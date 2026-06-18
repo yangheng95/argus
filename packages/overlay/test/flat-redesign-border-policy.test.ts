@@ -49,6 +49,10 @@ function selectorRule(className: string): RegExp {
   return new RegExp(`(^|[\\n,{])\\s*\\.${className}(?:\\s|[,>{:+~.#\\[]|$)`, "m")
 }
 
+function retiredTitlebarStatusSelector(className: string): RegExp {
+  return new RegExp(`(^|[\\n,{])\\s*\\.${className}(?:\\s|[,>{:+~.#\\[]|$)`, "m")
+}
+
 describe("flat-redesign Rule A — surface containers have no resting self-border", () => {
   const workspace = readSurface("workspace.css")
   const activity = readSurface("activity.css")
@@ -101,13 +105,15 @@ describe("flat-redesign Rule B — only cross-context boundaries carry borders",
     expect(titlebar).not.toMatch(/\.titlebar::after\s*\{/)
   })
 
-  test(".titlebar-status-chip has no self-border (Rule A applies to chips too)", () => {
-    // The shared rule is `.titlebar-status-chip,\n.titlebar-setup-cta,\n.titlebar-status-icon`.
-    // Find the combined head.
-    const combinedHead = ".titlebar-status-chip,\n.titlebar-setup-cta,\n.titlebar-status-icon"
-    const body = ruleBody(titlebar, combinedHead)
-    expect(body).toMatch(/(?:^|\s)border\s*:\s*0\s*;/)
-    expect(body).not.toMatch(/(?:^|\s)border\s*:\s*1px\s+solid/)
+  test("retired titlebar status utility shell carries no chrome rules", () => {
+    for (const className of [
+      "titlebar-status-chip",
+      "titlebar-setup-cta",
+      "titlebar-status-icon",
+      "titlebar-task-status",
+    ]) {
+      expect(titlebar).not.toMatch(retiredTitlebarStatusSelector(className))
+    }
   })
 })
 
@@ -117,18 +123,11 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
   const activity = readSurface("activity.css")
   const composer = readSurface("composer.css")
 
-  test(".titlebar-task-status[data-status] variants don't flip border-color", () => {
-    for (const status of ["active", "completed", "failed"]) {
-      const body = ruleBody(titlebar, `.titlebar-task-status[data-status="${status}"]`)
-      expect(body).not.toMatch(/border-color\s*:/)
-      // Bg tint must still be present.
-      expect(body).toMatch(/background\s*:/)
+  test("retired titlebar task status variants stay absent", () => {
+    for (const status of ["queued", "active", "completed", "failed"]) {
+      expect(titlebar).not.toMatch(new RegExp(`\\.titlebar-task-status\\[data-status="${status}"\\]`))
     }
-  })
-
-  test(".titlebar-task-status:hover doesn't flip border-color", () => {
-    const body = ruleBody(titlebar, ".titlebar-task-status:hover")
-    expect(body).not.toMatch(/border-color\s*:/)
+    expect(titlebar).not.toMatch(/\.titlebar-task-status:hover/)
   })
 
   test(".titlebar-menubar-trigger:hover doesn't flip border-color", () => {
