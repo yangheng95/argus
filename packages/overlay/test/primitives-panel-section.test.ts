@@ -317,6 +317,17 @@ describe("TracePanel.tsx — Panel primitive adoption", () => {
     }
   })
 
+  test("event disclosure rows expose visible keyboard focus", () => {
+    expect(tsx).toContain('class="trace-event-head"')
+    expect(tsx).toContain("aria-expanded={open()}")
+    expect(cardCss).toMatch(
+      /\.trace-event-head:hover,\s*\.trace-event-head:focus-visible\s*\{[^}]*background:\s*var\(--surface-hover\);/s,
+    )
+    expect(cardCss).toMatch(
+      /\.trace-event-head:focus-visible\s*\{[^}]*box-shadow:\s*inset 0 0 0 var\(--oc-border-width\) var\(--accent\);/s,
+    )
+  })
+
   test("uses <Panel> element", () => {
     expect(tsx).toMatch(/<Panel\b/)
   })

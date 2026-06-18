@@ -1439,8 +1439,13 @@ body {
   cursor: pointer;
   text-align: left;
 }
-.trace-event-head:hover {
+.trace-event-head:hover,
+.trace-event-head:focus-visible {
   background: var(--surface-hover);
+}
+.trace-event-head:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 var(--oc-border-width) var(--accent);
 }
 .trace-event-ts {
   color: var(--text-muted);
