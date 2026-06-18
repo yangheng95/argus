@@ -158,6 +158,25 @@ describe("scan", () => {
     expect(hits.map((hit) => [hit.file, hit.patternId])).toEqual([["src/secret.ts", "openai-style"]])
   })
 
+  test("default scan uses real blob sizes for cacheinfo-staged blobs", () => {
+    initGitRepo()
+    const body = "x".repeat(900 * 1024)
+    for (let i = 0; i < 12; i++) {
+      const hashed = spawnSync("git", ["hash-object", "-w", "--stdin"], {
+        cwd: root,
+        input: body,
+        encoding: "utf8",
+      })
+      if (hashed.error) throw hashed.error
+      if (hashed.status !== 0) throw new Error(`git hash-object failed: ${hashed.stderr}`)
+      runGit(["update-index", "--add", "--cacheinfo", "100644", hashed.stdout.trim(), `src/cache-${i}.ts`])
+    }
+
+    const hits = scan({ repoRoot: root })
+
+    expect(hits).toHaveLength(0)
+  })
+
   test("default scan reads HEAD content when index cleanup hides a committed secret", () => {
     initGitRepo()
     write("src/secret.ts", `export const key = "sk-FFFFFFFFFFFFFFFFFFFFFF"`) // secret-scan: ignore
