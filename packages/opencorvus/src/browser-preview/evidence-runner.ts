@@ -64,6 +64,7 @@ export type BrowserPreviewRegionComparisonCaptureResult = {
   fullpagePath?: string
   regions: Array<{
     regionID: string
+    stateID: string
     viewportID: BrowserPreviewViewportID
     status: "completed" | "failed"
     bbox?: BrowserPreviewRegionBox
@@ -102,6 +103,7 @@ export type BrowserPreviewFinalizedSidecarCapture = {
 
 type BrowserPreviewRegionSidecarBinding = {
   regionID: string
+  stateID: string
   viewportID: BrowserPreviewViewportID
   route: string
   locator: BrowserPreviewRegionBinding["implementation"]["locator"]
@@ -231,6 +233,7 @@ export async function runBrowserPreviewRegionComparisonCapture(
   const runtime = await resolveBrowserNodeSidecarRuntime()
   const sidecarBindings: BrowserPreviewRegionSidecarBinding[] = input.bindings.map((binding) => ({
     regionID: binding.region_id,
+    stateID: binding.state_id,
     viewportID: binding.viewport_id,
     route: binding.implementation.route,
     locator: binding.implementation.locator,
@@ -812,12 +815,13 @@ async function main() {
             await page.goto(routeUrl(input.url, binding.route), { waitUntil: "networkidle", timeout: 30000 });
             currentRoute = binding.route;
           }
-          const regionScreenshotPath = path.join(viewportDir, sanitizeSegment(binding.regionID) + ".png");
+          const regionScreenshotPath = path.join(viewportDir, sanitizeSegment(binding.viewportID + ":" + binding.stateID + ":" + binding.regionID) + ".png");
           await page.screenshot({ path: regionScreenshotPath, type: "png", fullPage: true });
           const bbox = await locate(page, binding.locator);
           if (!bbox) {
             regions.push({
               regionID: binding.regionID,
+              stateID: binding.stateID,
               viewportID,
               status: "failed",
               reason: "Implementation locator did not match any visible element.",
@@ -826,6 +830,7 @@ async function main() {
           }
           regions.push({
             regionID: binding.regionID,
+            stateID: binding.stateID,
             viewportID,
             status: "completed",
             bbox,

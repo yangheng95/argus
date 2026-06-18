@@ -64,7 +64,7 @@ describe("browser preview region source bbox bounds", () => {
         expect(validSourceCrop.width).toBe(40)
         expect(validSourceCrop.height).toBe(30)
 
-        const evidenceID = result.evidenceIDs["desktop:bad-source-bbox"]
+        const evidenceID = result.evidenceIDs["desktop:default:bad-source-bbox"]
         expect(evidenceID).toBeTruthy()
         const evidence = await Instance.provide({
           directory: tmp.path,
@@ -81,7 +81,7 @@ describe("browser preview region source bbox bounds", () => {
             findReadableBrowserPreviewEvidenceByID({
               projectRoot: tmp.path,
               taskID,
-              evidenceID: result.evidenceIDs["desktop:valid-source-bbox"],
+              evidenceID: result.evidenceIDs["desktop:default:valid-source-bbox"],
             }),
         })
         expect(validEvidence?.status).toBe("passed")

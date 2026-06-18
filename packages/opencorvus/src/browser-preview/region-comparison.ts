@@ -91,6 +91,7 @@ export const BrowserPreviewRegionComparisonResult = z.object({
     z.object({
       region_id: z.string(),
       viewport_id: BrowserPreviewViewportID,
+      state_id: z.string().optional(),
       status: z.enum(["completed", "failed"]),
       reason: z.string().optional(),
       source_bbox: BrowserPreviewRegionBox.optional(),
@@ -128,12 +129,14 @@ export async function compareBrowserPreviewRegions(
   if (!input.taskID.trim() || !input.targetID.trim()) {
     throw new Error("Browser preview region comparison requires taskID and targetID.")
   }
+  const bindings = BrowserPreviewRegionBinding.array().parse(input.bindings)
   const jobID = Identifier.ascending("artifact")
   let outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
   let resultJobID = jobID
 
   const selectedViewportIDs = dedupeViewportIDs(input.viewportIDs)
-  const selectedBindings = input.bindings.filter((binding) => selectedViewportIDs.includes(binding.viewport_id))
+  const selectedBindings = bindings.filter((binding) => selectedViewportIDs.includes(binding.viewport_id))
+  assertUniqueBindingKeys(selectedBindings)
   const initialRegions: BrowserPreviewRegionComparisonResult["regions"] = []
   if (selectedBindings.length === 0) {
     initialRegions.push(
@@ -162,6 +165,7 @@ export async function compareBrowserPreviewRegions(
       initialRegions.push({
         region_id: binding.region_id,
         viewport_id: binding.viewport_id,
+        state_id: binding.state_id,
         status: "failed",
         reason: error instanceof Error ? error.message : String(error),
         source_bbox: binding.source.bbox,
@@ -192,7 +196,10 @@ export async function compareBrowserPreviewRegions(
   if (sidecar) {
     for (const region of sidecar.regions) {
       const binding = runnableBindings.find(
-        (item) => item.region_id === region.regionID && item.viewport_id === region.viewportID,
+        (item) =>
+          item.region_id === region.regionID &&
+          item.viewport_id === region.viewportID &&
+          item.state_id === region.stateID,
       )
       if (!binding) continue
       const source = sourceRefs.get(bindingKey(binding))
@@ -201,6 +208,7 @@ export async function compareBrowserPreviewRegions(
         regions.push({
           region_id: binding.region_id,
           viewport_id: binding.viewport_id,
+          state_id: binding.state_id,
           status: "failed",
           reason: region.reason ?? "Implementation region was not found.",
           source_bbox: binding.source.bbox,
@@ -226,6 +234,7 @@ export async function compareBrowserPreviewRegions(
         regions.push({
           region_id: binding.region_id,
           viewport_id: binding.viewport_id,
+          state_id: binding.state_id,
           status: "failed",
           reason,
           source_bbox: binding.source.bbox,
@@ -247,13 +256,14 @@ export async function compareBrowserPreviewRegions(
       viewportID: region.viewport_id,
       operationKind: "reference-comparison",
       regionID: region.region_id,
+      stateID: region.state_id,
       manifestPath,
       artifactPaths: region.artifacts,
       status: region.status === "completed" ? "passed" : "failed",
       summary:
         region.status === "completed"
-          ? `reference comparison completed for ${region.region_id} (${region.viewport_id})`
-          : `reference comparison failed for ${region.region_id} (${region.viewport_id}): ${region.reason}`,
+          ? `reference comparison completed for ${region.region_id} (${region.state_id ?? "default"}, ${region.viewport_id})`
+          : `reference comparison failed for ${region.region_id} (${region.state_id ?? "default"}, ${region.viewport_id}): ${region.reason}`,
       capture: {
         operation: "reference-comparison",
         manifest_path: manifestPath,
@@ -261,7 +271,7 @@ export async function compareBrowserPreviewRegions(
       },
       diagnostics: region.diagnostics,
     })
-    evidenceIDs[`${region.viewport_id}:${region.region_id}`] = evidenceID
+    evidenceIDs[regionKey(region)] = evidenceID
   }
   const result: BrowserPreviewRegionComparisonResult = {
     status: regions.length > 0 && regions.every((region) => region.status === "completed") ? "passed" : "failed",
@@ -315,7 +325,7 @@ async function materializeRegionComparison(input: {
   includeSideBySide: boolean
   includeDiff: boolean
 }): Promise<BrowserPreviewRegionComparisonResult["regions"][number]> {
-  const dir = path.join(input.outDir, "regions", input.binding.viewport_id, regionDirectoryKey(input.binding))
+  const dir = path.join(input.outDir, "regions", input.binding.viewport_id, input.binding.state_id, regionDirectoryKey(input.binding))
   await fs.mkdir(dir, { recursive: true })
   const sourceCrop = path.join(dir, "source.png")
   const implementationCrop = path.join(dir, "implementation.png")
@@ -326,7 +336,7 @@ async function materializeRegionComparison(input: {
     leftPath: sourceCrop,
     rightPath: implementationCrop,
     outputPath: sideBySide,
-    title: `${input.binding.region_id} (${input.binding.viewport_id})`,
+    title: `${input.binding.region_id} [${input.binding.state_id}] (${input.binding.viewport_id})`,
   })
   const artifacts: NonNullable<BrowserPreviewRegionComparisonResult["regions"][number]["artifacts"]> = {
     source_crop: sourceCrop,
@@ -341,6 +351,7 @@ async function materializeRegionComparison(input: {
   return {
     region_id: input.binding.region_id,
     viewport_id: input.binding.viewport_id,
+    state_id: input.binding.state_id,
     status: "completed",
     source_bbox: input.sourceBox,
     implementation_bbox: input.implementationBox,
@@ -456,7 +467,11 @@ async function makeDiff(input: { sourcePath: string; implementationPath: string;
 }
 
 function bindingKey(binding: BrowserPreviewRegionBinding): string {
-  return `${binding.viewport_id}:${binding.region_id}`
+  return `${binding.viewport_id}:${binding.state_id}:${binding.region_id}`
+}
+
+function regionKey(region: { viewport_id: BrowserPreviewViewportID; state_id?: string; region_id: string }): string {
+  return `${region.viewport_id}:${region.state_id ?? "default"}:${region.region_id}`
 }
 
 function dedupeViewportIDs(ids: BrowserPreviewViewportID[]): BrowserPreviewViewportID[] {
@@ -473,7 +488,18 @@ function sanitizeSegment(value: string): string {
 }
 
 function regionDirectoryKey(binding: BrowserPreviewRegionBinding): string {
-  return sanitizeSegment(`${binding.viewport_id}:${binding.region_id}`)
+  return sanitizeSegment(`${binding.viewport_id}:${binding.state_id}:${binding.region_id}`)
+}
+
+function assertUniqueBindingKeys(bindings: BrowserPreviewRegionBinding[]): void {
+  const seen = new Set<string>()
+  for (const binding of bindings) {
+    const key = bindingKey(binding)
+    if (seen.has(key)) {
+      throw new Error(`Duplicate browser preview region comparison binding identity: ${key}`)
+    }
+    seen.add(key)
+  }
 }
 
 function escapeXml(value: string): string {

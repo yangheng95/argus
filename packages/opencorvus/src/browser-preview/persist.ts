@@ -32,6 +32,7 @@ export const PersistedBrowserPreviewEvidence = z.object({
   viewportID: z.string(),
   operationKind: z.enum(["preview-capture", "reference-comparison"]).default("preview-capture"),
   regionID: z.string().optional(),
+  stateID: z.string().optional(),
   manifestPath: z.string().optional(),
   artifactPaths: z.record(z.string(), z.string()).optional(),
   status: z.enum(["passed", "failed"]),
@@ -286,6 +287,7 @@ function findBrowserPreviewEvidenceByID(input: {
       ? payload.operation_kind
       : "preview-capture"
   const regionID = typeof payload.region_id === "string" ? payload.region_id : undefined
+  const stateID = typeof payload.state_id === "string" ? payload.state_id : undefined
   const manifestPath = typeof payload.manifest_path === "string" ? payload.manifest_path : undefined
   const artifactPaths =
     payload.artifact_paths && typeof payload.artifact_paths === "object" && !Array.isArray(payload.artifact_paths)
@@ -309,6 +311,7 @@ function findBrowserPreviewEvidenceByID(input: {
     viewportID,
     operationKind,
     regionID,
+    stateID,
     manifestPath,
     artifactPaths,
     status,
@@ -365,6 +368,7 @@ export function persistBrowserPreviewEvidence(input: {
   viewportID: string
   operationKind?: "preview-capture" | "reference-comparison"
   regionID?: string
+  stateID?: string
   manifestPath?: string
   artifactPaths?: Record<string, string | undefined>
   status: "passed" | "failed"
@@ -399,6 +403,7 @@ export function persistBrowserPreviewEvidence(input: {
           viewport_id: input.viewportID,
           operation_kind: input.operationKind ?? "preview-capture",
           ...(input.regionID ? { region_id: input.regionID } : {}),
+          ...(input.stateID ? { state_id: input.stateID } : {}),
           ...(input.manifestPath ? { manifest_path: toRuntimeRelativePath(projectRoot, input.manifestPath) } : {}),
           ...(artifactPaths ? { artifact_paths: artifactPaths } : {}),
           status: input.status,

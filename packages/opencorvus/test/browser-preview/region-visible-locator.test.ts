@@ -57,7 +57,7 @@ describe("browser preview region visible locator capture", () => {
               findReadableBrowserPreviewEvidenceByID({
                 projectRoot: tmp.path,
                 taskID,
-                evidenceID: result.evidenceIDs[`desktop:${regionID}`],
+                evidenceID: result.evidenceIDs[`desktop:default:${regionID}`],
               }),
           })
           expect(evidence?.operationKind).toBe("reference-comparison")
