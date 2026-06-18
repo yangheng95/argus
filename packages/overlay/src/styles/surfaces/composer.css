@@ -300,9 +300,8 @@
   min-width: 0;
 }
 
-/* Compose meta: the bottom row beneath the textarea showing build /
-   permissions / shortcut hints. Two-up flex layout that wraps on narrow
-   compose containers. */
+/* Compose meta: the compact prompt-profile and executor selector row beneath
+   the textarea. */
 .chat-compose-meta {
   display: flex;
   align-items: center;
@@ -321,16 +320,6 @@
   gap: calc(8px * var(--ui-scale) * var(--chat-compose-scale));
   flex: 1 1 100%;
   min-width: 0;
-}
-
-.chat-compose-meta-left a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.chat-compose-meta-left a:hover {
-  color: var(--text-soft);
-  text-decoration: underline;
 }
 
 .prompt-profile-select-wrap {
