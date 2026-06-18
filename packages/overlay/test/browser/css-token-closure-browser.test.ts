@@ -142,6 +142,7 @@ test("CSS token closure surfaces resolve canonical tokens visually", async () =>
           borderRadius: computed.borderTopLeftRadius,
           borderTopColor: computed.borderTopColor,
           borderTopStyle: computed.borderTopStyle,
+          boxShadow: computed.boxShadow,
           color: computed.color,
           fontFamily: computed.fontFamily,
           fontWeight: computed.fontWeight,
@@ -166,6 +167,7 @@ test("CSS token closure surfaces resolve canonical tokens visually", async () =>
     }
     assert.match(metrics.commit.fontFamily, /Cascadia|JetBrains|monospace/i)
     assert.match(metrics.derived.fontFamily, /Cascadia|JetBrains|monospace/i)
+    assert.notEqual(metrics.image.boxShadow, "none")
     assert.equal(metrics.status.borderTopStyle, "solid")
     assert.notEqual(metrics.status.backgroundColor, "rgba(0, 0, 0, 0)")
 
