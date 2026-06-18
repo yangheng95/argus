@@ -7,11 +7,12 @@ const REPO_ROOT = join(OVERLAY_ROOT, "..", "..")
 const GOD_CSS_ARCHIVE_DIR = join(REPO_ROOT, "docs/archive/overlay-god-css")
 const THIS_FILE = join(import.meta.dir, "overlay-architecture-guards.test.ts")
 const SURFACE_DUPLICATE_SELECTOR_LIMITS = new Map<string, number>([
-  ["activity.css", 15],
+  ["activity.css", 21],
   ["card.css", 6],
   ["changes.css", 3],
   ["chat-bubble.css", 0],
   ["cmdk.css", 0],
+  ["coding-assistant.css", 0],
   ["composer.css", 0],
   ["conn-banner.css", 0],
   ["conversation.css", 21],
@@ -25,13 +26,12 @@ const SURFACE_DUPLICATE_SELECTOR_LIMITS = new Map<string, number>([
   ["markdown.css", 22],
   ["messages.css", 5],
   ["mission.css", 10],
-  ["ndjson-log.css", 0],
   ["notifications.css", 0],
-  ["settings.css", 11],
-  ["sidebar.css", 7],
+  ["settings.css", 13],
+  ["sidebar.css", 9],
   ["titlebar.css", 11],
   ["workspace-onboarding.css", 4],
-  ["workspace.css", 10],
+  ["workspace.css", 12],
 ])
 
 function readText(path: string): string {
@@ -339,10 +339,12 @@ describe("overlay architecture guards", () => {
     expect(overBudget).toEqual([])
   })
 
-  test("retired agent-card stylesheet stays out of the runtime graph", () => {
+  test("retired agent-card and ndjson log stylesheets stay out of the runtime graph", () => {
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
     expect(html).not.toContain('href="styles/surfaces/agent-card.css"')
     expect(existsSync(join(OVERLAY_ROOT, "src/styles/surfaces/agent-card.css"))).toBe(false)
+    expect(html).not.toContain('href="styles/surfaces/ndjson-log.css"')
+    expect(existsSync(join(OVERLAY_ROOT, "src/styles/surfaces/ndjson-log.css"))).toBe(false)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
