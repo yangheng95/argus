@@ -842,14 +842,15 @@ describe("browser preview routes", () => {
   )
 
   test(
-    "POST /task/:taskID/browser-preview/live/snapshot reloads the same target URL for fresh frames",
+    "POST /task/:taskID/browser-preview/live/snapshot preserves the active same-target page",
     async () => {
       await using tmp = await tmpdir()
       let hitCount = 0
       const preview = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
-        fetch() {
+        fetch(request) {
+          if (new URL(request.url).pathname !== "/live") return new Response("", { status: 404 })
           hitCount += 1
           const background = hitCount === 1 ? "#b91c1c" : "#047857"
           return new Response(
@@ -891,10 +892,10 @@ describe("browser preview routes", () => {
 
         expect(first.status).toBe(200)
         expect(second.status).toBe(200)
-        expect(hitCount).toBeGreaterThanOrEqual(2)
+        expect(hitCount).toBe(1)
         const firstHash = crypto.createHash("sha256").update(Buffer.from(await first.arrayBuffer())).digest("hex")
         const secondHash = crypto.createHash("sha256").update(Buffer.from(await second.arrayBuffer())).digest("hex")
-        expect(secondHash).not.toBe(firstHash)
+        expect(secondHash).toBe(firstHash)
       } finally {
         preview.stop(true)
       }
