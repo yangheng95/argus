@@ -25,6 +25,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-retire-llm-provider-summary-residue.md](2026-06-19-retire-llm-provider-summary-residue.md)         | Retire LLM Provider Summary Residue |
 | [2026-06-19-retire-detail-card-residue.md](2026-06-19-retire-detail-card-residue.md)                           | Retire Detail Card Residue |
 | [2026-06-19-retire-settings-continuation-residue.md](2026-06-19-retire-settings-continuation-residue.md)       | Retire Settings Continuation Residue |
+| [2026-06-19-retire-dialog-section-actions-residue.md](2026-06-19-retire-dialog-section-actions-residue.md)     | Retire Dialog Section Actions Residue |
 
 ## 2026-06-18
 
