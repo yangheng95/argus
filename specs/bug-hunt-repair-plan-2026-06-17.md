@@ -3201,3 +3201,56 @@ LINE:
 - Euler confirmed BH-100 was still present in committed HEAD before this local repair: all three webpage evidence tools used `process.cwd()` for visual evidence provenance.
 - Euler identified `specs/new-arch/2026-06-08-visual-fidelity-evidence-chain.md` as the relevant design record and confirmed `VisualEvidenceBundle.rendered.projectDirectory` is part of the single structured visual evidence contract.
 - Euler recommended binding the three tool entrypoints to `Instance.directory`, retaining `tryMaterializeVisualEvidenceBundle(...)` as the serializer boundary, and avoiding fallback or parallel metadata sources.
+
+## Batch P1-BB: BH-098 global config patches must refresh active project runtime state
+
+### Findings
+
+- BH-098 targets `packages/opencorvus/src/server/routes/global.ts::PATCH /global/config` and `packages/opencorvus/src/config/config.ts::Config.updateGlobal(...)`.
+- `Config.updateGlobal(...)` writes the global config file and resets only `Config.global`.
+- `Config.get()` is backed by `Config.state`, a `lazyInstanceState(...)` value keyed by active project directory. Existing project instances therefore keep serving a stale merged config after the global file changes.
+- `Provider` and `Agent` each build their own `lazyInstanceState(...)` from `Config.get()`, so they can continue exposing stale provider and agent settings even after a later config read is corrected.
+- `ChannelSupervisor` keeps per-instance runtime state and derives its desired runtime signature from the merged config plus `Instance.directory`. A global config change that enables, disables, or edits channel settings must be applied to every active project instance without disposing those instances.
+- Project-scoped `PATCH /config` already shows the intended refresh boundary for one project: reset provider and agent state, then synchronize the channel runtime from the freshly loaded config.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/global.ts::PATCH /config` is a control-plane route and is mounted before the project-directory middleware, so it has no single current project instance.
+- `packages/opencorvus/src/config/config.ts::Config.global` caches the global user config file.
+- `packages/opencorvus/src/config/config.ts::Config.state` caches merged config per active `Instance.directory`.
+- `packages/opencorvus/src/config/config.ts::Config.update(...)` resets the current project config state after project config writes; this batch must extend the global write path, not replace project writes.
+- `packages/opencorvus/src/skill/manager.ts::patchGlobal(...)` also calls `Config.updateGlobal(...)`, so global runtime invalidation must live in the update API rather than only in the HTTP route.
+- `packages/opencorvus/src/provider/provider.ts::Provider.resetAll()` clears provider state for all active instances.
+- `packages/opencorvus/src/agent/agent.ts::Agent.resetAll()` clears agent state for all active instances.
+- `packages/opencorvus/src/channel/supervisor.ts::ChannelSupervisor.sync(...)` updates the managed channel runtime for the active instance from a provided config.
+- `packages/opencorvus/src/project/instance.ts` owns the active instance cache; global config refresh needs an explicit active-instance traversal helper rather than `Instance.disposeAll()`.
+- `packages/opencorvus/test/server/config-routes.test.ts` and `packages/opencorvus/test/server/config-patch-provider.test.ts` cover project config routes but do not cover global config cache invalidation.
+
+### Fix Shape
+
+- Add an `Instance.forEachActive(...)` helper that runs a callback inside every currently cached active instance context.
+- After writing the global config file inside `Config.updateGlobal(...)`, reset `Config.global`, every cached project `Config.state`, all provider state, and all agent state.
+- In the same `Config.updateGlobal(...)` path, call `ChannelSupervisor.sync(await Config.get())` inside every active instance through `Instance.forEachActive(...)`.
+- Keep `PATCH /global/config` as a thin caller of `Config.updateGlobal(...)` so `skill/manager.ts` and any future global config writes share the same invalidation path.
+- Do not call `Instance.disposeAll()`, kill executor sessions, infer a project directory from the process working directory, add a route gate, or introduce a second config source.
+- Do not swallow channel synchronization failures in the global write path; BH-099 tracks the separate issue that existing project config patch hides channel runtime startup failures.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/server/global-config-routes.test.ts`.
+- Prime an active project with `/config`, `Provider.list()`, and `Agent.get("build")`, then patch `/global/config` and assert the same active project observes the new global username, provider, and build-agent description without disposing the instance.
+- Add a source-level guard proving `Config.updateGlobal(...)` owns active runtime invalidation through `state.resetAll()`, `Provider.resetAll()`, `Agent.resetAll()`, `Instance.forEachActive(...)`, and `ChannelSupervisor.sync(...)`.
+
+### Verification
+
+- Focused test passed: `bun test packages/opencorvus/test/server/global-config-routes.test.ts --timeout 60000`.
+- Related config route tests passed: `bun test packages/opencorvus/test/server/global-config-routes.test.ts packages/opencorvus/test/server/config-routes.test.ts packages/opencorvus/test/server/config-patch-provider.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Carver confirmed BH-098 was still substantive in HEAD `39ab900d97`: after priming `Config.get()`, `Config.updateGlobal({ username: "new-global" })` changed direct global reads while the same active instance still returned the old merged username.
+- Carver identified the single-source requirement missed by the first draft: `Config.updateGlobal(...)` is also called by `packages/opencorvus/src/skill/manager.ts`, so Provider/Agent/channel invalidation cannot live only in `PATCH /global/config`.
+- Carver also flagged that channel sync failures must not be hidden by copying the project `/config` route's `catch` block; this batch lets global update errors propagate visibly.
