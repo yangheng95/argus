@@ -26,8 +26,7 @@ import {
   type PromptProfileTarget,
 } from "../../services/config"
 import { Button } from "../ui/Button"
-import { SurfaceHeader } from "../ui/SurfaceHeader"
-import { SettingsPill } from "./primitives"
+import { SettingsGroup, SettingsPanel, SettingsPill } from "./primitives"
 
 function promptPreviewHtml(value: string): string {
   if (!value.trim()) {
@@ -375,54 +374,52 @@ export default function PromptCatalog() {
         </div>
       </Show>
 
-      <div class="general-panel">
-        <div class="config-panel-group">
-          <SurfaceHeader
-            variant="settings-group"
-            title={t("prompt_profile.settings_title")}
-            actions={
-              <div class="prompt-profile-head-actions">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  tone="neutral"
-                  disabled={saving()}
-                  onClick={openImportPicker}
-                >
-                  {t("prompt_profile.import")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  tone="neutral"
-                  disabled={saving()}
-                  onClick={handleCreateProfile}
-                >
-                  {t("prompt_profile.create")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  tone="neutral"
-                  disabled={saving() || !currentProfile()}
-                  onClick={handleDuplicateProfile}
-                >
-                  {t("prompt_profile.duplicate")}
-                </Button>
-                <input
-                  ref={(element) => (importFileInput = element)}
-                  data-ui="prompt-profile-import-input"
-                  type="file"
-                  accept="application/json,.json"
-                  hidden
-                  onChange={handleImportFile}
-                />
-              </div>
-            }
-          />
+      <SettingsPanel class="general-panel">
+        <SettingsGroup
+          title={t("prompt_profile.settings_title")}
+          actions={
+            <div class="prompt-profile-head-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                tone="neutral"
+                disabled={saving()}
+                onClick={openImportPicker}
+              >
+                {t("prompt_profile.import")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                tone="neutral"
+                disabled={saving()}
+                onClick={handleCreateProfile}
+              >
+                {t("prompt_profile.create")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                tone="neutral"
+                disabled={saving() || !currentProfile()}
+                onClick={handleDuplicateProfile}
+              >
+                {t("prompt_profile.duplicate")}
+              </Button>
+              <input
+                ref={(element) => (importFileInput = element)}
+                data-ui="prompt-profile-import-input"
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={handleImportFile}
+              />
+            </div>
+          }
+        >
           <p class="agent-models-info">{t("prompt_profile.settings_intro")}</p>
           <Show when={currentScopeSessionID()}>
             <p class="agent-models-info">{t("prompt_profile.session_scope_hint")}</p>
@@ -659,8 +656,8 @@ export default function PromptCatalog() {
               </div>
             </Show>
           </Show>
-        </div>
-      </div>
+        </SettingsGroup>
+      </SettingsPanel>
     </>
   )
 }

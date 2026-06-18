@@ -8,8 +8,14 @@ const STYLES = readFileSync(join(import.meta.dir, "../src/styles/surfaces/settin
 test("ProvidersPanel uses a dedicated command area and provider row summary", () => {
   expect(SOURCE).toContain('class="provider-command"')
   expect(SOURCE).toContain('class="provider-stat-strip"')
+  expect(SOURCE).toContain("SettingsRow")
+  expect(SOURCE).toContain('class="provider-settings-row"')
   expect(SOURCE).toContain('class="provider-row-summary"')
-  expect(SOURCE).toContain('class="provider-count-pill"')
+  expect(SOURCE).toContain("SettingsPill")
+  expect(SOURCE).toContain('class="provider-model-count"')
+  expect(SOURCE).not.toContain("provider-count-pill")
+  expect(SOURCE).not.toContain("provider-row-status")
+  expect(SOURCE).not.toContain("provider-flat-row")
 })
 
 test("provider form discovers OpenAI-compatible models before saving", () => {

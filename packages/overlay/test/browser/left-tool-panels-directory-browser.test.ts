@@ -185,11 +185,11 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     const skillButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]'
     await page.waitForSelector(skillButton, { visible: true })
     await page.click(skillButton)
-    await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-row")
+    await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-settings-row")
     assert.equal(requestLog.some((item) => item.path === "/skill/installed"), true)
     assert.equal(requestLog.some((item) => item.path === "/mcp"), false)
     const skillName = await page.$eval(
-      "#leftPanelSkills .extension-row .extension-row-main > strong",
+      "#leftPanelSkills .extension-settings-row .s-row-title",
       (node) => node.textContent || "",
     )
     assert.equal(skillName, "project-review")
@@ -199,14 +199,19 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     })
     assert.ok(skillListMetrics.height > 24)
     assert.match(skillListMetrics.text, /project-review/)
+    const skillPanel = await page.$("#leftPanelSkills")
+    assert.ok(skillPanel, "skill panel should exist before screenshot")
+    const skillScreenshotPath = resolve(".scratch", "left-skill-panel-primitive-row.png")
+    mkdirSync(dirname(skillScreenshotPath), { recursive: true })
+    writeFileSync(skillScreenshotPath, await skillPanel.screenshot({}))
 
     const mcpButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]'
     await page.waitForSelector(mcpButton, { visible: true })
     await page.click(mcpButton)
-    await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-row")
+    await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-settings-row")
     assert.equal(requestLog.some((item) => item.path === "/mcp"), true)
     const mcpName = await page.$eval(
-      "#leftPanelMcp .extension-row .extension-row-main > strong",
+      "#leftPanelMcp .extension-settings-row .s-row-title",
       (node) => node.textContent || "",
     )
     assert.equal(mcpName, "docs")

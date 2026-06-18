@@ -137,14 +137,21 @@
   padding: 0;
 }
 
-.sidebar-tool-panel .ext-group,
+.sidebar-tool-panel .extension-settings-group,
 .sidebar-tool-panel .memory-panel {
   flex: 1 1 0;
   min-height: 0;
 }
 
-.sidebar-tool-panel .ext-group {
+.sidebar-tool-panel .extension-settings-group {
   gap: 0;
+}
+
+.sidebar-tool-panel .extension-settings-group > .s-group-body {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
 }
 
 .sidebar-tool-panel .tool-panel-toolbar {
@@ -209,7 +216,7 @@
   white-space: nowrap;
 }
 
-.sidebar-tool-panel .ext-group-body,
+.sidebar-tool-panel .extension-settings-body,
 .sidebar-tool-panel .memory-panel {
   display: flex;
   flex: 1 1 0;
@@ -220,7 +227,7 @@
   overflow: hidden;
 }
 
-.sidebar-tool-panel .ext-group[data-compact="true"] .ext-group-body {
+.sidebar-tool-panel .extension-settings-group[data-compact="true"] .extension-settings-body {
   gap: calc(6px * var(--ui-scale));
 }
 
@@ -250,7 +257,7 @@
   padding-right: calc(2px * var(--ui-scale));
 }
 
-.sidebar-tool-panel .extension-row,
+.sidebar-tool-panel .extension-settings-row,
 .sidebar-tool-panel .market-card,
 .sidebar-tool-panel .knowledge-item {
   padding: calc(8px * var(--ui-scale)) 0;
@@ -262,7 +269,7 @@
   gap: calc(6px * var(--ui-scale));
 }
 
-.sidebar-tool-panel .extension-row {
+.sidebar-tool-panel .extension-settings-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -274,33 +281,33 @@
   gap: calc(5px * var(--ui-scale));
 }
 
-.sidebar-tool-panel .extension-row:last-child,
+.sidebar-tool-panel .extension-settings-row:last-child,
 .sidebar-tool-panel .market-card:last-child,
 .sidebar-tool-panel .knowledge-item:last-child {
   border-bottom: 0;
 }
 
-.sidebar-tool-panel .extension-row-main,
+.sidebar-tool-panel .extension-settings-row .s-row-main,
 .sidebar-tool-panel .market-card-main,
 .sidebar-tool-panel .knowledge-item-main {
   width: 100%;
   min-width: 0;
 }
 
-.sidebar-tool-panel .extension-row-main {
+.sidebar-tool-panel .extension-settings-row .s-row-main {
   grid-column: 1;
   grid-row: 1;
   gap: calc(3px * var(--ui-scale));
 }
 
-.sidebar-tool-panel .extension-row strong,
+.sidebar-tool-panel .extension-settings-row .s-row-title,
 .sidebar-tool-panel .market-card-main strong,
 .sidebar-tool-panel .knowledge-item-title {
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
-.sidebar-tool-panel .extension-row strong {
+.sidebar-tool-panel .extension-settings-row .s-row-title {
   display: block;
   max-width: 100%;
   overflow: hidden;
@@ -308,8 +315,8 @@
   white-space: nowrap;
 }
 
-.sidebar-tool-panel .extension-row span,
-.sidebar-tool-panel .extension-row small,
+.sidebar-tool-panel .extension-settings-row .s-row-desc,
+.sidebar-tool-panel .extension-settings-row .s-row-meta,
 .sidebar-tool-panel .market-card-main span,
 .sidebar-tool-panel .market-card-main small,
 .sidebar-tool-panel .knowledge-item-meta {
@@ -317,7 +324,7 @@
   overflow-wrap: anywhere;
 }
 
-.sidebar-tool-panel .extension-row-main > span {
+.sidebar-tool-panel .extension-settings-row .s-row-desc {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -325,7 +332,7 @@
   color: var(--text-muted);
 }
 
-.sidebar-tool-panel .extension-row-main > small {
+.sidebar-tool-panel .extension-settings-row .s-row-meta {
   display: block;
   max-width: 100%;
   overflow: hidden;
@@ -350,7 +357,7 @@
   flex: 1 1 auto;
 }
 
-.sidebar-tool-panel .extension-row-actions,
+.sidebar-tool-panel .extension-settings-actions,
 .sidebar-tool-panel .market-card-actions {
   width: 100%;
   min-width: 0;
@@ -358,7 +365,7 @@
   gap: calc(4px * var(--ui-scale));
 }
 
-.sidebar-tool-panel .extension-row-actions {
+.sidebar-tool-panel .extension-settings-actions {
   grid-column: 2;
   grid-row: 1;
   width: auto;
@@ -368,17 +375,16 @@
   flex-wrap: nowrap;
 }
 
-.sidebar-tool-panel .extension-row-actions .oc-button {
+.sidebar-tool-panel .extension-settings-actions .oc-button {
   min-width: auto;
   height: calc(22px * var(--ui-scale));
   padding-inline: 0;
 }
 
-.sidebar-tool-panel .extension-row-actions .extension-status {
+.sidebar-tool-panel .extension-settings-actions .s-pill {
   margin-left: 0;
 }
 
-.sidebar-tool-panel .extension-status,
 .sidebar-tool-panel .knowledge-scope {
   margin-left: auto;
 }

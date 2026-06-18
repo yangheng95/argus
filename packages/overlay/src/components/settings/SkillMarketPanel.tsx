@@ -29,9 +29,15 @@ import {
 } from "../../services/extensions"
 import { addMcpServer, deleteAllMcp } from "../../services/mcp"
 import { Button } from "../ui/Button"
-import { SurfaceHeader } from "../ui/SurfaceHeader"
 import { Icon, type IconName } from "../Icon"
-import { SettingsSelect, type SettingsSelectOption } from "./primitives"
+import {
+  SettingsGroup,
+  SettingsPill,
+  SettingsRow,
+  SettingsSelect,
+  type SettingsPillTone,
+  type SettingsSelectOption,
+} from "./primitives"
 
 // ── Types ──
 
@@ -123,6 +129,14 @@ function mcpStatusLabel(status: string): string {
     needs_client_registration: t("mcp.status.needs_client_registration"),
   }
   return map[status] || status
+}
+
+function mcpStatusTone(status: string): SettingsPillTone {
+  if (status === "connected") return "ok"
+  if (status === "failed" || status === "error") return "bad"
+  if (status === "disabled") return "muted"
+  if (status === "connecting" || status === "needs_auth" || status === "needs_client_registration") return "warn"
+  return "neutral"
 }
 
 function dataTransferEntries(dataTransfer: DataTransfer | null): WebkitFileSystemEntry[] {
@@ -234,6 +248,13 @@ function policyLabel(policy: string): string {
   if (policy === "allow") return t("skill.policy.allow")
   if (policy === "deny") return t("skill.policy.deny")
   return policy
+}
+
+function policyTone(policy: string): SettingsPillTone {
+  if (policy === "allow") return "ok"
+  if (policy === "ask") return "warn"
+  if (policy === "deny") return "bad"
+  return "muted"
 }
 
 function isRemoteUrl(value: string): boolean {
@@ -693,10 +714,33 @@ function ExtensionSettingsPanel(props: {
 
       {/* ── Installed Skills ── */}
       <Show when={props.mode === "skill"}>
-        <section
-          class="ext-group"
+        <SettingsGroup
+          class="extension-settings-group"
           data-compact={props.compact ? "true" : "false"}
           data-skill-drop-active={skillDragActive() ? "true" : "false"}
+          title={props.compact ? undefined : t("skill.title")}
+          actions={
+            props.compact ? undefined : (
+              <>
+                <PanelActionButton icon="refresh" label={t("common.reload")} onClick={handleReloadSkills} />
+                <Show when={canOpenLocalPath()}>
+                  <PanelActionButton icon="folder-open" label={t("skill.open_dir")} onClick={handleOpenSkillDir} />
+                </Show>
+                <PanelActionButton
+                  icon="plus"
+                  label={t("skill.add")}
+                  onClick={() => void setShowAddSkill(!showAddSkill())}
+                />
+                <PanelActionButton
+                  icon="cancel"
+                  label={t("skill.delete_all")}
+                  tone="danger"
+                  disabled={removableSkills().length === 0}
+                  onClick={handleDeleteAllSkills}
+                />
+              </>
+            )
+          }
           onDragEnter={(event) => {
             event.preventDefault()
             setSkillDragActive(true)
@@ -716,35 +760,7 @@ function ExtensionSettingsPanel(props: {
             void handleDroppedSkillDrop(event)
           }}
         >
-          <Show
-            when={props.compact}
-            fallback={
-              <SurfaceHeader
-                variant="settings-group"
-                title={t("skill.title")}
-                actions={
-                  <>
-                    <PanelActionButton icon="refresh" label={t("common.reload")} onClick={handleReloadSkills} />
-                    <Show when={canOpenLocalPath()}>
-                      <PanelActionButton icon="folder-open" label={t("skill.open_dir")} onClick={handleOpenSkillDir} />
-                    </Show>
-                    <PanelActionButton
-                      icon="plus"
-                      label={t("skill.add")}
-                      onClick={() => void setShowAddSkill(!showAddSkill())}
-                    />
-                    <PanelActionButton
-                      icon="cancel"
-                      label={t("skill.delete_all")}
-                      tone="danger"
-                      disabled={removableSkills().length === 0}
-                      onClick={handleDeleteAllSkills}
-                    />
-                  </>
-                }
-              />
-            }
-          >
+          <Show when={props.compact}>
             <div class="tool-panel-toolbar" role="toolbar" aria-label={t("skill.title")}>
               <PanelActionButton compact icon="refresh" label={t("common.reload")} onClick={handleReloadSkills} />
               <Show when={canOpenLocalPath()}>
@@ -771,7 +787,7 @@ function ExtensionSettingsPanel(props: {
               />
             </div>
           </Show>
-          <div class="ext-group-body">
+          <div class="extension-settings-body">
             <div class="skill-drop-zone" data-active={skillDragActive() ? "true" : "false"}>
               <span class="skill-drop-zone__icon" aria-hidden="true">
                 <Icon name="upload" />
@@ -841,93 +857,95 @@ function ExtensionSettingsPanel(props: {
               <Show when={skills().length > 0} fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}>
                 <For each={skills()}>
                   {(item) => (
-                    <div class="extension-row">
-                      <div class="extension-row-main">
-                        <strong>
-                          {item.name}
+                    <SettingsRow
+                      class="extension-settings-row"
+                      title={
+                        <>
+                          <span>{item.name}</span>
                           <Show when={skillDuplicateLocations(item).length > 1}>
-                            <span class="extension-status" data-state="warn" title={skillDuplicateTitle(item)}>
+                            <SettingsPill tone="warn" title={skillDuplicateTitle(item)}>
                               {t("skill.duplicate")}
-                            </span>
+                            </SettingsPill>
                           </Show>
-                        </strong>
-                        <span>{item.description || ""}</span>
-                        <small>{item.location || ""}</small>
-                      </div>
-                      <div class="extension-row-actions">
-                        <Show when={skillRemovable(item)}>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            tone="danger"
-                            title={t("skill.delete_button_title")}
-                            aria-label={t("skill.delete_button_title")}
-                            onClick={() => handleRemoveSkill(item.source || "", skillRemoveKind(item), item.name)}
+                        </>
+                      }
+                      desc={item.description || ""}
+                      meta={<small>{item.location || ""}</small>}
+                      interactive
+                      actions={
+                        <div class="extension-settings-actions">
+                          <Show when={skillRemovable(item)}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              tone="danger"
+                              title={t("skill.delete_button_title")}
+                              aria-label={t("skill.delete_button_title")}
+                              onClick={() => handleRemoveSkill(item.source || "", skillRemoveKind(item), item.name)}
+                            >
+                              {t("common.delete")}
+                            </Button>
+                          </Show>
+                          <Show
+                            when={
+                              item.location &&
+                              item.location !== "builtin" &&
+                              (isRemoteUrl(item.location) ? canOpenRemoteUrl() : canOpenLocalPath())
+                            }
                           >
-                            {t("common.delete")}
-                          </Button>
-                        </Show>
-                        <Show
-                          when={
-                            item.location &&
-                            item.location !== "builtin" &&
-                            (isRemoteUrl(item.location) ? canOpenRemoteUrl() : canOpenLocalPath())
-                          }
-                        >
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            tone="neutral"
-                            title={t("skill.open_button_title")}
-                            aria-label={t("skill.open_button_title")}
-                            onClick={() => handleOpenSkill(item.location!)}
-                          >
-                            {t("common.open")}
-                          </Button>
-                        </Show>
-                        <span class="extension-status" data-state="connected">
-                          {item.builtin ? t("skill.builtin") : t("common.loaded")}
-                        </span>
-                      </div>
-                    </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              tone="neutral"
+                              title={t("skill.open_button_title")}
+                              aria-label={t("skill.open_button_title")}
+                              onClick={() => handleOpenSkill(item.location!)}
+                            >
+                              {t("common.open")}
+                            </Button>
+                          </Show>
+                          <SettingsPill tone="ok">
+                            {item.builtin ? t("skill.builtin") : t("common.loaded")}
+                          </SettingsPill>
+                        </div>
+                      }
+                    />
                   )}
                 </For>
               </Show>
             </div>
           </div>
-        </section>
+        </SettingsGroup>
       </Show>
 
       {/* ── MCP Servers ── */}
       <Show when={props.mode === "mcp"}>
-        <section class="ext-group" data-compact={props.compact ? "true" : "false"}>
-          <Show
-            when={props.compact}
-            fallback={
-              <SurfaceHeader
-                variant="settings-group"
-                title={t("mcp.title")}
-                actions={
-                  <>
-                    <PanelActionButton
-                      icon="plus"
-                      label={t("mcp.add_action")}
-                      onClick={() => void setShowAddMcp(!showAddMcp())}
-                    />
-                    <PanelActionButton
-                      icon="cancel"
-                      label={t("mcp.delete_all")}
-                      tone="danger"
-                      disabled={mcpEntries().length === 0}
-                      onClick={handleDeleteAllMcp}
-                    />
-                  </>
-                }
-              />
-            }
-          >
+        <SettingsGroup
+          class="extension-settings-group"
+          data-compact={props.compact ? "true" : "false"}
+          title={props.compact ? undefined : t("mcp.title")}
+          actions={
+            props.compact ? undefined : (
+              <>
+                <PanelActionButton
+                  icon="plus"
+                  label={t("mcp.add_action")}
+                  onClick={() => void setShowAddMcp(!showAddMcp())}
+                />
+                <PanelActionButton
+                  icon="cancel"
+                  label={t("mcp.delete_all")}
+                  tone="danger"
+                  disabled={mcpEntries().length === 0}
+                  onClick={handleDeleteAllMcp}
+                />
+              </>
+            )
+          }
+        >
+          <Show when={props.compact}>
             <div class="tool-panel-toolbar" role="toolbar" aria-label={t("mcp.title")}>
               <PanelActionButton
                 compact
@@ -945,7 +963,7 @@ function ExtensionSettingsPanel(props: {
               />
             </div>
           </Show>
-          <div class="ext-group-body">
+          <div class="extension-settings-body">
             {/* Add MCP inline form */}
             <Show when={showAddMcp()}>
               <div class="config-inline-form">
@@ -1033,29 +1051,26 @@ function ExtensionSettingsPanel(props: {
                     const status = item?.status || "disabled"
                     const detail = item?.error || ""
                     return (
-                      <div class="extension-row">
-                        <div class="extension-row-main">
-                          <strong>{name}</strong>
-                          <span>{detail ? detail : mcpStatusLabel(status)}</span>
-                        </div>
-                        <span class="extension-status" data-state={status}>
-                          {mcpStatusLabel(status)}
-                        </span>
-                      </div>
+                      <SettingsRow
+                        class="extension-settings-row"
+                        title={name}
+                        desc={detail ? detail : mcpStatusLabel(status)}
+                        interactive
+                        actions={<SettingsPill tone={mcpStatusTone(status)}>{mcpStatusLabel(status)}</SettingsPill>}
+                      />
                     )
                   }}
                 </For>
               </Show>
             </div>
           </div>
-        </section>
+        </SettingsGroup>
       </Show>
 
       {/* ── Skill Market ── */}
       <Show when={props.mode === "skill-market"}>
-        <section class="ext-group">
-          <SurfaceHeader variant="settings-group" title={t("skill.market.title")} />
-          <div class="ext-group-body">
+        <SettingsGroup class="extension-settings-group" title={t("skill.market.title")}>
+          <div class="extension-settings-body">
             <div class="extension-list" id="skillMarketList">
               <Show when={market().length > 0} fallback={<div class="empty-hint">{t("skill.market.none")}</div>}>
                 <For each={market()}>
@@ -1074,9 +1089,9 @@ function ExtensionSettingsPanel(props: {
                           </Show>
                         </div>
                         <div class="market-card-actions">
-                          <span class="extension-status" data-state={item.recommended_policy || ""}>
+                          <SettingsPill tone={policyTone(item.recommended_policy || "")}>
                             {policyLabel(item.recommended_policy || "")}
-                          </span>
+                          </SettingsPill>
                           <Show
                             when={installable}
                             fallback={
@@ -1115,7 +1130,7 @@ function ExtensionSettingsPanel(props: {
               </Show>
             </div>
           </div>
-        </section>
+        </SettingsGroup>
       </Show>
     </>
   )

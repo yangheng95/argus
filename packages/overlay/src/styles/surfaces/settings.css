@@ -13,14 +13,11 @@
    text-strong / text-soft / text-muted triad (not font size —
    --ui-font-heading / title / body remain 14/13/12).
 
-   Migration map (see specs/overlay-settings-primitives-2026-05-26.md):
-     perm-row / extension-row / market-card / channel-doc-card /
-     provider-flat-row / agent-model-row / knowledge-item /
-     config-toggle-list-item → .s-row
-     config-panel-group / ext-group → .s-group
-     extension-status / provider-row-status / provider-count-pill /
-     knowledge-scope → .s-pill
-     perm-action-btn → .s-segmented-btn
+   Migration map: settings-specific legacy row wrappers converge on
+   .s-row, group wrappers converge on .s-group, and settings-owned
+   status/count badges converge on .s-pill. Market, channel-doc, and
+   knowledge item classes keep domain layout but must not recreate
+   settings row/status primitives.
    ────────────────────────────────────────────────────────── */
 
 .s-panel {
@@ -506,11 +503,9 @@
 
 
 /* Memory scope chip: "global" / "session" / "builtin_default"
-   tones. The pill-shape declaration (border-radius / padding /
-   font) lives in the cross-surface multi-class
-   `.section-badge, .extension-status, .knowledge-
-   scope, .mini-badge` block in styles.css — only the
-   surface-specific tone overrides live here. */
+   tones. Knowledge scope owns its compact pill shape here so settings
+   chips do not depend on a retired cross-surface extension status
+   family. */
 .knowledge-scope {
   padding: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
@@ -622,30 +617,7 @@
   gap: calc(6px * var(--ui-scale));
 }
 
-/* Extension row: one card per installed extension. The row's
-   `--surface-inset` background was moved into this canonical
-   directly during iter30 because the late forced reset
-   was forcing the rendered bg anyway (see styles.css note for
-   the iter30 audit). */
-.extension-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: calc(10px * var(--ui-scale));
-  padding: var(--ui-card-padding-y) 0;
-  border-radius: 0;
-  border: 0;
-  background: transparent;
-}
-
-.extension-row-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(3px * var(--ui-scale));
-}
-
-.extension-row strong {
+.extension-settings-row .s-row-title {
   display: inline-flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
@@ -654,14 +626,14 @@
   color: var(--text-strong);
 }
 
-.extension-row span,
-.extension-row small {
+.extension-settings-row .s-row-desc,
+.extension-settings-row .s-row-meta {
   font-size: var(--ui-font-control);
   line-height: 1.4;
   color: var(--text-soft);
 }
 
-.extension-row-actions {
+.extension-settings-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -808,7 +780,7 @@
   color: var(--text-strong);
 }
 
-.ext-group[data-skill-drop-active="true"] .skill-drop-zone {
+.extension-settings-group[data-skill-drop-active="true"] .skill-drop-zone {
   border-color: color-mix(in srgb, var(--accent) 76%, var(--border));
   background: color-mix(in srgb, var(--accent) 10%, var(--surface-inset));
   color: var(--text-strong);
@@ -1261,22 +1233,13 @@
     transform var(--ui-duration-base) var(--ui-timing-standard);
 }
 
-/* Flat (non-collapsible) groups inside the Extensions tab —
-   keeps nested extension lists visually grouped without adding
-   another shell surface. */
-.ext-group {
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.ext-group + .ext-group {
+.extension-settings-group + .extension-settings-group {
   margin-top: calc(10px * var(--ui-scale));
   padding-top: calc(10px * var(--ui-scale));
   border-top: 0 solid transparent;
 }
 
-.ext-group-body {
+.extension-settings-body {
   display: flex;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
@@ -1923,7 +1886,7 @@
   flex-direction: column;
   gap: var(--ui-gap-sm);
 }
-.provider-flat-row {
+.provider-settings-row {
   display: grid;
   grid-template-columns:
     minmax(calc(260px * var(--ui-scale)), 1fr) minmax(calc(160px * var(--ui-scale)), max-content)
@@ -1943,12 +1906,6 @@
     border-color var(--ui-duration-base),
     background var(--ui-duration-base),
     box-shadow var(--ui-duration-base);
-}
-.provider-flat-row:hover,
-.provider-flat-row:focus-within {
-  border-color: transparent;
-  background: var(--settings-surface-hover);
-  box-shadow: none;
 }
 .provider-row-main {
   grid-area: main;
@@ -1983,7 +1940,6 @@
   white-space: nowrap;
 }
 .provider-row-meta,
-.provider-row-status,
 .provider-row-models {
   color: var(--text-soft);
   font-size: var(--ui-font-control);
@@ -2006,39 +1962,15 @@
   gap: var(--ui-gap-xs);
   min-width: 0;
 }
-.provider-count-pill,
-.provider-row-status {
+.provider-model-count,
+.provider-auth-status {
   max-width: 100%;
-  display: inline-flex;
-  align-items: center;
-  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: var(--surface-inset);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.provider-count-pill {
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
+.provider-model-count {
   font-variant-numeric: tabular-nums;
-}
-.provider-row-status[data-tone="active"],
-.provider-row-status[data-tone="ready"] {
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-.provider-row-status[data-tone="error"] {
-  border-color: color-mix(in srgb, var(--bad) 34%, transparent);
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-.provider-row-status[data-tone="warn"] {
-  border-color: color-mix(in srgb, var(--warn) 34%, transparent);
-  background: var(--warn-dim);
-  color: var(--warn);
 }
 .provider-row-actions {
   grid-area: actions;
@@ -2071,8 +2003,14 @@
   white-space: nowrap;
 }
 .provider-add-card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
   margin-top: var(--ui-gap-md);
+  padding: 0;
   border: 0 solid transparent;
+  border-radius: 0;
+  background: transparent;
 }
 .provider-add-title {
   color: var(--text-strong);
@@ -2175,10 +2113,10 @@
 @media (max-width: 900px) {
   /* breakpoint: --ui-breakpoint-lg */
   .provider-command,
-  .provider-flat-row {
+  .provider-settings-row {
     grid-template-columns: 1fr;
   }
-  .provider-flat-row {
+  .provider-settings-row {
     grid-template-areas:
       "main"
       "summary"
@@ -2324,99 +2262,6 @@
   overflow-wrap: break-word;
 }
 
-.config-panel-group {
-  display: flex;
-  flex-direction: column;
-  /* Density refresh: 10 → 6 between header and card inside a group. */
-  gap: calc(6px * var(--ui-scale));
-}
-
-.config-panel-card {
-  display: flex;
-  flex-direction: column;
-  /* Flat settings group: spacing only; the owner surface does not draw
-   * another card around controls that already have their own chrome. */
-  gap: calc(6px * var(--ui-scale));
-  padding: 0;
-  border: 0 solid transparent;
-  border-radius: 0;
-  background: transparent;
-  transition:
-    border-color var(--ui-duration-base),
-    background var(--ui-duration-base);
-}
-
-.config-panel-card:hover {
-  border-color: transparent;
-}
-
-.config-panel-card-head {
-  display: flex;
-  align-items: flex-start;
-  gap: calc(12px * var(--ui-scale));
-  min-width: 0;
-}
-
-.config-panel-card-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--ui-font-title);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.config-panel-card-actions {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.config-panel-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.config-panel-list-row {
-  display: flex;
-  align-items: center;
-  gap: calc(12px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) 0;
-  border-bottom: var(--oc-border-width) solid var(--border);
-  font-size: var(--ui-font-control);
-}
-
-.config-panel-list-row:last-child {
-  border-bottom: none;
-}
-
-.config-panel-list-main {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.config-panel-list-meta {
-  flex: none;
-  color: var(--text-muted);
-  white-space: nowrap;
-  text-align: right;
-}
-
-.config-panel-card .field-label {
-  text-transform: none;
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--text-soft);
-  letter-spacing: var(--ui-letter-spacing-normal);
-}
-
-.config-panel-card .dialog-actions {
-  padding-top: calc(4px * var(--ui-scale));
-}
-
 .config-content .oc-button[data-size="mini"] {
   font-size: var(--ui-font-control);
 }
@@ -2454,24 +2299,30 @@
   margin-top: calc(2px * var(--ui-scale));
 }
 
-.agent-model-row {
-  display: flex;
-  align-items: center;
+.agent-model-assignment {
   gap: calc(10px * var(--ui-scale));
   padding: calc(5px * var(--ui-scale)) 0;
   border-top: 0 solid transparent;
 }
 
-.agent-model-row:hover {
-  background: var(--settings-surface-hover);
+.agent-model-assignment .s-row-main {
+  flex: 0 0 calc(140px * var(--ui-scale));
+  min-width: 0;
 }
 
-.agent-model-tier-label + .agent-model-row {
+.agent-model-assignment .s-row-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+}
+
+.agent-model-tier-label + .agent-model-assignment {
   border-top: none;
 }
 
 .agent-model-name {
-  flex: 0 0 calc(140px * var(--ui-scale));
   font-family: var(--mono);
   font-size: var(--ui-font-control);
   color: var(--text-soft);
@@ -2509,57 +2360,6 @@
 
 .pref-item-value {
   font-size: var(--ui-font-control);
-}
-
-.config-toggle-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.config-toggle-list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(12px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  border-bottom: var(--oc-border-width) solid var(--divider-soft);
-  transition: background var(--ui-duration-fast);
-}
-.config-toggle-list-item:hover {
-  background: var(--settings-surface-hover);
-}
-.config-toggle-list-item:last-child {
-  border-bottom: none;
-  padding-bottom: calc(2px * var(--ui-scale));
-}
-.config-toggle-list-item:first-child {
-  padding-top: calc(2px * var(--ui-scale));
-}
-
-.config-toggle-list-item .toggle-label {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--text);
-  line-height: 1.3;
-  cursor: default;
-}
-.config-toggle-list-item .toggle-hint {
-  font-size: var(--ui-font-meta);
-  font-weight: var(--ui-font-weight-body);
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.config-toggle-list-item input[type="checkbox"] {
-  width: calc(16px * var(--ui-scale));
-  height: calc(16px * var(--ui-scale));
-  /* `accent-color` declared globally on body (tokens/design-language.css). */
-  flex-shrink: 0;
-  cursor: pointer;
 }
 
 /* ─────────────────────────────────────────────────────────────

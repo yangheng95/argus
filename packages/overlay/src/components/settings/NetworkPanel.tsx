@@ -8,7 +8,7 @@ import {
 } from "../../services/config"
 import { t } from "../../utils/i18n"
 import { Button } from "../ui/Button"
-import { SurfaceHeader } from "../ui/SurfaceHeader"
+import { SettingsGroup, SettingsPanel, SettingsRow } from "./primitives"
 
 function configuredProxy(): {
   llmProvider: boolean
@@ -174,41 +174,45 @@ export default function NetworkPanel() {
   }
 
   return (
-    <div class="general-panel network-panel">
-      <div class="config-panel-group">
-        <SurfaceHeader variant="settings-group" title={t("network.proxy.title")} />
-        <div class="config-panel-card">
-          <div class="config-toggle-list">
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">
-                {t("network.proxy.llm_provider_label")}
-                <span class="toggle-hint">{t("network.proxy.llm_provider_hint")}</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={llmProvider()}
-                onChange={(e) => {
-                  setLlmProvider(e.currentTarget.checked)
-                  clearFeedback()
-                }}
-              />
-            </label>
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">
-                {t("network.proxy.web_research_label")}
-                <span class="toggle-hint">{t("network.proxy.web_research_hint")}</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={webResearch()}
-                onChange={(e) => {
-                  setWebResearch(e.currentTarget.checked)
-                  clearFeedback()
-                }}
-              />
-            </label>
-          </div>
+    <SettingsPanel class="general-panel network-panel">
+      <SettingsGroup title={t("network.proxy.title")}>
+        <SettingsRow
+          title={<label for="network-proxy-llm-provider">{t("network.proxy.llm_provider_label")}</label>}
+          desc={t("network.proxy.llm_provider_hint")}
+          align="center"
+          interactive
+          actions={
+            <input
+              id="network-proxy-llm-provider"
+              type="checkbox"
+              checked={llmProvider()}
+              onChange={(e) => {
+                setLlmProvider(e.currentTarget.checked)
+                clearFeedback()
+              }}
+            />
+          }
+        />
 
+        <SettingsRow
+          title={<label for="network-proxy-web-research">{t("network.proxy.web_research_label")}</label>}
+          desc={t("network.proxy.web_research_hint")}
+          align="center"
+          interactive
+          actions={
+            <input
+              id="network-proxy-web-research"
+              type="checkbox"
+              checked={webResearch()}
+              onChange={(e) => {
+                setWebResearch(e.currentTarget.checked)
+                clearFeedback()
+              }}
+            />
+          }
+        />
+
+        <SettingsRow>
           <label class="field">
             <span class="field-label">{t("network.proxy.url_label")}</span>
             <input
@@ -222,7 +226,9 @@ export default function NetworkPanel() {
               }}
             />
           </label>
+        </SettingsRow>
 
+        <SettingsRow>
           <label class="field">
             <span class="field-label">{t("network.proxy.username_label")}</span>
             <input
@@ -236,7 +242,9 @@ export default function NetworkPanel() {
               }}
             />
           </label>
+        </SettingsRow>
 
+        <SettingsRow>
           <label class="field">
             <span class="field-label">{t("network.proxy.password_label")}</span>
             <input
@@ -250,50 +258,55 @@ export default function NetworkPanel() {
               }}
             />
           </label>
+        </SettingsRow>
 
-          {error() ? (
-            <div class="provider-form-error" role="alert" aria-live="polite">
-              {error()}
-            </div>
-          ) : null}
-
-          {testResult() ? (
-            <div
-              class="provider-test-result"
-              data-ok={testResult()!.ok ? "true" : "false"}
-              role="status"
-              aria-live="polite"
-              title={testResult()!.targetUrl}
-            >
-              <span class="provider-test-result-msg">{proxyTestMessage(testResult()!)}</span>
-            </div>
-          ) : null}
-
-          <div class="dialog-actions compact">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              tone="neutral"
-              onClick={() => void testProxy()}
-              disabled={testing() || saving()}
-              title={t("network.proxy.test_button_title")}
-            >
-              {testing() ? t("network.proxy.test_testing") : t("network.proxy.test_button")}
-            </Button>
-            <Button
-              type="button"
-              variant="solid"
-              size="sm"
-              tone="accent"
-              onClick={() => void saveProxy()}
-              disabled={saving() || testing()}
-            >
-              {saving() ? t("common.saving") : saved() ? t("common.saved") : t("common.save")}
-            </Button>
+        {error() ? (
+          <div class="provider-form-error" role="alert" aria-live="polite">
+            {error()}
           </div>
-        </div>
-      </div>
-    </div>
+        ) : null}
+
+        {testResult() ? (
+          <div
+            class="provider-test-result"
+            data-ok={testResult()!.ok ? "true" : "false"}
+            role="status"
+            aria-live="polite"
+            title={testResult()!.targetUrl}
+          >
+            <span class="provider-test-result-msg">{proxyTestMessage(testResult()!)}</span>
+          </div>
+        ) : null}
+
+        <SettingsRow
+          align="center"
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                tone="neutral"
+                onClick={() => void testProxy()}
+                disabled={testing() || saving()}
+                title={t("network.proxy.test_button_title")}
+              >
+                {testing() ? t("network.proxy.test_testing") : t("network.proxy.test_button")}
+              </Button>
+              <Button
+                type="button"
+                variant="solid"
+                size="sm"
+                tone="accent"
+                onClick={() => void saveProxy()}
+                disabled={saving() || testing()}
+              >
+                {saving() ? t("common.saving") : saved() ? t("common.saved") : t("common.save")}
+              </Button>
+            </>
+          }
+        />
+      </SettingsGroup>
+    </SettingsPanel>
   )
 }

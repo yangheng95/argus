@@ -38,7 +38,7 @@ async function savePanelScreenshot(page: any, filename: string) {
 
 async function readGeneralHeaderState(page: any) {
   return page.$$eval(
-    ".general-panel .oc-surface-header[data-surface='settings-group'] .oc-surface-header__title",
+    ".general-panel .s-group-head-title",
     (nodes: HTMLElement[]) =>
       nodes.map((node) => {
         const style = getComputedStyle(node)
@@ -192,9 +192,9 @@ test("General Settings write failures stay visible and do not report saved state
       node.scrollTop = 0
     })
     assert.deepEqual(await readGeneralHeaderState(page), [
-      { text: "Connection", textTransform: "none", letterSpacing: "normal", fontWeight: "550" },
-      { text: "Database", textTransform: "none", letterSpacing: "normal", fontWeight: "550" },
-      { text: "Behaviour", textTransform: "none", letterSpacing: "normal", fontWeight: "550" },
+      { text: "Connection", textTransform: "uppercase", letterSpacing: "0.44304px", fontWeight: "600" },
+      { text: "Database", textTransform: "uppercase", letterSpacing: "0.44304px", fontWeight: "600" },
+      { text: "Behaviour", textTransform: "uppercase", letterSpacing: "0.44304px", fontWeight: "600" },
     ])
     const headerScreenshot = await savePanelScreenshot(page, "general-settings-surface-headers.png")
     assert.ok(headerScreenshot.endsWith("general-settings-surface-headers.png"))
@@ -211,7 +211,7 @@ test("General Settings write failures stay visible and do not report saved state
       /Reset the OpenCorvus database for D:\/overlay\/workspace\/app/,
     )
 
-    const saveButton = "#configDialog .general-panel .dialog-actions .oc-button"
+    const saveButton = '#configDialog .general-panel [data-ui="settings-server-save"]'
     await page.waitForSelector(saveButton, { visible: true })
     await page.click(saveButton)
     await page.waitForFunction(() =>
@@ -228,7 +228,7 @@ test("General Settings write failures stay visible and do not report saved state
       ;(window as any).__settingsSaveShouldFail = false
     })
 
-    const debugToggle = ".general-panel .config-toggle-list-item:nth-of-type(2) input[type='checkbox']"
+    const debugToggle = "#settings-fail-on-information-missing"
     await page.waitForSelector(debugToggle, { visible: true })
     assert.equal(await page.$eval(debugToggle, (node: HTMLInputElement) => node.checked), false)
     await page.click(debugToggle)

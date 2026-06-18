@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   Inline Pill family (.extension-status, .gwg-priority-badge)
+   Inline Pill family (.gwg-priority-badge)
 
    The "dot-prefix" canonical established in iter15+: a transparent
    base + ::before colored dot + state-tinted color, no panel chrome.
@@ -12,26 +12,6 @@
    `.llm-status` + `.llm-notice` were retired with this slice
    (2026-05-04) — they had no remaining call sites in TS/TSX/HTML.
    ───────────────────────────────────────────────────────────── */
-
-.extension-status {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  min-height: auto;
-  padding: 0 0 0 calc(10px * var(--ui-scale));
-  border: none;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  box-shadow: none;
-  line-height: 1.3;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  font-weight: var(--ui-font-weight-strong);
-  flex-shrink: 0;
-  padding-left: calc(10px * var(--ui-scale));
-  font-size: var(--ui-font-small);
-  text-transform: none;
-  color: var(--text-soft);
-}
 
 .gwg-priority-badge {
   position: relative;
@@ -52,7 +32,6 @@
   color: var(--warn);
 }
 
-.extension-status::before,
 .gwg-priority-badge::before {
   content: "";
   position: absolute;
@@ -63,38 +42,6 @@
   border-radius: var(--oc-radius-pill);
   background: color-mix(in srgb, var(--subtle-4) 94%, transparent);
   transform: translateY(-50%);
-}
-
-.extension-status[data-state="connected"] {
-  color: var(--accent);
-}
-
-.extension-status[data-state="connected"]::before {
-  background: color-mix(in srgb, var(--accent) 84%, transparent);
-}
-
-.extension-status[data-state="failed"] {
-  color: var(--bad);
-}
-
-.extension-status[data-state="failed"]::before {
-  background: color-mix(in srgb, var(--bad) 82%, transparent);
-}
-
-.extension-status[data-state="disabled"] {
-  color: var(--text-muted);
-}
-
-.extension-status[data-state="disabled"]::before {
-  background: color-mix(in srgb, var(--text-muted) 72%, transparent);
-}
-
-.extension-status[data-state="warn"] {
-  color: var(--warn);
-}
-
-.extension-status[data-state="warn"]::before {
-  background: color-mix(in srgb, var(--warn) 82%, transparent);
 }
 
 .gwg-priority-badge::before {

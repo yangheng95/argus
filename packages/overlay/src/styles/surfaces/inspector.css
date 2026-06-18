@@ -954,6 +954,8 @@
 .acceptance-panel {
   --acceptance-panel-accent: var(--text-muted);
   position: relative;
+  min-width: 0;
+  max-width: 100%;
   padding: calc(6px * var(--ui-scale));
   border: 0;
   border-radius: var(--oc-radius-soft);
@@ -996,13 +998,6 @@
   display: none;
 }
 
-.acceptance-panel,
-.acceptance-summary,
-.acceptance-panel .oc-button[data-ui="acceptance-files-link"] {
-  min-width: 0;
-  max-width: 100%;
-}
-
 .acceptance-panel-meta {
   display: flex;
   min-height: calc(26px * var(--ui-scale));
@@ -1018,6 +1013,8 @@
 }
 
 .acceptance-summary {
+  min-width: 0;
+  max-width: 100%;
   font-size: var(--ui-font-title);
   color: var(--text);
   line-height: 1.65;
@@ -1043,6 +1040,8 @@
 .acceptance-panel .oc-button[data-ui="acceptance-files-link"] {
   align-self: flex-start;
   justify-self: flex-start;
+  min-width: 0;
+  max-width: 100%;
   --oc-button-padding-x: calc(10px * var(--ui-scale));
   font-family: var(--mono);
 }
@@ -2492,7 +2491,6 @@
     transform var(--ui-duration-base);
 }
 
-.extension-row:hover,
 .channel-doc-card:hover,
 .knowledge-item:hover,
 .pref-item:hover {

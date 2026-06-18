@@ -10,7 +10,7 @@
 //                  bg, `--warn` color. Looked like a
 //                  classic warn pill.
 //   - line ~11958: multi-selector layout shared with
-//                  `.extension-status` / `.llm-status` —
+//                  retired status classes —
 //                  REWRITES the chrome to a dot-prefix
 //                  status row: `border: none`,
 //                  `border-radius: 0`, `background: transparent`,
@@ -27,13 +27,9 @@
 // editing it was a no-op.
 //
 // Pin: delete the lying pill canonical at ~10628; keep the
-// actual rendered values (the dot-prefix layout shared via
-// the 11958 multi-selector + the warn color override at
-// ~12053). Result: ONE solo top-level `.gwg-priority-badge`
-// rule (the color override). The shared dot-prefix layout
-// stays in its multi-selector partner — that's a legitimate
-// DRY abstraction shared with .extension-status /
-// .llm-status, not a dual-source concern.
+// actual rendered dot-prefix values. Result: ONE solo top-level
+// `.gwg-priority-badge` rule owns the live badge after the retired
+// status classes were removed.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
