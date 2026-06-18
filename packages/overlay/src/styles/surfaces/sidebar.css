@@ -28,15 +28,6 @@
   flex: 1 1 auto;
 }
 
-.sidebar-subtitle {
-  font-size: var(--ui-font-meta);
-  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-soft));
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .sidebar-header-actions {
   flex-wrap: nowrap;
   justify-content: flex-end;
@@ -113,18 +104,6 @@
   display: flex;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
-}
-
-/* Group heading: "Today", "Yesterday", "Last 7 days", "Older" labels.
-   Title Case, slightly muted, sits one notch below the chat row
-   labels. Weight tightened to 600 (was 700) — the muted color +
-   smaller font already carry the kicker. */
-.sidebar-list-heading {
-  display: block;
-  padding: calc(2px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  font-size: var(--ui-font-small);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-muted);
 }
 
 .sidebar-list-cluster {
@@ -239,15 +218,6 @@
   align-items: center;
   gap: calc(5px * var(--ui-scale));
   overflow: hidden;
-}
-
-.task-row-meta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--ui-scale));
-  flex-shrink: 0;
-  color: var(--text-muted);
 }
 
 .task-row-main strong {

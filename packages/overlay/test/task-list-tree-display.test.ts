@@ -103,7 +103,7 @@ describe("Parent-row badge: count + run-pulse + fail-color", () => {
   test("chevron click stops propagation so the row is not selected on toggle", () => {
     // Without stopPropagation the chevron click would bubble into
     // the outer .task-row-main button and trigger task selection.
-    expect(TASK_LIST).toMatch(/onClick=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\);\s*props\.onToggleExpand/)
+    expect(TASK_LIST).toMatch(/onClick=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\)\s*;?\s*props\.onToggleExpand/)
   })
 
   test("chevron opts out of HTML5 drag so clicking it never starts a row drag", () => {
@@ -118,10 +118,10 @@ describe("Parent-row badge: count + run-pulse + fail-color", () => {
     // dragstart handler as belt-and-suspenders.
     expect(TASK_LIST).toMatch(/class="task-row-children-toggle"[\s\S]+?draggable=\{false\}/)
     expect(TASK_LIST).toMatch(
-      /class="task-row-children-toggle"[\s\S]+?onMouseDown=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\)/,
+      /class="task-row-children-toggle"[\s\S]+?onMouseDown=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\)\s*;?\s*\}/,
     )
     expect(TASK_LIST).toMatch(
-      /class="task-row-children-toggle"[\s\S]+?onDragStart=\{\(event\)\s*=>\s*\{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\)/,
+      /class="task-row-children-toggle"[\s\S]+?onDragStart=\{\(event\)\s*=>\s*\{\s*event\.preventDefault\(\)\s*;?\s*event\.stopPropagation\(\)/,
     )
   })
 })

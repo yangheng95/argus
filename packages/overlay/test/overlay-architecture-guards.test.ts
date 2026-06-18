@@ -558,7 +558,6 @@ describe("overlay architecture guards", () => {
       "task-row-drag-handle",
       "task-row-main",
       "task-row-head",
-      "task-row-meta",
       "task-row-stamp",
       "task-row-badge",
       "task-row-badge-text",
@@ -573,6 +572,7 @@ describe("overlay architecture guards", () => {
     expect(sidebarSurface).toMatch(/\.task-row-badge\[data-status="completed"\]/)
     expect(sidebarSurface).toMatch(/\.task-row-badge\[data-status="failed"\]/)
     expect(sidebarSurface).toMatch(/\.task-row-mini\[data-draggable="true"\]:hover \.task-row-drag-handle/)
+    expect(sidebarSurface).not.toMatch(/\.task-row-meta\b/)
   })
 
   test("sidebar body + list family are owned by surfaces/sidebar.css", () => {
@@ -585,7 +585,6 @@ describe("overlay architecture guards", () => {
       "sidebar-list",
       "task-list-panel",
       "sidebar-list-group",
-      "sidebar-list-heading",
       "sidebar-list-cluster",
       "project-group",
       "project-group-heading",
@@ -604,6 +603,7 @@ describe("overlay architecture guards", () => {
     expect(sidebarSurface).toMatch(/\.project-group-icon\s*\{/)
     expect(sidebarSurface).toMatch(/@keyframes project-group-body-reveal\s*\{/)
     expect(sidebarSurface).not.toMatch(/data-active-project/)
+    expect(sidebarSurface).not.toMatch(/\.sidebar-list-heading\b/)
   })
 
   test("sidebar shell + tool family are owned by surfaces/sidebar.css", () => {
@@ -611,11 +611,12 @@ describe("overlay architecture guards", () => {
     const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
-    for (const className of ["sidebar", "sidebar-title", "sidebar-subtitle", "sidebar-header-actions"]) {
+    for (const className of ["sidebar", "sidebar-title", "sidebar-header-actions"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
+    expect(sidebarSurface).not.toMatch(/\.sidebar-subtitle\b/)
     expect(sidebarSurface).toMatch(/\.sidebar\[data-collapsed="true"\]\s*\{/)
     expect(sidebarSurface).toContain("--ui-collapsed-pane-width")
     expect(sidebarSurface).not.toContain("sidebar-toolset")

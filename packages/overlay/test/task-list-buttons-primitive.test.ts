@@ -61,6 +61,7 @@ test("TaskList task rows stay one-line while preserving detail in tooltips", () 
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('aria-expanded={props.collapsed ? "false" : "true"}')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('class="project-group-chevron"')
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-meta"')
+  expect(SIDEBAR_CSS).not.toContain(".task-row-meta")
   expect(SIDEBAR_CSS).toMatch(/\.task-row-mini\s*\{[^}]*display:\s*grid;/)
   expect(SIDEBAR_CSS).toMatch(
     /\.task-row-mini\s*\{[^}]*grid-template-columns:\s*calc\(20px \* var\(--ui-scale\)\) 0 minmax\(0, 1fr\) max-content;/,
