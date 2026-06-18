@@ -26,17 +26,21 @@ popup readability risk, not a component-local color patch.
 | `rg -n -F "<select" packages/overlay/src packages/overlay/test specs/new-arch` | No active overlay component renders a native prompt-profile `<select>` or `<option>`. | Do not reintroduce native select-specific CSS. |
 | `rg -n -F "prompt-profile-select" packages/overlay/src packages/overlay/dist-vite packages/overlay/test specs/new-arch` | Source and current dist both use Kobalte Select with `.oc-select-content` and `.oc-select-option`. | Treat current runtime as the evidence source, not the old native implementation. |
 | Real browser screenshot `.scratch/prompt-profile-selector-current.png` | The current light-theme popup renders General, Frontend, Backend, and Algorithm visibly. | No production color patch is justified by current evidence. |
-| `packages/overlay/test/browser/prompt-profile-selector-browser.test.ts` | The test checked all options but did not separately pin the unselected-option set or calculate contrast against each option's effective surface. | Harden the browser test to match the reported failure mode. |
+| `packages/overlay/test/browser/prompt-profile-selector-browser.test.ts` | The test checked all options but did not pin Kobalte's explicit `aria-selected="false"` unselected-option state. | Harden the browser test to match the reported failure mode. |
+| `packages/overlay/test/browser/select-popup-contrast-matrix.test.ts` | The matrix covered shared Select consumers, but hand-wrote a partial CSS order instead of using `src/index.html` as the stylesheet source. | Load matrix CSS from the real entrypoint order. |
 
 ## Fix
 
 - Keep the Expert Squad selector on Kobalte Select and shared `.oc-select-*`
   popup styling.
 - Extend the real overlay browser test to:
-  - identify unselected `.prompt-profile-select-option` rows explicitly;
+  - identify unselected `.prompt-profile-select-option[aria-selected="false"]`
+    rows explicitly;
   - composite each option background over the popup background;
   - assert primary and secondary text contrast against that effective surface;
   - keep the popup background alpha check at `1`.
+- Make the shared Select matrix read stylesheet order from `src/index.html`
+  and require an explicit `aria-selected="false"` option for every sample.
 - Leave production CSS and component code unchanged because the current
   screenshots and shared Select matrix already prove the live source is
   readable.
