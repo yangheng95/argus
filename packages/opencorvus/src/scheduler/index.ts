@@ -53,7 +53,7 @@ export namespace Scheduler {
   }
 
   async function run(task: Task) {
-    log.info("run", { id: task.id })
+    log.debug("run", { id: task.id })
     await task.run().catch((error) => {
       log.error("run failed", { id: task.id, error })
     })

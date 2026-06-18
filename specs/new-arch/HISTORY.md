@@ -12,6 +12,12 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [right-sidebar-opencode-tui-upgrade-2026-06-04.md](right-sidebar-opencode-tui-upgrade-2026-06-04.md)                                   | Right Sidebar OpenCode TUI Upgrade                  |
 | [spec-vscode-extension.md](spec-vscode-extension.md)                                                                                   | spec: opencorvus VSCode 扩展                        |
 
+## 2026-06-19
+
+| File                                                                                                           | Title                      |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| [2026-06-19-overlay-diff-poll-pressure.md](2026-06-19-overlay-diff-poll-pressure.md)                           | Overlay Diff Poll Pressure |
+
 ## 2026-06-18
 
 | File                                                                                                                                       | Title                                  |

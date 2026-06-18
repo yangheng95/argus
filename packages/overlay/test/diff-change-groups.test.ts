@@ -1,4 +1,6 @@
 import { expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import type { ChangeGroup } from "../src/services/diff"
 
 mock.module("../src/store/board", () => ({
@@ -65,4 +67,13 @@ test("changeGroupsRevisionKey changes when per-file stats are upgraded", () => {
   ])
 
   expect(resolved).not.toBe(stub)
+})
+
+test("ChangesPanel acceptance diff key ignores broad visible tree churn", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/ChangesPanel.tsx"), "utf8")
+  const requestKeyBlock = source.slice(source.indexOf("const requestKey"), source.indexOf("const [resolvedGroups]"))
+
+  expect(requestKeyBlock).toContain("const agentKey = changeGroupsRevisionKey(agentGroups())")
+  expect(requestKeyBlock).toContain("changeGroupsRevisionKey(groups)")
+  expect(requestKeyBlock).not.toContain("cardTreeStore.visibleVersion")
 })

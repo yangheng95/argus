@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { Scheduler } from "../src/scheduler"
 import { Instance } from "../src/project/instance"
 import { tmpdir } from "./fixture/fixture"
@@ -69,5 +71,13 @@ describe("Scheduler.register", () => {
       },
     })
     expect(runs.count).toBe(1)
+  })
+
+  test("successful scheduler ticks are debug logs only", () => {
+    const source = readFileSync(join(import.meta.dir, "../src/scheduler/index.ts"), "utf8")
+
+    expect(source).toContain('log.debug("run", { id: task.id })')
+    expect(source).not.toContain('log.info("run", { id: task.id })')
+    expect(source).toContain('log.error("run failed", { id: task.id, error })')
   })
 })
