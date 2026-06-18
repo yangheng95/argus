@@ -56,4 +56,29 @@ describe("product documentation single source", () => {
 
     expect(offenders).toEqual([])
   })
+
+  test("Mission and Task API guide reflects SDK directory and message contracts", () => {
+    const sdkClient = fs.readFileSync(path.join(repoRoot, "packages/sdk/js/src/client.ts"), "utf8")
+    const taskModel = fs.readFileSync(path.join(repoRoot, "packages/opencorvus/src/engine/model.ts"), "utf8")
+    const enSdk = fs.readFileSync(path.join(repoRoot, "packages/web/src/content/docs/reference/sdk.mdx"), "utf8")
+    const zhSdk = fs.readFileSync(path.join(repoRoot, "packages/web/src/content/docs/zh-cn/reference/sdk.mdx"), "utf8")
+    const enGuide = fs.readFileSync(path.join(repoRoot, "packages/web/src/content/docs/reference/mission-task.mdx"), "utf8")
+    const zhGuide = fs.readFileSync(
+      path.join(repoRoot, "packages/web/src/content/docs/zh-cn/reference/mission-task.mdx"),
+      "utf8",
+    )
+
+    expect(sdkClient).toContain('url.searchParams.set("directory", directory)')
+    expect(enSdk).toContain("Adds the `directory` query parameter")
+    expect(zhSdk).toContain("添加 `directory` query 参数")
+    expect(enSdk).not.toContain("Adds `x-opencorvus-directory`")
+    expect(zhSdk).not.toContain("添加 `x-opencorvus-directory`")
+
+    expect(taskModel).toContain("export const TaskMessageInput = z.object")
+    expect(taskModel).toContain("source: z.string().min(1)")
+    expect(enGuide).toContain('source: "api"')
+    expect(enGuide).toContain("`source` is required")
+    expect(zhGuide).toContain('source: "api"')
+    expect(zhGuide).toContain("`source` 是必填字段")
+  })
 })

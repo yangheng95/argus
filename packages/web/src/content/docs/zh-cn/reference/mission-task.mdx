@@ -91,7 +91,7 @@ Task 有自己的 ID、状态、进度、对话、执行证据和最终代码归
 | -------- | ---------------------------------------- | ------------------------------------ |
 | 发布任务 | `client.task.create()`                   | `POST /task`                         |
 | 查状态   | `client.task.status({ taskID })`         | `GET /task/{taskID}/status`          |
-| 追加说明 | `client.task.message({ taskID, text })`  | `POST /task/{taskID}/message`        |
+| 追加说明 | `client.task.message({ taskID, source, text })` | `POST /task/{taskID}/message`        |
 | 下载代码 | `client.task.projectArchive({ taskID })` | `GET /task/{taskID}/project-archive` |
 | 取消任务 | `client.task.cancel({ taskID })`         | `POST /task/{taskID}/cancel`         |
 | 重试任务 | `client.task.retry({ taskID })`          | `POST /task/{taskID}/retry`          |
@@ -286,9 +286,12 @@ for await (const event of stream) {
 ```typescript
 await client.task.message({
   taskID,
+  source: "api",
   text: "移动端优先，桌面端不要改布局。",
 })
 ```
+
+`source` 是必填字段，用来标识调用方，例如 `api`、`github-action` 或你的系统名。
 
 curl：
 
@@ -296,7 +299,7 @@ curl：
 curl -X POST "http://127.0.0.1:7878/task/task_.../message" \
   -H "content-type: application/json" \
   -H "x-opencorvus-directory: D:\repo\my-project" \
-  -d "{\"text\":\"移动端优先，桌面端不要改布局。\"}"
+  -d "{\"source\":\"api\",\"text\":\"移动端优先，桌面端不要改布局。\"}"
 ```
 
 ## 下载 Task 代码
@@ -496,6 +499,8 @@ const client = createOpenCorvusClient({
 ```text
 http://127.0.0.1:7878/task/task_.../status?directory=D:\repo\my-project
 ```
+
+SDK 会把 `directory` 作为 query 参数加到项目作用域请求上；`x-opencorvus-directory` 是裸 HTTP 调用时可用的等价方式。
 
 设置了 `OPENCORVUS_SERVER_PASSWORD` 时：
 

@@ -35,6 +35,22 @@ Full-repo grep before writing this plan:
 
 The first Chinese draft was still shaped like an endpoint inventory and was too abstract for a human integrator. The revised Chinese page now starts with a complete runnable SDK script, then explains Task and Mission flows with direct SDK and curl examples for create, status polling, message input, archive download, Mission wake, Mission status, and Mission management.
 
+## 2026-06-18 manual refresh
+
+Follow-up grep before the refresh:
+
+| Surface | Evidence | Decision |
+| ------- | -------- | -------- |
+| SDK directory injection | `packages/sdk/js/src/client.ts` uses `withDirectoryQuery()` and `routeRequiresProjectDirectory()` to append `directory` as a query parameter for project-scoped routes. | Update the SDK reference and Mission/Task guide so they no longer claim the SDK sends `x-opencorvus-directory`. |
+| Server directory selection | `packages/opencorvus/src/server/server.ts` accepts either `?directory=` or `x-opencorvus-directory`; `packages/opencorvus/src/server/directory.ts` prefers query when both exist. | Keep raw HTTP examples valid, but describe query as the generated OpenAPI/SDK path and header as a raw HTTP option. |
+| Task follow-up input | `packages/opencorvus/src/engine/model.ts::TaskMessageInput` requires `source`; `packages/sdk/js/src/gen/sdk.gen.ts::Task.message()` exposes `source: string`. | Add `source: "api"` to SDK and curl examples, and add a docs health test so this does not regress. |
+
+Required end state for this refresh:
+
+1. English and Chinese Mission/Task API guides show `source` on every `task.message` example.
+2. SDK reference states that `directory` appends a query parameter, not a header.
+3. Docs tests verify the public examples do not drift from the generated SDK contract.
+
 ## Non-goals
 
 This change does not alter route schemas, SDK generation, task execution, Mission execution, or OpenAPI rendering.
