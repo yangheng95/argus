@@ -81,7 +81,10 @@ export namespace Server {
   }
 
   export async function routeInventoryApp(): Promise<Hono> {
-    const { AppRoutes } = await import("./routes/app")
+    const { AppRoutes, resetAppRouteFactoriesForOpenApi } = await import("./routes/app")
+    resetAppRouteFactoriesForOpenApi()
+    GlobalRoutes.reset()
+    AuthRoutes.reset()
     const documented = AppRoutes(new Hono())
       .route("/global", GlobalRoutes())
       .route("/auth", AuthRoutes())
@@ -274,10 +277,17 @@ export namespace Server {
   )
 
   export async function openapi() {
-    const result = await generateSpecs(await routeInventoryApp(), {
-      documentation: AppDocumentation,
-    })
-    return markRequiredJsonRequestBodies(addDirectoryQueryParameter(result))
+    const { resetAppRouteFactoriesForOpenApi } = await import("./routes/app")
+    try {
+      const result = await generateSpecs(await routeInventoryApp(), {
+        documentation: AppDocumentation,
+      })
+      return markRequiredJsonRequestBodies(addDirectoryQueryParameter(result))
+    } finally {
+      resetAppRouteFactoriesForOpenApi()
+      GlobalRoutes.reset()
+      AuthRoutes.reset()
+    }
   }
 
   export function listen(opts: {

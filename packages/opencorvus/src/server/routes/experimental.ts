@@ -511,3 +511,8 @@ export const ExperimentalRoutes = lazy(() =>
       },
     ),
 )
+
+export function resetExperimentalRouteFactoriesForOpenApi() {
+  WorkspaceRoutes.reset()
+  ExperimentalRoutes.reset()
+}

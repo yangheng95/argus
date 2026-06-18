@@ -4818,3 +4818,52 @@ LINE:
 - Lovelace traced the user-command loss through `resolveSession(...)`, `shouldRemoveSession(...)`, `Session.remove(...)`, and the session message cascade.
 - Lovelace confirmed `ControlTimeline.list(...)` needed an `id` tie-breaker once user and assistant rows are written in the same append transaction.
 - Lovelace warned not to keep temporary sessions, reconstruct from deleted session messages, add route gates, or store raw data URL attachments in timeline metadata.
+
+## Batch P2-CG: residual document-health convergence
+
+### Findings
+
+- After BH-079, the full `packages/opencorvus/test/script/document-health.test.ts` suite still failed in three places.
+- `GET /provider` runtime returns `Provider.database()` / `Provider.list()` entries shaped as `Provider.Info`, where source models marked `deprecated` are filtered and published model status is `alpha | beta | active`.
+- The `GET /provider` OpenAPI schema still declared `all: ModelsDev.Provider[]`, so generated SDK clients exposed `status?: "alpha" | "beta" | "deprecated"` for the public provider list response even though production provider contracts reject deprecated published models.
+- The document-health STT assertion still expected managed `ChannelSupervisor` to call `createConfiguredSTT(process.env)`, but BH-095 intentionally moved managed runtime registration to the project-scoped `env` object to prevent global credential residue.
+- `packages/overlay/test/browser/popup-contrast-matrix.test.ts` contained `C:/Users/chuan/...` sample text, violating the repository hygiene contract that tracked overlay tests must not encode one developer profile path.
+- Re-running `Server.openapi()` in one process left later specs with `$ref: "#/components/schemas/Provider"` under `/provider` but without the corresponding `components.schemas.Provider` entry, because cached lazy route instances kept schema metadata mutated by the previous `hono-openapi` generation.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/provider.ts::GET /provider` owns provider list route metadata and currently uses `Provider.database()`, `Provider.list()`, and `Provider.sort(...)` at runtime.
+- `packages/opencorvus/src/provider/provider.ts::Provider.Info` is the runtime provider contract; `fromModelsDevProvider(...)` filters source models whose status is `deprecated`.
+- `packages/opencorvus/src/provider/models.ts::ModelsDev.Provider` remains the source registry/cache schema and is allowed to know about deprecated source models.
+- `packages/opencorvus/test/server/app-routes.test.ts` already owns OpenAPI route-shape assertions.
+- `packages/opencorvus/src/server/server.ts::routeInventoryApp()` and `Server.openapi()` own OpenAPI app construction and spec generation.
+- `packages/opencorvus/src/server/routes/app.ts::AppRoutes(...)` mounts project-scoped lazy route factories.
+- `packages/opencorvus/src/server/routes/experimental.ts::ExperimentalRoutes` also nests the lazy `WorkspaceRoutes` factory.
+- `packages/opencorvus/test/script/document-health.test.ts` owns public generated-contract and repository hygiene regressions.
+- `packages/channel-runtime/src/main.ts` remains the standalone runtime caller that explicitly uses `process.env`.
+- `packages/opencorvus/src/channel/supervisor.ts` remains the managed runtime caller that must use the project-scoped `env` object.
+- `packages/overlay/test/browser/popup-contrast-matrix.test.ts` owns the visual contrast fixture text.
+
+### Fix Shape
+
+- Change the `GET /provider` response schema from `ModelsDev.Provider.array()` to `Provider.Info.array()` so OpenAPI and SDK match the runtime public contract.
+- Add an OpenAPI regression asserting `provider.list` response model status enum excludes `deprecated` and includes `active`.
+- Keep `ModelsDev.Provider` unchanged as the internal source registry schema; do not remove deprecated source-model support from the cache/input layer.
+- Update document-health STT assertions to require `createConfiguredSTT(process.env)` only in the standalone channel runtime, and require `createConfiguredSTT(env)` in managed `ChannelSupervisor`.
+- Replace the hard-coded `C:/Users/chuan/...` fixture path with a generic workspace path.
+- Reset the lazy route factories used for OpenAPI before and after spec generation so repeated `Server.openapi()` calls rebuild route metadata from source instead of reusing schema objects mutated by a previous generator pass.
+- Regenerate tracked OpenAPI, JavaScript SDK, and API reference docs through existing generators.
+
+### Regression Tests
+
+- `packages/opencorvus/test/server/app-routes.test.ts` will cover repeated OpenAPI generation and the provider list OpenAPI status enum.
+- `packages/opencorvus/test/script/document-health.test.ts` will pass as a full-suite regression for SDK generated type hygiene, STT source assertions, and machine-path hygiene.
+
+### Verification
+
+- `bun test packages/opencorvus/test/server/app-routes.test.ts --timeout 60000` passed after adding the repeated-generation regression.
+- `bun test packages/opencorvus/test/script/document-health.test.ts --timeout 60000` passed with 19 tests and 219 assertions.
+- `bun run --cwd packages/sdk/js build` regenerated the tracked SDK contract from the OpenAPI change.
+- `bun run docs:api` rewrote API references with no tracked docs diff.
+- `bun run api:routes-check`, `bun run docs:check`, `bun run --cwd packages/opencorvus typecheck`, and `bun run --cwd packages/sdk/js typecheck` passed.
+- `git diff --check` passed for the P2-CG touched files.

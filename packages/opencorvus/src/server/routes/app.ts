@@ -15,7 +15,7 @@ import z from "zod"
 import { errors } from "../error"
 import { ProjectRoutes } from "./project"
 import { ConfigRoutes } from "./config"
-import { ExperimentalRoutes } from "./experimental"
+import { ExperimentalRoutes, resetExperimentalRouteFactoriesForOpenApi } from "./experimental"
 import { SessionRoutes } from "./session"
 import { PermissionRoutes } from "./permission"
 import { QuestionRoutes } from "./question"
@@ -68,6 +68,26 @@ const LogReadQuery = z.object({
   file: Log.FileName.optional(),
   n: z.coerce.number().int().min(1).max(5000).default(500),
 })
+
+export function resetAppRouteFactoriesForOpenApi() {
+  ProjectRoutes.reset()
+  ConfigRoutes.reset()
+  ChannelRoutes.reset()
+  ExecutorRoutes.reset()
+  resetExperimentalRouteFactoriesForOpenApi()
+  SessionRoutes.reset()
+  PermissionRoutes.reset()
+  QuestionRoutes.reset()
+  ProviderRoutes.reset()
+  QuickNoteRoutes.reset()
+  BrowserPreviewRoutes.reset()
+  EngineRoutes.reset()
+  ExportRoutes.reset()
+  FileRoutes.reset()
+  AttachmentRoutes.reset()
+  McpRoutes.reset()
+  PtyRoutes.reset()
+}
 
 export function AppRoutes(root: Hono) {
   return new Hono()
