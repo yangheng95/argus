@@ -26,6 +26,7 @@ popup readability risk, not a component-local color patch.
 | `rg -n -F "<select" packages/overlay/src packages/overlay/test specs/new-arch` | No active overlay component renders a native prompt-profile `<select>` or `<option>`. | Do not reintroduce native select-specific CSS. |
 | `rg -n -F "prompt-profile-select" packages/overlay/src packages/overlay/dist-vite packages/overlay/test specs/new-arch` | Source and current dist both use Kobalte Select with `.oc-select-content` and `.oc-select-option`. | Treat current runtime as the evidence source, not the old native implementation. |
 | Real browser screenshot `.scratch/prompt-profile-selector-current.png` | The current light-theme popup renders General, Frontend, Backend, and Algorithm visibly. | No production color patch is justified by current evidence. |
+| `packages/vscode-extension/src/webview/html.ts` + `packages/vscode-extension/esbuild.mjs` | VS Code webviews load `media/ui`, which is copied from `packages/overlay/dist-vite` during the extension build. A stale local `media/ui` can therefore show the retired native prompt-profile select even when source and `dist-vite` are correct. | Refresh local `media/ui` through the extension build and add a build-time bundle assertion for retired prompt-profile native-select markers. |
 | `packages/overlay/test/browser/prompt-profile-selector-browser.test.ts` | The test checked all options but did not pin Kobalte's explicit `aria-selected="false"` unselected-option state. | Harden the browser test to match the reported failure mode. |
 | `packages/overlay/test/browser/select-popup-contrast-matrix.test.ts` | The matrix covered shared Select consumers, but hand-wrote a partial CSS order instead of using `src/index.html` as the stylesheet source. | Load matrix CSS from the real entrypoint order. |
 
@@ -44,12 +45,17 @@ popup readability risk, not a component-local color patch.
 - Leave production CSS and component code unchanged because the current
   screenshots and shared Select matrix already prove the live source is
   readable.
+- Move the VS Code extension's synced webview bundle assertions into a
+  testable helper and reject the retired prompt-profile native-select markers
+  from `media/ui` after every extension UI sync.
 
 ## Acceptance
 
 - Expert Squad light-theme popup remains visually readable in a real browser.
 - Unselected Expert Squad options have primary and secondary text contrast of
   at least `4.5` against their effective white popup surface.
+- VS Code extension builds cannot ship `media/ui` assets containing the retired
+  prompt-profile native `<select>` / hidden chrome implementation.
 - Shared Select matrix coverage remains green for Expert Squad, Agent Models,
   Settings, App Dialog, Browser Preview, and Log Level.
 - No component-local `.prompt-profile-select-*` color override is introduced.

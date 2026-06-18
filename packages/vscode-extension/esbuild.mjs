@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
+import { assertOverlayUiBundleDir } from "./script/overlay-ui-bundle-assertions.mjs"
 
 /**
  * VS Code extension build:
@@ -25,7 +26,7 @@ const skipUi = process.argv.includes("--skip-ui")
 if (!skipUi) {
   buildOverlayUi(here)
   syncOverlayUi(here)
-  assertOverlayUiBundle(here)
+  assertOverlayUiBundleDir(path.resolve(here, "media", "ui"))
 }
 
 await esbuild.build({
@@ -74,21 +75,6 @@ function syncOverlayUi(extensionRoot) {
   console.log(`[build] overlay UI synced: ${distVite} → ${target}`)
 }
 
-function assertOverlayUiBundle(extensionRoot) {
-  const target = path.resolve(extensionRoot, "media", "ui")
-  const scripts = listFiles(target).filter((file) => file.endsWith(".js"))
-  const combined = scripts.map((file) => fs.readFileSync(file, "utf8")).join("\n")
-  if (!combined.includes("__OPENCORVUS_ASSET_BASE__")) {
-    throw new Error("[build] overlay UI bundle does not consume __OPENCORVUS_ASSET_BASE__")
-  }
-  if (/\.catch\(\s*\(\s*\)\s*=>\s*\(\s*\{\s*\}\s*\)\s*\)/.test(combined)) {
-    throw new Error("[build] overlay UI bundle still contains silent empty-object catch handlers")
-  }
-  if (/fetch\(\s*`i18n\/\$\{/.test(combined)) {
-    throw new Error("[build] overlay UI bundle still contains bare i18n fetch URLs")
-  }
-}
-
 function copyTree(src, dest) {
   const stat = fs.statSync(src)
   if (stat.isDirectory()) {
@@ -99,16 +85,6 @@ function copyTree(src, dest) {
   } else {
     fs.copyFileSync(src, dest)
   }
-}
-
-function listFiles(dir) {
-  const result = []
-  for (const entry of fs.readdirSync(dir)) {
-    const full = path.join(dir, entry)
-    if (fs.statSync(full).isDirectory()) result.push(...listFiles(full))
-    else result.push(full)
-  }
-  return result
 }
 
 function runBun(args, cwd) {
