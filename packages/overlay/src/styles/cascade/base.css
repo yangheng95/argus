@@ -171,7 +171,6 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .board-intro__cta,
   .task-list-skeleton-row {
     animation: none !important;
   }
