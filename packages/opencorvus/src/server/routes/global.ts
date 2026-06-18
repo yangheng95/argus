@@ -27,6 +27,14 @@ import {
 
 const log = Log.create({ service: "server" })
 
+function badRequest(message: string) {
+  return {
+    success: false as const,
+    data: { message },
+    errors: [{ message }],
+  }
+}
+
 export const GlobalRoutes = lazy(() =>
   new Hono()
     .get(
@@ -276,13 +284,17 @@ export const GlobalRoutes = lazy(() =>
       ),
       async (c) => {
         const { projectDir } = c.req.valid("json")
+        const registered = Project.findByRegisteredDirectory(projectDir)
+        if (!registered) {
+          return c.json(badRequest(`projectDir must reference a registered project directory: ${projectDir}`), 400)
+        }
         const { hasActiveSessions } = await import("@/engine/runtime")
         if (hasActiveSessions()) {
           return c.json({ error: "Active executor sessions exist, refusing DB reset" }, 409)
         }
         await Instance.disposeAll()
-        const targets = await Database.reset(projectDir)
-        log.warn("db reset via /global/db/reset", { projectDir, targets })
+        const targets = await Database.reset(registered.directory)
+        log.warn("db reset via /global/db/reset", { projectDir: registered.directory, targets })
         return c.json({ ok: targets.every((t) => t.ok), targets })
       },
     )

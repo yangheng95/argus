@@ -54,7 +54,7 @@ export namespace Project {
     return process.platform === "win32" ? normalized.toLowerCase() : normalized
   }
 
-  function samePath(a: string, b: string) {
+  export function samePath(a: string, b: string) {
     return comparePath(a) === comparePath(b)
   }
 
@@ -367,6 +367,15 @@ export namespace Project {
         .all()
         .map((row) => fromRow(row)),
     )
+  }
+
+  export function findByRegisteredDirectory(directory: string) {
+    const target = path.resolve(directory)
+    for (const project of list()) {
+      if (samePath(project.worktree, target)) return { project, directory: project.worktree }
+      const sandbox = project.sandboxes.find((candidate) => samePath(candidate, target))
+      if (sandbox) return { project, directory: sandbox }
+    }
   }
 
   const generatedDefaultDirectories = new Map<string, string>()

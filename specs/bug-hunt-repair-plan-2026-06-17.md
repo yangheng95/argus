@@ -3989,3 +3989,59 @@ LINE:
 - Heisenberg confirmed the repaired public route callpoints now use `Worktree.removeProjectWorktree(...)` and no other current HTTP route directly passes user-supplied directories to raw `Worktree.remove(...)`.
 - Heisenberg identified the remaining `/experimental/worktree` 404 contract gap; the route metadata and positive/negative route tests now cover that surface.
 - Heisenberg confirmed the raw low-level remover still has legitimate internal call sites for GC, stored workspace rows, rewind, goal runner cleanup, and worktree reclaim/create cleanup.
+
+## Batch P2-BR: BH-024 DB reset route must reject unregistered project directories
+
+### Findings
+
+- BH-024 targets `POST /global/db/reset` in `packages/opencorvus/src/server/routes/global.ts`.
+- The route already rejected relative `projectDir` values through the request schema, and `Database.reset(projectDir)` also rejects relative paths.
+- The remaining defect was absolute but unregistered input: the route passed caller-supplied `projectDir` directly to `Database.reset(...)`, which recursively removes the global DB files plus runtime and legacy scratch directories under that path.
+- `Database.reset(...)` is also used by `opencorvus db reset --force`, where `process.cwd()` is the command boundary. Moving registered-project checks into the storage helper would break the low-level reset/recovery path rather than fixing the HTTP authority bug.
+- Overlay's hidden DB reset backdoor posts `activeDirectory()`, which can be a registered project worktree or sandbox. The route must accept registered project directories without accepting arbitrary absolute filesystem paths.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/global.ts::POST /global/db/reset` is the only HTTP surface that accepts a JSON `projectDir` and triggers recursive runtime deletion through `Database.reset(...)`.
+- `packages/opencorvus/src/storage/db.ts::Database.reset(projectDir)` is the low-level destructive reset helper shared by HTTP and CLI callers; it must retain its absolute-path guard but not learn HTTP registry semantics.
+- `packages/opencorvus/src/cli/cmd/db.ts::ResetCommand` calls `Database.reset(process.cwd())`; it is not an arbitrary remote path input.
+- `packages/overlay/src/main.tsx` posts `activeDirectory()` to `global/db/reset`; `activeDirectory()` may refer to a registered project worktree or sandbox.
+- `packages/opencorvus/src/project/project.ts` owns the existing path equivalence helper and the Project table projection containing primary worktrees and sandboxes.
+
+### Fix Shape
+
+- Export the existing `Project.samePath(...)` helper instead of adding a second route-local path normalization rule.
+- Add `Project.findByRegisteredDirectory(...)` to resolve an input directory against registered project worktrees and registered sandboxes.
+- Make `/global/db/reset` call `Project.findByRegisteredDirectory(...)` immediately after body validation and before `hasActiveSessions()`, `Instance.disposeAll()`, or `Database.reset(...)`.
+- Reject unknown absolute paths with the documented 400 response shape and leave filesystem state untouched.
+- Pass the registered directory spelling to `Database.reset(...)`, not the caller's raw spelling, so equivalent paths with trailing separators cannot select a different target.
+- Keep `Database.reset(...)` unchanged for CLI reset/recovery; no fallback, route gate, or compatibility path was added.
+- Regenerate `packages/sdk/openapi.json` so `api:routes-check` matches the current route inventory.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/server/global-db-destructive.test.ts`:
+  - relative `projectDir` returns 400 before `Instance.disposeAll()` or `Database.reset(...)`;
+  - unknown absolute `projectDir` returns 400 and preserves sentinels under `.opencorvus/r` plus all legacy runtime paths;
+  - registered primary worktree with trailing separator succeeds and passes the registered path to `Database.reset(...)`;
+  - registered sandbox with trailing separator succeeds and passes the registered sandbox path to `Database.reset(...)`;
+  - the existing MySQL import dispose-failure test no longer assumes cross-file test isolation owns every project row.
+- Keep `packages/opencorvus/test/storage/db-path.test.ts` covering direct `Database.reset(...)` filesystem deletion and relative-path rejection.
+- Keep `packages/opencorvus/test/cli/db-reset.test.ts` covering CLI dispose-failure stop-before-delete semantics.
+
+### Verification
+
+- Focused BH-024 tests passed: `bun test packages/opencorvus/test/server/global-db-destructive.test.ts packages/opencorvus/test/server/directory-required.test.ts packages/opencorvus/test/storage/db-path.test.ts packages/opencorvus/test/cli/db-reset.test.ts --timeout 90000`.
+- Package test-entry guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- API route inventory passed after regenerating tracked OpenAPI: `bun run api:routes-check`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Descartes confirmed clean HEAD still had BH-024: unknown absolute `projectDir` returned 200 and deleted sentinel files under runtime and legacy scratch directories.
+- Descartes confirmed the repaired dirty tree rejected relative and unknown absolute inputs before `Instance.disposeAll()` / `Database.reset(...)`.
+- Descartes called out the Overlay `activeDirectory()` sandbox boundary; the final repair accepts registered sandboxes as registered project directories while still rejecting unknown absolute paths.
+- Descartes confirmed CLI reset is a separate `process.cwd()` caller and should not receive route-level registered-project semantics.
