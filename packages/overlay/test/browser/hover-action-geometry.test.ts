@@ -75,7 +75,16 @@ test(
                   <span class="recent-dir-path">D:/myhexin-local/demos/superchart/very/long/path</span>
                 </span>
               </button>
-              <button type="button" class="recent-dir-remove" aria-label="delete">x</button>
+              <button
+                type="button"
+                class="oc-button"
+                data-variant="ghost"
+                data-size="icon"
+                data-tone="danger"
+                data-chrome="icon-action"
+                data-ui="recent-dir-remove"
+                aria-label="delete"
+              >x</button>
             </div>
           </main>
         </body>
@@ -86,7 +95,7 @@ test(
       await sleep(260)
       const rest = await page.evaluate(() => {
         const taskActions = document.querySelector<HTMLElement>(".task-row-actions")!
-        const recentRemove = document.querySelector<HTMLElement>(".recent-dir-remove")!
+        const recentRemove = document.querySelector<HTMLElement>('[data-ui="recent-dir-remove"]')!
         return {
           taskOpacity: getComputedStyle(taskActions.querySelector<HTMLElement>(".oc-button")!).opacity,
           taskPointerEvents: getComputedStyle(taskActions.querySelector<HTMLElement>(".oc-button")!).pointerEvents,
@@ -123,11 +132,11 @@ test(
       await sleep(260)
       const recentHover = await page.evaluate(() => {
         const item = document.querySelector<HTMLElement>(".recent-dir-item")!.getBoundingClientRect()
-        const remove = document.querySelector<HTMLElement>(".recent-dir-remove")!.getBoundingClientRect()
+        const remove = document.querySelector<HTMLElement>('[data-ui="recent-dir-remove"]')!.getBoundingClientRect()
         return {
           itemRight: item.right,
           removeLeft: remove.left,
-          removePointerEvents: getComputedStyle(document.querySelector<HTMLElement>(".recent-dir-remove")!)
+          removePointerEvents: getComputedStyle(document.querySelector<HTMLElement>('[data-ui="recent-dir-remove"]')!)
             .pointerEvents,
         }
       })

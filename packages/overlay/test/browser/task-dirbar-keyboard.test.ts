@@ -260,8 +260,129 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     assert.ok(openState.geometry.leftDelta <= 2)
     assert.ok(openState.geometry.panelWidth > 240)
     assert.ok(openState.geometry.panelWidth <= openState.geometry.shellWidth)
+
+    const actionSemantics = await page.evaluate(() => {
+      const submit = document.querySelector<HTMLButtonElement>('[data-ui="recent-dir-edit-submit"]')
+      const remove = document.querySelector<HTMLButtonElement>(
+        '.recent-dir-list[data-kind="recent"] .recent-dir-row:nth-child(2) [data-ui="recent-dir-remove"]',
+      )
+      return {
+        submitTag: submit?.tagName ?? "",
+        submitClass: submit?.className ?? "",
+        submitChrome: submit?.dataset.chrome ?? "",
+        submitSize: submit?.dataset.size ?? "",
+        submitTitle: submit?.getAttribute("title") ?? "",
+        submitLabel: submit?.getAttribute("aria-label") ?? "",
+        removeTag: remove?.tagName ?? "",
+        removeClass: remove?.className ?? "",
+        removeChrome: remove?.dataset.chrome ?? "",
+        removeSize: remove?.dataset.size ?? "",
+        removeTone: remove?.dataset.tone ?? "",
+        removeTitle: remove?.getAttribute("title") ?? "",
+        removeLabel: remove?.getAttribute("aria-label") ?? "",
+      }
+    })
+    assert.match(actionSemantics.submitClass, /\boc-button\b/)
+    assert.match(actionSemantics.removeClass, /\boc-button\b/)
+    assert.deepEqual(
+      {
+        submitTag: actionSemantics.submitTag,
+        submitChrome: actionSemantics.submitChrome,
+        submitSize: actionSemantics.submitSize,
+        submitTitle: actionSemantics.submitTitle,
+        submitLabel: actionSemantics.submitLabel,
+        removeTag: actionSemantics.removeTag,
+        removeChrome: actionSemantics.removeChrome,
+        removeSize: actionSemantics.removeSize,
+        removeTone: actionSemantics.removeTone,
+        removeTitle: actionSemantics.removeTitle,
+        removeLabel: actionSemantics.removeLabel,
+      },
+      {
+        submitTag: "BUTTON",
+        submitChrome: "icon-action",
+        submitSize: "icon",
+        submitTitle: "Save",
+        submitLabel: "Save",
+        removeTag: "BUTTON",
+        removeChrome: "icon-action",
+        removeSize: "icon",
+        removeTone: "danger",
+        removeTitle: "Delete",
+        removeLabel: "Delete",
+      },
+    )
+
+    await page.$eval('[data-ui="cwd-path-input"]', (node) => {
+      const input = node as HTMLInputElement
+      input.value = ""
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }))
+    })
+    await page.waitForFunction(() => document.querySelector<HTMLButtonElement>('[data-ui="recent-dir-edit-submit"]')?.disabled)
+    const disabledSubmit = await page.$eval('[data-ui="recent-dir-edit-submit"]', (node) => {
+      const element = node as HTMLButtonElement
+      const styles = getComputedStyle(element)
+      return {
+        disabled: element.disabled,
+        opacity: styles.opacity,
+        color: styles.color,
+      }
+    })
+    assert.equal(disabledSubmit.disabled, true)
+    assert.equal(disabledSubmit.opacity, "1")
+    assert.notEqual(disabledSubmit.color, "rgba(0, 0, 0, 0)")
+
+    await page.$eval(
+      '[data-ui="cwd-path-input"]',
+      (node, value) => {
+        const input = node as HTMLInputElement
+        input.value = String(value)
+        input.dispatchEvent(new InputEvent("input", { bubbles: true }))
+      },
+      PROJECT_DIRECTORY,
+    )
+    await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('[data-ui="recent-dir-edit-submit"]')?.disabled)
+    await page.focus('[data-ui="recent-dir-edit-submit"]')
+    const submitFocus = await page.$eval('[data-ui="recent-dir-edit-submit"]', (node) => {
+      const element = node as HTMLButtonElement
+      return {
+        active: document.activeElement === element,
+        className: element.className,
+      }
+    })
+    assert.equal(submitFocus.active, true)
+    assert.match(submitFocus.className, /\boc-button\b/)
+
+    const recentRowSelector = '.recent-dir-list[data-kind="recent"] .recent-dir-row:nth-child(2)'
+    await page.hover(recentRowSelector)
+    await new Promise((resolve) => setTimeout(resolve, 260))
+    const removeGeometry = await page.$eval(recentRowSelector, (row) => {
+      const item = row.querySelector<HTMLElement>(".recent-dir-item")!.getBoundingClientRect()
+      const remove = row.querySelector<HTMLElement>('[data-ui="recent-dir-remove"]')!
+      const removeRect = remove.getBoundingClientRect()
+      const styles = getComputedStyle(remove)
+      return {
+        itemRight: item.right,
+        removeLeft: removeRect.left,
+        opacity: styles.opacity,
+        pointerEvents: styles.pointerEvents,
+      }
+    })
+    assert.ok(
+      removeGeometry.itemRight <= removeGeometry.removeLeft,
+      `expected recent directory text to end before remove action: ${removeGeometry.itemRight} <= ${removeGeometry.removeLeft}`,
+    )
+    assert.equal(removeGeometry.opacity, "1")
+    assert.equal(removeGeometry.pointerEvents, "auto")
+
     assert.deepEqual(badResponses, [])
 
+    const actionScreenshot = await saveElementScreenshot(
+      page,
+      ".recent-dir-panel",
+      "task-dirbar-recent-actions-button-primitive.png",
+    )
+    assert.ok(actionScreenshot.endsWith("task-dirbar-recent-actions-button-primitive.png"))
     await saveScreenshot(page, "task-dirbar-recent-trigger-keyboard.png")
   } finally {
     await browser.close()

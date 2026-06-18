@@ -232,9 +232,19 @@ export function TaskDirContent() {
                   spellcheck={false}
                 />
               </label>
-              <button type="submit" class="recent-dir-edit-submit" disabled={!pathDraft().trim()}>
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-chrome="icon-action"
+                data-ui="recent-dir-edit-submit"
+                disabled={!pathDraft().trim()}
+                title={t("common.save")}
+                aria-label={t("common.save")}
+              >
                 <Icon name="folder-open" size={14} />
-              </button>
+              </Button>
             </form>
             <Show when={discoveryError()}>
               <div class="recent-dir-discovery-error" data-testid="cwd-discovery-error" role="status">
@@ -303,9 +313,13 @@ export function TaskDirContent() {
                             </span>
                           </Show>
                         </DropdownMenu.Item>
-                        <button
+                        <Button
                           type="button"
-                          class="recent-dir-remove"
+                          variant="ghost"
+                          size="icon"
+                          tone="danger"
+                          data-chrome="icon-action"
+                          data-ui="recent-dir-remove"
                           title={t("common.delete")}
                           aria-label={t("common.delete")}
                           onClick={(event) => {
@@ -314,7 +328,7 @@ export function TaskDirContent() {
                           }}
                         >
                           <Icon name="close" size={11} />
-                        </button>
+                        </Button>
                       </div>
                     )
                   }}
