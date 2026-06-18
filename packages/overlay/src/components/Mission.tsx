@@ -19,6 +19,7 @@ import { humanizeApiError } from "../utils/mission-helpers"
 import { isAbortError } from "../utils/string"
 import { Icon } from "./Icon"
 import { MissionList } from "./MissionList"
+import { Button } from "./ui/Button"
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message
@@ -213,14 +214,19 @@ function MissionContent(props: MissionProps) {
               error: actionError()!.error,
             })}
           </span>
-          <button
+          <Button
             type="button"
-            class="mission-action-error-dismiss"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
+            data-ui="mission-action-error-dismiss"
             aria-label={t("common.clear")}
+            title={t("common.clear")}
             onClick={() => setActionError(null)}
           >
-            <Icon name="close" size={10} />
-          </button>
+            <Icon name="close" size={12} />
+          </Button>
         </div>
       </Show>
 
