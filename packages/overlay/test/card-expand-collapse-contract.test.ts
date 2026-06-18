@@ -23,8 +23,8 @@ describe("card expand and collapse contract", () => {
     expect(src).toContain('target.closest(".card") !== articleRef')
     expect(src).toContain('window.getSelection()?.type === "Range"')
     expect(src).toContain("onDblClick={(event) =>")
-    expect(src).toContain("if (!canCardSurfaceToggle(event)) return;")
-    expect(src).toContain("toggleExpanded();")
+    expect(src).toContain("if (!canCardSurfaceToggle(event)) return")
+    expect(src).toContain("toggleExpanded()")
   })
 
   test("Card surface toggle ignores controls and nested cards on the double-click path", () => {
@@ -53,8 +53,12 @@ describe("card expand and collapse contract", () => {
   test("CardHeader single click and keyboard toggle both directions", () => {
     const src = read("src/components/CardHeader.tsx")
     expect(src).toContain("onToggle: () => void")
-    expect(src).toContain("if (!props.collapsible) return;")
-    expect(src).toContain("props.onToggle();")
+    expect(src).toContain('class="card__head-main"')
+    expect(src).toContain("aria-expanded={props.collapsible ? props.expanded : undefined}")
+    expect(src).toContain("if (!props.collapsible) return")
+    expect(src).toContain("props.onToggle()")
+    expect(src).not.toContain('role={props.collapsible ? "button" : undefined}')
+    expect(src).not.toContain("tabindex={props.collapsible ? 0 : undefined}")
     expect(src).not.toContain("props.expanded) return")
     expect(src).not.toContain("card__chevron")
   })
