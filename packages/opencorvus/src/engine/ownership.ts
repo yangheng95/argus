@@ -50,8 +50,8 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 const log = Log.create({ service: "ownership" })
 
-const WORKTREE_DIR = "worktrees"
-const PROCESS_DIR = "processes"
+const WORKTREE_DIR = "w"
+const PROCESS_DIR = "p"
 const MARKER_SUFFIX = ".json"
 
 export namespace Ownership {
