@@ -1953,7 +1953,20 @@ export namespace Config {
     const next = await writeConfigFile(filepath, config)
 
     global.reset()
-    // Do NOT disposeAll — kills running executor sessions. global.reset() is sufficient.
+    await state.resetAll()
+    const [{ Provider }, { Agent }, { ChannelSupervisor }] = await Promise.all([
+      import("@/provider/provider"),
+      import("@/agent/agent"),
+      import("@/channel/supervisor"),
+    ])
+    Provider.resetAll()
+    Agent.resetAll()
+    await Instance.forEachActive({
+      async fn() {
+        await ChannelSupervisor.sync(await get())
+      },
+    })
+    // Do NOT disposeAll — kills running executor sessions. Reset config state instead.
     GlobalBus.emit("event", {
       directory: "global",
       payload: {
