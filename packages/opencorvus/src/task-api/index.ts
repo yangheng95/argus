@@ -69,6 +69,7 @@ import {
   startQueuedTaskInCwd,
   taskCwd,
 } from "@/engine/queue"
+import { reopenActiveRunForOperatorWake } from "@/engine/task-message-open"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import {
   updateGoal as updateGoalRow,
@@ -1933,10 +1934,12 @@ export namespace EngineService {
         supersedePriorActivePlansForTask(db, { taskID: task.id, now })
       })
     }
-    if (isTaskTerminal(task) || !liveRun) {
-      await updateTask(task, { status: "queued", error: null, metadata }, `${label} requested by operator`)
-    } else {
-      await updateTask(task, { error: null, metadata }, `${label} requested by operator`)
+    const openedTask =
+      isTaskTerminal(task) || !liveRun
+        ? await updateTask(task, { status: "queued", error: null, metadata }, `${label} requested by operator`)
+        : await updateTask(task, { error: null, metadata }, `${label} requested by operator`)
+    if (intent === "retry") {
+      await reopenActiveRunForOperatorWake(openedTask, `${label} reopened blocked run`)
     }
     const note = intent === "retry" ? OrchestratorEventNote.retry(task) : OrchestratorEventNote.replan(task)
     void dispatchTaskLoop({ taskID, event: { note, operatorIntent: { kind: intent } } })

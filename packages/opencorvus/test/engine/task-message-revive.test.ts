@@ -25,8 +25,8 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-describe("EngineService.retryTask — active blocked run wake", () => {
-  test("retry wakes without rewriting a blocked active run and dispatches retry intent", async () => {
+describe("EngineService.retryTask — active blocked run reopen", () => {
+  test("retry clears a stale active run blocker and dispatches retry intent", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -80,10 +80,10 @@ describe("EngineService.retryTask — active blocked run wake", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
-        const blocked = findRun(runID)
-        expect(blocked?.status).toBe("blocked")
-        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
-        expect(blocked?.error).toBe("MessageAbortedError: total deadline")
+        const reopened = findRun(runID)
+        expect(reopened?.status).toBe("running")
+        expect(reopened?.blocking_reason).toBeNull()
+        expect(reopened?.error).toBeNull()
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         const event = (runTaskLoop.mock.calls[0]?.[0] as
           | { event?: { note?: string; operatorIntent?: { kind?: string } } }
