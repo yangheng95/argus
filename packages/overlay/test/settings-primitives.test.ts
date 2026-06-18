@@ -18,6 +18,7 @@ const SETTINGS_COMPONENT_ROOT = join(OVERLAY_ROOT, "src/components/settings")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"), "utf8")
 const PRIMITIVES_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/primitives.tsx"), "utf8")
 const SEGMENTED_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/ui/SegmentedControl.tsx"), "utf8")
+const SELECT_CONTROL_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/ui/SelectControl.tsx"), "utf8")
 const AGENT_MODELS_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/AgentModelsPanel.tsx"), "utf8")
 const SKILL_MARKET_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/SkillMarketPanel.tsx"), "utf8")
 
@@ -214,20 +215,33 @@ describe("settings primitives — Solid exports", () => {
   })
 
   test("Select delegates combobox semantics to Kobalte with one accessible label source", () => {
-    expect(PRIMITIVES_SRC).toContain('import * as Select from "@kobalte/core/select"')
+    expect(PRIMITIVES_SRC).toContain('import { SelectControl } from "../ui/SelectControl"')
     expect(PRIMITIVES_SRC).toContain("export interface SettingsSelectOption")
     expect(PRIMITIVES_SRC).toContain("export function SettingsSelect")
-    expect(PRIMITIVES_SRC).toContain("<Select.Root<T>")
-    expect(PRIMITIVES_SRC).toContain("<Select.Trigger")
-    expect(PRIMITIVES_SRC).toContain("<Select.HiddenSelect aria-label={props.ariaLabel}")
-    expect(PRIMITIVES_SRC).toContain("aria-label={props.ariaLabel}")
-    expect(PRIMITIVES_SRC).toContain("props.optionData?.(option())")
-    expect(PRIMITIVES_SRC).toContain('props.optionTextClass ? `oc-select-option-copy ${props.optionTextClass}`')
-    expect(PRIMITIVES_SRC).toContain("class={optionTextClass()}")
+    expect(PRIMITIVES_SRC).toContain("<SelectControl<T>")
+    expect(PRIMITIVES_SRC).toContain("ariaLabel={props.ariaLabel}")
+    expect(PRIMITIVES_SRC).toContain("optionData={props.optionData}")
+    expect(PRIMITIVES_SRC).toContain("optionCopyClass={props.optionTextClass}")
     expect(PRIMITIVES_SRC).toContain(
       "const selectedOption = () => props.options.find((option) => option.value === props.value) ?? null",
     )
     expect(PRIMITIVES_SRC).not.toContain("?? props.options[0]")
+    expect(PRIMITIVES_SRC).not.toContain('import * as Select from "@kobalte/core/select"')
+    expect(PRIMITIVES_SRC).not.toContain("<Select.Root")
+  })
+
+  test("SelectControl is the single Kobalte Select shell owner", () => {
+    expect(SELECT_CONTROL_SRC).toContain('import * as Select from "@kobalte/core/select"')
+    expect(SELECT_CONTROL_SRC).toContain("<Select.Root<T>")
+    expect(SELECT_CONTROL_SRC).toContain("<Select.Trigger")
+    expect(SELECT_CONTROL_SRC).toContain("<Select.HiddenSelect")
+    expect(SELECT_CONTROL_SRC).toContain("<Select.Portal")
+    expect(SELECT_CONTROL_SRC).toContain("<Select.Content")
+    expect(SELECT_CONTROL_SRC).toContain("<Select.Listbox")
+    expect(SELECT_CONTROL_SRC).toContain("<Select.Item")
+    expect(SELECT_CONTROL_SRC).toContain("aria-label={props.ariaLabel}")
+    expect(SELECT_CONTROL_SRC).toContain("aria-labelledby={props.ariaLabelledBy}")
+    expect(SELECT_CONTROL_SRC).toContain('withClass("oc-select-trigger"')
   })
 
   test("settings panels reuse SettingsSelect instead of local Select wrappers", () => {

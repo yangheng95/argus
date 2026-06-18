@@ -1,4 +1,3 @@
-import * as Select from "@kobalte/core/select"
 import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
 import type { JSX } from "solid-js"
 import { ApiError } from "../services/api"
@@ -18,6 +17,7 @@ import {
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
+import { SelectControl } from "./ui/SelectControl"
 import { SegmentedControl } from "./ui/SegmentedControl"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
 import { browserPreviewLivePoint } from "./browser-preview-live-point"
@@ -532,39 +532,32 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           </div>
 
           <Show when={readyTarget() && candidates().length > 0}>
-            <Select.Root<BrowserPreviewCandidate>
+            <SelectControl<BrowserPreviewCandidate>
               class="browser-preview-candidate-select"
               options={candidates()}
-              optionValue="id"
-              optionTextValue="url"
               value={selectedCandidate()}
               onChange={selectCandidate}
-              itemComponent={BrowserPreviewCandidateOption}
+              optionValue="id"
+              optionTextValue="url"
               disabled={candidates().length <= 1}
               disallowEmptySelection
               gutter={4}
               sameWidth
-            >
-              <Icon name="external-link" size={13} />
-              <Select.Trigger
-                class="oc-select-trigger browser-preview-candidate-trigger"
-                aria-label={t("browser_preview.candidates.label")}
-                data-ui="browser-preview-candidate-trigger"
-              >
-                <Select.Value<BrowserPreviewCandidate>>
-                  {(state) => <span>{state.selectedOption()?.url ?? targetUrl() ?? ""}</span>}
-                </Select.Value>
-                <Select.Icon>
-                  <Icon name="caret-down" size={12} />
-                </Select.Icon>
-              </Select.Trigger>
-              <Select.HiddenSelect aria-label={t("browser_preview.candidates.label")} />
-              <Select.Portal>
-                <Select.Content class="oc-select-content browser-preview-candidate-content">
-                  <Select.Listbox class="oc-select-listbox browser-preview-candidate-listbox" />
-                </Select.Content>
-              </Select.Portal>
-            </Select.Root>
+              beforeTrigger={<Icon name="external-link" size={13} />}
+              triggerClass="browser-preview-candidate-trigger"
+              triggerDataUI="browser-preview-candidate-trigger"
+              ariaLabel={t("browser_preview.candidates.label")}
+              contentClass="browser-preview-candidate-content"
+              listboxClass="browser-preview-candidate-listbox"
+              optionClass="browser-preview-candidate-option"
+              indicatorClass="browser-preview-candidate-indicator"
+              optionData={(candidate) => ({
+                "data-ui": "browser-preview-candidate-option",
+                "data-target-id": candidate.id,
+              })}
+              renderValue={(candidate) => <span>{candidate?.url ?? targetUrl() ?? ""}</span>}
+              renderOptionLabel={(candidate) => candidate.url}
+            />
           </Show>
 
           <Show when={readyTarget() && viewports().length > 0}>
@@ -796,25 +789,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         </Switch>
       </div>
     </section>
-  )
-}
-
-function BrowserPreviewCandidateOption(
-  props: Select.SelectRootItemComponentProps<BrowserPreviewCandidate>,
-): JSX.Element {
-  const candidate = () => props.item.rawValue
-  return (
-    <Select.Item
-      item={props.item}
-      class="oc-select-option browser-preview-candidate-option"
-      data-ui="browser-preview-candidate-option"
-      data-target-id={candidate().id}
-    >
-      <Select.ItemLabel>{candidate().url}</Select.ItemLabel>
-      <Select.ItemIndicator class="oc-select-indicator browser-preview-candidate-indicator">
-        <Icon name="status-completed" size={12} />
-      </Select.ItemIndicator>
-    </Select.Item>
   )
 }
 

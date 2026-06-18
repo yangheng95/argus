@@ -12,10 +12,9 @@
  */
 import { Show, mergeProps, splitProps } from "solid-js"
 import { Dynamic } from "solid-js/web"
-import * as Select from "@kobalte/core/select"
 import type { JSX } from "solid-js"
-import { Icon } from "../Icon"
 import { SegmentedControl, type SegmentedControlOption, type SegmentedControlTone } from "../ui/SegmentedControl"
+import { SelectControl } from "../ui/SelectControl"
 
 export type SettingsPillTone = SegmentedControlTone
 
@@ -207,66 +206,33 @@ export function SettingsSelect<T extends SettingsSelectOption>(props: SettingsSe
   }
   const rootClass = () => (props.class ? `settings-select ${props.class}` : "settings-select")
   const triggerClass = () =>
-    props.triggerClass ? `field-input oc-select-trigger ${props.triggerClass}` : "field-input oc-select-trigger"
-  const contentClass = () =>
-    props.contentClass ? `oc-select-content ${props.contentClass}` : "oc-select-content settings-select-content"
-  const listboxClass = () =>
-    props.listboxClass ? `oc-select-listbox ${props.listboxClass}` : "oc-select-listbox settings-select-listbox"
-  const optionClass = () =>
-    props.optionClass ? `oc-select-option ${props.optionClass}` : "oc-select-option settings-select-option"
-  const indicatorClass = () =>
-    props.indicatorClass ? `oc-select-indicator ${props.indicatorClass}` : "oc-select-indicator"
-  const optionTextClass = () =>
-    props.optionTextClass ? `oc-select-option-copy ${props.optionTextClass}` : "oc-select-option-copy"
-
-  function SettingsSelectOptionItem(itemProps: Select.SelectRootItemComponentProps<T>): JSX.Element {
-    const option = () => itemProps.item.rawValue
-    const optionData = () => props.optionData?.(option()) ?? {}
-    const optionCopy = () => (
-      <>
-        <Select.ItemLabel>{option().label}</Select.ItemLabel>
-        <Show when={option().description}>{(description) => <small>{description()}</small>}</Show>
-      </>
-    )
-    return (
-      <Select.Item item={itemProps.item} class={optionClass()} {...optionData()}>
-        <Show when={props.optionTextClass || option().description} fallback={optionCopy()}>
-          <span class={optionTextClass()}>{optionCopy()}</span>
-        </Show>
-        <Select.ItemIndicator class={indicatorClass()}>
-          <Icon name="status-completed" size={12} />
-        </Select.ItemIndicator>
-      </Select.Item>
-    )
-  }
+    props.triggerClass ? `field-input ${props.triggerClass}` : "field-input"
 
   return (
-    <Select.Root<T>
+    <SelectControl<T>
       class={rootClass()}
       options={props.options}
-      optionValue="value"
-      optionTextValue="label"
       value={selectedOption()}
       onChange={setSelectedOption}
-      itemComponent={SettingsSelectOptionItem}
+      optionValue="value"
+      optionTextValue="label"
       disabled={props.disabled}
       disallowEmptySelection
       gutter={4}
       sameWidth
-    >
-      <Select.Trigger class={triggerClass()} data-testid={props.testid} aria-label={props.ariaLabel}>
-        <Select.Value<T>>{(state) => <span>{state.selectedOption()?.label ?? props.placeholder ?? ""}</span>}</Select.Value>
-        <Select.Icon>
-          <Icon name="caret-down" size={12} />
-        </Select.Icon>
-      </Select.Trigger>
-      <Select.HiddenSelect aria-label={props.ariaLabel} />
-      <Select.Portal>
-        <Select.Content class={contentClass()}>
-          <Select.Listbox class={listboxClass()} />
-        </Select.Content>
-      </Select.Portal>
-    </Select.Root>
+      triggerClass={triggerClass()}
+      triggerTestID={props.testid}
+      ariaLabel={props.ariaLabel}
+      contentClass={props.contentClass ?? "settings-select-content"}
+      listboxClass={props.listboxClass ?? "settings-select-listbox"}
+      optionClass={props.optionClass ?? "settings-select-option"}
+      indicatorClass={props.indicatorClass}
+      optionCopyClass={props.optionTextClass}
+      optionData={props.optionData}
+      renderValue={(selected) => <span>{selected?.label ?? props.placeholder ?? ""}</span>}
+      renderOptionLabel={(option) => option.label}
+      renderOptionDescription={(option) => option.description}
+    />
   )
 }
 
