@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "09b1da64c5980c2e"
+    "panel_revision": "3a4e55608c1110c8"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -52,7 +52,7 @@
   "brand.guide_usage_1": "发送消息前，先选择工作区文件夹和最近任务。",
   "brand.guide_usage_2": "给出明确请求，并写清约束和验收标准。",
   "brand.guide_usage_3": "运行时查看工作区：规格核对理解，方案核对路径，目标与评估识别偏航，文件展示实际改动。",
-  "brand.guide_usage_4": "标题栏菜单用于配置工作区、模型、工具、视图、投递通道和诊断。",
+  "brand.guide_usage_4": "标题栏菜单用于配置工作区、模型提供方、运行、视图、设置、帮助、投递通道和诊断。",
   "brand.guide_usage_title": "快速路径",
   "brand.logo_alt": "OpenCorvus 标识",
   "brand.workspace_label": "工作区",
