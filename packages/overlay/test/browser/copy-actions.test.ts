@@ -273,7 +273,9 @@ test(
           `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify({ errors, snapshot })}`,
         )
       }
-      await tab.waitForSelector(".task-row-main[data-task-id='task-1']")
+      await tab.waitForSelector('[data-ui="side-activity-button"][data-activity="tasks"]')
+      await tab.click('[data-ui="side-activity-button"][data-activity="tasks"]')
+      await tab.waitForSelector(".task-row-main[data-task-id='task-1']", { visible: true })
       await tab.click(".task-row-main[data-task-id='task-1']")
 
       await tab.evaluate(() => window.dispatchEvent(new CustomEvent("oc:open-logs")))

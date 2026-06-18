@@ -42,6 +42,8 @@
 }
 
 .dialog-form.cmdk-panel > .dialog-header.cmdk-header {
+  --px-exact: 1;
+
   position: absolute;
   width: 1px;
   height: 1px;
