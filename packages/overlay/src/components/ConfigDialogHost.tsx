@@ -219,11 +219,7 @@ export function ConfigDialogHost() {
               <h4 class="about-section-title">{t("about.author_name")}</h4>
               <div class="about-author-card">
                 <div class="about-author-avatar">
-                  <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                    <circle cx="20" cy="20" r="19" stroke="var(--accent)" stroke-width="1.5" />
-                    <circle cx="20" cy="16" r="6" stroke="var(--text-soft)" stroke-width="1.3" />
-                    <path d="M8 34c0-6.6 5.4-12 12-12s12 5.4 12 12" stroke="var(--text-soft)" stroke-width="1.3" />
-                  </svg>
+                  <Icon name="avatar-user" size={40} />
                 </div>
                 <div class="about-author-info">
                   <strong class="about-author-name">杨恒@Hithink Research</strong>
