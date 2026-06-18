@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const source = readFileSync(join(import.meta.dir, "../src/components/TaskProgressBar.tsx"), "utf8")
+const conversationSource = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8")
+const html = readFileSync(join(import.meta.dir, "../src/index.html"), "utf8")
+const domSource = readFileSync(join(import.meta.dir, "../src/dom.ts"), "utf8")
+const conversationCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
 const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/card.css"), "utf8")
 const en = readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")
 const zh = readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")
@@ -30,5 +34,15 @@ test("task progress fold labels are localized", () => {
   for (const bundle of [en, zh]) {
     expect(bundle).toContain('"progress.expand_card"')
     expect(bundle).toContain('"progress.collapse_card"')
+  }
+})
+
+test("TaskProgressBar is the single conversation goal progress surface", () => {
+  expect(conversationSource).toContain("<TaskProgressBar />")
+  expect(css).toContain(".task-progress__pill")
+  for (const sourceText of [html, domSource, conversationCss]) {
+    expect(sourceText).not.toMatch(/\bchatGoalsStrip\b/)
+    expect(sourceText).not.toMatch(/\bchat-goals-strip\b/)
+    expect(sourceText).not.toMatch(/\bgoal-chip\b/)
   }
 })

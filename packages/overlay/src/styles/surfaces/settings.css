@@ -489,7 +489,7 @@
 /* Memory scope chip: "global" / "session" / "builtin_default"
    tones. The pill-shape declaration (border-radius / padding /
    font) lives in the cross-surface multi-class
-   `.section-badge, .task-flag, .extension-status, .knowledge-
+   `.section-badge, .extension-status, .knowledge-
    scope, .mini-badge` block in styles.css — only the
    surface-specific tone overrides live here. */
 .knowledge-scope {
