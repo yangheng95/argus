@@ -27,6 +27,13 @@ describe("Mission and Coding Assistant ledger row interactions", () => {
     expect(assistant).toContain("props.onSelectSession(props.session)")
   })
 
+  test("selected row visual state is mirrored on the focusable main button", () => {
+    expect(mission).toContain('data-active={props.selected ? "true" : undefined}')
+    expect(mission).toContain('aria-current={props.selected ? "page" : undefined}')
+    expect(assistant).toContain('data-active={props.selected ? "true" : undefined}')
+    expect(assistant).toContain('aria-current={props.selected ? "page" : undefined}')
+  })
+
   test("row action buttons stay sibling controls outside the main selection button", () => {
     const missionMain = mission.indexOf('class="task-row-main mission-row-main"')
     const missionActions = mission.indexOf('class="task-row-actions"', missionMain)
