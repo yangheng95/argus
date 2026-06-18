@@ -691,8 +691,8 @@ describe("overlay architecture guards", () => {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    // section-head-action stays in inspector.css (surface-specific, not primitive)
-    expect(inspectorSurface).toMatch(/(^|\n)\.section-head-action\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.section-head-action\b/)
+    expect(inspectorSurface).not.toMatch(/\.section-actions\b/)
 
     // New primitive names live in primitives/section.css + inspector.css overrides
     expect(sectionPrimitive).toMatch(/(^|\n)\.oc-section__icon\s*\{/)

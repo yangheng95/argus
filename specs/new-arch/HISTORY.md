@@ -31,6 +31,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-retire-field-input-action-residue.md](2026-06-19-retire-field-input-action-residue.md)             | Retire Field Input Action Residue |
 | [2026-06-19-retire-section-icon-button-residue.md](2026-06-19-retire-section-icon-button-residue.md)           | Retire Section Icon Button Residue |
 | [2026-06-19-provider-head-actions-responsive-source.md](2026-06-19-provider-head-actions-responsive-source.md) | Provider Head Actions Responsive Source |
+| [2026-06-19-retire-section-action-residue.md](2026-06-19-retire-section-action-residue.md)                     | Retire Section Action Residue |
 
 ## 2026-06-18
 

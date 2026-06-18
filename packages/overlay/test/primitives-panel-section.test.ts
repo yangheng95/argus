@@ -353,10 +353,8 @@ describe("CSS class rename guards — no stale .section-* selectors", () => {
 
   test("inspector.css uses .oc-section__head not .section-head for main rule", () => {
     expect(inspectorCss).toContain(".oc-section__head {")
-    // allow section-head-action (surface-specific CTA class, not the primitive)
-    const badPattern = /\.section-head\s*[\{:]/
-    const occurrences = inspectorCss.match(/\.section-head(?!-action)/g) ?? []
-    expect(occurrences.length).toBe(0)
+    expect(inspectorCss).not.toContain(".section-head")
+    expect(inspectorCss).not.toContain(".section-actions")
   })
 
   test("inspector.css uses .oc-section not .section for main rule", () => {

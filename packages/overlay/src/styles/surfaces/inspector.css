@@ -736,15 +736,6 @@
   background: color-mix(in srgb, var(--accent) 84%, transparent);
 }
 
-.section-head-action {
-  min-width: calc(58px * var(--ui-scale));
-  position: relative;
-  z-index: var(--ui-z-decoration);
-  border-radius: var(--oc-radius-large);
-  padding: 0 calc(8px * var(--ui-scale));
-  line-height: 1;
-}
-
 .oc-section__body {
   padding: 0 var(--ui-gap-sm) var(--ui-gap-sm);
 }
@@ -2392,25 +2383,8 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Inspector misc (extracted 2026-05-04): section-actions toolbar
-   inside section bodies, and embedded session list panel.
+   Inspector misc (extracted 2026-05-04): embedded session list panel.
    ───────────────────────────────────────────────────────────── */
-
-.section-actions {
-  display: flex;
-  gap: var(--ui-gap-sm);
-  margin-top: var(--ui-gap-md);
-  flex-wrap: wrap;
-}
-
-.section-actions .oc-button {
-  padding: calc(4px * var(--ui-scale)) var(--ui-section-padding-x);
-  font-size: var(--ui-font-control);
-}
-
-.section-actions.compact {
-  margin-top: 0;
-}
 
 .session-list-panel {
   display: flex;
