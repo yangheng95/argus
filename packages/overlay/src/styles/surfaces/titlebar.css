@@ -788,105 +788,6 @@
   }
 }
 
-.titlebar-status-chip,
-.titlebar-setup-cta,
-.titlebar-status-icon {
-  height: var(--ui-titlebar-btn-height);
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: 0;
-  border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
-  color: var(--text-soft);
-  font-size: var(--ui-font-small);
-  cursor: pointer;
-  min-width: 0;
-}
-
-.titlebar-status-chip {
-  max-width: calc(180px * var(--ui-scale));
-  padding: 0 calc(7px * var(--ui-scale));
-}
-
-.titlebar-status-label {
-  color: var(--text-muted);
-  flex: none;
-}
-
-.titlebar-status-value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-soft);
-}
-
-.titlebar-setup-cta {
-  padding: 0 calc(9px * var(--ui-scale));
-  color: var(--accent);
-  background: var(--accent-dim);
-}
-
-.titlebar-status-icon {
-  width: var(--ui-titlebar-btn-width);
-  justify-content: center;
-  padding: 0;
-}
-
-.titlebar-status-chip:hover,
-.titlebar-setup-cta:hover,
-.titlebar-status-icon:hover {
-  color: var(--text-strong);
-  background: var(--surface-hover);
-}
-
-.titlebar-task-status {
-  width: var(--ui-titlebar-btn-width);
-  min-width: var(--ui-titlebar-btn-width);
-  height: var(--ui-titlebar-btn-height);
-  min-height: var(--ui-titlebar-btn-height);
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-  border-radius: var(--oc-radius-soft);
-  background: color-mix(in srgb, var(--surface-strong) 86%, transparent);
-  cursor: help;
-  transition:
-    border-color var(--ui-duration-fast),
-    background var(--ui-duration-fast),
-    color var(--ui-duration-fast),
-    box-shadow var(--ui-duration-fast);
-}
-
-.titlebar-task-status:hover {
-  background: var(--surface-hover);
-}
-
-.titlebar-task-status[data-status="queued"] {
-  background: color-mix(in srgb, var(--warn) 10%, transparent);
-}
-
-/* Flat-redesign Step 2 (2026-05-04): per-status border-color flip retired
- * (rule §2.2 C). Background tint alone carries the status. */
-.titlebar-task-status[data-status="active"] {
-  background: color-mix(in srgb, var(--info) 12%, transparent);
-}
-
-.titlebar-task-status[data-status="completed"] {
-  background: color-mix(in srgb, var(--good) 10%, transparent);
-}
-
-.titlebar-task-status[data-status="failed"] {
-  background: color-mix(in srgb, var(--bad) 10%, transparent);
-}
-
-.titlebar-task-status .status-label,
-.titlebar-task-status .elapsed {
-  display: none;
-}
-
 .status-icon {
   width: var(--oc-titlebar-status-icon);
   height: var(--oc-titlebar-status-icon);
@@ -985,19 +886,6 @@
     width: auto;
     justify-content: flex-end;
     gap: calc(3px * var(--ui-scale));
-  }
-
-  .titlebar-status-chip,
-  .titlebar-status-icon {
-    display: none;
-  }
-
-  .titlebar-setup-cta {
-    flex-shrink: 0;
-    max-width: calc(56px * var(--ui-scale));
-    padding-inline: calc(7px * var(--ui-scale));
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .conn-badge__label {
