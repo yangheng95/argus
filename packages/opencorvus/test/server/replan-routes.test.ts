@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EnginePlanVersionTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { findActivePlanForTask } from "../../src/engine/store"
 import { Identifier } from "../../src/id/id"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Instance } from "../../src/project/instance"
@@ -80,10 +81,14 @@ describe("task replan and retry routes", () => {
 
     expect(response.status).toBe(200)
     await waitForMockCalls(runTaskLoop, 1)
-    const note = (runTaskLoop.mock.calls[0]?.[0] as { event?: { note?: string } } | undefined)?.event?.note
-    expect(note).toContain("User requested replan")
-    expect(note).toContain("Create a fresh plan")
-    expect(note).not.toContain("User requested retry")
+    const event = (runTaskLoop.mock.calls[0]?.[0] as
+      | { event?: { note?: string; operatorIntent?: { kind?: string } } }
+      | undefined)?.event
+    expect(event?.operatorIntent).toEqual({ kind: "replan" })
+    expect(event?.note).toContain("User requested replan")
+    expect(event?.note).toContain("Create a fresh plan")
+    expect(event?.note).not.toContain("User requested retry")
+    expect(findActivePlanForTask(taskID)).toBeUndefined()
   }, 15_000)
 
   test("POST /task/:taskID/retry still wakes the orchestrator with retry intent", async () => {
@@ -101,8 +106,12 @@ describe("task replan and retry routes", () => {
 
     expect(response.status).toBe(200)
     await waitForMockCalls(runTaskLoop, 1)
-    const note = (runTaskLoop.mock.calls[0]?.[0] as { event?: { note?: string } } | undefined)?.event?.note
-    expect(note).toContain("User requested retry")
-    expect(note).not.toContain("User requested replan")
+    const event = (runTaskLoop.mock.calls[0]?.[0] as
+      | { event?: { note?: string; operatorIntent?: { kind?: string } } }
+      | undefined)?.event
+    expect(event?.operatorIntent).toEqual({ kind: "retry" })
+    expect(event?.note).toContain("User requested retry")
+    expect(event?.note).not.toContain("User requested replan")
+    expect(findActivePlanForTask(taskID)?.status).toBe("active")
   }, 15_000)
 })
