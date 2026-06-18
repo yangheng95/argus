@@ -367,7 +367,7 @@ body {
   padding-top: calc(1px * var(--ui-scale));
 }
 
-.card__head > .card__error-reason {
+.card__head > .oc-button[data-ui="card-error-reason"] {
   flex: 0 1 auto;
 }
 
@@ -572,36 +572,55 @@ body {
   color: color-mix(in srgb, var(--text) 90%, transparent);
 }
 
-.card__rewind {
+.card__control-actions .oc-button[data-ui="card-trace"],
+.card__control-actions .oc-button[data-ui="card-agent-model-settings"],
+.card__control-actions .oc-button[data-ui="card-agent-cancel"],
+.card__control-actions .oc-button[data-ui="card-rewind"] {
+  --oc-button-height: calc(22px * var(--ui-scale, 1));
+  --oc-button-padding-x: 0;
+  --oc-button-color: var(--text-muted);
+
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: calc(22px * var(--ui-scale, 1));
-  height: calc(22px * var(--ui-scale, 1));
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--oc-radius-soft);
+  min-width: calc(22px * var(--ui-scale, 1));
   opacity: var(--ui-opacity-disabled);
   font-size: calc(14px * var(--ui-scale));
-  line-height: 1;
   transition:
     opacity var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard),
-    background-color var(--ui-duration-base) var(--ui-timing-standard);
+    --oc-button-color var(--ui-duration-base) var(--ui-timing-standard),
+    --oc-button-bg var(--ui-duration-base) var(--ui-timing-standard);
 }
-.card__head:hover .card__rewind,
-.card__rewind:focus-visible {
+
+.card__head:hover .card__control-actions .oc-button[data-ui="card-trace"],
+.card__head:hover .card__control-actions .oc-button[data-ui="card-agent-model-settings"],
+.card__head:hover .card__control-actions .oc-button[data-ui="card-agent-cancel"],
+.card__head:hover .card__control-actions .oc-button[data-ui="card-rewind"],
+.card__control-actions .oc-button[data-ui="card-trace"]:focus-visible,
+.card__control-actions .oc-button[data-ui="card-agent-model-settings"]:focus-visible,
+.card__control-actions .oc-button[data-ui="card-agent-cancel"]:focus-visible,
+.card__control-actions .oc-button[data-ui="card-rewind"]:focus-visible,
+.card__control-actions .oc-button[data-ui="card-trace"][data-state="open"] {
   opacity: var(--ui-opacity-full);
 }
-.card__rewind:hover {
-  color: var(--warn);
-  background: var(--surface-hover);
+
+.card__control-actions .oc-button[data-ui="card-trace"]:hover,
+.card__control-actions .oc-button[data-ui="card-agent-model-settings"]:hover,
+.card__control-actions .oc-button[data-ui="card-trace"][data-state="open"] {
+  --oc-button-color: var(--accent);
+  --oc-button-bg: var(--surface-hover);
 }
-.card__rewind--pending {
+
+.card__control-actions .oc-button[data-ui="card-agent-cancel"]:hover {
+  --oc-button-color: var(--bad);
+  --oc-button-bg: color-mix(in srgb, var(--bad) 14%, transparent);
+}
+
+.card__control-actions .oc-button[data-ui="card-rewind"]:hover {
+  --oc-button-color: var(--warn);
+  --oc-button-bg: var(--surface-hover);
+}
+
+.card__control-actions .oc-button[data-state="pending"] {
   opacity: var(--ui-opacity-disabled);
   pointer-events: none;
 }
@@ -1008,44 +1027,52 @@ body {
   opacity: var(--ui-opacity-subtle);
 }
 
-/* card__error-reason — clickable button-styled chip on cards that flipped
+/* card-error-reason — clickable Button chip on cards that flipped
    to status="error". Lives beside the disclosure title so the operator sees WHY a
    session failed without expanding the card. Truncates with ellipsis;
    the full reason lives in the title tooltip and click copies it to the
-   clipboard for pasting into a bug report. data-copied flips to --good
+   clipboard for pasting into a bug report. data-state="copied" flips to --good
    for the 1.2s feedback window. */
-.card__error-reason {
-  display: inline-block;
+.oc-button[data-ui="card-error-reason"] {
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(6px * var(--ui-scale));
+  --oc-button-padding-y: 0;
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 32%, transparent);
+  --oc-button-bg: var(--bad-dim);
+  --oc-button-color: var(--bad);
+
   max-width: clamp(calc(160px * var(--ui-scale)), 50%, calc(420px * var(--ui-scale)));
-  padding: 0 calc(6px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 32%, transparent);
-  border-radius: var(--oc-radius-soft);
-  background: var(--bad-dim);
-  color: var(--bad);
-  font: inherit;
+  min-height: 0;
   font-size: var(--card-sub-size);
   line-height: 1.4;
-  white-space: nowrap;
+  overflow: hidden;
+  user-select: text;
+  transition:
+    --oc-button-bg var(--ui-duration-base),
+    --oc-button-color var(--ui-duration-base),
+    --oc-button-border var(--ui-duration-base);
+}
+
+.oc-button[data-ui="card-error-reason"] > [data-ui="card-error-reason-text"] {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  user-select: text;
-  cursor: pointer;
-  transition:
-    background var(--ui-duration-base),
-    color var(--ui-duration-base),
-    border-color var(--ui-duration-base);
+  white-space: nowrap;
 }
-.card__error-reason:hover {
-  background: color-mix(in srgb, var(--bad) 28%, transparent);
+
+.oc-button[data-ui="card-error-reason"]:hover {
+  --oc-button-bg: color-mix(in srgb, var(--bad) 28%, transparent);
 }
-.card__error-reason:focus-visible {
+
+.oc-button[data-ui="card-error-reason"]:focus-visible {
   outline: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--bad) 60%, transparent);
   outline-offset: calc(1px * var(--ui-scale));
 }
-.card__error-reason--copied {
-  background: var(--good-dim);
-  color: var(--good);
-  border-color: color-mix(in srgb, var(--good) 50%, transparent);
+
+.oc-button[data-ui="card-error-reason"][data-state="copied"] {
+  --oc-button-bg: var(--good-dim);
+  --oc-button-color: var(--good);
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--good) 50%, transparent);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -1199,53 +1226,6 @@ body {
 
 /* ── AgentTrace surface (per-session 🔍 button + inline TracePanel) ── */
 
-.card__trace,
-.card__agent-cancel,
-.card__agent-reply-toggle {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: calc(22px * var(--ui-scale, 1));
-  height: calc(22px * var(--ui-scale, 1));
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--oc-radius-soft);
-  opacity: var(--ui-opacity-disabled);
-  transition:
-    opacity var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard),
-    background-color var(--ui-duration-base) var(--ui-timing-standard);
-}
-.card__head:hover .card__trace,
-.card__head:hover .card__agent-cancel,
-.card__head:hover .card__agent-reply-toggle,
-.card__trace:focus-visible,
-.card__agent-cancel:focus-visible,
-.card__agent-reply-toggle:focus-visible,
-.card__trace--open {
-  opacity: var(--ui-opacity-full);
-}
-.card__trace:hover {
-  color: var(--accent);
-  background: var(--surface-hover);
-}
-.card__agent-cancel:hover {
-  color: var(--bad);
-  background: color-mix(in srgb, var(--bad) 14%, transparent);
-}
-.card__agent-cancel:disabled {
-  cursor: default;
-  opacity: var(--ui-opacity-disabled);
-}
-.card__trace--open {
-  color: var(--accent);
-  background: var(--surface-hover);
-  opacity: var(--ui-opacity-full);
-}
 /* Inline reply box at the END of agent session card body. Renders via
    <AgentSessionReplyBox/> in Card.tsx; spans full width of the card body. */
 .card__agent-reply {
@@ -1392,33 +1372,35 @@ body {
   display: inline-flex;
   gap: calc(4px * var(--ui-scale));
 }
-.trace-panel-refresh,
-.trace-panel-close,
-.trace-panel-copy {
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
+.trace-panel-actions .oc-button[data-ui="trace-copy"],
+.trace-panel-actions .oc-button[data-ui="trace-refresh"],
+.trace-panel-actions .oc-button[data-ui="trace-close"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-color: var(--text-muted);
+
+  width: calc(22px * var(--ui-scale));
+  min-width: calc(22px * var(--ui-scale));
   font-size: calc(12px * var(--ui-scale));
-  line-height: 1;
 }
-.trace-panel-refresh:hover,
-.trace-panel-close:hover,
-.trace-panel-copy:hover:not([disabled]) {
-  color: var(--text-strong);
-  background: var(--surface-hover);
+
+.trace-panel-actions .oc-button[data-ui="trace-copy"]:hover:not([disabled]),
+.trace-panel-actions .oc-button[data-ui="trace-refresh"]:hover,
+.trace-panel-actions .oc-button[data-ui="trace-close"]:hover {
+  --oc-button-color: var(--text-strong);
+  --oc-button-bg: var(--surface-hover);
 }
-.trace-panel-copy[disabled] {
+
+.trace-panel-actions .oc-button[data-ui="trace-copy"]:disabled {
   opacity: var(--ui-opacity-faint);
-  cursor: not-allowed;
 }
-.trace-panel-copy[data-state="ok"] {
-  color: var(--good);
+
+.trace-panel-actions .oc-button[data-ui="trace-copy"][data-state="ok"] {
+  --oc-button-color: var(--good);
 }
-.trace-panel-copy[data-state="err"] {
-  color: var(--bad);
+
+.trace-panel-actions .oc-button[data-ui="trace-copy"][data-state="err"] {
+  --oc-button-color: var(--bad);
 }
 .trace-panel-empty {
   padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));

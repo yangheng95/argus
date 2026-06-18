@@ -237,11 +237,13 @@ async function visualSnapshot(page: OverlayPage) {
         },
       }
     })
-    const headerControls = Array.from(document.querySelectorAll<HTMLElement>(".card__rewind")).map((element) => {
+    const headerControls = Array.from(document.querySelectorAll<HTMLElement>('[data-ui="card-rewind"]')).map((element) => {
       const parent = element.closest<HTMLElement>("[data-card-id]")
       const rect = element.getBoundingClientRect()
       return {
         cardID: parent?.dataset.cardId || "",
+        className: element.className,
+        dataUi: element.dataset.ui || "",
         left: Math.round(rect.left),
         top: Math.round(rect.top),
         right: Math.round(rect.right),
@@ -518,6 +520,8 @@ function assertNoLayoutBreakage(snapshot: Awaited<ReturnType<typeof visualSnapsh
     )
   }
   for (const item of snapshot.headerControls) {
+    assert.equal(item.dataUi, "card-rewind", `rewind control missing data-ui ${JSON.stringify(item)}`)
+    assert.match(String(item.className), /\boc-button\b/, `rewind control bypassed Button ${JSON.stringify(item)}`)
     assert.ok(Number(item.width) >= 12 && Number(item.height) >= 12, `bad rewind control box ${JSON.stringify(item)}`)
     assert.ok(
       Number(item.left) >= -1 && Number(item.right) <= snapshot.viewportWidth + 1,
@@ -662,7 +666,7 @@ async function rewindButtonTarget(page: OverlayPage, cardID: string, selector: s
 }
 
 async function clickRewind(page: OverlayPage, cardID: string) {
-  const selector = `[data-card-id="${cardID}"] .card__rewind`
+  const selector = `[data-card-id="${cardID}"] [data-ui="card-rewind"]`
   let lastState: unknown = { cardID, selector }
   recordClickTrace(cardID, "wait-button:start", { selector })
   await stepTimeout(
@@ -1123,6 +1127,23 @@ test(
         if (path === `/task/${TASK_ID}/transcript`) return json(visibleMessages())
         if (path === `/task/${TASK_ID}/trace`)
           return json({ events: [], traceDir: `${PROJECT_ROOT}/.opencorvus/trace`, enabled: true })
+        if (path.startsWith("/session/") && path.endsWith("/trace")) {
+          const sessionID = decodeURIComponent(path.slice("/session/".length, -"/trace".length))
+          return json({
+            events: [
+              {
+                ts: times.t8,
+                kind: "session_open",
+                sessionID,
+                taskID: TASK_ID,
+                agentName: "orchestrator",
+                payload: { firstEvent: "session_open" },
+              },
+            ],
+            traceDir: `${PROJECT_ROOT}/.opencorvus/trace`,
+            enabled: true,
+          })
+        }
         if (path === `/task/${TASK_ID}/browser-preview`) return json(browserPreviewTarget)
         if (path === "/control/timeline") return json([])
         if (path === "/task/events") return eventStream(sseClients, path)
@@ -1287,6 +1308,33 @@ test(
       assertVisible(snapshot, ["RW-T8 final orchestration tail"])
       await captureScreenshot("01-baseline")
       markStage("01-baseline")
+
+      await page.click('[data-card-id="orchestrator:session:ses_orch:message:msg_orch_1"] [data-ui="card-trace"]')
+      await page.waitForSelector(".trace-panel-body", { visible: true, timeout: 5_000 })
+      const traceActionState = await page.$$eval(".trace-panel-actions button", (buttons) =>
+        buttons.map((button) => ({
+          dataUi: button.dataset.ui || "",
+          className: String(button.className || ""),
+          disabled: button.disabled,
+          ariaLabel: button.getAttribute("aria-label") || "",
+        })),
+      )
+      assert.deepEqual(
+        traceActionState.map((item) => item.dataUi),
+        ["trace-copy", "trace-refresh", "trace-close"],
+      )
+      for (const item of traceActionState) {
+        assert.match(item.className, /\boc-button\b/, `${item.dataUi} did not use Button primitive chrome`)
+        assert.ok(item.ariaLabel, `${item.dataUi} missing accessible label`)
+      }
+      assert.deepEqual(
+        traceActionState.map((item) => item.disabled),
+        [false, false, false],
+      )
+      await captureScreenshot("01-trace-panel-actions")
+      await page.click('.trace-panel-actions [data-ui="trace-close"]')
+      await page.waitForFunction(() => !document.querySelector(".trace-panel"))
+      markStage("01-trace-panel-actions")
 
       await waitForVisualState(
         page,

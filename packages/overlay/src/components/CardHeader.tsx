@@ -13,6 +13,7 @@ import { goalRevisionLabel } from "../utils/goal-label"
 import { useCardHeadActions } from "../hooks/use-card-head-actions"
 import { formatCostUSD, formatTokenCount } from "../utils/format-usage"
 import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
 
 function leadingGlyph(node: CardNode): string {
   if (node.kind === "tool") return displayToolIcon(node.stage || node.title)
@@ -200,10 +201,13 @@ export function CardHeader(props: {
         </span>
       </button>
       <Show when={props.node.status === "error" && !!props.node.errorReason}>
-        <button
+        <Button
           type="button"
-          class="card__error-reason"
-          classList={{ "card__error-reason--copied": reasonCopied() }}
+          variant="ghost"
+          size="mini"
+          tone={reasonCopied() ? "accent" : "danger"}
+          data-ui="card-error-reason"
+          data-state={reasonCopied() ? "copied" : "idle"}
           title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
           aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
           onClick={async (e) => {
@@ -216,8 +220,8 @@ export function CardHeader(props: {
             setTimeout(() => setReasonCopied(false), 1200)
           }}
         >
-          {props.node.errorReason}
-        </button>
+          <span data-ui="card-error-reason-text">{props.node.errorReason}</span>
+        </Button>
       </Show>
       <div class="card__actions">
         <Show when={hasMetaActions()}>
@@ -295,10 +299,13 @@ export function CardHeader(props: {
         <Show when={hasControlActions()}>
           <div class="card__control-actions">
             <Show when={!!props.traceSessionID && !!props.onTrace}>
-              <button
+              <Button
                 type="button"
-                class="card__trace"
-                classList={{ "card__trace--open": !!props.traceOpen }}
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-ui="card-trace"
+                data-state={props.traceOpen ? "open" : "closed"}
                 title={t("card.inspect_agent_trace")}
                 aria-label={t("card.inspect_agent_trace")}
                 aria-pressed={!!props.traceOpen}
@@ -306,21 +313,17 @@ export function CardHeader(props: {
                   e.stopPropagation()
                   props.onTrace?.()
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    props.onTrace?.()
-                  }
-                }}
               >
                 <Icon name="inspect" size={13} />
-              </button>
+              </Button>
             </Show>
             <Show when={!!props.agentSessionID && !!props.onAgentModelSettings}>
-              <button
+              <Button
                 type="button"
-                class="card__trace"
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-ui="card-agent-model-settings"
                 title="Session model settings"
                 aria-label="Session model settings"
                 data-testid="card-open-session-agent-models"
@@ -328,54 +331,41 @@ export function CardHeader(props: {
                   e.stopPropagation()
                   props.onAgentModelSettings?.(props.agentSessionID!)
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    props.onAgentModelSettings?.(props.agentSessionID!)
-                  }
-                }}
               >
                 <Icon name="executor" size={13} />
-              </button>
+              </Button>
             </Show>
             <Show when={headActions.caps.canCancel()}>
-              <button
+              <Button
                 type="button"
-                class="card__agent-cancel"
-                classList={{ "card__agent-cancel--pending": headActions.state.cancelling() }}
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-ui="card-agent-cancel"
+                data-state={headActions.state.cancelling() ? "pending" : "idle"}
                 title={headActions.labels.cancel()}
                 aria-label={headActions.labels.cancel()}
                 disabled={headActions.state.cancelling()}
                 onClick={headActions.onAgentCancel}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    headActions.onAgentCancel(e)
-                  }
-                }}
               >
                 <Icon name="cancel" size={13} />
-              </button>
+              </Button>
             </Show>
             <Show when={headActions.caps.canRewind()}>
-              <button
+              <Button
                 type="button"
-                class="card__rewind"
-                classList={{ "card__rewind--pending": headActions.state.rewinding() }}
+                variant="ghost"
+                size="icon"
+                tone="neutral"
+                data-ui="card-rewind"
+                data-state={headActions.state.rewinding() ? "pending" : "idle"}
                 title={headActions.labels.rewind()}
                 aria-label={headActions.labels.rewindStep()}
                 disabled={headActions.state.rewinding()}
                 onClick={headActions.onRewind}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    headActions.onRewind(e)
-                  }
-                }}
               >
                 <Icon name="rewind" size={13} />
-              </button>
+              </Button>
             </Show>
           </div>
         </Show>
