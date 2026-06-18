@@ -51,9 +51,9 @@ test("TaskProgressBar goal pills expose visible keyboard focus", () => {
   expect(source).toContain('class="task-progress__pill"')
   expect(source).toContain("onClick={() => onPillClick(g.goalID)}")
   expect(css).toMatch(
-    /\.task-progress__pill:hover,\s*\.task-progress__pill:focus-visible\s*\{[^}]*background:\s*var\(--card-bg-hover\);[^}]*border-color:\s*var\(--card-border-strong\);[^}]*color:\s*var\(--text-strong\);/s,
+    /\.task-progress__pill:hover\s*\{[^}]*background:\s*var\(--card-bg-hover\);[^}]*border-color:\s*var\(--card-border-strong\);[^}]*color:\s*var\(--text-strong\);/s,
   )
   expect(css).toMatch(
-    /\.task-progress__pill:focus-visible\s*\{[^}]*outline:\s*var\(--oc-border-width\) solid color-mix\(in srgb, var\(--accent\) 40%, transparent\);[^}]*outline-offset:\s*calc\(2px \* var\(--ui-scale\)\);/s,
+    /\.task-progress__pill:focus-visible\s*\{[^}]*background:\s*var\(--card-bg-hover\);[^}]*border-color:\s*var\(--card-border-strong\);[^}]*color:\s*var\(--text-strong\);[^}]*outline:\s*var\(--oc-border-width\) solid color-mix\(in srgb, var\(--accent\) 40%, transparent\);[^}]*outline-offset:\s*calc\(2px \* var\(--ui-scale\)\);/s,
   )
 })

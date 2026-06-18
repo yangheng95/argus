@@ -46,6 +46,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-coding-cli-icon-token-source.md](2026-06-18-coding-cli-icon-token-source.md)                                                     | Coding CLI Icon Token Source |
 | [2026-06-18-conversation-agent-rail-button-primitive.md](2026-06-18-conversation-agent-rail-button-primitive.md)                             | Conversation Agent Rail Button Primitive |
 | [2026-06-18-image-preview-shadow-token-source.md](2026-06-18-image-preview-shadow-token-source.md)                                           | Image Preview Shadow Token Source |
+| [2026-06-18-card-css-duplicate-selector-debt.md](2026-06-18-card-css-duplicate-selector-debt.md)                                               | Card CSS Duplicate Selector Debt |
 | [2026-06-18-file-changes-filter-primitive-owner.md](2026-06-18-file-changes-filter-primitive-owner.md) | File Changes Filter Primitive Owner |
 | [2026-06-18-card-trace-action-button-owner.md](2026-06-18-card-trace-action-button-owner.md)                                               | Card Trace Action Button Owner |
 | [2026-06-18-goal-workflow-header-native-button.md](2026-06-18-goal-workflow-header-native-button.md)                                       | Goal Workflow Header Native Button |
