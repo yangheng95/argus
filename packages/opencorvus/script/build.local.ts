@@ -17,6 +17,7 @@ import {
   artifactBrowserMcpNodeExternalModules,
   artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
+  artifactExecutableName,
   artifactExternalModules,
   artifactHostCanProvideNodeRuntime,
   artifactPackageBaseName,
@@ -360,7 +361,7 @@ for (const item of targets) {
     autoloadTsconfig: true,
     autoloadPackageJson: true,
     target: compileTarget,
-    outfile: `dist/${name}/opencorvus`,
+    outfile: `dist/${name}/${artifactExecutableName(item.os)}`,
     execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
     windows: {},
   }

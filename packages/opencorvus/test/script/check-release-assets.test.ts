@@ -19,9 +19,9 @@ interface RunResult {
   stdout: string
 }
 
-async function runCheck(distDir: string, args: string[]): Promise<RunResult> {
+async function runCheckForPlatforms(distDir: string, platforms: string, args: string[]): Promise<RunResult> {
   const proc = Bun.spawn(
-    ["bun", CHECK_SCRIPT, "cli", "--dir", distDir, "--platforms", "linux-x64", "--version", "9.9.9", ...args],
+    ["bun", CHECK_SCRIPT, "cli", "--dir", distDir, "--platforms", platforms, "--version", "9.9.9", ...args],
     { stdout: "pipe", stderr: "pipe" },
   )
   const exitCode = await proc.exited
@@ -30,10 +30,14 @@ async function runCheck(distDir: string, args: string[]): Promise<RunResult> {
   return { ok: exitCode === 0, stdout, stderr }
 }
 
-function seedPlatformDir(root: string, platform: string) {
+async function runCheck(distDir: string, args: string[]): Promise<RunResult> {
+  return runCheckForPlatforms(distDir, "linux-x64", args)
+}
+
+function seedPlatformDir(root: string, platform: string, binaryName = "opencorvus") {
   const dir = path.join(root, `opencorvus-${platform}`)
   fs.mkdirSync(path.join(dir, "ui"), { recursive: true })
-  fs.writeFileSync(path.join(dir, "opencorvus"), "#!/usr/bin/env sh\nexit 0\n")
+  fs.writeFileSync(path.join(dir, binaryName), "#!/usr/bin/env sh\nexit 0\n")
   fs.writeFileSync(path.join(dir, "ui", "index.html"), "<html></html>")
   fs.writeFileSync(path.join(dir, "ui", "app.abc.js"), "/* ui */")
   fs.writeFileSync(path.join(dir, "ui", "app.abc.css"), "/* ui */")
@@ -71,6 +75,29 @@ describe("check-release-assets cli --require-archives", () => {
     seedPlatformDir(workdir, "linux-x64")
     const res = await runCheck(workdir, [])
     expect(res.ok).toBe(true)
+  })
+
+  test("requires the Windows CLI binary to use the .exe archive name", async () => {
+    seedPlatformDir(workdir, "windows-x64", "opencorvus.exe")
+    const res = await runCheckForPlatforms(workdir, "windows-x64", [])
+    expect(res.ok).toBe(true)
+    expect(res.stdout).toContain("CLI assets validated for windows-x64")
+  })
+
+  test("rejects extensionless Windows CLI binary directories", async () => {
+    seedPlatformDir(workdir, "windows-x64", "opencorvus")
+    const res = await runCheckForPlatforms(workdir, "windows-x64", [])
+    expect(res.ok).toBe(false)
+    expect(res.stderr).toContain("Missing required file")
+    expect(res.stderr).toContain("opencorvus.exe")
+  })
+
+  test("rejects .exe-only Linux CLI binary directories", async () => {
+    seedPlatformDir(workdir, "linux-x64", "opencorvus.exe")
+    const res = await runCheck(workdir, [])
+    expect(res.ok).toBe(false)
+    expect(res.stderr).toContain("Missing required file")
+    expect(res.stderr).toContain("opencorvus")
   })
 
   test("validates every requested CLI variant archive", async () => {
