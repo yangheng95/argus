@@ -1206,7 +1206,6 @@
 
 .project-worktree-remove:disabled {
   cursor: default;
-  opacity: var(--ui-opacity-disabled);
   background: transparent;
   color: var(--text-muted);
 }
@@ -1624,7 +1623,7 @@
 
 .recent-dir-edit-submit:disabled {
   cursor: default;
-  opacity: var(--ui-opacity-disabled);
+  color: var(--text-muted);
 }
 
 .recent-dir-section {
