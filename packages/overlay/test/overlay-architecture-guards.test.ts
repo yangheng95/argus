@@ -1290,22 +1290,22 @@ describe("overlay architecture guards", () => {
   test("extensions panel block + row is owned by surfaces/settings.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    const sourceText = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|html)$/.test(path))
+      .map((path) => readText(path))
+      .join("\n")
 
-    for (const className of [
-      "extension-block",
-      "extension-head",
-      "extension-list",
-      "extension-row",
-      "extension-row-main",
-      "extension-row-actions",
-      "extension-policy",
-    ]) {
+    for (const className of ["extension-block", "extension-policy"]) {
+      expect(sourceText).not.toMatch(new RegExp(`\\b${className}\\b`))
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+    }
+
+    for (const className of ["extension-head", "extension-list", "extension-row", "extension-row-main", "extension-row-actions"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
     expect(settingsSurface).toMatch(/\.extension-head:hover,\s*\.extension-head:focus-within\s*\{/)
-    expect(settingsSurface).toMatch(/\.extension-block \+ \.extension-block\s*\{/)
     expect(settingsSurface).toMatch(/\.extension-row span,\s*\.extension-row small\s*\{/)
     const titleBody = soloRuleBody(settingsSurface, ".extension-row strong")
     expect(titleBody).toContain("display: inline-flex")
@@ -1317,6 +1317,17 @@ describe("overlay architecture guards", () => {
   test("knowledge / memory panel is owned by surfaces/settings.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    const activitySurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/activity.css"))
+    const sourceText = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|html)$/.test(path))
+      .map((path) => readText(path))
+      .join("\n")
+
+    for (const className of ["knowledge-item-actions", "knowledge-delete"]) {
+      expect(sourceText).not.toMatch(new RegExp(`\\b${className}\\b`))
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(activitySurface).not.toMatch(new RegExp(`(^|\\n)\\.sidebar-tool-panel\\s+\\.${className}(?:\\s|,|\\{)`))
+    }
 
     for (const className of [
       "knowledge-toolbar",
@@ -1327,8 +1338,6 @@ describe("overlay architecture guards", () => {
       "knowledge-item-title",
       "knowledge-item-meta",
       "knowledge-item-meta-row",
-      "knowledge-item-actions",
-      "knowledge-delete",
       "knowledge-scope",
       "memory-inline-detail",
       "memory-detail-meta",
