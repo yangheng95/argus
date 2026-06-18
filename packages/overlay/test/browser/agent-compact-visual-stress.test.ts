@@ -255,6 +255,51 @@ async function screenshotPanel(page: OverlayPage, name: string) {
   return { file, stats }
 }
 
+async function screenshotAgentRail(page: OverlayPage, name: string) {
+  await page.waitForSelector(".conversation-agent-rail", { visible: true })
+  const element = await page.$(".conversation-agent-rail")
+  assert.ok(element, `${name}: agent rail missing`)
+  const screenshot = await element.screenshot({})
+  const file = resolve(SCREENSHOT_DIR, `${name}.png`)
+  writeFileSync(file, screenshot)
+  const stats = await analyzePng(screenshot)
+  assert.ok(stats.width >= 90 && stats.height >= 32, `${name}: invalid screenshot size ${JSON.stringify(stats)}`)
+  assert.ok(stats.nonWhiteDensity > 0.03, `${name}: screenshot lacks UI pixels ${JSON.stringify(stats)}`)
+  assert.ok(stats.uniqueColorBuckets > 12, `${name}: screenshot is visually too sparse ${JSON.stringify(stats)}`)
+  return { file, stats }
+}
+
+async function focusAgentRailLocateButton(page: OverlayPage) {
+  const selector = '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]'
+  await page.waitForSelector(selector, { visible: true })
+  await page.evaluate(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement) active.blur()
+  })
+  for (let index = 0; index < 80; index += 1) {
+    const state = await page.evaluate((targetSelector) => {
+      const active = document.activeElement
+      if (!(active instanceof HTMLElement) || !active.matches(targetSelector)) return null
+      const rect = active.getBoundingClientRect()
+      const style = getComputedStyle(active)
+      return {
+        tagName: active.tagName,
+        className: active.className,
+        ariaLabel: active.getAttribute("aria-label") || "",
+        title: active.getAttribute("title") || "",
+        focusVisible: active.matches(":focus-visible"),
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      }
+    }, selector)
+    if (state) return state
+    await page.keyboard.press("Tab")
+  }
+  assert.fail("Unable to reach ConversationAgentRail locate button through keyboard Tab navigation")
+}
+
 async function settleFrame(page: OverlayPage) {
   await page.evaluate(
     () =>
@@ -887,6 +932,17 @@ test(
       ])
       assertChronology(snapshot, ["AGC-PRECOMPACT", "AGC-COMPACT-CHECKPOINT", "AGC-RESUME-AFTER-COMPACT"])
       snapshots["01-hydrated-compact"] = snapshot
+      const railFocus = await focusAgentRailLocateButton(page)
+      assert.equal(railFocus.tagName, "BUTTON")
+      assert.match(railFocus.className, /\boc-button\b/)
+      assert.equal(railFocus.ariaLabel.length > 0, true)
+      assert.equal(railFocus.ariaLabel, railFocus.title)
+      assert.equal(railFocus.focusVisible, true)
+      assert.notEqual(railFocus.outlineStyle, "none")
+      assert.notEqual(railFocus.outlineWidth, "0px")
+      assert.ok(railFocus.width >= 30)
+      assert.ok(railFocus.height >= 30)
+      screenshots.push({ name: "00-agent-rail-focus", ...(await screenshotAgentRail(page, "00-agent-rail-focus")) })
       await scrollMarkerIntoView(page, "AGC-COMPACT-CHECKPOINT")
       screenshots.push({ name: "01-hydrated-compact", ...(await screenshotPanel(page, "01-hydrated-compact")) })
       mark("hydrated-complete")

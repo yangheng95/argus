@@ -122,8 +122,13 @@ test("conversation agent rail and conversation owner surfaces stay flat", () => 
   expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__row")).toMatch(/display:\s*grid/)
   expect(CONVERSATION_CSS).not.toContain("conversation-agent-rail__run")
   expect(CONVERSATION_CSS).not.toContain("conversation-agent-rail__report")
-  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__avatar-button:hover")).toMatch(
-    /background:\s*var\(--subtle-2\)/,
+  expect(
+    bodyOf(
+      CONVERSATION_CSS,
+      '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:hover, .conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:focus-visible',
+    ),
+  ).toMatch(
+    /--oc-button-bg:\s*var\(--subtle-2\)/,
   )
   expect(bodyOf(CARD_CSS, ".task-progress__pill")).toMatch(/border:\s*var\(--oc-border-width\) solid var\(--card-border\)/)
   expect(bodyOf(CARD_CSS, ".task-progress__pill")).toMatch(/background:\s*var\(--card-bg-0\)/)

@@ -17,6 +17,21 @@ test("ConversationAgentRail reads workflow through the projection and renders a 
   expect(source).not.toContain("event.kind")
 })
 
+test("ConversationAgentRail avatar navigation uses the Button primitive and explicit labels", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
+  const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
+  expect(source).toContain('import { Button } from "./ui/Button"')
+  expect(source).toContain("<Button")
+  expect(source).toContain('data-ui="conversation-agent-rail-locate"')
+  expect(source).toContain("aria-label={compactLabel(record())}")
+  expect(source).toContain("title={compactLabel(record())}")
+  expect(source).not.toContain("<button")
+  expect(source).not.toContain("conversation-agent-rail__avatar-button")
+  expect(css).toContain('.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]')
+  expect(css).not.toContain(".conversation-agent-rail__avatar-button")
+  expect(css).not.toMatch(/conversation-agent-rail[^{]*\{[^}]*appearance:\s*none/)
+})
+
 test("ConversationAgentRail locates cards through renderedCardID and CSS.escape", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   expect(source).toContain("record.renderedCardID")
