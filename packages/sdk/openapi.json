@@ -14988,7 +14988,7 @@
       "post": {
         "operationId": "mission.wake",
         "summary": "Wake the Mission agent",
-        "description": "Start (or resume) a Mission agent session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — exactly one mission session is keyed per mission.",
+        "description": "Start (or resume) a Mission agent session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, directory, missionID) — exactly one mission session is keyed per mission.",
         "responses": {
           "200": {
             "description": "Mission wake accepted",
