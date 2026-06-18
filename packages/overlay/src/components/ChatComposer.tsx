@@ -2,7 +2,6 @@
 // Solid.js port of renderChatComposer / renderChatAttachments / chatForm submit
 // and related attachment/keyboard logic
 
-import * as Select from "@kobalte/core/select"
 import { createSignal, createMemo, createEffect, For, Show, onCleanup, onMount } from "solid-js"
 import type { JSX } from "solid-js"
 import { t, tArray } from "../utils/i18n"
@@ -22,6 +21,7 @@ import { fileToDataUrl } from "../services/file-to-data-url"
 import { Icon } from "./Icon"
 import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
 import { Button } from "./ui/Button"
+import { SelectControl } from "./ui/SelectControl"
 import {
   clearComposerDraft,
   composerDraftText,
@@ -90,26 +90,6 @@ export interface ChatComposerProps {
   promptProfiles: PromptProfileOption[]
   promptProfileID: string
   onPromptProfileChange: (profileID: string) => void
-}
-
-function PromptProfileSelectOptionItem(props: Select.SelectRootItemComponentProps<PromptProfileOption>): JSX.Element {
-  const option = () => props.item.rawValue
-  return (
-    <Select.Item
-      item={props.item}
-      class="oc-select-option prompt-profile-select-option"
-      data-profile-id={option().id}
-      title={option().description ?? option().label}
-    >
-      <span class="oc-select-option-copy prompt-profile-select-option-copy">
-        <Select.ItemLabel>{option().label}</Select.ItemLabel>
-        <Show when={option().description}>{(description) => <small>{description()}</small>}</Show>
-      </span>
-      <Select.ItemIndicator class="oc-select-indicator">
-        <Icon name="status-completed" size={12} />
-      </Select.ItemIndicator>
-    </Select.Item>
-  )
 }
 
 // ── Constants ──
@@ -680,40 +660,40 @@ export function ChatComposer(props: ChatComposerProps) {
        * stays clean. */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
-          <Select.Root<PromptProfileOption>
+          <SelectControl<PromptProfileOption>
             class="prompt-profile-select-wrap"
             options={props.promptProfiles}
-            optionValue="id"
-            optionTextValue="label"
             value={selectedPromptProfile()}
             onChange={selectPromptProfile}
-            itemComponent={PromptProfileSelectOptionItem}
+            optionValue="id"
+            optionTextValue="label"
             disabled={promptProfileDisabled()}
             disallowEmptySelection
             gutter={4}
             sameWidth
-          >
-            <Select.Trigger
-              class="oc-select-trigger prompt-profile-select-trigger"
-              data-ui="prompt-profile-selector"
-              aria-label={t("prompt_profile.selector_title")}
-              title={t("prompt_profile.selector_title")}
-            >
+            triggerClass="prompt-profile-select-trigger"
+            triggerDataUI="prompt-profile-selector"
+            triggerTitle={t("prompt_profile.selector_title")}
+            ariaLabel={t("prompt_profile.selector_title")}
+            contentClass="prompt-profile-select-content"
+            listboxClass="prompt-profile-select-listbox"
+            optionClass="prompt-profile-select-option"
+            optionCopyClass="prompt-profile-select-option-copy"
+            iconClass="prompt-profile-select-caret"
+            icon={<Icon name="caret-down" size={9} />}
+            optionData={(option) => ({
+              "data-profile-id": option.id,
+              title: option.description ?? option.label,
+            })}
+            renderValue={() => (
               <span class="prompt-profile-select-copy">
                 <span class="prompt-profile-select-label">{t("prompt_profile.selector_label")}</span>
                 <span class="prompt-profile-select-value">{promptProfileLabel()}</span>
               </span>
-              <Select.Icon class="prompt-profile-select-caret">
-                <Icon name="caret-down" size={9} />
-              </Select.Icon>
-            </Select.Trigger>
-            <Select.HiddenSelect aria-label={t("prompt_profile.selector_title")} />
-            <Select.Portal>
-              <Select.Content class="oc-select-content prompt-profile-select-content">
-                <Select.Listbox class="oc-select-listbox prompt-profile-select-listbox" />
-              </Select.Content>
-            </Select.Portal>
-          </Select.Root>
+            )}
+            renderOptionLabel={(option) => option.label}
+            renderOptionDescription={(option) => option.description}
+          />
           <ExecutorSelector />
         </div>
       </div>

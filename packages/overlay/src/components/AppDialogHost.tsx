@@ -1,29 +1,15 @@
-import * as Select from "@kobalte/core/select"
 import { createEffect, createSignal, onCleanup, Show } from "solid-js"
-import type { JSX } from "solid-js"
 import { dialogStore, setDialogStore } from "../store/dialog"
 import { dismissAppDialog, settleAppDialog } from "../services/app-dialog"
 import { t } from "../utils/i18n"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
 import { SegmentedControl, type SegmentedControlOption } from "./ui/SegmentedControl"
-import { Icon } from "./Icon"
+import { SelectControl } from "./ui/SelectControl"
 
 const TASK_DECISION_COUNTDOWN_TICK_MS = 250
 type AppDialogSelectOption = { value: string; label?: string }
 type AppDialogDecisionOption = SegmentedControlOption<string>
-
-function AppDialogSelectOptionItem(props: Select.SelectRootItemComponentProps<AppDialogSelectOption>): JSX.Element {
-  const option = () => props.item.rawValue
-  return (
-    <Select.Item item={props.item} class="oc-select-option app-dialog-select-option" data-value={option().value}>
-      <Select.ItemLabel>{option().label || option().value}</Select.ItemLabel>
-      <Select.ItemIndicator class="oc-select-indicator">
-        <Icon name="status-completed" size={12} />
-      </Select.ItemIndicator>
-    </Select.Item>
-  )
-}
 
 export function AppDialogHost() {
   let okButtonRef: HTMLButtonElement | undefined
@@ -209,43 +195,29 @@ export function AppDialogHost() {
         <span class="field-label" id="appDialogSelectLabel">
           {dialogStore.app.selectLabel || t("dialog.input")}
         </span>
-        <Select.Root<AppDialogSelectOption>
+        <SelectControl<AppDialogSelectOption>
           class="app-dialog-select"
           options={selectOptions()}
-          optionValue="value"
-          optionTextValue="label"
           value={selectedOption()}
           onChange={setSelectOption}
-          itemComponent={AppDialogSelectOptionItem}
+          optionValue="value"
+          optionTextValue="label"
           disallowEmptySelection
           gutter={4}
           sameWidth
-        >
-          <Select.Trigger
-            id="appDialogSelect"
-            class="field-input oc-select-trigger app-dialog-input app-dialog-select-trigger"
-            aria-labelledby="appDialogSelectLabel"
-            ref={(el) => {
-              selectRef = el
-            }}
-          >
-            <Select.Value<AppDialogSelectOption>>
-              {(state) => {
-                const option = state.selectedOption()
-                return <span>{option?.label || option?.value || ""}</span>
-              }}
-            </Select.Value>
-            <Select.Icon>
-              <Icon name="caret-down" size={12} />
-            </Select.Icon>
-          </Select.Trigger>
-          <Select.HiddenSelect aria-labelledby="appDialogSelectLabel" />
-          <Select.Portal>
-            <Select.Content class="oc-select-content app-dialog-select-content">
-              <Select.Listbox class="oc-select-listbox app-dialog-select-listbox" />
-            </Select.Content>
-          </Select.Portal>
-        </Select.Root>
+          triggerID="appDialogSelect"
+          triggerClass="field-input app-dialog-input app-dialog-select-trigger"
+          ariaLabelledBy="appDialogSelectLabel"
+          triggerRef={(el) => {
+            selectRef = el
+          }}
+          contentClass="app-dialog-select-content"
+          listboxClass="app-dialog-select-listbox"
+          optionClass="app-dialog-select-option"
+          optionData={(option) => ({ "data-value": option.value })}
+          renderValue={(option) => <span>{option?.label || option?.value || ""}</span>}
+          renderOptionLabel={(option) => option.label || option.value}
+        />
       </label>
     </Dialog>
   )

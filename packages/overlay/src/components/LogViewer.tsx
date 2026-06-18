@@ -5,7 +5,6 @@
 // supporting helpers (parseServerLogLine, stringifyLogValue, etc., lines
 // 10795–10926).
 
-import * as Select from "@kobalte/core/select"
 import { createEffect, createSignal, createMemo, For, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { VList, type VListHandle } from "virtua/solid"
@@ -16,6 +15,7 @@ import { apiJson } from "../services/api"
 import { useAsyncAction } from "../solid/async-action"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
+import { SelectControl } from "./ui/SelectControl"
 import { Icon } from "./Icon"
 import { fmtElapsed, logDetailFields, parseServerLogLine, stringifyLogValue } from "../utils/log"
 
@@ -23,6 +23,11 @@ import { fmtElapsed, logDetailFields, parseServerLogLine, stringifyLogValue } fr
 export type { LogEntry, LogLevel, LogSource }
 
 const LOG_LEVEL_OPTIONS: LogLevel[] = ["debug", "info", "warn", "error"]
+type LogLevelSelectOption = { value: LogLevel; label: string }
+const LOG_LEVEL_SELECT_OPTIONS: LogLevelSelectOption[] = LOG_LEVEL_OPTIONS.map((level) => ({
+  value: level,
+  label: level.toUpperCase(),
+}))
 
 // ── Internal server-log state ──
 // Stored as module-level variables (same pattern as ) so they survive
@@ -57,18 +62,6 @@ function logSourceLabel(source: LogSource): string {
   if (source === "server") return "Server"
   if (source === "pipeline") return "Pipeline"
   return "Overlay"
-}
-
-function LogLevelOption(props: Select.SelectRootItemComponentProps<LogLevel>): JSX.Element {
-  const level = () => props.item.rawValue
-  return (
-    <Select.Item item={props.item} class="oc-select-option log-level-select-option">
-      <Select.ItemLabel>{level().toUpperCase()}</Select.ItemLabel>
-      <Select.ItemIndicator class="oc-select-indicator">
-        <Icon name="status-completed" size={12} />
-      </Select.ItemIndicator>
-    </Select.Item>
-  )
 }
 
 // ── Merge all log sources (
@@ -270,9 +263,12 @@ export function LogViewer(props: LogViewerProps) {
     setServerLogsSeq((value) => value + 1)
   }
 
-  const setLogLevel = (level: LogLevel | null) => {
-    if (!level) return
-    setAppStore("logFilterLevel", level)
+  const selectedLogLevelOption = () =>
+    LOG_LEVEL_SELECT_OPTIONS.find((option) => option.value === appStore.logFilterLevel) ?? null
+
+  const setLogLevel = (option: LogLevelSelectOption | null) => {
+    if (!option) return
+    setAppStore("logFilterLevel", option.value)
   }
 
   createEffect(() => {
@@ -298,32 +294,25 @@ export function LogViewer(props: LogViewerProps) {
       onClose={() => props.onClose?.()}
       headerActions={
         <>
-          <Select.Root<LogLevel>
+          <SelectControl<LogLevelSelectOption>
             id="logLevelFilter"
             class="log-level-select"
-            options={LOG_LEVEL_OPTIONS}
-            value={appStore.logFilterLevel}
+            options={LOG_LEVEL_SELECT_OPTIONS}
+            value={selectedLogLevelOption()}
             onChange={setLogLevel}
-            itemComponent={LogLevelOption}
+            optionValue="value"
+            optionTextValue="label"
             disallowEmptySelection
             gutter={4}
             sameWidth
-          >
-            <Select.Trigger class="field-input oc-select-trigger log-level-select-trigger" aria-label={t("log.filter_level")}>
-              <Select.Value<LogLevel>>
-                {(state) => <span>{(state.selectedOption() ?? "debug").toUpperCase()}</span>}
-              </Select.Value>
-              <Select.Icon>
-                <Icon name="caret-down" size={12} />
-              </Select.Icon>
-            </Select.Trigger>
-            <Select.HiddenSelect aria-label={t("log.filter_level")} />
-            <Select.Portal>
-              <Select.Content class="oc-select-content log-level-select-content">
-                <Select.Listbox class="oc-select-listbox log-level-select-listbox" />
-              </Select.Content>
-            </Select.Portal>
-          </Select.Root>
+            triggerClass="field-input log-level-select-trigger"
+            ariaLabel={t("log.filter_level")}
+            contentClass="log-level-select-content"
+            listboxClass="log-level-select-listbox"
+            optionClass="log-level-select-option"
+            renderValue={(option) => <span>{option?.label ?? "DEBUG"}</span>}
+            renderOptionLabel={(option) => option.label}
+          />
           <Button
             type="button"
             id="btnLogServerLogs"
