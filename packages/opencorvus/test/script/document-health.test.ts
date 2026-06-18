@@ -404,7 +404,6 @@ describe("document health audit regressions", () => {
         "Retained for API compatibility",
         "void input.hooks",
         'status: z.enum(["alpha", "beta", "deprecated", "active"])',
-        'status: z.enum(["alpha", "beta", "deprecated"]).optional()',
         'status?: "alpha" | "beta" | "deprecated"',
         'status: "alpha" | "beta" | "deprecated" | "active"',
       ],
@@ -452,7 +451,8 @@ describe("document health audit regressions", () => {
       "Set STT_PROVIDER to one speech-to-text provider",
     )
     expect(read("packages/channel-runtime/src/main.ts")).toContain("createConfiguredSTT(process.env)")
-    expect(read("packages/opencorvus/src/channel/supervisor.ts")).toContain("createConfiguredSTT(process.env)")
+    expect(read("packages/opencorvus/src/channel/supervisor.ts")).toContain("createConfiguredSTT(env)")
+    expect(read("packages/opencorvus/src/channel/supervisor.ts")).not.toContain("createConfiguredSTT(process.env)")
   })
 
   test("current helper contracts do not describe active behavior as legacy fallback", () => {

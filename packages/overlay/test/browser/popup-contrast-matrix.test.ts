@@ -158,7 +158,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                 <div class="recent-dir-panel-shell">
                   <div class="recent-dir-panel-head">
                     <div class="recent-dir-panel-title" data-popup-text>Recent directories</div>
-                    <div class="recent-dir-panel-meta" data-popup-text>C:/Users/chuan/myhexin-local/opecorvus</div>
+                    <div class="recent-dir-panel-meta" data-popup-text>C:/Workspaces/opencorvus</div>
                   </div>
                   <section class="recent-dir-section">
                     <div class="recent-dir-section-title" data-popup-text>Pinned</div>
@@ -166,7 +166,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                       <button class="recent-dir-item" type="button">
                         <span class="recent-dir-copy">
                           <span class="recent-dir-label" data-popup-text>OpenCorvus</span>
-                          <span class="recent-dir-path" data-popup-text>C:/Users/chuan/myhexin-local/opecorvus</span>
+                          <span class="recent-dir-path" data-popup-text>C:/Workspaces/opencorvus</span>
                         </span>
                       </button>
                     </div>
@@ -208,7 +208,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                   <div class="titlebar-menubar-group-title" data-popup-text>Workspace</div>
                   <button class="titlebar-menubar-item titlebar-menubar-recent-item" type="button">
                     <span class="titlebar-menubar-recent-name" data-popup-text>OpenCorvus</span>
-                    <span class="titlebar-menubar-recent-path" data-popup-text>C:/Users/chuan/myhexin-local/opecorvus</span>
+                    <span class="titlebar-menubar-recent-path" data-popup-text>C:/Workspaces/opencorvus</span>
                   </button>
                   <button class="titlebar-menubar-item" type="button">
                     <span class="titlebar-menubar-item-title" data-popup-text>Open folder</span>

@@ -75,6 +75,16 @@ describe("app routes", () => {
     expect(schema?.properties).not.toHaveProperty("url")
   })
 
+  test("Server.openapi repeatedly documents provider list with published model statuses only", async () => {
+    await Server.openapi()
+    const spec = await Server.openapi()
+    const responseSchema = spec.paths?.["/provider"]?.get?.responses?.[200]?.content?.["application/json"]?.schema
+    const expanded = JSON.stringify(expandSchemaRefs(spec, responseSchema))
+
+    expect(expanded).toContain('"active"')
+    expect(expanded).not.toContain('"deprecated"')
+  })
+
   test("POST /shutdown returns 503 without a registered handler", async () => {
     const app = Server.App()
     const response = await app.request("/shutdown", { method: "POST" })
@@ -102,3 +112,17 @@ describe("app routes", () => {
     expect(calls).toEqual(["http.shutdown"])
   })
 })
+
+function expandSchemaRefs(spec: any, value: unknown, seen = new Set<string>()): unknown {
+  if (!value || typeof value !== "object") return value
+  if (Array.isArray(value)) return value.map((item) => expandSchemaRefs(spec, item, seen))
+  const object = value as Record<string, unknown>
+  const ref = object.$ref
+  if (typeof ref === "string" && ref.startsWith("#/components/schemas/")) {
+    if (seen.has(ref)) return { $ref: ref }
+    seen.add(ref)
+    const name = ref.slice("#/components/schemas/".length)
+    return expandSchemaRefs(spec, spec.components?.schemas?.[name], seen)
+  }
+  return Object.fromEntries(Object.entries(object).map(([key, item]) => [key, expandSchemaRefs(spec, item, seen)]))
+}
