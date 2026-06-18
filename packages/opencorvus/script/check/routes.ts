@@ -2,6 +2,7 @@
 import path from "node:path"
 import fs from "node:fs"
 import { Server } from "../../src/server/server"
+import { generateOpenApiSpec } from "../../src/cli/cmd/generate"
 import { extractSdkRoutesFromText } from "./sdk-route-extractor"
 
 const ROOT = path.resolve(import.meta.dir, "..", "..")
@@ -69,9 +70,13 @@ type Violation = {
   text: string
 }
 
-type InventoryViolation = {
+export type InventoryViolation = {
   rule: string
   entries: string[]
+}
+
+type OpenApiSpec = {
+  paths?: Record<string, Record<string, unknown>>
 }
 
 function listFiles(dir: string): string[] {
@@ -122,7 +127,7 @@ async function runtimeRoutes() {
   return routes
 }
 
-function openapiRoutes(spec: { paths?: Record<string, Record<string, unknown>> }) {
+function openapiRoutes(spec: OpenApiSpec) {
   const routes = new Set<string>()
   for (const [routePath, operations] of Object.entries(spec.paths ?? {})) {
     for (const method of Object.keys(operations)) {
@@ -147,24 +152,66 @@ function readJsonFile(pathname: string) {
   return JSON.parse(text) as unknown
 }
 
-async function scanInventory(): Promise<InventoryViolation[]> {
-  const generated = await Server.openapi()
-  const tracked = readJsonFile(SDK_OPENAPI) as {
-    paths?: Record<string, Record<string, unknown>>
+function stableJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableJsonValue)
+  if (!value || typeof value !== "object") return value
+  const sorted: Record<string, unknown> = {}
+  for (const key of Object.keys(value).sort()) {
+    sorted[key] = stableJsonValue((value as Record<string, unknown>)[key])
   }
-  const runtime = await runtimeRoutes()
-  const generatedOpenapi = openapiRoutes(generated)
-  const trackedOpenapi = openapiRoutes(tracked)
-  const generatedSdk = sdkRoutes()
+  return sorted
+}
+
+function stableJsonText(value: unknown) {
+  return JSON.stringify(stableJsonValue(value), null, 2)
+}
+
+function minimalDiff(label: string, expected: string, actual: string): string {
+  const expectedLines = expected.split("\n")
+  const actualLines = actual.split("\n")
+  const max = Math.max(expectedLines.length, actualLines.length)
+  const out: string[] = [`--- ${label} (tracked)`, `+++ ${label} (generated)`]
+  let shown = 0
+  for (let i = 0; i < max && shown < 40; i++) {
+    if (expectedLines[i] !== actualLines[i]) {
+      if (expectedLines[i] !== undefined) out.push(`-${i + 1}: ${expectedLines[i]}`)
+      if (actualLines[i] !== undefined) out.push(`+${i + 1}: ${actualLines[i]}`)
+      shown++
+    }
+  }
+  if (shown >= 40) out.push("... (truncated, more diffs follow)")
+  return out.join("\n")
+}
+
+export function compareOpenApiSpecs(generated: unknown, tracked: unknown): InventoryViolation[] {
+  const generatedText = stableJsonText(generated)
+  const trackedText = stableJsonText(tracked)
+  if (generatedText === trackedText) return []
+  return [
+    {
+      rule: "generated-openapi-differs-tracked-openapi",
+      entries: [minimalDiff(path.relative(ROOT, SDK_OPENAPI).replace(/\\/g, "/"), trackedText, generatedText)],
+    },
+  ]
+}
+
+export function collectInventoryViolations(input: {
+  runtime: Set<string>
+  generated: OpenApiSpec
+  tracked: OpenApiSpec
+  sdk: Set<string>
+}): InventoryViolation[] {
+  const generatedOpenapi = openapiRoutes(input.generated)
+  const trackedOpenapi = openapiRoutes(input.tracked)
 
   return [
     {
       rule: "runtime-route-missing-openapi",
-      entries: difference(runtime, generatedOpenapi),
+      entries: difference(input.runtime, generatedOpenapi),
     },
     {
       rule: "openapi-route-missing-runtime",
-      entries: difference(generatedOpenapi, runtime),
+      entries: difference(generatedOpenapi, input.runtime),
     },
     {
       rule: "generated-openapi-missing-tracked-openapi",
@@ -176,43 +223,59 @@ async function scanInventory(): Promise<InventoryViolation[]> {
     },
     {
       rule: "openapi-route-missing-sdk",
-      entries: difference(trackedOpenapi, generatedSdk),
+      entries: difference(trackedOpenapi, input.sdk),
     },
     {
       rule: "sdk-route-missing-openapi",
-      entries: difference(generatedSdk, trackedOpenapi),
+      entries: difference(input.sdk, trackedOpenapi),
     },
+    ...compareOpenApiSpecs(input.generated, input.tracked),
   ].filter((violation) => violation.entries.length > 0)
 }
 
-const violations = scan()
-const inventoryViolations = await scanInventory()
-if (violations.length === 0 && inventoryViolations.length === 0) {
-  console.log(
-    `api:routes-check ok — ${RULES.length} rules and route inventory clean across ${listFiles(ROUTES_DIR).length} files`,
-  )
-  process.exit(0)
+async function scanInventory(): Promise<InventoryViolation[]> {
+  const generated = await generateOpenApiSpec()
+  const tracked = readJsonFile(SDK_OPENAPI) as OpenApiSpec
+  const runtime = await runtimeRoutes()
+  const generatedSdk = sdkRoutes()
+
+  return collectInventoryViolations({ runtime, generated, tracked, sdk: generatedSdk })
 }
 
-if (violations.length > 0) {
-  console.error(`api:routes-check found ${violations.length} static violation(s):\n`)
-  for (const v of violations) {
-    const rel = path.relative(ROOT, v.file).replace(/\\/g, "/")
-    console.error(`  ${rel}:${v.line}  [${v.rule}]`)
-    console.error(`    ${v.text}`)
+async function main() {
+  const violations = scan()
+  const inventoryViolations = await scanInventory()
+  if (violations.length === 0 && inventoryViolations.length === 0) {
+    console.log(
+      `api:routes-check ok — ${RULES.length} rules and route inventory clean across ${listFiles(ROUTES_DIR).length} files`,
+    )
+    process.exit(0)
   }
-  console.error("")
-  console.error("Rules:")
-  for (const rule of RULES) {
-    console.error(`  - ${rule.name}: ${rule.description}`)
+
+  if (violations.length > 0) {
+    console.error(`api:routes-check found ${violations.length} static violation(s):\n`)
+    for (const v of violations) {
+      const rel = path.relative(ROOT, v.file).replace(/\\/g, "/")
+      console.error(`  ${rel}:${v.line}  [${v.rule}]`)
+      console.error(`    ${v.text}`)
+    }
+    console.error("")
+    console.error("Rules:")
+    for (const rule of RULES) {
+      console.error(`  - ${rule.name}: ${rule.description}`)
+    }
   }
+
+  if (inventoryViolations.length > 0) {
+    console.error(`api:routes-check found ${inventoryViolations.length} route inventory violation(s):\n`)
+    for (const violation of inventoryViolations) {
+      console.error(`  [${violation.rule}]`)
+      for (const entry of violation.entries) console.error(`    ${entry}`)
+    }
+  }
+  process.exit(1)
 }
 
-if (inventoryViolations.length > 0) {
-  console.error(`api:routes-check found ${inventoryViolations.length} route inventory violation(s):\n`)
-  for (const violation of inventoryViolations) {
-    console.error(`  [${violation.rule}]`)
-    for (const entry of violation.entries) console.error(`    ${entry}`)
-  }
+if (import.meta.main) {
+  await main()
 }
-process.exit(1)
