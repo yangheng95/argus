@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import path from "node:path"
 import fs from "node:fs"
+import { generateOpenApiSpec } from "../../src/cli/cmd/generate"
 
 type GroupCfg = {
   title_en: string
@@ -49,7 +50,6 @@ type Group = {
 const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..")
-const OPENAPI_PATH = path.join(REPO_ROOT, "packages", "sdk", "openapi.json")
 const I18N_PATH = path.join(import.meta.dir, "i18n.json")
 const OUT_EN = path.join(REPO_ROOT, "packages", "web", "src", "content", "docs", "reference", "api.mdx")
 const OUT_ZH = path.join(REPO_ROOT, "packages", "web", "src", "content", "docs", "zh-cn", "reference", "api.mdx")
@@ -132,8 +132,8 @@ function render(groups: Group[], i18n: I18n, lang: Lang): string {
   const isZh = lang === "zh"
   const title = isZh ? i18n.title_zh : i18n.title_en
   const description = isZh
-    ? "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
-    : "HTTP API reference--auto-generated from packages/sdk/openapi.json."
+    ? "HTTP API 参考--由生成的 OpenAPI 规格自动生成。"
+    : "HTTP API reference--auto-generated from the generated OpenAPI spec."
   const generated = isZh ? i18n.generated_lead_zh : i18n.generated_lead_en
   const auth = isZh ? i18n.auth_zh_lead : i18n.auth_en_lead
   const sec = isZh ? i18n.section_endpoints_zh : i18n.section_endpoints_en
@@ -215,7 +215,7 @@ function minimalDiff(label: string, a: string, b: string): string {
 async function main() {
   const args = new Set(process.argv.slice(2))
   const mode: "write" | "check" = args.has("--check") ? "check" : "write"
-  const spec = loadJson<any>(OPENAPI_PATH)
+  const spec = await generateOpenApiSpec()
   const i18n = loadJson<I18n>(I18N_PATH)
   const ops = collectOps(spec)
   const groups = groupOps(ops, i18n)

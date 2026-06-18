@@ -3401,3 +3401,56 @@ LINE:
 - Bohr found that the exact Windows Git Bash install failure described in BH-070 no longer reproduced in HEAD `199521d6af9ee073d100a6b346557dcbffcecc45`, because Git Bash can resolve `opencorvus.exe` through a bare `opencorvus` command.
 - Bohr confirmed the substantive remaining bug is the release executable-name contract gap: `install` hardcoded `opencorvus`, release validation accepted either `opencorvus` or `opencorvus.exe` for every platform, and build scripts emitted extensionless `opencorvus` even for Windows targets.
 - Bohr confirmed the same no-fallback fix boundary: define one platform executable-name helper and use it in build output, release validation, and install destination; require exactly `opencorvus.exe` for Windows and exactly `opencorvus` for Linux/macOS.
+
+## Batch P1-BF: BH-072 pre-push checks must catch full OpenAPI drift
+
+### Findings
+
+- BH-072 targets `.husky/pre-push`, `packages/opencorvus/script/check/routes.ts`, and `packages/opencorvus/script/docs/render-api-md.ts`.
+- Pre-push already runs `api:routes-check` and `docs:check`, but HEAD only compared method/path route sets across runtime OpenAPI, tracked `packages/sdk/openapi.json`, and generated SDK routes.
+- Schema, response, summary, operation metadata, components, and `x-codeSamples` drift could preserve the same method/path set and still pass `api:routes-check`.
+- `docs:check` read tracked `packages/sdk/openapi.json`; if that file was stale, docs could regenerate from the stale source and pass without touching live route schemas.
+- The canonical SDK OpenAPI source is `generateOpenApiSpec()`, not raw `Server.openapi()`, because it augments operations with `x-codeSamples`.
+
+### Call-point Inventory
+
+- `.husky/pre-push` runs `bun run api:routes-check` and `bun run docs:check`.
+- `package.json` maps `api:routes-check` to `packages/opencorvus/script/check/routes.ts` and docs checks to `packages/opencorvus/script/docs/render-api-md.ts`.
+- `packages/opencorvus/src/server/server.ts::Server.openapi()` provides raw runtime route OpenAPI.
+- `packages/opencorvus/src/cli/cmd/generate.ts::generateOpenApiSpec()` is the SDK OpenAPI generator and adds code samples.
+- `packages/opencorvus/script/generate-openapi.ts` and `packages/sdk/js/script/build.ts` use `generateOpenApiSpec()` to write tracked `packages/sdk/openapi.json` and SDK generated sources.
+- `packages/opencorvus/script/check/routes.ts` owns static route rules, runtime route inventory, tracked OpenAPI reads, SDK route extraction, and now the full generated-vs-tracked OpenAPI parity comparison.
+- `packages/opencorvus/script/docs/render-api-md.ts` owns generated API reference markdown for English and Chinese web docs.
+- `packages/web/src/content/docs/reference/api.mdx` and `packages/web/src/content/docs/zh-cn/reference/api.mdx` are generated docs outputs.
+- `packages/web/src/content/docs/reference/sdk.mdx`, `packages/web/src/content/docs/zh-cn/reference/sdk.mdx`, and `specs/README.md` describe the generation source.
+
+### Fix Shape
+
+- Keep `Server.openapi()` as the raw route source, but use `generateOpenApiSpec()` as the single generated OpenAPI source for SDK parity checks and API docs rendering.
+- Add stable JSON normalization to the route checker and compare the full canonical generated OpenAPI object against tracked `packages/sdk/openapi.json`.
+- Keep method/path inventory checks for missing route/SDK entries, but add `generated-openapi-differs-tracked-openapi` for schema and metadata drift.
+- Extract the inventory violation assembly into a testable function used by `api:routes-check`, so regression tests exercise the same full-spec comparison path as the pre-push check.
+- Update generated API reference docs and source descriptions to say they come from the generated OpenAPI spec, not directly from tracked `packages/sdk/openapi.json`.
+- Do not ignore `x-codeSamples`, add metadata allowlists, or add a fallback compare against raw `Server.openapi()`.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/script/routes-check-openapi.test.ts`.
+- Assert schema drift on an existing method/path fails through the inventory checker with `generated-openapi-differs-tracked-openapi`.
+- Assert metadata drift, including changed summary and missing `x-codeSamples`, fails.
+- Assert stable key ordering does not fail semantically identical OpenAPI objects.
+- Assert route check and docs renderer use `generateOpenApiSpec()` and do not source docs from tracked `packages/sdk/openapi.json` or raw `Server.openapi()`.
+
+### Verification
+
+- Focused script tests passed: `bun test packages/opencorvus/test/script/routes-check-openapi.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Route contract check passed: `bun run api:routes-check`.
+- Docs were regenerated with `bun run docs:api`, then docs check passed: `bun run docs:check`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Rawls confirmed BH-072 was still present in HEAD `b6ef153741d5b4ce6e440ec08f3f29c4b44d7c55`: pre-push ran route/docs checks, but route check reduced OpenAPI to method/path sets and docs read the tracked OpenAPI file.
+- Rawls identified that comparing raw `Server.openapi()` to tracked SDK OpenAPI would false-fail because the canonical generator injects `x-codeSamples`; this batch uses `generateOpenApiSpec()` as the shared source instead.
+- Rawls recommended schema-drift, metadata-drift, stable-order, and actual inventory-check regression coverage; the final tests cover those cases.
