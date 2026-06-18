@@ -4165,3 +4165,54 @@ LINE:
 - Helmholtz confirmed the production entry point is build-agent staging and that upstream task/artifact write paths legitimately allow same display filename with different sha values.
 - Helmholtz recommended keeping the repair boundary inside `AttachmentStore.stageToWorktree(...)` and using deterministic `stem-<sha8><ext>` allocation.
 - Helmholtz requested a hard-collision regression where `references/screenshot-<sha8>.png` is already occupied by different content; that test is now included.
+
+## Batch P2-BU: BH-044 terminal tool updates must preserve the first terminal state
+
+### Findings
+
+- BH-044 targets `packages/opencorvus/src/session/index.ts::Session.updatePart(...)`.
+- Tool part writes use `insert(...).onConflictDoUpdate({ set: { data } })`, so every accepted update replaces the entire persisted part payload.
+- The old monotonicity check ranked `completed` and `error` equally and only skipped updates when `newRank < oldRank`.
+- Because equal-rank terminal updates were still accepted, a stale `error` update could overwrite an already persisted `completed` tool result, and a stale `completed` update could overwrite an already persisted `error` failure.
+- The right invariant is first-terminal-wins between different terminal statuses. Same-terminal updates must still be allowed because compaction refreshes completed tool metadata such as `time.compacted`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/session/index.ts::Session.updatePart(...)` is the single durable write boundary for message parts and the single place where tool status monotonicity belongs.
+- `packages/opencorvus/src/session/message.ts` defines the tool state union: `pending`, `running`, `completed`, and `error`.
+- Production callers converge through `Session.updatePart(...)`, including session processor, session loop, shell execution, batch tools, engine writer shutdown cleanup, control messages, server session routes, and session compaction.
+- `packages/opencorvus/src/session/compaction.ts` performs same-status completed updates to mark compacted tool output, so terminal handling cannot ban every terminal-to-terminal write.
+
+### Fix Shape
+
+- Keep the status rank model but type it as `Record<Message.ToolPart["state"]["status"], number>` so new tool statuses must update the comparator explicitly.
+- Add a typed `TERMINAL_TOOL_STATUS` set for `completed` and `error`.
+- Skip updates when the new status has lower rank than the persisted status.
+- Also skip updates when the persisted and incoming statuses have equal rank, differ from each other, and the persisted status is terminal.
+- Allow same-status terminal writes, preserving compaction metadata refreshes and other legitimate idempotent updates.
+- Keep the fix inside the durable write boundary; no processor, engine, route, or UI-side gate was added.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/session/tool-status-monotonicity.test.ts`:
+  - `completed -> error` preserves the persisted completed output;
+  - `error -> completed` preserves the persisted failure;
+  - stale terminal updates do not publish `message.part.updated`, so observers do not see an event for data that was not persisted;
+  - `completed -> completed` can refresh `time.compacted`, proving same-terminal updates still work.
+
+### Verification
+
+- Focused session monotonicity and adjacent tests passed: `bun test packages/opencorvus/test/session/tool-status-monotonicity.test.ts packages/opencorvus/test/session/part-delta.test.ts packages/opencorvus/test/session/session.test.ts packages/opencorvus/test/engine/shutdown-active-task-sessions.test.ts --timeout 90000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Package test-entry guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- API route inventory passed: `bun run api:routes-check`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Carson confirmed `HEAD` before the repair still allowed `completed -> error` and `error -> completed` overwrites because equal terminal ranks flowed through `onConflictDoUpdate`.
+- Carson confirmed all production writers converge through `Session.updatePart(...)`, so the fix should not be duplicated in processor, engine, build, or route call sites.
+- Carson recommended a strong typed comparator instead of `Record<string, number>` with unknown-status fallback; the final repair uses `Message.ToolPart["state"]["status"]`.
+- Carson requested event suppression and same-terminal refresh coverage; both are now in the regression suite.
