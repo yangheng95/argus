@@ -25,4 +25,4 @@ export {
 export { createNote, listNotes, getNote, deleteNote, type Note, type CreateNoteResult } from "./service"
 
 // 导出路由
-export { routes } from "./routes"
+export { QuickNoteRoutes } from "./routes"

@@ -4577,3 +4577,58 @@ LINE:
 - Gauss confirmed the current fix removes the parser split and leaves yargs as the single command parsing authority.
 - Gauss traced the affected MCP path from `McpCommand` and `McpServeCommand` through `packages/opencorvus/src/mcp/serve.ts`, `executor/bootstrap.ts`, and `executor/claude-agent.ts`.
 - Gauss recommended keeping the regression in `serve-default-command.test.ts` and explicitly warned against fallbacks, command-name gates, serve defaults, or compatibility branches.
+
+## Batch P2-CC: BH-062 QuickNote route must be mounted and documented
+
+### Findings
+
+- BH-062 targets `packages/opencorvus/src/quicknote/routes.ts` and `packages/opencorvus/src/server/routes/app.ts`.
+- `packages/opencorvus/src/quicknote/README.md` documents the canonical QuickNote endpoint as `POST /api/v1/notes`.
+- The QuickNote route module defined a bare `POST /notes` Hono route, exported it as `routes`, and did not attach OpenAPI metadata.
+- `AppRoutes(...)` did not mount the QuickNote route module, so `Server.App()` could not serve the documented endpoint and `Server.openapi()` could not include it.
+- The old route also parsed JSON manually and caught every error into an ad hoc response, leaving the route outside the project's typed route and generated contract flow.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/quicknote/routes.ts` owns the QuickNote HTTP route.
+- `packages/opencorvus/src/quicknote/index.ts` re-exports the route module for package consumers.
+- `packages/opencorvus/src/quicknote/service.ts` owns `createNote(...)` and database writes; the route must call this service instead of touching storage directly.
+- `packages/opencorvus/src/quicknote/text-processor.ts` owns `MAX_CONTENT_LENGTH`, so the route request schema must reuse that source.
+- `packages/opencorvus/src/server/routes/app.ts::AppRoutes(...)` is the project-scoped route composition point used by both runtime requests and route inventory.
+- `packages/opencorvus/src/server/server.ts::routeInventoryApp()` builds the app used by `Server.openapi()`.
+- `packages/opencorvus/script/check/routes.ts` compares runtime routes, generated OpenAPI, tracked OpenAPI, and generated Software Development Kit routes.
+- `packages/sdk/js/script/build.ts` regenerates `packages/sdk/openapi.json` and the JavaScript Software Development Kit client.
+- `packages/opencorvus/script/docs/render-api-md.ts` regenerates the public API reference pages from the generated OpenAPI spec.
+
+### Fix Shape
+
+- Replace the bare QuickNote route export with `QuickNoteRoutes`, using the same lazy Hono route factory pattern as other project routes.
+- Define named Zod request and response schemas for QuickNote creation and attach `describeRoute(...)` metadata with operation id `quicknote.create`.
+- Use `validator("json", CreateQuickNoteRequest)` to reject invalid payloads before `createNote(...)`; do not keep manual catch-all route responses.
+- Mount `QuickNoteRoutes()` at `/api/v1` inside `AppRoutes(...)`, producing the documented `POST /api/v1/notes`.
+- Regenerate tracked OpenAPI, generated JavaScript Software Development Kit client files, and generated API reference markdown through the existing generators.
+- Do not add compatibility paths, directory bypasses, or hand-written OpenAPI fragments.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/quicknote/routes.test.ts` covering:
+  - `Server.App()` accepts `POST /api/v1/notes` with project directory context;
+  - the route writes the note through the service layer;
+  - `Server.openapi()` contains `POST /api/v1/notes`, operation id `quicknote.create`, the request schema reference, and the project directory query parameter;
+  - an invalid over-limit payload returns `400` and does not insert that payload.
+
+### Verification
+
+- Focused QuickNote tests passed: `bun test packages/opencorvus/test/quicknote/routes.test.ts packages/opencorvus/test/quicknote/service.test.ts packages/opencorvus/test/quicknote/text-processor.test.ts --timeout 60000`.
+- Software Development Kit generation passed: `bun run --cwd packages/sdk/js build`.
+- Route inventory passed: `bun run api:routes-check`.
+- API reference check passed: `bun run docs:check`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Software Development Kit typecheck passed: `bun run --cwd packages/sdk/js typecheck`.
+
+### Independent Review Feedback
+
+- Hegel confirmed BH-062 was present: QuickNote documented `POST /api/v1/notes`, but the route was not mounted through `AppRoutes(...)`.
+- Hegel confirmed the current route shape is correct only when paired with tracked OpenAPI and Software Development Kit regeneration; before regeneration `api:routes-check` failed on `POST /api/v1/notes`.
+- Hegel traced the generated contract chain through `Server.routeInventoryApp()`, `Server.openapi()`, `packages/opencorvus/script/check/routes.ts`, and `packages/sdk/js/script/build.ts`.
+- Hegel noted a separate README drift: the internal QuickNote README also mentions additional note routes that this batch does not implement. BH-062 acceptance is the canonical `POST /api/v1/notes` route and OpenAPI visibility, so that drift is recorded for a later issue instead of expanding this batch.

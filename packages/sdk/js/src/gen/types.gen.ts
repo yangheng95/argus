@@ -2206,6 +2206,18 @@ export type CodingCliOpenResponse = {
   ok: boolean
 }
 
+export type CreateQuickNoteResponse = {
+  code: 200
+  data: {
+    note_id: string
+    summary: string
+  }
+}
+
+export type CreateQuickNoteRequest = {
+  content: string
+}
+
 export type AcceptanceDiffSummary = {
   file: string
   additions?: number
@@ -9146,6 +9158,36 @@ export type MissionWakeResponses = {
 }
 
 export type MissionWakeResponse = MissionWakeResponses[keyof MissionWakeResponses]
+
+export type QuicknoteCreateData = {
+  body?: CreateQuickNoteRequest
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/api/v1/notes"
+}
+
+export type QuicknoteCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type QuicknoteCreateError = QuicknoteCreateErrors[keyof QuicknoteCreateErrors]
+
+export type QuicknoteCreateResponses = {
+  /**
+   * QuickNote created successfully
+   */
+  200: CreateQuickNoteResponse
+}
+
+export type QuicknoteCreateResponse = QuicknoteCreateResponses[keyof QuicknoteCreateResponses]
 
 export type BrowserPreviewTaskTargetData = {
   body?: never
