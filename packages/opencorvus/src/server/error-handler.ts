@@ -40,6 +40,8 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "TaskChannelBindingProjectConflictError") return 409
   if (err.name === "MissingModelConfigError") return 400
   if (err.name === "PtyCreateFailedError") return 400
+  if (err.name === "FileUploadConflictError") return 409
+  if (err.name.startsWith("FileUpload")) return 400
   if (err.name === "PluginServiceNotFoundError") return 404
   if (err.name === "PluginServiceRegistrationError") return 500
   if (err.name === "PluginServiceDuplicateIDError") return 500

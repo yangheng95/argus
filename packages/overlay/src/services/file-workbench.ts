@@ -1,4 +1,6 @@
 import { createSignal } from "solid-js"
+import { uint8ToBase64 } from "@opencorvus-ai/transport-protocol"
+import { apiJson } from "./api"
 
 export interface FileNode {
   name: string
@@ -14,6 +16,18 @@ export interface FileContent {
   diff?: string
   encoding?: "base64"
   mimeType?: string
+}
+
+export interface FileUploadPayload {
+  name: string
+  contentBase64: string
+  mimeType?: string
+}
+
+export interface FileUploadResult {
+  name: string
+  path: string
+  bytes: number
 }
 
 const [selectedFilePath, setSelectedFilePath] = createSignal("")
@@ -39,4 +53,21 @@ export function shortWorkbenchPath(path: string): string {
     .filter(Boolean)
   if (parts.length <= 2) return path
   return parts.slice(-2).join("/")
+}
+
+async function droppedFilePayload(file: File): Promise<FileUploadPayload> {
+  return {
+    name: file.name,
+    contentBase64: uint8ToBase64(new Uint8Array(await file.arrayBuffer())),
+    mimeType: file.type || undefined,
+  }
+}
+
+export async function uploadDroppedFiles(targetDir: string, files: File[]): Promise<FileUploadResult[]> {
+  const payloads = await Promise.all(files.map(droppedFilePayload))
+  return (await apiJson("file/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetDir, files: payloads }),
+  })) as FileUploadResult[]
 }

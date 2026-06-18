@@ -14618,6 +14618,38 @@ export type FileWriteResponses = {
 
 export type FileWriteResponse = FileWriteResponses[keyof FileWriteResponses]
 
+export type FileUploadData = {
+  body: {
+    targetDir: string
+    files: Array<{
+      name: string
+      contentBase64: string
+      mimeType?: string
+    }>
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/file/upload"
+}
+
+export type FileUploadResponses = {
+  /**
+   * Uploaded files
+   */
+  200: Array<{
+    name: string
+    path: string
+    bytes: number
+  }>
+}
+
+export type FileUploadResponse = FileUploadResponses[keyof FileUploadResponses]
+
 export type FileStatusData = {
   body?: never
   path?: never

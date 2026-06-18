@@ -157,6 +157,141 @@ describe("file/index Filesystem patterns", () => {
     })
   })
 
+  describe("File.upload()", () => {
+    function contentBase64(value: string | Buffer): string {
+      return Buffer.from(value).toString("base64")
+    }
+
+    test("writes dropped files into an existing project directory without overwriting", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "docs"), { recursive: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await File.upload({
+            targetDir: "docs",
+            files: [
+              { name: "notes.md", contentBase64: contentBase64("hello\n") },
+              { name: "image.bin", contentBase64: contentBase64(Buffer.from([1, 2, 3])) },
+            ],
+          })
+
+          expect(result).toEqual([
+            { name: "notes.md", path: path.join("docs", "notes.md"), bytes: 6 },
+            { name: "image.bin", path: path.join("docs", "image.bin"), bytes: 3 },
+          ])
+          expect(await fs.readFile(path.join(tmp.path, "docs", "notes.md"), "utf-8")).toBe("hello\n")
+          expect(await fs.readFile(path.join(tmp.path, "docs", "image.bin"))).toEqual(Buffer.from([1, 2, 3]))
+        },
+      })
+    })
+
+    test("rejects uploaded names that are paths", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            File.upload({
+              targetDir: "",
+              files: [{ name: "../escape.txt", contentBase64: contentBase64("nope") }],
+            }),
+          ).rejects.toThrow("FileUploadInvalidNameError")
+          await expect(fs.readFile(path.join(tmp.path, "escape.txt"), "utf-8")).rejects.toThrow()
+        },
+      })
+    })
+
+    test.if(process.platform === "win32")("rejects Windows reserved uploaded names before writing", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            File.upload({
+              targetDir: "",
+              files: [{ name: "CON.txt", contentBase64: contentBase64("nope") }],
+            }),
+          ).rejects.toThrow("FileUploadInvalidNameError")
+        },
+      })
+    })
+
+    test("rejects duplicate dropped names before writing any file", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            File.upload({
+              targetDir: "",
+              files: [
+                { name: "same.txt", contentBase64: contentBase64("first") },
+                { name: "same.txt", contentBase64: contentBase64("second") },
+              ],
+            }),
+          ).rejects.toThrow("FileUploadConflictError")
+          await expect(fs.readFile(path.join(tmp.path, "same.txt"), "utf-8")).rejects.toThrow()
+        },
+      })
+    })
+
+    test("rejects existing destination files", async () => {
+      await using tmp = await tmpdir()
+      await fs.writeFile(path.join(tmp.path, "README.md"), "existing", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            File.upload({
+              targetDir: "",
+              files: [{ name: "README.md", contentBase64: contentBase64("new") }],
+            }),
+          ).rejects.toThrow("FileUploadConflictError")
+          expect(await fs.readFile(path.join(tmp.path, "README.md"), "utf-8")).toBe("existing")
+        },
+      })
+    })
+
+    test("rejects missing upload target directories", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            File.upload({
+              targetDir: "missing",
+              files: [{ name: "notes.md", contentBase64: contentBase64("new") }],
+            }),
+          ).rejects.toThrow("FileUploadInvalidTargetError")
+        },
+      })
+    })
+
+    test("rejects non-standard base64 content", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            File.upload({
+              targetDir: "",
+              files: [{ name: "bad.txt", contentBase64: "--__" }],
+            }),
+          ).rejects.toThrow("FileUploadInvalidContentError")
+          await expect(fs.readFile(path.join(tmp.path, "bad.txt"), "utf-8")).rejects.toThrow()
+        },
+      })
+    })
+  })
+
   describe("File.read() - Filesystem.mimeType()", () => {
     test("detects MIME type via Filesystem.mimeType()", async () => {
       await using tmp = await tmpdir()

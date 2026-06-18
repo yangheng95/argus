@@ -202,6 +202,30 @@ export const FileRoutes = lazy(() =>
         return c.json(content)
       },
     )
+    .post(
+      "/file/upload",
+      describeRoute({
+        summary: "Upload files",
+        description: "Write dropped files into an existing project directory without overwriting existing files.",
+        operationId: "file.upload",
+        responses: {
+          200: {
+            description: "Uploaded files",
+            content: {
+              "application/json": {
+                schema: resolver(File.UploadResult.array()),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", File.UploadRequest),
+      async (c) => {
+        const input = c.req.valid("json")
+        const result = await File.upload(input)
+        return c.json(result)
+      },
+    )
     .get(
       "/file/status",
       describeRoute({

@@ -79,6 +79,7 @@ import type {
   FilePartSource,
   FileReadResponses,
   FileStatusResponses,
+  FileUploadResponses,
   FileWriteResponses,
   FindFilesResponses,
   FindSymbolsResponses,
@@ -8055,6 +8056,47 @@ export class File extends HeyApiClient {
     )
     return (options?.client ?? this.client).patch<FileWriteResponses, unknown, ThrowOnError>({
       url: "/file/content",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Upload files
+   *
+   * Write dropped files into an existing project directory without overwriting existing files.
+   */
+  public upload<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      targetDir: string
+      files: Array<{
+        name: string
+        contentBase64: string
+        mimeType?: string
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "targetDir" },
+            { in: "body", key: "files" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<FileUploadResponses, unknown, ThrowOnError>({
+      url: "/file/upload",
       ...options,
       ...params,
       headers: {

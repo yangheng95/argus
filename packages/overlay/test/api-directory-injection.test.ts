@@ -134,6 +134,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("provider Hexin budget", () => expectInjects("provider/hexin/budget"))
     test("project current", () => expectInjects("project/current"))
     test("project current worktrees", () => expectInjects("project/current/worktrees"))
+    test("file upload", () => expectInjects("file/upload"))
     test("mission wake", () => expectInjects("mission/wake"))
     test("channel", () => expectInjects("channel"))
     test("agent", () => expectInjects("agent"))
@@ -199,6 +200,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "provider/hexin/budget",
       "project/current",
       "project/current/worktrees",
+      "file/upload",
       "session/session_123/conversation",
       "mission/wake",
       "coding/session/ses_123/abort",
