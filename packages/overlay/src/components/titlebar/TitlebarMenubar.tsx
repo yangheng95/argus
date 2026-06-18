@@ -27,7 +27,7 @@ import {
 import { getHostTransport } from "../../services/host-transport"
 import { t } from "../../utils/i18n"
 
-type MenuID = "workspace" | "provider" | "run" | "tools" | "settings" | "view" | "help"
+type MenuID = "workspace" | "provider" | "run" | "settings" | "view" | "help"
 
 type MenuDef = {
   id: MenuID
@@ -36,12 +36,11 @@ type MenuDef = {
   accessKey: string
 }
 
-const MENU_IDS: MenuID[] = ["workspace", "provider", "run", "tools", "settings", "view", "help"]
+const MENU_IDS: MenuID[] = ["workspace", "provider", "run", "settings", "view", "help"]
 const MENU_ACCESS_KEYS: Record<MenuID, string> = {
   workspace: "p",
   provider: "a",
   run: "r",
-  tools: "t",
   settings: "g",
   view: "v",
   help: "h",
@@ -194,7 +193,6 @@ export function TitlebarMenubar() {
     { id: "workspace", label: t("titlebar.menu.workspace"), compact: "P", accessKey: MENU_ACCESS_KEYS.workspace },
     { id: "provider", label: t("titlebar.menu.provider"), compact: "Pr", accessKey: MENU_ACCESS_KEYS.provider },
     { id: "run", label: t("titlebar.menu.run"), compact: "R", accessKey: MENU_ACCESS_KEYS.run },
-    { id: "tools", label: t("titlebar.menu.tools"), compact: "T", accessKey: MENU_ACCESS_KEYS.tools },
     { id: "settings", label: t("titlebar.menu.settings"), compact: "Se", accessKey: MENU_ACCESS_KEYS.settings },
     { id: "view", label: t("titlebar.menu.view"), compact: "V", accessKey: MENU_ACCESS_KEYS.view },
     { id: "help", label: t("titlebar.menu.help"), compact: "?", accessKey: MENU_ACCESS_KEYS.help },
@@ -359,11 +357,13 @@ export function TitlebarMenubar() {
       if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
         const id = menuIDForAccessKey(event.key)
         altPressedOnly = false
+        event.preventDefault()
         if (id) {
-          event.preventDefault()
           openFromKeyboard(id)
           return
         }
+        closeMenu()
+        return
       } else if (event.key !== "Alt") {
         altPressedOnly = false
       }
@@ -559,14 +559,6 @@ export function TitlebarMenubar() {
                       testid="titlebar-compaction-threshold-range"
                       onChange={(value) => handlePatchCompactionThreshold(value)}
                     />
-                  </MenuGroup>
-                </Show>
-
-                <Show when={menu.id === "tools"}>
-                  <MenuGroup title={t("titlebar.menu.tools")}>
-                    <MenuItem onClick={() => openConfig("channel")}>{t("channel.title")}</MenuItem>
-                    <MenuItem onClick={() => openConfig("permissions")}>{t("permissions.title")}</MenuItem>
-                    <MenuItem onClick={() => openConfig("prompt")}>{t("prompt.title")}</MenuItem>
                   </MenuGroup>
                 </Show>
 
