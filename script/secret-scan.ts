@@ -287,14 +287,51 @@ function* chunkGitEntries(entries: GitIndexEntry[]): Generator<GitIndexEntry[]> 
   if (chunk.length > 0) yield chunk
 }
 
-function readGitBlobs(repoRoot: string, entries: GitIndexEntry[]): Map<string, Buffer> {
-  const objectSizes = new Map<string, number>()
-  for (const entry of entries) {
-    if (!objectSizes.has(entry.objectId)) objectSizes.set(entry.objectId, entry.size)
-  }
-  const objectIds = [...objectSizes.keys()]
+function readGitObjectSizes(repoRoot: string, objectIds: string[]): Map<string, number> {
   const input = Buffer.from(objectIds.join("\n") + "\n")
-  const expectedBytes = [...objectSizes.values()].reduce((sum, size) => sum + size, 0) + objectIds.length * 128
+  const result = spawnSync("git", ["-C", repoRoot, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)"], {
+    input,
+    maxBuffer: Math.max(objectIds.length * 256, 1024 * 1024),
+  })
+  if (result.error) throw result.error
+  if (result.status !== 0) {
+    const stderr = result.stderr.toString("utf8").trim()
+    throw new Error(`git cat-file --batch-check failed: ${stderr}`)
+  }
+  const sizes = new Map<string, number>()
+  for (const line of result.stdout.toString("utf8").trim().split(/\r?\n/)) {
+    if (!line) continue
+    const [objectId, type, sizeText] = line.split(" ") as [string, string, string]
+    if (type === "missing") throw new Error(`git blob ${objectId} is missing`)
+    if (type !== "blob") throw new Error(`git object ${objectId} is not a blob: ${line}`)
+    const size = Number(sizeText)
+    if (!Number.isSafeInteger(size) || size < 0) throw new Error(`git blob ${objectId} has invalid size: ${sizeText}`)
+    sizes.set(objectId, size)
+  }
+  if (sizes.size !== objectIds.length) throw new Error("git cat-file --batch-check returned an incomplete object list")
+  return sizes
+}
+
+function* chunkObjectIdsBySize(objectIds: string[], sizes: Map<string, number>) {
+  let chunk: string[] = []
+  let size = 0
+  for (const objectId of objectIds) {
+    const objectSize = sizes.get(objectId)
+    if (objectSize === undefined) throw new Error(`git blob ${objectId} size was not returned`)
+    if (chunk.length > 0 && size + objectSize > BLOB_BATCH_TARGET_BYTES) {
+      yield chunk
+      chunk = []
+      size = 0
+    }
+    chunk.push(objectId)
+    size += objectSize
+  }
+  if (chunk.length > 0) yield chunk
+}
+
+function readGitBlobBatch(repoRoot: string, objectIds: string[], sizes: Map<string, number>): Map<string, Buffer> {
+  const input = Buffer.from(objectIds.join("\n") + "\n")
+  const expectedBytes = objectIds.reduce((sum, objectId) => sum + sizes.get(objectId)!, 0) + objectIds.length * 128
   const result = spawnSync("git", ["-C", repoRoot, "cat-file", "--batch"], {
     input,
     maxBuffer: Math.max(expectedBytes + 1024 * 1024, BLOB_BATCH_TARGET_BYTES + 1024 * 1024),
@@ -327,6 +364,18 @@ function readGitBlobs(repoRoot: string, entries: GitIndexEntry[]): Map<string, B
     offset = bodyEnd
     if (output[offset] !== 0x0a) throw new Error(`git cat-file output for ${objectId} is missing body terminator`)
     offset++
+  }
+  return blobs
+}
+
+function readGitBlobs(repoRoot: string, entries: GitIndexEntry[]): Map<string, Buffer> {
+  const objectIds = [...new Set(entries.map((entry) => entry.objectId))]
+  const sizes = readGitObjectSizes(repoRoot, objectIds)
+  const blobs = new Map<string, Buffer>()
+  for (const chunk of chunkObjectIdsBySize(objectIds, sizes)) {
+    for (const [objectId, blob] of readGitBlobBatch(repoRoot, chunk, sizes)) {
+      blobs.set(objectId, blob)
+    }
   }
   return blobs
 }

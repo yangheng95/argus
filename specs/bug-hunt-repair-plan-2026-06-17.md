@@ -4918,3 +4918,27 @@ LINE:
 - `bun run --cwd packages/web check` passed with the existing 3 Astro hints.
 - `bun run docs:api`, `bun run --cwd packages/sdk/js build`, `bun run docs:check`, and `bun run api:routes-check` passed after regenerating tracked API/SDK outputs for the current workspace.
 - `git diff --check` passed for the BH-090 touched files.
+
+## Tooling Repair: secret-scan cacheinfo blob batching
+
+### Findings
+
+- `git push origin coding-assistant` ran all typecheck, route, docs, and i18n pre-push steps successfully, then failed inside `script/secret-scan.ts::readGitBlobs(...)`.
+- The failure was `spawnSync git ENOBUFS` from `git cat-file --batch`. The scanner estimated `maxBuffer` from `GitIndexEntry.size`, but index entries staged via `git update-index --cacheinfo` can have zero or stale stat sizes while the blob object itself is large.
+- This is a scanner tool-chain bug, not a BH-090 regression; leaving it unfixed blocks all pushes from a valid working tree.
+
+### Fix Shape
+
+- Before reading blob contents, call `git cat-file --batch-check=%(objectname) %(objecttype) %(objectsize)` for the unique object IDs and use those true object sizes.
+- Split `git cat-file --batch` reads by true blob size, so index stat metadata cannot underestimate stdout volume.
+- Keep the existing max scanned file size and text classifier unchanged.
+
+### Regression Tests
+
+- Extend `packages/vscode-extension/test/secret-scan.test.ts` with cacheinfo-staged blobs large enough to exceed the previous underestimated buffer if true blob sizes are not used.
+
+### Verification
+
+- `bun test packages/vscode-extension/test/secret-scan.test.ts --timeout 60000` passed with 19 tests.
+- `bun run script/secret-scan.ts` passed.
+- `"<current-ref-line>" | bun run script/secret-scan.ts --pre-push-stdin` passed.
