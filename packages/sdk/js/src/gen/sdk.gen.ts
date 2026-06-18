@@ -4495,16 +4495,10 @@ export class Control2 extends HeyApiClient {
       body?:
         | {
             action: "view_plan"
-            /**
-             * Task id whose plan and goal list should be inspected.
-             */
             taskID: string
           }
         | {
             action: "view_board"
-            /**
-             * Task id whose board should be inspected; omit to list recent tasks.
-             */
             taskID?: string
           }
         | {
@@ -4512,48 +4506,18 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "query_task"
-            /**
-             * Task ids to query, preserving one output row per id.
-             */
             taskIDs: Array<string>
-            /**
-             * Include compact child task summaries for each queried task.
-             */
             includeChildren?: boolean
-            /**
-             * Include pending interaction counts for each queried task.
-             */
             includeInteractions?: boolean
           }
         | {
             action: "create_task"
-            /**
-             * Short semantic title for the new task.
-             */
             title?: string
-            /**
-             * Complete user-facing request for the task to execute.
-             */
             request: string
-            /**
-             * Optional idempotency key from the originating channel or UI request.
-             */
             request_id?: string
-            /**
-             * Executor runtime to use for the new task when overriding the project default.
-             */
             executor?: "opencorvus" | "codex" | "claude-code"
-            /**
-             * Model override for the new task, in provider/model form.
-             */
             model?: string
-            /**
-             * Whether to enqueue the task behind the directory queue instead of starting now.
-             */
             queue?: boolean
-            /**
-             * Verification check configuration for the new task.
-             */
             checks?: {
               build?: Array<string> | false
               test?: Array<string> | false
@@ -4652,25 +4616,13 @@ export class Control2 extends HeyApiClient {
               }
               timeout_ms?: number
             }
-            /**
-             * Stage routing overrides for the new task.
-             */
             routing?: {
               spec?: "opencorvus" | "executor"
               plan?: "opencorvus" | "executor"
               evaluation?: "opencorvus" | "hybrid"
             }
-            /**
-             * External channel id to bind this task to when created from a channel.
-             */
             channel?: string
-            /**
-             * External thread id to bind this task to when created from a channel.
-             */
             thread?: string
-            /**
-             * External channel platform for the binding, such as slack or feishu.
-             */
             platform?:
               | "slack"
               | "telegram"
@@ -4686,102 +4638,48 @@ export class Control2 extends HeyApiClient {
               | "wecom"
               | "dingtalk"
               | "qq"
-            /**
-             * Additional task metadata supplied by the caller.
-             */
             metadata?: {
               [key: string]: unknown
             }
-            /**
-             * Business source label for the task, for example panel or channel:slack.
-             */
             source?: string
-            /**
-             * Set false to return an ignored response instead of creating a task.
-             */
             allow_create?: boolean
           }
         | {
             action: "send_task_message"
-            /**
-             * Task id that should receive the follow-up message.
-             */
             taskID: string
-            /**
-             * Natural-language follow-up message to append to the task conversation.
-             */
             text: string
-            /**
-             * Business source label for the follow-up message.
-             */
             source: string
-            /**
-             * Optional upstream user id associated with the follow-up message.
-             */
             user_id?: string
           }
         | {
             action: "reply_interaction"
-            /**
-             * Pending interaction id to answer.
-             */
             interactionID: string
-            /**
-             * Predefined reply mode for permission-style interactions.
-             */
             reply?: "once" | "always"
-            /**
-             * Free-form answer message for the pending interaction.
-             */
             message?: string
           }
         | {
             action: "reject_interaction"
-            /**
-             * Pending interaction id to reject.
-             */
             interactionID: string
-            /**
-             * Optional rejection explanation to show with the interaction.
-             */
             message?: string
           }
         | {
             action: "retry_task"
-            /**
-             * Task id to queue for retry.
-             */
             taskID: string
           }
         | {
             action: "replan_task"
-            /**
-             * Task id to queue for replanning.
-             */
             taskID: string
           }
         | {
             action: "cancel_task"
-            /**
-             * Task id to cancel.
-             */
             taskID: string
           }
         | {
             action: "update_checks"
-            /**
-             * Task id whose verification checks should be updated.
-             */
             taskID: string
-            /**
-             * Per-check enabled/disabled selection map keyed by check id.
-             */
             selection?: {
               [key: string]: boolean
             }
-            /**
-             * Full replacement verification check configuration.
-             */
             checks?: {
               build?: Array<string> | false
               test?: Array<string> | false
@@ -4883,30 +4781,18 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "capture_overlay_screenshot"
-            /**
-             * Optional window-title match text used to select the OpenCorvus GUI window.
-             */
             match?: string
           }
         | {
             action: "set_executor"
-            /**
-             * Executor runtime to select in the local panel.
-             */
             executor: "opencorvus" | "codex" | "claude-code"
           }
         | {
             action: "select_task"
-            /**
-             * Task id to focus in the local project assistant surface.
-             */
             taskID: string
           }
         | {
             action: "select_session"
-            /**
-             * Session id to focus in the local project assistant surface.
-             */
             sessionID: string
           }
         | {
@@ -4914,201 +4800,20 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "fork_session"
-            /**
-             * Existing session id to fork.
-             */
             sessionID: string
           }
         | {
             action: "delete_session"
-            /**
-             * Session id to delete along with linked tasks.
-             */
             sessionID: string
           }
         | {
             action: "update_goal"
-            /**
-             * Goal id whose description and acceptance specs should be replaced.
-             */
             goalID: string
-            /**
-             * Replacement goal description.
-             */
             description: string
-            /**
-             * Complete replacement acceptance specs for this goal using the canonical AcceptanceSpec schema.
-             */
-            acceptance_specs: Array<{
-              /**
-               * Stable spec ID, e.g. 'acc-login-3s'.
-               */
-              id: string
-              /**
-               * Requirement ID this spec was derived from (REQ-N).
-               */
-              source_requirement_id: string
-              /**
-               * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
-               */
-              goal_id: string
-              title: string
-              /**
-               * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
-               */
-              scenario?: {
-                given: Array<string>
-                when: Array<string>
-                then: Array<string>
-              }
-              /**
-               * At least one scorer — a spec without a scorer is untestable.
-               */
-              scorers: Array<
-                | {
-                    /**
-                     * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
-                     */
-                    type: "heuristic"
-                    name: string
-                    spec:
-                      | {
-                          /**
-                           * shell — run an inline command. Requires: cmd; optional cwd.
-                           */
-                          kind: "shell"
-                          /**
-                           * Shell command. Exit 0 = pass unless expect.exit_code set.
-                           */
-                          cmd: string
-                          cwd?: string
-                        }
-                      | {
-                          /**
-                           * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
-                           */
-                          kind: "script_ref"
-                          /**
-                           * Repo-relative script path that already exists at registration time.
-                           */
-                          path: string
-                          args?: Array<string>
-                        }
-                    expect?: {
-                      exit_code?: number
-                    }
-                  }
-                | {
-                    /**
-                     * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
-                     */
-                    type: "llm_judge"
-                    name: string
-                    /**
-                     * Single-criterion evaluation question in natural language.
-                     */
-                    criteria: string
-                    /**
-                     * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
-                     */
-                    rubric?: Array<{
-                      /**
-                       * Integer score for this level.
-                       */
-                      score: number
-                      /**
-                       * Short level label, e.g. 'fully met'.
-                       */
-                      label: string
-                      /**
-                       * Behavioral description: what earns this score.
-                       */
-                      anchor: string
-                      /**
-                       * Does this level count as pass for binary verdict?
-                       */
-                      passes: boolean
-                    }>
-                    /**
-                     * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
-                     */
-                    inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
-                  }
-                | {
-                    /**
-                     * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
-                     */
-                    type: "prebuilt"
-                    name:
-                      | "factuality"
-                      | "relevance"
-                      | "contains"
-                      | "exact_match"
-                      | "length_within"
-                      | "json_schema"
-                      | "visual-evidence-bundle"
-                    /**
-                     * Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.
-                     */
-                    config?: {
-                      /**
-                       * For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.
-                       */
-                      expected_text?: string
-                      /**
-                       * For length_within: inclusive minimum character count.
-                       */
-                      min_length?: number
-                      /**
-                       * For length_within: inclusive maximum character count.
-                       */
-                      max_length?: number
-                      /**
-                       * For json_schema: JSON.stringify of the expected JSON Schema object.
-                       */
-                      json_schema?: string
-                    }
-                    /**
-                     * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
-                     */
-                    spec?: {
-                      kind: "visual_evidence_bundle"
-                      viewport?: string
-                    }
-                    /**
-                     * For name=visual-evidence-bundle, requires a passing current bundle.
-                     */
-                    expect?: {
-                      status: "passed"
-                    }
-                  }
-                | {
-                    /**
-                     * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
-                     */
-                    type: "contract_audit"
-                    name: string
-                    spec: {
-                      kind: "contract_graph"
-                      contract_ids: Array<string>
-                    }
-                    expect: {
-                      status: "passed"
-                    }
-                  }
-              >
-              severity: "essential" | "important" | "optional" | "pitfall"
-              /**
-               * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
-               */
-              trigger?: "on_goal" | "on_integrity"
-            }>
+            acceptance_specs: Array<unknown>
           }
         | {
             action: "delete_goal"
-            /**
-             * Goal id to delete from the task plan.
-             */
             goalID: string
           }
     },
@@ -5464,7 +5169,7 @@ export class Mission extends HeyApiClient {
   /**
    * Wake the Mission agent
    *
-   * Start (or resume) a Mission agent session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — exactly one mission session is keyed per mission.
+   * Start (or resume) a Mission agent session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, directory, missionID) — exactly one mission session is keyed per mission.
    */
   public wake<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -6502,26 +6207,8 @@ export class Task extends HeyApiClient {
                   | "length_within"
                   | "json_schema"
                   | "visual-evidence-bundle"
-                /**
-                 * Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.
-                 */
                 config?: {
-                  /**
-                   * For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.
-                   */
-                  expected_text?: string
-                  /**
-                   * For length_within: inclusive minimum character count.
-                   */
-                  min_length?: number
-                  /**
-                   * For length_within: inclusive maximum character count.
-                   */
-                  max_length?: number
-                  /**
-                   * For json_schema: JSON.stringify of the expected JSON Schema object.
-                   */
-                  json_schema?: string
+                  [key: string]: unknown
                 }
                 /**
                  * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
@@ -6685,26 +6372,8 @@ export class Task extends HeyApiClient {
                     | "length_within"
                     | "json_schema"
                     | "visual-evidence-bundle"
-                  /**
-                   * Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.
-                   */
                   config?: {
-                    /**
-                     * For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.
-                     */
-                    expected_text?: string
-                    /**
-                     * For length_within: inclusive minimum character count.
-                     */
-                    min_length?: number
-                    /**
-                     * For length_within: inclusive maximum character count.
-                     */
-                    max_length?: number
-                    /**
-                     * For json_schema: JSON.stringify of the expected JSON Schema object.
-                     */
-                    json_schema?: string
+                    [key: string]: unknown
                   }
                   /**
                    * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
@@ -8063,26 +7732,8 @@ export class Goal extends HeyApiClient {
                 | "length_within"
                 | "json_schema"
                 | "visual-evidence-bundle"
-              /**
-               * Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.
-               */
               config?: {
-                /**
-                 * For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.
-                 */
-                expected_text?: string
-                /**
-                 * For length_within: inclusive minimum character count.
-                 */
-                min_length?: number
-                /**
-                 * For length_within: inclusive maximum character count.
-                 */
-                max_length?: number
-                /**
-                 * For json_schema: JSON.stringify of the expected JSON Schema object.
-                 */
-                json_schema?: string
+                [key: string]: unknown
               }
               /**
                * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
@@ -9235,7 +8886,7 @@ export class Db extends HeyApiClient {
   /**
    * Reset database
    *
-   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
+   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify a registered absolute projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
    */
   public reset<ThrowOnError extends boolean = false>(
     parameters?: {
