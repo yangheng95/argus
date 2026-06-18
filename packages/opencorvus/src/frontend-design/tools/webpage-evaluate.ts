@@ -13,6 +13,7 @@ import path from "node:path"
 import z from "zod"
 
 import { Tool } from "../../tool/tool"
+import { Instance } from "@/project/instance"
 import {
   WEBPAGE_EVALUATE_PASS_SCORE,
   evaluateVisual,
@@ -87,7 +88,7 @@ Returns score, SSIM, pixelDiff%, and whether the optional numeric diagnostic thr
       outputDir,
       taskID: typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined,
       source: sourceForAgent(ctx.agent),
-      projectDirectory: process.cwd(),
+      projectDirectory: Instance.directory,
     })
 
     return {

@@ -46,6 +46,17 @@ describe("webpage evidence architecture guards", () => {
     expect(renderCore).toMatch(/headless:\s*true/)
   })
 
+  test("visual evidence project directories come from Instance context", () => {
+    const renderTool = readSource("frontend-design/tools/webpage-render.ts")
+    const evaluateTool = readSource("frontend-design/tools/webpage-evaluate.ts")
+    const judgeTool = readSource("frontend-design/tools/webpage-vision-judge.ts")
+
+    for (const source of [renderTool, evaluateTool, judgeTool]) {
+      expect(source).toContain("Instance.directory")
+      expect(source).not.toContain("projectDirectory: process.cwd()")
+    }
+  })
+
   test("vision judge failures do not synthesize verdict files", () => {
     const source = readSource("frontend-design/tools/webpage-vision-judge.ts")
     expect(source).not.toContain("failurePayload")
