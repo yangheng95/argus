@@ -62,3 +62,21 @@ test("proposed-task confirmation i18n keys exist in both locales", () => {
   expect(EN["titlebar.confirm_proposed_tasks"]).not.toBe("")
   expect(ZH["titlebar.confirm_proposed_tasks"]).not.toBe("")
 })
+
+test("titlebar top-level menu i18n keys exist in both locales", () => {
+  for (const key of [
+    "titlebar.menu.workspace",
+    "titlebar.menu.provider",
+    "titlebar.menu.run",
+    "titlebar.menu.settings",
+    "titlebar.menu.view",
+    "titlebar.menu.help",
+  ]) {
+    expect(typeof EN[key]).toBe("string")
+    expect(typeof ZH[key]).toBe("string")
+    expect(EN[key]).not.toBe("")
+    expect(ZH[key]).not.toBe("")
+  }
+  expect(EN["titlebar.menu.tools"]).toBeUndefined()
+  expect(ZH["titlebar.menu.tools"]).toBeUndefined()
+})

@@ -765,6 +765,11 @@ export namespace Provider {
               }, inactivityMs)
             }
           : undefined
+        const clearInactivityTimer = () => {
+          if (!inactivityTimer) return
+          clearTimeout(inactivityTimer)
+          inactivityTimer = undefined
+        }
 
         if (inactivityController) {
           const signals: AbortSignal[] = []
@@ -776,116 +781,121 @@ export namespace Provider {
         // Start the inactivity timer BEFORE fetch — covers initial connection hang
         resetInactivityTimer?.()
 
-        // Strip openai itemId metadata following what codex does
-        // Codex uses #[serde(skip_serializing)] on id fields for all item types:
-        // Message, Reasoning, FunctionCall, LocalShellCall, CustomToolCall, WebSearchCall
-        // IDs are only re-attached for Azure with store=true
-        if (model.api.npm === "@ai-sdk/openai" && opts.body && opts.method === "POST") {
-          const body = JSON.parse(opts.body as string)
-          const isAzure = model.providerID.includes("azure")
-          const keepIds = isAzure && body.store === true
-          if (!keepIds && Array.isArray(body.input)) {
-            for (const item of body.input) {
-              if ("id" in item) {
-                delete item.id
+        try {
+          // Strip openai itemId metadata following what codex does
+          // Codex uses #[serde(skip_serializing)] on id fields for all item types:
+          // Message, Reasoning, FunctionCall, LocalShellCall, CustomToolCall, WebSearchCall
+          // IDs are only re-attached for Azure with store=true
+          if (model.api.npm === "@ai-sdk/openai" && opts.body && opts.method === "POST") {
+            const body = JSON.parse(opts.body as string)
+            const isAzure = model.providerID.includes("azure")
+            const keepIds = isAzure && body.store === true
+            if (!keepIds && Array.isArray(body.input)) {
+              for (const item of body.input) {
+                if ("id" in item) {
+                  delete item.id
+                }
+              }
+              opts.body = JSON.stringify(body)
+            }
+          }
+
+          if (
+            ProviderTransform.shouldNormalizeRequestBody(model.providerID, model.api.npm) &&
+            opts.body &&
+            opts.method === "POST"
+          ) {
+            const body = JSON.parse(opts.body as string)
+            const normalized = ProviderTransform.requestBody(model.providerID, body)
+            if (normalized !== body) opts.body = JSON.stringify(normalized)
+          }
+
+          const response = await fetchFn(input, providerFetchInit(opts, proxyUrl))
+
+          // Response received — reset timer (server is alive)
+          resetInactivityTimer?.()
+
+          // Some SDKs (e.g. @ai-sdk/openai-compatible) do not surface HTTP
+          // errors from streaming responses — they silently consume the body
+          // and later throw a generic "No output generated" error.  Extract
+          // the upstream error here so callers get actionable messages.
+          //
+          // We throw an APICallError (not a plain Error) so:
+          //   1. Message.fromError takes the APICallError branch and produces a
+          //      Message.APIError with statusCode/isRetryable preserved
+          //      (instead of falling through to NamedError.Unknown which loses
+          //      the status and is treated as fatal).
+          //   2. SessionRetry.retryable / llm/api.ts retryable() classify
+          //      transient 408/429/5xx as retryable via the standard AI SDK
+          //      contract, so the session loop backs off and retries instead
+          //      of bubbling the failure up to the orchestrator stream-error
+          //      path. Without this, an alibaba 429 rate-limit blew up the
+          //      orchestrator into an "unknown session error" wake loop —
+          //      see _session-20260428-130617.out incident.
+          if (!response.ok) {
+            clearInactivityTimer()
+            const text = await response.text().catch(() => "")
+            let detail = ""
+            try {
+              const json = JSON.parse(text)
+              detail = json?.error?.message ?? json?.message ?? text
+            } catch {
+              detail = text
+            }
+            const responseHeaders: Record<string, string> = {}
+            response.headers.forEach((value, key) => {
+              responseHeaders[key] = value
+            })
+            let requestBodyValues: unknown = undefined
+            if (typeof opts.body === "string") {
+              try {
+                requestBodyValues = JSON.parse(opts.body)
+              } catch {
+                requestBodyValues = opts.body
               }
             }
-            opts.body = JSON.stringify(body)
+            // fetch accepts string | URL | Request; URL has .href, Request has .url
+            const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input?.url ?? "")
+            throw new APICallError({
+              message: `Provider ${model.providerID} returned HTTP ${response.status}: ${detail || response.statusText}`,
+              url,
+              requestBodyValues,
+              statusCode: response.status,
+              responseHeaders,
+              responseBody: text,
+            })
           }
-        }
 
-        if (
-          ProviderTransform.shouldNormalizeRequestBody(model.providerID, model.api.npm) &&
-          opts.body &&
-          opts.method === "POST"
-        ) {
-          const body = JSON.parse(opts.body as string)
-          const normalized = ProviderTransform.requestBody(model.providerID, body)
-          if (normalized !== body) opts.body = JSON.stringify(normalized)
-        }
+          // For streaming responses, wrap the body so each chunk resets the timer.
+          if (inactivityController && response.body) {
+            const original = response.body
+            const wrapped = original.pipeThrough(
+              new TransformStream({
+                transform(chunk, controller) {
+                  resetInactivityTimer!()
+                  controller.enqueue(chunk)
+                },
+                flush() {
+                  clearInactivityTimer()
+                },
+              }),
+            )
 
-        const response = await fetchFn(input, providerFetchInit(opts, proxyUrl))
-
-        // Response received — reset timer (server is alive)
-        resetInactivityTimer?.()
-
-        // Some SDKs (e.g. @ai-sdk/openai-compatible) do not surface HTTP
-        // errors from streaming responses — they silently consume the body
-        // and later throw a generic "No output generated" error.  Extract
-        // the upstream error here so callers get actionable messages.
-        //
-        // We throw an APICallError (not a plain Error) so:
-        //   1. Message.fromError takes the APICallError branch and produces a
-        //      Message.APIError with statusCode/isRetryable preserved
-        //      (instead of falling through to NamedError.Unknown which loses
-        //      the status and is treated as fatal).
-        //   2. SessionRetry.retryable / llm/api.ts retryable() classify
-        //      transient 408/429/5xx as retryable via the standard AI SDK
-        //      contract, so the session loop backs off and retries instead
-        //      of bubbling the failure up to the orchestrator stream-error
-        //      path. Without this, an alibaba 429 rate-limit blew up the
-        //      orchestrator into an "unknown session error" wake loop —
-        //      see _session-20260428-130617.out incident.
-        if (!response.ok) {
-          if (inactivityTimer) clearTimeout(inactivityTimer)
-          const text = await response.text().catch(() => "")
-          let detail = ""
-          try {
-            const json = JSON.parse(text)
-            detail = json?.error?.message ?? json?.message ?? text
-          } catch {
-            detail = text
+            // Return a new Response with the wrapped body, preserving headers/status
+            return new Response(wrapped, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            })
           }
-          const responseHeaders: Record<string, string> = {}
-          response.headers.forEach((value, key) => {
-            responseHeaders[key] = value
-          })
-          let requestBodyValues: unknown = undefined
-          if (typeof opts.body === "string") {
-            try {
-              requestBodyValues = JSON.parse(opts.body)
-            } catch {
-              requestBodyValues = opts.body
-            }
-          }
-          // fetch accepts string | URL | Request; URL has .href, Request has .url
-          const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input?.url ?? "")
-          throw new APICallError({
-            message: `Provider ${model.providerID} returned HTTP ${response.status}: ${detail || response.statusText}`,
-            url,
-            requestBodyValues,
-            statusCode: response.status,
-            responseHeaders,
-            responseBody: text,
-          })
+
+          // Non-streaming response — clear the inactivity timer
+          clearInactivityTimer()
+          return response
+        } catch (error) {
+          clearInactivityTimer()
+          throw error
         }
-
-        // For streaming responses, wrap the body so each chunk resets the timer.
-        if (inactivityController && response.body) {
-          const original = response.body
-          const wrapped = original.pipeThrough(
-            new TransformStream({
-              transform(chunk, controller) {
-                resetInactivityTimer!()
-                controller.enqueue(chunk)
-              },
-              flush() {
-                if (inactivityTimer) clearTimeout(inactivityTimer)
-              },
-            }),
-          )
-
-          // Return a new Response with the wrapped body, preserving headers/status
-          return new Response(wrapped, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-          })
-        }
-
-        // Non-streaming response — clear the inactivity timer
-        if (inactivityTimer) clearTimeout(inactivityTimer)
-        return response
       }
 
       const bundledFn = BUNDLED_PROVIDERS[model.api.npm]

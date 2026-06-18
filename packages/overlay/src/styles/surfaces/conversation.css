@@ -1152,9 +1152,9 @@
   font-size: var(--ui-font-control);
 }
 
-/* Cwd dropdown: control-vocab chip carrying the breadcrumb path
-   and a caret. The shell already routes through `--oc-control-*`
-   tokens — just relocating. */
+/* Cwd control: control-vocab chip carrying the breadcrumb path and a
+   dedicated recent-directory trigger. The shell already routes through
+   `--oc-control-*` tokens — just relocating. */
 .task-dir-shell {
   box-sizing: border-box;
   height: calc(24px * var(--ui-scale));
@@ -1170,7 +1170,7 @@
 }
 
 .task-cwd-dropdown {
-  cursor: pointer;
+  cursor: default;
   border-radius: var(--oc-radius-soft);
   padding: 0 calc(4px * var(--ui-scale));
   transition:
@@ -1187,7 +1187,7 @@
 }
 
 .task-cwd-dropdown:hover,
-.task-cwd-dropdown:focus-visible {
+.task-cwd-dropdown:focus-within {
   background: var(--oc-control-bg-hover);
   border-color: var(--oc-control-border-hover);
   outline: none;
@@ -1215,7 +1215,8 @@
     color var(--ui-duration-fast);
 }
 
-.task-cwd-dropdown:hover .task-cwd-caret {
+.task-cwd-dropdown:hover .task-cwd-caret,
+.task-dir-recent-trigger:focus-visible .task-cwd-caret {
   color: var(--text-strong);
 }
 
@@ -1224,13 +1225,41 @@
   color: var(--text-strong);
 }
 
-/* Breadcrumb path + action buttons inside the dropdown shell. */
-.task-dir-actions {
+/* Breadcrumb path actions and the separate recent-menu trigger. */
+.task-dir-actions,
+.task-dir-menu-actions {
   display: inline-flex;
   align-items: center;
   gap: calc(2px * var(--ui-scale));
   flex-shrink: 0;
   margin-left: auto;
+}
+
+.task-dir-recent-trigger {
+  appearance: none;
+  width: calc(22px * var(--ui-scale));
+  height: calc(20px * var(--ui-scale));
+  min-width: calc(22px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background var(--ui-duration-fast),
+    color var(--ui-duration-fast);
+}
+
+.task-dir-recent-trigger:hover,
+.task-dir-recent-trigger:focus-visible,
+.task-dir-recent-trigger[data-open="true"] {
+  background: var(--subtle-3);
+  outline: none;
 }
 
 .task-dir-path {

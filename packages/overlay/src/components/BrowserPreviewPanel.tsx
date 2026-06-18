@@ -31,6 +31,13 @@ type BrowserPreviewLiveImage = {
   url: string
 }
 
+type BrowserPreviewEvidenceImage = {
+  taskID: string
+  evidenceID: string
+  viewportID: BrowserPreviewViewportID
+  url: string
+}
+
 export interface BrowserPreviewPanelProps {
   active: () => boolean
   directory: () => string
@@ -90,7 +97,16 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (pendingTargetID && resolved.id !== pendingTargetID) return undefined
     return resolved
   })
-  const targetTransitionPending = createMemo(() => Boolean(pendingSelectedTargetID() && !currentTarget()))
+  const currentTargetError = createMemo(() => {
+    const taskID = props.taskID()
+    if (!taskID || !props.directory()) return undefined
+    const loadError = targetLoadError()
+    if (loadError?.taskID === taskID) return loadError.message
+    return targetSelectionError() || target.error
+  })
+  const targetTransitionPending = createMemo(
+    () => Boolean(pendingSelectedTargetID() && !currentTarget() && !currentTargetError()),
+  )
   const [latestEvidence] = createResource(
     () => {
       const taskID = props.taskID()
@@ -101,12 +117,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     },
     (scope) => loadTaskBrowserPreviewEvidence(scope),
   )
-  const currentTargetError = createMemo(() => {
-    const taskID = props.taskID()
-    const error = targetLoadError()
-    if (!taskID || !props.directory() || error?.taskID !== taskID) return ""
-    return error.message
-  })
   const candidates = createMemo(() => currentTarget()?.candidates ?? [])
   const selectedCandidate = createMemo(
     () =>
@@ -165,14 +175,30 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     }
     return evidence
   })
-  const [captureImageUrl] = createResource(
+  const [captureImage] = createResource(
     () => {
       const evidence = renderedEvidence()
       if (!evidence?.capture?.captured) return undefined
       return { taskID: evidence.taskID, evidenceID: evidence.id, viewportID: evidence.viewportID }
     },
-    (scope) => loadTaskBrowserPreviewEvidenceCaptureObjectUrl(scope),
+    async (scope): Promise<BrowserPreviewEvidenceImage> => ({
+      ...scope,
+      url: await loadTaskBrowserPreviewEvidenceCaptureObjectUrl(scope),
+    }),
   )
+  const currentCaptureImage = createMemo(() => {
+    const evidence = renderedEvidence()
+    const image = captureImage()
+    if (!evidence || !image) return undefined
+    if (
+      image.taskID !== evidence.taskID ||
+      image.evidenceID !== evidence.id ||
+      image.viewportID !== evidence.viewportID
+    ) {
+      return undefined
+    }
+    return image
+  })
 
   createEffect(() => {
     const taskID = props.taskID()
@@ -190,15 +216,15 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (taskID && resolved?.taskID === taskID) setTargetLoadError(undefined)
   })
 
-  createEffect<string | undefined>((previous) => {
-    const current = captureImageUrl()
-    if (previous && previous !== current) URL.revokeObjectURL(previous)
+  createEffect<BrowserPreviewEvidenceImage | undefined>((previous) => {
+    const current = captureImage()
+    if (previous?.url && previous.url !== current?.url) URL.revokeObjectURL(previous.url)
     return current
   })
 
   onCleanup(() => {
-    const current = captureImageUrl()
-    if (current) URL.revokeObjectURL(current)
+    const current = captureImage()
+    if (current) URL.revokeObjectURL(current.url)
     const live = liveImage()
     if (live) URL.revokeObjectURL(live.url)
   })
@@ -217,6 +243,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const pendingTargetID = pendingSelectedTargetID()
     const resolved = target()
     if (pendingTargetID && resolved?.id === pendingTargetID) setPendingSelectedTargetID("")
+  })
+
+  createEffect(() => {
+    props.taskID()
+    props.directory()
+    setPendingSelectedTargetID("")
+    setTargetSelectionError("")
   })
 
   createEffect(() => {
@@ -264,8 +297,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       .then(() => setRefreshToken((value) => value + 1))
       .catch((error) => {
         if (props.taskID() !== taskID) return
+        if (pendingSelectedTargetID() !== candidate.id) return
         setPendingSelectedTargetID("")
-        setTargetSelectionError(String(error))
+        setTargetSelectionError(browserPreviewErrorMessage(error))
         void refetchTarget()
       })
   }
@@ -430,7 +464,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               title={t("browser_preview.refresh_title")}
               aria-label={t("browser_preview.refresh_title")}
               disabled={!props.taskID()}
-              onClick={() => setRefreshToken((value) => value + 1)}
+              onClick={() => {
+                setTargetSelectionError("")
+                setRefreshToken((value) => value + 1)
+              }}
             >
               <Icon name="refresh" size={13} />
             </Button>
@@ -438,16 +475,16 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         />
 
         <div class="browser-preview-controls">
-          <div
-            class="browser-preview-status"
-            data-status={
-              targetSelectionError() || currentTargetError()
-                ? "failed"
-                : targetTransitionPending()
-                  ? "loading"
-                  : (currentTarget()?.status ?? "loading")
-            }
-          >
+            <div
+              class="browser-preview-status"
+              data-status={
+                targetSelectionError() || currentTargetError()
+                  ? "failed"
+                  : targetTransitionPending()
+                    ? "loading"
+                    : (currentTarget()?.status ?? "loading")
+              }
+            >
             <Switch
               fallback={
                 <>
@@ -679,10 +716,16 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   <code>{evidence().id}</code>
                 </div>
                 <p>{evidence().summary}</p>
-                <Show when={captureImageUrl()}>
-                  {(url) => (
+                <Show when={currentCaptureImage()}>
+                  {(image) => (
                     <figure class="browser-preview-evidence-shot">
-                      <img src={url()} alt={evidence().summary} data-ui="browser-preview-screenshot" decoding="async" />
+                      <img
+                        src={image().url}
+                        alt={evidence().summary}
+                        data-ui="browser-preview-screenshot"
+                        data-evidence-id={image().evidenceID}
+                        decoding="async"
+                      />
                     </figure>
                   )}
                 </Show>
@@ -819,6 +862,10 @@ function emptyMessage(status: string): string {
     default:
       return t("browser_preview.empty.missing")
   }
+}
+
+function browserPreviewErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function evidenceFromVerification(

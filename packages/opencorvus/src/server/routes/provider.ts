@@ -21,7 +21,7 @@ const HexinBudget = z
   })
   .meta({ ref: "HexinBudget" })
 
-const HexinBudgetResponse = z
+export const HexinBudgetResponse = z
   .discriminatedUnion("ok", [
     z.object({
       ok: z.literal(true),

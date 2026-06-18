@@ -57,11 +57,11 @@ if (!skipLinux) {
 
   // Check Docker is available
   const dockerCheck = await $`docker info`.nothrow().quiet()
-  if (dockerCheck.exitCode !== 0) {
-    throw new Error(
-      "Docker is required for Linux overlay builds. Start Docker Desktop or pass --skip-linux explicitly.",
-    )
-  } else {
+    if (dockerCheck.exitCode !== 0) {
+      throw new Error(
+      "Docker is required for Linux overlay builds. Start Docker Desktop and re-run, or pass --skip-linux explicitly.",
+      )
+    } else {
     const targetArgs = linuxTargets.map((t) => `--target=${t}`).join(" ")
     await $`bun run script/build-docker.ts ${targetArgs}`.cwd(overlay)
   }

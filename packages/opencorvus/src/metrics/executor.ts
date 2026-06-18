@@ -441,11 +441,47 @@ async function runAggregator(spec: MetricSpec, input: ExecuteMetricsInput): Prom
   }
   const results = readResultsForIteration(input.task_id, iteration)
   const wanted = new Set(cfg.of)
-  const values = results.filter((r) => wanted.has(r.metric_spec_id) && r.evidence_fresh).map((r) => r.normalized_value)
-  if (values.length === 0) {
+  const rowsBySpec = new Map<string, MetricResult[]>()
+  for (const row of results) {
+    if (!wanted.has(row.metric_spec_id)) {
+      continue
+    }
+    const rows = rowsBySpec.get(row.metric_spec_id)
+    if (rows) {
+      rows.push(row)
+    } else {
+      rowsBySpec.set(row.metric_spec_id, [row])
+    }
+  }
+  const values: number[] = []
+  const missing: string[] = []
+  const stale: string[] = []
+  for (const metricID of cfg.of) {
+    const rows = rowsBySpec.get(metricID)
+    if (!rows || rows.length === 0) {
+      missing.push(metricID)
+      continue
+    }
+    let fresh: MetricResult | undefined
+    for (const row of rows) {
+      if (!row.evidence_fresh) {
+        continue
+      }
+      const isNewer = fresh && (row.computed_at > fresh.computed_at || (row.computed_at === fresh.computed_at && row.id > fresh.id))
+      if (!fresh || isNewer) {
+        fresh = row
+      }
+    }
+    if (!fresh) {
+      stale.push(metricID)
+      continue
+    }
+    values.push(fresh.normalized_value)
+  }
+  if (missing.length > 0 || stale.length > 0) {
     return {
       raw_value: 0,
-      evidence_ref: `aggregator://no_fresh_inputs iter=${iteration}`,
+      evidence_ref: `aggregator://incomplete_inputs iter=${iteration};missing=${missing.join(",")};stale=${stale.join(",")}`,
       evidence_fresh: false,
     }
   }

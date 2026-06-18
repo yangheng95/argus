@@ -4424,7 +4424,12 @@ export type ExecutorGetModelResponses = {
 export type ExecutorGetModelResponse = ExecutorGetModelResponses[keyof ExecutorGetModelResponses]
 
 export type ExecutorSetModelData = {
-  body?: never
+  body: {
+    /**
+     * Native executor model value. An empty string clears the executor model override.
+     */
+    model: string
+  }
   path: {
     executorID: string
   }
@@ -4439,10 +4444,16 @@ export type ExecutorSetModelData = {
 
 export type ExecutorSetModelErrors = {
   /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
    * Executor not found or does not support model switching
    */
   404: unknown
 }
+
+export type ExecutorSetModelError = ExecutorSetModelErrors[keyof ExecutorSetModelErrors]
 
 export type ExecutorSetModelResponses = {
   /**
@@ -6741,68 +6752,7 @@ export type ProviderListResponses = {
    * List of providers
    */
   200: {
-    all: Array<{
-      api?: string
-      name: string
-      env: Array<string>
-      id: string
-      npm?: string
-      models: {
-        [key: string]: {
-          id: string
-          name: string
-          family?: string
-          release_date: string
-          attachment: boolean
-          reasoning: boolean
-          temperature: boolean
-          tool_call: boolean
-          interleaved?:
-            | true
-            | {
-                field: "reasoning_content" | "reasoning_details"
-              }
-          cost?: {
-            input: number
-            output: number
-            cache_read?: number
-            cache_write?: number
-            context_over_200k?: {
-              input: number
-              output: number
-              cache_read?: number
-              cache_write?: number
-            }
-          }
-          limit: {
-            context: number
-            input?: number
-            output: number
-          }
-          modalities?: {
-            input: Array<"text" | "audio" | "image" | "video" | "pdf">
-            output: Array<"text" | "audio" | "image" | "video" | "pdf">
-          }
-          experimental?: boolean
-          status?: "alpha" | "beta" | "deprecated"
-          options: {
-            [key: string]: unknown
-          }
-          headers?: {
-            [key: string]: string
-          }
-          provider?: {
-            npm?: string
-            api?: string
-          }
-          variants?: {
-            [key: string]: {
-              [key: string]: unknown
-            }
-          }
-        }
-      }
-    }>
+    all: Array<Provider>
     default: {
       [key: string]: string
     }
@@ -8388,10 +8338,16 @@ export type GatewayControlActionData = {
   body?:
     | {
         action: "view_plan"
+        /**
+         * Task id whose plan and goal list should be inspected.
+         */
         taskID: string
       }
     | {
         action: "view_board"
+        /**
+         * Task id whose board should be inspected; omit to list recent tasks.
+         */
         taskID?: string
       }
     | {
@@ -8399,18 +8355,48 @@ export type GatewayControlActionData = {
       }
     | {
         action: "query_task"
+        /**
+         * Task ids to query, preserving one output row per id.
+         */
         taskIDs: Array<string>
+        /**
+         * Include compact child task summaries for each queried task.
+         */
         includeChildren?: boolean
+        /**
+         * Include pending interaction counts for each queried task.
+         */
         includeInteractions?: boolean
       }
     | {
         action: "create_task"
+        /**
+         * Short semantic title for the new task.
+         */
         title?: string
+        /**
+         * Complete user-facing request for the task to execute.
+         */
         request: string
+        /**
+         * Optional idempotency key from the originating channel or UI request.
+         */
         request_id?: string
+        /**
+         * Executor runtime to use for the new task when overriding the project default.
+         */
         executor?: "opencorvus" | "codex" | "claude-code"
+        /**
+         * Model override for the new task, in provider/model form.
+         */
         model?: string
+        /**
+         * Whether to enqueue the task behind the directory queue instead of starting now.
+         */
         queue?: boolean
+        /**
+         * Verification check configuration for the new task.
+         */
         checks?: {
           build?: Array<string> | false
           test?: Array<string> | false
@@ -8509,13 +8495,25 @@ export type GatewayControlActionData = {
           }
           timeout_ms?: number
         }
+        /**
+         * Stage routing overrides for the new task.
+         */
         routing?: {
           spec?: "opencorvus" | "executor"
           plan?: "opencorvus" | "executor"
           evaluation?: "opencorvus" | "hybrid"
         }
+        /**
+         * External channel id to bind this task to when created from a channel.
+         */
         channel?: string
+        /**
+         * External thread id to bind this task to when created from a channel.
+         */
         thread?: string
+        /**
+         * External channel platform for the binding, such as slack or feishu.
+         */
         platform?:
           | "slack"
           | "telegram"
@@ -8531,48 +8529,102 @@ export type GatewayControlActionData = {
           | "wecom"
           | "dingtalk"
           | "qq"
+        /**
+         * Additional task metadata supplied by the caller.
+         */
         metadata?: {
           [key: string]: unknown
         }
+        /**
+         * Business source label for the task, for example panel or channel:slack.
+         */
         source?: string
+        /**
+         * Set false to return an ignored response instead of creating a task.
+         */
         allow_create?: boolean
       }
     | {
         action: "send_task_message"
+        /**
+         * Task id that should receive the follow-up message.
+         */
         taskID: string
+        /**
+         * Natural-language follow-up message to append to the task conversation.
+         */
         text: string
+        /**
+         * Business source label for the follow-up message.
+         */
         source: string
+        /**
+         * Optional upstream user id associated with the follow-up message.
+         */
         user_id?: string
       }
     | {
         action: "reply_interaction"
+        /**
+         * Pending interaction id to answer.
+         */
         interactionID: string
+        /**
+         * Predefined reply mode for permission-style interactions.
+         */
         reply?: "once" | "always"
+        /**
+         * Free-form answer message for the pending interaction.
+         */
         message?: string
       }
     | {
         action: "reject_interaction"
+        /**
+         * Pending interaction id to reject.
+         */
         interactionID: string
+        /**
+         * Optional rejection explanation to show with the interaction.
+         */
         message?: string
       }
     | {
         action: "retry_task"
+        /**
+         * Task id to queue for retry.
+         */
         taskID: string
       }
     | {
         action: "replan_task"
+        /**
+         * Task id to queue for replanning.
+         */
         taskID: string
       }
     | {
         action: "cancel_task"
+        /**
+         * Task id to cancel.
+         */
         taskID: string
       }
     | {
         action: "update_checks"
+        /**
+         * Task id whose verification checks should be updated.
+         */
         taskID: string
+        /**
+         * Per-check enabled/disabled selection map keyed by check id.
+         */
         selection?: {
           [key: string]: boolean
         }
+        /**
+         * Full replacement verification check configuration.
+         */
         checks?: {
           build?: Array<string> | false
           test?: Array<string> | false
@@ -8674,18 +8726,30 @@ export type GatewayControlActionData = {
       }
     | {
         action: "capture_overlay_screenshot"
+        /**
+         * Optional window-title match text used to select the OpenCorvus GUI window.
+         */
         match?: string
       }
     | {
         action: "set_executor"
+        /**
+         * Executor runtime to select in the local panel.
+         */
         executor: "opencorvus" | "codex" | "claude-code"
       }
     | {
         action: "select_task"
+        /**
+         * Task id to focus in the local project assistant surface.
+         */
         taskID: string
       }
     | {
         action: "select_session"
+        /**
+         * Session id to focus in the local project assistant surface.
+         */
         sessionID: string
       }
     | {
@@ -8693,20 +8757,201 @@ export type GatewayControlActionData = {
       }
     | {
         action: "fork_session"
+        /**
+         * Existing session id to fork.
+         */
         sessionID: string
       }
     | {
         action: "delete_session"
+        /**
+         * Session id to delete along with linked tasks.
+         */
         sessionID: string
       }
     | {
         action: "update_goal"
+        /**
+         * Goal id whose description and acceptance specs should be replaced.
+         */
         goalID: string
+        /**
+         * Replacement goal description.
+         */
         description: string
-        acceptance_specs: Array<unknown>
+        /**
+         * Complete replacement acceptance specs for this goal using the canonical AcceptanceSpec schema.
+         */
+        acceptance_specs: Array<{
+          /**
+           * Stable spec ID, e.g. 'acc-login-3s'.
+           */
+          id: string
+          /**
+           * Requirement ID this spec was derived from (REQ-N).
+           */
+          source_requirement_id: string
+          /**
+           * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+           */
+          goal_id: string
+          title: string
+          /**
+           * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
+           */
+          scenario?: {
+            given: Array<string>
+            when: Array<string>
+            then: Array<string>
+          }
+          /**
+           * At least one scorer — a spec without a scorer is untestable.
+           */
+          scorers: Array<
+            | {
+                /**
+                 * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+                 */
+                type: "heuristic"
+                name: string
+                spec:
+                  | {
+                      /**
+                       * shell — run an inline command. Requires: cmd; optional cwd.
+                       */
+                      kind: "shell"
+                      /**
+                       * Shell command. Exit 0 = pass unless expect.exit_code set.
+                       */
+                      cmd: string
+                      cwd?: string
+                    }
+                  | {
+                      /**
+                       * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
+                       */
+                      kind: "script_ref"
+                      /**
+                       * Repo-relative script path that already exists at registration time.
+                       */
+                      path: string
+                      args?: Array<string>
+                    }
+                expect?: {
+                  exit_code?: number
+                }
+              }
+            | {
+                /**
+                 * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+                 */
+                type: "llm_judge"
+                name: string
+                /**
+                 * Single-criterion evaluation question in natural language.
+                 */
+                criteria: string
+                /**
+                 * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
+                 */
+                rubric?: Array<{
+                  /**
+                   * Integer score for this level.
+                   */
+                  score: number
+                  /**
+                   * Short level label, e.g. 'fully met'.
+                   */
+                  label: string
+                  /**
+                   * Behavioral description: what earns this score.
+                   */
+                  anchor: string
+                  /**
+                   * Does this level count as pass for binary verdict?
+                   */
+                  passes: boolean
+                }>
+                /**
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                 */
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+              }
+            | {
+                /**
+                 * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+                 */
+                type: "prebuilt"
+                name:
+                  | "factuality"
+                  | "relevance"
+                  | "contains"
+                  | "exact_match"
+                  | "length_within"
+                  | "json_schema"
+                  | "visual-evidence-bundle"
+                /**
+                 * Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.
+                 */
+                config?: {
+                  /**
+                   * For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.
+                   */
+                  expected_text?: string
+                  /**
+                   * For length_within: inclusive minimum character count.
+                   */
+                  min_length?: number
+                  /**
+                   * For length_within: inclusive maximum character count.
+                   */
+                  max_length?: number
+                  /**
+                   * For json_schema: JSON.stringify of the expected JSON Schema object.
+                   */
+                  json_schema?: string
+                }
+                /**
+                 * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                 */
+                spec?: {
+                  kind: "visual_evidence_bundle"
+                  viewport?: string
+                }
+                /**
+                 * For name=visual-evidence-bundle, requires a passing current bundle.
+                 */
+                expect?: {
+                  status: "passed"
+                }
+              }
+            | {
+                /**
+                 * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                 */
+                type: "contract_audit"
+                name: string
+                spec: {
+                  kind: "contract_graph"
+                  contract_ids: Array<string>
+                }
+                expect: {
+                  status: "passed"
+                }
+              }
+          >
+          severity: "essential" | "important" | "optional" | "pitfall"
+          /**
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
+           */
+          trigger?: "on_goal" | "on_integrity"
+        }>
       }
     | {
         action: "delete_goal"
+        /**
+         * Goal id to delete from the task plan.
+         */
         goalID: string
       }
   path?: never
@@ -9195,7 +9440,7 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     taskID: string
     targetID: string
     viewportID: string
-    operationKind?: "preview-capture" | "reference-comparison"
+    operationKind: "preview-capture" | "reference-comparison"
     regionID?: string
     manifestPath?: string
     artifactPaths?: {
@@ -9868,8 +10113,26 @@ export type TaskCreateData = {
                 | "length_within"
                 | "json_schema"
                 | "visual-evidence-bundle"
+              /**
+               * Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.
+               */
               config?: {
-                [key: string]: unknown
+                /**
+                 * For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.
+                 */
+                expected_text?: string
+                /**
+                 * For length_within: inclusive minimum character count.
+                 */
+                min_length?: number
+                /**
+                 * For length_within: inclusive maximum character count.
+                 */
+                max_length?: number
+                /**
+                 * For json_schema: JSON.stringify of the expected JSON Schema object.
+                 */
+                json_schema?: string
               }
               /**
                * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
@@ -10033,8 +10296,26 @@ export type TaskCreateData = {
                   | "length_within"
                   | "json_schema"
                   | "visual-evidence-bundle"
+                /**
+                 * Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.
+                 */
                 config?: {
-                  [key: string]: unknown
+                  /**
+                   * For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.
+                   */
+                  expected_text?: string
+                  /**
+                   * For length_within: inclusive minimum character count.
+                   */
+                  min_length?: number
+                  /**
+                   * For length_within: inclusive maximum character count.
+                   */
+                  max_length?: number
+                  /**
+                   * For json_schema: JSON.stringify of the expected JSON Schema object.
+                   */
+                  json_schema?: string
                 }
                 /**
                  * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
@@ -14198,8 +14479,26 @@ export type GoalUpdateData = {
               | "length_within"
               | "json_schema"
               | "visual-evidence-bundle"
+            /**
+             * Closed configuration object for prebuilt scorer families. Empty object means the named metric has no parameters.
+             */
             config?: {
-              [key: string]: unknown
+              /**
+               * For contains/exact_match/relevance/factuality checks: the concrete text or claim to compare against.
+               */
+              expected_text?: string
+              /**
+               * For length_within: inclusive minimum character count.
+               */
+              min_length?: number
+              /**
+               * For length_within: inclusive maximum character count.
+               */
+              max_length?: number
+              /**
+               * For json_schema: JSON.stringify of the expected JSON Schema object.
+               */
+              json_schema?: string
             }
             /**
              * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.

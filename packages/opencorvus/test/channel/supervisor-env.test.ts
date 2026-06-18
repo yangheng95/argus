@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 
 const adapterRegistrations: Array<{ env: Record<string, string | undefined>; slackOptions?: unknown }> = []
+let runtimeStartFailure: Error | undefined
 
 class FakeAdapter {
   constructor(readonly options: unknown) {}
@@ -15,7 +16,9 @@ class FakeRuntime {
   }
   setSTT(_pipeline: unknown) {}
   setVision(_pipeline: unknown) {}
-  async start() {}
+  async start() {
+    if (runtimeStartFailure) throw runtimeStartFailure
+  }
   async stop() {}
 }
 
@@ -76,14 +79,10 @@ mock.module("../../../channel-runtime/src/stt/pipeline", () => ({
 mock.module("../../../channel-runtime/src/vision", () => ({
   VisionPipeline: class {},
 }))
-mock.module("@/server/server", () => ({
-  Server: {
-    url: () => new URL("http://127.0.0.1:17777"),
-  },
-}))
 
 const { Instance } = await import("../../src/project/instance")
 const { ChannelSupervisor } = await import("../../src/channel/supervisor")
+const { Server } = await import("../../src/server/server")
 const { Log } = await import("../../src/util/log")
 const { resetDatabase } = await import("../fixture/db")
 const { tmpdir } = await import("../fixture/fixture")
@@ -92,6 +91,7 @@ Log.init({ print: false })
 
 const slackEnvKeys = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SIGNING_SECRET"] as const
 let previousEnv: Record<(typeof slackEnvKeys)[number], string | undefined>
+let server: ReturnType<typeof Server.listen> | undefined
 
 function slackConfig(suffix: string) {
   return {
@@ -108,6 +108,8 @@ function slackConfig(suffix: string) {
 describe("channel supervisor env isolation", () => {
   beforeEach(() => {
     adapterRegistrations.length = 0
+    runtimeStartFailure = undefined
+    server = Server.listen({ port: 0, hostname: "127.0.0.1", randomPort: true })
     previousEnv = {
       SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
       SLACK_APP_TOKEN: process.env.SLACK_APP_TOKEN,
@@ -117,6 +119,10 @@ describe("channel supervisor env isolation", () => {
   })
 
   afterEach(async () => {
+    runtimeStartFailure = undefined
+    server?.stop(true)
+    server = undefined
+    Server.resetProjectRoutesAppForTest()
     await Instance.disposeAll()
     await resetDatabase()
     for (const key of slackEnvKeys) {
@@ -200,5 +206,61 @@ describe("channel supervisor env isolation", () => {
         expect(process.env.SLACK_SIGNING_SECRET).toBeUndefined()
       },
     })
+  })
+
+  test("surfaces managed runtime startup failure while preserving error status", async () => {
+    runtimeStartFailure = new Error("mock runtime start failed")
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(ChannelSupervisor.sync(slackConfig("fail"))).rejects.toThrow("Channel runtime failed")
+
+        const status = await ChannelSupervisor.status()
+        expect(status.status).toBe("error")
+        expect(status.running).toBe(false)
+        expect(status.channels).toEqual(["slack"])
+        expect(status.detail).toContain("mock runtime start failed")
+      },
+    })
+  })
+
+  test("PATCH /config returns structured channel startup failure", async () => {
+    runtimeStartFailure = new Error("mock route start failed")
+    await using tmp = await tmpdir({ git: true })
+
+    const response = await Server.App().request("/config", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify(slackConfig("route-fail")),
+    })
+
+    expect(response.status).toBe(500)
+    const body = (await response.json()) as {
+      name: string
+      data: { message: string; channels: string[] }
+    }
+    expect(body.name).toBe("ChannelRuntimeStartError")
+    expect(body.data.message).toContain("mock route start failed")
+    expect(body.data.channels).toEqual(["slack"])
+
+    const runtime = await Server.App().request("/channel/runtime", {
+      headers: { "x-opencorvus-directory": tmp.path },
+    })
+    expect(runtime.status).toBe(200)
+    const runtimeBody = (await runtime.json()) as {
+      status: string
+      detail: string
+      channels: string[]
+      running: boolean
+    }
+    expect(runtimeBody.status).toBe("error")
+    expect(runtimeBody.running).toBe(false)
+    expect(runtimeBody.channels).toEqual(["slack"])
+    expect(runtimeBody.detail).toContain("mock route start failed")
   })
 })

@@ -1,13 +1,12 @@
 // ── useHotkey ──
 //
 // Registers a global keyboard shortcut on `document` or `window` and
-// cleans it up when the owning component unmounts.  Replaces the four
-// component-local `document/window.addEventListener("keydown", …) +
+// cleans it up when the owning component unmounts. Replaces component-local
+// `document/window.addEventListener("keydown", …) +
 // onCleanup(() => removeEventListener(…))` blocks in:
 //   CommandPalette (Cmd/Ctrl+K, window, capture)
 //   ChangesPanel   (Escape closes goal picker, document)
 //   ExecutorSelector (Escape closes executor menu, document)
-//   TaskDetailOverlay (Escape closes overlay, window)
 //
 // Scope: keydown-only global listeners. Local element handlers
 // (textarea onKeyDown, button onKeyDown) stay as JSX props — those

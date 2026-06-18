@@ -8,8 +8,9 @@ import {
   taskCwd,
 } from "../../src/engine/queue"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { processOwner } from "../../src/engine/lease"
 import { beginBuildAttempt } from "../../src/engine/persist"
-import { findGoalRun, findTask } from "../../src/engine/store"
+import { findGoalRun, findRun, findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { resolveConfiguredModelRef } from "../../src/agent/model"
 import {
@@ -283,6 +284,261 @@ describe("engine queue", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(taskStatus(taskID)).toBe("queued")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  test("advanceQueue terminalizes dead-owner active tasks before claiming same-cwd queued work", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const activeID = `task_queue_dead_owner_${now}`
+        const queuedID = `task_queue_after_dead_owner_${now}`
+        const runID = `run_queue_dead_owner_${now}`
+        const goalID = `goal_queue_dead_owner_${now}`
+        const goalRunID = `grun_queue_dead_owner_${now}`
+        const reason = "Directory queue: previous owner process died before terminalization"
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: activeID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "dead-owner active task",
+              request: "holds the cwd queue until convergence",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: queuedID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "queued sibling",
+              request: "must start after the dead owner is terminalized",
+              priority: "normal",
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: activeID,
+              title: "Dead owner goal",
+              slug: "dead-owner-goal",
+              objective: "Expose cwd queue dead-owner convergence.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: activeID,
+              run_id: runID,
+              kind: "run",
+              label: "run-running",
+              payload: {
+                plan_version_id: null,
+                session_id: null,
+                executor: "opencorvus",
+                status: "running",
+                phase: "dispatch",
+                blocking_reason: null,
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: `${goalRunID}_${now}`,
+              task_id: activeID,
+              run_id: runID,
+              goal_run_id: goalRunID,
+              kind: "goal_run_attempt",
+              label: "goal-run-running",
+              payload: {
+                goal_id: goalID,
+                session_id: null,
+                status: "running",
+                retry_count: 0,
+                blocking_reason: null,
+                error: null,
+                workspace_dir: null,
+                workspace_branch: null,
+                workspace_base_ref: null,
+                base_ref: null,
+                merge_ref: null,
+                owner: "999999:dead:beef00",
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+        })
+
+        await advanceQueue(taskCwd(queuedID))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(taskStatus(activeID)).toBe("failed")
+        expect(findTask(activeID)?.error).toBe(reason)
+        expect(findRun(runID)?.status).toBe("aborted")
+        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+        expect(taskStatus(queuedID)).toBe("active")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID: queuedID })
+      },
+    })
+  })
+
+  test("advanceQueue keeps live-owner active tasks ahead of same-cwd queued work", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const activeID = `task_queue_live_owner_${now}`
+        const queuedID = `task_queue_after_live_owner_${now}`
+        const runID = `run_queue_live_owner_${now}`
+        const goalID = `goal_queue_live_owner_${now}`
+        const goalRunID = `grun_queue_live_owner_${now}`
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: activeID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "live-owner active task",
+              request: "must keep the cwd queue slot",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: queuedID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "queued sibling",
+              request: "must wait behind the live owner",
+              priority: "normal",
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: activeID,
+              title: "Live owner goal",
+              slug: "live-owner-goal",
+              objective: "Prove cwd queue convergence does not kill live owners.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: activeID,
+              run_id: runID,
+              kind: "run",
+              label: "run-running",
+              payload: {
+                plan_version_id: null,
+                session_id: null,
+                executor: "opencorvus",
+                status: "running",
+                phase: "dispatch",
+                blocking_reason: null,
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: `${goalRunID}_${now}`,
+              task_id: activeID,
+              run_id: runID,
+              goal_run_id: goalRunID,
+              kind: "goal_run_attempt",
+              label: "goal-run-running",
+              payload: {
+                goal_id: goalID,
+                session_id: null,
+                status: "running",
+                retry_count: 0,
+                blocking_reason: null,
+                error: null,
+                workspace_dir: null,
+                workspace_branch: null,
+                workspace_base_ref: null,
+                base_ref: null,
+                merge_ref: null,
+                owner: processOwner(),
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+        })
+
+        await advanceQueue(taskCwd(queuedID))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(taskStatus(activeID)).toBe("active")
+        expect(findRun(runID)?.status).toBe("running")
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(taskStatus(queuedID)).toBe("queued")
         expect(runTaskLoop).not.toHaveBeenCalled()
       },
     })

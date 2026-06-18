@@ -686,10 +686,12 @@ function ExecutorChip(props: ExecutorChipProps) {
           </span>
           <ChevronCaret open={props.disclosure.open()} />
         </Popover.Trigger>
+      </div>
+      <Popover.Portal>
         <Popover.Content class="executor-popover" data-section={props.side}>
           {props.children}
         </Popover.Content>
-      </div>
+      </Popover.Portal>
     </Popover.Root>
   )
 }
@@ -714,6 +716,7 @@ function ProviderModelGroup(props: ProviderModelGroupProps) {
               type="button"
               class="executor-popover-model"
               data-active={modelID === props.currentModel ? "true" : "false"}
+              aria-current={modelID === props.currentModel ? "true" : undefined}
               title={modelID}
               disabled={props.disabled}
               onClick={() => props.onPick(modelID)}

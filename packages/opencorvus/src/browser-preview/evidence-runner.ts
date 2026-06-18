@@ -646,7 +646,7 @@ async function captureViewport(browser, input, viewport) {
     const response = await page.goto(input.url, { waitUntil: "load", timeout: input.navigationTimeoutMs });
     const status = response?.status() || 0;
     const contentType = String(response?.headers()["content-type"] || "").toLowerCase();
-    const bodyBuf = response ? await response.body().catch(() => Buffer.alloc(0)) : Buffer.alloc(0);
+    const bodyBuf = response ? await response.body() : Buffer.alloc(0);
     let httpReason = "";
     if (status < 200 || status >= 300) httpReason = "status=" + status;
     else if (!contentType.includes("text/html")) httpReason = "content-type=" + (contentType || "(missing)") + " - app root must serve text/html";
@@ -709,7 +709,7 @@ async function captureViewport(browser, input, viewport) {
       summary: "browser preview capture failed: " + message,
     };
   } finally {
-    await context.close().catch(() => {});
+    await context.close();
   }
 }
 
@@ -736,7 +736,7 @@ async function main() {
     }));
     process.exitCode = 1;
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (browser) await browser.close();
   }
 }
 
@@ -754,9 +754,9 @@ function routeUrl(base, route) {
 
 async function locate(page, locator) {
   const target = locatorFor(page, locator).first();
-  const visible = await target.isVisible().catch(() => false);
+  const visible = await target.isVisible();
   if (!visible) return null;
-  const box = await target.boundingBox().catch(() => null);
+  const box = await target.boundingBox();
   if (!box || box.width <= 0 || box.height <= 0) return null;
   const normalized = toBox(box);
   if (normalized.width <= 0 || normalized.height <= 0) return null;
@@ -806,14 +806,14 @@ async function main() {
         const viewportDir = path.join(input.outDir, "implementation", viewportID);
         await fs.mkdir(viewportDir, { recursive: true });
         const screenshotPath = path.join(viewportDir, "full.png");
-        await page.screenshot({ path: screenshotPath, type: "png", fullPage: false });
+        await page.screenshot({ path: screenshotPath, type: "png", fullPage: true });
         for (const binding of input.bindings.filter((item) => item.viewportID === viewportID)) {
           if (binding.route !== currentRoute) {
             await page.goto(routeUrl(input.url, binding.route), { waitUntil: "networkidle", timeout: 30000 });
             currentRoute = binding.route;
           }
           const regionScreenshotPath = path.join(viewportDir, sanitizeSegment(binding.regionID) + ".png");
-          await page.screenshot({ path: regionScreenshotPath, type: "png", fullPage: false });
+          await page.screenshot({ path: regionScreenshotPath, type: "png", fullPage: true });
           const bbox = await locate(page, binding.locator);
           if (!bbox) {
             regions.push({
@@ -833,7 +833,7 @@ async function main() {
           });
         }
       } finally {
-        await context.close().catch(() => {});
+        await context.close();
       }
     }
     process.stdout.write(JSON.stringify({ ok: true, regions }));
@@ -841,7 +841,7 @@ async function main() {
     process.stdout.write(JSON.stringify({ ok: false, message: error?.message || String(error), stack: error?.stack }));
     process.exitCode = 1;
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (browser) await browser.close();
   }
 }
 

@@ -233,13 +233,36 @@ export function TitlebarMenubar() {
     setOpenMenu((current) => (current === id ? null : id))
   }
 
-  function focusTrigger(id: MenuID) {
-    document.querySelector<HTMLButtonElement>(`[data-menu-trigger="${id}"]`)?.focus()
+  function menuTrigger(id: MenuID): HTMLButtonElement {
+    const trigger = document.querySelector<HTMLButtonElement>(`[data-menu-trigger="${id}"]`)
+    if (!trigger) {
+      throw new Error(`Missing titlebar menu trigger: ${id}`)
+    }
+    return trigger
   }
 
-  function focusFirstMenuItem(id: MenuID) {
+  function focusTrigger(id: MenuID) {
+    menuTrigger(id).focus()
+  }
+
+  function focusInitialMenuItem(id: MenuID) {
     queueMicrotask(() => {
-      document.querySelector<HTMLElement>(`#titlebar-menu-${id} .titlebar-menubar-item:not([data-disabled])`)?.focus()
+      const menu = document.getElementById(`titlebar-menu-${id}`)
+      if (!menu) {
+        throw new Error(`Missing titlebar menu content: ${id}`)
+      }
+      const checkedRadio = menu.querySelector<HTMLElement>(
+        '[role="menuitemradio"][aria-checked="true"]:not([aria-disabled="true"])',
+      )
+      const firstItem =
+        checkedRadio ??
+        menu.querySelector<HTMLElement>(
+          '[role="menuitemradio"]:not([aria-disabled="true"]), [role="menuitem"]:not([aria-disabled="true"])',
+        )
+      if (!firstItem) {
+        throw new Error(`Missing focusable titlebar menu item: ${id}`)
+      }
+      firstItem.focus()
     })
   }
 
@@ -248,7 +271,7 @@ export function TitlebarMenubar() {
     setMenuAnchor(id)
     setAutoFocusMenu(true)
     setOpenMenu(id)
-    focusFirstMenuItem(id)
+    focusInitialMenuItem(id)
   }
 
   function openConfig(section: string) {
@@ -334,11 +357,13 @@ export function TitlebarMenubar() {
       if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
         const id = menuIDForAccessKey(event.key)
         altPressedOnly = false
+        event.preventDefault()
         if (id) {
-          event.preventDefault()
           openFromKeyboard(id)
           return
         }
+        closeMenu()
+        return
       } else if (event.key !== "Alt") {
         altPressedOnly = false
       }

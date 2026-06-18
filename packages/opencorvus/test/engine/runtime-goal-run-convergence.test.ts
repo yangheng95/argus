@@ -7,6 +7,7 @@ import {
 } from "../../src/engine/engine.sql"
 import { EngineRuntime } from "../../src/engine/runtime"
 import { hooks } from "../../src/engine/state"
+import { describeTask, renderTaskDescription } from "../../src/engine/describe"
 import { findRun } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
@@ -245,6 +246,49 @@ describe("EngineRuntime goal-run convergence", () => {
 
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(goalBatchNotificationsForTask(taskID)).toHaveLength(1)
+      },
+    })
+  })
+
+  test("terminal goal batch notification is visible in task description", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_batch_describe_${Date.now()}`
+        const runID = `run_goal_batch_describe_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedGoalRun(taskID, runID, "grun_batch_visible_one", "completed", now + 1)
+        seedGoalRun(taskID, runID, "grun_batch_visible_two", "failed", now + 2)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        const notifications = goalBatchNotificationsForTask(taskID)
+        expect(notifications).toHaveLength(1)
+
+        const desc = await describeTask(taskID)
+        expect(desc.recent_terminal_goal_batches).toHaveLength(1)
+        expect(desc.recent_terminal_goal_batches![0]).toMatchObject({
+          run_id: runID,
+          goal_runs: [
+            { id: "grun_batch_visible_one", status: "completed" },
+            { id: "grun_batch_visible_two", status: "failed" },
+          ],
+        })
+
+        const md = renderTaskDescription(desc)
+        expect(md).toContain("Terminal goal batch wake facts")
+        expect(md).toContain(`run=${runID}`)
+        expect(md).toContain("grun_batch_visible_one:completed")
+        expect(md).toContain("grun_batch_visible_two:failed")
       },
     })
   })

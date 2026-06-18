@@ -32,6 +32,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-retire-settings-config-shell-residue.md](2026-06-18-retire-settings-config-shell-residue.md)                                     | Retire Settings Config Shell Residue |
 | [2026-06-18-retire-settings-extension-memory-residue.md](2026-06-18-retire-settings-extension-memory-residue.md)                             | Retire Settings Extension Memory Residue |
 | [2026-06-18-retire-conversation-goal-strip-residue.md](2026-06-18-retire-conversation-goal-strip-residue.md)                                   | Retire Conversation Goal Strip Residue |
+| [2026-06-18-retire-ndjson-log-css-residue.md](2026-06-18-retire-ndjson-log-css-residue.md)                                                 | Retire NDJSON Log CSS Residue |
 | [2026-06-18-retire-titlebar-status-residue.md](2026-06-18-retire-titlebar-status-residue.md)                                                 | Retire Titlebar Status Residue |
 | [2026-06-18-retire-titlebar-nav-residue.md](2026-06-18-retire-titlebar-nav-residue.md)                                                       | Retire Titlebar Nav Residue |
 | [2026-06-18-right-activity-toolbar-responsive-rail.md](2026-06-18-right-activity-toolbar-responsive-rail.md)                                 | Right Activity Toolbar Responsive Rail |

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm"
 import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { PNG } from "pngjs"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
@@ -65,6 +66,27 @@ describe("browser preview routes", () => {
         )
       },
     })
+  }
+
+  function centerPixel(bytes: Buffer): [number, number, number, number] {
+    const png = PNG.sync.read(bytes)
+    const x = Math.floor(png.width / 2)
+    const y = Math.floor(png.height / 2)
+    const offset = (y * png.width + x) * 4
+    return [png.data[offset]!, png.data[offset + 1]!, png.data[offset + 2]!, png.data[offset + 3]!]
+  }
+
+  function expectCenterColor(bytes: Buffer, color: "red" | "blue") {
+    const [red, green, blue] = centerPixel(bytes)
+    if (color === "red") {
+      expect(red).toBeGreaterThan(200)
+      expect(green).toBeLessThan(80)
+      expect(blue).toBeLessThan(80)
+    } else {
+      expect(red).toBeLessThan(80)
+      expect(green).toBeLessThan(80)
+      expect(blue).toBeGreaterThan(200)
+    }
   }
 
   async function browserPreviewArtifactPath(directory: string, taskID: string, name: string): Promise<string> {
@@ -948,6 +970,100 @@ describe("browser preview routes", () => {
       } finally {
         preview.stop(true)
       }
+    },
+    { timeout: 60_000 },
+  )
+
+  test(
+    "POST /task/:taskID/browser-preview/live/input serializes concurrent same-session commands",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const target = await persistBrowserPreviewTarget({
+        taskID,
+        url: `data:text/html,${encodeURIComponent(`<!doctype html>
+          <html>
+            <head>
+              <style>
+                html, body { margin: 0; width: 100%; height: 100%; background: rgb(32, 32, 32); }
+                button { position: absolute; top: 0; width: 120px; height: 120px; }
+                #first { left: 0; }
+                #second { left: 150px; }
+              </style>
+              <script>
+                window.firstCompleted = false
+                window.raceDetected = false
+                function paint(value) {
+                  document.body.style.background = value
+                }
+                function firstInput() {
+                  setTimeout(() => {
+                    window.firstCompleted = true
+                    if (!window.raceDetected) paint('rgb(255, 0, 0)')
+                  }, 40)
+                }
+                function secondInput() {
+                  if (window.firstCompleted) {
+                    paint('rgb(0, 0, 255)')
+                  } else {
+                    window.raceDetected = true
+                    paint('rgb(255, 0, 255)')
+                  }
+                }
+              </script>
+            </head>
+            <body>
+              <button id="first" onclick="firstInput()">First</button>
+              <button id="second" onclick="secondInput()">Second</button>
+            </body>
+          </html>`)}`,
+      })
+      const app = Server.App()
+      const headers = {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      }
+      const url = `/task/${taskID}/browser-preview/live/input`
+
+      const warm = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ targetID: target.id, viewportID: "desktop" }),
+      })
+      expect(warm.status).toBe(200)
+
+      const redRequest = app.request(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          targetID: target.id,
+          viewportID: "desktop",
+          input: { kind: "click", x: 60, y: 60 },
+        }),
+      })
+      const blueRequest = app.request(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          targetID: target.id,
+          viewportID: "desktop",
+          input: { kind: "click", x: 210, y: 60 },
+        }),
+      })
+
+      const [redResponse, blueResponse] = await Promise.all([redRequest, blueRequest])
+      expect(redResponse.status).toBe(200)
+      expect(blueResponse.status).toBe(200)
+      expectCenterColor(Buffer.from(await redResponse.arrayBuffer()), "red")
+      expectCenterColor(Buffer.from(await blueResponse.arrayBuffer()), "blue")
+
+      const finalSnapshot = await app.request(`/task/${taskID}/browser-preview/live/snapshot`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ targetID: target.id, viewportID: "desktop" }),
+      })
+      expect(finalSnapshot.status).toBe(200)
+      expectCenterColor(Buffer.from(await finalSnapshot.arrayBuffer()), "blue")
     },
     { timeout: 60_000 },
   )

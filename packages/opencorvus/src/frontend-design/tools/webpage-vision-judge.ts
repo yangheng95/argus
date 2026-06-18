@@ -28,6 +28,7 @@ import z from "zod"
 import { Output } from "ai"
 
 import { Tool } from "../../tool/tool"
+import { Instance } from "@/project/instance"
 import { Provider } from "../../provider/provider"
 import { ProviderLLM } from "../../provider/llm"
 import { ProviderSchema } from "../../provider/schema"
@@ -338,7 +339,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       outputDir,
       taskID: typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined,
       source: sourceForAgent(ctx.agent),
-      projectDirectory: process.cwd(),
+      projectDirectory: Instance.directory,
     })
 
     const lines: string[] = [

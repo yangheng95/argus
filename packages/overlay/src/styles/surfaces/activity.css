@@ -115,8 +115,6 @@
 .side-activity-body[data-active="true"],
 .sidebar-explorer-panel,
 .sidebar-file-changes-panel,
-.chat-plugin-activity,
-.chat-plugin-outlet,
 .chat-browser-preview-activity,
 .screenshot-browser-activity {
   display: flex;
@@ -472,8 +470,6 @@
 
 .sidebar-explorer-panel,
 .sidebar-file-changes-panel,
-.chat-plugin-activity,
-.chat-plugin-outlet,
 .chat-browser-preview-activity,
 .screenshot-browser-activity {
   padding: var(--ui-gap-sm);

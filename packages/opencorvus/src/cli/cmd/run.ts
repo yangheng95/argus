@@ -224,6 +224,16 @@ function normalizePath(input?: string) {
   return input
 }
 
+export async function resolveRunAgent(agent?: string) {
+  if (!agent) return undefined
+  const entry = await Agent.get(agent)
+  if (!entry) throw new Error(`agent "${agent}" not found`)
+  if (entry.mode === "subagent") {
+    throw new Error(`agent "${agent}" is a subagent, not a primary agent`)
+  }
+  return agent
+}
+
 export const RunCommand = cmd({
   command: "run [message..]",
   describe: "run opencorvus with a message",
@@ -564,28 +574,7 @@ export const RunCommand = cmd({
         }
       }
 
-      // Validate agent if specified
-      const agent = await (async () => {
-        if (!args.agent) return undefined
-        const entry = await Agent.get(args.agent)
-        if (!entry) {
-          UI.println(
-            UI.Style.TEXT_WARNING_BOLD + "!",
-            UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" not found. Falling back to default agent`,
-          )
-          return undefined
-        }
-        if (entry.mode === "subagent") {
-          UI.println(
-            UI.Style.TEXT_WARNING_BOLD + "!",
-            UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" is a subagent, not a primary agent. Falling back to default agent`,
-          )
-          return undefined
-        }
-        return args.agent
-      })()
+      const agent = await resolveRunAgent(args.agent)
 
       const sessionID = await session(sdk)
       if (!sessionID) {

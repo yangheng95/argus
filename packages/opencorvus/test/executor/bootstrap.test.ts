@@ -5,6 +5,7 @@ import { CodexAppServerClientProcess } from "../../src/executor/codex-app-server
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Instance } from "../../src/project/instance"
 import { MCPServe } from "../../src/mcp/serve"
+import { EngineConfig } from "../../src/engine/config"
 import { tmpdir } from "../fixture/fixture"
 
 describe("executor.bootstrap", () => {
@@ -14,7 +15,14 @@ describe("executor.bootstrap", () => {
   })
 
   test("injects OpenCorvus MCP config into codex app-server via -c flags", async () => {
-    const seen: Array<{ command: string[] }> = []
+    const seen: Array<{ command: string[]; requestIdleMs: number }> = []
+    spyOn(EngineConfig, "get").mockResolvedValue({
+      ...EngineConfig.defaults,
+      activity: {
+        ...EngineConfig.defaults.activity,
+        executor_events_idle_ms: 12_345,
+      },
+    })
     spyOn(ExecutorDiscovery, "scan").mockResolvedValue({
       opencorvus: {
         name: "opencorvus",
@@ -45,7 +53,7 @@ describe("executor.bootstrap", () => {
       args: ["mcp", "serve", "--cwd", "D:\\repo\\worktree", "--toolset", "executor"],
     })
     spyOn(CodexAppServerClientProcess, "create").mockImplementation((input) => {
-      seen.push({ command: input.command })
+      seen.push({ command: input.command, requestIdleMs: input.requestIdleMs })
       return {
         async initialize() {
           return {}
@@ -124,6 +132,7 @@ describe("executor.bootstrap", () => {
     expect(cmd).toContain('approval_policy="never"')
     expect(cmd).toContain('mcp_servers.opencorvus.default_tools_approval_mode="approve"')
     expect(cmd.includes("--dangerously-bypass-approvals-and-sandbox")).toBe(false)
+    expect(seen[0]?.requestIdleMs).toBe(12_345)
   })
 
   test("does not override an executor that is already registered", async () => {

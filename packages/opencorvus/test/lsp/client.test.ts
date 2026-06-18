@@ -5,6 +5,7 @@ import { LSP } from "../../src/lsp"
 import { LSPClient } from "../../src/lsp/client"
 import { LSPServer } from "../../src/lsp/server"
 import { Instance } from "../../src/project/instance"
+import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -26,6 +27,47 @@ function spawnHangingShutdownServer() {
     process: spawn(process.execPath, [serverPath], {
       stdio: "pipe",
     }),
+  }
+}
+
+function spawnSupervisorStyleFakeServer(): ProcessSupervisor.Handle & { disposeCalls: () => number } {
+  const { spawn } = require("child_process")
+  const serverPath = path.join(__dirname, "../fixture/lsp/fake-lsp-server.js")
+  const child = spawn(process.execPath, [serverPath], {
+    stdio: "pipe",
+  })
+  if (!child.pid || !child.stdin || !child.stdout || !child.stderr) {
+    throw new Error("fake LSP child did not expose stdio")
+  }
+  const exited = new Promise<number>((resolve, reject) => {
+    child.once("exit", (code: number | null, signal: NodeJS.Signals | null) => {
+      resolve(code ?? (signal ? 1 : 0))
+    })
+    child.once("error", reject)
+  })
+  const terminate = async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill()
+    await Promise.race([exited.catch(() => undefined), Bun.sleep(1_000)])
+  }
+  let disposeCalls = 0
+  let disposed = false
+  return {
+    pid: child.pid,
+    stdin: child.stdin,
+    stdout: child.stdout,
+    stderr: child.stderr,
+    exited,
+    terminate,
+    async dispose() {
+      if (disposed) return
+      disposed = true
+      disposeCalls++
+      await terminate()
+    },
+    unref() {
+      child.unref?.()
+    },
+    disposeCalls: () => disposeCalls,
   }
 }
 
@@ -179,6 +221,38 @@ describe("LSPClient interop", () => {
     } finally {
       process.off("unhandledRejection", onUnhandled)
       handle.process.kill()
+    }
+  }, 15_000)
+
+  test("typescript client initializes when the server uses a supervised stdio handle", async () => {
+    const supervisorHandles: Array<ProcessSupervisor.Handle & { disposeCalls: () => number }> = []
+    const restoreSupervisor = ProcessSupervisor.setFactoryForTest(async () => {
+      const handle = spawnSupervisorStyleFakeServer()
+      supervisorHandles.push(handle)
+      return handle
+    })
+    try {
+      await Instance.provide({
+        directory: process.cwd(),
+        fn: async () => {
+          const server = await LSPServer.Typescript.spawn(process.cwd())
+          expect(server).toBeDefined()
+
+          const client = await LSPClient.create({
+            serverID: "typescript",
+            server: server!,
+            root: process.cwd(),
+          })
+
+          expect(client.connection).toBeDefined()
+          expect(supervisorHandles[0]?.disposeCalls()).toBe(0)
+          await client.shutdown()
+          expect(supervisorHandles[0]?.disposeCalls()).toBe(1)
+        },
+      })
+    } finally {
+      restoreSupervisor()
+      await Promise.all(supervisorHandles.map((handle) => handle.dispose()))
     }
   }, 15_000)
 

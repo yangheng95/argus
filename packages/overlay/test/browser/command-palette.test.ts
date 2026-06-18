@@ -118,7 +118,7 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
     }
     if (path === "/provider") return send({ all: [], connected: [], default: {} })
     if (path === "/provider/auth") return send({})
-    if (path === "/provider/hexin/budget") return send({ ok: true })
+    if (path === "/provider/hexin/budget") return send({ ok: false, error: "HEXIN_API_KEY unset" })
     if (path === "/config/providers") return send({ providers: [] })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile") return send(promptProfileCatalog)

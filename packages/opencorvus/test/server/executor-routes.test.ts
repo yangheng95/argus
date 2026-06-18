@@ -8,11 +8,16 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+const CODEX_MODEL_KEY = "OPENCORVUS_EXECUTOR_CODEX_MODEL"
+const CLAUDE_MODEL_KEY = "OPENCORVUS_EXECUTOR_CLAUDE_MODEL"
+
 describe("executor routes", () => {
   afterEach(async () => {
     mock.restore()
     ExecutorRegistry.reset()
     delete process.env.OPENCORVUS_EXECUTOR_CODEX_PROTOCOL
+    delete process.env[CODEX_MODEL_KEY]
+    delete process.env[CLAUDE_MODEL_KEY]
     await resetDatabase()
   })
 
@@ -48,5 +53,95 @@ describe("executor routes", () => {
         ).toBe(false)
       },
     })
+  })
+
+  test("PATCH /executor/:executorID/model rejects malformed bodies without clearing the current override", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        process.env[CODEX_MODEL_KEY] = "gpt-5.5"
+
+        const nonString = await app.request("/executor/codex/model", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ model: 42 }),
+        })
+        expect(nonString.status).toBe(400)
+        expect(process.env[CODEX_MODEL_KEY]).toBe("gpt-5.5")
+
+        const missing = await app.request("/executor/codex/model", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({}),
+        })
+        expect(missing.status).toBe(400)
+        expect(process.env[CODEX_MODEL_KEY]).toBe("gpt-5.5")
+      },
+    })
+  })
+
+  test("PATCH /executor/:executorID/model accepts a string body and keeps empty string as explicit clear", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        process.env[CODEX_MODEL_KEY] = "gpt-5.5"
+
+        const set = await app.request("/executor/codex/model", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ model: " gpt-5.4 " }),
+        })
+        expect(set.status).toBe(200)
+        await expect(set.json()).resolves.toEqual({ ok: true })
+        expect(process.env[CODEX_MODEL_KEY]).toBe("gpt-5.4")
+
+        const clear = await app.request("/executor/codex/model", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ model: "" }),
+        })
+        expect(clear.status).toBe(200)
+        await expect(clear.json()).resolves.toEqual({ ok: true })
+        expect(process.env[CODEX_MODEL_KEY]).toBeUndefined()
+
+        const unsupported = await app.request("/executor/opencorvus/model", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ model: "gpt-5.4" }),
+        })
+        expect(unsupported.status).toBe(404)
+      },
+    })
+  })
+
+  test("Server.openapi documents executor model PATCH body as required string model", async () => {
+    const spec = await Server.openapi()
+    const requestBody = spec.paths?.["/executor/{executorID}/model"]?.patch?.requestBody
+    const schema = requestBody?.content?.["application/json"]?.schema
+
+    expect(requestBody?.required).toBe(true)
+    expect(schema?.properties?.model?.type).toBe("string")
+    expect(schema?.required).toContain("model")
   })
 })

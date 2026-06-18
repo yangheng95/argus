@@ -3,6 +3,8 @@ import { Installation } from "@/installation"
 import { Log } from "@/util/log"
 import { Server } from "@/server/server"
 import { ChannelCatalog, channelEnv } from "./catalog"
+import { NamedError } from "@opencorvus-ai/util/error"
+import z from "zod"
 
 const log = Log.create({ service: "channel.supervisor" })
 
@@ -20,6 +22,15 @@ type State = {
 }
 
 export namespace ChannelSupervisor {
+  export const RuntimeStartError = NamedError.create(
+    "ChannelRuntimeStartError",
+    z.object({
+      message: z.string(),
+      detail: z.string(),
+      channels: z.array(z.string()),
+    }),
+  )
+
   const state = Instance.state<State>(
     () => ({
       status: "disabled",
@@ -145,9 +156,18 @@ async function syncRuntime(current: State, next: ReturnType<typeof desired>, for
     current.status = "running"
     current.detail = `Managed runtime active for ${next.channels.join(", ")}.`
   } catch (error) {
+    const detail = `Channel runtime failed: ${String(error)}`
     current.status = "error"
-    current.detail = `Channel runtime failed: ${String(error)}`
+    current.detail = detail
     log.error("channel runtime failed", { error: String(error) })
+    throw new ChannelSupervisor.RuntimeStartError(
+      {
+        message: detail,
+        detail,
+        channels: [...next.channels],
+      },
+      { cause: error },
+    )
   }
 }
 

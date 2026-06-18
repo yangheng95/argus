@@ -67,8 +67,9 @@ async function appendOpenToolPart(input: {
   partID: string
   directory: string
   status?: "pending" | "running"
+  now?: number
 }) {
-  const now = Date.now()
+  const now = input.now ?? Date.now()
   await Session.updateMessage({
     id: input.messageID,
     sessionID: input.sessionID,
@@ -452,24 +453,93 @@ describe("describeTask.open_tool_calls_without_current_owner", () => {
       fn: async () => {
         projectID = Instance.project.id
         const root = await Session.create({ kind: "root", title: "owned open tool root" })
-        const orchestrator = await Session.create({
+        const streamingOrchestrator = await Session.create({
           kind: "orchestrator",
           parentID: root.id,
-          title: "owned open tool orchestrator",
+          title: "streaming open tool orchestrator",
+        })
+        const retryOrchestrator = await Session.create({
+          kind: "orchestrator",
+          parentID: root.id,
+          title: "retry open tool orchestrator",
         })
         seedTask(Date.now(), root.id)
         await appendOpenToolPart({
-          sessionID: orchestrator.id,
+          sessionID: streamingOrchestrator.id,
           messageID: `msg_owned_tool_${stamp}`,
           partID: `prt_owned_tool_${stamp}`,
           directory: tmp.path,
           status: "running",
         })
-        SessionStatus.set(orchestrator.id, { type: "streaming" })
+        await appendOpenToolPart({
+          sessionID: retryOrchestrator.id,
+          messageID: `msg_retry_tool_${stamp}`,
+          partID: `prt_retry_tool_${stamp}`,
+          directory: tmp.path,
+          status: "running",
+        })
+        SessionStatus.set(streamingOrchestrator.id, { type: "streaming" })
+        SessionStatus.set(retryOrchestrator.id, { type: "retry", attempt: 1, message: "retrying" })
 
         const desc = await describeTask(taskID)
         expect(desc.open_tool_calls_without_current_owner).toBeUndefined()
         expect(renderTaskDescription(desc)).not.toContain("Open tool calls without current process owner")
+      },
+    })
+  })
+
+  test("filters current-process open tools before applying the prompt cap", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        projectID = Instance.project.id
+        const root = await Session.create({ kind: "root", title: "open tool cap root" })
+        const stale = await Session.create({
+          kind: "orchestrator",
+          parentID: root.id,
+          title: "stale open tool orchestrator",
+        })
+        seedTask(Date.now(), root.id)
+        const base = Date.now()
+        await appendOpenToolPart({
+          sessionID: stale.id,
+          messageID: `msg_stale_tool_${stamp}`,
+          partID: `prt_stale_tool_${stamp}`,
+          directory: tmp.path,
+          status: "running",
+          now: base,
+        })
+
+        for (let i = 0; i < 5; i += 1) {
+          const owned = await Session.create({
+            kind: "orchestrator",
+            parentID: root.id,
+            title: `owned open tool orchestrator ${i}`,
+          })
+          await appendOpenToolPart({
+            sessionID: owned.id,
+            messageID: `msg_owned_tool_${i}_${stamp}`,
+            partID: `prt_owned_tool_${i}_${stamp}`,
+            directory: tmp.path,
+            status: "running",
+            now: base + i + 1,
+          })
+          SessionStatus.set(owned.id, { type: "streaming" })
+        }
+
+        const desc = await describeTask(taskID)
+        expect(desc.open_tool_calls_without_current_owner).toHaveLength(1)
+        expect(desc.open_tool_calls_without_current_owner![0]).toMatchObject({
+          session_id: stale.id,
+          part_id: `prt_stale_tool_${stamp}`,
+          tool_name: "frontend_research",
+          status: "running",
+        })
+
+        const md = renderTaskDescription(desc)
+        expect(md).toContain(`prt_stale_tool_${stamp}`)
+        expect(md).toContain("Open tool calls without current process owner")
       },
     })
   })

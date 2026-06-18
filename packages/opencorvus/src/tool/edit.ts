@@ -5,6 +5,7 @@
 
 import z from "zod"
 import * as path from "path"
+import * as fs from "fs/promises"
 import { Tool } from "./tool"
 import { LSP } from "../lsp"
 import { createTwoFilesPatch, diffLines } from "diff"
@@ -17,6 +18,7 @@ import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Snapshot } from "@/snapshot"
 import { assertBuildWriteDirectory, assertExternalDirectory } from "./external-directory"
+import { Patch } from "../patch"
 
 const MAX_DIAGNOSTICS_PER_FILE = 20
 
@@ -59,7 +61,7 @@ export const EditTool = Tool.define("edit", {
     let contentNew = ""
     await FileTime.withLock(filePath, async () => {
       if (params.oldString === "") {
-        const existed = await Filesystem.exists(filePath)
+        await Patch.assertAddFileTargetDoesNotExist(filePath)
         contentNew = params.newString
         diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
         await ctx.ask({
@@ -71,13 +73,14 @@ export const EditTool = Tool.define("edit", {
             diff,
           },
         })
-        await Filesystem.write(filePath, params.newString)
+        await fs.mkdir(path.dirname(filePath), { recursive: true })
+        await fs.writeFile(filePath, params.newString, { encoding: "utf-8", flag: "wx" })
         await Bus.publish(File.Event.Edited, {
           file: filePath,
         })
         await Bus.publish(FileWatcher.Event.Updated, {
           file: filePath,
-          event: existed ? "change" : "add",
+          event: "add",
         })
         FileTime.read(ctx.sessionID, filePath)
         return
