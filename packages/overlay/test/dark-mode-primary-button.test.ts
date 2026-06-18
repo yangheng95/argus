@@ -3,8 +3,8 @@
 //
 // Original user feedback (2026-05-02 22:57): "深色模式下渐变色按钮有点
 // 奇怪" — the gradient primary buttons look weird in dark mode. The
-// original fix used a `body:is([data-theme="dark"], …) :is(.btn-primary,
-// .board-intro__cta-action)` selector to force a
+// original fix used a `body:is([data-theme="dark"], …) .btn-primary`
+// selector to force a
 // solid accent on dark surfaces. That made the theme override button
 // chrome, which violates the "themes only swap palette" contract this
 // codebase now enforces.
@@ -14,7 +14,7 @@
 // `--accent-gradient-hover` to `var(--accent-hover)`). The shared
 // canonical at the multi-class selector reads `--accent-gradient`
 // directly, so dark surfaces resolve to a solid accent without any
-// theme selector touching `.btn-primary` / `.board-intro__cta-action`.
+// theme selector touching `.btn-primary`.
 // Light keeps the linear-gradient palette
 // because the original complaint was scoped to dark.
 
@@ -79,12 +79,11 @@ describe("dark-mode primary buttons render with a solid accent (no multi-hue gra
 
   test("primary-button selectors do not appear in any theme override block", () => {
     // The chrome layer is single-sourced in the shared canonical at line
-    // 7585; no `body:is([data-theme="dark"], …) :is(.btn-primary, …)`
+    // 7585; no `body:is([data-theme="dark"], …) .btn-primary`
     // override is allowed. Iter19's selector-driven fix has been
     // retired in favour of a palette-only approach.
     const themeWithPrimaryRe = new RegExp(
-      "body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))" +
-        "[^{]*(?:\\.btn-primary|\\.board-intro__cta-action)\\b",
+      "body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))" + "[^{]*\\.btn-primary\\b",
       "g",
     )
     const stripped = STYLES.replace(/\/\*[\s\S]*?\*\//g, "")

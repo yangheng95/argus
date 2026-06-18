@@ -1129,7 +1129,6 @@ test(
           '[data-ui^="executor-chip-"]',
           ".chat-input",
           '.chat-compose-row .oc-button[data-mode]',
-          ".board-intro__cta-action",
         ]
         return selectors.flatMap((selector) => {
           const node = document.querySelector<HTMLElement>(selector)
@@ -1192,7 +1191,6 @@ test(
           '[data-ui="sidebar-new-task-button"]',
           ".btn.mini",
           '[data-ui^="connection-banner-"]',
-          ".board-intro__cta-action",
         ]
         const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
         return selectors.flatMap((selector) => {
@@ -1219,27 +1217,6 @@ test(
             selector: '[data-ui="side-activity-button"][data-side="right"]',
             props: ["height", "paddingLeft", "paddingRight"],
             max: 40,
-          },
-          {
-            selector: ".board-intro",
-            props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-            max: 7,
-          },
-          { selector: ".board-intro__head", props: ["rowGap"], max: 3 },
-          {
-            selector: ".board-intro__section",
-            props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-            max: 7,
-          },
-          {
-            selector: ".board-intro__mode",
-            props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-            max: 7,
-          },
-          {
-            selector: ".board-intro__agent",
-            props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-            max: 7,
           },
           {
             selector: ".acceptance-panel",
@@ -1269,10 +1246,6 @@ test(
         const selectors = [
           ".sections",
           ".sections-header",
-          ".board-intro",
-          ".board-intro__section",
-          ".board-intro__mode",
-          ".board-intro__agent",
           ".section",
           ".section-head",
           ".section-body > .empty-hint",

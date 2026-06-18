@@ -363,7 +363,7 @@ describe("overlay architecture guards", () => {
     // selector that starts with `body[data-theme=…]` or `body:is(…data-theme…)`.
     // Theme palette (`--accent-gradient`) drives the gradient↔flat split
     // — themes never touch button chrome directly.
-    for (const cls of ["btn-primary", "board-intro__cta-action"]) {
+    for (const cls of ["btn-primary"]) {
       const themeSelector = new RegExp(
         `body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))[^{]*\\.${cls}\\b`,
       )
@@ -387,8 +387,8 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     // The shell families (`.sidebar` / `.chat` / `.sections` for the
     // three workbench columns; `.section` / `.gwg` for inspector cards;
-    // `.board-intro` / `.chat-empty--task` for empty states; the four
-    // `.board-intro__*` children) canonicalize on one surface language.
+    // `.chat-empty--task` for empty states) canonicalize on one surface
+    // language.
     // Themes only swap palette behind those tokens; no `body[data-theme]`
     // selector touches the shell chrome.
     for (const cls of [
@@ -397,12 +397,7 @@ describe("overlay architecture guards", () => {
       "sections",
       "section",
       "gwg",
-      "board-intro",
       "chat-empty--task",
-      "board-intro__section",
-      "board-intro__mode",
-      "board-intro__agent",
-      "board-intro__cta",
       "agent-workflow-warning",
     ]) {
       // Negative lookahead `(?![\w-])` instead of `\b`: a dash is a
@@ -2779,16 +2774,21 @@ describe("overlay architecture guards", () => {
   test("BoardIntro was deleted — no .board-intro CSS or component references remain", () => {
     // BoardIntro.tsx was deleted in commit 9978c43ba (2026-05-04).
     // board.css was deleted with it. Assert that no ghost references remain.
-    const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
+    const styleFiles = walkFiles(join(OVERLAY_ROOT, "src/styles"), (path) => path.endsWith(".css"))
+    const styleResidue = styleFiles.flatMap((file) => {
+      const css = withoutComments(readText(file))
+      return /\.board-intro(?:__|\b)/.test(css) ? [file.replace(OVERLAY_ROOT, "").replace(/\\/g, "/")] : []
+    })
+    expect(styleResidue).toEqual([])
 
-    // No standalone .board-intro rules in cascade layer
-    expect(styles).not.toMatch(/^\.board-intro\s*\{/m)
-    expect(styles).not.toMatch(/^\.board-intro__title\s*\{/m)
-    // No board-intro rules leaked into card.css
-    expect(card).not.toMatch(/\.board-intro(?:__|\b)/)
-    const button = readText(join(OVERLAY_ROOT, "src/styles/primitives/button.css"))
-    expect(button).not.toContain(".board-intro__cta-action")
+    const runtimeFiles = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:ts|tsx|html)$/.test(path))
+    const sourceResidue = runtimeFiles.flatMap((file) => {
+      const source = withoutComments(readText(file))
+      return /\bBoardIntro\b|board-intro(?:__|-|\b)/.test(source)
+        ? [file.replace(OVERLAY_ROOT, "").replace(/\\/g, "/")]
+        : []
+    })
+    expect(sourceResidue).toEqual([])
     // board.css must not exist (was deleted with BoardIntro.tsx)
     expect(existsSync(join(OVERLAY_ROOT, "src/styles/surfaces/board.css"))).toBe(false)
   })
