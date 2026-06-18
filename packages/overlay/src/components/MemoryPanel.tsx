@@ -176,6 +176,11 @@ export function MemoryPanel(props: MemoryPanelProps) {
     void doSearch(searchQuery())
   }
 
+  const handleSearchClear = () => {
+    setSearchQuery("")
+    if (searchMode()) void loadMemory()
+  }
+
   const handleRefresh = () => {
     setSearchQuery("")
     void loadMemory()
@@ -266,26 +271,46 @@ export function MemoryPanel(props: MemoryPanelProps) {
     <div class="memory-panel" data-compact={props.compact ? "true" : "false"}>
       {/* Search toolbar */}
       <div class="knowledge-toolbar">
-        <input
-          id="memorySearch"
-          type="text"
-          class="knowledge-search"
-          placeholder={t("memory.search_placeholder")}
-          value={searchQuery()}
-          onInput={(e) => setSearchQuery((e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault()
-              void doSearch(searchQuery())
-            }
-          }}
-        />
+        <div class="memory-search search-field">
+          <Icon name="search" size={12} class="memory-search-icon search-field-icon" />
+          <input
+            id="memorySearch"
+            type="search"
+            class="memory-search-input search-field-input"
+            placeholder={t("memory.search_placeholder")}
+            aria-label={t("memory.search_placeholder")}
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery((e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                void doSearch(searchQuery())
+              }
+            }}
+          />
+          <Show when={searchQuery()}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              tone="neutral"
+              data-chrome="icon-action"
+              data-ui="memory-search-clear"
+              onClick={handleSearchClear}
+              title={t("common.clear")}
+              aria-label={t("common.clear")}
+            >
+              <Icon name="close" />
+            </Button>
+          </Show>
+        </div>
         <Button
           type="button"
           id="btnMemorySearch"
           variant="ghost"
           size="sm"
           tone="neutral"
+          data-ui="memory-search-submit"
           title={t("common.search")}
           aria-label={t("common.search")}
           disabled={loading()}
@@ -300,6 +325,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
           variant="ghost"
           size="sm"
           tone="neutral"
+          data-ui="memory-refresh"
           title={t("common.refresh")}
           aria-label={t("common.refresh")}
           onClick={handleRefresh}
