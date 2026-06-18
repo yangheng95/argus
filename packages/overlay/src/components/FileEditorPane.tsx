@@ -4,6 +4,7 @@ import { closeFileEditor, selectedFilePath, shortWorkbenchPath, type FileContent
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { CodeEditor } from "./primitives/CodeEditor"
+import { Button } from "./ui/Button"
 
 async function readFileContent(path: string): Promise<FileContent | null> {
   if (!path) return null
@@ -83,24 +84,31 @@ export function FileEditorPane() {
               </span>
             </Show>
           </div>
-          <button
+          <Button
             type="button"
-            class="file-editor-save"
+            variant="ghost"
+            size="sm"
+            tone={dirty() ? "accent" : "neutral"}
+            data-ui="file-editor-save"
             data-dirty={dirty() ? "true" : "false"}
             disabled={!dirty() || saving()}
             onClick={() => void save()}
           >
             {saving() ? t("common.saving") : t("common.save")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            class="file-editor-close"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
+            data-ui="file-editor-close"
             onClick={closeFileEditor}
             title={t("workspace.close")}
             aria-label={t("workspace.close")}
           >
             <Icon name="close" size={13} />
-          </button>
+          </Button>
         </header>
         <div class="file-editor-body">
           <Show
