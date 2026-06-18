@@ -4,6 +4,7 @@ import { t } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
 import { Icon } from "./Icon"
 import { visibleStreamingText } from "./text-part-model"
+import { Button } from "./ui/Button"
 
 export function isEmptyReasoning(s: string): boolean {
   // Filter out reasoning that is only brackets/whitespace (e.g. "[]", "[[]]", "[] []")
@@ -24,9 +25,12 @@ export function ReasoningPart(props: { part: any; streaming?: boolean }) {
   return (
     <Show when={text().trim() && !isEmptyReasoning(text()) && !hidden()}>
       <div class="msg-reasoning" data-expanded={expanded() ? "true" : "false"}>
-        <button
+        <Button
           type="button"
-          class="reasoning-label"
+          variant="ghost"
+          size="mini"
+          tone="accent"
+          data-ui="reasoning-toggle"
           aria-expanded={expanded()}
           onClick={(event) => {
             event.stopPropagation()
@@ -34,7 +38,7 @@ export function ReasoningPart(props: { part: any; streaming?: boolean }) {
           }}
         >
           {label()} <Icon name={expanded() ? "caret-down" : "chevron"} />
-        </button>
+        </Button>
         <Show when={props.streaming} fallback={<div class="reasoning-text md-content" innerHTML={renderedHtml()} />}>
           <div class="reasoning-text reasoning-text--streaming">{visibleStreamingText(text())}</div>
         </Show>

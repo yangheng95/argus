@@ -7,7 +7,7 @@
 // section subtitle, not a status chip — so the all-caps rendering
 // fought the Title Case used by the surrounding dialog header.
 //
-// `.reasoning-label`, by contrast, is a legitimate tier-3 pill
+// `.oc-button[data-ui="reasoning-toggle"]`, by contrast, is a legitimate tier-3 pill
 // (pill chrome — accent-dim background + 999px radius + accent
 // color) and keeps its uppercase styling. The pinned negative
 // control at the bottom guards that distinction so a future
@@ -59,7 +59,7 @@ describe(".dialog-subtitle renders Title Case", () => {
 })
 
 describe("legitimate tier-3 pills keep uppercase (negative control)", () => {
-  for (const sel of [".verdict-pill", ".req-status", ".gwg-verdict", ".reasoning-label"]) {
+  for (const sel of [".verdict-pill", ".req-status", ".gwg-verdict", '.oc-button[data-ui="reasoning-toggle"]']) {
     test(`${sel} stays uppercase`, () => {
       expect(ruleBody(sel)).toContain("text-transform: uppercase")
     })
