@@ -4,7 +4,6 @@ installProcessShims()
 
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
-import type { CommandModule } from "yargs"
 import { Log } from "./util/log"
 import { Installation } from "./installation"
 import { NamedError } from "@opencorvus-ai/util/error"
@@ -14,12 +13,10 @@ import { installProcessErrorLogging } from "./util/process-error-logging"
 
 installProcessErrorLogging()
 
-const argv = hideBin(process.argv)
-const requestedCommand = argv.find((arg) => !arg.startsWith("-"))
-const commands: CommandModule<any, any>[] =
-  requestedCommand === "mcp"
-    ? [(await import("./cli/cmd/mcp")).McpCommand]
-    : [(await import("./cli/cmd/serve")).DefaultServeCommand, (await import("./cli/cmd/serve")).ServeCommand]
+const [{ McpCommand }, { DefaultServeCommand, ServeCommand }] = await Promise.all([
+  import("./cli/cmd/mcp"),
+  import("./cli/cmd/serve"),
+])
 
 const cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })
@@ -53,9 +50,7 @@ const cli = yargs(hideBin(process.argv))
       args: process.argv.slice(2),
     })
   })
-for (const command of commands) {
-  cli.command(command)
-}
+cli.command(DefaultServeCommand).command(ServeCommand).command(McpCommand)
 
 cli
   .fail((msg, err) => {

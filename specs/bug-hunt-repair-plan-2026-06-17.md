@@ -4529,3 +4529,51 @@ LINE:
 - Boole traced the serving path through `Server.App()`, `serve.ts`, `overlay-ui.ts`, `overlay-ui-embedded.generated.ts`, `build.ts`, and `packaged-overlay-server-health.test.ts`.
 - Boole recommended testing the same compiled executable for both health and `/ui/index.html`, and explicitly warned not to gate `/global/health` on UI or rely on workspace `dist-vite` at runtime.
 - Boole noted that a build source-contract test is appropriate if the repair changes build staging; this batch added that guard for the canonical `build.ts --overlay-server` path.
+
+## Batch P2-CB: BH-076 overlay-server command parsing must not pre-scan argv
+
+### Findings
+
+- BH-076 targets `packages/opencorvus/src/overlay-server.ts`.
+- The overlay-server entrypoint tried to choose which command modules to register before yargs parsed the CLI: `argv.find((arg) => !arg.startsWith("-"))`.
+- That pre-scan cannot distinguish a global option value from a command. For example, `--log-level INFO mcp serve --help` treats `INFO` as the requested command, registers only serve commands, and hides the MCP command tree.
+- The project already has an entrypoint lifecycle constraint that command dispatch should go through `parseAsync()` without command-name gates or fallback dispatch.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/overlay-server.ts` is the overlay-server binary entrypoint and owns command registration before `cli.parseAsync()`.
+- `packages/opencorvus/src/cli/cmd/serve.ts::DefaultServeCommand` registers `$0` for bare overlay-server execution and routes to `handleServeCommand(...)`.
+- `packages/opencorvus/src/cli/cmd/serve.ts::ServeCommand` registers explicit `serve`.
+- `packages/opencorvus/src/cli/cmd/mcp.ts::McpCommand` registers the `mcp` command tree and `McpServeCommand`.
+- `packages/opencorvus/src/mcp/serve.ts` builds packaged executor MCP command arguments as `["mcp", "serve", "--cwd", cwd, "--toolset", "executor"]`.
+- `packages/opencorvus/src/executor/bootstrap.ts` and `packages/opencorvus/src/executor/claude-agent.ts` launch that packaged executor MCP command path.
+- `packages/opencorvus/test/cli/serve-default-command.test.ts` already covers overlay-server default serve routing and is the right home for the entrypoint-level command parsing regression.
+
+### Fix Shape
+
+- Remove the manual argv pre-scan and conditional command registration from `overlay-server.ts`.
+- Import and register `DefaultServeCommand`, `ServeCommand`, and `McpCommand` unconditionally, then let yargs parse global options, commands, and subcommands.
+- Do not add command allowlists, serve fallbacks, or a second command parser.
+
+### Regression Tests
+
+- `packages/opencorvus/test/cli/serve-default-command.test.ts` now starts a real `bun src/overlay-server.ts --log-level INFO mcp serve --help` subprocess and asserts:
+  - exit code is `0`;
+  - stderr is empty;
+  - stdout shows `opencorvus mcp serve`;
+  - stdout includes `--cwd` and the MCP server working-directory help text.
+
+### Verification
+
+- Focused CLI test passed: `bun test packages/opencorvus/test/cli/serve-default-command.test.ts --timeout 60000`.
+- Related CLI/MCP tests passed: `bun test packages/opencorvus/test/mcp/serve-command.test.ts packages/opencorvus/test/cli/serve-default-command.test.ts --timeout 60000`.
+- Residual source scan passed: `rg -n "requestedCommand|argv\\.find\\(\\(arg\\) => !arg\\.startsWith|const argv = hideBin\\(process.argv\\)" packages/opencorvus/src/overlay-server.ts packages/opencorvus/test/cli/serve-default-command.test.ts` returned no matches.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Gauss confirmed BH-076 was present in committed `HEAD` because `overlay-server.ts` preselected commands before yargs parsed options.
+- Gauss confirmed the current fix removes the parser split and leaves yargs as the single command parsing authority.
+- Gauss traced the affected MCP path from `McpCommand` and `McpServeCommand` through `packages/opencorvus/src/mcp/serve.ts`, `executor/bootstrap.ts`, and `executor/claude-agent.ts`.
+- Gauss recommended keeping the regression in `serve-default-command.test.ts` and explicitly warned against fallbacks, command-name gates, serve defaults, or compatibility branches.
