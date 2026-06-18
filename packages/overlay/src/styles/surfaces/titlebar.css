@@ -617,7 +617,15 @@
 
 .titlebar-menubar-item:disabled,
 .titlebar-menubar-item[data-disabled] {
-  opacity: var(--ui-opacity-disabled);
+  cursor: default;
+  color: var(--text-muted);
+}
+
+.titlebar-menubar-item:disabled .titlebar-menubar-item-title,
+.titlebar-menubar-item[data-disabled] .titlebar-menubar-item-title,
+.titlebar-menubar-item:disabled .titlebar-menubar-item-meta,
+.titlebar-menubar-item[data-disabled] .titlebar-menubar-item-meta {
+  color: var(--text-muted);
 }
 
 .titlebar-menubar-item-title {
