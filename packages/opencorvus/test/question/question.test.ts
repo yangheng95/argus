@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test"
 import { Question } from "../../src/question"
 import { Instance } from "../../src/project/instance"
+import { NotFoundError } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
 
 test("ask - returns pending promise", async () => {
@@ -124,16 +125,17 @@ test("reply - removes from pending list", async () => {
   })
 })
 
-test("reply - does nothing for unknown requestID", async () => {
+test("reply - rejects unknown requestID", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await Question.reply({
-        requestID: "que_unknown",
-        answers: [["Option 1"]],
-      })
-      // Should not throw
+      await expect(
+        Question.reply({
+          requestID: "que_unknown",
+          answers: [["Option 1"]],
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError)
     },
   })
 })
@@ -198,13 +200,12 @@ test("reject - removes from pending list", async () => {
   })
 })
 
-test("reject - does nothing for unknown requestID", async () => {
+test("reject - rejects unknown requestID", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await Question.reject("que_unknown")
-      // Should not throw
+      await expect(Question.reject("que_unknown")).rejects.toBeInstanceOf(NotFoundError)
     },
   })
 })
