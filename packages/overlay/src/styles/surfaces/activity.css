@@ -353,8 +353,7 @@
 }
 
 .sidebar-tool-panel .extension-row-actions,
-.sidebar-tool-panel .market-card-actions,
-.sidebar-tool-panel .knowledge-item-actions {
+.sidebar-tool-panel .market-card-actions {
   width: 100%;
   min-width: 0;
   justify-content: space-between;
