@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
 import path from "node:path"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
@@ -104,6 +105,25 @@ describe("log routes", () => {
 
     expect(body.lines).toHaveLength(1)
     expect(JSON.parse(body.lines[0]!).message).toBe("last tail line")
+  })
+
+  test("GET /log/tail reads large logs through the bounded tail reader", async () => {
+    await Log.init({ print: false, dev: true, level: "DEBUG" })
+    const entries = Array.from({ length: 20_000 }, (_, index) =>
+      JSON.stringify({ level: "INFO", message: `large log line ${index}`, index }),
+    )
+    await fs.writeFile(Log.file(), `${entries.join("\n")}\n`)
+
+    const response = await Server.App().request("/log/tail?n=3")
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { lines: string[] }
+
+    expect(body.lines.map((line) => JSON.parse(line).index)).toEqual([19_997, 19_998, 19_999])
+
+    const source = await fs.readFile(path.join(import.meta.dir, "../../src/util/log.ts"), "utf8")
+    const readBlock = source.slice(source.indexOf("export async function read"), source.indexOf("function createRootLogger"))
+    expect(readBlock).toContain("readTailLines(pathname, input.lines)")
+    expect(readBlock).not.toContain("fs.readFile(pathname")
   })
 
   test("POST /log remains readable through GET /log when print mode is enabled", async () => {

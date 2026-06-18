@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| [2026-06-19-deep-performance-investigation.md](2026-06-19-deep-performance-investigation.md)                   | Deep Performance Investigation |
 | [2026-06-19-system-performance-high-confidence-pass.md](2026-06-19-system-performance-high-confidence-pass.md) | System Performance High Confidence Pass |
 | [2026-06-19-overlay-diff-poll-pressure.md](2026-06-19-overlay-diff-poll-pressure.md)                           | Overlay Diff Poll Pressure |
 

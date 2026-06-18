@@ -58,6 +58,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [liveError, setLiveError] = createSignal("")
   const [liveLoading, setLiveLoading] = createSignal(false)
   const [targetLoadError, setTargetLoadError] = createSignal<{ taskID: string; message: string }>()
+  const panelActive = createMemo(() => props.active())
   const [verificationRequest, setVerificationRequest] = createSignal<{
     taskID: string
     targetID: string
@@ -68,7 +69,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     () => {
       const taskID = props.taskID()
       const directory = props.directory()
-      if (!taskID || !directory) return undefined
+      if (!panelActive() || !taskID || !directory) return undefined
       return { taskID, directory, refreshKey: props.refreshKey(), refreshToken: refreshToken() }
     },
     async (scope) => {
@@ -87,8 +88,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       viewportIDs: request.viewportIDs,
     }),
   )
-  const panelActive = createMemo(() => props.active())
   const currentTarget = createMemo(() => {
+    if (!panelActive()) return undefined
     const taskID = props.taskID()
     if (!taskID || !props.directory()) return undefined
     const resolved = target()
