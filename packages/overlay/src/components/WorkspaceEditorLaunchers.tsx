@@ -48,8 +48,6 @@ export function WorkspaceEditorLaunchers() {
   return (
     <WorkspaceSplitLauncher
       rootClass="workspace-editor-launchers"
-      primaryClass="workspace-editor-open"
-      menuButtonClass="workspace-editor-menu-button"
       menuClass="workspace-editor-menu"
       disabled={disabled()}
       open={open()}

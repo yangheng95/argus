@@ -1,12 +1,11 @@
 import * as DropdownMenu from "@kobalte/core/dropdown-menu"
 import type { JSX } from "solid-js"
+import { Button } from "./ui/Button"
 
 interface WorkspaceSplitLauncherProps {
   rootClass: string
   rootRole?: JSX.IntrinsicElements["div"]["role"]
   rootAriaLabel?: string
-  primaryClass: string
-  menuButtonClass: string
   menuClass: string
   disabled: boolean
   open: boolean
@@ -61,9 +60,12 @@ export function WorkspaceSplitLauncher(props: WorkspaceSplitLauncherProps): JSX.
       gutter={6}
     >
       <div class={props.rootClass} data-no-drag="true" role={props.rootRole} aria-label={props.rootAriaLabel}>
-        <button
+        <Button
           type="button"
-          class={`${props.primaryClass} workspace-split-launcher-primary`}
+          variant="ghost"
+          size="icon"
+          tone="neutral"
+          data-chrome="workspace-split-primary"
           data-ui={props.primaryDataUI}
           aria-pressed={props.pressed}
           title={props.title}
@@ -72,9 +74,14 @@ export function WorkspaceSplitLauncher(props: WorkspaceSplitLauncherProps): JSX.
           onClick={primaryClick}
         >
           {props.primaryChildren}
-        </button>
+        </Button>
         <DropdownMenu.Trigger
-          class={`${props.menuButtonClass} workspace-split-launcher-menu-button`}
+          as={Button}
+          type="button"
+          variant="ghost"
+          size="icon"
+          tone="neutral"
+          data-chrome="workspace-split-menu"
           data-ui={props.menuDataUI}
           data-open={props.open ? "true" : "false"}
           disabled={props.disabled}

@@ -93,8 +93,6 @@ export function WorkspaceCodingCliLaunchers() {
   return (
     <WorkspaceSplitLauncher
       rootClass="workspace-coding-cli-launchers"
-      primaryClass="workspace-coding-cli-open"
-      menuButtonClass="workspace-coding-cli-menu-button"
       menuClass="workspace-coding-cli-menu"
       disabled={disabled()}
       open={open()}

@@ -93,8 +93,6 @@ export function WorkspaceLayoutControls() {
       rootClass="workspace-layout-controls"
       rootRole="toolbar"
       rootAriaLabel={t("terminal.open")}
-      primaryClass="workspace-terminal-open"
-      menuButtonClass="workspace-terminal-menu-button"
       menuClass="workspace-terminal-menu"
       disabled={disabled()}
       open={open()}

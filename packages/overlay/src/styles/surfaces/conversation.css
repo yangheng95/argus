@@ -574,62 +574,38 @@
   flex-shrink: 0;
 }
 
-.workspace-split-launcher-primary,
-.workspace-split-launcher-menu-button,
+.workspace-command-dock .oc-button[data-chrome^="workspace-split"],
 .workspace-layout-controls .oc-button[data-size="icon"] {
   --oc-button-height: calc(28px * var(--ui-scale));
   --oc-button-padding-x: 0;
+  --oc-button-gap: calc(2px * var(--ui-scale));
   --oc-button-border: var(--oc-border-width) solid transparent;
   --oc-button-bg: transparent;
   --oc-button-color: var(--text-soft);
 
   width: calc(28px * var(--ui-scale));
+  min-width: calc(28px * var(--ui-scale));
   height: calc(28px * var(--ui-scale));
   box-shadow: none;
 }
 
-.workspace-split-launcher-primary,
-.workspace-split-launcher-menu-button {
-  appearance: none;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 calc(4px * var(--ui-scale));
-  gap: calc(2px * var(--ui-scale));
-  border: 0;
-  background: transparent;
-  color: var(--text-soft);
-  font-family: var(--font);
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-strong);
-  cursor: pointer;
-}
-
-.workspace-split-launcher-primary {
+.workspace-command-dock .oc-button[data-chrome="workspace-split-primary"] {
   width: calc(28px * var(--ui-scale));
+  min-width: calc(28px * var(--ui-scale));
   border-radius: var(--oc-radius-soft) 0 0 var(--oc-radius-soft);
 }
 
-.workspace-split-launcher-menu-button {
+.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"] {
   width: calc(18px * var(--ui-scale));
+  min-width: calc(18px * var(--ui-scale));
   border-radius: 0 var(--oc-radius-soft) var(--oc-radius-soft) 0;
 }
 
-.workspace-split-launcher-primary:hover,
-.workspace-split-launcher-primary:focus-visible,
-.workspace-split-launcher-menu-button:hover,
-.workspace-split-launcher-menu-button:focus-visible,
-.workspace-split-launcher-menu-button[data-open="true"] {
-  background: var(--oc-control-bg-hover);
-  color: var(--text-strong);
-  outline: none;
-}
-
-.workspace-split-launcher-primary:disabled,
-.workspace-split-launcher-menu-button:disabled {
-  cursor: default;
-  opacity: var(--ui-opacity-disabled);
+.workspace-command-dock .oc-button[data-chrome^="workspace-split"]:hover,
+.workspace-command-dock .oc-button[data-chrome^="workspace-split"]:focus-visible,
+.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"] {
+  --oc-button-bg: var(--oc-control-bg-hover);
+  --oc-button-color: var(--text-strong);
 }
 
 .workspace-terminal-select-icon,
@@ -661,9 +637,9 @@
   color: var(--text-muted);
 }
 
-.workspace-split-launcher-menu-button[data-open="true"] .workspace-terminal-select-caret,
-.workspace-split-launcher-menu-button[data-open="true"] .workspace-editor-select-caret,
-.workspace-split-launcher-menu-button[data-open="true"] .workspace-coding-cli-select-caret {
+.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"] .workspace-terminal-select-caret,
+.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"] .workspace-editor-select-caret,
+.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"] .workspace-coding-cli-select-caret {
   color: var(--text-strong);
   transform: rotate(180deg);
 }
@@ -804,13 +780,11 @@
   color: var(--text-strong);
 }
 
-.workspace-split-launcher-primary[aria-pressed="true"],
+.workspace-command-dock .oc-button[data-chrome="workspace-split-primary"][aria-pressed="true"],
 .workspace-layout-controls .oc-button[aria-pressed="true"] {
   --oc-button-border: var(--oc-border-width) solid var(--oc-control-border-hover);
   --oc-button-bg: var(--oc-control-bg-hover);
   --oc-button-color: var(--text-strong);
-  background: var(--oc-control-bg-hover);
-  color: var(--text-strong);
 }
 
 /* VcsBadge: branch + dirty/ahead/behind glyph cluster. Tone driven
