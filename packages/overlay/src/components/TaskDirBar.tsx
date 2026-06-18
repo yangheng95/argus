@@ -248,6 +248,7 @@ export function TaskDirContent() {
                             type="button"
                             class="recent-dir-item"
                             title={project.directory}
+                            aria-current={isActive() ? "location" : undefined}
                             onSelect={() => void chooseRecentDirectory(project.directory)}
                           >
                             <span class="recent-dir-copy">
@@ -279,6 +280,7 @@ export function TaskDirContent() {
                           type="button"
                           class="recent-dir-item"
                           title={recent}
+                          aria-current={isActive() ? "location" : undefined}
                           onSelect={() => void chooseRecentDirectory(recent)}
                         >
                           <span class="recent-dir-copy">
