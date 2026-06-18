@@ -1206,3 +1206,79 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
     "task/tsk_lifecycle_session/conversation/session/ses_frontend_session",
   ])
 })
+
+test("stale session-history response after task switch does not hydrate the current task tree", async () => {
+  resetWriter()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_history_old" })
+  let resolveHistory!: (body: unknown) => void
+  const historyResponse = new Promise<unknown>((resolve) => {
+    resolveHistory = resolve
+  })
+  const requests: TransportRequest[] = []
+
+  __setHostTransportForTest(
+    fakeTransport(async (req) => {
+      requests.push(req)
+      if (req.path === "task/tsk_history_old/conversation/session/ses_old_build") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: await historyResponse,
+        }
+      }
+      throw new Error(`unexpected request path: ${req.path}`)
+    }),
+  )
+
+  const history = loadConversationSessionHistory("ses_old_build", "tsk_history_old")
+  await Promise.resolve()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_history_new" })
+
+  resolveHistory({
+    transcript: [
+      {
+        info: {
+          id: "msg_old_build",
+          sessionID: "ses_old_build",
+          role: "assistant",
+          resolvedRole: "assistant",
+          channel: "build",
+          time: { created: 1_776_000_060_000 },
+        },
+        parts: [
+          {
+            id: "part_old_build",
+            sessionID: "ses_old_build",
+            messageID: "msg_old_build",
+            type: "text",
+            text: "Old task build history must not appear.",
+          },
+        ],
+      },
+    ],
+    timeline: [],
+    events: [],
+    view: {
+      sessions: [
+        {
+          sessionID: "ses_old_build",
+          stage: "build",
+          messageIDs: ["msg_old_build"],
+          firstMessageTime: 1_776_000_060_000,
+          lastMessageTime: 1_776_000_060_000,
+          placement: "top_level",
+        },
+      ],
+      topLevelSessionIDs: ["ses_old_build"],
+    },
+  })
+
+  await expect(history).rejects.toThrow("Conversation history source changed")
+  expect(requests.map((req) => req.path)).toEqual(["task/tsk_history_old/conversation/session/ses_old_build"])
+  expect(
+    Object.values(cardTreeStore.cards).some((card: any) =>
+      card?.parts?.some((part: any) => String(part.text || "").includes("Old task build history must not appear.")),
+    ),
+  ).toBe(false)
+})

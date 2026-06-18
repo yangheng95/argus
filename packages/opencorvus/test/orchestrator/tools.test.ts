@@ -2346,10 +2346,187 @@ describe("orchestrator tools", () => {
 
         const result = await tools.read_context.execute({ scope: "goals" }, {} as any)
 
-        expect(result).toContain("requirement_ids: REQ-1, REQ-3")
-        expect(result).toContain(`latest_goal_run_id: ${goalRunID}`)
-        expect(result).toContain("latest_goal_run_status: running")
-        expect(result).toContain(`latest_goal_session_id: ${child.id}`)
+        expect(result).toContain("Requirement IDs: REQ-1, REQ-3")
+        expect(result).toContain(`run=${goalRunID}`)
+        expect(result).toContain("outcome=running")
+        expect(result).toContain(`session=${child.id}`)
+      },
+    })
+  })
+
+  test("read_context preserves describe-layer redispatch and orphan facts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_describe_facts_${stamp}`
+    const taskID = `tsk_read_context_describe_facts_${stamp}`
+    const retryGoalID = `gol_read_context_retry_${stamp}`
+    const orphanGoalID = `gol_read_context_orphan_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID: retryGoalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read_context describe facts",
+      taskTitle: "read_context describe facts",
+      request: "Expose describe-layer goal facts",
+      goalTitle: "Retry goal",
+      goalSlug: "retry-goal",
+      objective: "Surface superseded terminal retry intent",
+      now,
+      requirementIDs: ["REQ-REDISPATCH"],
+    })
+
+    Database.use((db) =>
+      db
+        .insert(EngineGoalTable)
+        .values({
+          id: orphanGoalID,
+          task_id: taskID,
+          spec_snapshot_id: `spec_${retryGoalID}`,
+          title: "Owner orphan goal",
+          slug: "owner-orphan-goal",
+          objective: "Surface dead owner orphan fact",
+          acceptance_specs: [],
+          owned_paths: ["src/orphan.ts"],
+          depends_on: [],
+          exports: [],
+          imports: [],
+          kind: "feature",
+          requirement_ids: ["REQ-ORPHAN"],
+          priority: "blocking",
+          source: "test",
+          status: "pending",
+          order_index: 1,
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read_context describe facts parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+
+        const retryRunID = beginBuildAttempt({
+          taskID,
+          goalID: retryGoalID,
+          sessionID: `ses_retry_${stamp}`,
+          now: now + 1,
+        })
+        updateGoalRun(retryRunID, {
+          status: "failed",
+          error: "Acceptance rejected retry goal",
+          time_completed: now + 2,
+        })
+        startNewAttempt({
+          goalID: retryGoalID,
+          reason: "acceptance_rework",
+          now: now + 3,
+        })
+
+        const orphanRunID = beginBuildAttempt({
+          taskID,
+          goalID: orphanGoalID,
+          sessionID: `ses_orphan_${stamp}`,
+          now: now + 4,
+        })
+        updateGoalRun(orphanRunID, {
+          owner: "999999:zzzz:dead00",
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.read_context.execute({ scope: "goals" }, {} as any)
+
+        expect(result).toContain("NEEDS_REDISPATCH(acceptance_rework)")
+        expect(result).toContain("superseded_reason=acceptance_rework")
+        expect(result).toContain(`run=${retryRunID}`)
+        expect(result).toContain("ORPHANED(owner process restarted")
+        expect(result).toContain(`run=${orphanRunID}`)
+        expect(result).toContain(`session=ses_orphan_${stamp}`)
+      },
+    })
+  })
+
+  test("read_context surfaces terminal goal batch wake facts", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_goal_batch_${stamp}`
+    const taskID = `tsk_read_context_goal_batch_${stamp}`
+    const goalID = `gol_read_context_goal_batch_${stamp}`
+    const runID = `run_read_context_goal_batch_${stamp}`
+    const fingerprint = `grun_read_context_goal_batch_one_${stamp}:completed|grun_read_context_goal_batch_two_${stamp}:failed`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read_context terminal batch",
+      taskTitle: "read_context terminal batch",
+      request: "Expose terminal goal batch facts",
+      goalTitle: "Batch goal",
+      goalSlug: "batch-goal",
+      objective: "Surface terminal batch notification evidence",
+      now,
+    })
+    Database.use((db) =>
+      db
+        .insert(EngineArtifactTable)
+        .values({
+          id: `art_read_context_goal_batch_${stamp}`,
+          task_id: taskID,
+          run_id: runID,
+          goal_run_id: null,
+          kind: "goal_batch_notification",
+          label: "goal-batch-wake-dispatched",
+          payload: {
+            task_id: taskID,
+            run_id: runID,
+            fingerprint,
+            goal_runs: [
+              { id: `grun_read_context_goal_batch_one_${stamp}`, status: "completed" },
+              { id: `grun_read_context_goal_batch_two_${stamp}`, status: "failed" },
+            ],
+            time_dispatched: now + 1,
+          },
+          time_created: now + 1,
+          time_updated: now + 1,
+        })
+        .run(),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read_context terminal batch parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.read_context.execute({ scope: "goals" }, {} as any)
+
+        expect(result).toContain("Terminal goal batch wake facts")
+        expect(result).toContain(`run=${runID}`)
+        expect(result).toContain(fingerprint)
+        expect(result).toContain(`grun_read_context_goal_batch_one_${stamp}:completed`)
+        expect(result).toContain(`grun_read_context_goal_batch_two_${stamp}:failed`)
       },
     })
   })

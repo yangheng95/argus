@@ -54,6 +54,11 @@ describe("browser preview evidence runner contract", () => {
       'import type { BrowserPreviewRegionBinding, BrowserPreviewRegionBox } from "./region-comparison"',
     )
     expect(source).not.toContain("import { BrowserPreviewRegionBinding")
+    expect(source).not.toContain("isVisible().catch")
+    expect(source).not.toContain("boundingBox().catch")
+    expect(source).not.toContain("response.body().catch")
+    expect(source).not.toContain("context.close().catch")
+    expect(source).not.toContain("browser.close().catch")
   })
 
   test("product runner rejects an unknown target before creating a runtime job", async () => {

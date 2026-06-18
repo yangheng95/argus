@@ -44,9 +44,15 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
       ...(config === undefined ? {} : { OPENCORVUS_CONFIG_CONTENT: config }),
     },
   })
+  const stopProcess = () => {
+    if (proc.exitCode === null && proc.signalCode === null) {
+      proc.kill()
+    }
+  }
 
   const url = await new Promise<string>((resolve, reject) => {
     const id = setTimeout(() => {
+      stopProcess()
       reject(new Error(`Timeout waiting for server to start after ${options.timeout}ms`))
     }, options.timeout)
     let output = ""
@@ -83,6 +89,7 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
     if (options.signal) {
       options.signal.addEventListener("abort", () => {
         clearTimeout(id)
+        stopProcess()
         reject(new Error("Aborted"))
       })
     }
@@ -91,7 +98,7 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
   return {
     url,
     close() {
-      proc.kill()
+      stopProcess()
     },
   }
 }

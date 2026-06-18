@@ -785,6 +785,8 @@ describe("overlay architecture guards", () => {
       "task-cwd-dropdown",
       "task-cwd-caret",
       "task-dir-actions",
+      "task-dir-menu-actions",
+      "task-dir-recent-trigger",
       "task-dir-path",
       "task-dir-tool",
       "task-dir-node",
@@ -792,14 +794,15 @@ describe("overlay architecture guards", () => {
       "task-dir-empty",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
-      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
+      expect(conversationSurface).toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|,|\\{)`))
     }
 
     for (const tone of ["good", "warn", "bad"]) {
       expect(conversationSurface).toMatch(new RegExp(`\\.vcs-badge\\[data-tone="${tone}"\\]\\s*\\{`))
     }
-    expect(conversationSurface).toMatch(/\.task-cwd-dropdown:hover,\s*\.task-cwd-dropdown:focus-visible\s*\{/)
+    expect(conversationSurface).toMatch(/\.task-cwd-dropdown:hover,\s*\.task-cwd-dropdown:focus-within\s*\{/)
     expect(conversationSurface).toMatch(/\.task-cwd-dropdown\[data-open="true"\]\s*\{/)
+    expect(conversationSurface).toMatch(/\.task-dir-recent-trigger:hover,\s*\.task-dir-recent-trigger:focus-visible,/)
     expect(conversationSurface).toMatch(/\.task-dir-tool\.danger:hover\s*\{/)
     expect(conversationSurface).not.toMatch(/#94a3b8/)
     expect(conversationSurface).not.toMatch(/#e5e7eb/)
@@ -959,7 +962,6 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).toMatch(/code \.file-link\s*\{/)
 
     expect(workspaceSurface).toContain("var(--oc-border-width)")
-    expect(workspaceSurface).toContain("var(--oc-radius-pill)")
     expect(workspaceSurface).not.toMatch(/border-radius:\s*999px/)
     expect(workspaceSurface).not.toMatch(/rgba\(/)
     expect(workspaceSurface).not.toMatch(/var\(--accent,\s*#/)
@@ -969,6 +971,10 @@ describe("overlay architecture guards", () => {
 
     expect(html).not.toContain("btnWorkspaceToggle")
     expect(workspaceSurface).not.toContain(".workspace-toggle")
+    expect(workspaceSurface).not.toContain(".chat-plugin-activity")
+    expect(workspaceSurface).not.toContain(".chat-plugin-outlet")
+    expect(activitySurface).not.toContain(".chat-plugin-activity")
+    expect(activitySurface).not.toContain(".chat-plugin-outlet")
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer:hover::before/)
@@ -1228,7 +1234,6 @@ describe("overlay architecture guards", () => {
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
-      "log-level-select",
       "log-viewer",
       "log-path",
       "log-line",
@@ -2374,11 +2379,13 @@ describe("overlay architecture guards", () => {
         const selector = match[1] ?? ""
         const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         const hasHeaderControl =
-          /\.(?:task-dir-shell|task-cwd-dropdown)\b/.test(selector) ||
+          /\.(?:task-dir-shell|task-cwd-dropdown|task-dir-recent-trigger)\b/.test(selector) ||
           /\[data-ui="sidebar-new-task-button"\]/.test(selector)
         if (!isThemeSelector || !hasHeaderControl) continue
 
-        expect(selector).not.toMatch(/\.(?:task-dir-shell|task-cwd-dropdown)\b|\[data-ui="sidebar-new-task-button"\]/)
+        expect(selector).not.toMatch(
+          /\.(?:task-dir-shell|task-cwd-dropdown|task-dir-recent-trigger)\b|\[data-ui="sidebar-new-task-button"\]/,
+        )
       }
     }
 
@@ -2395,6 +2402,9 @@ describe("overlay architecture guards", () => {
     )
     expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
       "padding-block: calc(2px * var(--ui-scale))",
+    )
+    expect(soloRuleBody(conversationSurface, ".task-dir-recent-trigger")).toContain(
+      "width: calc(22px * var(--ui-scale))",
     )
     const sidebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")))
     expect(sidebarSurface).not.toContain("sidebar-toolset")

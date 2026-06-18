@@ -25,6 +25,7 @@ type StateFactory = <S>(
 
 type InstanceApi = {
   provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R>
+  forEachActive(input: { fn: () => void | Promise<void> }): Promise<void>
   readonly directory: string
   readonly worktree: string
   readonly project: Project.Info
@@ -129,6 +130,15 @@ export const Instance: InstanceApi = {
     return context.provide(ctx, async () => {
       return input.fn()
     })
+  },
+  async forEachActive(input: { fn: () => void | Promise<void> }) {
+    const entries = [...cache.entries()]
+    for (const [key, value] of entries) {
+      if (cache.get(key) !== value) continue
+      const ctx = await value
+      if (cache.get(key) !== value) continue
+      await context.provide(ctx, input.fn)
+    }
   },
   get directory() {
     return context.use().directory

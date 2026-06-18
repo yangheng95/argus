@@ -95,6 +95,7 @@ describe("task selection initial hydrate", () => {
     ])
     setBoardStore("selectedSource", { kind: "task", id: "tsk_deleted" })
     let requested = false
+    const nativeCalls: unknown[] = []
     __setHostTransportForTest({
       kind: "tauri",
       capabilities: HOST_CAPABILITIES.tauri,
@@ -112,8 +113,10 @@ describe("task selection initial hydrate", () => {
       openStream() {
         throw new Error("openStream not used")
       },
-      async native() {
-        throw new Error("native not used")
+      async native(input: unknown) {
+        nativeCalls.push(input)
+        if ((input as { kind?: string }).kind === "settings.save") return true
+        throw new Error(`unexpected native call: ${JSON.stringify(input)}`)
       },
       subscribeUiCommand() {
         return { unsubscribe() {} }
@@ -124,6 +127,15 @@ describe("task selection initial hydrate", () => {
 
     expect(requested).toBe(true)
     expect(activeTaskID()).toBe("")
+    expect(nativeCalls).toEqual([
+      expect.objectContaining({
+        kind: "settings.save",
+        payload: expect.objectContaining({
+          workspaceTaskID: undefined,
+          workspaceDirectory: undefined,
+        }),
+      }),
+    ])
   })
 
   test("deleting a missing selected task surfaces task-list refresh failures", async () => {

@@ -27,6 +27,7 @@ import { EngineProtocol } from "./protocol"
 import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
 
 const log = Log.create({ service: "engine.queue" })
+const DEAD_OWNER_QUEUE_CONVERGENCE_REASON = "Directory queue: previous owner process died before terminalization"
 
 // Process-local loop accounting. The real queue lock is in the DB
 // (claimNextForCwd), but interrupt-driven replacement can briefly overlap an
@@ -471,11 +472,32 @@ export function listOrphanedActiveInProject(projectID: string): TaskRow[] {
  */
 export async function advanceQueue(cwd: string): Promise<void> {
   if (!cwd) return
+  await convergeDeadOwnerActiveTasksForCwd(cwd)
   const claimed = claimNextForCwd(cwd)
   if (!claimed) return
   const event = queuedTaskEvents.get(claimed.id)
   queuedTaskEvents.delete(claimed.id)
   await startLoopForTask(claimed, event, cwd)
+}
+
+async function convergeDeadOwnerActiveTasksForCwd(cwd: string): Promise<void> {
+  const activeTasks = listActiveForCwd(cwd)
+  if (activeTasks.length === 0) return
+  const { convergeDeadOwnerLiveExecutionForTasks } = await import("./writer")
+  const converged = await convergeDeadOwnerLiveExecutionForTasks({
+    tasks: activeTasks,
+    reason: DEAD_OWNER_QUEUE_CONVERGENCE_REASON,
+  })
+  if (converged.tasks === 0 && converged.goalRuns === 0 && converged.runs === 0) return
+  log.info("advanceQueue converged dead-owner active tasks", {
+    cwd,
+    tasks: converged.tasks,
+    runs: converged.runs,
+    goalRuns: converged.goalRuns,
+    sessions: converged.sessions,
+    toolParts: converged.toolParts,
+    corruptTasks: converged.corruptTasks,
+  })
 }
 
 export type DispatchTaskLoopResult = "started" | "queued" | "ignored"

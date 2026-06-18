@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -225,11 +227,12 @@ test(
             }
           })
 
-          assert.equal(geometry.triggers.includes("product"), false)
-          assert.equal(geometry.triggers.includes("model"), false)
-          assert.equal(geometry.triggers.includes("agent"), false)
-          assert.deepEqual(geometry.triggers, ["workspace", "provider", "run", "view", "settings", "help"])
-          assert.equal(geometry.triggers.includes("tools"), false)
+          assert.deepEqual(geometry.triggers, ["workspace", "provider", "run", "settings", "view", "help"])
+            assert.equal(geometry.triggers.includes("product"), false)
+            assert.equal(geometry.triggers.includes("model"), false)
+            assert.equal(geometry.triggers.includes("agent"), false)
+            assert.deepEqual(geometry.triggers, ["workspace", "provider", "run", "view", "settings", "help"])
+            assert.equal(geometry.triggers.includes("tools"), false)
           assert.equal(geometry.triggers.includes("skill"), false)
           assert.equal(geometry.triggers.includes("mcp"), false)
           assert.equal(geometry.triggers.includes("memory"), false)
@@ -240,6 +243,13 @@ test(
           assert.ok(geometry.badgeTitle.includes(String(server.port)))
           assert.ok(geometry.badgeTitle.includes("12345"))
           assert.ok(geometry.titlebarHeight > 24)
+          if (locale === "en-US" && width === 1440) {
+            const titlebarElement = await page.$("#titlebar")
+            assert.ok(titlebarElement)
+            const screenshotPath = resolve(".scratch/titlebar-top-level-menus.png")
+            mkdirSync(dirname(screenshotPath), { recursive: true })
+            writeFileSync(screenshotPath, await titlebarElement.screenshot({}))
+          }
           if (width <= 760) {
             assert.equal(
               geometry.triggerMetrics.every((item) => item.width <= 32),
@@ -263,6 +273,7 @@ test(
               true,
             )
           }
+          for (const menu of ["workspace", "provider", "run", "view", "settings", "help"]) {
           for (const menu of ["workspace", "provider", "run", "view", "settings", "help"]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
             await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
@@ -292,6 +303,18 @@ test(
               menu,
             )
           }
+          await page.click('[data-menu-trigger="settings"]')
+          await page.waitForSelector('[data-testid="titlebar-menu-settings"]', { visible: true })
+          const settingsEntries = await page.$eval('[data-testid="titlebar-menu-settings"]', (node) =>
+            Array.from(node.querySelectorAll<HTMLElement>('[data-testid^="titlebar-settings-"]')).map(
+              (item) => item.dataset.testid || "",
+            ),
+          )
+          assert.equal(settingsEntries.includes("titlebar-settings-permissions"), true)
+          assert.equal(settingsEntries.includes("titlebar-settings-prompt"), true)
+          assert.equal(settingsEntries.includes("titlebar-settings-channel"), true)
+          await page.keyboard.press("Escape")
+          await page.waitForFunction(() => !document.querySelector('[data-testid="titlebar-menu-settings"]'))
           await page.click('[data-menu-trigger="help"]')
           await page.waitForSelector('[data-testid="titlebar-help-about"]', { visible: true })
           const helpContract = await page.$eval('[data-testid="titlebar-menu-help"]', (node) => {
@@ -618,16 +641,55 @@ test(
       )
 
       await page.keyboard.down("Alt")
+      await page.keyboard.press("t")
+      await page.keyboard.up("Alt")
+      const altTRetiredState = await page.evaluate(() => {
+        const visibleMenus = Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="titlebar-menu-"]'))
+          .filter((node) => {
+            const style = getComputedStyle(node)
+            const rect = node.getBoundingClientRect()
+            return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
+          })
+          .map((node) => node.dataset.testid || "")
+        return {
+          toolsTriggerCount: document.querySelectorAll('[data-menu-trigger="tools"]').length,
+          toolsMenuCount: document.querySelectorAll('[data-testid="titlebar-menu-tools"]').length,
+          visibleMenus,
+        }
+      })
+      assert.deepEqual(altTRetiredState, {
+        toolsTriggerCount: 0,
+        toolsMenuCount: 0,
+        visibleMenus: [],
+      })
+
+      await page.keyboard.down("Alt")
       await page.keyboard.press("v")
       await page.keyboard.up("Alt")
       await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
       assert.notEqual(await page.$('[data-testid="titlebar-theme-vscode-dark"]'), null)
+      await page.waitForFunction(
+        () => (document.activeElement as HTMLElement | null)?.getAttribute("role") === "menuitemradio",
+      )
       const altOpenState = await page.evaluate(() => ({
         expanded: document.querySelector('[data-menu-trigger="view"]')?.getAttribute("aria-expanded"),
+        focusedClass: (document.activeElement as HTMLElement | null)?.className || "",
+        focusedRole: (document.activeElement as HTMLElement | null)?.getAttribute("role") || "",
+        focusedTestid: (document.activeElement as HTMLElement | null)?.dataset.testid || "",
+        focusedAriaChecked: (document.activeElement as HTMLElement | null)?.getAttribute("aria-checked") || "",
         focusedMenuText: (document.activeElement as HTMLElement | null)?.textContent?.trim() || "",
       }))
       assert.equal(altOpenState.expanded, "true")
-      assert.ok(altOpenState.focusedMenuText.includes("Language"))
+      assert.equal(altOpenState.focusedRole, "menuitemradio", JSON.stringify(altOpenState))
+      assert.match(altOpenState.focusedClass, /titlebar-theme-option/, JSON.stringify(altOpenState))
+      assert.equal(altOpenState.focusedTestid, "titlebar-theme-vscode-dark", JSON.stringify(altOpenState))
+      assert.equal(altOpenState.focusedAriaChecked, "true", JSON.stringify(altOpenState))
+      assert.ok(altOpenState.focusedMenuText.includes("VS Code Dark"), JSON.stringify(altOpenState))
+      const viewMenuElement = await page.$('[data-testid="titlebar-menu-view"]')
+      assert.ok(viewMenuElement)
+      const screenshotPath = resolve(".scratch/titlebar-view-radio-focus.png")
+      mkdirSync(dirname(screenshotPath), { recursive: true })
+      writeFileSync(screenshotPath, await viewMenuElement.screenshot({}))
       const themeRadioState = await page.$eval('[data-testid="titlebar-menu-view"]', (node) => {
         const items = Array.from(node.querySelectorAll<HTMLElement>(".titlebar-theme-option"))
         return {

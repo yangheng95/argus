@@ -1,23 +1,61 @@
 import { afterEach, expect, test } from "bun:test"
-import { Hono } from "hono"
 import { Auth } from "../../src/auth"
-import { Env } from "../../src/env"
 import { Instance } from "../../src/project/instance"
-import { ProviderRoutes } from "../../src/server/routes/provider"
+import { HexinBudgetResponse } from "../../src/server/routes/provider"
+import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
 const originalFetch = globalThis.fetch
+const originalHexinApiKey = process.env.HEXIN_API_KEY
 
-function app() {
-  return new Hono().route("/provider", ProviderRoutes())
+function hexinBudgetRequest(directory?: string) {
+  return Server.App().request("/provider/hexin/budget", {
+    headers: directory ? { "x-opencorvus-directory": directory } : undefined,
+  })
 }
 
 afterEach(async () => {
   globalThis.fetch = originalFetch
+  if (originalHexinApiKey === undefined) delete process.env.HEXIN_API_KEY
+  else process.env.HEXIN_API_KEY = originalHexinApiKey
+  Server.resetProjectRoutesAppForTest()
   await Instance.disposeAll().catch(() => undefined)
+})
+
+test("HexinBudgetResponse requires discriminated success and failure payloads", () => {
+  expect(HexinBudgetResponse.safeParse({ ok: true }).success).toBe(false)
+  expect(HexinBudgetResponse.safeParse({ ok: false }).success).toBe(false)
+  expect(
+    HexinBudgetResponse.safeParse({
+      ok: true,
+      budget: {
+        maxBudget: 100,
+        spend: 25,
+        remaining: 75,
+        overBudget: false,
+      },
+    }).success,
+  ).toBe(true)
+  expect(HexinBudgetResponse.safeParse({ ok: false, error: "HEXIN_API_KEY unset" }).success).toBe(true)
+})
+
+test("GET /provider/hexin/budget requires a project directory through Server.App", async () => {
+  let fetchCalls = 0
+  globalThis.fetch = (async () => {
+    fetchCalls++
+    throw new Error("budget route must not fetch without project directory")
+  }) as typeof fetch
+
+  const response = await hexinBudgetRequest()
+
+  expect(response.status).toBe(400)
+  const body = (await response.json()) as { name: string; data: { message: string } }
+  expect(body.name).toBe("DirectoryRequiredError")
+  expect(body.data.message).toContain("/provider/hexin/budget")
+  expect(fetchCalls).toBe(0)
 })
 
 test("GET /provider/hexin/budget sends configured Hexin bearer key and maps LiteLLM budget fields", async () => {
@@ -38,25 +76,18 @@ test("GET /provider/hexin/budget sends configured Hexin bearer key and maps Lite
   }) as typeof fetch
 
   try {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      init: async () => {
-        Env.set("HEXIN_API_KEY", "hexin-budget-key")
-      },
-      fn: async () => {
-        const response = await app().request("/provider/hexin/budget")
+    process.env.HEXIN_API_KEY = "hexin-budget-key"
+    await using tmp = await tmpdir({ git: true })
+    const response = await hexinBudgetRequest(tmp.path)
 
-        expect(response.status).toBe(200)
-        await expect(response.json()).resolves.toEqual({
-          ok: true,
-          budget: {
-            maxBudget: 4435.3,
-            spend: 2980.312612080029,
-            remaining: 1454.9873879199713,
-            overBudget: false,
-          },
-        })
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      budget: {
+        maxBudget: 4435.3,
+        spend: 2980.312612080029,
+        remaining: 1454.9873879199713,
+        overBudget: false,
       },
     })
 
@@ -81,23 +112,16 @@ test("GET /provider/hexin/budget reports missing Hexin key without touching the 
 
   try {
     await Auth.remove("hexin").catch(() => undefined)
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      init: async () => {
-        Env.remove("HEXIN_API_KEY")
-      },
-      fn: async () => {
-        const response = await app().request("/provider/hexin/budget")
+    delete process.env.HEXIN_API_KEY
+    await using tmp = await tmpdir({ git: true })
+    const response = await hexinBudgetRequest(tmp.path)
 
-        expect(response.status).toBe(200)
-        await expect(response.json()).resolves.toEqual({
-          ok: false,
-          error: "HEXIN_API_KEY unset",
-        })
-        expect(fetchCalls).toBe(0)
-      },
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: "HEXIN_API_KEY unset",
     })
+    expect(fetchCalls).toBe(0)
   } finally {
     if (previousAuth) await Auth.set("hexin", previousAuth)
     else await Auth.remove("hexin").catch(() => undefined)
@@ -109,21 +133,43 @@ test("GET /provider/hexin/budget reports malformed upstream budget JSON", async 
   globalThis.fetch = (async () => Response.json({ spend: 1 })) as typeof fetch
 
   try {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      init: async () => {
-        Env.set("HEXIN_API_KEY", "hexin-budget-key")
-      },
-      fn: async () => {
-        const response = await app().request("/provider/hexin/budget")
-        const body = (await response.json()) as { ok: boolean; error?: string }
+    process.env.HEXIN_API_KEY = "hexin-budget-key"
+    await using tmp = await tmpdir({ git: true })
+    const response = await hexinBudgetRequest(tmp.path)
+    const body = (await response.json()) as { ok: boolean; error?: string }
 
-        expect(response.status).toBe(200)
-        expect(body.ok).toBe(false)
-        expect(body.error).toContain("max_budget")
-      },
-    })
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(false)
+    expect(body.error).toContain("max_budget")
+  } finally {
+    if (previousAuth) await Auth.set("hexin", previousAuth)
+    else await Auth.remove("hexin").catch(() => undefined)
+  }
+})
+
+test("GET /provider/hexin/budget redacts upstream error bodies", async () => {
+  const previousAuth = await Auth.get("hexin")
+  globalThis.fetch = (async () =>
+    new Response("upstream echoed Authorization: Bearer hexin-budget-key", {
+      status: 401,
+      statusText: "Unauthorized",
+      headers: { "content-type": "text/plain" },
+    })) as typeof fetch
+
+  try {
+    process.env.HEXIN_API_KEY = "hexin-budget-key"
+    await using tmp = await tmpdir({ git: true })
+    const response = await hexinBudgetRequest(tmp.path)
+    const body = (await response.json()) as { ok: boolean; error?: string }
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(false)
+    expect(body.error).toBe(
+      "GET https://aimemodeldev.myhexin.com/litellm/key/budget returned HTTP 401 Unauthorized.",
+    )
+    expect(body.error).not.toContain("hexin-budget-key")
+    expect(body.error).not.toContain("Authorization")
+    expect(body.error).not.toContain("Bearer")
   } finally {
     if (previousAuth) await Auth.set("hexin", previousAuth)
     else await Auth.remove("hexin").catch(() => undefined)

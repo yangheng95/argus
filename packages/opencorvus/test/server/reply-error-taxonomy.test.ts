@@ -101,6 +101,68 @@ describe("task agent session reply routes through task-root wake when direct con
     })
   })
 
+  test("invalid direct reply with attachments rejects without task-root fallback", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "root" })
+        const executor = await Session.create({
+          kind: "executor",
+          parentID: root.id,
+          title: "executor",
+        })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "attachment fallback reject",
+              request: "attachment fallback reject",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/session/${executor.id}/reply`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            message: "keep the file structured",
+            attachments: [
+              {
+                mime: "text/plain",
+                url: "https://example.test/spec.txt",
+                filename: "spec.txt",
+              },
+            ],
+          }),
+        })
+
+        expect(response.status).toBe(400)
+        const body = (await response.json()) as { name?: string; data?: { kind?: string; sessionID?: string } }
+        expect(body.name).toBe("InvalidReplyTargetKindError")
+        expect(body.data?.kind).toBe("executor")
+        expect(body.data?.sessionID).toBe(executor.id)
+        expect(await Session.messages({ sessionID: root.id })).toEqual([])
+        expect(await Session.messages({ sessionID: executor.id })).toEqual([])
+      },
+    })
+  })
+
   test("build sessions are accepted as targeted task-root input", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
     await Instance.provide({

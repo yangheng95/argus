@@ -12,7 +12,7 @@ import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import { boardStore, rootTaskSessionID, activeTaskID } from "../store/board"
 import { loadConversationSessionHistory } from "../services/conversation"
 import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
-import { apiRequest } from "../services/api"
+import { submitTaskRewind } from "../services/rewind"
 import { normalizeAgentRole } from "../utils/message"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
 import { CardHeader } from "./CardHeader"
@@ -158,27 +158,7 @@ export function Card(props: { node: CardNode; depth: number }) {
   const onRewind = async (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => {
     const taskID = activeTaskID()
     if (!taskID) return
-    // Pre-M3 this called fetch() with a relative URL (`/task/...`) which
-    // worked under "/ui" but not under any other origin (e.g. Tauri).
-    // Routing through apiRequest() also gives us the VS Code webview
-    // path for free in M4.
-    try {
-      const resp = await apiRequest<unknown>(`task/${encodeURIComponent(taskID)}/rewind`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          anchor: { kind: "cursorTime", cursorTime, anchorEventID: anchorID },
-          resetWorktree: opts.resetWorktree,
-          reason: "user rewind card",
-        }),
-        responseKind: "text",
-      })
-      if (!resp.ok) {
-        console.error("rewind request failed", resp.status, resp.body)
-      }
-    } catch (err) {
-      console.error("rewind request errored", err)
-    }
+    await submitTaskRewind({ taskID, cursorTime, anchorID, resetWorktree: opts.resetWorktree })
   }
 
   const onAgentReply = async (sessionID: string, message: string) => {

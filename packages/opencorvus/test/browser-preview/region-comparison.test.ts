@@ -146,6 +146,91 @@ describe("browser preview region comparison", () => {
     { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
   )
 
+  test(
+    "crops below-fold implementation regions from full-page comparison screenshots",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await sharp({
+        create: {
+          width: 800,
+          height: 1200,
+          channels: 4,
+          background: "#ffffff",
+        },
+      })
+        .composite([
+          {
+            input: Buffer.from(
+              `<svg width="320" height="140" xmlns="http://www.w3.org/2000/svg">
+                <rect width="320" height="140" fill="#dbeafe"/>
+                <text x="24" y="56" font-family="Arial" font-size="28" fill="#1e3a8a">Below Fold</text>
+                <text x="24" y="96" font-family="Arial" font-size="18" fill="#1d4ed8">Full-page crop</text>
+              </svg>`,
+            ),
+            left: 40,
+            top: 900,
+          },
+        ])
+        .png()
+        .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
+      const server = await startBelowFoldPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const binding: BrowserPreviewRegionBinding = {
+          region_id: "below-fold",
+          viewport_id: "desktop",
+          region_scope: "page-section",
+          source: {
+            reference_artifact_id: "reference.png",
+            bbox: { x: 40, y: 900, width: 320, height: 140 },
+            semantic_role: "below fold section",
+            text_anchors: ["Below Fold", "Full-page crop"],
+            source_refs: ["source screenshot"],
+          },
+          implementation: {
+            route: "/below-fold",
+            locator: { kind: "data-oc-region", value: "below-fold" },
+            component_files: ["src/BelowFold.tsx"],
+          },
+          acceptance_refs: ["below fold parity"],
+        }
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+          bindings: [binding],
+          includeDiff: true,
+        })
+
+        expect(result.status).toBe("passed")
+        expect(result.regions).toHaveLength(1)
+        const region = result.regions[0]
+        expect(region.implementation_bbox?.y).toBeGreaterThan(800)
+        expect(region.artifacts?.source_crop).toEndWith("source.png")
+        expect(region.artifacts?.implementation_crop).toEndWith("implementation.png")
+        expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
+        expect(region.artifacts?.diff).toEndWith("diff.png")
+        const implementationCropPath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.implementation_crop)
+        const sideBySidePath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side)
+        await expectPngDimensions(implementationCropPath, { width: 320, height: 140 })
+        await expectPngDimensions(sideBySidePath, { width: 656, height: 216 })
+        await expectPngHasColorDiversity(implementationCropPath)
+        await expectPngHasColorDiversity(sideBySidePath)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
+  )
+
   test("delegates runtime capture to browser evidence runner instead of owning a sidecar", async () => {
     const source = await fs.readFile(
       path.resolve(import.meta.dir, "../../src/browser-preview/region-comparison.ts"),
@@ -232,6 +317,51 @@ async function startPreviewServer(): Promise<{ url: string; close: () => Promise
   }
 }
 
+async function startBelowFoldPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((req, res) => {
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Below fold preview</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 1180px 40px 120px; }
+            [data-oc-region="below-fold"] {
+              width: 320px;
+              height: 140px;
+              background: #dbeafe;
+              color: #1e3a8a;
+              box-sizing: border-box;
+              padding: 24px;
+            }
+            h1 { margin: 0 0 18px; font-size: 28px; line-height: 1; }
+            p { margin: 0; font-size: 18px; color: #1d4ed8; }
+          </style>
+        </head>
+        <body><main><section data-oc-region="below-fold"><h1>Below Fold</h1><p>Full-page crop</p></section></main></body>
+      </html>`
+    if (req.url !== "/below-fold") {
+      res.writeHead(404, { "content-type": "text/plain" })
+      res.end("not found")
+      return
+    }
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("below-fold preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
 async function fileExists(input: string): Promise<boolean> {
   try {
     await fs.access(input)
@@ -239,4 +369,15 @@ async function fileExists(input: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function expectPngDimensions(input: string, expected: { width: number; height: number }): Promise<void> {
+  const metadata = await sharp(input).metadata()
+  expect(metadata.format).toBe("png")
+  expect({ width: metadata.width, height: metadata.height }).toEqual(expected)
+}
+
+async function expectPngHasColorDiversity(input: string): Promise<void> {
+  const stats = await sharp(input).stats()
+  expect(stats.channels.some((channel) => channel.min !== channel.max)).toBe(true)
 }

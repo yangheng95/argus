@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptionsWithoutStdio } from "child_process"
+import { EventEmitter } from "node:events"
 import path from "path"
 import os from "os"
 import { Global } from "../global"
@@ -116,6 +117,73 @@ export namespace LSPServer {
     return owned
   }
 
+  function supervisedChildProcess(supervisor: ProcessSupervisor.Handle): ChildProcessWithoutNullStreams {
+    const events = new EventEmitter()
+    let exitCode: number | null = null
+    let signalCode: NodeJS.Signals | null = null
+    let exitError: Error | undefined
+    let settled = false
+    const processLike = {
+      pid: supervisor.pid,
+      stdin: supervisor.stdin,
+      stdout: supervisor.stdout,
+      stderr: supervisor.stderr,
+      get exitCode() {
+        return exitCode
+      },
+      get signalCode() {
+        return signalCode
+      },
+      kill: () => {
+        void supervisor.terminate()
+        return true
+      },
+      once(event: string | symbol, listener: (...args: any[]) => void) {
+        if (event === "exit" && settled && !exitError) {
+          queueMicrotask(() => listener(exitCode, signalCode))
+          return processLike
+        }
+        if (event === "error" && exitError) {
+          queueMicrotask(() => listener(exitError))
+          return processLike
+        }
+        events.once(event, listener)
+        return processLike
+      },
+      on(event: string | symbol, listener: (...args: any[]) => void) {
+        events.on(event, listener)
+        return processLike
+      },
+      off(event: string | symbol, listener: (...args: any[]) => void) {
+        events.off(event, listener)
+        return processLike
+      },
+      removeListener(event: string | symbol, listener: (...args: any[]) => void) {
+        events.removeListener(event, listener)
+        return processLike
+      },
+      emit(event: string | symbol, ...args: any[]) {
+        return events.emit(event, ...args)
+      },
+    } as unknown as ChildProcessWithoutNullStreams
+
+    supervisor.exited.then(
+      (code) => {
+        settled = true
+        exitCode = code
+        events.emit("exit", exitCode, signalCode)
+        events.emit("close", exitCode, signalCode)
+      },
+      (error) => {
+        settled = true
+        exitError = error instanceof Error ? error : new Error(String(error))
+        if (events.listenerCount("error") > 0) events.emit("error", exitError)
+      },
+    )
+
+    return processLike
+  }
+
   async function spawnSupervisedStdio(root: string, argv: string[], env?: NodeJS.ProcessEnv): Promise<Handle> {
     const shell = Shell.acceptable()
     const supervisor = await ProcessSupervisor.spawnShell({
@@ -130,16 +198,7 @@ export namespace LSPServer {
       throw new Error("Process supervisor did not provide stdio pipes")
     }
     return {
-      process: {
-        pid: supervisor.pid,
-        stdin: supervisor.stdin,
-        stdout: supervisor.stdout,
-        stderr: supervisor.stderr,
-        kill: () => {
-          void supervisor.terminate()
-          return true
-        },
-      } as ChildProcessWithoutNullStreams,
+      process: supervisedChildProcess(supervisor),
       dispose: () => supervisor.dispose(),
     }
   }

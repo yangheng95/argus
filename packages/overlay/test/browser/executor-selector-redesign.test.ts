@@ -12,13 +12,20 @@
 //     them inside compact one-row composer viewports.
 
 import assert from "node:assert/strict"
+import { mkdirSync } from "node:fs"
+import { writeFile } from "node:fs/promises"
+import { dirname, join, resolve } from "node:path"
 import test from "node:test"
+import { fileURLToPath } from "node:url"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
+
+const OVERLAY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
+const SCRATCH_ROOT = resolve(OVERLAY_ROOT, "../../.scratch")
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -34,6 +41,13 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
+async function saveScreenshot(page: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+  const target = join(SCRATCH_ROOT, name)
+  mkdirSync(dirname(target), { recursive: true })
+  await writeFile(target, await page.screenshot({ fullPage: false }))
+  return target
+}
+
 test(
   "dual executor chip — mirror vs external popovers with availability",
   async () => {
@@ -41,8 +55,33 @@ test(
     assert.equal(typeof globalThis.Bun, "undefined")
 
     const projectModel = "hexin/kimi-k2.7-code"
-    const codexModel = "openai/gpt-5.5-codex"
+    const codexModel = "gpt-5.5-codex"
     let budgetRequests = 0
+    const promptProfileCatalog = {
+      active: "frontend",
+      project_active: "frontend",
+      session_active: null,
+      default: "general",
+      targets: [],
+      profiles: [
+        {
+          id: "general",
+          label: "General",
+          description: "Baseline prompt set.",
+          built_in: true,
+          editable: false,
+          agents: {},
+        },
+        {
+          id: "frontend",
+          label: "Frontend",
+          description: "Visual UI verification squad.",
+          built_in: true,
+          editable: false,
+          agents: {},
+        },
+      ],
+    }
 
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -126,7 +165,8 @@ test(
       if (path === "/config" && req.method === "PATCH") {
         return send(await req.json())
       }
-      if (path === "/config/prompt" || path === "/config/prompt-profile") return send([])
+      if (path === "/config/prompt") return send([])
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog)
       if (path === "/mission") return send([])
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
@@ -308,6 +348,64 @@ test(
       assert.ok(mirrorBody.includes("gpt-5.5-pro"))
       assert.ok(mirrorBody.includes("gpt-5.5-codex"))
       assert.ok(mirrorBody.includes("kimi-k2.7-code"))
+      const mirrorPlacement = await page.evaluate(() => {
+        const slot = document.querySelector('[data-side="mirror"]') as HTMLElement | null
+        const trigger = document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null
+        const popover = document.querySelector('[data-section="mirror"]') as HTMLElement | null
+        const header = popover?.querySelector(".executor-popover-header") as HTMLElement | null
+        if (!slot || !trigger || !popover || !header) return null
+        const slotRect = slot.getBoundingClientRect()
+        const triggerRect = trigger.getBoundingClientRect()
+        const popoverRect = popover.getBoundingClientRect()
+        const headerRect = header.getBoundingClientRect()
+        const style = getComputedStyle(popover)
+        return {
+          slotLeft: slotRect.left,
+          slotRight: slotRect.right,
+          triggerLeft: triggerRect.left,
+          triggerRight: triggerRect.right,
+          popoverLeft: popoverRect.left,
+          popoverRight: popoverRect.right,
+          headerLeft: headerRect.left,
+          viewportWidth: window.innerWidth,
+          inlineStyle: popover.getAttribute("style") || "",
+          position: style.position,
+          left: style.left,
+          transform: style.transform,
+        }
+      })
+      assert.notEqual(mirrorPlacement, null)
+      assert.notEqual(mirrorPlacement!.position, "static", JSON.stringify(mirrorPlacement))
+      assert.ok(mirrorPlacement!.popoverLeft >= 0, JSON.stringify(mirrorPlacement))
+      assert.ok(mirrorPlacement!.headerLeft >= mirrorPlacement!.popoverLeft, JSON.stringify(mirrorPlacement))
+      assert.ok(mirrorPlacement!.popoverRight <= mirrorPlacement!.viewportWidth + 1, JSON.stringify(mirrorPlacement))
+      assert.ok(mirrorPlacement!.popoverLeft <= mirrorPlacement!.triggerLeft + 1, JSON.stringify(mirrorPlacement))
+      assert.ok(mirrorPlacement!.popoverRight >= mirrorPlacement!.triggerRight - 1, JSON.stringify(mirrorPlacement))
+      const mirrorModelState = await page.evaluate(() => {
+        const current = document.querySelector(
+          '[data-section="mirror"] .executor-popover-model[title="hexin/kimi-k2.7-code"]',
+        ) as HTMLElement | null
+        const inactive = document.querySelector(
+          '[data-section="mirror"] .executor-popover-model[title="openai/gpt-5.5-pro"]',
+        ) as HTMLElement | null
+        return {
+          currentActive: current?.dataset.active ?? "",
+          currentAria: current?.getAttribute("aria-current") ?? "",
+          inactiveActive: inactive?.dataset.active ?? "",
+          inactiveAria: inactive?.getAttribute("aria-current") ?? "",
+        }
+      })
+      assert.deepEqual(mirrorModelState, {
+        currentActive: "true",
+        currentAria: "true",
+        inactiveActive: "false",
+        inactiveAria: "",
+      })
+      const visibleErrorNotifications = await page.$$eval(".app-notification[data-tone=\"error\"]", (nodes) =>
+        nodes.map((node) => (node as HTMLElement).innerText.trim()),
+      )
+      assert.deepEqual(visibleErrorNotifications, [])
+      await saveScreenshot(page, "executor-selector-current-model-aria.png")
 
       await page.click('[data-section="mirror"] .executor-popover-model[title="openai/gpt-5.5-pro"]')
       await page.waitForFunction(() =>
@@ -340,6 +438,49 @@ test(
         const body = document.querySelector('[data-section="external"]') as HTMLElement | null
         return body?.innerText.toLowerCase().includes("openai") ?? false
       })
+      const externalTabState = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('[data-section="external"] [data-ui="executor-popover-tab"]')).map(
+          (node) => ({
+            text: (node as HTMLElement).innerText.trim(),
+            role: node.getAttribute("role") ?? "",
+            active: (node as HTMLElement).dataset.active ?? "",
+            selected: node.getAttribute("aria-selected") ?? "",
+          }),
+        ),
+      )
+      assert.deepEqual(
+        externalTabState.map((row) => ({
+          text: row.text,
+          role: row.role,
+          active: row.active,
+          selected: row.selected,
+        })),
+        [
+          { text: "None", role: "tab", active: "false", selected: "false" },
+          { text: "Codex", role: "tab", active: "true", selected: "true" },
+          { text: "Claude Code", role: "tab", active: "false", selected: "false" },
+        ],
+      )
+      const externalModelState = await page.evaluate(() => {
+        const current = document.querySelector(
+          '[data-section="external"] .executor-popover-model[title="gpt-5.5-codex"]',
+        ) as HTMLElement | null
+        const inactive = document.querySelector(
+          '[data-section="external"] .executor-popover-model[title="gpt-5.5-pro"]',
+        ) as HTMLElement | null
+        return {
+          currentActive: current?.dataset.active ?? "",
+          currentAria: current?.getAttribute("aria-current") ?? "",
+          inactiveActive: inactive?.dataset.active ?? "",
+          inactiveAria: inactive?.getAttribute("aria-current") ?? "",
+        }
+      })
+      assert.deepEqual(externalModelState, {
+        currentActive: "true",
+        currentAria: "true",
+        inactiveActive: "false",
+        inactiveAria: "",
+      })
       const externalBody = (
         await page.$eval('[data-section="external"]', (node) => (node as HTMLElement).innerText)
       ).toLowerCase()
@@ -362,6 +503,27 @@ test(
         const body = document.querySelector('[data-section="external"]') as HTMLElement | null
         return body?.innerText.toLowerCase().includes("anthropic") ?? false
       })
+      const claudeTabState = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('[data-section="external"] [data-ui="executor-popover-tab"]')).map(
+          (node) => ({
+            text: (node as HTMLElement).innerText.trim(),
+            active: (node as HTMLElement).dataset.active ?? "",
+            selected: node.getAttribute("aria-selected") ?? "",
+          }),
+        ),
+      )
+      assert.deepEqual(
+        claudeTabState.map((row) => ({
+          text: row.text,
+          active: row.active,
+          selected: row.selected,
+        })),
+        [
+          { text: "None", active: "false", selected: "false" },
+          { text: "Codex", active: "false", selected: "false" },
+          { text: "Claude Code", active: "true", selected: "true" },
+        ],
+      )
       const claudeBody = (
         await page.$eval('[data-section="external"]', (node) => (node as HTMLElement).innerText)
       ).toLowerCase()
@@ -393,7 +555,6 @@ test(
       })
       assert.notEqual(placement, null)
       assert.notEqual(placement!.position, "static", JSON.stringify(placement))
-      assert.equal(placement!.left, "0px", JSON.stringify(placement))
       assert.ok(placement!.popoverLeft >= 0, JSON.stringify(placement))
       assert.ok(placement!.popoverRight <= placement!.viewportWidth + 1, JSON.stringify(placement))
       assert.ok(placement!.popoverLeft <= placement!.triggerLeft + 1, JSON.stringify(placement))

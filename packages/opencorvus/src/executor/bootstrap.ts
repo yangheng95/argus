@@ -8,6 +8,7 @@ import { CodexAppServerClientProcess } from "./codex-app-server-client"
 import { CodexAppServerExecutor } from "./codex-app-server"
 import { ClaudeAgentExecutor } from "./claude-agent"
 import { MCPServe } from "@/mcp/serve"
+import { EngineConfig } from "@/engine/config"
 import { codingRuntimeEnv } from "./contract"
 import type { CodingRunInfo } from "./contract"
 
@@ -88,7 +89,8 @@ function codexProvider(command: string[]) {
     return CodexCLIExecutor.create({ command })
   }
   return CodexAppServerExecutor.create(
-    (runtime?: Pick<CodingRunInfo, "cwd" | "taskID" | "logicalSessionID" | "runtimeDir" | "worktreeDir">) => {
+    async (runtime?: Pick<CodingRunInfo, "cwd" | "taskID" | "logicalSessionID" | "runtimeDir" | "worktreeDir">) => {
+      const cfg = await EngineConfig.get()
       const cwd = runtime?.cwd
       const mcp = MCPServe.command(cwd ?? Instance.directory)
       const runtimeEnv = codingRuntimeEnv(runtime ?? {})
@@ -156,6 +158,7 @@ function codexProvider(command: string[]) {
           ...process.env,
           ...runtimeEnv,
         },
+        requestIdleMs: cfg.activity.executor_events_idle_ms,
       })
     },
   )

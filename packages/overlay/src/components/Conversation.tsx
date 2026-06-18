@@ -320,7 +320,7 @@ export function Conversation(props: { container: HTMLElement }) {
     })
     scrollController = c
     // Conversation is rendered directly into an existing `.chat-scroll`
-    // host (see main.tsx and TaskDetailOverlay). The host remains the
+    // host owned by main.tsx. The host remains the
     // single scroll container while `virtua` owns only the virtualized
     // content window inside it.
     const markHistoryIntent = () => {

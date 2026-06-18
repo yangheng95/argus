@@ -2,7 +2,7 @@
 // Behaviour coverage for useHotkey and adoption watermark.
 
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
-import { readFileSync } from "fs"
+import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 
 // ── Test helpers ─────────────────────────────────────────────────
@@ -122,7 +122,7 @@ describe("useHotkey matching logic", () => {
 
 describe("useHotkey adoption watermark", () => {
   test("global hotkey surfaces import the shared useHotkey helper", () => {
-    for (const rel of ["src/components/CommandPalette.tsx", "src/components/TaskDetailOverlay.tsx"]) {
+    for (const rel of ["src/components/CommandPalette.tsx"]) {
       const text = readText(join(OVERLAY_ROOT, rel))
       expect(text).toContain('from "../solid/hotkey"')
       expect(text).toContain("useHotkey({")
@@ -130,13 +130,12 @@ describe("useHotkey adoption watermark", () => {
   })
 
   test("no bare document/window.addEventListener keydown in migrated components", () => {
-    // The four migrated components must not contain raw
+    // Migrated components must not contain raw
     // `addEventListener("keydown", ...)` calls (those live in useHotkey now).
     const migrated = [
       "src/components/ChangesPanel.tsx",
       "src/components/CommandPalette.tsx",
       "src/components/ExecutorSelector.tsx",
-      "src/components/TaskDetailOverlay.tsx",
     ]
     for (const rel of migrated) {
       const text = readText(join(OVERLAY_ROOT, rel))
@@ -161,8 +160,19 @@ describe("useHotkey adoption watermark", () => {
     expect(text).not.toContain("onGlobalKey")
   })
 
-  test("TaskDetailOverlay no longer uses onCleanup for keydown", () => {
-    const text = readText(join(OVERLAY_ROOT, "src/components/TaskDetailOverlay.tsx"))
-    expect(text).not.toMatch(/removeEventListener\(\s*['"]keydown/)
+  test("retired task hash overlay stays out of runtime sources", () => {
+    expect(existsSync(join(OVERLAY_ROOT, "src/components/TaskDetailOverlay.tsx"))).toBe(false)
+    for (const rel of [
+      "src/i18n/en-US.json",
+      "src/i18n/zh-CN.json",
+      "src/styles/surfaces/workspace.css",
+      "src/solid/hotkey.ts",
+      "src/components/Conversation.tsx",
+    ]) {
+      const text = readText(join(OVERLAY_ROOT, rel))
+      expect(text).not.toContain("TaskDetailOverlay")
+      expect(text).not.toContain("task_overlay")
+      expect(text).not.toContain("task-overlay")
+    }
   })
 })

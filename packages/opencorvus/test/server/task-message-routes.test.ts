@@ -58,6 +58,50 @@ async function seedRootSession(sessionID: string, text = "initial request") {
   })
 }
 
+async function seedActiveAndCompletedSameCwdTasks() {
+  const activeTaskID = Identifier.ascending("task")
+  const completedTaskID = Identifier.ascending("task")
+  const now = Date.now()
+  const activeRoot = await Session.create({ kind: "root", title: "active same cwd" })
+  const completedRoot = await Session.create({ kind: "root", title: "completed same cwd" })
+  await seedRootSession(activeRoot.id)
+  await seedRootSession(completedRoot.id)
+
+  Database.use((db) => {
+    db.insert(EngineTaskTable)
+      .values({
+        id: activeTaskID,
+        project_id: Instance.project.id,
+        session_id: activeRoot.id,
+        source: "panel",
+        title: "active same cwd",
+        request: "active same cwd",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: completedTaskID,
+        project_id: Instance.project.id,
+        session_id: completedRoot.id,
+        source: "panel",
+        title: "completed same cwd",
+        request: "completed same cwd",
+        priority: "normal",
+        time_created: now + 1,
+        time_updated: now + 1,
+        time_started: now + 1,
+        time_completed: now + 2,
+      })
+      .run()
+  })
+
+  return { activeTaskID, completedTaskID }
+}
+
 describe("task message routes", () => {
   afterEach(async () => {
     mock.restore()
@@ -859,7 +903,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message reopens a completed task and wakes the orchestrator", async () => {
+  test("POST /task/:taskID/message queues a completed task and wakes the orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -913,9 +957,96 @@ describe("task message routes", () => {
         expect(dispatchTaskLoop.mock.calls[0]?.[0]?.event?.operatorMessage?.text).toBe("继续完善这个已完成任务。")
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_started).toBeNull()
         expect(row?.time_completed).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message queues a completed same-cwd task behind active work", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const { completedTaskID } = await seedActiveAndCompletedSameCwdTasks()
+
+        const response = await app.request(`/task/${completedTaskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "继续完善这个已完成任务。",
+            source: "panel",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as { kind: string; should_resume: boolean }
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(body.kind).toBe("note")
+        expect(body.should_resume).toBe(true)
+        expect(runTaskLoop).not.toHaveBeenCalled()
+
+        const completed = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, completedTaskID)).get(),
+        )
+        expect(completed ? deriveTaskStatus(completed) : undefined).toBe("queued")
+        expect(Queue.directoryQueueSnapshot(tmp.path).queuedTaskIDs).toContain(completedTaskID)
+      },
+    })
+  })
+
+  test("POST /task/:taskID/inject queues a completed same-cwd task behind active work", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const { completedTaskID } = await seedActiveAndCompletedSameCwdTasks()
+
+        const response = await app.request(`/task/${completedTaskID}/inject`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            message: "继续完善这个已完成任务。",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          appended: boolean
+          orchestratorWoken: boolean
+          executorResumed: boolean
+          resumed: boolean
+          status: string
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(body).toEqual({
+          appended: true,
+          orchestratorWoken: true,
+          executorResumed: false,
+          resumed: false,
+          status: "queued",
+        })
+        expect(runTaskLoop).not.toHaveBeenCalled()
+
+        const completed = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, completedTaskID)).get(),
+        )
+        expect(completed ? deriveTaskStatus(completed) : undefined).toBe("queued")
+        expect(Queue.directoryQueueSnapshot(tmp.path).queuedTaskIDs).toContain(completedTaskID)
       },
     })
   })
@@ -971,11 +1102,26 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; message: string; should_resume: boolean }
+        const body = (await response.json()) as {
+          kind: string
+          message: string
+          should_resume: boolean
+          user_message: {
+            info: { id: string; sessionID: string }
+            parts: Array<{ type: string; mime?: string; filename?: string; url?: string }>
+          }
+        }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.message).toBe("Operator note recorded. Task wake dispatched.")
         expect(body.should_resume).toBe(true)
+        expect(body.user_message.info.sessionID).toBe(root.id)
+        expect(body.user_message.parts).toHaveLength(2)
+        expect(body.user_message.parts[1]).toMatchObject({
+          type: "file",
+          mime: "text/plain",
+          filename: "spec.txt",
+        })
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         // V35: trigger schema replaced with `event.operatorMessage`.
         const event = (
@@ -994,6 +1140,29 @@ describe("task message routes", () => {
         expect(event.operatorMessage.attachmentSummary).toContain("spec.txt")
         expect(event.operatorMessage.attachmentSummary).toContain("text/plain")
         expect((dispatchTaskLoop.mock.calls[0]?.[0] as { interrupt?: boolean }).interrupt).toBe(true)
+        const task = Database.use((db) =>
+          db
+            .select({ attachments: EngineTaskTable.attachments })
+            .from(EngineTaskTable)
+            .where(eq(EngineTaskTable.id, taskID))
+            .get(),
+        )
+        expect(task?.attachments).toEqual([
+          expect.objectContaining({
+            mime: "text/plain",
+            filename: "spec.txt",
+            intent: "spec_artifact",
+            source: "user-upload",
+          }),
+        ])
+        const messages = await Session.messages({ sessionID: root.id })
+        const latest = messages.at(-1)
+        expect(latest?.info.id).toBe(body.user_message.info.id)
+        expect(latest?.parts[1]).toMatchObject({
+          type: "file",
+          mime: "text/plain",
+          filename: "spec.txt",
+        })
       },
     })
   })

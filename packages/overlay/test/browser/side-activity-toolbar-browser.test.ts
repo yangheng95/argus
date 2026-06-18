@@ -586,6 +586,11 @@ test(
         }
         throw new Error(`${label}: ${JSON.stringify(state)} requests=${JSON.stringify(requestLog.slice(-20))}`)
       }
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+      await waitForState(
+        "mission activity should be active before mission layout assertions",
+        (state) => state.leftMission === "true" && state.leftTasks === "false",
+      )
       assertMatchObject(await activeState(), {
         leftTasks: "false",
         leftMission: "true",
@@ -837,6 +842,14 @@ test(
         "mission row should select its session",
         (state) => state.selectedSourceID === "ses_mission_side_activity",
       )
+      const missionCurrentState = await page.$eval(missionRowSelector, (node) => {
+        const row = node as HTMLElement
+        return {
+          rowActive: row.dataset.active || "",
+          current: row.querySelector<HTMLElement>(".mission-row-main")?.getAttribute("aria-current") || "",
+        }
+      })
+      assert.deepEqual(missionCurrentState, { rowActive: "true", current: "page" })
       assertMatchObject(await activeState(), {
         selectedSourceKind: "session",
         selectedSourceID: "ses_mission_side_activity",
@@ -1307,6 +1320,14 @@ test(
       )
       await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main')
       await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
+      const assistantCurrentState = await page.$eval(assistantRowSelector, (node) => {
+        const row = node as HTMLElement
+        return {
+          rowActive: row.dataset.active || "",
+          current: row.querySelector<HTMLElement>(".coding-assistant-row-main")?.getAttribute("aria-current") || "",
+        }
+      })
+      assert.deepEqual(assistantCurrentState, { rowActive: "true", current: "page" })
       assertMatchObject(await activeState(), {
         centerPreview: "false",
         centerWorkflow: "true",

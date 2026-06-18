@@ -44,6 +44,72 @@ describe("tool.edit", () => {
       })
     })
 
+    test("rejects empty oldString create when target already exists before asking permission", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "existing.txt")
+      await fs.writeFile(filepath, "original content", "utf-8")
+      const permissionCalls: unknown[] = []
+      const permissionCtx = {
+        ...ctx,
+        ask: async (input: unknown) => {
+          permissionCalls.push(input)
+        },
+      }
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const edit = await EditTool.init()
+          await expect(
+            edit.execute(
+              {
+                filePath: filepath,
+                oldString: "",
+                newString: "replacement content",
+              },
+              permissionCtx,
+            ),
+          ).rejects.toThrow("apply_patch verification failed: Add File target already exists")
+
+          expect(permissionCalls).toHaveLength(0)
+          expect(await fs.readFile(filepath, "utf-8")).toBe("original content")
+        },
+      })
+    })
+
+    test("rejects empty oldString create when target appears during permission", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "race.txt")
+      const permissionCalls: unknown[] = []
+      const permissionCtx = {
+        ...ctx,
+        ask: async (input: unknown) => {
+          permissionCalls.push(input)
+          await fs.writeFile(filepath, "interloper content", "utf-8")
+        },
+      }
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const edit = await EditTool.init()
+          await expect(
+            edit.execute(
+              {
+                filePath: filepath,
+                oldString: "",
+                newString: "tool content",
+              },
+              permissionCtx,
+            ),
+          ).rejects.toThrow("EEXIST")
+
+          expect(permissionCalls).toHaveLength(1)
+          expect(await fs.readFile(filepath, "utf-8")).toBe("interloper content")
+        },
+      })
+    })
+
     test("creates new file with nested directories", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "nested", "dir", "file.txt")
@@ -79,8 +145,12 @@ describe("tool.edit", () => {
           const { FileWatcher } = await import("../../src/file/watcher")
 
           const events: string[] = []
+          const watcherEvents: string[] = []
           const unsubEdited = Bus.subscribe(File.Event.Edited, () => events.push("edited"))
-          const unsubUpdated = Bus.subscribe(FileWatcher.Event.Updated, () => events.push("updated"))
+          const unsubUpdated = Bus.subscribe(FileWatcher.Event.Updated, (event) => {
+            events.push("updated")
+            watcherEvents.push(event.properties.event)
+          })
 
           const edit = await EditTool.init()
           await edit.execute(
@@ -94,10 +164,18 @@ describe("tool.edit", () => {
 
           expect(events).toContain("edited")
           expect(events).toContain("updated")
+          expect(watcherEvents).toEqual(["add"])
           unsubEdited()
           unsubUpdated()
         },
       })
+    })
+
+    test("create-file branch uses the shared Add File verifier and exclusive create write", async () => {
+      const source = await fs.readFile(path.join(import.meta.dir, "../../src/tool/edit.ts"), "utf8")
+      expect(source).toContain("Patch.assertAddFileTargetDoesNotExist(filePath)")
+      expect(source).toContain('flag: "wx"')
+      expect(source).not.toContain('event: existed ? "change" : "add"')
     })
   })
 

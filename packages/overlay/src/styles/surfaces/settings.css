@@ -485,6 +485,7 @@
   flex: 0 0 auto;
 }
 
+
 /* Memory scope chip: "global" / "session" / "builtin_default"
    tones. The pill-shape declaration (border-radius / padding /
    font) lives in the cross-surface multi-class
@@ -565,6 +566,7 @@
 }
 
 /* ── ExtensionsPanel.tsx (Skill / Channel sections) ─────── */
+
 
 /* Section head: card-shaped header that opens the section body
    beneath. Hover/focus-within wash routed through the shared
@@ -648,6 +650,7 @@
   flex-wrap: wrap;
   flex-shrink: 0;
 }
+
 
 /* ── ChannelsPanel.tsx (channel docs + actions) ──────────── */
 
@@ -821,8 +824,6 @@
   line-height: 1.35;
   color: var(--text-muted);
 }
-
-/* ── LogViewer.tsx (Diagnostics tab) ─────────────────────── */
 
 /* Log viewer container — scrollable mono-font region that holds
    the log lines. The 520px max-height was already calc-wrapped

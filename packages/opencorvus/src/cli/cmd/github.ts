@@ -187,6 +187,10 @@ export function formatPromptTooLargeError(files: { filename: string; content: st
   return `PROMPT_TOO_LARGE: The prompt exceeds the model's context limit.${fileDetails}`
 }
 
+export async function summarizeGitHubActionResponse(response: string, chat: (message: string) => Promise<string>) {
+  return await chat(`Summarize the following in less than 40 characters:\n\n${response}`)
+}
+
 export const GithubCommand = cmd({
   command: "github",
   describe: "manage GitHub agent",
@@ -884,14 +888,7 @@ export const GithubRunCommand = cmd({
       }
 
       async function summarize(response: string) {
-        try {
-          return await chat(`Summarize the following in less than 40 characters:\n\n${response}`)
-        } catch (e) {
-          const title = issueEvent
-            ? issueEvent.issue.title
-            : (payload as PullRequestReviewCommentEvent).pull_request.title
-          return `Fix issue: ${title}`
-        }
+        return await summarizeGitHubActionResponse(response, chat)
       }
 
       async function chat(message: string, files: PromptFiles = []) {

@@ -82,7 +82,14 @@ interface ActiveStream {
 }
 
 const pending = new Map<string, Pending>()
-const pendingNative = new Map<string, { resolve: (value: unknown) => void; reject: (err: Error) => void }>()
+const pendingNative = new Map<
+  string,
+  {
+    resolve: (value: unknown) => void
+    reject: (err: Error) => void
+    timeout: ReturnType<typeof setTimeout>
+  }
+>()
 const streams = new Map<string, ActiveStream>()
 const uiCommandHandlers = new Map<string, Set<(payload: unknown) => void>>()
 let installed = false
@@ -212,6 +219,7 @@ function handleIncoming(raw: unknown): void {
       const p = pendingNative.get(msg.id)
       if (!p) return
       pendingNative.delete(msg.id)
+      clearTimeout(p.timeout)
       if (msg.ok) {
         p.resolve(msg.value)
         return
@@ -531,7 +539,19 @@ export function createVsCodeTransport(): HostTransport {
           }
           return new Promise((resolve, reject) => {
             const id = newId()
-            pendingNative.set(id, { resolve, reject })
+            let timeout: ReturnType<typeof setTimeout>
+            timeout = setTimeout(() => {
+              const p = pendingNative.get(id)
+              if (!p) return
+              pendingNative.delete(id)
+              clearTimeout(timeout)
+              const error = new Error(
+                `VS Code native command ${command.kind} timed out after ${DEFAULT_REQUEST_TIMEOUT_MILLISECONDS}ms.`,
+              )
+              error.name = "TimeoutError"
+              p.reject(error)
+            }, DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)
+            pendingNative.set(id, { resolve, reject, timeout })
             try {
               vscode.postMessage(<WebviewMessage>{
                 protocol: PROTOCOL_VERSION,
@@ -541,6 +561,7 @@ export function createVsCodeTransport(): HostTransport {
               })
             } catch (err) {
               pendingNative.delete(id)
+              clearTimeout(timeout)
               reject(err instanceof Error ? err : new Error(String(err)))
             }
           })

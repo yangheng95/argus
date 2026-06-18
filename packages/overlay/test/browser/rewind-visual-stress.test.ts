@@ -482,10 +482,7 @@ function assertNoLayoutBreakage(snapshot: Awaited<ReturnType<typeof visualSnapsh
 }
 
 function isExpectedFailedRewindConsole(text: string): boolean {
-  return (
-    text === "Failed to load resource: the server responded with a status of 503 ()" ||
-    text === "rewind request failed 503 rewind failed by visual stress fixture"
-  )
+  return text === "Failed to load resource: the server responded with a status of 503 ()"
 }
 
 async function sendButtonState(page: OverlayPage) {

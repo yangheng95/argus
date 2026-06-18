@@ -270,6 +270,7 @@ function MissionRow(props: {
             <button
               type="button"
               class="task-row-main mission-row-main"
+              aria-current={props.selected ? "page" : undefined}
               title={debugCopied() ? t("common.copied") : missionRowTip(props.mission)}
               onClick={(event) => {
                 event.stopPropagation()

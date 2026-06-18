@@ -87,7 +87,9 @@ last-resort hung-test guard for Playwright calls.
 | Local module located by `data-testid`, ARIA role/name, or owned CSS selector | Local capture | Capture and bind the same visible module through each supported locator kind. |
 | Source bbox outside image bounds | Region comparison | Persist failed reference-comparison evidence with no crops. |
 | Hidden or zero-size implementation region | Region comparison | Persist failed reference-comparison evidence with no one-pixel crop. |
+| Below-fold implementation region | Region comparison | Crop from a full-page implementation screenshot so valid offscreen module bboxes do not fail as viewport-clipped artifacts. |
 | Multiple routes in one viewport | Region runner | Navigate per binding and restore route-specific region coordinates. |
+| Playwright sidecar lifecycle errors | Evidence runner | Propagate locator and close errors instead of converting them into missing regions or successful captures. |
 | Tool-level bind output feeds compare input | Toolchain integration | `browser_preview_bind_local_module` metadata binding is accepted by `browser_preview_compare_regions`, which persists `reference-comparison` evidence and side-by-side artifacts. |
 | Build registry tools on task-backed sessions | Tool context | `SessionPrompt.prompt(...).extra.taskID` equals the current task ID. |
 

@@ -6,6 +6,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { ModelsDev } from "../../src/provider/models"
+import { generateText } from "ai"
 import { CUSTOM_LOADERS } from "../../src/provider/vendor"
 import { Env } from "../../src/env"
 import { Global } from "../../src/global"
@@ -35,6 +36,74 @@ test("stable providers retain the five minute minimum fetch inactivity timeout",
   expect(Provider.resolveFetchInactivityMs("anthropic", 30_000)).toBe(300_000)
   expect(Provider.resolveFetchInactivityMs("anthropic", 600_000)).toBe(600_000)
   expect(Provider.resolveFetchInactivityMs("anthropic", false)).toBe(0)
+})
+
+test("provider fetch clears inactivity timer when fetch throws before response", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      let observedSignal: AbortSignal | undefined
+      const inactivityTimers = new Set<ReturnType<typeof setTimeout>>()
+      const clearedInactivityTimers = new Set<ReturnType<typeof setTimeout>>()
+      const originalSetTimeout = globalThis.setTimeout
+      const originalClearTimeout = globalThis.clearTimeout
+      const fetchFailure = new Error("provider socket failed before response")
+      const config = {
+        provider: {
+          "alibaba-coding-plan-cn": {
+            name: "Throwing Provider",
+            npm: "@ai-sdk/openai-compatible",
+            api: "https://example.invalid/v1",
+            env: [],
+            models: {
+              "throwing-model": {
+                name: "Throwing Model",
+                tool_call: true,
+              },
+            },
+            options: {
+              apiKey: "test-key",
+              timeout: 20,
+              fetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
+                observedSignal = init?.signal ?? undefined
+                throw fetchFailure
+              },
+            },
+          },
+        },
+      } as any
+
+      const model = await Provider.getModel("alibaba-coding-plan-cn", "throwing-model", { config })
+      const language = await Provider.getLanguage(model, { config })
+
+      globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+        const timer = originalSetTimeout(handler, timeout, ...args)
+        if (timeout === 20) inactivityTimers.add(timer)
+        return timer
+      }) as typeof setTimeout
+      globalThis.clearTimeout = ((timer?: Parameters<typeof clearTimeout>[0]) => {
+        if (timer && inactivityTimers.has(timer as ReturnType<typeof setTimeout>)) {
+          clearedInactivityTimers.add(timer as ReturnType<typeof setTimeout>)
+        }
+        return originalClearTimeout(timer)
+      }) as typeof clearTimeout
+
+      try {
+        await expect(generateText({ model: language, prompt: "hello" })).rejects.toThrow("provider socket failed")
+        expect(observedSignal).toBeDefined()
+        expect(observedSignal?.aborted).toBe(false)
+        expect(inactivityTimers.size).toBe(1)
+        expect(clearedInactivityTimers.size).toBe(1)
+      } finally {
+        globalThis.setTimeout = originalSetTimeout
+        globalThis.clearTimeout = originalClearTimeout
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 60))
+      expect(observedSignal?.aborted).toBe(false)
+    },
+  })
 })
 
 test("local model catalog includes every custom-loader provider", async () => {

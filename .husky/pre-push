@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+pre_push_refs=$(cat)
 # Check if bun version matches package.json
 # keep in sync with packages/script/src/index.ts semver qualifier
 bun -e '
@@ -26,4 +27,4 @@ bun run overlay:i18n-check
 # reaches the remote branch. The script exits 1 on any hit and prints
 # the file:line + pattern id; deliberate test fixtures should mark the
 # offending line with `// secret-scan: ignore`.
-bun run script/secret-scan.ts
+printf '%s\n' "$pre_push_refs" | bun run script/secret-scan.ts --pre-push-stdin

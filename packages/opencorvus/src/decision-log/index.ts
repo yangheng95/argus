@@ -188,26 +188,22 @@ export function createDecisionLog(taskID: string): DecisionLog {
     append(entry) {
       const id = Identifier.ascending("decision_log")
       const now = Date.now()
-      try {
-        Database.use((db) =>
-          db
-            .insert(DecisionLogTable)
-            .values({
-              id,
-              task_id: taskID,
-              goal_id: entry.goalID ?? null,
-              phase: entry.phase,
-              key: entry.key,
-              value: entry.value,
-              reason: entry.reason,
-              time_created: now,
-            })
-            .run(),
-        )
-        log.info("decision logged", { taskID, key: entry.key, value: entry.value, phase: entry.phase })
-      } catch (err) {
-        log.warn("decision log append failed (non-fatal)", { taskID, key: entry.key, error: String(err) })
-      }
+      Database.use((db) =>
+        db
+          .insert(DecisionLogTable)
+          .values({
+            id,
+            task_id: taskID,
+            goal_id: entry.goalID ?? null,
+            phase: entry.phase,
+            key: entry.key,
+            value: entry.value,
+            reason: entry.reason,
+            time_created: now,
+          })
+          .run(),
+      )
+      log.info("decision logged", { taskID, key: entry.key, value: entry.value, phase: entry.phase })
     },
 
     read(): DecisionEntry[] {

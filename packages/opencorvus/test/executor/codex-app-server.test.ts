@@ -605,6 +605,102 @@ describe("codex app server executor", () => {
       expect(result.at(-1)?.type).toBe("done")
     }
   })
+
+  test("closes the client when run initialization fails before thread start", async () => {
+    let closed = false
+    const provider = CodexAppServerExecutor.create({
+      async initialize() {
+        throw new Error("forced initialize failure")
+      },
+      async threadStart() {
+        throw new Error("threadStart should not run")
+      },
+      async threadResume() {
+        throw new Error("threadResume should not run")
+      },
+      async turnStart() {
+        throw new Error("turnStart should not run")
+      },
+      async turnInterrupt() {
+        return true
+      },
+      async *events() {},
+      close() {
+        closed = true
+      },
+    })
+
+    await expect(collect(provider.run({ prompt: "test" }))).rejects.toThrow("forced initialize failure")
+    expect(closed).toBe(true)
+  })
+
+  test("run initialization requests honor caller abort and close the client", async () => {
+    const controller = new AbortController()
+    let initializedWithCallerSignal = false
+    let closed = false
+    const provider = CodexAppServerExecutor.create({
+      initialize(_input, options) {
+        initializedWithCallerSignal = options?.signal === controller.signal
+        return new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), { once: true })
+        })
+      },
+      async threadStart() {
+        throw new Error("threadStart should not run")
+      },
+      async threadResume() {
+        throw new Error("threadResume should not run")
+      },
+      async turnStart() {
+        throw new Error("turnStart should not run")
+      },
+      async turnInterrupt() {
+        return true
+      },
+      async *events() {},
+      close() {
+        closed = true
+      },
+    })
+
+    const pending = collect(provider.run({ prompt: "test", signal: controller.signal }))
+    await Bun.sleep(0)
+    controller.abort(new DOMException("forced startup abort", "AbortError"))
+
+    await expect(pending).rejects.toThrow("forced startup abort")
+    expect(initializedWithCallerSignal).toBe(true)
+    expect(closed).toBe(true)
+  })
+
+  test("closes the client when resume initialization fails before thread resume", async () => {
+    let closed = false
+    const provider = CodexAppServerExecutor.create({
+      async initialize() {
+        throw new Error("forced resume initialize failure")
+      },
+      async threadStart() {
+        throw new Error("threadStart should not run")
+      },
+      async threadResume() {
+        throw new Error("threadResume should not run")
+      },
+      async turnStart() {
+        throw new Error("turnStart should not run")
+      },
+      async turnInterrupt() {
+        return true
+      },
+      async *events() {},
+      close() {
+        closed = true
+      },
+    })
+
+    await expect(collect(provider.resume({ sessionID: "thr_old:turn_old", prompt: "test" }))).rejects.toThrow(
+      "forced resume initialize failure",
+    )
+    expect(closed).toBe(true)
+  })
 })
 
 function client(

@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { SECRET_PATTERNS, parseGitIndexPaths, scan } from "../../../script/secret-scan"
+import {
+  SECRET_PATTERNS,
+  parseGitIndexEntries,
+  parseGitIndexPaths,
+  parseGitTreeEntries,
+  parsePrePushLocalRefs,
+  scan,
+} from "../../../script/secret-scan"
 
 /**
  * Regression for the historical leak that triggered this guard:
@@ -34,6 +42,29 @@ describe("scan", () => {
     fs.writeFileSync(abs, body)
   }
 
+  function runGit(args: string[]) {
+    const result = spawnSync("git", args, { cwd: root, encoding: "utf8" })
+    if (result.error) throw result.error
+    if (result.status !== 0) {
+      throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`)
+    }
+  }
+
+  function gitOutput(args: string[]) {
+    const result = spawnSync("git", args, { cwd: root, encoding: "utf8" })
+    if (result.error) throw result.error
+    if (result.status !== 0) {
+      throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`)
+    }
+    return result.stdout.trim()
+  }
+
+  function initGitRepo() {
+    runGit(["init"])
+    runGit(["config", "user.email", "secret-scan@example.test"])
+    runGit(["config", "user.name", "Secret Scan Test"])
+  }
+
   test("zero hits on a clean tree", () => {
     write("src/index.ts", "export const ok = true\nconsole.log('hello world')")
     write("README.md", "# OpenCorvus\n\nA project.")
@@ -48,6 +79,17 @@ describe("scan", () => {
     expect(hits[0]!.patternId).toBe("openai-style")
     expect(hits[0]!.lineNumber).toBe(1)
     expect(hits[0]!.match).toContain("sk-eq7WQu0ylel")
+  })
+
+  test("scans env example files with compound suffixes", () => {
+    write(".env.example", "OPENAI_API_KEY=sk-BBBBBBBBBBBBBBBBBBBBBB") // secret-scan: ignore
+    write("config/app.env.example", "OPENAI_API_KEY=sk-AAAAAAAAAAAAAAAAAAAAAA") // secret-scan: ignore
+    write("config/notes.example", "OPENAI_API_KEY=sk-CCCCCCCCCCCCCCCCCCCCCC") // secret-scan: ignore
+    const hits = scan({ repoRoot: root, files: [".env.example", "config/app.env.example", "config/notes.example"] })
+    expect(hits.map((hit) => [hit.file, hit.patternId])).toEqual([
+      [".env.example", "openai-style"],
+      ["config/app.env.example", "openai-style"],
+    ])
   })
 
   test("flags GitHub PAT, AWS AKID, Google AIza, Slack token, JWT", () => {
@@ -90,6 +132,63 @@ describe("scan", () => {
     expect(hits).toHaveLength(0)
   })
 
+  test("default scan reads committed index content instead of unstaged worktree cleanup", () => {
+    initGitRepo()
+    write("src/secret.ts", `export const key = "sk-DDDDDDDDDDDDDDDDDDDDDD"`) // secret-scan: ignore
+    runGit(["add", "src/secret.ts"])
+    runGit(["commit", "-m", "commit secret fixture"])
+    write("src/secret.ts", "export const key = undefined\n")
+
+    const hits = scan({ repoRoot: root })
+
+    expect(hits.map((hit) => [hit.file, hit.patternId])).toEqual([["src/secret.ts", "openai-style"]])
+  })
+
+  test("default scan reads staged index content instead of unstaged worktree cleanup", () => {
+    initGitRepo()
+    write("src/secret.ts", "export const key = undefined\n")
+    runGit(["add", "src/secret.ts"])
+    runGit(["commit", "-m", "commit clean fixture"])
+    write("src/secret.ts", `export const key = "sk-EEEEEEEEEEEEEEEEEEEEEE"`) // secret-scan: ignore
+    runGit(["add", "src/secret.ts"])
+    write("src/secret.ts", "export const key = undefined\n")
+
+    const hits = scan({ repoRoot: root })
+
+    expect(hits.map((hit) => [hit.file, hit.patternId])).toEqual([["src/secret.ts", "openai-style"]])
+  })
+
+  test("default scan reads HEAD content when index cleanup hides a committed secret", () => {
+    initGitRepo()
+    write("src/secret.ts", `export const key = "sk-FFFFFFFFFFFFFFFFFFFFFF"`) // secret-scan: ignore
+    runGit(["add", "src/secret.ts"])
+    runGit(["commit", "-m", "commit secret fixture"])
+    write("src/secret.ts", "export const key = undefined\n")
+    runGit(["add", "src/secret.ts"])
+
+    const hits = scan({ repoRoot: root })
+
+    expect(hits.map((hit) => [hit.file, hit.patternId])).toEqual([["src/secret.ts", "openai-style"]])
+  })
+
+  test("pre-push local ref scan reads the pushed commit when worktree and index are clean", () => {
+    initGitRepo()
+    write("src/secret.ts", `export const key = "sk-GGGGGGGGGGGGGGGGGGGGGG"`) // secret-scan: ignore
+    runGit(["add", "src/secret.ts"])
+    runGit(["commit", "-m", "commit secret fixture"])
+    const secretCommit = gitOutput(["rev-parse", "HEAD"])
+    write("src/secret.ts", "export const key = undefined\n")
+    runGit(["add", "src/secret.ts"])
+    runGit(["commit", "-m", "commit clean fixture"])
+
+    const refs = parsePrePushLocalRefs(
+      `refs/heads/main ${secretCommit} refs/heads/main 0000000000000000000000000000000000000000\n`,
+    )
+    const hits = scan({ repoRoot: root, refs })
+
+    expect(hits.map((hit) => [hit.file, hit.patternId])).toEqual([["src/secret.ts", "openai-style"]])
+  })
+
   test("only scans text-like extensions", () => {
     // Binary file with a fake key inside should NOT be flagged
     // (the scanner skips unknown extensions). This avoids tripping
@@ -121,20 +220,40 @@ describe("scan", () => {
 })
 
 describe("parseGitIndexPaths", () => {
-  function indexBuffer(paths: string[]) {
+  function indexBuffer(
+    entries: Array<
+      | string
+      | {
+          path: string
+          objectId?: string
+          size?: number
+          mode?: number
+          stage?: number
+        }
+    >,
+  ) {
     const header = Buffer.alloc(12)
     header.write("DIRC", 0, "ascii")
     header.writeUInt32BE(2, 4)
-    header.writeUInt32BE(paths.length, 8)
-    const entries = paths.map((rel) => {
+    header.writeUInt32BE(entries.length, 8)
+    const encodedEntries = entries.map((entry) => {
+      const rel = typeof entry === "string" ? entry : entry.path
       const encoded = Buffer.from(rel, "utf8")
       const fixed = Buffer.alloc(62)
-      fixed.writeUInt16BE(encoded.length, 60)
+      const objectId =
+        typeof entry === "string"
+          ? "0000000000000000000000000000000000000000"
+          : (entry.objectId ?? "0000000000000000000000000000000000000000")
+      fixed.writeUInt32BE(typeof entry === "string" ? 0o100644 : (entry.mode ?? 0o100644), 24)
+      fixed.writeUInt32BE(typeof entry === "string" ? encoded.length : (entry.size ?? encoded.length), 36)
+      Buffer.from(objectId, "hex").copy(fixed, 40)
+      const stage = typeof entry === "string" ? 0 : (entry.stage ?? 0)
+      fixed.writeUInt16BE((stage << 12) | Math.min(encoded.length, 0xfff), 60)
       const rawLength = fixed.length + encoded.length + 1
       const padding = (8 - (rawLength % 8)) % 8
       return Buffer.concat([fixed, encoded, Buffer.alloc(1 + padding)])
     })
-    return Buffer.concat([header, ...entries, Buffer.alloc(20)])
+    return Buffer.concat([header, ...encodedEntries, Buffer.alloc(20)])
   }
 
   test("reads tracked paths from a v2 git index without spawning git", () => {
@@ -144,9 +263,58 @@ describe("parseGitIndexPaths", () => {
     ])
   })
 
+  test("reads blob metadata from v2 git index entries", () => {
+    const objectId = "1234567890abcdef1234567890abcdef12345678"
+    expect(
+      parseGitIndexEntries(indexBuffer([{ path: "src/index.ts", objectId, size: 42, mode: 0o100755, stage: 0 }])),
+    ).toEqual([{ file: "src/index.ts", objectId, size: 42, mode: 0o100755, stage: 0 }])
+  })
+
   test("rejects unsupported git index versions loudly", () => {
     const data = indexBuffer(["src/index.ts"])
     data.writeUInt32BE(4, 4)
     expect(() => parseGitIndexPaths(data)).toThrow("unsupported git index version 4")
+  })
+})
+
+describe("parseGitTreeEntries", () => {
+  test("reads blob metadata from nul-delimited ls-tree output", () => {
+    const data = Buffer.from(
+      [
+        "100644 blob 1234567890abcdef1234567890abcdef12345678      42\tsrc/index.ts",
+        "040000 tree 2222222222222222222222222222222222222222       -\tsrc",
+        "",
+      ].join("\0"),
+      "utf8",
+    )
+
+    expect(parseGitTreeEntries(data)).toEqual([
+      {
+        file: "src/index.ts",
+        objectId: "1234567890abcdef1234567890abcdef12345678",
+        size: 42,
+        mode: 0o100644,
+        stage: 0,
+      },
+    ])
+  })
+})
+
+describe("parsePrePushLocalRefs", () => {
+  test("deduplicates pushed local object ids and skips deleted refs", () => {
+    expect(
+      parsePrePushLocalRefs(
+        [
+          "refs/heads/main 1234567890abcdef1234567890abcdef12345678 refs/heads/main 0000000000000000000000000000000000000000",
+          "refs/heads/again 1234567890abcdef1234567890abcdef12345678 refs/heads/again 1111111111111111111111111111111111111111",
+          "refs/heads/deleted 0000000000000000000000000000000000000000 refs/heads/deleted 2222222222222222222222222222222222222222",
+          "",
+        ].join("\n"),
+      ),
+    ).toEqual(["1234567890abcdef1234567890abcdef12345678"])
+  })
+
+  test("rejects malformed pre-push ref lines loudly", () => {
+    expect(() => parsePrePushLocalRefs("refs/heads/main\n")).toThrow("invalid pre-push ref line")
   })
 })
