@@ -67,7 +67,7 @@ test("task and file search share the field primitive", () => {
 })
 
 test("inspector list rows keep a neutral inset base", () => {
-  expect(bodyOf(INSPECTOR_CSS, ".goal-item, .knowledge-item, .pref-item")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(INSPECTOR_CSS, ".knowledge-item, .pref-item")).toMatch(/background:\s*transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".req-spec-content")).toMatch(/background:\s*var\(--surface-inset\)/)
   expect(bodyOf(INSPECTOR_CSS, ".integrity__issue, .integrity__correction, .integrity__missing")).toMatch(
     /background:\s*transparent/,
@@ -78,11 +78,12 @@ test("inspector list rows keep a neutral inset base", () => {
   expect(INSPECTOR_CSS).not.toContain(".criteria-check")
   expect(INSPECTOR_CSS).not.toContain(".criteria-group")
   expect(INSPECTOR_CSS).not.toContain(".integrity__dimension")
-  expect(bodyOf(INSPECTOR_CSS, '.goal-status-icon[data-status="pending"]')).toMatch(
-    /background:\s*var\(--surface-hover\)/,
-  )
-  expect(bodyOf(INSPECTOR_CSS, '.goal-priority[data-priority="advisory"]')).toMatch(
-    /background:\s*var\(--surface-hover\)/,
+  for (const retiredSelector of [".goal-item", ".goals-list", ".goal-status-icon", ".goal-priority", ".goal-actions"]) {
+    expect(INSPECTOR_CSS).not.toContain(retiredSelector)
+  }
+  expect(bodyOf(INSPECTOR_CSS, ".gwg")).toMatch(/background:\s*var\(--gwg-surface-base\)/)
+  expect(bodyOf(INSPECTOR_CSS, '.gwg[data-goal-status="running"] .gwg-status-icon')).toMatch(
+    /background:\s*var\(--accent-dim\)/,
   )
 })
 

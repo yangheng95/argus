@@ -1839,6 +1839,35 @@ describe("overlay architecture guards", () => {
     expect(cardSurface).toMatch(/(^|\n)\.task-progress__pill\s*\{/)
   })
 
+  test("retired goal item list selectors stay absent while GWG remains canonical", () => {
+    const productionSource = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|html)$/.test(path))
+      .map((path) => withoutComments(readText(path)))
+      .join("\n")
+    const goalWorkflowGroup = readText(join(OVERLAY_ROOT, "src/components/GoalWorkflowGroup.tsx"))
+    const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+
+    for (const token of [
+      "goals-list",
+      "goal-item",
+      "goal-item-head",
+      "goal-item-chevron",
+      "goal-desc-inline",
+      "goal-title-brief",
+      "goal-item-id",
+      "goal-item-body",
+      "goal-status-icon",
+      "goal-priority",
+      "goal-actions",
+    ]) {
+      expect(productionSource).not.toContain(token)
+    }
+
+    expect(goalWorkflowGroup).toContain('class="gwg-list"')
+    expect(goalWorkflowGroup).toContain('class="gwg-status-icon"')
+    expect(inspectorSurface).toMatch(/(^|\n)\.gwg-list\s*\{/)
+    expect(inspectorSurface).toMatch(/(^|\n)\.gwg-status-icon\s*\{/)
+  })
+
   test("conversation header + task-switch progress are owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
