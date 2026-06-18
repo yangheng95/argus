@@ -13,11 +13,10 @@
 //   * New Task (focus composer)
 //
 // Filtering: case-insensitive substring on command label + description +
-// keywords. Up/Down navigate, Enter runs, Esc closes. The selected
-// command is highlighted via aria-selected for screen readers and via
-// the .cmdk-item--active class for the eye.
+// keywords. The shared Combobox primitive owns active descendant,
+// listbox option semantics, and keyboard navigation.
 
-import { For, Show, createMemo, createSignal, createEffect } from "solid-js"
+import { createMemo } from "solid-js"
 import { boardStore } from "../store/board"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
 import { syncAgentPromptLocale } from "../services/config"
@@ -28,9 +27,11 @@ import { openConfigDialog } from "../services/dialog"
 import { CONFIG_SECTIONS } from "../store/dialog"
 import { setLocale } from "../utils/i18n"
 import { t } from "../utils/i18n"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { useDisclosure } from "../solid/disclosure"
 import { useHotkey } from "../solid/hotkey"
 import { Dialog } from "./primitives/Dialog"
+import { ComboboxControl } from "./ui/ComboboxControl"
 
 interface Command {
   id: string
@@ -44,10 +45,6 @@ interface Command {
 const COMMAND_PALETTE_INPUT_ID = "commandPaletteInput"
 const COMMAND_PALETTE_LISTBOX_ID = "commandPaletteListbox"
 
-function commandOptionID(command: Command, index: number): string {
-  return `commandPaletteOption-${index}-${command.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
-}
-
 // `id` is the canonical theme value (matches `data-theme` and
 // settings.theme); `slug` is the underscore-safe i18n key suffix so
 // `t(\`cmdk.theme.${slug}\`)` resolves at the call site as a template
@@ -60,10 +57,7 @@ const LOCALES: Array<{ id: string; label: string }> = [
 
 export function CommandPalette() {
   const palette = useDisclosure()
-  const [query, setQuery] = createSignal("")
-  const [activeIndex, setActiveIndex] = createSignal(0)
   let inputRef: HTMLInputElement | undefined
-  let listRef: HTMLDivElement | undefined
   // Element that had focus right before the palette opened — restored on
   // close so keyboard users land back where they triggered Cmd+K from
   // (textarea, button, etc.) instead of leaking to <body>.
@@ -155,33 +149,15 @@ export function CommandPalette() {
     return cmds
   })
 
-  const filtered = createMemo<Command[]>(() => {
-    const q = query().trim().toLowerCase()
-    const list = commands()
-    if (!q) return list
-    return list.filter((c) => {
-      const haystack = `${c.label} ${c.hint || ""} ${c.keywords || ""}`.toLowerCase()
-      return haystack.includes(q)
-    })
-  })
-
-  const activeDescendantID = createMemo(() => {
-    const command = filtered()[activeIndex()]
-    return command ? commandOptionID(command, activeIndex()) : undefined
-  })
-
-  // Reset selection whenever the visible command set changes — otherwise a
-  // stale activeIndex points off the end of the filtered list and Enter
-  // does nothing.
-  createEffect(() => {
-    void filtered().length
-    setActiveIndex(0)
-  })
+  function commandMatches(command: Command, inputValue: string): boolean {
+    const q = inputValue.trim().toLowerCase()
+    if (!q) return true
+    const haystack = `${command.label} ${command.hint || ""} ${command.keywords || ""}`.toLowerCase()
+    return haystack.includes(q)
+  }
 
   function close() {
     palette.close()
-    setQuery("")
-    setActiveIndex(0)
     // Return focus to whatever the operator was on before the palette
     // grabbed it. Wrap in try because the prior element may have been
     // removed from the DOM during the palette's lifetime (e.g. the
@@ -196,52 +172,17 @@ export function CommandPalette() {
     priorFocus = null
   }
 
-  function runActive() {
-    const list = filtered()
-    const cmd = list[activeIndex()]
+  function runCommand(cmd: Command | null) {
     if (!cmd) return
     close()
     try {
       cmd.run()
     } catch (err) {
-      console.error("[cmdk] command failed", cmd.id, err)
-    }
-  }
-
-  function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === "Escape") {
-      e.preventDefault()
-      close()
-      return
-    }
-    if (e.key === "ArrowDown") {
-      e.preventDefault()
-      setActiveIndex((i) => Math.min(filtered().length - 1, i + 1))
-      return
-    }
-    if (e.key === "ArrowUp") {
-      e.preventDefault()
-      setActiveIndex((i) => Math.max(0, i - 1))
-      return
-    }
-    if (e.key === "Enter") {
-      e.preventDefault()
-      runActive()
-      return
-    }
-    // Tab focus trap: arrow keys are the canonical navigation, but
-    // Tab/Shift+Tab from the input would otherwise leave the palette
-    // open with focus stranded outside it. Treat them as down/up so
-    // keyboard-only operators stay inside the palette until Esc/Enter.
-    if (e.key === "Tab") {
-      e.preventDefault()
-      const len = filtered().length
-      if (len === 0) return
-      setActiveIndex((i) => {
-        const next = e.shiftKey ? i - 1 : i + 1
-        return ((next % len) + len) % len
+      notifyError({
+        title: t("common.error"),
+        message: `${t("command_palette.label")}: ${cmd.label}`,
+        details: formatErrorDetails(err),
       })
-      return
     }
   }
 
@@ -266,18 +207,6 @@ export function CommandPalette() {
     },
   })
 
-  // Keep the active option scrolled into view as the operator arrows
-  // through the command list.
-  createEffect(() => {
-    if (!palette.open() || !listRef) return
-    void filtered()
-    void activeIndex()
-    queueMicrotask(() => {
-      const item = listRef?.querySelector<HTMLElement>(".cmdk-item--active")
-      item?.scrollIntoView({ block: "nearest" })
-    })
-  })
-
   return (
     <Dialog
       id="commandPaletteDialog"
@@ -297,49 +226,44 @@ export function CommandPalette() {
       }}
       onCloseAutoFocus={(event) => event.preventDefault()}
     >
-      <input
-        id={COMMAND_PALETTE_INPUT_ID}
-        ref={inputRef}
-        type="search"
-        class="cmdk-input"
+      <ComboboxControl<Command>
+        class="cmdk-combobox"
+        controlClass="cmdk-control"
+        inputClass="cmdk-input"
+        listboxClass="cmdk-list"
+        optionClass="cmdk-item"
+        optionPrefixClass="cmdk-item-group"
+        optionLabelClass="cmdk-item-label"
+        optionDescriptionClass="cmdk-item-hint"
+        inputID={COMMAND_PALETTE_INPUT_ID}
+        listboxID={COMMAND_PALETTE_LISTBOX_ID}
+        inputRef={(el) => {
+          inputRef = el
+        }}
+        ariaLabel={t("cmdk.placeholder")}
         placeholder={t("cmdk.placeholder")}
-        value={query()}
-        onInput={(e) => setQuery(e.currentTarget.value)}
-        onKeyDown={handleKeyDown}
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={palette.open()}
-        aria-controls={COMMAND_PALETTE_LISTBOX_ID}
-        aria-activedescendant={activeDescendantID()}
-        aria-label={t("cmdk.placeholder")}
+        options={commands()}
+        optionValue="id"
+        optionTextValue={(command) => `${command.label} ${command.hint || ""} ${command.keywords || ""}`}
+        optionLabel="label"
+        value={null}
+        open={palette.open()}
+        onOpenChange={(open) => {
+          if (!open && palette.open()) close()
+        }}
+        defaultFilter={commandMatches}
+        allowsEmptyCollection
+        closeOnSelection
+        onChange={runCommand}
+        renderOptionPrefix={(command) => command.group}
+        renderOptionLabel={(command) => command.label}
+        renderOptionDescription={(command) => command.hint}
+        optionData={(command) => ({
+          "data-command-id": command.id,
+          "data-group": command.group,
+        })}
+        emptyContent={<div class="cmdk-empty">{t("cmdk.empty")}</div>}
       />
-      <div id={COMMAND_PALETTE_LISTBOX_ID} class="cmdk-list" ref={listRef} role="listbox">
-        <Show when={filtered().length > 0} fallback={<div class="cmdk-empty">{t("cmdk.empty")}</div>}>
-          <For each={filtered()}>
-            {(cmd, i) => (
-              <div
-                id={commandOptionID(cmd, i())}
-                class="cmdk-item"
-                classList={{ "cmdk-item--active": i() === activeIndex() }}
-                role="option"
-                aria-selected={i() === activeIndex()}
-                data-group={cmd.group}
-                onMouseEnter={() => setActiveIndex(i())}
-                onClick={() => {
-                  setActiveIndex(i())
-                  runActive()
-                }}
-              >
-                <span class="cmdk-item-group">{cmd.group}</span>
-                <span class="cmdk-item-label">{cmd.label}</span>
-                <Show when={cmd.hint}>
-                  <span class="cmdk-item-hint">{cmd.hint}</span>
-                </Show>
-              </div>
-            )}
-          </For>
-        </Show>
-      </div>
       <div class="cmdk-foot">
         <kbd>↑↓</kbd> {t("cmdk.foot.navigate")} · <kbd>↵</kbd> {t("cmdk.foot.run")} · <kbd>esc</kbd>{" "}
         {t("cmdk.foot.close")}
