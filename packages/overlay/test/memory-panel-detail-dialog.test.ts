@@ -13,9 +13,25 @@ describe("MemoryPanel inline detail lifecycle", () => {
     expect(source).toContain("expandedFileId")
     expect(source).toContain("loadMemoryDetail")
     expect(source).toContain('class="memory-inline-detail"')
+    expect(source).toContain('class="knowledge-item-row"')
     expect(source).toContain('class="knowledge-item-meta-row"')
     expect(source).toContain('data-expanded={expanded() ? "true" : "false"}')
     expect(source).toContain("aria-expanded={expanded()}")
+    expect(source).toContain("aria-controls={expanded() ? detailElementId() : undefined}")
+  })
+
+  test("memory row disclosure and delete controls are sibling interactives", () => {
+    expect(source).not.toContain('role="button"')
+    expect(source).not.toContain("tabIndex={0}")
+    expect(source).toContain('<button\n                      type="button"\n                      class="knowledge-item-main"')
+    expect(source).toContain('data-action="delete-memory"')
+
+    const mainButton = source.indexOf('class="knowledge-item-main"')
+    const deleteButton = source.indexOf('data-action="delete-memory"')
+    const detail = source.indexOf('class="memory-inline-detail"')
+    expect(mainButton).toBeGreaterThan(0)
+    expect(deleteButton).toBeGreaterThan(mainButton)
+    expect(detail).toBeGreaterThan(deleteButton)
   })
 
   test("memory panel reads task identifier through a reactive accessor", () => {
@@ -33,7 +49,7 @@ describe("MemoryPanel inline detail lifecycle", () => {
     expect(source).toContain("const currentDirectory = () =>")
     expect(source).toContain("configureApi({ directory })")
     expect(source).toContain("const directory = currentDirectory()")
-    expect(source).toContain("if (!isActive()) return")
+    expect(source).toContain("if (!isActive() && !props.compact) return")
     expect(source).toContain("void loadMemory(taskID, directory)")
     expect(source).toContain("if (!taskID || !directory)")
   })

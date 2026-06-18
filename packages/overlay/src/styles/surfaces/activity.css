@@ -388,7 +388,7 @@
   flex: 0 0 auto;
 }
 
-.sidebar-tool-panel .knowledge-item-meta-row .oc-button[data-action="delete-memory"] {
+.sidebar-tool-panel .knowledge-item-row > .oc-button[data-action="delete-memory"] {
   --oc-button-padding-x: 0;
 
   flex: 0 0 auto;

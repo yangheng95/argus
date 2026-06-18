@@ -322,6 +322,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
               const detailState = () => detailStates()[f.id]
               const detail = () => detailState()?.detail ?? null
               const expanded = () => expandedFileId() === f.id
+              const detailElementId = () => `memory-detail-${f.id.replace(/[^A-Za-z0-9_-]/g, "-")}`
 
               return (
                 <div
@@ -329,69 +330,64 @@ export function MemoryPanel(props: MemoryPanelProps) {
                   data-mode={mode}
                   data-id={f.id}
                   data-expanded={expanded() ? "true" : "false"}
-                  onClick={() => toggleMemoryDetail(f.id)}
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={expanded()}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      toggleMemoryDetail(f.id)
-                    }
-                  }}
                 >
-                  <div class="knowledge-item-main">
-                    <div class="knowledge-item-title">{f.title}</div>
-                    <div class="knowledge-item-meta-row">
-                      <span class="knowledge-item-meta">{meta}</span>
-                      <span class="knowledge-scope" data-scope={f.scope}>
-                        {knowledgeScopeLabel(f.scope)}
+                  <div class="knowledge-item-row">
+                    <button
+                      type="button"
+                      class="knowledge-item-main"
+                      aria-expanded={expanded()}
+                      aria-controls={expanded() ? detailElementId() : undefined}
+                      onClick={() => toggleMemoryDetail(f.id)}
+                    >
+                      <span class="knowledge-item-title">{f.title}</span>
+                      <span class="knowledge-item-meta-row">
+                        <span class="knowledge-item-meta">{meta}</span>
+                        <span class="knowledge-scope" data-scope={f.scope}>
+                          {knowledgeScopeLabel(f.scope)}
+                        </span>
                       </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        tone="danger"
-                        data-action="delete-memory"
-                        data-id={f.id}
-                        title={t("memory.delete_button_title")}
-                        aria-label={t("memory.delete_button_title")}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void handleDeleteInline(f.id)
-                        }}
-                      >
-                        {t("common.delete")}
-                      </Button>
-                    </div>
-                    <Show when={!!f.snippet}>
-                      <div class="knowledge-item-meta">{f.snippet}</div>
-                    </Show>
-                    <Show when={expanded()}>
-                      <div class="memory-inline-detail" onClick={(event) => event.stopPropagation()}>
-                        <Show when={detailState()?.loading}>
-                          <div class="loading-hint">{t("common.loading")}</div>
-                        </Show>
-                        <Show when={!detailState()?.loading && !!detailState()?.error}>
-                          <div class="config-status-box" data-status="error">
-                            {detailState()?.error}
-                          </div>
-                        </Show>
-                        <Show when={!detailState()?.loading && !detailState()?.error && detail()}>
-                          {(d) => (
-                            <>
-                              <div class="memory-detail-meta">
-                                <span>{t("memory.source", { value: d().source })}</span>
-                                <span>{t("memory.created", { value: formatDateTime(d().timeCreated) })}</span>
-                                <span>{t("memory.updated", { value: formatDateTime(d().timeUpdated) })}</span>
-                              </div>
-                              <pre class="memory-detail-content">{d().content || t("memory.empty_value")}</pre>
-                            </>
-                          )}
-                        </Show>
-                      </div>
-                    </Show>
+                      <Show when={!!f.snippet}>
+                        <span class="knowledge-item-meta">{f.snippet}</span>
+                      </Show>
+                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      tone="danger"
+                      data-action="delete-memory"
+                      data-id={f.id}
+                      title={t("memory.delete_button_title")}
+                      aria-label={t("memory.delete_button_title")}
+                      onClick={() => void handleDeleteInline(f.id)}
+                    >
+                      {t("common.delete")}
+                    </Button>
                   </div>
+                  <Show when={expanded()}>
+                    <div id={detailElementId()} class="memory-inline-detail">
+                      <Show when={detailState()?.loading}>
+                        <div class="loading-hint">{t("common.loading")}</div>
+                      </Show>
+                      <Show when={!detailState()?.loading && !!detailState()?.error}>
+                        <div class="config-status-box" data-status="error">
+                          {detailState()?.error}
+                        </div>
+                      </Show>
+                      <Show when={!detailState()?.loading && !detailState()?.error && detail()}>
+                        {(d) => (
+                          <>
+                            <div class="memory-detail-meta">
+                              <span>{t("memory.source", { value: d().source })}</span>
+                              <span>{t("memory.created", { value: formatDateTime(d().timeCreated) })}</span>
+                              <span>{t("memory.updated", { value: formatDateTime(d().timeUpdated) })}</span>
+                            </div>
+                            <pre class="memory-detail-content">{d().content || t("memory.empty_value")}</pre>
+                          </>
+                        )}
+                      </Show>
+                    </div>
+                  </Show>
                 </div>
               )
             }}

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -137,6 +139,19 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
         },
       ])
     }
+    if (path === "/panel/knowledge/memory/mem_left_tool_panels") {
+      return send({
+        file: {
+          id: "mem_left_tool_panels",
+          title: "Left panel memory loaded from selected task",
+          scope: "cwd",
+          source: "memory.md",
+          timeCreated: 1,
+          timeUpdated: 2,
+        },
+        content: "Remember that the left Memory panel uses sibling controls.",
+      })
+    }
     if (path === "/panel/knowledge/preference") return send([])
     if (path === "/file") return send({ entries: [] })
     if (path === "/find/file") return send({ entries: [] })
@@ -208,6 +223,60 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     await page.waitForSelector("#leftPanelMemory[data-active='true'] .knowledge-item")
     const memoryName = await page.$eval("#leftPanelMemory .knowledge-item-title", (node) => node.textContent || "")
     assert.equal(memoryName, "Left panel memory loaded from selected task")
+    const memoryStructure = await page.$eval("#leftPanelMemory .knowledge-item", (item) => {
+      const row = item as HTMLElement
+      const main = row.querySelector<HTMLElement>(".knowledge-item-main")!
+      const del = row.querySelector<HTMLElement>('[data-action="delete-memory"]')!
+      return {
+        rowRole: row.getAttribute("role"),
+        rowTabIndex: row.getAttribute("tabindex"),
+        mainTag: main.tagName,
+        mainExpanded: main.getAttribute("aria-expanded"),
+        deleteInsideMain: main.contains(del),
+      }
+    })
+    assert.deepEqual(memoryStructure, {
+      rowRole: null,
+      rowTabIndex: null,
+      mainTag: "BUTTON",
+      mainExpanded: "false",
+      deleteInsideMain: false,
+    })
+
+    await page.focus("#leftPanelMemory .knowledge-item-main")
+    await page.keyboard.press("Enter")
+    await page.waitForSelector("#leftPanelMemory .memory-inline-detail")
+    await page.waitForFunction(() =>
+      /sibling controls/.test(document.querySelector("#leftPanelMemory .memory-inline-detail")?.textContent || ""),
+    )
+    const expandedState = await page.$eval("#leftPanelMemory .knowledge-item", (item) => {
+      const row = item as HTMLElement
+      const main = row.querySelector<HTMLElement>(".knowledge-item-main")!
+      const detail = row.querySelector<HTMLElement>(".memory-inline-detail")!
+      return {
+        expanded: row.dataset.expanded,
+        mainExpanded: main.getAttribute("aria-expanded"),
+        controls: main.getAttribute("aria-controls"),
+        detailId: detail.id,
+        detailText: detail.textContent || "",
+      }
+    })
+    assert.equal(expandedState.expanded, "true")
+    assert.equal(expandedState.mainExpanded, "true")
+    assert.equal(expandedState.controls, expandedState.detailId)
+    assert.match(expandedState.detailText, /sibling controls/)
+
+    await page.keyboard.press("Tab")
+    const deleteFocused = await page.evaluate(() =>
+      document.activeElement?.matches('#leftPanelMemory [data-action="delete-memory"]'),
+    )
+    assert.equal(deleteFocused, true)
+
+    const memoryItem = await page.$("#leftPanelMemory .knowledge-item")
+    assert.ok(memoryItem)
+    const screenshotPath = resolve(".scratch", "memory-row-sibling-controls.png")
+    mkdirSync(dirname(screenshotPath), { recursive: true })
+    writeFileSync(screenshotPath, await memoryItem.screenshot({}))
 
     const skillRequest = requestLog.find((item) => item.path === "/skill/installed")
     const mcpRequest = requestLog.find((item) => item.path === "/mcp")
