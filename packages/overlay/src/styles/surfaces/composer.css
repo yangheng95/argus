@@ -824,12 +824,12 @@
 
 .executor-popover-model:disabled {
   cursor: not-allowed;
-  opacity: var(--ui-opacity-faint);
+  color: var(--text-muted);
 }
 
 .executor-popover-model:disabled:hover {
   background: transparent;
-  color: var(--text-soft);
+  color: var(--text-muted);
 }
 
 .executor-popover-model[data-active="true"] {
