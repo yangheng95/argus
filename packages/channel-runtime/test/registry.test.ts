@@ -138,10 +138,47 @@ describe("channel registry", () => {
     })
   })
 
-  test("registers dingtalk from env keys", () => {
-    const app = runtime()
-    const result = registerAdapters(
-      app,
+  test("requires googlechat auth audience before registering", () => {
+    const partial = runtime()
+    const partialResult = registerAdapters(
+      partial,
+      {
+        GOOGLECHAT_SERVICE_ACCOUNT_JSON: "{}",
+      },
+      factory(),
+    )
+
+    expect(partialResult.names).toEqual([])
+    expect(partialResult.warns).toEqual([
+      "Skip googlechat channel: missing required env. Need: GOOGLECHAT_SERVICE_ACCOUNT_JSON, GOOGLECHAT_AUTH_AUDIENCE.",
+    ])
+    expect(partial.list).toHaveLength(0)
+
+    const complete = runtime()
+    const completeResult = registerAdapters(
+      complete,
+      {
+        GOOGLECHAT_SERVICE_ACCOUNT_JSON: "{}",
+        GOOGLECHAT_AUTH_AUDIENCE: "https://public.opencorvus.dev/googlechat",
+      },
+      factory(),
+    )
+
+    expect(completeResult.warns).toEqual([])
+    expect(completeResult.names).toEqual(["googlechat"])
+    expect((complete.list[0] as Fake).options).toEqual({
+      serviceAccount: "{}",
+      authAudience: "https://public.opencorvus.dev/googlechat",
+      host: undefined,
+      port: undefined,
+      path: undefined,
+    })
+  })
+
+  test("requires dingtalk callback crypto env before registering", () => {
+    const partial = runtime()
+    const partialResult = registerAdapters(
+      partial,
       {
         DINGTALK_APP_KEY: "ding_key",
         DINGTALK_APP_SECRET: "ding_secret",
@@ -149,9 +186,103 @@ describe("channel registry", () => {
       factory(),
     )
 
+    expect(partialResult.names).toEqual([])
+    expect(partialResult.warns).toEqual([
+      "Skip dingtalk channel: missing required env. Need: DINGTALK_APP_KEY, DINGTALK_APP_SECRET, DINGTALK_CALLBACK_TOKEN, DINGTALK_ENCODING_AES_KEY.",
+    ])
+    expect(partial.list).toHaveLength(0)
+
+    const complete = runtime()
+    const completeResult = registerAdapters(
+      complete,
+      {
+        DINGTALK_APP_KEY: "ding_key",
+        DINGTALK_APP_SECRET: "ding_secret",
+        DINGTALK_CALLBACK_TOKEN: "ding_token",
+        DINGTALK_ENCODING_AES_KEY: "aes_key",
+      },
+      factory(),
+    )
+
+    expect(completeResult.warns).toEqual([])
+    expect(completeResult.names).toEqual(["dingtalk"])
+    expect((complete.list[0] as Fake).options).toEqual({
+      appKey: "ding_key",
+      appSecret: "ding_secret",
+      callbackToken: "ding_token",
+      encodingAesKey: "aes_key",
+      host: undefined,
+      port: undefined,
+      path: undefined,
+      defaultWebhook: undefined,
+    })
+  })
+
+  test("requires wecom callback crypto env before registering", () => {
+    const partial = runtime()
+    const partialResult = registerAdapters(
+      partial,
+      {
+        WECOM_CORP_ID: "wxcorp",
+        WECOM_SECRET: "wxsec",
+        WECOM_AGENT_ID: "1000002",
+      },
+      factory(),
+    )
+
+    expect(partialResult.names).toEqual([])
+    expect(partialResult.warns).toEqual([
+      "Skip wecom channel: missing required env. Need: WECOM_CORP_ID, WECOM_SECRET, WECOM_AGENT_ID, WECOM_CALLBACK_TOKEN, WECOM_ENCODING_AES_KEY.",
+    ])
+    expect(partial.list).toHaveLength(0)
+
+    const complete = runtime()
+    const completeResult = registerAdapters(
+      complete,
+      {
+        WECOM_CORP_ID: "wxcorp",
+        WECOM_SECRET: "wxsec",
+        WECOM_AGENT_ID: "1000002",
+        WECOM_CALLBACK_TOKEN: "wecom_token",
+        WECOM_ENCODING_AES_KEY: "aes_key",
+      },
+      factory(),
+    )
+
+    expect(completeResult.warns).toEqual([])
+    expect(completeResult.names).toEqual(["wecom"])
+    expect((complete.list[0] as Fake).options).toEqual({
+      corpId: "wxcorp",
+      secret: "wxsec",
+      agentId: "1000002",
+      token: "wecom_token",
+      encodingAesKey: "aes_key",
+      host: undefined,
+      port: undefined,
+      path: undefined,
+    })
+  })
+
+  test("registers dingtalk from complete env keys", () => {
+    const app = runtime()
+    const result = registerAdapters(
+      app,
+      {
+        DINGTALK_APP_KEY: "ding_key",
+        DINGTALK_APP_SECRET: "ding_secret",
+        DINGTALK_CALLBACK_TOKEN: "ding_token",
+        DINGTALK_ENCODING_AES_KEY: "aes_key",
+      },
+      factory(),
+    )
+
     expect(result.warns).toEqual([])
     expect(result.names).toEqual(["dingtalk"])
     expect(app.list.map((item) => item.platform)).toEqual(["dingtalk"])
+    expect((app.list[0] as Fake).options).toMatchObject({
+      callbackToken: "ding_token",
+      encodingAesKey: "aes_key",
+    })
   })
 
   test("requires whatsapp verification token and app secret before registering", () => {

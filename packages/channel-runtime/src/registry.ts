@@ -27,6 +27,7 @@ type AdapterOptions = {
   }
   googlechat: {
     serviceAccount: string
+    authAudience: string
     host?: string
     port?: number
     path?: string
@@ -59,6 +60,8 @@ type AdapterOptions = {
     corpId: string
     secret: string
     agentId: string
+    token: string
+    encodingAesKey: string
     host?: string
     port?: number
     path?: string
@@ -66,6 +69,8 @@ type AdapterOptions = {
   dingtalk: {
     appKey: string
     appSecret: string
+    callbackToken: string
+    encodingAesKey: string
     host?: string
     port?: number
     path?: string
@@ -160,6 +165,7 @@ function build(id: ChannelName, create: AdapterFactory, values: Values) {
     case "googlechat":
       return create.googlechat({
         serviceAccount: values.serviceAccount!,
+        authAudience: values.authAudience!,
         host: values.webhookHost,
         port: parsePort(values.webhookPort),
         path: values.webhookPath,
@@ -205,6 +211,8 @@ function build(id: ChannelName, create: AdapterFactory, values: Values) {
         corpId: values.corpId!,
         secret: values.secret!,
         agentId: values.agentId!,
+        token: values.token!,
+        encodingAesKey: values.encodingAesKey!,
         host: values.webhookHost,
         port: parsePort(values.webhookPort),
         path: values.webhookPath,
@@ -213,6 +221,8 @@ function build(id: ChannelName, create: AdapterFactory, values: Values) {
       return create.dingtalk({
         appKey: values.appKey!,
         appSecret: values.appSecret!,
+        callbackToken: values.callbackToken!,
+        encodingAesKey: values.encodingAesKey!,
         host: values.webhookHost,
         port: parsePort(values.webhookPort),
         path: values.webhookPath,

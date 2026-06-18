@@ -14,6 +14,8 @@ description: 钉钉适配器支持自建企业应用的 HTTP 回调。
 ```bash
 export DINGTALK_APP_KEY=...
 export DINGTALK_APP_SECRET=...
+export DINGTALK_CALLBACK_TOKEN=...
+export DINGTALK_ENCODING_AES_KEY=...
 export DINGTALK_DEFAULT_WEBHOOK=...      # 可选：群自定义机器人 webhook，用于无会话消息推送
 export DINGTALK_WEBHOOK_HOST=0.0.0.0
 export DINGTALK_WEBHOOK_PORT=16673
@@ -30,5 +32,5 @@ export DINGTALK_WEBHOOK_PATH=/dingtalk
 
 ## 故障排查
 
-- **回调 signature 校验失败**：钉钉签名算法是 HMAC-SHA256，用 `timestamp + "\n" + appSecret` 作为 secret。
+- **回调 signature 校验失败**：确认钉钉事件订阅里的 Callback Token 和 EncodingAESKey 与环境变量完全一致。
 - **消息发不出**：应用未被管理员审批发布，或未加入目标群。

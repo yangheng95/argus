@@ -14,6 +14,8 @@ description: DingTalk adapter with HTTP callback for internal enterprise apps.
 ```bash
 export DINGTALK_APP_KEY=...
 export DINGTALK_APP_SECRET=...
+export DINGTALK_CALLBACK_TOKEN=...
+export DINGTALK_ENCODING_AES_KEY=...
 export DINGTALK_DEFAULT_WEBHOOK=...       # optional: custom group bot webhook
 export DINGTALK_WEBHOOK_HOST=0.0.0.0
 export DINGTALK_WEBHOOK_PORT=16673
@@ -30,5 +32,5 @@ Custom group bot webhooks are useful for **stateless push** (e.g., task-complete
 
 ## Troubleshooting
 
-- **Callback signature invalid**: DingTalk uses HMAC-SHA256 with `timestamp + "\n" + appSecret` as secret.
+- **Callback signature invalid**: confirm the DingTalk callback Token and EncodingAESKey match the event subscription settings.
 - **Can't send messages**: the app might not yet be admin-approved, or hasn't joined the target group.

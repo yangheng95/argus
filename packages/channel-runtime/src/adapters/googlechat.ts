@@ -1,6 +1,10 @@
 import { createSign } from "node:crypto"
+import { createRemoteJWKSet, jwtVerify } from "jose"
 import type { ChannelAdapter, MessageHandler } from "../adapter"
 import { adapt, path, type Serve, type Server } from "./http"
+
+const GOOGLE_CHAT_SENDER = "chat@system.gserviceaccount.com"
+const GOOGLE_OIDC_KEYS = new URL("https://www.googleapis.com/oauth2/v3/certs")
 
 type Body = {
   type?: string
@@ -34,6 +38,7 @@ export class GoogleChatAdapter implements ChannelAdapter {
   readonly platform = "googlechat"
   private handler?: MessageHandler
   private raw: string
+  private authAudience: string
   private host: string
   private port: number
   private hook: string
@@ -42,9 +47,19 @@ export class GoogleChatAdapter implements ChannelAdapter {
   private cached?: Account
   private token?: string
   private expires = 0
+  private keys = createRemoteJWKSet(GOOGLE_OIDC_KEYS)
 
-  constructor(opts: { serviceAccount: string; host?: string; port?: number; path?: string; serve?: Serve }) {
+  constructor(opts: {
+    serviceAccount: string
+    authAudience: string
+    host?: string
+    port?: number
+    path?: string
+    serve?: Serve
+  }) {
     this.raw = opts.serviceAccount
+    this.authAudience = opts.authAudience
+    if (!this.authAudience.trim()) throw new Error("Google Chat auth audience is required")
     this.host = opts.host ?? "0.0.0.0"
     this.port = opts.port ?? 16668
     this.hook = path(opts.path, "/googlechat")
@@ -147,6 +162,8 @@ export class GoogleChatAdapter implements ChannelAdapter {
     if (req.method === "GET") return new Response("ok")
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 })
 
+    if (!(await this.valid(req))) return Response.json({ error: "invalid auth" }, { status: 401 })
+
     // Malformed JSON → 400 below
     const body = (await req.json().catch(() => undefined)) as Body | undefined
     if (!body) return Response.json({ error: "invalid body" }, { status: 400 })
@@ -169,6 +186,22 @@ export class GoogleChatAdapter implements ChannelAdapter {
     })
 
     return Response.json({ ok: true })
+  }
+
+  private async valid(req: Request) {
+    const token = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]
+    if (!token) return false
+    try {
+      const verified = await jwtVerify(token, this.keys, {
+        issuer: ["https://accounts.google.com", "accounts.google.com"],
+        audience: this.authAudience,
+        algorithms: ["RS256"],
+        clockTolerance: 300,
+      })
+      return verified.payload.email === GOOGLE_CHAT_SENDER && verified.payload.email_verified === true
+    } catch {
+      return false
+    }
   }
 
   private async auth() {
