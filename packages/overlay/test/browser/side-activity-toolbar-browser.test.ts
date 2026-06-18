@@ -669,6 +669,86 @@ test(
         missionActivityInHeader: false,
       })
       assert.equal(narrowLeftActivityLayout.headerActionText.includes("Mission"), true)
+
+      const rightToolbarResponsiveLayout = async (viewport: { width: number; height: number }) => {
+        await page.setViewport(viewport)
+        await page.waitForFunction(
+          () => getComputedStyle(document.querySelector<HTMLElement>("#workspaceMain")!).flexDirection === "column",
+        )
+        return page.evaluate(() => {
+          const workspace = document.querySelector<HTMLElement>("#workspaceMain")!
+          const toolbarMount = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!
+          const toolbar = toolbarMount.querySelector<HTMLElement>(".side-activity-toolbar")!
+          const items = toolbar.querySelector<HTMLElement>(".side-activity-toolbar__items")!
+          const workspaceRect = workspace.getBoundingClientRect()
+          const toolbarRect = toolbarMount.getBoundingClientRect()
+          const buttons = Array.from(
+            toolbarMount.querySelectorAll<HTMLElement>('[data-ui="side-activity-button"][data-side="right"]'),
+          )
+          const clippedButtons = buttons
+            .map((button) => {
+              const rect = button.getBoundingClientRect()
+              return {
+                activity: button.dataset.activity || "",
+                insideWorkspace:
+                  rect.left >= workspaceRect.left - 1 &&
+                  rect.right <= workspaceRect.right + 1 &&
+                  rect.top >= workspaceRect.top - 1 &&
+                  rect.bottom <= workspaceRect.bottom + 1,
+                insideToolbar:
+                  rect.left >= toolbarRect.left - 1 &&
+                  rect.right <= toolbarRect.right + 1 &&
+                  rect.top >= toolbarRect.top - 1 &&
+                  rect.bottom <= toolbarRect.bottom + 1,
+              }
+            })
+            .filter((item) => !item.insideWorkspace || !item.insideToolbar)
+          const hitMisses = buttons
+            .map((button) => {
+              const rect = button.getBoundingClientRect()
+              const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+              const hitButton = hit instanceof Element ? hit.closest('[data-ui="side-activity-button"]') : null
+              return {
+                activity: button.dataset.activity || "",
+                hit: hitButton === button,
+              }
+            })
+            .filter((item) => !item.hit)
+          return {
+            workspaceDirection: getComputedStyle(workspace).flexDirection,
+            toolbarDirection: getComputedStyle(toolbar).flexDirection,
+            itemsDirection: getComputedStyle(items).flexDirection,
+            buttonCount: buttons.length,
+            toolbarWithinWorkspace:
+              toolbarRect.left >= workspaceRect.left - 1 &&
+              toolbarRect.right <= workspaceRect.right + 1 &&
+              toolbarRect.top >= workspaceRect.top - 1 &&
+              toolbarRect.bottom <= workspaceRect.bottom + 1,
+            toolbarWidth: toolbarRect.width,
+            toolbarHeight: toolbarRect.height,
+            workspaceWidth: workspaceRect.width,
+            clippedButtons,
+            hitMisses,
+          }
+        })
+      }
+      for (const viewport of [
+        { width: 960, height: 720 },
+        { width: 390, height: 760 },
+      ]) {
+        const layout = await rightToolbarResponsiveLayout(viewport)
+        assertMatchObject(layout, {
+          workspaceDirection: "column",
+          toolbarDirection: "row",
+          itemsDirection: "row",
+          buttonCount: 7,
+          toolbarWithinWorkspace: true,
+        })
+        assert.ok(layout.toolbarWidth >= viewport.width - 2, JSON.stringify({ viewport, layout }))
+        assert.ok(layout.toolbarHeight <= 48, JSON.stringify({ viewport, layout }))
+        assert.deepEqual(layout.clippedButtons, [], JSON.stringify({ viewport, layout }))
+        assert.deepEqual(layout.hitMisses, [], JSON.stringify({ viewport, layout }))
+      }
       await page.setViewport({ width: 1440, height: 900 })
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
