@@ -664,6 +664,7 @@ export function materializeInlineExtractedPageAssets(page: ExtractedPage, output
 export interface ExtractPageInput {
   url: string
   viewport?: { width: number; height: number }
+  browserProxy?: BrowserRuntime.BrowserProxyConfig
   /** CSS selector scoping the extraction; default body. */
   scopeSelector?: string | null
   /** Post-DOM settle wait (ms), default 2000. */
@@ -693,6 +694,7 @@ type NodeExtractInput = {
   launchArgs: string[]
   launchTimeoutMs: number
   navigationTimeoutMs: number
+  browserProxy?: BrowserRuntime.BrowserProxyConfig
   browserExtractSource: string
   maxDepth: number
   maxChildren: number
@@ -739,6 +741,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
     onProgress,
     signal,
   } = input
+  const browserProxy = input.browserProxy ?? BrowserRuntime.resolveBrowserProxyConfig()
 
   onProgress?.(`Extracting URL: ${url}`)
   onProgress?.(`Viewport: ${viewport.width}x${viewport.height}`)
@@ -762,6 +765,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       nodeExecutable: sidecarRuntime.nodeExecutable,
       playwrightRequirePath: sidecarRuntime.playwrightRequirePath,
       launchArgs: BrowserRuntime.defaultLaunchArgs({
+        proxyServer: browserProxy?.server,
         extraArgs: [
           "--disable-extensions",
           "--disable-background-networking",
@@ -770,6 +774,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       }),
       launchTimeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
       navigationTimeoutMs: 60_000,
+      browserProxy,
       browserExtractSource: browserExtract.toString(),
       maxDepth: MAX_DEPTH,
       maxChildren: MAX_CHILDREN,
@@ -935,6 +940,7 @@ async function main() {
     });
     const context = await browser.newContext({
       viewport: input.viewport,
+      ...(input.browserProxy ? { proxy: input.browserProxy } : {}),
       userAgent:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       extraHTTPHeaders: { "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" },

@@ -4,6 +4,7 @@ import os from "node:os"
 import z from "zod"
 
 import { assessCaptureDiagnostics, captureReferenceManifest, summarizeCaptureDiagnostics } from "./capture-gate"
+import { resolveFrontendDesignBrowserProxy } from "./browser-proxy"
 
 function screenshotFilename(inputUrl: string): string {
   try {
@@ -38,6 +39,7 @@ export function createUrlScreenshotTool() {
           .describe("Viewport height in logical pixels. Default 900."),
       }),
       execute: async ({ url, viewport_width, viewport_height }) => {
+        const browserProxy = await resolveFrontendDesignBrowserProxy()
         const outDir = path.join(
           os.tmpdir(),
           "opencorvus-capture",
@@ -50,6 +52,7 @@ export function createUrlScreenshotTool() {
             width: viewport_width ?? 1440,
             height: viewport_height ?? 900,
           },
+          browserProxy,
         })
         const diagnostics = assessCaptureDiagnostics(result.manifest)
         const diagnosticSummary = diagnostics.length > 0 ? summarizeCaptureDiagnostics(diagnostics) : "none"

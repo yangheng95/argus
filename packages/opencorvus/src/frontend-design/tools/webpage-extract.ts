@@ -23,6 +23,7 @@ import { Tool } from "../../tool/tool"
 import { Log } from "../../util/log"
 import { extractPage } from "@/browser/webpage/extract"
 import { resolveWebpageEvidenceOutputDir, DEFAULT_WEBPAGE_EVIDENCE_SUBDIR } from "./output-dir"
+import { resolveFrontendDesignBrowserProxy } from "../browser-proxy"
 
 const log = Log.create({ service: "webpage-evidence.tool.webpage_extract" })
 
@@ -95,6 +96,7 @@ Use this only when URL evidence is missing for the requested output directory. D
       height: params.viewport_height ?? 900,
     }
     const keepImages = params.keep_images ?? true
+    const browserProxy = await resolveFrontendDesignBrowserProxy()
 
     log.info("extracting webpage", { url: params.url, outputDir })
     const captureHtmlPath = path.join(outputDir, "capture.html")
@@ -108,6 +110,7 @@ Use this only when URL evidence is missing for the requested output directory. D
       outputDir,
       captureHtmlPath,
       downloadImages: keepImages,
+      browserProxy,
       signal: ctx.abort,
       onProgress: (msg) => log.info(msg),
     })
@@ -128,6 +131,7 @@ Use this only when URL evidence is missing for the requested output directory. D
       waitMs: 3000,
       noScreenshots: false,
       downloadImages: false,
+      browserProxy,
       signal: ctx.abort,
       onProgress: (msg) => log.info(`mobile reference: ${msg}`),
     })

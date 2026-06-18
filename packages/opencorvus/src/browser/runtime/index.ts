@@ -3,6 +3,13 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 
 export namespace BrowserRuntime {
+  export type BrowserProxyConfig = {
+    server: string
+    bypass?: string
+    username?: string
+    password?: string
+  }
+
   type PlaywrightModule = {
     chromium: {
       launch(input: { executablePath: string; headless: boolean; args: string[]; timeout: number }): Promise<any>
@@ -150,13 +157,33 @@ export namespace BrowserRuntime {
 
   export function resolveBrowserProxyLaunchArgs(input?: { env?: NodeJS.ProcessEnv; proxyServer?: string }): string[] {
     const env = input?.env ?? process.env
-    const proxyServer = normalizeProxyServer(input?.proxyServer ?? resolveBrowserProxyServer(env))
-    if (!proxyServer) return []
+    const proxy = resolveBrowserProxyConfig({ env, proxyServer: input?.proxyServer })
+    if (!proxy) return []
 
-    const args = [`--proxy-server=${proxyServer}`]
+    const args = [`--proxy-server=${proxy.server}`]
     const bypassList = resolveBrowserProxyBypassList(env)
     if (bypassList) args.push(`--proxy-bypass-list=${bypassList}`)
     return args
+  }
+
+  export function resolveBrowserProxyConfig(input?: {
+    env?: NodeJS.ProcessEnv
+    proxyServer?: string
+  }): BrowserProxyConfig | undefined {
+    const env = input?.env ?? process.env
+    const normalized = normalizeProxyServer(input?.proxyServer ?? resolveBrowserProxyServer(env))
+    if (!normalized) return undefined
+    const parsed = new URL(normalized)
+    const proxy: BrowserProxyConfig = {
+      server: `${parsed.protocol}//${parsed.host}`,
+    }
+    const username = decodeUrlCredential(parsed.username)
+    const password = decodeUrlCredential(parsed.password)
+    if (username) proxy.username = username
+    if (password) proxy.password = password
+    const bypass = resolveBrowserContextProxyBypassList(env)
+    if (bypass) proxy.bypass = bypass
+    return proxy
   }
 
   export function resolveBrowserProxyServer(env: NodeJS.ProcessEnv = process.env): string | undefined {
@@ -172,14 +199,11 @@ export namespace BrowserRuntime {
   }
 
   export function resolveBrowserProxyBypassList(env: NodeJS.ProcessEnv = process.env): string {
-    const noProxy = firstNonBlank([env.NO_PROXY, env.no_proxy])
-    const tokens = noProxy
-      ? noProxy
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean)
-      : ["localhost", "127.0.0.1", "::1", "*.local"]
-    return tokens.join(";")
+    return resolveNoProxyTokens(env).join(";")
+  }
+
+  export function resolveBrowserContextProxyBypassList(env: NodeJS.ProcessEnv = process.env): string {
+    return resolveNoProxyTokens(env).join(",")
   }
 
   export function resolveBrowserExecutableCandidates(input?: {
@@ -326,6 +350,25 @@ export namespace BrowserRuntime {
     if (!trimmed) return undefined
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed
     return `http://${trimmed}`
+  }
+
+  function resolveNoProxyTokens(env: NodeJS.ProcessEnv): string[] {
+    const noProxy = firstNonBlank([env.NO_PROXY, env.no_proxy])
+    return noProxy
+      ? noProxy
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : ["localhost", "127.0.0.1", "::1", "*.local"]
+  }
+
+  function decodeUrlCredential(value: string): string | undefined {
+    if (!value) return undefined
+    try {
+      return decodeURIComponent(value)
+    } catch {
+      return value
+    }
   }
 
   function firstNonBlank(values: readonly (string | undefined)[]): string | undefined {

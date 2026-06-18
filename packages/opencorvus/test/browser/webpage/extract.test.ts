@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test"
 import { createServer, type Server } from "node:http"
 import { AddressInfo } from "node:net"
-import { mkdirSync, rmSync } from "node:fs"
+import { mkdirSync, readFileSync, rmSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
@@ -80,6 +80,14 @@ async function serveFixture(): Promise<{ url: string; server: Server }> {
 }
 
 describe("extractPage", () => {
+  test("passes browser proxy credentials to the Playwright context", () => {
+    const source = readFileSync(path.join(import.meta.dir, "../../../src/browser/webpage/extract.ts"), "utf8")
+
+    expect(source).toContain("browserProxy?: BrowserRuntime.BrowserProxyConfig")
+    expect(source).toContain("proxyServer: browserProxy?.server")
+    expect(source).toContain("...(input.browserProxy ? { proxy: input.browserProxy } : {})")
+  })
+
   test("extracts DOM, tokens, assets, and validates schema", async () => {
     const { url, server } = await serveFixture()
     try {
