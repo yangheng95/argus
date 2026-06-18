@@ -54,6 +54,10 @@ export function artifactBrowserMcpNodeExecutableName(os = process.platform): str
   return os === "win32" ? "node.exe" : "node"
 }
 
+export function artifactExecutableName(os = process.platform): string {
+  return os === "win32" || os.startsWith("windows") ? "opencorvus.exe" : "opencorvus"
+}
+
 export interface ArtifactNodeRuntimeTarget {
   os: string
   arch: string

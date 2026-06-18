@@ -8,6 +8,7 @@ import {
   artifactBrowserMcpNodeExternalModules,
   artifactBrowserMcpNodeExecutableName,
   artifactEntrypoints,
+  artifactExecutableName,
   artifactExternalModules,
   artifactHostCanProvideNodeRuntime,
   artifactPackageBaseName,
@@ -73,6 +74,20 @@ describe("build-artifact", () => {
     expect(tauriBuildSource).toContain("collect_plugin_resource_files")
     expect(tauriBuildSource).toContain("plugin_manifest_resource_path")
     expect(tauriBuildSource).toContain("EMBEDDED_PLUGIN_RESOURCE_FILES")
+  })
+
+  test("CLI executable artifact name is platform-specific and used by build scripts", () => {
+    expect(artifactExecutableName("win32")).toBe("opencorvus.exe")
+    expect(artifactExecutableName("windows-x64")).toBe("opencorvus.exe")
+    expect(artifactExecutableName("linux")).toBe("opencorvus")
+    expect(artifactExecutableName("darwin")).toBe("opencorvus")
+
+    const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
+    const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")
+    for (const source of [buildSource, localBuildSource]) {
+      expect(source).toContain("artifactExecutableName(item.os)")
+      expect(source).not.toContain("outfile: `dist/${name}/opencorvus`")
+    }
   })
 
   test("package-local builds overlay-server sidecars before Docker overlay packaging", () => {

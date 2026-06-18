@@ -3353,3 +3353,51 @@ LINE:
 - Dirac confirmed BH-106 was still substantive in committed HEAD `3468fffb5b0ed4a347dacd9c5678491b4015e2ec`: `oldString === ""` used `Filesystem.exists(...)` only for watcher event selection, skipped `FileTime.assert(...)`, prompted with an add-only diff, and overwrote through `Filesystem.write(...)`.
 - Dirac identified the same single-source repair boundary: use `Patch.assertAddFileTargetDoesNotExist(...)`, write with `flag: "wx"`, publish only `add`, and avoid update fallbacks, retries, gates, or compatibility paths.
 - Dirac added the required race regression where the file is absent during validation but appears during permission; the final test suite covers that interleaving.
+
+## Batch P1-BE: BH-070 Windows CLI archives must use the installer-compatible binary name
+
+### Findings
+
+- BH-070 targets `install:343` and `script/check-release-assets.ts::cli`.
+- `install` detects Windows and downloads `opencorvus-windows-*.zip`, but `download_and_install()` unconditionally moves `$tmp_dir/opencorvus` into the install directory.
+- `script/check-release-assets.ts` accepts either `opencorvus` or `opencorvus.exe` for every CLI platform through `/^opencorvus(\.exe)?$/`, so a Windows release directory with only `opencorvus.exe` passes validation while the installer fails after unzip.
+- `packages/opencorvus/script/build.ts` and `packages/opencorvus/script/build.local.ts` still set the Bun compile output to `dist/${name}/opencorvus` for every target, so the producer, validator, and installer do not share one platform binary-name contract.
+
+### Call-point Inventory
+
+- `install` owns downloaded archive selection, extraction, and final install path under `$HOME/.opencorvus/bin`.
+- `script/check-release-assets.ts` validates release CLI platform directories before upload.
+- `.github/workflows/build.yml::Package CLI archive` zips/tars the contents of each `packages/opencorvus/dist/opencorvus-*` directory as the archive root consumed by `install`.
+- `packages/opencorvus/script/build.ts` produces release CLI and overlay-server artifact directories.
+- `packages/opencorvus/script/build.local.ts` produces local package artifact directories.
+- `packages/opencorvus/script/build-artifact.ts` already owns artifact naming helpers for package base names and bundled Node runtime executable names.
+- `packages/opencorvus/test/script/check-release-assets.test.ts` covers CLI validator behavior.
+- `packages/opencorvus/test/script/build-artifact.test.ts` covers build artifact naming and build-script source contracts.
+
+### Fix Shape
+
+- Add `artifactExecutableName(targetOS)` to `packages/opencorvus/script/build-artifact.ts`, returning `opencorvus.exe` for `win32` / `windows` and `opencorvus` for other platforms.
+- Use that helper in both build scripts for the Bun compile `outfile`.
+- Use the same helper in `script/check-release-assets.ts` so the validator requires exactly the platform binary name instead of accepting both names everywhere.
+- In `install`, derive `installed_binary_name` from detected `os`, move `$tmp_dir/$installed_binary_name` into `$INSTALL_DIR/$installed_binary_name`, and copy local `--binary` installs to the same platform path.
+- Do not add a fallback that tries both `opencorvus` and `opencorvus.exe`; a mismatched archive should fail visibly.
+
+### Regression Tests
+
+- Add an install-script regression that runs `install --version ... --no-modify-path` through Git Bash / bash with fake `uname`, `curl`, and `powershell.exe`, downloads a real zip containing only `opencorvus.exe`, and asserts the install succeeds with `$HOME/.opencorvus/bin/opencorvus.exe`.
+- Extend `check-release-assets.test.ts` so Windows CLI validation passes with only `opencorvus.exe`, fails with only extensionless `opencorvus`, and Linux validation fails with only `opencorvus.exe`.
+- Extend `build-artifact.test.ts` to assert `artifactExecutableName(...)` and both build scripts use that helper for `outfile`.
+
+### Verification
+
+- Focused package tests passed: `bun test packages/opencorvus/test/script/install-script.test.ts packages/opencorvus/test/script/check-release-assets.test.ts packages/opencorvus/test/script/build-artifact.test.ts packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Adjacent npm wrapper test passed: `bun test packages/opencorvus/test/script/published-package-bin.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Bohr found that the exact Windows Git Bash install failure described in BH-070 no longer reproduced in HEAD `199521d6af9ee073d100a6b346557dcbffcecc45`, because Git Bash can resolve `opencorvus.exe` through a bare `opencorvus` command.
+- Bohr confirmed the substantive remaining bug is the release executable-name contract gap: `install` hardcoded `opencorvus`, release validation accepted either `opencorvus` or `opencorvus.exe` for every platform, and build scripts emitted extensionless `opencorvus` even for Windows targets.
+- Bohr confirmed the same no-fallback fix boundary: define one platform executable-name helper and use it in build output, release validation, and install destination; require exactly `opencorvus.exe` for Windows and exactly `opencorvus` for Linux/macOS.
