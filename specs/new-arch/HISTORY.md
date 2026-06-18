@@ -34,6 +34,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-retire-settings-config-shell-residue.md](2026-06-18-retire-settings-config-shell-residue.md) | Retire Settings Config Shell Residue |
 | [2026-06-18-retire-settings-extension-memory-residue.md](2026-06-18-retire-settings-extension-memory-residue.md) | Retire Settings Extension Memory Residue |
 | [2026-06-18-retire-conversation-goal-strip-residue.md](2026-06-18-retire-conversation-goal-strip-residue.md) | Retire Conversation Goal Strip Residue |
+| [2026-06-18-retire-ndjson-log-css-residue.md](2026-06-18-retire-ndjson-log-css-residue.md) | Retire NDJSON Log CSS Residue |
 | [2026-06-18-retire-workspace-panel-residue.md](2026-06-18-retire-workspace-panel-residue.md) | Retire Workspace Panel Residue |
 | [2026-06-18-retire-criteria-dom-css-residue.md](2026-06-18-retire-criteria-dom-css-residue.md) | Retire Criteria DOM CSS Residue |
 | [2026-06-18-retire-eval-shell-residue.md](2026-06-18-retire-eval-shell-residue.md) | Retire Eval Shell Residue |
