@@ -1663,10 +1663,15 @@ body {
     border-color var(--ui-duration-base) var(--ui-timing-standard),
     color var(--ui-duration-base) var(--ui-timing-standard);
 }
-.task-progress__pill:hover {
+.task-progress__pill:hover,
+.task-progress__pill:focus-visible {
   background: var(--card-bg-hover);
   border-color: var(--card-border-strong);
   color: var(--text-strong);
+}
+.task-progress__pill:focus-visible {
+  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: calc(2px * var(--ui-scale));
 }
 .task-progress__pill-id {
   flex: none;
