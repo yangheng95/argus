@@ -28,6 +28,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-retire-dialog-section-actions-residue.md](2026-06-19-retire-dialog-section-actions-residue.md)     | Retire Dialog Section Actions Residue |
 | [2026-06-19-retire-pref-item-residue.md](2026-06-19-retire-pref-item-residue.md)                               | Retire Pref Item Residue |
 | [2026-06-19-provider-refresh-spinner-owner.md](2026-06-19-provider-refresh-spinner-owner.md)                   | Provider Refresh Spinner Owner |
+| [2026-06-19-retire-field-input-action-residue.md](2026-06-19-retire-field-input-action-residue.md)             | Retire Field Input Action Residue |
 
 ## 2026-06-18
 

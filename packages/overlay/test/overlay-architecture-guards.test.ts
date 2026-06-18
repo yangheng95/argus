@@ -2437,6 +2437,29 @@ describe("overlay architecture guards", () => {
     expect(channelsPanel).toContain('id="channelList"')
   })
 
+  test("retired field input action/icon/row selectors stay removed while live field primitives remain", () => {
+    const fieldSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/field.css")))
+    const productionSource = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:ts|tsx|html|json)$/.test(path))
+      .map((path) => withoutComments(readText(path)))
+      .join("\n")
+    const cssClassSelector = (className: string) => new RegExp(`(^|[^A-Za-z0-9_-])\\.${className}(?![A-Za-z0-9_-])`)
+    const sourceClassToken = (className: string) => new RegExp(`(^|[^A-Za-z0-9_-])${className}(?![A-Za-z0-9_-])`)
+
+    for (const className of ["field-input-actions", "field-input-icon", "field-row"]) {
+      expect(fieldSurface).not.toMatch(cssClassSelector(className))
+      expect(productionSource).not.toMatch(sourceClassToken(className))
+    }
+
+    expect(fieldSurface).toMatch(cssClassSelector("field-input"))
+    expect(fieldSurface).toMatch(cssClassSelector("field-input-group"))
+    expect(fieldSurface).toMatch(cssClassSelector("search-field"))
+    expect(fieldSurface).toMatch(cssClassSelector("search-field-icon"))
+    expect(fieldSurface).toMatch(cssClassSelector("search-field-input"))
+    expect(productionSource).toContain("field-input-group")
+    expect(productionSource).toContain("search-field-icon")
+    expect(productionSource).toContain("search-field-input")
+  })
+
   test("composer shell does not rely on theme chrome resets", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
 
