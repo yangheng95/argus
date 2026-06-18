@@ -1,4 +1,7 @@
 import assert from "node:assert/strict"
+import { mkdirSync } from "node:fs"
+import { writeFile } from "node:fs/promises"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -32,6 +35,11 @@ test(
       tool_permissions: { websearch: "allow" },
     }
     const configPatches: Record<string, unknown>[] = []
+    let resolveRefreshResponse: ((response: Response) => void) | undefined
+    let resolveRefreshStarted!: () => void
+    const refreshStarted = new Promise<void>((resolve) => {
+      resolveRefreshStarted = resolve
+    })
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
@@ -71,6 +79,12 @@ test(
           ],
           connected: [],
           default: {},
+        })
+      }
+      if (path === "/provider/refresh" && req.method === "POST") {
+        resolveRefreshStarted()
+        return new Promise<Response>((resolve) => {
+          resolveRefreshResponse = resolve
         })
       }
       if (path === "/provider/auth") return send({})
@@ -167,6 +181,41 @@ test(
       assert.equal(new Set(metrics.headHeights).size, 1)
       assert.ok(Math.abs(metrics.apiInputHeight - metrics.apiButtonHeight) <= 1)
       assert.ok(metrics.dialogHeight >= 600)
+
+      await page.click('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]')
+      await refreshStarted
+      await page.waitForFunction(() => {
+        const button = document.querySelector('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]') as HTMLElement | null
+        const icon = button?.querySelector(".provider-refresh-icon") as HTMLElement | null
+        return button?.dataset.spinning === "true" && icon && getComputedStyle(icon).transform !== "none"
+      })
+      const refreshState = await page.evaluate(() => {
+        const button = document.querySelector('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]') as HTMLButtonElement
+        const icon = button.querySelector(".provider-refresh-icon") as HTMLElement
+        return {
+          oldOwnerCount: document.querySelectorAll(".provider-refresh-btn").length,
+          spinning: button.dataset.spinning,
+          disabled: button.disabled,
+          iconTransform: getComputedStyle(icon).transform,
+        }
+      })
+      assert.equal(refreshState.oldOwnerCount, 0)
+      assert.equal(refreshState.spinning, "true")
+      assert.equal(refreshState.disabled, true)
+      assert.notEqual(refreshState.iconTransform, "none")
+
+      const refreshButton = await page.$('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]')
+      assert.ok(refreshButton)
+      const refreshScreenshot = resolve(".scratch", "provider-refresh-spinner-button.png")
+      mkdirSync(dirname(refreshScreenshot), { recursive: true })
+      await writeFile(refreshScreenshot, await refreshButton.screenshot({}))
+
+      assert.ok(resolveRefreshResponse)
+      resolveRefreshResponse(send({ ok: true, fetchedAt: Date.now() }))
+      await page.waitForFunction(() => {
+        const button = document.querySelector('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]') as HTMLElement | null
+        return button?.dataset.spinning === "false"
+      })
 
       const beforeDrag = await page.evaluate(() => {
         const dialog = document.querySelector("#configDialog .dialog-form") as HTMLElement

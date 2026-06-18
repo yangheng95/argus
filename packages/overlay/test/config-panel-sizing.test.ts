@@ -182,6 +182,12 @@ describe("config panel sizing", () => {
       /align-self\s*:\s*stretch/,
     )
     expect(PROVIDERS_TSX).toContain('data-ui="provider-refresh-button"')
+    expect(PROVIDERS_TSX).toContain('data-spinning={refreshing() ? "true" : "false"}')
+    expect(PROVIDERS_TSX).not.toContain("provider-refresh-btn")
+    expect(SETTINGS_CSS).not.toContain(".provider-refresh-btn")
+    expect(
+      bodyOf('.provider-head-actions .oc-button[data-ui="provider-refresh-button"][data-spinning="true"] .provider-refresh-icon'),
+    ).toMatch(/transform:\s*rotate\(90deg\)/)
   })
 
   test("about author avatar uses the Icon primitive", () => {
