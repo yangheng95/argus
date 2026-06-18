@@ -650,9 +650,10 @@ describe("overlay architecture guards", () => {
     expect(inspectorAt).toBeGreaterThan(-1)
   })
 
-  test("inspector section icon button is owned by surfaces/inspector.css", () => {
+  test("retired inspector section icon button stays removed", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const sectionPrimitive = readText(join(OVERLAY_ROOT, "src/components/primitives/Section.tsx"))
 
     // Deleted frontend-preview family must not reappear in either layer.
     for (const className of [
@@ -666,9 +667,11 @@ describe("overlay architecture guards", () => {
       expect(inspectorSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    // Section icon button was renamed to .oc-section__icon-btn (Step 9.E migration)
-    expect(inspectorSurface).toMatch(/\.oc-section__icon-btn\s*\{/)
-    expect(inspectorSurface).toMatch(/\.oc-section__icon-btn:hover,\s*\.oc-section__icon-btn:focus-visible\s*\{/)
+    expect(styles).not.toMatch(/\.oc-section__icon-btn\b/)
+    expect(inspectorSurface).not.toMatch(/\.oc-section__icon-btn\b/)
+    expect(sectionPrimitive).not.toContain("oc-section__icon-btn")
+    expect(sectionPrimitive).not.toMatch(/^\s*actions\??:/m)
+    expect(sectionPrimitive).not.toContain("local.actions")
     expect(withoutComments(inspectorSurface)).not.toContain("background: white")
     expect(inspectorSurface).toContain("background: var(--surface-inset)")
     expect(inspectorSurface).toContain("var(--oc-border-width)")
