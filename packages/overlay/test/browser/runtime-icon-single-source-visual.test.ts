@@ -263,6 +263,33 @@ test(
       assert.equal(aboutIcon.hidden, "true")
       assert.equal(aboutIcon.box, 40)
       assert.notEqual(aboutIcon.color, "rgba(0, 0, 0, 0)")
+      const aboutLinkState = await taskPage.$eval(".about-link", (node: HTMLAnchorElement) => {
+        const style = getComputedStyle(node)
+        return {
+          authorLinkCount: document.querySelectorAll(".about-author-link").length,
+          href: node.href,
+          color: style.color,
+          background: style.backgroundColor,
+          borderColor: style.borderColor,
+        }
+      })
+      assert.equal(aboutLinkState.authorLinkCount, 0)
+      assert.ok(aboutLinkState.href.startsWith("https://github.com/yangheng95"))
+      assert.notEqual(aboutLinkState.color, "rgba(0, 0, 0, 0)")
+      await taskPage.hover(".about-link")
+      const hoveredAboutLinkState = await taskPage.$eval(".about-link", (node: HTMLAnchorElement) => {
+        const style = getComputedStyle(node)
+        return {
+          color: style.color,
+          background: style.backgroundColor,
+          borderColor: style.borderColor,
+        }
+      })
+      assert.notDeepEqual(hoveredAboutLinkState, {
+        color: aboutLinkState.color,
+        background: aboutLinkState.background,
+        borderColor: aboutLinkState.borderColor,
+      })
       await saveElementScreenshot(taskPage, "#configDialog", "runtime-icon-about-panel.png")
       await taskPage.close()
 

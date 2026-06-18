@@ -1130,7 +1130,6 @@ describe("overlay architecture guards", () => {
       "about-author-avatar",
       "about-author-info",
       "about-author-name",
-      "about-author-link",
       "about-info-grid",
       "about-info-label",
       "about-info-value",
@@ -1141,13 +1140,14 @@ describe("overlay architecture guards", () => {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+    expect(settingsSurface).not.toMatch(/(^|\n)\.about-author-link(?:\s|:|\{)/)
+    expect(readText(join(OVERLAY_ROOT, "src/components/ConfigDialogHost.tsx"))).not.toContain("about-author-link")
     expect(settingsSurface).toMatch(/(^|\n)\.config-status-box\s*\{/)
     expect(() => soloRuleBody(styles, ".config-status-box")).toThrow()
 
     for (const status of ["active", "warn", "error"]) {
       expect(settingsSurface).toMatch(new RegExp(`\\.config-status-box\\[data-status="${status}"\\]\\s*\\{`))
     }
-    expect(settingsSurface).toMatch(/\.about-author-link:hover\s*\{/)
     expect(settingsSurface).toMatch(/\.about-link:hover\s*\{/)
     expect(settingsSurface).toMatch(/\.about-shortcut-grid kbd\s*\{/)
     expect(settingsSurface).toMatch(/\.about-shortcut-grid span\s*\{/)
