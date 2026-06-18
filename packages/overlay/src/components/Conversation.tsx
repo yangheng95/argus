@@ -13,6 +13,7 @@ import { canLoadOlderConversationHistory, loadOlderConversationHistory } from ".
 import { conversationAgentStore } from "../store/conversation-agents"
 import { listenConversationCardScroll, type ConversationCardScrollRequest } from "../services/conversation-scroll"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
+import { Icon } from "./Icon"
 
 const VIRTUAL_OVERSCAN_ITEMS = 16
 const ESTIMATED_CARD_HEIGHT = 132
@@ -431,11 +432,7 @@ export function Conversation(props: { container: HTMLElement }) {
       <Show when={!hasItems() && taskContextID()}>
         <div class="chat-empty chat-empty--task" data-status={selectedTaskStatus()}>
           <div class="chat-empty-marker" aria-hidden="true">
-            <svg class="chat-empty-icon" width="40" height="40" viewBox="0 0 40 40" fill="none">
-              <rect x="7" y="8" width="26" height="20" rx="3.5" stroke="currentColor" stroke-width="1.6" />
-              <path d="M13 15h14M13 20h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-              <path d="M10 31h20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.72" />
-            </svg>
+            <Icon name="file-document" class="chat-empty-icon" size={40} />
           </div>
           <div class="chat-empty-copy">
             <span class="chat-empty-kicker">{emptyText()}</span>
@@ -453,11 +450,7 @@ export function Conversation(props: { container: HTMLElement }) {
       </Show>
       <Show when={!hasItems() && !taskContextID()}>
         <div class="chat-empty">
-          <svg class="chat-empty-icon" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-            <rect x="4" y="5" width="32" height="22" rx="3.5" stroke="currentColor" stroke-width="1.6" />
-            <path d="M4 27l7-6h22l7 6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
-            <path d="M13 15h14M13 19.5h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
+          <Icon name="message" class="chat-empty-icon" size={40} />
           <span class="chat-empty-text">{emptyText()}</span>
         </div>
       </Show>
