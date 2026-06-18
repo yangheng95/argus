@@ -157,9 +157,6 @@ test(
             const selectors = [
               ".titlebar-brand",
               "[data-menu-trigger]",
-              ".titlebar-status-chip",
-              ".titlebar-setup-cta",
-              '[data-ui="titlebar-status-icon"]',
               ".titlebar-window-controls button",
             ]
             const nodes = selectors
@@ -460,8 +457,23 @@ test(
         })
         await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
         await page.waitForSelector('[data-menu-trigger="workspace"]', { visible: true })
-        const setupCount = await page.$$eval('[data-testid="titlebar-setup-cta"]', (nodes) => nodes.length)
-        assert.equal(setupCount, 0)
+        const retiredTitlebarStatusCounts = await page.evaluate(() => {
+          const selectors = [
+            ".titlebar-status-chip",
+            ".titlebar-setup-cta",
+            ".titlebar-status-icon",
+            ".titlebar-task-status",
+            ".titlebar-status-label",
+            ".titlebar-status-value",
+            '[data-testid="titlebar-setup-cta"]',
+            '[data-ui="titlebar-status-icon"]',
+          ]
+          return Object.fromEntries(selectors.map((selector) => [selector, document.querySelectorAll(selector).length]))
+        })
+        assert.deepEqual(
+          retiredTitlebarStatusCounts,
+          Object.fromEntries(Object.keys(retiredTitlebarStatusCounts).map((selector) => [selector, 0])),
+        )
         const workspaceBounds = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
           const rect = node.getBoundingClientRect()
           return { left: rect.left, right: rect.right, width: rect.width }
@@ -1298,9 +1310,13 @@ test(
 
       const leftDrag = await page.evaluate(() => {
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
+        const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
+        const max = document.querySelector<HTMLElement>("#leftPaneResizer")!.getAttribute("aria-valuemax")
         return {
+          initialSidebar: sidebar.width,
           centerX: left.left + left.width / 2,
           centerY: left.top + left.height / 2,
+          max: max === null ? null : Number(max),
           targetX: 700,
         }
       })
@@ -1315,17 +1331,27 @@ test(
         const workbench = document.querySelector<HTMLElement>("#centerWorkbench")!.getBoundingClientRect()
         const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
+        const leftResizer = document.querySelector<HTMLElement>("#leftPaneResizer")!
         const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!.getBoundingClientRect()
+        const max = leftResizer.getAttribute("aria-valuemax")
+        const now = leftResizer.getAttribute("aria-valuenow")
         return {
           sidebar: sidebar.width,
           chat: chat.width,
           leftDivider: workspace.left - sidebar.right,
           rightDivider: toolbar.left - workbench.right,
           leftHandleWidth: left.width,
+          leftMax: max === null ? null : Number(max),
+          leftNow: now === null ? null : Number(now),
           rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }
       })
-      assert.ok(afterLeftDrag.sidebar > 600)
+      assert.equal(Number.isFinite(leftDrag.max), true)
+      assert.equal(Number.isFinite(afterLeftDrag.leftMax), true)
+      assert.equal(Number.isFinite(afterLeftDrag.leftNow), true)
+      assert.ok(afterLeftDrag.sidebar > leftDrag.initialSidebar + 200)
+      assert.ok(afterLeftDrag.sidebar >= afterLeftDrag.leftMax! - 2)
+      assert.ok(afterLeftDrag.leftNow! >= afterLeftDrag.leftMax! - 1)
       assert.ok(afterLeftDrag.chat > 300)
       assert.ok(afterLeftDrag.leftDivider <= 2)
       assert.ok(afterLeftDrag.rightDivider <= 2)
