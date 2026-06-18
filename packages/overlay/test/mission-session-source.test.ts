@@ -112,8 +112,12 @@ test("Mission ledger uses MissionList and not the task list projection", () => {
 test("Mission ledger groups records by project directory", () => {
   expect(MISSION_LIST_TSX).toContain("const groupedMissions = createMemo")
   expect(MISSION_LIST_TSX).toContain("mission.directory")
-  expect(MISSION_LIST_TSX).toContain('class="project-group mission-project-group"')
-  expect(MISSION_LIST_TSX).toContain('data-ui="mission-project-group"')
+  expect(MISSION_LIST_TSX).toContain("ProjectLedgerGroup")
+  expect(MISSION_LIST_TSX).toContain("createProjectLedgerGroupCollapseState")
+  expect(MISSION_LIST_TSX).toContain('class="mission-project-group"')
+  expect(MISSION_LIST_TSX).toContain('dataUi="mission-project-group"')
+  expect(MISSION_LIST_TSX).not.toContain('class="project-group-heading"')
+  expect(MISSION_LIST_TSX).not.toContain('class="project-group mission-project-group"')
   expect(MISSION_LIST_TSX).toContain("<For each={group.items}>")
 })
 

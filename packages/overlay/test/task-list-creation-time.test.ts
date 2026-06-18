@@ -107,7 +107,7 @@ test("task list refresh preserves unchanged row references", () => {
 test("TaskList has no lifecycle timestamp or status-priority sort path", () => {
   expect(TASK_LIST_SOURCE).toContain("taskCreatedAt")
   expect(TASK_LIST_SOURCE).toContain("items: sortTaskItemsByCreated(group.items)")
-  expect(TASK_LIST_SOURCE).toContain('class="project-group"')
+  expect(TASK_LIST_SOURCE).toContain("ProjectLedgerGroup")
   expect(TASK_LIST_SOURCE).toContain("COMPACT_GROUP_VISIBLE_LIMIT")
   expect(TASK_LIST_SOURCE).toContain("visibleGroupItems")
   expect(TASK_LIST_SOURCE).toContain("expandDirectoryGroup(group.directory)")

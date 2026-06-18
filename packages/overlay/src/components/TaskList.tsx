@@ -18,8 +18,9 @@ import {
 import { useArmedConfirm } from "../solid/armed-confirm"
 import { t } from "../utils/i18n"
 import { stamp, fullStampWithRelative } from "../utils/time"
-import { projectDirectoryKey, projectDirectoryLabel } from "../utils/project-directory"
+import { projectDirectoryKey } from "../utils/project-directory"
 import { Icon } from "./Icon"
+import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { Button } from "./ui/Button"
 
 const COMPACT_GROUP_VISIBLE_LIMIT = 5
@@ -111,10 +112,6 @@ function projectDirectoryOf(item: any): string {
   // Pending tasks have no server-assigned directory yet; attribute them to the
   // currently active project so the user sees them grouped correctly.
   return settingsStore.directory || ""
-}
-
-function projectGroupTip(directory: string, count: number): string {
-  return joinBullet([directory || t("task.project.unknown"), t("task.project.count", { count: String(count) })])
 }
 
 // ── DeleteButton (two-step inline confirm) ──
@@ -654,7 +651,6 @@ export function TaskList(props: TaskListProps) {
   // operator forgot they typed about.
   const [searchQuery, setSearchQuery] = createSignal("")
   const [expandedDirectories, setExpandedDirectories] = createSignal<Record<string, boolean>>({})
-  const [collapsedDirectories, setCollapsedDirectories] = createSignal<Record<string, boolean>>({})
   const matchesQuery = (item: any, q: string): boolean => {
     if (!q) return true
     const haystack = [
@@ -681,6 +677,7 @@ export function TaskList(props: TaskListProps) {
   // storage persistence is intentionally out of scope (see spec
   // docs/superpowers/specs/2026-05-27-task-tree-display.md §3.2).
   const [expandedTasks, setExpandedTasks] = createSignal<Set<string>>(new Set())
+  const directoryCollapse = createProjectLedgerGroupCollapseState()
 
   function toggleTaskExpand(id: string): void {
     if (!id) return
@@ -760,20 +757,6 @@ export function TaskList(props: TaskListProps) {
   function expandDirectoryGroup(directory: string): void {
     const key = projectDirectoryKey(directory)
     setExpandedDirectories((current) => ({ ...current, [key]: true }))
-  }
-
-  function isDirectoryCollapsed(directory: string): boolean {
-    return collapsedDirectories()[projectDirectoryKey(directory)] === true
-  }
-
-  function toggleDirectoryGroup(directory: string): void {
-    const key = projectDirectoryKey(directory)
-    setCollapsedDirectories((current) => {
-      const next = { ...current }
-      if (next[key]) delete next[key]
-      else next[key] = true
-      return next
-    })
   }
 
   const [retrying, setRetrying] = createSignal(false)
@@ -974,9 +957,8 @@ export function TaskList(props: TaskListProps) {
       >
         <For each={grouped()}>
           {(group) => {
-            const label = projectDirectoryLabel(group.directory, t("task.project.unknown"))
             const expanded = () => isDirectoryExpanded(group.directory)
-            const collapsed = () => isDirectoryCollapsed(group.directory)
+            const collapsed = () => directoryCollapse.isCollapsed(group.directory)
             // Compact quota bounds the *top-level* row count of the
             // directory group. Expanded subtrees push children below their
             // parent without consuming that quota — they only appear after
@@ -986,86 +968,56 @@ export function TaskList(props: TaskListProps) {
             const hiddenCount = () => Math.max(0, group.items.length - visibleGroupItems().length)
             const entries = () => flattenGroup(visibleGroupItems(), group.directory)
             return (
-              <section class="project-group" data-collapsed={collapsed() ? "true" : undefined}>
-                <button
-                  type="button"
-                  class="project-group-heading"
-                  title={projectGroupTip(group.directory, group.items.length)}
-                  aria-expanded={collapsed() ? "false" : "true"}
-                  aria-label={
-                    collapsed()
-                      ? t("task.project.expand", { name: label.name })
-                      : t("task.project.collapse", { name: label.name })
+              <ProjectLedgerGroup
+                directory={group.directory}
+                count={group.items.length}
+                collapsed={collapsed()}
+                onToggle={() => directoryCollapse.toggle(group.directory)}
+              >
+                <TaskSection
+                  entries={entries()}
+                  isSelected={isSelected}
+                  queuePositions={queuePositions()}
+                  onSelectTask={props.onSelectTask}
+                  onDeleteTask={props.onDeleteTask}
+                  onCancelTask={props.onCancelTask}
+                  onRenameTask={props.onRenameTask}
+                  onStartNow={handleStartNow}
+                  onDownloadProject={handleDownloadProject}
+                  startNowBusyID={startNowBusyID()}
+                  downloadBusyID={downloadBusyID()}
+                  canReorder={
+                    group.items.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1
                   }
-                  onClick={() => toggleDirectoryGroup(group.directory)}
-                >
-                  <span class="project-group-icon" aria-hidden="true">
-                    <Icon name={collapsed() ? "folder" : "folder-open"} size={15} />
+                  draggingID={draggingID()}
+                  dragOverID={dragOverID()}
+                  onDragStart={setDraggingID}
+                  onDragOver={(id, event) => {
+                    event.preventDefault()
+                    if (draggingID() && id !== draggingID()) setDragOverID(id)
+                  }}
+                  onDrop={(id, event) => handleDrop(group.directory, id, event)}
+                  onDragEnd={() => {
+                    setDraggingID("")
+                    setDragOverID("")
+                  }}
+                  onToggleExpand={toggleTaskExpand}
+                />
+                <Show when={hiddenCount() > 0}>
+                  <span class="project-group-show-more">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      tone="neutral"
+                      onClick={() => expandDirectoryGroup(group.directory)}
+                      aria-label={t("progress.expand_more", { count: String(hiddenCount()) })}
+                    >
+                      {t("acceptance.show_more")}
+                    </Button>
                   </span>
-                  <span class="project-group-copy">
-                    <span class="project-group-name">{label.name}</span>
-                    <Show when={label.parent}>
-                      <span class="project-group-parent">{label.parent}</span>
-                    </Show>
-                  </span>
-                  <span
-                    class="project-group-count"
-                    aria-label={t("task.project.count", { count: String(group.items.length) })}
-                  >
-                    {group.items.length}
-                  </span>
-                  <span class="project-group-chevron" aria-hidden="true">
-                    <Icon name={collapsed() ? "chevron" : "chevron-down"} size={12} />
-                  </span>
-                </button>
-                <Show when={!collapsed()}>
-                  <div class="project-group-body">
-                    <TaskSection
-                      entries={entries()}
-                      isSelected={isSelected}
-                      queuePositions={queuePositions()}
-                      onSelectTask={props.onSelectTask}
-                      onDeleteTask={props.onDeleteTask}
-                      onCancelTask={props.onCancelTask}
-                      onRenameTask={props.onRenameTask}
-                      onStartNow={handleStartNow}
-                      onDownloadProject={handleDownloadProject}
-                      startNowBusyID={startNowBusyID()}
-                      downloadBusyID={downloadBusyID()}
-                      canReorder={
-                        group.items.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1
-                      }
-                      draggingID={draggingID()}
-                      dragOverID={dragOverID()}
-                      onDragStart={setDraggingID}
-                      onDragOver={(id, event) => {
-                        event.preventDefault()
-                        if (draggingID() && id !== draggingID()) setDragOverID(id)
-                      }}
-                      onDrop={(id, event) => handleDrop(group.directory, id, event)}
-                      onDragEnd={() => {
-                        setDraggingID("")
-                        setDragOverID("")
-                      }}
-                      onToggleExpand={toggleTaskExpand}
-                    />
-                    <Show when={hiddenCount() > 0}>
-                      <span class="project-group-show-more">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          tone="neutral"
-                          onClick={() => expandDirectoryGroup(group.directory)}
-                          aria-label={t("progress.expand_more", { count: String(hiddenCount()) })}
-                        >
-                          {t("acceptance.show_more")}
-                        </Button>
-                      </span>
-                    </Show>
-                  </div>
                 </Show>
-              </section>
+              </ProjectLedgerGroup>
             )
           }}
         </For>
