@@ -175,8 +175,6 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
 }
 
 function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.infer<typeof ControlMessageResult>) {
-  // Only record the assistant response in the timeline.
-  // The user message already exists in the control session (via SessionPrompt.prompt).
   ControlTimeline.append({
     ...scope(input, result),
     surface: input.surface,
@@ -186,6 +184,11 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
     userID: input.user_id,
     requestID: input.request_id,
     entries: [
+      {
+        role: "user",
+        text: input.text,
+        metadata: userTimelineMetadata(input),
+      },
       {
         role: "assistant",
         text: result.message,
@@ -200,6 +203,26 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
       },
     ],
   })
+}
+
+function userTimelineMetadata(input: z.infer<typeof ControlMessageInput>) {
+  return {
+    kind: "control_input",
+    allow_create: input.allow_create,
+    ...(input.executor ? { executor: input.executor } : {}),
+    ...(input.model ? { model: input.model } : {}),
+    ...(input.taskID ? { task_id: input.taskID } : {}),
+    ...(input.sessionID ? { session_id: input.sessionID } : {}),
+    ...(input.metadata ? { metadata: input.metadata } : {}),
+    ...(input.attachments?.length
+      ? {
+          input_attachments: input.attachments.map((attachment) => ({
+            mime: attachment.mime,
+            ...(attachment.filename ? { filename: attachment.filename } : {}),
+          })),
+        }
+      : {}),
+  }
 }
 
 async function resolveModel(explicitModel?: string) {

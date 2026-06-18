@@ -70,14 +70,14 @@ export namespace ControlTimeline {
             .select()
             .from(ControlMessageTable)
             .where(and(eq(ControlMessageTable.scope, "task"), eq(ControlMessageTable.scope_id, input.taskID)))
-            .orderBy(asc(ControlMessageTable.time_created))
+            .orderBy(asc(ControlMessageTable.time_created), asc(ControlMessageTable.id))
             .all()
         : input.sessionID
           ? db
               .select()
               .from(ControlMessageTable)
               .where(and(eq(ControlMessageTable.scope, "session"), eq(ControlMessageTable.scope_id, input.sessionID)))
-              .orderBy(asc(ControlMessageTable.time_created))
+              .orderBy(asc(ControlMessageTable.time_created), asc(ControlMessageTable.id))
               .all()
           : db
               .select()
@@ -88,7 +88,7 @@ export namespace ControlTimeline {
                   eq(ControlMessageTable.scope_id, input.surface ?? "panel"),
                 ),
               )
-              .orderBy(asc(ControlMessageTable.time_created))
+              .orderBy(asc(ControlMessageTable.time_created), asc(ControlMessageTable.id))
               .all(),
     )
     return TimelineMessage.array().parse(rows.map(view))

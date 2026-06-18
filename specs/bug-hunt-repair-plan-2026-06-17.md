@@ -4770,3 +4770,51 @@ LINE:
 - Bernoulli confirmed the target files had no local diff before this batch.
 - Bernoulli found the same suitable regression home in `document-health.test.ts`.
 - Bernoulli recommended adding the real `astro check` script because the package already depends on `@astrojs/check` and `typescript`.
+
+## Batch P2-CF: BH-081 control timeline must persist user commands
+
+### Findings
+
+- BH-081 targets `packages/opencorvus/src/control/message.ts::appendTimeline(...)` and `packages/opencorvus/src/control/timeline.ts::ControlTimeline.list(...)`.
+- `appendTimeline(...)` writes only an assistant entry and comments that the user message already exists in the control session through `SessionPrompt.prompt(...)`.
+- For task-scoped and channel control messages, `resolveSession(...)` creates a temporary control session and `finally` removes it when `control.keep` is false.
+- That cleanup removes the only durable copy of the original user command, so task control timelines preserve the assistant answer but lose the operator input.
+- `ControlTimeline.append(...)` already accepts multiple ordered entries in one transaction; no schema or compatibility path is needed.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/control/message.ts::ControlMessage.handle(...)` and `handleStream(...)` call `appendTimeline(...)` after `run(...)` returns a timeline-worthy result.
+- `packages/opencorvus/src/control/message.ts::resolveSession(...)` creates non-persistent temporary sessions for task-scoped control messages and non-panel surfaces.
+- `packages/opencorvus/src/control/message.ts::shouldRemoveSession(...)` removes created temporary sessions that are not kept.
+- `packages/opencorvus/src/control/timeline.ts::ControlTimeline.append(...)` writes timeline rows from supplied entries.
+- `packages/opencorvus/src/control/timeline.ts::ControlTimeline.list(...)` is used by `packages/opencorvus/src/server/routes/control.ts` and task conversation route composition in `packages/opencorvus/src/server/routes/orchestrator.ts`.
+- `packages/opencorvus/test/workspace/message.test.ts` already covers control message behavior with stubbed `SessionPrompt.prompt(...)`, though several real-LLM tests there are skipped.
+
+### Fix Shape
+
+- Change `appendTimeline(...)` to append a `user` entry containing `input.text` before the existing assistant entry.
+- Store user-side metadata from the control request (`allow_create`, UI metadata, executor, model, and `input_attachments` descriptors when present) so the durable timeline keeps the command context after the temporary session is removed without duplicating raw attachment URLs or mixing input descriptors with output attachment parts.
+- Add an `id` ascending tie-breaker to `ControlTimeline.list(...)` order clauses, because user and assistant rows are written with the same millisecond timestamp in one append call.
+- Do not keep temporary control sessions just to preserve history, and do not add secondary reconstruction from deleted session messages.
+
+### Regression Tests
+
+- Add a focused control message test that:
+  - creates a real temporary task-scoped control session path under a test project;
+  - stubs `SessionPrompt.prompt(...)` to return a structured assistant result without running an LLM;
+  - calls `ControlMessage.handle(...)`;
+  - asserts `ControlTimeline.list({ taskID })` returns ordered `user` then `assistant` rows after temporary-session cleanup.
+- Update stale assistant-message fixtures in the adjacent control message tests so they satisfy the current `Message.Assistant` token schema and can run with this batch's verification set.
+
+### Verification
+
+- Focused and adjacent control tests passed: `bun test packages/opencorvus/test/control/timeline.test.ts packages/opencorvus/test/control/message-attachments.test.ts packages/opencorvus/test/workspace/message.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check -- packages/opencorvus/src/control/message.ts packages/opencorvus/src/control/timeline.ts packages/opencorvus/test/control/timeline.test.ts packages/opencorvus/test/workspace/message.test.ts specs/bug-hunt-repair-plan-2026-06-17.md`.
+
+### Independent Review Feedback
+
+- Lovelace confirmed BH-081 was present in `HEAD`: `appendTimeline(...)` wrote only an assistant row while temporary control session cleanup removed the original user prompt.
+- Lovelace traced the user-command loss through `resolveSession(...)`, `shouldRemoveSession(...)`, `Session.remove(...)`, and the session message cascade.
+- Lovelace confirmed `ControlTimeline.list(...)` needed an `id` tie-breaker once user and assistant rows are written in the same append transaction.
+- Lovelace warned not to keep temporary sessions, reconstruct from deleted session messages, add route gates, or store raw data URL attachments in timeline metadata.

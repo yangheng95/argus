@@ -118,6 +118,7 @@ describe("control.message", () => {
         },
         cost: 0,
         tokens: {
+          total: 0,
           input: 0,
           output: 0,
           reasoning: 0,
@@ -157,6 +158,7 @@ describe("control.message", () => {
         },
         cost: 0,
         tokens: {
+          total: 0,
           input: 0,
           output: 0,
           reasoning: 0,
