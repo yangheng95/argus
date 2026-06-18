@@ -232,50 +232,52 @@ export default function ChannelsPanel() {
 
       {/* ── Channel List ── */}
       <Show when={channels().length > 0} fallback={<div class="empty-hint">{t("channel.none")}</div>}>
-        <For each={channels()}>
-          {(item) => (
-            <SettingsRow
-              class="channel-settings-row"
-              title={<strong>{item.name}</strong>}
-              desc={item.summary}
-              meta={
-                <small class="channel-doc-credit">
-                  {t("channel.tutorial_credit", { source: OPENCLAW_DOCS.credit })}
-                </small>
-              }
-              interactive
-              actions={
-                <div class="channel-row-actions">
-                  <SettingsPill tone={channelStatusTone(item.status)}>{channelStatusLabel(item.status)}</SettingsPill>
-                  <Show when={canOpenTutorialDocs()}>
+        <div id="channelList">
+          <For each={channels()}>
+            {(item) => (
+              <SettingsRow
+                class="channel-settings-row"
+                title={<strong>{item.name}</strong>}
+                desc={item.summary}
+                meta={
+                  <small class="channel-doc-credit">
+                    {t("channel.tutorial_credit", { source: OPENCLAW_DOCS.credit })}
+                  </small>
+                }
+                interactive
+                actions={
+                  <div class="channel-row-actions">
+                    <SettingsPill tone={channelStatusTone(item.status)}>{channelStatusLabel(item.status)}</SettingsPill>
+                    <Show when={canOpenTutorialDocs()}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        tone="neutral"
+                        title={t("channel.tutorial_hint")}
+                        aria-label={t("channel.tutorial_hint")}
+                        onClick={() => nativeOpen(channelTutorialUrl(item.id))}
+                      >
+                        {t("channel.tutorial")}
+                      </Button>
+                    </Show>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="solid"
                       size="sm"
-                      tone="neutral"
-                      title={t("channel.tutorial_hint")}
-                      aria-label={t("channel.tutorial_hint")}
-                      onClick={() => nativeOpen(channelTutorialUrl(item.id))}
+                      tone="accent"
+                      title={t("channel.edit_title")}
+                      aria-label={t("channel.edit_title")}
+                      onClick={() => openEdit(item.id)}
                     >
-                      {t("channel.tutorial")}
+                      {t("common.edit")}
                     </Button>
-                  </Show>
-                  <Button
-                    type="button"
-                    variant="solid"
-                    size="sm"
-                    tone="accent"
-                    title={t("channel.edit_title")}
-                    aria-label={t("channel.edit_title")}
-                    onClick={() => openEdit(item.id)}
-                  >
-                    {t("common.edit")}
-                  </Button>
-                </div>
-              }
-            />
-          )}
-        </For>
+                  </div>
+                }
+              />
+            )}
+          </For>
+        </div>
       </Show>
 
       {/* ── Channel Edit Dialog ── */}

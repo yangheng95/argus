@@ -2328,28 +2328,9 @@ button.s-row:focus-visible {
 
 /* ─────────────────────────────────────────────────────────────
    Extracted from styles.css 2026-05-04 (continuation slice).
-   Settings / channel-config / acceptance / opacity / llm
+   Settings / channel-config / acceptance / llm
    surface chrome.
    ───────────────────────────────────────────────────────────── */
-
-.playwright-options {
-  margin-top: var(--ui-gap-sm);
-  padding: 0 var(--ui-gap-xs);
-}
-.playwright-options .field-compact {
-  margin-bottom: 0;
-}
-.playwright-options .field-compact .field-label {
-  font-size: var(--ui-font-control);
-}
-.playwright-options .field-compact .field-input {
-  font-size: var(--ui-font-control);
-  padding: calc(4px * var(--ui-scale)) var(--ui-input-padding-x);
-}
-
-.channel-public-url-head .field {
-  flex: 1;
-}
 
 #channelConfigBody {
   min-height: 0;
@@ -2374,137 +2355,10 @@ button.s-row:focus-visible {
   gap: var(--section-row-gap);
 }
 
-.config-field-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: end;
-}
-
-.config-field-row .field {
-  min-width: 0;
-}
-
-.config-inline-popup {
-  position: absolute;
-  top: calc(10px * var(--ui-scale));
-  right: calc(10px * var(--ui-scale));
-  z-index: var(--ui-z-raised);
-  max-width: min(calc(280px * var(--ui-scale)), calc(100% - calc(20px * var(--ui-scale))));
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: var(--oc-radius-large);
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--dialog-bg);
-  color: var(--text);
-  font-size: var(--ui-font-body);
-  line-height: 1.45;
-  box-shadow: var(--shadow);
-  opacity: var(--ui-opacity-hidden);
-  pointer-events: none;
-  transform: translateY(calc(-6px * var(--ui-scale)));
-  transition:
-    opacity var(--ui-duration-base) var(--ui-timing-standard),
-    transform var(--ui-duration-base) var(--ui-timing-standard);
-}
-
-.config-inline-popup[data-open="true"] {
-  opacity: var(--ui-opacity-full);
-  transform: translateY(0);
-}
-
-.config-inline-popup[data-status="active"] {
-  border-color: color-mix(in srgb, var(--good) 30%, transparent);
-  background: color-mix(in srgb, var(--good) 10%, var(--dialog-bg));
-  color: var(--good);
-}
-
-.config-inline-popup[data-status="warn"] {
-  border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-  background: color-mix(in srgb, var(--warn) 10%, var(--dialog-bg));
-  color: var(--warn);
-}
-
-.config-inline-popup[data-status="error"] {
-  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
-  background: color-mix(in srgb, var(--bad) 10%, var(--dialog-bg));
-  color: var(--bad);
-}
-
-@media (max-width: 760px) {
-  /* breakpoint: --ui-breakpoint-md */
-  .config-field-row {
-    grid-template-columns: 1fr;
-  }
-
-  .config-inline-popup {
-    left: calc(10px * var(--ui-scale));
-    right: calc(10px * var(--ui-scale));
-    max-width: none;
-  }
-}
-
-.config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--ui-scale));
-  font-size: var(--ui-font-title);
-}
-.config-label {
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-.config-value {
-  color: var(--text);
-  text-align: right;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.config-value[data-status="ready"] {
-  color: var(--good);
-}
-.config-value[data-status="active"] {
-  color: var(--good);
-}
-.config-value[data-status="warn"] {
-  color: var(--warn);
-}
-.config-value[data-status="error"] {
-  color: var(--bad);
-}
-
 .general-panel {
   display: flex;
   flex-direction: column;
   gap: calc(20px * var(--ui-scale));
-}
-
-.opacity-field {
-  gap: calc(6px * var(--ui-scale));
-}
-
-.opacity-field .opacity-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--ui-scale));
-}
-
-.opacity-field .opacity-value {
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-  min-width: calc(32px * var(--ui-scale));
-  text-align: right;
-}
-
-.opacity-field input[type="range"] {
-  width: 100%;
-  height: calc(4px * var(--ui-scale));
-  /* `accent-color` declared globally on body (tokens/design-language.css). */
-  cursor: pointer;
-  margin: calc(4px * var(--ui-scale)) 0;
 }
 
 .loading-hint {

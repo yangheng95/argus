@@ -162,6 +162,19 @@ test(
       writeFileSync(screenshotPath, await head.screenshot({}))
 
       await page.waitForSelector('[data-config-panel="channel"] .channel-settings-row')
+      const channelListMetrics = await page.$eval('[data-config-panel="channel"] #channelList', (node) => {
+        const list = node as HTMLElement
+        const rect = list.getBoundingClientRect()
+        return {
+          width: rect.width,
+          height: rect.height,
+          rowCount: list.querySelectorAll(".channel-settings-row").length,
+        }
+      })
+      assert.equal(channelListMetrics.rowCount, 1)
+      assert.ok(channelListMetrics.width > 120)
+      assert.ok(channelListMetrics.height > 20)
+
       await page.evaluate(() => {
         const buttons = Array.from(
           document.querySelectorAll<HTMLButtonElement>('[data-config-panel="channel"] .channel-settings-row button'),
