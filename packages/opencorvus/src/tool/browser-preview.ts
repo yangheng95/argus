@@ -3,7 +3,7 @@ import { persistBrowserPreviewTarget } from "@/browser-preview/persist"
 import { deriveBrowserPreviewUrlsFromDevServerCommand } from "@/browser-preview/dev-server-command"
 import { extractBrowserPreviewUrlsFromText } from "@/browser-preview/extract"
 import { waitForBrowserPreviewUrlReachable } from "@/browser-preview/liveness"
-import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "@/browser-preview/target"
+import { missingBrowserPreviewTarget, normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "@/browser-preview/target"
 import { Instance } from "@/project/instance"
 import { BashTool } from "./bash"
 import { BrowserPreviewToolID } from "./browser-preview-tool-ids"
@@ -148,13 +148,21 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
         })
       }
 
-      const target = await resolveBrowserPreviewTarget({
-        projectRoot: Instance.directory,
-        taskID,
-      })
       const startupTargets = startupCandidates
         .filter((item) => item.persistedTargetID)
         .map((item) => ({ id: item.persistedTargetID!, url: item.url, source: item.source }))
+      const noStartupTargetDiagnostic = "No browser_preview_target was persisted for this service startup."
+      const target =
+        startupTargets.length > 0
+          ? await resolveBrowserPreviewTarget({
+              projectRoot: Instance.directory,
+              taskID,
+            })
+          : missingBrowserPreviewTarget({
+              projectRoot: Instance.directory,
+              taskID,
+              diagnostics: [noStartupTargetDiagnostic],
+            })
       const payload = {
         kind: "browser_preview_service",
         taskID,
@@ -172,7 +180,9 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
         startupTargets,
         diagnostics: [
           ...target.diagnostics,
-          ...(startupTargets.length === 0 ? ["No browser_preview_target was persisted for this service startup."] : []),
+          ...(startupTargets.length === 0 && !target.diagnostics.includes(noStartupTargetDiagnostic)
+            ? [noStartupTargetDiagnostic]
+            : []),
           "Overlay Preview opens from the task-scoped browser_preview_target artifact.",
         ],
       }
