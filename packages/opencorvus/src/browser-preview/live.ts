@@ -437,7 +437,7 @@ async function settle(ms) {
 }
 
 async function capture(command) {
-  const activePage = await ensurePage(command, { reload: command.kind === "snapshot" });
+  const activePage = await ensurePage(command);
   await settle(command.settleMs);
   const png = await activePage.screenshot({ type: "png" });
   return {

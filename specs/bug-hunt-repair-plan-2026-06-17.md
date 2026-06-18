@@ -4942,3 +4942,44 @@ LINE:
 - `bun test packages/vscode-extension/test/secret-scan.test.ts --timeout 60000` passed with 19 tests.
 - `bun run script/secret-scan.ts` passed.
 - `"<current-ref-line>" | bun run script/secret-scan.ts --pre-push-stdin` passed.
+
+## Batch P1-AF2: browser-preview live snapshot must preserve active page state
+
+### Findings
+
+- The BH-034 serialization repair made same-session commands sequential, but the final route regression still failed because `capture(...)` forced `ensurePage(..., { reload: command.kind === "snapshot" })`.
+- The focused failure is reproducible with `bun test packages/opencorvus/test/browser-preview/live-lifecycle.test.ts packages/opencorvus/test/server/browser-preview-routes.test.ts -t "serializes commands|serializes concurrent same-session" --timeout 60000`; both input responses pass, but the final `live/snapshot` reloads the target and captures the original dark page instead of the blue post-input state.
+- `/live/input` already preserves active page state by calling `ensurePage(command)` and then `capture(command)`, but `/live/snapshot` contradicts that live-session contract by reloading whenever the URL is unchanged.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/browser-preview/live.ts::captureBrowserPreviewLiveSnapshot(...)` sends snapshot commands to the live sidecar.
+- `packages/opencorvus/src/browser-preview/live.ts::interactBrowserPreviewLive(...)` sends input commands to the same sidecar session key.
+- `packages/opencorvus/src/browser-preview/live.ts::ensurePage(...)` already opens/navigates when the live page is missing, viewport changes, or URL changes.
+- `packages/opencorvus/src/browser-preview/live.ts::capture(...)` is the only remaining place forcing reload for snapshot commands.
+- `packages/opencorvus/test/browser-preview/live-lifecycle.test.ts` owns embedded source-contract checks.
+- `packages/opencorvus/test/server/browser-preview-routes.test.ts` owns route-level live snapshot/input behavior.
+
+### Fix Shape
+
+- Remove unconditional snapshot reload from `capture(...)`; same live session snapshots should capture the active page.
+- Keep `ensurePage(...)` navigation on missing page, viewport changes, or target URL changes.
+- Change the stale "snapshot reloads the same target URL" regression into the current contract: repeated snapshots for the same target hit the HTTP page once and return the same active-page frame unless page script changes it.
+- Add a source-level lifecycle assertion that the embedded sidecar no longer contains `reload: command.kind === "snapshot"`.
+
+### Regression Tests
+
+- Update `packages/opencorvus/test/server/browser-preview-routes.test.ts` so consecutive live snapshots for the same target do not reload the HTTP target.
+- Keep the existing concurrent same-session command test; it should now pass through the final snapshot assertion.
+- Update `packages/opencorvus/test/browser-preview/live-lifecycle.test.ts` to lock the no-unconditional-snapshot-reload invariant.
+
+### Verification
+
+- The original focused failure reproduced before the fix: `bun test packages/opencorvus/test/browser-preview/live-lifecycle.test.ts packages/opencorvus/test/server/browser-preview-routes.test.ts -t "serializes commands|serializes concurrent same-session" --timeout 60000` failed because final snapshot captured the reloaded dark page.
+- Ampere independently confirmed the current disk state no longer reproduces the failure and identified the same old reload call as the root cause.
+- `bun test packages/opencorvus/test/browser-preview/live-lifecycle.test.ts packages/opencorvus/test/server/browser-preview-routes.test.ts -t "serializes commands|serializes concurrent same-session" --timeout 60000` passed after the fix.
+- `bun test packages/opencorvus/test/browser-preview/live-lifecycle.test.ts --timeout 30000` passed with 5 tests.
+- `bun test packages/opencorvus/test/server/browser-preview-routes.test.ts --timeout 60000` passed with 24 tests.
+- `bun run --cwd packages/opencorvus typecheck` passed.
+- `git diff --check` passed for the P1-AF2 touched files.
+- Residual note: `ensurePage(command, options = {})` still has an unused `options.reload` branch. It is now dead code; deletion is intentionally deferred because project rule 17 requires explicit user approval before removing dead code.

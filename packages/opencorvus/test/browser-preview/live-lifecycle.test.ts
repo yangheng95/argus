@@ -48,6 +48,7 @@ test("interactive browser preview sidecar serializes commands inside one live se
   expect(live).toContain("commandChain = commandChain.then(run, run);")
   expect(live).toContain("enqueueCommand(message);")
   expect(live).not.toContain("handle(message).catch((error) =>")
+  expect(live).not.toContain('reload: command.kind === "snapshot"')
 })
 
 test("server dispose and shutdown paths close interactive browser preview sessions", () => {
