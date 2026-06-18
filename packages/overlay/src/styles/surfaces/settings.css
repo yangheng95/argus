@@ -2328,7 +2328,7 @@ button.s-row:focus-visible {
 
 /* ─────────────────────────────────────────────────────────────
    Extracted from styles.css 2026-05-04 (continuation slice).
-   Settings / channel-config / acceptance / detail / opacity / llm
+   Settings / channel-config / acceptance / opacity / llm
    surface chrome.
    ───────────────────────────────────────────────────────────── */
 
@@ -2345,50 +2345,6 @@ button.s-row:focus-visible {
 .playwright-options .field-compact .field-input {
   font-size: var(--ui-font-control);
   padding: calc(4px * var(--ui-scale)) var(--ui-input-padding-x);
-}
-
-.detail-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-md);
-}
-
-.detail-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-sm);
-  padding: var(--ui-panel-padding-y) var(--ui-panel-padding-x);
-  border-radius: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.detail-pre {
-  margin: 0;
-  padding: calc(10px * var(--ui-scale)) var(--ui-panel-padding-x);
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
-  font-family: var(--mono);
-  font-size: var(--ui-font-control);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text);
-  max-height: calc(280px * var(--ui-scale));
-  overflow: auto;
-}
-
-.detail-pre-json {
-  max-height: calc(220px * var(--ui-scale));
-}
-
-@media (max-width: 760px) {
-  /* breakpoint: --ui-breakpoint-md */
-  .detail-grid-row {
-    grid-template-columns: 1fr;
-  }
 }
 
 .channel-public-url-head .field {
