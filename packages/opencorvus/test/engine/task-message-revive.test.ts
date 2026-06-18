@@ -2,12 +2,17 @@ import { describe, expect, mock, spyOn, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Database, eq } from "../../src/storage/db"
-import { EngineArtifactTable, EngineInteractionRequestTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineInteractionRequestTable,
+  EnginePlanVersionTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { reopenActiveRunForOperatorWake } from "../../src/engine/task-message-open"
-import { findRun, findTask } from "../../src/engine/store"
+import { findActivePlanForTask, findRun, findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { EngineService } from "../../src/task-api"
 import { Session } from "../../src/session"
@@ -220,6 +225,91 @@ describe("EngineService.retryTask — active blocked run reopen", () => {
         expect(reopened?.status).toBe("running")
         expect(reopened?.blocking_reason).toBeNull()
         expect(reopened?.error).toBeNull()
+      },
+    })
+  })
+})
+
+describe("EngineService.replanTask — structured replan intent", () => {
+  test("replan supersedes the active plan and does not reopen a blocked run as retry", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const planID = Identifier.ascending("plan")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "replan blocked run" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Replan blocked task",
+              request: "replan",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            } as any)
+            .run()
+          db.insert(EnginePlanVersionTable)
+            .values({
+              id: planID,
+              task_id: taskID,
+              version: 1,
+              status: "active",
+              summary: "stale active plan",
+              prompt: "old plan",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-blocked",
+              payload: {
+                plan_version_id: planID,
+                session_id: root.id,
+                executor: "opencorvus",
+                status: "blocked",
+                phase: "dispatch",
+                blocking_reason: "orchestrator_stream_error",
+                error: "MessageAbortedError: total deadline",
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        await EngineService.replanTask(taskID)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(findActivePlanForTask(taskID)).toBeUndefined()
+        const blocked = findRun(runID)
+        expect(blocked?.status).toBe("blocked")
+        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        const event = (runTaskLoop.mock.calls[0]?.[0] as
+          | { event?: { note?: string; operatorIntent?: { kind?: string } } }
+          | undefined)?.event
+        expect(event?.operatorIntent).toEqual({ kind: "replan" })
+        expect(event?.note).toContain("User requested replan")
+        expect(event?.note).not.toContain("User requested retry")
       },
     })
   })
