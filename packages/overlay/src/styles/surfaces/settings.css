@@ -1326,16 +1326,6 @@ button.s-row:focus-visible {
   color: var(--text-strong);
 }
 
-.about-author-link {
-  font-size: var(--ui-font-small);
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.about-author-link:hover {
-  text-decoration: underline;
-}
-
 .about-info-grid {
   display: grid;
   grid-template-columns: auto 1fr;
