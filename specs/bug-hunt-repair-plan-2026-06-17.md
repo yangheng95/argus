@@ -4216,3 +4216,57 @@ LINE:
 - Carson confirmed all production writers converge through `Session.updatePart(...)`, so the fix should not be duplicated in processor, engine, build, or route call sites.
 - Carson recommended a strong typed comparator instead of `Record<string, number>` with unknown-status fallback; the final repair uses `Message.ToolPart["state"]["status"]`.
 - Carson requested event suppression and same-terminal refresh coverage; both are now in the regression suite.
+
+## Batch P2-BV: BH-045 acceptance latest readers need deterministic same-ms tie-breaks
+
+### Findings
+
+- BH-045 targets the acceptance artifact readers in `packages/opencorvus/src/engine/store.ts`.
+- Acceptance lifecycle rows are append-only `engine_artifact` rows with `kind="acceptance"` and the same logical `acceptance_id`.
+- `latestPerAcceptance(...)` intentionally keeps the first row for each logical acceptance id, so every caller must pass rows sorted newest-first.
+- The four public acceptance readers sorted only by `time_created DESC`. Same-millisecond lifecycle rows could therefore keep the stale `candidate` row before a later `delivered` or `publishing` row.
+- `packages/opencorvus/src/engine/persist.ts::findLatestAcceptanceArtifact(...)` had the same ordering gap for lifecycle writers such as `markAcceptancePublishing(...)` and `finalizeAcceptanceResult(...)`.
+- Neighboring artifact readers already use `time_created DESC, id DESC` for same-millisecond determinism, including run and acceptance-verdict readers.
+
+### Call-point Inventory
+
+- `findAcceptanceByRun(...)` reads task-level acceptance rows for a run.
+- `findLatestAcceptanceForRun(...)` reads the latest acceptance for a run, including goal-run deliveries.
+- `findDeliveriesForTask(...)` reads all latest acceptance deliveries for a task.
+- `findAcceptanceByGoalRun(...)` reads the latest acceptance bound to a goal run.
+- `latestPerAcceptance(...)` collapses the append-only stream and depends on caller ordering.
+- `findLatestAcceptanceArtifact(...)` in `persist.ts` is the private lifecycle-writer reader used before appending publishing/final result rows.
+
+### Fix Shape
+
+- Add `desc(EngineArtifactTable.id)` as the secondary order key to every acceptance latest reader.
+- Apply the same secondary ordering in `persist.ts::findLatestAcceptanceArtifact(...)`.
+- Update comments in `store.ts`, `persist.ts`, and `engine.sql.ts` so the documented latest rule is `time_created desc, id desc`.
+- Do not add fallback reads, repair gates, or in-memory resorting inside `latestPerAcceptance(...)`; the single source of truth is deterministic SQL ordering at the reader boundary.
+
+### Regression Tests
+
+- Add `packages/opencorvus/test/engine/acceptance-latest-order.test.ts`:
+  - same-time task-level acceptance rows keep the highest artifact id as latest across `findAcceptanceByRun(...)`, `findLatestAcceptanceForRun(...)`, and `findDeliveriesForTask(...)`;
+  - same-time goal-run acceptance rows keep the highest artifact id as latest across `findAcceptanceByGoalRun(...)`, `findLatestAcceptanceForRun(...)`, and `findDeliveriesForTask(...)`;
+  - `markAcceptancePublishing(...)` copies the payload from the same-time highest-id acceptance row, covering the private `persist.ts` helper.
+- The fixture inserts minimal `verification-evidence` artifacts for synthetic acceptance rows so it does not violate engine state invariants while exercising read-model ordering.
+
+### Verification
+
+- Focused BH-045 tests passed: `bun test packages/opencorvus/test/engine/acceptance-latest-order.test.ts --timeout 60000`.
+- Adjacent start-new-attempt tests passed: `bun test packages/opencorvus/test/engine/start-new-attempt.test.ts --timeout 90000`.
+- Engine invariant tests passed independently: `bun test packages/opencorvus/test/engine/state-invariants.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Package test-entry guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- API route inventory passed: `bun run api:routes-check`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Aquinas confirmed `HEAD` still had BH-045 in all four public acceptance readers because `latestPerAcceptance(...)` first-seen collapse received rows sorted only by `time_created`.
+- Aquinas identified `persist.ts::findLatestAcceptanceArtifact(...)` as the adjacent same-root lifecycle helper; it is now sorted by `time_created desc, id desc`.
+- Aquinas recommended updating `engine.sql.ts` and helper comments to document the deterministic latest rule; those comments now match the implementation.
+- Aquinas pointed to existing `findRun`, `findGoalRun`, and acceptance-verdict readers as local precedent for `id desc` same-millisecond ordering.

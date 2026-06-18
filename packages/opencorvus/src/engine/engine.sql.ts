@@ -535,7 +535,8 @@ export const EngineInteractionRequestTable = sqliteTable(
 // engine/store.ts (AcceptanceRow) for the read-model that reconstructs the
 // historical shape from the artifact payload. Append-only — status
 // transitions (candidate → publishing → delivered/failed) are new rows per
-// acceptance_id and `findAcceptance*` take the newest via `time_created desc`.
+// acceptance_id and `findAcceptance*` take the newest via `time_created desc,
+// id desc`.
 
 export const EngineArtifactTable = sqliteTable(
   "engine_artifact",

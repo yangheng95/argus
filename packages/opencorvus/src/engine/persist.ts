@@ -1950,14 +1950,15 @@ export function finalizeAcceptanceResult(input: {
 }
 
 /** Phase-6-c internal: find the latest acceptance artifact row by acceptance_id.
- *  Newer rows supersede older ones (append-only semantics). */
+ *  Newer rows supersede older ones (append-only semantics); id breaks same-ms
+ *  ties the same way store.ts acceptance readers do. */
 function findLatestAcceptanceArtifact(acceptanceId: string) {
   return Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.acceptance_id, acceptanceId), eq(EngineArtifactTable.kind, "acceptance")))
-      .orderBy(desc(EngineArtifactTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
   )
 }
