@@ -2184,19 +2184,6 @@ button.s-row:focus-visible {
   color: var(--good);
 }
 
-.provider-head-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--ui-gap-sm);
-  flex-wrap: wrap;
-}
-.provider-refresh-meta {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 .provider-refresh-icon {
   display: inline-block;
   line-height: 1;

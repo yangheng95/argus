@@ -65,3 +65,18 @@ test("provider rows keep stable responsive grid areas", () => {
   expect(STYLES).toContain('"key key key"')
   expect(STYLES).toContain('"models models models"')
 })
+
+test("provider header actions keep a single base owner before the responsive override", () => {
+  const headActionOwners = STYLES.match(/(^|\n)\.provider-head-actions\s*\{/g) ?? []
+  const refreshMetaOwners = STYLES.match(/(^|\n)\.provider-refresh-meta\s*\{/g) ?? []
+  const headActionsBase = STYLES.indexOf(".provider-head-actions {")
+  const responsiveBlock = STYLES.indexOf("@media (max-width: 900px)", headActionsBase)
+
+  expect(headActionOwners).toHaveLength(1)
+  expect(refreshMetaOwners).toHaveLength(1)
+  expect(headActionsBase).toBeGreaterThan(-1)
+  expect(responsiveBlock).toBeGreaterThan(headActionsBase)
+  expect(STYLES.slice(responsiveBlock)).toContain(
+    ".provider-head-actions,\n  .provider-row-actions,\n  .provider-row-summary",
+  )
+})
