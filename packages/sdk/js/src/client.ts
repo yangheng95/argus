@@ -53,11 +53,13 @@ export function createOpenCorvusClient(input?: OpenCorvusClientConfig) {
   const { directory, username, password, ...rest } = input ?? {}
   let config: Config = rest
 
-  const fetcher = config.fetch ?? ((async (req: any) => {
-    // @ts-ignore
-    req.timeout = false
-    return fetch(req)
-  }) as typeof fetch)
+  const fetcher =
+    config.fetch ??
+    ((async (req: any) => {
+      // @ts-ignore
+      req.timeout = false
+      return fetch(req)
+    }) as typeof fetch)
   config = {
     ...config,
     fetch: directory ? directoryScopedFetch(fetcher, normalizeDirectory(directory)) : fetcher,
