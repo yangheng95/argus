@@ -7,6 +7,7 @@ process.chdir(dir)
 import { $ } from "bun"
 import fs from "node:fs/promises"
 import path from "path"
+import { replaceDirectoryAfterSuccessfulBuild } from "./generation-transaction"
 
 const openapi = path.join(dir, "openapi.json")
 const rootOpenapi = path.join(dir, "..", "openapi.json")
@@ -55,18 +56,18 @@ async function writeFileWithRetry(file: string, contents: string) {
   }
 }
 
-async function waitForGeneratedClient() {
+async function waitForGeneratedClient(root = path.join(dir, "src", "gen")) {
   const checks = [
     {
-      file: path.join(dir, "src", "gen", "client", "index.ts"),
+      file: path.join(root, "client", "index.ts"),
       text: "ClientOptions",
     },
     {
-      file: path.join(dir, "src", "gen", "client", "types.gen.ts"),
+      file: path.join(root, "client", "types.gen.ts"),
       text: "export interface Config",
     },
     {
-      file: path.join(dir, "src", "gen", "sdk.gen.ts"),
+      file: path.join(root, "sdk.gen.ts"),
       text: "export class OpenCorvusClient",
     },
   ]
@@ -162,28 +163,9 @@ await writeFileWithRetry(
     `export const DEFAULT_SERVER_URL = \`http://\${DEFAULT_SERVER_HOST}:\${DEFAULT_SERVER_PORT}\`\n`,
 )
 
-// Bootstrap: opencorvus's OpenAPI generator imports "@opencorvus-ai/sdk",
-// which in turn imports ./gen/*. After a clean (e.g. `rm -rf src/gen`) those
-// modules are missing and the generator fails to load. Write minimal
-// stubs so the SDK module graph resolves; the real generation below replaces
-// them. Stubs are not retained — the `rm -rf src/gen` after generate removes
-// the entire dir and createClient writes fresh files.
-await writeFileWithRetry(path.join(dir, "src", "gen", "types.gen.ts"), "export {}\n")
-await writeFileWithRetry(
-  path.join(dir, "src", "gen", "sdk.gen.ts"),
-  "export class OpenCorvusClient { constructor(_?: unknown) {} }\n",
-)
-await writeFileWithRetry(path.join(dir, "src", "gen", "client", "types.gen.ts"), "export interface Config {}\n")
-await writeFileWithRetry(
-  path.join(dir, "src", "gen", "client", "client.gen.ts"),
-  "export function createClient(_?: unknown): unknown { throw new Error('SDK not yet generated') }\n",
-)
-await writeFileWithRetry(path.join(dir, "src", "gen", "client", "index.ts"), "export {}\n")
-
 const generatedOpenapi = await $`bun ./script/generate-openapi.ts`.cwd(path.resolve(dir, "../../opencorvus")).text()
 await writeFileWithRetry(openapi, generatedOpenapi)
 await writeFileWithRetry(rootOpenapi, await Bun.file(openapi).text())
-await rmWithinPackage("src/gen", { recursive: true })
 await rmWithinPackage("dist", { recursive: true })
 
 const generate = async (output: string) =>
@@ -218,8 +200,15 @@ const generate = async (output: string) =>
     ],
   })
 
-await generate("./src/gen")
-await waitForGeneratedClient()
+await replaceDirectoryAfterSuccessfulBuild({
+  packageRoot: dir,
+  stagingRelative: ".tmp-sdk-gen",
+  targetRelative: "src/gen",
+  build: async (stagingDir) => {
+    await generate(stagingDir)
+    await waitForGeneratedClient(stagingDir)
+  },
+})
 
 const prettierBin = await Bun.resolve("prettier/bin/prettier.cjs", dir)
 for (let attempt = 1; attempt <= 5; attempt++) {
