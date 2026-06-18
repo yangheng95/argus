@@ -1481,30 +1481,18 @@
   outline: none;
 }
 
-.recent-dir-edit-submit {
-  appearance: none;
+.recent-dir-edit-form .oc-button[data-ui="recent-dir-edit-submit"] {
+  --oc-button-height: calc(30px * var(--ui-scale));
+  --oc-button-color: var(--text-soft);
+
   width: calc(30px * var(--ui-scale));
-  height: calc(30px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: var(--oc-border-width) solid var(--oc-control-border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--oc-control-bg);
-  color: var(--text-soft);
-  cursor: pointer;
+  min-width: calc(30px * var(--ui-scale));
 }
 
-.recent-dir-edit-submit:hover,
-.recent-dir-edit-submit:focus-visible {
-  background: var(--oc-control-bg-hover);
-  color: var(--text-strong);
-  outline: none;
-}
+.recent-dir-edit-form .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][data-ui="recent-dir-edit-submit"]:disabled {
+  --oc-button-color: var(--text-muted);
 
-.recent-dir-edit-submit:disabled {
-  cursor: default;
-  color: var(--text-muted);
+  opacity: var(--ui-opacity-full);
 }
 
 .recent-dir-discovery-error {
@@ -1607,9 +1595,9 @@
   box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-.recent-dir-row:has(.recent-dir-remove):hover,
-.recent-dir-row:has(.recent-dir-remove):focus-within,
-.recent-dir-row:has(.recent-dir-remove)[data-active="true"] {
+.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):hover,
+.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):focus-within,
+.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"])[data-active="true"] {
   grid-template-columns: minmax(0, 1fr) var(--recent-dir-remove-slot-width);
 }
 
@@ -1680,20 +1668,17 @@
   color: var(--text-strong);
 }
 
-.recent-dir-remove {
+.recent-dir-item:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
+}
+
+.recent-dir-row .oc-button[data-ui="recent-dir-remove"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-color: var(--text-muted);
+
   width: calc(22px * var(--ui-scale));
-  height: calc(22px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--ui-font-heading);
-  line-height: 1;
-  cursor: pointer;
-  margin: 0;
+  min-width: calc(22px * var(--ui-scale));
   position: absolute;
   top: 50%;
   right: calc(6px * var(--ui-scale));
@@ -1706,16 +1691,11 @@
     opacity var(--ui-duration-base);
 }
 
-.recent-dir-row:hover .recent-dir-remove,
-.recent-dir-row:focus-within .recent-dir-remove,
-.recent-dir-row[data-active="true"] .recent-dir-remove {
+.recent-dir-row:hover .oc-button[data-ui="recent-dir-remove"],
+.recent-dir-row:focus-within .oc-button[data-ui="recent-dir-remove"],
+.recent-dir-row[data-active="true"] .oc-button[data-ui="recent-dir-remove"] {
   opacity: var(--ui-opacity-full);
   pointer-events: auto;
-}
-
-.recent-dir-remove:hover {
-  background: color-mix(in srgb, var(--bad) 16%, transparent);
-  color: var(--bad);
 }
 
 .recent-dir-empty {

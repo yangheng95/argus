@@ -179,10 +179,24 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                         </span>
                       </button>
                     </div>
-                    <label class="recent-dir-edit-label">
-                      <input value="OpenCorvus" aria-label="Rename directory" />
-                      <button class="recent-dir-edit-submit" type="button" disabled data-popup-text>Save</button>
-                    </label>
+                    <form class="recent-dir-edit-form">
+                      <label class="recent-dir-edit-label">
+                        <input value="OpenCorvus" aria-label="Rename directory" />
+                      </label>
+                      <button
+                        class="oc-button"
+                        data-variant="ghost"
+                        data-size="icon"
+                        data-tone="neutral"
+                        data-chrome="icon-action"
+                        data-ui="recent-dir-edit-submit"
+                        type="button"
+                        disabled
+                        data-popup-text
+                      >
+                        Save
+                      </button>
+                    </form>
                   </section>
                 </div>
               </div>
@@ -331,6 +345,26 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
     assert.ok(worktreeRemoveStates.some((state) => state.status === "active" && !state.disabled))
     assert.ok(worktreeRemoveStates.some((state) => state.status === "expired" && !state.disabled))
     assert.ok(worktreeRemoveStates.some((state) => state.status === "expired" && state.disabled && state.opacity === "1"))
+
+    const recentSubmit = await page.$eval(
+      '[data-popup-sample="recent-directory"] .oc-button[data-ui="recent-dir-edit-submit"]',
+      (node) => {
+        const element = node as HTMLButtonElement
+        const styles = getComputedStyle(element)
+        return {
+          disabled: element.disabled,
+          className: element.className,
+          chrome: element.dataset.chrome,
+          size: element.dataset.size,
+          opacity: styles.opacity,
+        }
+      },
+    )
+    assert.equal(recentSubmit.disabled, true)
+    assert.match(recentSubmit.className, /\boc-button\b/)
+    assert.equal(recentSubmit.chrome, "icon-action")
+    assert.equal(recentSubmit.size, "icon")
+    assert.equal(recentSubmit.opacity, "1")
 
     const result = await page.evaluate(() => {
       interface Rgba {
