@@ -1215,10 +1215,17 @@ describe("overlay architecture guards", () => {
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
     const configDialog = readText(join(OVERLAY_ROOT, "src/components/ConfigDialogHost.tsx"))
 
-    for (const className of ["config-close-btn", "config-sidebar", "config-nav-icon", "config-nav-badge"]) {
+    for (const className of ["config-sidebar", "config-nav-icon", "config-nav-badge"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+    expect(configDialog).toContain('import { Button } from "./ui/Button"')
+    expect(configDialog).toContain("<Button")
+    expect(configDialog).toContain('data-ui="config-dialog-close"')
+    expect(configDialog).toContain('id="btnCloseConfigDialog"')
+    expect(configDialog).not.toContain('class="config-close-btn"')
+    expect(settingsSurface).not.toMatch(/(^|\n)\.config-close-btn\b/)
+    expect(settingsSurface).toMatch(/\.dialog-header-actions \.oc-button\[data-ui="config-dialog-close"\]\s*\{/)
     for (const className of ["config-nav-item", "config-nav-spacer"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -1231,7 +1238,9 @@ describe("overlay architecture guards", () => {
     expect(layoutBody).toContain("flex: 1")
     expect(layoutBody).toContain("overflow: hidden")
 
-    expect(settingsSurface).toMatch(/\.config-close-btn:hover\s*\{/)
+    expect(settingsSurface).toMatch(
+      /\.dialog-header-actions \.oc-button\[data-ui="config-dialog-close"\]:hover,\s*\.dialog-header-actions \.oc-button\[data-ui="config-dialog-close"\]:focus-visible\s*\{/,
+    )
     const sidebarBody = settingsSurface.match(/(^|\n)\.config-sidebar\s*\{([^}]*)\}/)?.[2] ?? ""
     expect(sidebarBody).toContain("background: transparent")
     expect(configDialog).toContain('import { Tab, TabList, TabPanel, Tabs } from "./ui/Tabs"')
