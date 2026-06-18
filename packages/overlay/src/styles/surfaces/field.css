@@ -290,49 +290,6 @@ textarea.field-input {
   box-shadow: none;
 }
 
-.field-input-actions {
-  display: flex;
-  align-items: stretch;
-  padding-right: calc(6px * var(--ui-scale));
-}
-
-.field-input-icon {
-  width: calc(36px * var(--ui-scale));
-  min-width: calc(36px * var(--ui-scale));
-  border: none;
-  background: transparent;
-  color: var(--text-soft);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition:
-    background var(--ui-duration-fast),
-    color var(--ui-duration-fast);
-}
-
-.field-input-icon:hover:not(:disabled) {
-  background: var(--subtle-4);
-  color: var(--text-strong);
-}
-
-.field-input-icon:disabled {
-  opacity: var(--ui-opacity-faint);
-  cursor: default;
-}
-
-.field-input-icon:focus-visible {
-  outline: none;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
-}
-
-.field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--ui-gap-md);
-}
-
 /* Inspector ("sections" context) tightens the field family for the
  * right-rail's denser layout. The right rail uses the global
  * `--oc-radius-soft` corner + tighter padding tokens so a field
@@ -362,19 +319,6 @@ textarea.field-input {
 .sections .field-input-group {
   min-height: calc(32px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
-}
-
-.sections .field-input-actions {
-  padding-right: calc(4px * var(--ui-scale));
-}
-
-.sections .field-input-icon {
-  width: calc(32px * var(--ui-scale));
-  min-width: calc(32px * var(--ui-scale));
-}
-
-.sections .field-row {
-  gap: var(--section-row-gap);
 }
 
 /* ─────────────────────────────────────────────────────────────
