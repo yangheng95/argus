@@ -29,6 +29,9 @@ and the root chrome can conflict with the trigger chrome.
 - Keep `.log-level-select` as a root positioning/hook class only.
 - Add `oc-select-trigger` to the severity trigger class list.
 - Delete private root chrome and focus styling from `settings.css`.
+- Do not require `.log-level-select` to own a CSS rule in architecture guards;
+  the class may stay on the Kobalte root as a DOM hook while trigger/content
+  visuals come from shared `.oc-select-*` primitives.
 - Extend tests so LogViewer requires the shared trigger class and rejects root
   ownership of Select background, border, padding, color, and focus chrome.
 

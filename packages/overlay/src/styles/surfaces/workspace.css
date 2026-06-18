@@ -226,12 +226,6 @@ body[data-center-workbench-panel-resizing="true"] .center-workbench-panel-separa
   flex-direction: column;
 }
 
-.chat-plugin-activity[data-active="false"] {
-  display: none;
-}
-
-.chat-plugin-activity,
-.chat-plugin-outlet,
 .chat-browser-preview-activity,
 .chat-file-editor-activity {
   display: flex;

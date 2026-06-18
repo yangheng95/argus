@@ -36,6 +36,8 @@ menubar and popover primitives already used by the overlay.
 
 - Replace the static brand guide markup in `index.html` with a Solid mount.
 - Add `TitlebarBrandGuide.tsx` using Kobalte Popover for trigger/content semantics.
+- Resolve the brand SVG through the Vite asset graph from `TitlebarBrandGuide.tsx`
+  so dev, browser tests, and `dist-vite` all load one bundled resource path.
 - Keep `titlebar.css` as the visual owner only; remove CSS-only card reveal logic.
 - Move compact brand media rules after the base brand rules so the hidden
   copyblock and narrow card width apply at small breakpoints.
@@ -52,6 +54,8 @@ menubar and popover primitives already used by the overlay.
   `Popover.Trigger`, and `Popover.Content`.
 - The card is not `aria-hidden` and Escape/outside click behavior is delegated to
   Kobalte Popover.
+- The brand logo request succeeds in the real browser page and is not a bare
+  runtime-relative string that can fall out of `dist-vite`.
 - The stale `Tools` wording is gone from brand guide copy.
 - At compact width, the Project menu does not cover the brand trigger hit area.
 - Targeted tests, overlay typecheck, docs check, real browser screenshots, and
