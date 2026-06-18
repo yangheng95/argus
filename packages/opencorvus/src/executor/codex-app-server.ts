@@ -27,6 +27,14 @@ type TurnRef = {
   }
 }
 
+type RequestOptions = {
+  signal?: AbortSignal
+}
+
+type CodexAppServerClientFactory = (
+  input: z.infer<typeof CodingRunInput> | z.infer<typeof CodingResumeInput>,
+) => CodexAppServerClient | Promise<CodexAppServerClient>
+
 export type CodexInbound =
   | {
       type: "notification"
@@ -41,20 +49,23 @@ export type CodexInbound =
     }
 
 export type CodexAppServerClient = {
-  initialize(input: {
-    clientInfo: {
-      name: string
-      version: string
-    }
-    capabilities?: {
-      experimentalApi?: boolean
-      optOutNotificationMethods?: string[] | null
-    }
-  }): Promise<unknown>
-  threadStart(input: Record<string, unknown>): Promise<ThreadRef>
-  threadResume(input: Record<string, unknown>): Promise<ThreadRef>
-  turnStart(input: Record<string, unknown>): Promise<TurnRef>
-  turnInterrupt(input: { threadId: string; turnId: string }): Promise<unknown>
+  initialize(
+    input: {
+      clientInfo: {
+        name: string
+        version: string
+      }
+      capabilities?: {
+        experimentalApi?: boolean
+        optOutNotificationMethods?: string[] | null
+      }
+    },
+    options?: RequestOptions,
+  ): Promise<unknown>
+  threadStart(input: Record<string, unknown>, options?: RequestOptions): Promise<ThreadRef>
+  threadResume(input: Record<string, unknown>, options?: RequestOptions): Promise<ThreadRef>
+  turnStart(input: Record<string, unknown>, options?: RequestOptions): Promise<TurnRef>
+  turnInterrupt(input: { threadId: string; turnId: string }, options?: RequestOptions): Promise<unknown>
   respond?(input: { id: RequestID; result?: Record<string, unknown>; error?: Record<string, unknown> }): Promise<void>
   events(input?: { signal?: AbortSignal }): AsyncIterable<CodexInbound>
   close?(): Promise<void> | void
@@ -73,9 +84,7 @@ export namespace CodexAppServerExecutor {
     })
   }
 
-  export function create(
-    input: CodexAppServerClient | ((input: z.infer<typeof CodingRunInput>) => CodexAppServerClient),
-  ): CodingProvider {
+  export function create(input: CodexAppServerClient | CodexAppServerClientFactory): CodingProvider {
     const factory = typeof input === "function" ? input : () => input
     const sessions = new Map<string, { client: CodexAppServerClient; threadID?: string; turnID?: string }>()
     return {
@@ -84,58 +93,62 @@ export namespace CodexAppServerExecutor {
       async *run(raw) {
         const input = CodingRunInput.parse(raw)
         const logicalID = input.sessionID ?? provisionalID()
-        const client = factory(input)
+        const client = await factory(input)
         sessions.set(logicalID, { client })
-        await ensure(client)
-        const thread = await client.threadStart(threadStart(input))
-        const turn = await client.turnStart(turnStart(thread.thread.id, input))
-        const current = { client, threadID: thread.thread.id, turnID: turn.turn.id }
-        sessions.set(logicalID, current)
-        sessions.set(sessionID(thread.thread.id, turn.turn.id), current)
-        yield {
-          type: "progress",
-          phase: "init",
-          summary: "thread.started",
-          meta: {
-            thread_id: thread.thread.id,
-            turn_id: turn.turn.id,
-            session_id: sessionID(thread.thread.id, turn.turn.id),
-          },
-        }
+        let activeSessionID: string | undefined
         try {
+          await ensure(client, raw.signal)
+          const thread = await client.threadStart(threadStart(input), { signal: raw.signal })
+          const turn = await client.turnStart(turnStart(thread.thread.id, input), { signal: raw.signal })
+          activeSessionID = sessionID(thread.thread.id, turn.turn.id)
+          const current = { client, threadID: thread.thread.id, turnID: turn.turn.id }
+          sessions.set(logicalID, current)
+          sessions.set(activeSessionID, current)
+          yield {
+            type: "progress",
+            phase: "init",
+            summary: "thread.started",
+            meta: {
+              thread_id: thread.thread.id,
+              turn_id: turn.turn.id,
+              session_id: activeSessionID,
+            },
+          }
           yield* stream(client, thread.thread.id, turn.turn.id, raw.signal)
         } finally {
           sessions.delete(logicalID)
-          sessions.delete(sessionID(thread.thread.id, turn.turn.id))
+          if (activeSessionID) sessions.delete(activeSessionID)
           await client.close?.()
         }
       },
       async *resume(raw) {
         const input = CodingResumeInput.parse(raw)
         const ref = splitSession(input.sessionID)
-        const client = factory(input)
+        const client = await factory(input)
         sessions.set(input.sessionID, { client, threadID: ref.threadID, turnID: ref.turnID })
-        await ensure(client)
-        const thread = await client.threadResume(threadResume(ref.threadID, input))
-        const turn = await client.turnStart(turnStart(thread.thread.id, input))
-        const current = { client, threadID: thread.thread.id, turnID: turn.turn.id }
-        sessions.set(input.sessionID, current)
-        sessions.set(sessionID(thread.thread.id, turn.turn.id), current)
-        yield {
-          type: "progress",
-          phase: "init",
-          summary: "thread.resumed",
-          meta: {
-            thread_id: thread.thread.id,
-            turn_id: turn.turn.id,
-            session_id: sessionID(thread.thread.id, turn.turn.id),
-          },
-        }
+        let activeSessionID: string | undefined
         try {
+          await ensure(client, raw.signal)
+          const thread = await client.threadResume(threadResume(ref.threadID, input), { signal: raw.signal })
+          const turn = await client.turnStart(turnStart(thread.thread.id, input), { signal: raw.signal })
+          activeSessionID = sessionID(thread.thread.id, turn.turn.id)
+          const current = { client, threadID: thread.thread.id, turnID: turn.turn.id }
+          sessions.set(input.sessionID, current)
+          sessions.set(activeSessionID, current)
+          yield {
+            type: "progress",
+            phase: "init",
+            summary: "thread.resumed",
+            meta: {
+              thread_id: thread.thread.id,
+              turn_id: turn.turn.id,
+              session_id: activeSessionID,
+            },
+          }
           yield* stream(client, thread.thread.id, turn.turn.id, raw.signal)
         } finally {
           sessions.delete(input.sessionID)
-          sessions.delete(sessionID(thread.thread.id, turn.turn.id))
+          if (activeSessionID) sessions.delete(activeSessionID)
           await client.close?.()
         }
       },
@@ -168,16 +181,19 @@ export namespace CodexAppServerExecutor {
   }
 }
 
-async function ensure(client: CodexAppServerClient) {
-  await client.initialize({
-    clientInfo: {
-      name: "opencorvus",
-      version: "0.0.1-alpha",
+async function ensure(client: CodexAppServerClient, signal?: AbortSignal) {
+  await client.initialize(
+    {
+      clientInfo: {
+        name: "opencorvus",
+        version: "0.0.1-alpha",
+      },
+      capabilities: {
+        experimentalApi: true,
+      },
     },
-    capabilities: {
-      experimentalApi: true,
-    },
-  })
+    { signal },
+  )
 }
 
 async function* stream(client: CodexAppServerClient, threadID: string, turnID: string, signal?: AbortSignal) {

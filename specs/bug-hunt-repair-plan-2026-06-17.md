@@ -2923,3 +2923,55 @@ LINE:
 - Halley confirmed BH-073 was present in HEAD and identified the real root cause as the SDK build -> OpenAPI route inventory -> plugin top-level SDK import -> generated SDK import cycle.
 - Halley recommended fixing the cycle before removing stubs, then making `src/gen` replacement transactional through untracked staging and post-success replacement.
 - Halley confirmed the required regression coverage: forced generation failure leaves tracked generated files unchanged; successful staging replaces the target; source contract forbids top-level plugin SDK imports, tracked stubs, and pre-success `src/gen` deletion.
+
+## Batch P1-AV: BH-107 JSON-RPC executor requests must timeout on inactivity and honor abort
+
+### Findings
+
+- BH-107 targets `packages/opencorvus/src/executor/protocol/json-rpc.ts` and the Codex app-server startup chain in `packages/opencorvus/src/executor/codex-app-server.ts`.
+- HEAD stored outbound JSON-RPC request resolvers in `pending` and settled them only when a response arrived, the stream reader failed, or the child process exited.
+- A live child process that reads stdin and then stays silent leaves `initialize`, `thread/start`, `thread/resume`, `turn/start`, or `turn/interrupt` pending forever.
+- `CodexAppServerExecutor.run()` and `.resume()` only passed the caller abort signal to the later event stream. Startup requests before `stream(...)` could not be unwound by managed executor abort or upstream inactivity gates.
+- When startup failed before `threadStart` or `turnStart`, the previous `try/finally` began too late to guarantee `client.close()` for the spawned transport.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/executor/protocol/json-rpc.ts::JsonRpcLineTransport.create(...)` owns the stdio child, line reader, pending request map, event queue, and transport close path.
+- `packages/opencorvus/src/executor/protocol/json-rpc.ts::request(...)` is the only outbound JSON-RPC request entry.
+- `packages/opencorvus/src/executor/codex-app-server-client.ts::fromTransport(...)` maps Codex app-server methods to transport requests.
+- `packages/opencorvus/src/executor/codex-app-server.ts::run(...)` sends `initialize`, `thread/start`, and `turn/start` before streaming events.
+- `packages/opencorvus/src/executor/codex-app-server.ts::resume(...)` sends `initialize`, `thread/resume`, and `turn/start` before streaming events.
+- `packages/opencorvus/src/executor/codex-app-server.ts::interrupt(...)` sends `turn/interrupt`; it remains protected by the transport request inactivity timeout.
+- `packages/opencorvus/src/executor/bootstrap.ts::codexProvider(...)` creates the Codex app-server transport and must use the current `EngineConfig.get().activity.executor_events_idle_ms`.
+- `packages/opencorvus/src/executor/managed.ts` marks the managed run failed only after the provider stream rejects; therefore the provider transport must reject instead of parking forever.
+- `packages/opencorvus/test/executor/json-rpc.test.ts`, `codex-app-server.test.ts`, `managed.test.ts`, and `bootstrap.test.ts` cover the repaired boundary.
+
+### Fix Shape
+
+- Add required `requestIdleMs` to `JsonRpcLineTransport.create(...)`; validate it as a positive finite number.
+- Use the existing `withStreamActivity(...)` inactivity primitive as the single source for JSON-RPC pending-request liveness.
+- Start the request gate when the first outbound request is pending; reset it on real child stdout/stderr activity; clear it when no requests remain.
+- On request inactivity, close the reader, terminate the child, reject every pending request, and wake event consumers.
+- Add optional `AbortSignal` support to `transport.request(...)`; caller abort follows the same close/reject path as inactivity timeout.
+- Let `CodexAppServerClientProcess.fromTransport(...)` pass request options through to every outbound startup request.
+- Extend `CodexAppServerExecutor.create(...)` to accept async client factories so `bootstrap.ts` can read the current EngineConfig value before spawning the transport.
+- Move the `try/finally` in `run()` and `resume()` so `client.close()` happens even when `initialize`, `threadStart`, `threadResume`, or `turnStart` fails.
+- Do not add a managed-executor status gate, a wall-clock run cap, or a fallback completion path.
+
+### Verification
+
+- Added `json-rpc.test.ts` coverage where a child writes its PID, reads stdin, never replies, then the pending request fails after request inactivity and the child PID is no longer alive.
+- Added `json-rpc.test.ts` coverage where caller abort rejects a pending request and terminates the child.
+- Added `managed.test.ts` coverage where a silent Codex app-server child causes the managed run to reach `failed`, surfaces the `AbortError` / `json-rpc request` cause, and closes the child.
+- Added `codex-app-server.test.ts` coverage that startup initialization failure closes the client for both run and resume.
+- Added `codex-app-server.test.ts` coverage that run initialization receives the caller abort signal and closes the client after abort.
+- Updated `bootstrap.test.ts` to assert `requestIdleMs` is taken from `EngineConfig.get().activity.executor_events_idle_ms`, not a default constant.
+- Focused tests passed: `bun test packages/opencorvus/test/executor/json-rpc.test.ts packages/opencorvus/test/executor/codex-app-server.test.ts packages/opencorvus/test/executor/managed.test.ts packages/opencorvus/test/executor/bootstrap.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Avicenna confirmed BH-107 was still uncovered in the repair plan and traced the root cause to outbound JSON-RPC `pending` promises that only settled on response, reader error, or child exit.
+- Avicenna identified two gaps in the first working-tree draft: startup requests still lacked caller abort wiring, and `bootstrap.ts` initially used `EngineConfig.defaults` instead of current project config.
+- The final implementation addresses both review findings by passing `AbortSignal` through `initialize` / `threadStart` / `threadResume` / `turnStart` and by reading `EngineConfig.get()` inside the async Codex app-server client factory.

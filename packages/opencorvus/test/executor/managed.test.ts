@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { ClaudeCodeExecutor } from "../../src/executor/claude-code"
+import { CodexAppServerExecutor } from "../../src/executor/codex-app-server"
+import { CodexAppServerClientProcess } from "../../src/executor/codex-app-server-client"
 import { CodexExecutor } from "../../src/executor/codex"
 import type { CodingEventInfo, CodingProvider } from "../../src/executor/contract"
 import { ExecutorRegistry } from "../../src/executor/registry"
@@ -313,6 +318,47 @@ describe("managed coding executor", () => {
     expect(seen).toContain("session.error")
   })
 
+  test("JSON-RPC app-server request inactivity fails the managed run and closes the child", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-managed-json-rpc-idle-"))
+    const pidFile = path.join(root, "child.pid")
+    const script = [
+      "const fs = require('node:fs')",
+      `fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))`,
+      "const rl = require('node:readline').createInterface({ input: process.stdin, crlfDelay: Infinity })",
+      "for await (const line of rl) {",
+      "  JSON.parse(line)",
+      "}",
+    ].join("\n")
+    let pid: number | undefined
+
+    try {
+      const provider = CodexAppServerExecutor.create(() =>
+        CodexAppServerClientProcess.create({
+          command: [process.execPath, "-e", script],
+          requestIdleMs: 300,
+        }),
+      )
+      const executor = ExecutorRegistry.registerCoding("codex", provider, { cwd: root })
+      const submitted = await executor.submit({ sessionID: "session_json_rpc_idle", prompt: "work" })
+
+      await waitFor(async () => (await exists(pidFile)) === true)
+      pid = Number(await fs.readFile(pidFile, "utf8"))
+      await waitFor(async () => {
+        const status = await executor.status(submitted.queueTaskID)
+        return status.status === "failed"
+      })
+      const status = await executor.status(submitted.queueTaskID)
+
+      expect(status.status).toBe("failed")
+      expect(status.error).toContain("AbortError")
+      expect(status.error).toContain("json-rpc request")
+      await waitFor(() => !processAlive(pid))
+    } finally {
+      if (pid !== undefined && processAlive(pid)) process.kill(pid)
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("registerCoding exposes planning generation on the adapted executor", async () => {
     const provider = CodexExecutor.create({
       responses: {
@@ -388,3 +434,26 @@ describe("managed coding executor", () => {
     expect(seen[0]?.["tools"]).toBeUndefined()
   })
 })
+
+async function exists(file: string) {
+  try {
+    await fs.stat(file)
+    return true
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
+    if (code === "ENOENT") return false
+    throw error
+  }
+}
+
+function processAlive(pid: number) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
+    return code !== "ESRCH"
+  }
+}

@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { JsonRpcLineTransport } from "../../src/executor/protocol/json-rpc"
 
 describe("json rpc line transport", () => {
@@ -20,6 +23,7 @@ describe("json rpc line transport", () => {
 
     const transport = JsonRpcLineTransport.create({
       command: [process.execPath, "-e", script],
+      requestIdleMs: 1_000,
     })
 
     const result = await transport.request("initialize", {
@@ -42,4 +46,108 @@ describe("json rpc line transport", () => {
 
     await transport.close()
   })
+
+  test("fails a pending request and terminates a silent child after request inactivity", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-json-rpc-idle-"))
+    const pidFile = path.join(root, "child.pid")
+    const script = [
+      "const fs = require('node:fs')",
+      `fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))`,
+      "const rl = require('node:readline').createInterface({ input: process.stdin, crlfDelay: Infinity })",
+      "for await (const line of rl) {",
+      "  JSON.parse(line)",
+      "}",
+    ].join("\n")
+
+    const transport = JsonRpcLineTransport.create({
+      command: [process.execPath, "-e", script],
+      requestIdleMs: 40,
+    })
+    let pid: number | undefined
+
+    try {
+      await waitFor(async () => (await exists(pidFile)) === true)
+      pid = Number(await fs.readFile(pidFile, "utf8"))
+      await expect(transport.request("initialize", { clientInfo: { name: "test", version: "0" } })).rejects.toThrow(
+        /stream idle > 40ms \(json-rpc request:/,
+      )
+      await waitFor(() => !processAlive(pid))
+    } finally {
+      await transport.close()
+      if (pid !== undefined && processAlive(pid)) process.kill(pid)
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("caller abort fails a pending request and terminates the child", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-json-rpc-abort-"))
+    const pidFile = path.join(root, "child.pid")
+    const script = [
+      "const fs = require('node:fs')",
+      `fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))`,
+      "const rl = require('node:readline').createInterface({ input: process.stdin, crlfDelay: Infinity })",
+      "for await (const line of rl) {",
+      "  JSON.parse(line)",
+      "}",
+    ].join("\n")
+
+    const transport = JsonRpcLineTransport.create({
+      command: [process.execPath, "-e", script],
+      requestIdleMs: 5_000,
+    })
+    const controller = new AbortController()
+    let pid: number | undefined
+
+    try {
+      await waitFor(async () => (await exists(pidFile)) === true)
+      pid = Number(await fs.readFile(pidFile, "utf8"))
+      const pending = transport.request(
+        "initialize",
+        { clientInfo: { name: "test", version: "0" } },
+        {
+          signal: controller.signal,
+        },
+      )
+      controller.abort(new DOMException("forced caller abort", "AbortError"))
+
+      await expect(pending).rejects.toThrow("forced caller abort")
+      await waitFor(() => !processAlive(pid))
+    } finally {
+      await transport.close()
+      if (pid !== undefined && processAlive(pid)) process.kill(pid)
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
 })
+
+async function exists(file: string) {
+  try {
+    await fs.stat(file)
+    return true
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
+    if (code === "ENOENT") return false
+    throw error
+  }
+}
+
+async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await predicate()) return
+    await Bun.sleep(10)
+  }
+  throw new Error("timed out waiting for condition")
+}
+
+function processAlive(pid: number) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
+    return code !== "ESRCH"
+  }
+}
