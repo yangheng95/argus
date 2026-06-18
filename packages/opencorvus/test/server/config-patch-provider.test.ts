@@ -93,6 +93,33 @@ describe("config PATCH provider sub-shape validation", () => {
     })
   })
 
+  test("deprecated provider model status is rejected at the config boundary", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const res = await patch(tmp.path, {
+          provider: {
+            broken: {
+              name: "Broken Provider",
+              api: "https://api.example.com/v1",
+              models: {
+                retired: {
+                  name: "Retired Model",
+                  status: "deprecated",
+                },
+              },
+            },
+          },
+        })
+        expect(res.status).toBe(400)
+        const body = (await res.json()) as { error: string }
+        expect(body.error).toContain("config.provider.broken")
+        expect(body.error).toContain("models.retired.status")
+      },
+    })
+  })
+
   test("RFC 7396 null deletion of a previously-saved provider passes the validator", async () => {
     // Pin the validator's RFC 7396 contract specifically: the new sub-shape
     // check must NOT 400 a null-valued entry — that is the deletion sentinel

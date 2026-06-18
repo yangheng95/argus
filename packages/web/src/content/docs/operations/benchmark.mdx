@@ -19,27 +19,32 @@ ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
 bun run script/benchmark/overlay-web-benchmark.ts \
   "--request-file=/path/to/prd.txt" \
-  "--stall-timeout-ms=1200000" \
-  "--planning-stall-timeout-ms=7200000"
+  "--idle-timeout-ms=2700000"
 ```
 
-**Note**: flags require `=`, not space separation (parser specifics).
+**Note**: flags support both `--name=value` and `--name value`; quote paths that contain spaces.
 
 ## Key flags
 
-| flag                                        | purpose                                                                 |
-| ------------------------------------------- | ----------------------------------------------------------------------- |
-| `--request-file=PATH`                       | task description file (PRD)                                             |
-| `--model=MODEL`                             | model (auto-detect default)                                             |
-| `--executor=opencorvus\|codex\|claude-code` | executor: OpenCorvus / Codex / Claude Code                              |
-| `--title=TITLE`                             | task title                                                              |
-| `--report=PATH`                             | output JSON report                                                      |
-| `--max-runs=N`                              | maximum runs                                                            |
-| `--stall-timeout-ms=MS`                     | execution/evaluation **inactivity timeout**                             |
-| `--planning-stall-timeout-ms=MS`            | planning **inactivity timeout** (planning agents may go quiet for long) |
-| `--tool-timeout-ms=MS`                      | per tool-call **inactivity timeout**                                    |
-| `--no-keep`                                 | delete tmp directory on finish                                          |
-| `--skip-local-verify`                       | skip local re-verification                                              |
+| flag                                        | purpose                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
+| `--request-file=PATH`                       | task description file (PRD)                                              |
+| `--request-attachment=PATH`                 | attach a request file instead of reading task text from `--request-file` |
+| `--reference-images=PATHS`                  | comma-separated visual reference images                                  |
+| `--acceptance-verify-cmd=CMD`               | explicit local acceptance verification command                           |
+| `--executor=opencorvus\|codex\|claude-code` | executor: OpenCorvus / Codex / Claude Code                               |
+| `--title=TITLE`                             | task title                                                               |
+| `--report=PATH`                             | output JSON report                                                       |
+| `--max-runs=N`                              | maximum runs                                                             |
+| `--max-fix-runs=N`                          | maximum repair runs                                                      |
+| `--max-executor-groups=N`                   | maximum parallel executor groups                                         |
+| `--idle-timeout-ms=MS`                      | benchmark **inactivity timeout**                                         |
+| `--resume-task-id=ID`                       | resume an existing benchmark task                                        |
+| `--resume-home-dir=PATH`                    | OpenCorvus home directory from the original run                          |
+| `--resume-message=TEXT`                     | message injected when resuming                                           |
+| `--figma-url=URL`                           | Figma URL for tasks that use Figma input                                 |
+| `--no-keep`                                 | delete tmp directory on finish                                           |
+| `--stop-after-architect`                    | stop after architect output                                              |
 
 ## Env injection upfront
 
@@ -93,16 +98,6 @@ Historical baseline:
       "--report=report.json"
 ```
 
-## E2E eval suite
+## Targeted local probes
 
-`packages/opencorvus/script/eval-e2e.ts` is a finer-grained eval suite for daily regression. Start the server first:
-
-```bash
-cd packages/opencorvus
-DASHSCOPE_API_KEY=sk-... OPENCORVUS_CHANNEL=local \
-  bun src/index.ts serve --port 7878
-```
-
-Then `bun run script/eval-e2e.ts`.
-
-The server **must** have `DASHSCOPE_API_KEY`; without it, executor returns empty responses and every task fails in under 10 seconds.
+Use the maintained scripts under `packages/opencorvus/script/benchmark/` for focused checks, for example `html-skeleton-workflow-check.ts`, `visual-diff.ts`, and `review-deliverable.ts`. Each probe documents its own flags at the top of the script.

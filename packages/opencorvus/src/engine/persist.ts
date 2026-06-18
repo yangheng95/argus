@@ -614,6 +614,17 @@ export function upsertGoalsFromArchitect(
   const maxExistingOrderIndex = existing.reduce((max, goal) => Math.max(max, goal.order_index), -1)
   let nextNewOrderIndex = maxExistingOrderIndex + 1
 
+  for (const goal of input.architectGoals) {
+    const internalRuntimePaths = ProjectRuntimePaths.internalRuntimeRelativePaths(goal.owned_paths ?? [])
+    if (internalRuntimePaths.length > 0) {
+      throw new Error(
+        `upsertGoalsFromArchitect: goal ${goal.llmID} owned_paths include internal OpenCorvus runtime path(s): ` +
+          `${internalRuntimePaths.join(", ")}. Runtime evidence under .opencorvus/r/ is read-only input; ` +
+          `durable build deliverables must be planned under project source/docs paths.`,
+      )
+    }
+  }
+
   // First pass: assign DB ids for every goal in the Architect output. Existing
   // ids stay the same; fresh LLM ids get a new DB id. Builds the id map that
   // the second pass consults when rewriting depends_on.
@@ -2080,10 +2091,10 @@ export function beginBuildAttempt(input: {
     // the half-streamed goal turn is physically dead and cannot resume (spec
     // 2026-05-29 §0). Retire it to `aborted` here, at the re-dispatch choke
     // point, so the supersede chain below projects the fresh attempt as the
-    // tip instead of throwing "second live attempt". This is scheduling-layer
-    // liveness recovery on a proven physical death fact (CLAUDE.md rule 13.1 /
-    // 6.1a), NOT LLM routing — the orchestrator already chose to re-dispatch
-    // (describeGoal reports is_orphaned + mayDispatch). Without this the
+    // tip instead of throwing "second live attempt". This is execution-layer
+    // cleanup at the explicit build tool boundary, not background routing —
+    // the orchestrator already chose to call build after reading
+    // describeGoal.is_orphaned. Without this the
     // overlay stops spinning but `build({goalID})` would throw, leaving the
     // goal stuck in a build-error loop (independent review 2026-05-29).
     updateGoalRun(priorTip.id, {

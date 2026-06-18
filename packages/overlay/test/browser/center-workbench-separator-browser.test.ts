@@ -233,7 +233,10 @@ test(
       assert.ok(keyboardResized.workflowWidth < pointerResized.workflowWidth)
 
       await mkdir(resolve(".scratch"), { recursive: true })
-      await writeFile(resolve(".scratch", "center-workbench-separator-focus.png"), await page.screenshot({ fullPage: true }))
+      await writeFile(
+        resolve(".scratch", "center-workbench-separator-focus.png"),
+        await page.screenshot({ fullPage: true }),
+      )
 
       await page.keyboard.press("Home")
       await page.waitForFunction(() => {

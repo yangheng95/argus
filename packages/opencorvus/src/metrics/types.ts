@@ -89,36 +89,8 @@ export const MetricResult = z.object({
 })
 export type MetricResult = z.infer<typeof MetricResult>
 
-export const CounterexampleSeverity = z.enum(["blocking", "diagnostic"])
-export type CounterexampleSeverity = z.infer<typeof CounterexampleSeverity>
-
-export const CounterexampleTargetScope = z.enum(["goal", "global"])
-export type CounterexampleTargetScope = z.infer<typeof CounterexampleTargetScope>
-
-export const Counterexample = z.object({
-  id: z.string().min(1),
-  task_id: z.string().min(1),
-  iteration_found: z.number().int().min(0),
-  /** NULL while still open. */
-  iteration_resolved: z.number().int().min(0).nullable(),
-  /**
-   * Deterministic fingerprint of the reproducer + target. Used to dedup so
-   * repeated surfacing of the same reproducer contributes 0 to novelty_score
-   * that iteration, which is what feeds `stalled`.
-   */
-  novelty_hash: z.string().min(1),
-  target_scope: CounterexampleTargetScope,
-  /** goal_id when scope='goal'; free-form risk id when scope='global'. */
-  target_ref: z.string().min(1),
-  claim: z.string().min(1),
-  reproducer: z.string().min(1),
-  severity: CounterexampleSeverity,
-  linked_metric_spec_id: z.string().nullable(),
-})
-export type Counterexample = z.infer<typeof Counterexample>
-
 export const ArbiterVerdict = z.enum([
-  "continue", // next driver reads trajectory + counterexamples and decides what to do
+  "continue", // next driver reads the trajectory and decides what to do
   "accept", // terminal success
   "stalled", // no progress for N iterations, terminal but not failure
   "abort", // hard failure (regression cascade / iteration ceiling)

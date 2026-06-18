@@ -103,7 +103,7 @@ serve({
     if (p.startsWith("/ui/")) p = p.slice("/ui".length)
     const fp = path.join(root, p)
     if (!fp.startsWith(root) || !fs.existsSync(fp)) {
-      // SPA fallback to index.html
+      // SPA history route rewrite to index.html.
       const idx = path.join(root, "index.html")
       if (fs.existsSync(idx)) {
         return new Response(fs.readFileSync(idx), {

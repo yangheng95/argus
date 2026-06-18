@@ -1,7 +1,13 @@
 # Integrity Team Replay-Aware Prompt Plan - 2026-05-23
 
-Status: design draft for implementation. No runtime code is changed by this
-document.
+Status: implemented history as of 2026-06-17. Current runtime sources are
+`packages/opencorvus/src/integrity/replay-context.ts`,
+`packages/opencorvus/src/integrity/replay-lineage.ts`,
+`packages/opencorvus/src/integrity/shared-prompt.ts`,
+`packages/opencorvus/src/integrity/team-agent.ts`, and replay regression tests
+under `packages/opencorvus/test/integrity/` and
+`packages/opencorvus/test/fact-check/`. This file is retained as historical
+design evidence, not as a pending implementation checklist.
 
 This spec follows `CLAUDE.md` rules that matter for this change:
 

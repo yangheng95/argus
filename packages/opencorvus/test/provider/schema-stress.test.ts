@@ -109,7 +109,9 @@ function preparedToolJson(name: string, inputSchema: unknown, model = hexinGptMo
 }
 
 function schemaPath(path: Array<string | number>): string {
-  return path.length === 0 ? "$" : `$${path.map((item) => (typeof item === "number" ? `[${item}]` : `.${item}`)).join("")}`
+  return path.length === 0
+    ? "$"
+    : `$${path.map((item) => (typeof item === "number" ? `[${item}]` : `.${item}`)).join("")}`
 }
 
 function isJsonObject(value: unknown): value is JsonNode {

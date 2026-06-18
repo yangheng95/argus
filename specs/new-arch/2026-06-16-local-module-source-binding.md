@@ -17,13 +17,13 @@ The source crop does not need pixel-perfect bbox alignment. It must fully contai
 
 `rg "browser_preview_compare_regions|BrowserPreviewCompareRegionsTool|BrowserPreviewRegionBinding|reference.png|layout-map|sourceDomRegions" packages/opencorvus/src packages/opencorvus/test`
 
-| Area | Current behavior | Decision |
-| --- | --- | --- |
-| `browser_preview_compare_regions` | Requires a preauthored source bbox. | Keep it as the comparison consumer. Do not make build agents invent bboxes. |
-| `browser-preview/region-comparison.ts` | Crops source and local screenshots once binding exists. | Reuse the binding schema and source reference resolution. |
-| `browser-preview/evidence-runner.ts` | Captures local regions from browser preview targets. | Add a separate local-module capture path that extracts anchors and full-page local screenshot for binding. |
-| `web-clone-source` evidence | Contains `reference.png`, `visual-surface-candidates.json`, `source-ir/layout-map.json`, and sometimes frontend-design `sourceDomRegions.ts`. | Use these as candidate evidence for source module matching. |
-| Build prompt | Tells agents to prefer region comparison but leaves missing bindings underspecified. | Instruct build to call `browser_preview_bind_local_module` when source bbox is missing or questionable, then pass `metadata.binding` to comparison. |
+| Area                                   | Current behavior                                                                                                                              | Decision                                                                                                                                            |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser_preview_compare_regions`      | Requires a preauthored source bbox.                                                                                                           | Keep it as the comparison consumer. Do not make build agents invent bboxes.                                                                         |
+| `browser-preview/region-comparison.ts` | Crops source and local screenshots once binding exists.                                                                                       | Reuse the binding schema and source reference resolution.                                                                                           |
+| `browser-preview/evidence-runner.ts`   | Captures local regions from browser preview targets.                                                                                          | Add a separate local-module capture path that extracts anchors and full-page local screenshot for binding.                                          |
+| `web-clone-source` evidence            | Contains `reference.png`, `visual-surface-candidates.json`, `source-ir/layout-map.json`, and sometimes frontend-design `sourceDomRegions.ts`. | Use these as candidate evidence for source module matching.                                                                                         |
+| Build prompt                           | Tells agents to prefer region comparison but leaves missing bindings underspecified.                                                          | Instruct build to call `browser_preview_bind_local_module` when source bbox is missing or questionable, then pass `metadata.binding` to comparison. |
 
 ## Design
 

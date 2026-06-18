@@ -266,6 +266,32 @@ describe("renderTaskDescription — stream failures section", () => {
     })
   })
 
+  test("no-decision artifacts are rendered as decision-contract failures", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskStart = Date.now()
+        seedTask(taskStart)
+        seedStreamError({
+          artifactID: `art_no_decision_${stamp}`,
+          timeCreated: taskStart + 100,
+          reason: "OrchestratorNoDecisionStopError: Orchestrator stopped without calling any tool",
+          errorName: "OrchestratorNoDecisionStopError",
+        })
+
+        const desc = await describeTask(taskID)
+        const md = renderTaskDescription(desc)
+
+        expect(md).toContain("OrchestratorNoDecisionStopError")
+        expect(md).toContain("decision-contract failures")
+        expect(md).toContain("stream completed")
+        expect(md).toContain("make a real workflow decision")
+        expect(md).toContain("do not treat those entries as provider/network failures")
+      },
+    })
+  })
+
   test("section absent when no stream errors recorded since task start", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

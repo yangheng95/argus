@@ -173,12 +173,12 @@ describe("frontend-design VisualRegionBinding materializer", () => {
         expect(result.sourceImageDimensions).toEqual({ width: 400, height: 260 })
         expect(result.regions[0]?.source_crop_filename).toBe("01-header__src400x260__x20-y30-w180-h70.png")
         expect(result.regions[1]?.source_crop_filename).toBe("02-chart__src400x260__x220-y120-w150-h90.png")
-        expect(result.regions[0]?.source_reference_artifact.endsWith("01-header__src400x260__x20-y30-w180-h70.png")).toBe(
-          true,
-        )
-        expect(result.regions[1]?.source_reference_artifact.endsWith("02-chart__src400x260__x220-y120-w150-h90.png")).toBe(
-          true,
-        )
+        expect(
+          result.regions[0]?.source_reference_artifact.endsWith("01-header__src400x260__x20-y30-w180-h70.png"),
+        ).toBe(true)
+        expect(
+          result.regions[1]?.source_reference_artifact.endsWith("02-chart__src400x260__x220-y120-w150-h90.png"),
+        ).toBe(true)
         expect(result.bboxOverlayArtifact.endsWith("bbox-overlay__src400x260.png")).toBe(true)
         expect(result.contactSheetArtifact.endsWith("region-contact-sheet__src400x260.png")).toBe(true)
 

@@ -51,7 +51,7 @@ export async function executeWebFetch(params: z.infer<typeof WebFetchParameters>
 
   const { signal, clearTimeout } = abortAfterAny(timeout, ctx.abort)
 
-  // Build Accept header based on requested format with q parameters for fallbacks
+  // Build Accept header based on requested format with q-weighted alternatives.
   let acceptHeader = "*/*"
   switch (params.format) {
     case "markdown":

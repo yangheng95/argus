@@ -390,6 +390,16 @@ export namespace Worktree {
             branch: input.branch,
           })
         }
+        const internalRuntimeDiffs = await committedInternalRuntimeDiffs(input.worktreeDir, primaryBranch, input.branch)
+        if (internalRuntimeDiffs.length > 0) {
+          throw new MergeFailedError({
+            message:
+              `mergeWithMerge(${input.branch}): refusing to merge committed OpenCorvus internal runtime files. ` +
+              `.opencorvus/r/ is host-owned task/session state and cannot be a durable build deliverable. ` +
+              `Move the deliverable into a project source/docs path and retry merge_back:\n${internalRuntimeDiffs.join("\n")}`,
+            branch: input.branch,
+          })
+        }
         if (primaryDir !== input.worktreeDir) {
           const primaryState = await inspectBlockedMergeWorktree(primaryDir)
           if (primaryState.mergeHead) {
@@ -568,25 +578,19 @@ export namespace Worktree {
         .string()
         .optional()
         .describe("Additional startup script to run after the project's start command"),
-      checkout: z
-        .enum(["sync", "async"])
-        .optional()
-        .describe(
-          "Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning.",
-        ),
       reuseIfValid: z
         .boolean()
         .optional()
         .describe(
-          "When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. " +
-            "Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. " +
-            "Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.",
+          "When true and `name` is supplied, return the existing worktree only when `isValid()` confirms its `.git` linkage and `git worktree list` registration. " +
+            "Explicit retry flows use this to continue in a verified previous attempt directory. Invalid existing trees continue through the standard reclaim path, so corrupt state is not preserved.",
         ),
       taskID: z.string().optional(),
       goalID: z.string().optional(),
       runID: z.string().optional(),
       sessionID: z.string().optional(),
     })
+    .strict()
     .meta({
       ref: "WorktreeCreateInput",
     })
@@ -798,6 +802,31 @@ export namespace Worktree {
       .map((line) => line.trim())
       .filter(Boolean)
       .filter((file) => ProjectRuntimePaths.isEvidenceInputRelativePath(file))
+  }
+
+  async function committedInternalRuntimeDiffs(
+    worktreeDir: string,
+    primaryBranch: string,
+    branch: string,
+  ): Promise<string[]> {
+    const result = await runGit(
+      ["-c", "core.quotepath=false", "diff", "--name-only", "--no-renames", primaryBranch, branch, "--", "."],
+      { cwd: worktreeDir, timeoutProfile: "default" },
+    )
+    if (result.exitCode !== 0) {
+      throw new MergeFailedError({
+        message:
+          `mergeWithMerge(${branch}): failed to inspect committed OpenCorvus internal runtime files before merge_back. ` +
+          (errorText(result) || "git diff returned a non-zero exit code"),
+        branch,
+      })
+    }
+    return ProjectRuntimePaths.internalRuntimeRelativePaths(
+      outputText(result.stdout)
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    )
   }
 
   async function inspectBlockedMergeWorktree(directory: string) {
@@ -1512,8 +1541,8 @@ export namespace Worktree {
     // Optional fast path: caller asked to reuse a previously-created worktree
     // with the same deterministic name (build-agent retry of an attempt that
     // produced files but skipped merge_back). Only honoured when the existing
-    // dir + git linkage is still healthy via isValid(); otherwise fall through
-    // to the regular candidate/reclaim path so the unhealthy state cannot be
+    // dir + git linkage is still healthy via isValid(); otherwise continue to
+    // the regular candidate/reclaim path so the unhealthy state cannot be
     // silently propagated.
     if (base && input?.reuseIfValid) {
       const directory = scopedInfo?.directory ?? path.join(root, base)
@@ -1529,7 +1558,7 @@ export namespace Worktree {
         await Project.addSandbox(Instance.project.id, directory).catch(() => undefined)
         return Info.parse({ name: base, branch, directory })
       }
-      log.info("worktree reuse: existing tree invalid, falling through to reclaim", {
+      log.info("worktree reuse: existing tree invalid, continuing to reclaim", {
         name: base,
         directory,
         reason: validity.reason,

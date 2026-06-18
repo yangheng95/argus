@@ -8,13 +8,13 @@
 
 Full-repository search for Prettier execution found the failing SDK build call and related formatter invocations:
 
-| Path | Decision |
-| --- | --- |
-| `packages/sdk/js/script/build.ts` | Replace `bun prettier --write src` with an explicit resolved Prettier binary invocation. |
-| `script/format.ts` | Leave unchanged; it is a root developer formatting command and not part of the overlay build failure. |
-| `script/stats.ts` | Leave unchanged; unrelated stats generation helper. |
-| `packages/opencorvus/src/format/formatter.ts` | Leave unchanged; runtime formatter registry intentionally invokes user project tooling. |
-| Docs and formatter docs | Leave unchanged; they document user-facing formatter behavior. |
+| Path                                          | Decision                                                                                              |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `packages/sdk/js/script/build.ts`             | Replace `bun prettier --write src` with an explicit resolved Prettier binary invocation.              |
+| `script/format.ts`                            | Leave unchanged; it is a root developer formatting command and not part of the overlay build failure. |
+| `script/stats.ts`                             | Leave unchanged; unrelated stats generation helper.                                                   |
+| `packages/opencorvus/src/format/formatter.ts` | Leave unchanged; runtime formatter registry intentionally invokes user project tooling.               |
+| Docs and formatter docs                       | Leave unchanged; they document user-facing formatter behavior.                                        |
 
 ## Fix
 

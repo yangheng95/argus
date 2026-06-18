@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import {
+  collectScreenshotBrowserItemsFromCardTree,
   collectScreenshotBrowserItems,
   groupScreenshotBrowserItems,
   isStoredAttachmentUrl,
@@ -27,7 +28,13 @@ describe("screenshot browser panel", () => {
           { id: "p1", type: "file", url: "/attachment/project/a.png", mime: "image/png", filename: "a.png" },
           { id: "p2", type: "file", url: "/attachment/project/doc.pdf", mime: "application/pdf", filename: "doc.pdf" },
           { id: "p2b", type: "file", url: "data:image/png;base64,AAAA", mime: "image/png", filename: "inline.png" },
-          { id: "p2c", type: "file", url: "https://example.test/external.png", mime: "image/png", filename: "external.png" },
+          {
+            id: "p2c",
+            type: "file",
+            url: "https://example.test/external.png",
+            mime: "image/png",
+            filename: "external.png",
+          },
           { id: "p2d", type: "file", url: "/api/local.png", mime: "image/png", filename: "api.png" },
           {
             id: "p2e",
@@ -147,6 +154,93 @@ describe("screenshot browser panel", () => {
     expect(isStoredAttachmentUrl("data:image/png;base64,AAAA")).toBe(false)
   })
 
+  test("collects screenshots from hydrated card tree as the panel source", () => {
+    const items = collectScreenshotBrowserItemsFromCardTree(
+      ["card_visual", "card_build"],
+      {
+        card_visual: {
+          id: "card_visual",
+          kind: "agent",
+          sessionID: "ses_visual",
+          messageID: "msg_visual",
+          role: "visual-qa",
+          stage: "visual-qa",
+          title: "Visual QA",
+          time: 200,
+          parts: [
+            {
+              id: "part_visual",
+              type: "file",
+              messageID: "msg_visual",
+              sessionID: "ses_visual",
+              url: "/attachment/project/visual.png",
+              mime: "image/png",
+              filename: "visual.png",
+            },
+          ],
+          childIDs: ["card_child"],
+        },
+        card_child: {
+          id: "card_child",
+          kind: "tool",
+          sessionID: "ses_visual",
+          messageID: "msg_tool",
+          role: "visual-qa",
+          stage: "visual-qa",
+          title: "Browser observe",
+          time: 250,
+          parts: [
+            {
+              id: "part_browser",
+              type: "tool",
+              messageID: "msg_tool",
+              tool: "browser_observe",
+              state: {
+                metadata: {
+                  browser: {
+                    url: "https://example.test",
+                    title: "Observed page",
+                    screenshot: { attachmentUrl: "/attachment/project/browser.png" },
+                  },
+                },
+              },
+            },
+          ],
+          childIDs: [],
+        },
+        card_build: {
+          id: "card_build",
+          kind: "agent",
+          sessionID: "ses_build",
+          messageID: "msg_build",
+          role: "build",
+          stage: "build",
+          title: "Build",
+          time: 100,
+          parts: [
+            {
+              id: "part_build",
+              type: "file",
+              messageID: "msg_build",
+              sessionID: "ses_build",
+              url: "/attachment/project/build.png",
+              mime: "image/png",
+              filename: "build.png",
+            },
+          ],
+          childIDs: [],
+        },
+      },
+    )
+
+    expect(items.map((item) => item.src)).toEqual([
+      "/attachment/project/browser.png",
+      "/attachment/project/visual.png",
+      "/attachment/project/build.png",
+    ])
+    expect(groupScreenshotBrowserItems(items).map((group) => group.role)).toEqual(["visual-qa", "build"])
+  })
+
   test("bounds derived history before rendering", () => {
     const messages = Array.from({ length: SCREENSHOT_BROWSER_ITEM_LIMIT + 10 }, (_item, index) => ({
       info: {
@@ -188,9 +282,9 @@ describe("screenshot browser panel", () => {
     expect(main).toContain('id: "screenshots"')
     expect(main).toContain('icon: "screenshots"')
     expect(icon).toContain("Images")
-    expect(component).toContain("messageStore.messages")
-    expect(component).toContain("active() ? collectScreenshotBrowserItems(messageStore.messages) : []")
-    expect(component).toContain("collectScreenshotBrowserItems")
+    expect(component).toContain("cardTreeStore")
+    expect(component).toContain("collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)")
+    expect(component).not.toContain("messageStore.messages")
     expect(component).toContain("groupScreenshotBrowserItems")
     expect(component).toContain("fetchResourceAsObjectUrl")
     expect(component).toContain("peekResourceObjectUrl")
@@ -204,6 +298,7 @@ describe("screenshot browser panel", () => {
     expect(component).not.toContain("sessionStorage")
     expect(css).toContain(".screenshot-browser-panel")
     expect(css).toContain(".screenshot-browser-grid")
+    expect(css).toContain("grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(132px * var(--ui-scale))), 1fr))")
     expect(css).toContain("grid-template-rows: calc(86px * var(--ui-scale))")
     for (const key of [
       "screenshots.title",

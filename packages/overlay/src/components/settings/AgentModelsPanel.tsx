@@ -11,7 +11,7 @@
 //      "inherit the project default".
 //
 // Strict contract: the panel IS the source of truth for what the backend
-// will use. No hidden fallbacks (env vars, `~/.local/state/argus/model.json`
+// will use. No hidden fallbacks (env vars, retired local state files,
 // recent list, session user-message propagation) exist anymore — those were
 // removed because they silently switched provider/model between goal retries
 // and collapsed prompt cache.

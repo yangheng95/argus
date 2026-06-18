@@ -68,18 +68,18 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
    GET http://127.0.0.1:7878/task/{taskID}/events?after={sequence}
    ```
 
-   代码：`src/services/sse.ts:21` `startSSE()`
+   代码：`src/services/sse.ts` `startSSE()`
    用原生 `EventSource` 绕过 WebView2 对 `fetch().body` 的缓冲延迟。
 
 2. **全局任务列表流**（应用级）
    ```
    GET http://127.0.0.1:7878/task/events
    ```
-   代码：`src/services/sse.ts:104` `startTaskListSSE()`。这条流根据服务端盖章的 `notify` 元数据统一负责系统通知，并刷新任务列表徽标投影。
+   代码：`src/services/sse.ts` `startTaskListSSE()`。这条流根据服务端盖章的 `notify` 元数据统一负责系统通知，并刷新任务列表徽标投影。
 
 ### 事件路由
 
-`src/services/events.ts:261` `routeSSEEvent()` 把事件分流：
+`src/services/events.ts` `routeSSEEvent()` 把事件分流：
 
 | 事件                                          | 目的地                                                 |
 | --------------------------------------------- | ------------------------------------------------------ |
@@ -97,7 +97,7 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 | 命令                                              | 用途                                                                                                  |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `overlay_server_info` / `overlay_server_restart`  | 嵌入的 opencorvus 后端进程管理                                                                        |
-| `overlay_settings_load` / `overlay_settings_save` | 设置持久化到 `.opencorvus/overlay.jsonc`                                                              |
+| `overlay_settings_load` / `overlay_settings_save` | 设置以 `overlay.jsonc` 持久化到 Tauri app config 目录                                                 |
 | `overlay_pick_dir` / `overlay_pick_files`         | 目录 / 文件选择对话框                                                                                 |
 | `overlay_open_url` / `overlay_open_path`          | 外部打开                                                                                              |
 | `overlay_attention_set`                           | 托盘闪烁提示                                                                                          |
@@ -115,4 +115,4 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 
 ## 配置
 
-`~/.opencorvus/overlay.jsonc` 存 UI 偏好（主题、位置、缩放、server URL override）；托盘菜单的 **Restart** 会重启后端并 `location.reload()` 前端。
+Tauri app config 目录下的 `overlay.jsonc` 存 UI 偏好（主题、位置、缩放、server URL override）；托盘菜单的 **Restart** 会重启后端并 `location.reload()` 前端。

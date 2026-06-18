@@ -202,6 +202,33 @@ describe("tool.edit", () => {
       })
     })
 
+    test("rejects same-anchor multiline edits when the middle does not match", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "start\nactual middle\nend\n", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          FileTime.read(ctx.sessionID, filepath)
+
+          const edit = await EditTool.init()
+          await expect(
+            edit.execute(
+              {
+                filePath: filepath,
+                oldString: "start\nwrong middle\nend",
+                newString: "replacement",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("Could not find oldString")
+
+          await expect(fs.readFile(filepath, "utf-8")).resolves.toBe("start\nactual middle\nend\n")
+        },
+      })
+    })
+
     test("throws error when file was not read first (FileTime)", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "file.txt")

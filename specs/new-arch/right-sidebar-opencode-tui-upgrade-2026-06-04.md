@@ -4,6 +4,11 @@ Date: 2026-06-04
 
 Detailed implementation plan: `specs/new-arch/right-sidebar-opencode-tui-copy-implementation-plan-2026-06-04.md`
 
+> **Status (2026-06-17): Superseded.** The embedded/right-sidebar TUI surface was retired by
+> `2026-06-10-tui-removal-plan.md`; deleted `packages/opencorvus/src/tui`,
+> deleted `packages/opencorvus/src/cli/cmd/tui`, and `/tui/*` routes are historical references only.
+> Keep this note as evidence of the abandoned upgrade path, not as current implementation guidance.
+
 ## Source Baseline
 
 - Upstream: `anomalyco/opencode` `dev` branch at `94c49b20ba207a92e4150c552d616930b6560e39`
@@ -12,7 +17,7 @@ Detailed implementation plan: `specs/new-arch/right-sidebar-opencode-tui-copy-im
 - 2026-06-05 refresh: no changes were found under the inspected TUI, terminal, PTY, plugin TUI API, or OpenTUI dependency paths.
 - Local branch inspected: `coding-assistant`
 - Upstream TUI files: 165 files under `packages/opencode/src/cli/cmd/tui`
-- Local TUI files: existing OpenTUI implementation under `packages/opencorvus/src/cli/cmd/tui`, plus TUI runtime/control APIs under `packages/opencorvus/src/tui`
+- Historical local TUI files: deleted OpenTUI implementation under `packages/opencorvus/src/cli/cmd/tui`, plus deleted TUI runtime/control APIs under `packages/opencorvus/src/tui`
 
 ## Hard Finding
 

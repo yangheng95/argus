@@ -6,6 +6,7 @@ import { waitForBrowserPreviewUrlReachable } from "@/browser-preview/liveness"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "@/browser-preview/target"
 import { Instance } from "@/project/instance"
 import { BashTool } from "./bash"
+import { BrowserPreviewToolID } from "./browser-preview-tool-ids"
 import { Tool } from "./tool"
 
 const DEFAULT_PREVIEW_SERVICE_DESCRIPTION = "Start browser preview service"
@@ -54,7 +55,7 @@ export const BrowserPreviewToolStaticDefinition = {
   parameters: BrowserPreviewToolParameters,
 } as const
 
-export const BrowserPreviewTool = Tool.define("browser_preview", async (initCtx) => {
+export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initCtx) => {
   const bash = await BashTool.init(initCtx)
 
   return {

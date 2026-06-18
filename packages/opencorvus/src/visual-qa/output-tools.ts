@@ -45,7 +45,9 @@ function validateVisualQaReport(report: VisualQaReport): string[] {
     const blockerIDs = new Set(report.production_blockers.map((blocker) => blocker.id))
     const unknown = report.follow_up_task.blocker_ids.filter((id) => !blockerIDs.has(id))
     if (report.production_blockers.length === 0) {
-      issues.push("follow_up_task requires production_blockers because the new task must inherit concrete blocker evidence.")
+      issues.push(
+        "follow_up_task requires production_blockers because the new task must inherit concrete blocker evidence.",
+      )
     }
     if (unknown.length > 0) {
       issues.push(`follow_up_task.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)

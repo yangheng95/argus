@@ -177,7 +177,7 @@ describe("core prompt hygiene", () => {
   test("no core prompt routes final acceptance authority to the retired Acceptance review", async () => {
     // Regression guard (rule 8 single-source): acceptance is retired; integrity
     // owns final acceptance. No active agent core prompt may name Acceptance as
-    // the acceptance/verdict authority. Lowercase generic "deliver" verbs are
+    // the acceptance-review authority. Lowercase generic "deliver" verbs are
     // fine — these patterns target the retired role-as-authority constructs
     // that requirements-core used to carry.
     const forbidden = [
@@ -729,7 +729,7 @@ describe("core prompt hygiene", () => {
     )
     expect(design).toContain("`webpage-evidence/source-skeleton/index.html` as raw semantic HTML evidence")
     expect(design).toContain(
-      "`webpage-evidence/source-skeleton/critical.css` as reachable CSS plus computed-style fallback rules",
+      "`webpage-evidence/source-skeleton/critical.css` as reachable CSS plus computed-style evidence rules",
     )
     expect(design).toContain("`webpage-evidence/source-skeleton/full-source.css` as the complete CSS sidecar")
     expect(design).toContain(

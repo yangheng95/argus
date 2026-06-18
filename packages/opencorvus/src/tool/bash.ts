@@ -136,6 +136,32 @@ function sanitizeChildEnv(base: NodeJS.ProcessEnv, override: Record<string, stri
   return env
 }
 
+export function createBashSpawnDiagnostics(input: {
+  shell: string
+  cwd: string
+  shellEnv: Record<string, string>
+  guardEnv: Record<string, string>
+  childEnv: NodeJS.ProcessEnv
+}) {
+  const shellStat = Filesystem.stat(input.shell)
+  const cwdStat = Filesystem.stat(input.cwd)
+  return {
+    shell: input.shell,
+    cwd: input.cwd,
+    shellExists: Boolean(shellStat),
+    shellIsFile: shellStat?.isFile(),
+    cwdExists: Boolean(cwdStat),
+    cwdIsDirectory: cwdStat?.isDirectory(),
+    envShell: input.childEnv.SHELL,
+    envPath: input.childEnv.PATH,
+    shellEnvKeys: Object.keys(input.shellEnv).sort(),
+    guardEnvKeys: Object.keys(input.guardEnv).sort(),
+    removedForbiddenEnvKeys: Array.from(FORBIDDEN_ENV_KEYS)
+      .filter((key) => process.env[key] !== undefined)
+      .sort(),
+  }
+}
+
 function resolveWorkdir(rawCwd: string): string {
   const nativeCwd = process.platform === "win32" ? Filesystem.windowsPath(rawCwd) : rawCwd
   return path.isAbsolute(nativeCwd) ? nativeCwd : path.resolve(Instance.directory, nativeCwd)
@@ -311,15 +337,27 @@ export const BashTool = Tool.define("bash", async () => {
         { env: {} },
       )
       const guardEnv = await PidGuard.env(shell)
+      const childEnv = sanitizeChildEnv(process.env, {
+        ...shellEnv.env,
+        ...gitCeilingEnvForWorktree(cwd, { ...process.env, ...shellEnv.env }),
+        ...guardEnv,
+      })
+      const spawnDiagnostics = createBashSpawnDiagnostics({
+        shell,
+        cwd,
+        shellEnv: shellEnv.env,
+        guardEnv,
+        childEnv,
+      })
+      log.info("spawning shell", spawnDiagnostics)
       const supervisor = await ProcessSupervisor.spawnShell({
         command: params.command,
         shell,
         cwd,
-        env: sanitizeChildEnv(process.env, {
-          ...shellEnv.env,
-          ...gitCeilingEnvForWorktree(cwd, { ...process.env, ...shellEnv.env }),
-          ...guardEnv,
-        }),
+        env: childEnv,
+      }).catch((error) => {
+        log.error("spawn shell failed", { ...spawnDiagnostics, error })
+        throw error
       })
 
       let output = ""

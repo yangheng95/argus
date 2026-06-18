@@ -17,9 +17,8 @@ const ctx = {
 }
 
 describe("tool.web_clone_source_audit", () => {
-  test("defaults to the legacy execution-directory web-clone-source package", async () => {
+  test("rejects omitted sourcePackageDir instead of using an implicit package path", async () => {
     await using tmp = await tmpdir()
-    const sourcePackageDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
 
@@ -27,10 +26,7 @@ describe("tool.web_clone_source_audit", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneSourceAuditTool.init()
-        const result = await tool.execute({ projectDir }, ctx)
-
-        expect(result.metadata.audit.sourcePackageDir).toBe(sourcePackageDir)
-        expect(result.metadata.audit.passed).toBe(true)
+        await expect(tool.execute({ projectDir } as never, ctx)).rejects.toThrow()
       },
     })
   }, 30_000)
@@ -55,7 +51,10 @@ describe("tool.web_clone_source_audit", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneSourceAuditTool.init()
-        const result = await tool.execute({ projectDir, sourcePackageDir: webpageEvidenceDir }, ctx)
+        const result = await tool.execute(
+          { projectDir, sourcePackageDir: webpageEvidenceDir, finalAcceptanceMode: "visual_baseline_allowed" },
+          ctx,
+        )
 
         expect(result.title).toBe("Source-skeleton consumption audit failed")
         expect(result.output).toContain("Passed: false")
@@ -105,7 +104,10 @@ describe("tool.web_clone_source_audit", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneSourceAuditTool.init()
-        const result = await tool.execute({ projectDir, sourcePackageDir: webpageEvidenceDir }, ctx)
+        const result = await tool.execute(
+          { projectDir, sourcePackageDir: webpageEvidenceDir, finalAcceptanceMode: "visual_baseline_allowed" },
+          ctx,
+        )
 
         expect(result.title).toBe("Source-skeleton consumption audit passed")
         expect(result.output).toContain("Passed: true")
@@ -125,7 +127,15 @@ describe("tool.web_clone_source_audit", () => {
       fn: async () => {
         const tool = await WebCloneSourceAuditTool.init()
         await expect(
-          tool.execute({ projectDir, sourcePackageDir: webpageEvidenceDir, outputPath: "../audit.json" }, ctx),
+          tool.execute(
+            {
+              projectDir,
+              sourcePackageDir: webpageEvidenceDir,
+              finalAcceptanceMode: "visual_baseline_allowed",
+              outputPath: "../audit.json",
+            },
+            ctx,
+          ),
         ).rejects.toThrow("outputPath must stay inside the audited project directory")
       },
     })

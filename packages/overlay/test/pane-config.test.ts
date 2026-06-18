@@ -105,7 +105,7 @@ test("center workbench panel weights persist through the existing settings sourc
   expect(main).toContain("renderCenterWorkbenchPanelSeparators")
   expect(main).toContain("resizeCenterWorkbenchPanelByKeyboard")
   expect(main).toContain("centerWorkbenchShowsAdjacentPanels")
-  expect(main).toContain('separator.addEventListener(')
+  expect(main).toContain("separator.addEventListener(")
   expect(main).toContain('"[data-center-workbench-separator]"')
   expect(main).toContain('"aria-controls"')
   expect(main).not.toContain("findCenterWorkbenchResizePanel")

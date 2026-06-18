@@ -65,6 +65,24 @@ function emptyDefaultTransport(requests: TransportRequest[]): HostTransport {
   } satisfies HostTransport
 }
 
+function failingDiscoveryTransport(requests: TransportRequest[]): HostTransport {
+  return {
+    ...fakeTransport(requests),
+    async request(req) {
+      requests.push(req)
+      if (req.path === "global/projects/discover") {
+        return {
+          status: 503,
+          ok: false,
+          headers: {},
+          body: { error: "discovery unavailable" },
+        }
+      }
+      return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+    },
+  } satisfies HostTransport
+}
+
 describe("workspace discovery service", () => {
   afterEach(() => {
     __setHostTransportForTest(undefined)
@@ -117,6 +135,16 @@ describe("workspace discovery service", () => {
     __setHostTransportForTest(emptyDefaultTransport(requests))
 
     await expect(ensureDefaultDirectory()).resolves.toBe(false)
+
+    expect(requests[0]!.path).toBe("global/projects/discover")
+    expect(settingsStore.directory).toBe("")
+  })
+
+  test("ensureDefaultDirectory surfaces discovery failures instead of replacing them with an empty workspace", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(failingDiscoveryTransport(requests))
+
+    await expect(ensureDefaultDirectory()).rejects.toThrow("discovery unavailable")
 
     expect(requests[0]!.path).toBe("global/projects/discover")
     expect(settingsStore.directory).toBe("")

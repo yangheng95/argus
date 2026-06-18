@@ -14,14 +14,14 @@ Playwright against `http://127.0.0.1:7878/ui` showed a race between user-selecte
 
 ## Call-Site Evidence
 
-| Area | Grep evidence | Decision |
-| --- | --- | --- |
-| Assistant selection | `packages/overlay/src/services/coding-assistant.ts::selectCodingAssistantSession` sets `boardStore.selectedSource = { kind: "session" }`, hydrates canonical conversation, and starts session SSE. | Keep this as the only assistant message path. |
-| Assistant activity | `packages/overlay/src/main.tsx::activateCodingAssistantSessionList` loads session rows and opens workflow. | Do not add a second center panel or local transcript. |
-| Initial restore | `packages/overlay/src/services/init.ts::restoreInitialWorkspace` selects a saved or running task after initial project load. | Restore must not override a source the user already selected while init was still pending. |
-| Directory switch | `packages/overlay/src/services/workspace.ts::applyDirectory` clears project-scope state and reloads project data. | Keep directory reload behavior; the bug is restore ownership, not directory loading. |
-| Task selection | `packages/overlay/src/services/task.ts::selectTask` owns task conversation switching. | Do not route assistant messages through task selection. |
-| Existing restore tests | `packages/overlay/test/initial-workspace-restore-directory-sync.test.ts` already checks active standalone sessions when no task is restorable. | Add the missing restorable-running-task case. |
+| Area                   | Grep evidence                                                                                                                                                                                      | Decision                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Assistant selection    | `packages/overlay/src/services/coding-assistant.ts::selectCodingAssistantSession` sets `boardStore.selectedSource = { kind: "session" }`, hydrates canonical conversation, and starts session SSE. | Keep this as the only assistant message path.                                              |
+| Assistant activity     | `packages/overlay/src/main.tsx::activateCodingAssistantSessionList` loads session rows and opens workflow.                                                                                         | Do not add a second center panel or local transcript.                                      |
+| Initial restore        | `packages/overlay/src/services/init.ts::restoreInitialWorkspace` selects a saved or running task after initial project load.                                                                       | Restore must not override a source the user already selected while init was still pending. |
+| Directory switch       | `packages/overlay/src/services/workspace.ts::applyDirectory` clears project-scope state and reloads project data.                                                                                  | Keep directory reload behavior; the bug is restore ownership, not directory loading.       |
+| Task selection         | `packages/overlay/src/services/task.ts::selectTask` owns task conversation switching.                                                                                                              | Do not route assistant messages through task selection.                                    |
+| Existing restore tests | `packages/overlay/test/initial-workspace-restore-directory-sync.test.ts` already checks active standalone sessions when no task is restorable.                                                     | Add the missing restorable-running-task case.                                              |
 
 ## Acceptance
 

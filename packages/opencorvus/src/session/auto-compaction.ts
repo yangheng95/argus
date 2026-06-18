@@ -6,9 +6,15 @@ export namespace AutomaticCompaction {
 
   export const DISABLED_WORKFLOW_SESSION_KINDS = AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS
 
+  export const DIRECT_AUTOMATIC_COMPACTION_SESSION_KINDS =
+    AgentRuntimeMetadata.DIRECT_AUTOMATIC_COMPACTION_SESSION_KINDS
+
   export type Decision =
     | { enabled: true; reason: "allowed" | "runtime_continuation_ready" }
-    | { enabled: false; reason: "runtime_contract_required" | "unsupported_workflow_kind" }
+    | {
+        enabled: false
+        reason: "runtime_contract_required" | "unsupported_workflow_kind" | "uncategorized_session_kind"
+      }
 
   export function requiresLiveRuntimeContinuation(kind: SessionKind | string): boolean {
     return AgentRuntimeMetadata.LIVE_RUNTIME_CONTINUATION_SESSION_KIND_SET.has(kind as SessionKind)
@@ -16,6 +22,10 @@ export namespace AutomaticCompaction {
 
   export function isDisabledForKind(kind: SessionKind | string): boolean {
     return AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KIND_SET.has(kind as SessionKind)
+  }
+
+  export function isDirectlyAllowedForKind(kind: SessionKind | string): boolean {
+    return AgentRuntimeMetadata.DIRECT_AUTOMATIC_COMPACTION_SESSION_KIND_SET.has(kind as SessionKind)
   }
 
   export function decision(input: { sessionKind: SessionKind | string; runtimeContinuationReady?: boolean }): Decision {
@@ -28,6 +38,9 @@ export namespace AutomaticCompaction {
       }
       return { enabled: false, reason: "runtime_contract_required" }
     }
-    return { enabled: true, reason: "allowed" }
+    if (AgentRuntimeMetadata.DIRECT_AUTOMATIC_COMPACTION_SESSION_KIND_SET.has(input.sessionKind as SessionKind)) {
+      return { enabled: true, reason: "allowed" }
+    }
+    return { enabled: false, reason: "uncategorized_session_kind" }
   }
 }

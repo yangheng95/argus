@@ -44,9 +44,9 @@
 
 ### 归档与工作笔记
 
-| 文件                                            | 说明                                   |
-| ----------------------------------------------- | -------------------------------------- |
-| [\_archive-old-arch.svg](_archive-old-arch.svg) | 原 `specs/new-arch.svg`（1336 行）归档 |
+| 文件                                            | 说明                                    |
+| ----------------------------------------------- | --------------------------------------- |
+| [\_archive-old-arch.svg](_archive-old-arch.svg) | 原 `specs/new-arch.svg`（1336 行）归档  |
 | [HISTORY.md](HISTORY.md)                        | 按日期索引 `specs/new-arch/**` 历史方案 |
 
 ## 三张总览框图（SVG 瘦身目标）
@@ -75,7 +75,7 @@
 2. **每个 MD 顶部必须写「对应代码位置」**，做到一键跳转。
 3. **新概念先加 MD，再改 SVG**。SVG 只是图形化概要。
 4. **禁止把 MD 长文字塞进 SVG `<text>`**。SVG 只留标题和关键词。
-5. **产品文档只写 `packages/web/src/content/docs/**`**。`docs/product/**` 已在 2026-06-15 删除，历史 spec 只能引用它作为已退休路径，不能把新内容写回旧树。
+5. **产品文档只写 `packages/web/src/content/docs/**`**。`docs/product/\*\*` 已在 2026-06-15 删除，历史 spec 只能引用它作为已退休路径，不能把新内容写回旧树。
 
 ## 历史文档整并状态
 
@@ -143,9 +143,12 @@
     `routes/panel.ts` / `routes/global.ts` / `routes/app.ts` / `routes/coding.ts` 5 个文件；
     `src/server/event.ts` 只是 7 行的 `BusEvent` 类型声明（`server.connected` / `global.disposed`），
     历史 `routes/task-event.ts` 路径不存在
-  - `acceptance/` 新增 `arbiter.ts` / `manifest.ts` / `output-tools.ts` / `runtime-capture.ts` /
-    `service.ts` / `specialist-review.ts` / `specialists/` / `surface-detector.ts` /
-    `tool-result.ts` / `tools.ts` / `verdict.ts` / `visual-metric.ts`；checks 增 `walkthrough/`
+  - `acceptance/` 当前文件包括 `arbiter.ts` / `contract-audit.ts` / `lkg-isolated-eval.ts` /
+    `manifest.ts` / `review-verdict.ts` / `specialist-review.ts` / `surface-detector.ts` /
+    `types.ts` / `verdict.ts` / `visual-evidence.ts` / `visual-metric.ts`；checks 包括
+    `content-fingerprint.ts` / `contract-audit-review.ts` / `discovery.ts` /
+    `project-gate.ts` / `runtime-readiness.ts` / `walkthrough/`；specialists 包括
+    `backend-client.ts` / `security-data.ts` / `test-integration.ts`
   - `architect/` 新增 `contract-ir.ts` / `fidelity.ts` / `linker.ts` / `output-tools.ts`
   - `intent-analysis` **已接线**：orchestrator `analyze_intent` tool → `IntentAnalysisAgent.analyze`
     （旧 13 号文档"not wired yet"的判断已过期）
@@ -183,7 +186,7 @@ plan_exit` 这些 tool **从未存在**；build / general / explore / acceptance
     回退，改写到 `engine_artifact[goal_run_attempt].payload`
   - **11-agent-oop-protocol.md** — `ORCHESTRATOR_INSTRUCTIONS` 与 `ACCEPTANCE_AGENT_SYSTEM`
     inline → `.txt` 迁移**已完成**；§七迁移表 `planGoal()` 行整删；新增 `IntegrityAgent` /
-    `ProsecutorAgent` 行（已接线）；§4.1 待迁移段改为"全部已完成"
+    删除后续退役的 `ProsecutorAgent` 当前行；§4.1 待迁移段改为"全部已完成"
   - **13-agent-communication-matrix.md** — 修正"真源文件索引"：build 包没有 `runner.ts` /
     `sub-agent-protocol.ts`，runner 在 `goal/runner.ts`，sub-agent-protocol 在
     `agent/sub-agent-protocol.ts`
@@ -194,7 +197,7 @@ plan_exit` 这些 tool **从未存在**；build / general / explore / acceptance
     边界注释目标改指 `engine/rewind.ts`；明确 `engine/runtime.ts:123,182,193` 与
     `goal-status.ts:40-62` 两处 FSM-shaped residue 仍未收口
   - **99-principles.md** — Principle 2 sub-agent 列表删除 `Planner`，补
-    `Frontend Design / Intent-Analysis / Integrity / Prosecutor`
+    `Frontend Design / Intent-Analysis / Integrity`
   - **README + 01 + 13** — 修正 build 包描述：`build/` 实际只有 `agent.ts / index.ts /
 report.ts / types.ts` 4 个文件，没有 `runner.ts` / `sub-agent-protocol.ts` / `prompt/`；
     runner 在 `goal/runner.ts`，sub-agent 协议在 `agent/sub-agent-protocol.ts`

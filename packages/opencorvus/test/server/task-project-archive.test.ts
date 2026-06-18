@@ -57,7 +57,10 @@ describe("task project archive route", () => {
         await fs.mkdir(path.join(tmp.path, ".opencorvus", "runtime"), { recursive: true })
         await fs.mkdir(path.join(tmp.path, ".opencorvus", "worktrees"), { recursive: true })
         await fs.mkdir(path.join(tmp.path, ".opencorvus-worktrees"), { recursive: true })
-        await fs.writeFile(path.join(tmp.path, ".opencorvus", "r", "t", "ab", "cdef12", "forced.txt"), "short runtime must not archive\n")
+        await fs.writeFile(
+          path.join(tmp.path, ".opencorvus", "r", "t", "ab", "cdef12", "forced.txt"),
+          "short runtime must not archive\n",
+        )
         await fs.writeFile(path.join(tmp.path, ".opencorvus", "runtime", "forced.txt"), "runtime must not archive\n")
         await fs.writeFile(path.join(tmp.path, ".opencorvus", "worktrees", "forced.txt"), "worktree must not archive\n")
         await fs.writeFile(

@@ -18,10 +18,18 @@ function stampedInfo(channel: string, info: Record<string, any>) {
 }
 
 function stampedPart(channel: string, part: Record<string, any>) {
+  const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
+  return cleanPart
+}
+
+function stampedPartEvent(channel: string, part: Record<string, any>) {
+  const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
   return {
-    ...part,
-    resolvedRole: part.resolvedRole ?? channel,
+    part: cleanPart,
+    resolvedRole: resolvedRole ?? channel,
     channel,
+    ...(parentSessionID ? { parentSessionID } : {}),
+    ...(goalID ? { goalID } : {}),
   }
 }
 
@@ -33,7 +41,7 @@ test("part projection materializes the deterministic turn when the part arrives 
     emittedAt: 1_780_000_000_010,
     properties: {
       taskID: "tsk_projection",
-      part: stampedPart("build", {
+      ...stampedPartEvent("build", {
         id: "prt_before_message",
         messageID: "msg_before_message",
         sessionID: "ses_before_message",
@@ -82,7 +90,7 @@ test("part-first card survives regroup until its message metadata arrives", () =
     emittedAt: 1_780_000_000_010,
     properties: {
       taskID: "tsk_projection",
-      part: stampedPart("orchestrator", {
+      ...stampedPartEvent("orchestrator", {
         id: "prt_part_first_text",
         messageID: "msg_part_first",
         sessionID: "ses_part_first_regroup",
@@ -132,7 +140,7 @@ test("part-first card survives regroup until its message metadata arrives", () =
       emittedAt: 1_780_000_000_250,
       properties: {
         taskID: "tsk_projection",
-        part: stampedPart("orchestrator", {
+        ...stampedPartEvent("orchestrator", {
           id: "prt_part_first_finish",
           messageID: "msg_part_first",
           sessionID: "ses_part_first_regroup",

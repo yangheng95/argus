@@ -31,12 +31,10 @@ import {
   compareBrowserPreviewRegions,
 } from "../../browser-preview/region-comparison"
 
-const BrowserPreviewLiveRequest = z
-  .object({
-    targetID: z.string().min(1),
-    viewportID: BrowserPreviewViewportID,
-  })
-  .strict()
+const BrowserPreviewLiveRequest = z.object({
+  targetID: z.string().min(1),
+  viewportID: BrowserPreviewViewportID,
+}).strict()
 
 const BrowserPreviewCaptureRequest = z
   .object({
@@ -185,7 +183,8 @@ export const BrowserPreviewRoutes = lazy(() =>
       "/task/:taskID/browser-preview/evidence/:evidenceID/artifact/:artifactName",
       describeRoute({
         summary: "Read browser preview region comparison artifact",
-        description: "Return a persisted source, implementation, side-by-side, or diff PNG for region comparison evidence.",
+        description:
+          "Return a persisted source, implementation, side-by-side, or diff PNG for region comparison evidence.",
         operationId: "browserPreview.readTaskEvidenceArtifact",
         responses: {
           200: {
@@ -230,8 +229,7 @@ export const BrowserPreviewRoutes = lazy(() =>
       "/task/:taskID/browser-preview/target",
       describeRoute({
         summary: "Select task browser preview target",
-        description:
-          "Promote an existing task browser preview target artifact as the task preview target.",
+        description: "Promote an existing task browser preview target artifact as the task preview target.",
         operationId: "browserPreview.selectTaskTarget",
         responses: {
           200: {

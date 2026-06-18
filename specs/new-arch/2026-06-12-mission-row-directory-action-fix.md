@@ -19,13 +19,13 @@ show a row that the action route cannot find.
 
 ## Call Points
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/mission/session.ts::listGlobalMissionSessions` | Uses `missionSessionConditions(input)` without project ID and supports `directory`. | Keep as ledger source. |
-| `packages/opencorvus/src/mission/session.ts::getMissionSession` | Uses `findMissionSessionID(missionID)` scoped to `Instance.project.id`. | Keep for project-scoped creation/wake semantics. Add a directory-record lookup for row actions. |
-| `packages/opencorvus/src/server/routes/mission.ts` | `GET/PATCH/POST/DELETE /mission/:missionID...` ignore the request directory after middleware bootstrap. | Use `Instance.directory` as the already-decoded request directory for row action lookups. |
-| `packages/opencorvus/src/session/index.ts::remove` | Deletes only when the target session belongs to `Instance.project.id`. | Mission delete must call `removeInProject` with the found session's own `projectID`. |
-| `packages/opencorvus/test/server/mission-routes.test.ts` | Existing disambiguation test only covers two current git projects. | Add a regression with a stale project ID and matching directory, proving the action follows the row identity. |
+| Surface                                                                 | Evidence                                                                                                | Decision                                                                                                      |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/mission/session.ts::listGlobalMissionSessions` | Uses `missionSessionConditions(input)` without project ID and supports `directory`.                     | Keep as ledger source.                                                                                        |
+| `packages/opencorvus/src/mission/session.ts::getMissionSession`         | Uses `findMissionSessionID(missionID)` scoped to `Instance.project.id`.                                 | Keep for project-scoped creation/wake semantics. Add a directory-record lookup for row actions.               |
+| `packages/opencorvus/src/server/routes/mission.ts`                      | `GET/PATCH/POST/DELETE /mission/:missionID...` ignore the request directory after middleware bootstrap. | Use `Instance.directory` as the already-decoded request directory for row action lookups.                     |
+| `packages/opencorvus/src/session/index.ts::remove`                      | Deletes only when the target session belongs to `Instance.project.id`.                                  | Mission delete must call `removeInProject` with the found session's own `projectID`.                          |
+| `packages/opencorvus/test/server/mission-routes.test.ts`                | Existing disambiguation test only covers two current git projects.                                      | Add a regression with a stale project ID and matching directory, proving the action follows the row identity. |
 
 ## Acceptance
 

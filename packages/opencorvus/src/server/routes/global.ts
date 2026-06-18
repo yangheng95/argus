@@ -4,7 +4,7 @@ import { streamSSE } from "../sse"
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
-import { Event as ServerEvent } from "../event"
+import { Event as ServerEvent, globalEnvelope } from "../event"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { Installation } from "@/installation"
@@ -123,12 +123,7 @@ export const GlobalRoutes = lazy(() =>
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
           stream.writeSSE({
-            data: JSON.stringify({
-              payload: {
-                type: "server.connected",
-                properties: {},
-              },
-            }),
+            data: JSON.stringify(globalEnvelope("global", ServerEvent.Connected, {})),
           })
           async function handler(event: any) {
             await stream.writeSSE({
@@ -140,12 +135,7 @@ export const GlobalRoutes = lazy(() =>
           // Send heartbeat every 10s to prevent stalled proxy streams.
           const heartbeat = setInterval(() => {
             stream.writeSSE({
-              data: JSON.stringify({
-                payload: {
-                  type: "server.heartbeat",
-                  properties: {},
-                },
-              }),
+              data: JSON.stringify(globalEnvelope("global", ServerEvent.Heartbeat, {})),
             })
           }, 10_000)
 

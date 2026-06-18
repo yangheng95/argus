@@ -40,6 +40,10 @@ describe("message-bridge persistence guard", () => {
     }
   })
 
+  test("does not stamp overlay route metadata into Message.Part", () => {
+    expect(bridgeSource).not.toMatch(/enriched\.part\s*=/)
+  })
+
   test("dispatchEphemeral docstring records the 双源 (rule 23) rationale", () => {
     expect(protocolStoreSource).toMatch(/双源|rule 23/)
   })

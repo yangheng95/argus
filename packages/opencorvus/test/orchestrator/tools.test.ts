@@ -16,6 +16,7 @@ import {
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
+import { Identifier } from "../../src/id/id"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import * as TaskLoop from "../../src/orchestrator/loop"
@@ -74,6 +75,7 @@ import {
 } from "../../src/integrity/root-history"
 import { Config } from "../../src/config/config"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
+import { Provider } from "../../src/provider/provider"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -679,7 +681,6 @@ describe("orchestrator tools", () => {
       appended: true,
       orchestratorWoken: true,
       executorResumed: false,
-      resumed: false,
       status: "active",
     })
     const { tools } = createOrchestratorTools({
@@ -812,8 +813,36 @@ describe("orchestrator tools", () => {
         .run()
     })
 
-    const promptSpy = spyOn(SessionPrompt, "prompt").mockResolvedValue({
-      parts: [{ type: "text", text: "AuctionData lives under Hithink.PrefabLibrary/PrefabLibrary/Business." }],
+    const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation(async (input: any) => {
+      const userMessageID = Identifier.ascending("message")
+      await Session.updateMessage({
+        id: userMessageID,
+        sessionID: input.sessionID,
+        role: "user",
+        time: { created: Date.now() },
+        agent: input.agent,
+        model: input.model,
+        system: input.system,
+        systemMode: input.systemMode,
+        tools: input.tools,
+        extra: input.extra,
+      } as any)
+      return {
+        info: {
+          id: Identifier.ascending("message"),
+          role: "assistant",
+          sessionID: input.sessionID,
+          parentID: userMessageID,
+          agent: "explore",
+        },
+        parts: [{ type: "text", text: "AuctionData lives under Hithink.PrefabLibrary/PrefabLibrary/Business." }],
+      } as any
+    })
+    spyOn(Provider, "getModel").mockResolvedValue({
+      id: "model",
+      providerID: "test",
+      api: { id: "model" },
+      capabilities: { input: {} },
     } as any)
 
     await Instance.provide({
@@ -862,8 +891,25 @@ describe("orchestrator tools", () => {
           db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.kind, "exploration")).all(),
         )
         expect(artifacts).toHaveLength(1)
-        expect(typeof (artifacts[0].payload as any).session_id).toBe("string")
+        const sessionID = (artifacts[0].payload as any).session_id
+        expect(typeof sessionID).toBe("string")
         expect((artifacts[0].payload as any).result).toContain("AuctionData lives under Hithink.PrefabLibrary")
+        const messages = await Session.messages({ sessionID })
+        const source = messages.find((message) => message.info.role === "user")
+        expect(source?.info.agent).toBe("explore")
+        const descriptorRef = (source?.info.extra as any)?.workerTurnDescriptor
+        expect(typeof descriptorRef?.id).toBe("string")
+        expect(typeof descriptorRef?.hash).toBe("string")
+        const contract = SessionPrompt.getSessionRuntimeContract(sessionID)
+        expect(contract?.identity).toMatchObject({
+          sessionID,
+          agentKind: "explore",
+          contractKind: "stage-attempt",
+          workerTurnDescriptorID: descriptorRef.id,
+          workerTurnDescriptorHash: descriptorRef.hash,
+        })
+        expect(contract?.exactTools).toBeUndefined()
+        SessionPrompt.clearSessionRuntimeContract(sessionID)
       },
     })
   })
@@ -954,63 +1000,12 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("build rejects completed tasks without creating a new run", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const now = Date.now()
-        const completedAt = now - 1_000
-        const taskID = `tsk_build_terminal_${now.toString(16)}`
-        const parent = await Session.create({ kind: "root", title: "completed build rejection" })
-        Database.use((db) =>
-          db
-            .insert(EngineTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              session_id: parent.id,
-              source: "test",
-              title: "completed build rejection",
-              request: "must stay completed",
-              kind: "workflow",
-              priority: "normal",
-              time_created: now - 10_000,
-              time_updated: completedAt,
-              time_started: now - 10_000,
-              time_completed: completedAt,
-            } as any)
-            .run(),
-        )
-        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
-
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-          workflow: pipeline,
-          workflowState: createWorkflowState(pipeline),
-        })
-
-        const result = await tools.build.execute(
-          {
-            request: "Try to continue after completion.",
-            reason: "Regression test for terminal task wake.",
-            directBuildIntent: "modify_files",
-          },
-          buildToolOptions(),
-        )
-
-        expect(result).toContain("build: rejected because task")
-        expect(result).toContain("completed")
-        expect(findActiveRunForTask(taskID)).toBeUndefined()
-        const task = findTask(taskID)!
-        expect(deriveTaskStatus(task)).toBe("completed")
-        expect(task.time_completed).toBe(completedAt)
-      },
-    })
+  test("orchestrator tools do not reject work solely because the task is terminal", async () => {
+    const source = await fs.readFile(path.join(import.meta.dir, "..", "..", "src", "orchestrator", "tools.ts"), "utf8")
+    expect(source).not.toContain("Terminal tasks cannot create build runs")
+    expect(source).not.toContain("A terminal task must first be reactivated")
+    expect(source).not.toContain("build: rejected because task")
+    expect(source).not.toContain("terminal task")
   })
 
   test("task-level direct build receives persistent integrity findings in build context", async () => {
@@ -1404,11 +1399,22 @@ describe("orchestrator tools", () => {
         })
 
         try {
+          await expect(
+            tools.steer_subagent.execute(
+              {
+                session_id: goalRunID,
+                message: "汇报当前实现进度",
+                reason: "old mixed session_id must not resolve goal_run",
+              },
+              buildToolOptions(),
+            ),
+          ).rejects.toThrow(`Session ${goalRunID} does not belong to task ${taskID}`)
+
           const result = await tools.steer_subagent.execute(
             {
-              session_id: goalRunID,
+              goal_run_id: goalRunID,
               message: "汇报当前实现进度",
-              reason: "live goal_run should resolve to the child build session",
+              reason: "explicit live goal_run should resolve to the child build session",
             },
             buildToolOptions(),
           )

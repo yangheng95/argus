@@ -4,7 +4,7 @@ import os from "os"
 import path from "path"
 import { createServer, type Server } from "node:http"
 import { PassThrough } from "stream"
-import { BashTool, DEFAULT_TIMEOUT, disposeSyntaxTree } from "../../src/tool/bash"
+import { BashTool, DEFAULT_TIMEOUT, createBashSpawnDiagnostics, disposeSyntaxTree } from "../../src/tool/bash"
 import { DEFAULT_BASH_BACKGROUND_LEASE_MS, DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
@@ -118,6 +118,36 @@ async function executeWithMockedForegroundCommand(command: string) {
 }
 
 describe("tool.bash", () => {
+  test("builds spawn diagnostics for shell and cwd failures", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const shell = process.platform === "win32" ? process.execPath : "/bin/sh"
+    const diagnostics = createBashSpawnDiagnostics({
+      shell,
+      cwd: tmp.path,
+      shellEnv: { OPENCORVUS_TEST_SHELL_ENV: "1" },
+      guardEnv: { OPENCORVUS_TEST_GUARD_ENV: "1" },
+      childEnv: {
+        SHELL: shell,
+        PATH: process.env.PATH,
+        OPENCORVUS_TEST_SHELL_ENV: "1",
+        OPENCORVUS_TEST_GUARD_ENV: "1",
+      },
+    })
+
+    expect(diagnostics).toMatchObject({
+      shell,
+      cwd: tmp.path,
+      shellExists: true,
+      shellIsFile: true,
+      cwdExists: true,
+      cwdIsDirectory: true,
+      envShell: shell,
+      envPath: process.env.PATH,
+      shellEnvKeys: ["OPENCORVUS_TEST_SHELL_ENV"],
+      guardEnvKeys: ["OPENCORVUS_TEST_GUARD_ENV"],
+    })
+  })
+
   test("disposes parser syntax trees after extracting permission metadata", () => {
     let disposed = false
 

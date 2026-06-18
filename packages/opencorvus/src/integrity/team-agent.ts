@@ -23,7 +23,7 @@ import type { ParsedRequirement, RequirementsDecision } from "@/requirements/typ
 import { AttachmentStore } from "@/storage/attachment-store"
 import { Log } from "@/util/log"
 import { createIntegrityAcceptanceTools } from "./acceptance-tools"
-import { INTEGRITY_PREVIEW_TOOL_INFOS } from "./static-tools"
+import { loadIntegrityPreviewToolInfos } from "./static-tools"
 import {
   buildPriorManifestIndex,
   canonicalIntegritySymptom,
@@ -391,8 +391,9 @@ async function createSingleSessionIntegrityToolKit(input: {
 }
 
 async function createIntegrityPreviewTools(input: { taskID: string; signal?: AbortSignal }): Promise<ToolSet> {
+  const toolInfos = await loadIntegrityPreviewToolInfos()
   const entries = await Promise.all(
-    INTEGRITY_PREVIEW_TOOL_INFOS.map(async (info) => [info.id, await createIntegrityTool(info, input)] as const),
+    toolInfos.map(async (info) => [info.id, await createIntegrityTool(info, input)] as const),
   )
   return Object.fromEntries(entries) as ToolSet
 }

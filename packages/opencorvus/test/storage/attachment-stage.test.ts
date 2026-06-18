@@ -43,7 +43,7 @@ describe("AttachmentStore.stageToWorktree", () => {
     })
   })
 
-  test("falls back to attachment-<i>-<sha8>.<ext> for unsafe filenames", async () => {
+  test("generates attachment-<i>-<sha8>.<ext> for unsafe filenames", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,

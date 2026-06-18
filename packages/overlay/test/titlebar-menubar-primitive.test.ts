@@ -38,6 +38,17 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).toContain("focusTrigger")
   })
 
+  test("keeps the top-level menu order and removes the old Tools trigger", () => {
+    expect(SOURCE).toContain(
+      'const MENU_IDS: MenuID[] = ["workspace", "provider", "run", "view", "settings", "help"]',
+    )
+    expect(SOURCE).not.toContain('| "tools"')
+    expect(SOURCE).not.toContain("MENU_ACCESS_KEYS.tools")
+    expect(SOURCE).not.toContain('id: "tools"')
+    expect(SOURCE).not.toContain('menu.id === "tools"')
+    expect(SOURCE).not.toContain("titlebar.menu.tools")
+  })
+
   test("styles Kobalte disabled item state", () => {
     expect(CSS).toContain(".titlebar-menubar-item[data-disabled]")
     expect(CSS).toContain(":not([data-disabled])")

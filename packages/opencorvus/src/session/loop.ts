@@ -1086,18 +1086,24 @@ export namespace SessionLoop {
     if (!properties || typeof properties !== "object" || Array.isArray(properties)) return value
     if (!value || typeof value !== "object" || Array.isArray(value)) return value
 
-    const required = new Set(Array.isArray(record.required) ? record.required.filter((item) => typeof item === "string") : [])
+    const required = new Set(
+      Array.isArray(record.required) ? record.required.filter((item) => typeof item === "string") : [],
+    )
     const out: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
       const propertySchema = (properties as Record<string, unknown>)[key]
       if (item === null && propertySchema === undefined && dropUnknownNulls) {
         continue
       }
-      if (item === null && propertySchema !== undefined && !required.has(key) && !jsonSchemaAllowsNull(propertySchema)) {
+      if (
+        item === null &&
+        propertySchema !== undefined &&
+        !required.has(key) &&
+        !jsonSchemaAllowsNull(propertySchema)
+      ) {
         continue
       }
-      out[key] =
-        propertySchema !== undefined ? stripNullOptionalsFromJsonSchema(propertySchema, item, false) : item
+      out[key] = propertySchema !== undefined ? stripNullOptionalsFromJsonSchema(propertySchema, item, false) : item
     }
     return out
   }
@@ -1402,10 +1408,7 @@ export namespace SessionLoop {
     )
   }
 
-  export function hasCompletedCompactionForSource(
-    messages: Message.WithParts[],
-    sourceUserMessageID: string,
-  ): boolean {
+  export function hasCompletedCompactionForSource(messages: Message.WithParts[], sourceUserMessageID: string): boolean {
     const source = messages.find(
       (msg) =>
         msg.info.id === sourceUserMessageID &&

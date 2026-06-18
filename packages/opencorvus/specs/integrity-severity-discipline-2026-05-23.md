@@ -1,7 +1,12 @@
 # Integrity Severity Discipline — Prompt-Level Definition & Maturity Context
 
 Date: 2026-05-23
-Status: design draft. No code is changed by this document.
+Status: implemented history as of 2026-06-17. Current runtime sources are
+`packages/opencorvus/src/prompt/core/integrity-team-core.txt`,
+`packages/opencorvus/src/integrity/team-agent.ts`, and severity regression
+tests under `packages/opencorvus/test/prompt/` and
+`packages/opencorvus/test/integrity/`. This file is retained as historical
+design evidence, not as a pending implementation checklist.
 Scope: `packages/opencorvus/src/prompt/core/integrity-team-core.txt`,
 `packages/opencorvus/src/integrity/team-agent.ts` prompt builders,
 `packages/opencorvus/src/integrity/team-schema.ts` (schema doc only).

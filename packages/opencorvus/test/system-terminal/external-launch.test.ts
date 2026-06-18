@@ -53,12 +53,7 @@ describe("system terminal external launch command", () => {
     })
 
     expect(command.command).toBe("cmd.exe")
-    expect(command.args).toEqual([
-      "/d",
-      "/s",
-      "/k",
-      '"C:\\Tools\\Codex & CLI\\codex%%.cmd" "--filter=a|b" "100%%"',
-    ])
+    expect(command.args).toEqual(["/d", "/s", "/k", '"C:\\Tools\\Codex & CLI\\codex%%.cmd" "--filter=a|b" "100%%"'])
     expect(command.detached).toBe(true)
     expect(command.args).not.toContain("start")
     expect(command.args).not.toContain("C:\\repo & whoami | sort")

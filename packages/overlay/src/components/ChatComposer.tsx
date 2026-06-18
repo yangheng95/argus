@@ -130,8 +130,8 @@ const UTF8_ENCODER = new TextEncoder()
 // orchestrator's attachment inventory must be:
 //   - non-empty (paste hands us "" on Chromium)
 //   - shell-safe (no path separators, no metacharacters) — server-side
-//     `displayFilename` rejects unsafe names and falls back to a sha
-//     handle that is unreadable to sub-agents
+//     `displayFilename` replaces unsafe names with a generated display name
+//     that stays readable to sub-agents
 // Mirrors the SAFE_FILENAME_RE rule in
 // `opencorvus/src/storage/attachment-store.ts`. Keeping the regex
 // duplicated here (the server-side helper is not bundled into the

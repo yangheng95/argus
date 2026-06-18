@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Bus } from "../../src/bus"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { Scheduler } from "../../src/scheduler"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Database, eq } from "../../src/storage/db"
@@ -15,11 +16,63 @@ function result() {
   } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
 }
 
+async function waitForQueueStatus(id: string, status: string) {
+  for (let i = 0; i < 50; i += 1) {
+    const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+    if (row?.status === status) return row
+    await Bun.sleep(10)
+  }
+  const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+  throw new Error(`queue task ${id} did not reach ${status}; current=${row?.status ?? "missing"}`)
+}
+
 describe("scheduler.task-queue-service", () => {
   afterEach(async () => {
     delete process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY
     mock.restore()
     await Instance.disposeAll()
+  })
+
+  test("init does not register a background task-flow poller", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const register = spyOn(Scheduler, "register")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        TaskQueueService.init()
+      },
+    })
+
+    expect(register).not.toHaveBeenCalled()
+  })
+
+  test("enqueue explicitly starts prompt execution without caller-side runNow", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const id = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "start from enqueue",
+              },
+            ],
+          },
+          source: "test",
+        })
+        const row = await waitForQueueStatus(id, "completed")
+        expect(row?.status).toBe("completed")
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
   })
 
   test("executes queued prompt task", async () => {
@@ -88,6 +141,7 @@ describe("scheduler.task-queue-service", () => {
 
   test("direct queued prompt preserves agent-owned session identity", async () => {
     await using tmp = await tmpdir({ git: true })
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
 
     await Instance.provide({
       directory: tmp.path,
@@ -110,8 +164,11 @@ describe("scheduler.task-queue-service", () => {
           agent: "mission",
           parts: [{ type: "text", text: "mission queue" }],
         })
+        await TaskQueueService.runNow()
       },
     })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
   })
 
   test("direct execute prompt preserves agent-owned session identity", async () => {
@@ -145,7 +202,7 @@ describe("scheduler.task-queue-service", () => {
     )
   })
 
-  test("retries on failure and marks failed after max retries", async () => {
+  test("marks prompt failure failed without automatic retry", async () => {
     await using tmp = await tmpdir({ git: true })
     const prompt = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("boom"))
 
@@ -159,27 +216,24 @@ describe("scheduler.task-queue-service", () => {
             parts: [
               {
                 type: "text",
-                text: "retry me",
+                text: "fail once",
               },
             ],
           },
-          maxRetries: 1,
           source: "test",
         })
 
         await TaskQueueService.runNow()
         const first = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
-        expect(first?.status).toBe("retrying")
-        expect(first?.retry_count).toBe(1)
+        expect(first?.status).toBe("failed")
 
         await TaskQueueService.runNow()
         const second = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
         expect(second?.status).toBe("failed")
-        expect(second?.retry_count).toBe(2)
       },
     })
 
-    expect(prompt).toHaveBeenCalledTimes(2)
+    expect(prompt).toHaveBeenCalledTimes(1)
   })
 
   test("publishes session error when queued prompt reaches terminal failure", async () => {
@@ -208,7 +262,6 @@ describe("scheduler.task-queue-service", () => {
                 },
               ],
             },
-            maxRetries: 0,
             source: "test",
           })
 
@@ -223,7 +276,7 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(1)
   })
 
-  test("poll only processes tasks for current project", async () => {
+  test("explicit drain only processes tasks for current project", async () => {
     await using one = await tmpdir({ git: true })
     await using two = await tmpdir({ git: true })
     const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
@@ -233,18 +286,28 @@ describe("scheduler.task-queue-service", () => {
       directory: two.path,
       fn: async () => {
         const session = await Session.create({ kind: "assistant" })
-        id = TaskQueueService.enqueuePrompt({
-          sessionID: session.id,
-          prompt: {
-            parts: [
-              {
-                type: "text",
-                text: "other project",
+        const now = Date.now()
+        id = "task_other_project_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id,
+              session_id: session.id,
+              prompt: "other project",
+              status: "queued",
+              source: "test",
+              metadata: {
+                kind: "session_prompt",
+                input: {
+                  parts: [{ type: "text", text: "other project" }],
+                },
               },
-            ],
-          },
-          source: "test",
-        })
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
       },
     })
 
@@ -258,6 +321,79 @@ describe("scheduler.task-queue-service", () => {
     const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
     expect(row?.status).toBe("queued")
     expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("prefers high priority task over older low priority task in same session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "1"
+    const seen: string[] = []
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+      input: Parameters<typeof SessionPrompt.prompt>[0],
+    ) => {
+      const text = input.parts.find((part) => part.type === "text")?.text
+      if (text) seen.push(text)
+      return result()
+    }) as never)
+    let high = ""
+    let low = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const now = Date.now()
+        low = "task_low_" + Math.random().toString(36).slice(2)
+        high = "task_high_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values([
+              {
+                id: low,
+                session_id: session.id,
+                prompt: "low",
+                priority: "low",
+                status: "queued",
+                source: "test",
+                metadata: {
+                  kind: "session_prompt",
+                  input: {
+                    parts: [{ type: "text", text: "low" }],
+                  },
+                },
+                time_created: now,
+                time_updated: now,
+              },
+              {
+                id: high,
+                session_id: session.id,
+                prompt: "high",
+                priority: "high",
+                status: "queued",
+                source: "test",
+                metadata: {
+                  kind: "session_prompt",
+                  input: {
+                    parts: [{ type: "text", text: "high" }],
+                  },
+                },
+                time_created: now + 1,
+                time_updated: now + 1,
+              },
+            ])
+            .run(),
+        )
+
+        await TaskQueueService.runNow()
+        const highRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, high)).get())
+        const lowRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, low)).get())
+        expect(highRow?.status).toBe("completed")
+        expect(lowRow?.status).toBe("completed")
+        expect(seen).toEqual(["high", "low"])
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(2)
   })
 
   test("runs queued tasks concurrently across sessions", async () => {
@@ -374,7 +510,7 @@ describe("scheduler.task-queue-service", () => {
     })
   })
 
-  test("only claims one task per session in a single run", async () => {
+  test("completion event advances queued work in the same session", async () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "4"
     const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
@@ -416,64 +552,11 @@ describe("scheduler.task-queue-service", () => {
           db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, second)).get(),
         )
         expect(firstRow?.status).toBe("completed")
-        expect(secondRow?.status).toBe("queued")
-
-        await TaskQueueService.runNow()
-        const finalRow = Database.use((db) =>
-          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, second)).get(),
-        )
-        expect(finalRow?.status).toBe("completed")
+        expect(secondRow?.status).toBe("completed")
       },
     })
 
     expect(prompt).toHaveBeenCalledTimes(2)
-  })
-
-  test("prefers high priority task over older low priority task in same session", async () => {
-    await using tmp = await tmpdir({ git: true })
-    process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "1"
-    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
-    let high = ""
-    let low = ""
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const session = await Session.create({ kind: "assistant" })
-        low = TaskQueueService.enqueuePrompt({
-          sessionID: session.id,
-          prompt: {
-            parts: [
-              {
-                type: "text",
-                text: "low",
-              },
-            ],
-          },
-          priority: "low",
-        })
-        high = TaskQueueService.enqueuePrompt({
-          sessionID: session.id,
-          prompt: {
-            parts: [
-              {
-                type: "text",
-                text: "high",
-              },
-            ],
-          },
-          priority: "high",
-        })
-
-        await TaskQueueService.runNow()
-        const highRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, high)).get())
-        const lowRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, low)).get())
-        expect(highRow?.status).toBe("completed")
-        expect(lowRow?.status).toBe("queued")
-      },
-    })
-
-    expect(prompt).toHaveBeenCalledTimes(1)
   })
 
   test("scans deep queue and still picks another session", async () => {
@@ -493,15 +576,13 @@ describe("scheduler.task-queue-service", () => {
         const a = await Session.create({ kind: "assistant" })
         const b = await Session.create({ kind: "assistant" })
         const now = Date.now()
-        const bulk = Array.from({ length: 340 }, (_, i) => ({
+        const bulk = Array.from({ length: 40 }, (_, i) => ({
           id: `task_a_${i}_${Math.random().toString(36).slice(2)}`,
           session_id: a.id,
           prompt: `a-${i}`,
           priority: "high" as const,
           status: "queued" as const,
           source: "test",
-          retry_count: 0,
-          max_retries: 3,
           metadata: {
             kind: "session_prompt" as const,
             input: {
@@ -524,8 +605,6 @@ describe("scheduler.task-queue-service", () => {
                 priority: "high",
                 status: "queued",
                 source: "test",
-                retry_count: 0,
-                max_retries: 3,
                 metadata: {
                   kind: "session_prompt",
                   input: {
@@ -543,8 +622,9 @@ describe("scheduler.task-queue-service", () => {
       },
     })
 
-    expect(prompt).toHaveBeenCalledTimes(2)
+    expect(prompt).toHaveBeenCalledTimes(41)
     expect(new Set(seen).size).toBe(2)
+    expect(new Set(seen.slice(0, 2)).size).toBe(2)
   })
 
   test("does not claim queued task when same session already has running task", async () => {
@@ -568,8 +648,6 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "running",
                 status: "running",
                 source: "test",
-                retry_count: 0,
-                max_retries: 3,
                 metadata: {
                   kind: "session_prompt",
                   input: {
@@ -586,8 +664,6 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "queued",
                 status: "queued",
                 source: "test",
-                retry_count: 0,
-                max_retries: 3,
                 metadata: {
                   kind: "session_prompt",
                   input: {
@@ -641,8 +717,6 @@ describe("scheduler.task-queue-service", () => {
                 priority: "high",
                 status: "running",
                 source: "test",
-                retry_count: 0,
-                max_retries: 3,
                 metadata: {
                   kind: "session_prompt",
                   input: {
@@ -660,8 +734,6 @@ describe("scheduler.task-queue-service", () => {
                 priority: "high",
                 status: "queued",
                 source: "test",
-                retry_count: 0,
-                max_retries: 3,
                 metadata: {
                   kind: "session_prompt",
                   input: {
@@ -678,8 +750,6 @@ describe("scheduler.task-queue-service", () => {
                 priority: "normal",
                 status: "queued",
                 source: "test",
-                retry_count: 0,
-                max_retries: 3,
                 metadata: {
                   kind: "session_prompt",
                   input: {
@@ -741,8 +811,6 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "fresh",
                 status: "running",
                 source: "test",
-                retry_count: 0,
-                max_retries: 3,
                 metadata: {
                   kind: "session_prompt",
                   input: {
@@ -759,8 +827,6 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "stale",
                 status: "running",
                 source: "test",
-                retry_count: 0,
-                max_retries: 0,
                 metadata: {
                   kind: "session_prompt",
                   input: {
@@ -814,8 +880,6 @@ describe("scheduler.task-queue-service", () => {
                 prompt: "stale-visible",
                 status: "running",
                 source: "test",
-                retry_count: 0,
-                max_retries: 0,
                 metadata: {
                   kind: "session_prompt",
                   input: {

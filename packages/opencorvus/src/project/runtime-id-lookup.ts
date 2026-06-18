@@ -22,7 +22,12 @@ function uniqueRows(rows: Array<{ id: string | null }>): Array<{ id: string }> {
 }
 
 function resolveRows(kind: RuntimePathIDKind, segment: string, rows: Array<{ id: string }>): string {
-  if (isFullIDSegment(segment)) return assertOne(kind, segment, rows.filter((row) => row.id === segment))
+  if (isFullIDSegment(segment))
+    return assertOne(
+      kind,
+      segment,
+      rows.filter((row) => row.id === segment),
+    )
   if (segment.length !== Identifier.DIRECTORY_KEY_LENGTH) {
     throw new Error(`Invalid runtime ${kind} path segment: ${segment}`)
   }

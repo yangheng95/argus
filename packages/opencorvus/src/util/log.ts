@@ -6,6 +6,7 @@ import z from "zod"
 import { Glob } from "./glob"
 import { sanitizeMessage } from "./log-safety"
 import { SessionObservability } from "./session-observability"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
@@ -51,6 +52,15 @@ export namespace Log {
   export const FileName = z.string().regex(/^[^/\\:]+\.log$/, {
     message: "Log file must be a .log file name without path separators or drive/name-stream separators",
   })
+  export const FileNotFoundError = NamedError.create(
+    "LogFileNotFoundError",
+    z.object({
+      directory: z.string(),
+      file: z.string(),
+      path: z.string(),
+      message: z.string(),
+    }),
+  )
 
   export type FileName = z.infer<typeof FileName>
 
@@ -79,33 +89,43 @@ export namespace Log {
 
   export async function init(options: Options) {
     if (options.level) level = options.level
+    await fs.mkdir(directory(), { recursive: true })
     await cleanup(directory())
-    logpath = ""
-    let destination: pino.DestinationStream
-    if (options.print) {
-      destination = pino.destination(2)
-    } else {
-      logpath = path.join(
-        directory(),
-        options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
-      )
-      await fs.truncate(logpath).catch(() => {})
-      destination = pino.destination({ dest: logpath, sync: false, mkdir: true })
-    }
+    logpath = path.join(directory(), options.dev ? "dev.log" : productionLogFileName(generation + 1))
+    await fs.writeFile(logpath, "")
+    const fileDestination = pino.destination({ dest: logpath, sync: false, mkdir: true })
+    const destination = options.print
+      ? pino.multistream([{ stream: fileDestination }, { stream: pino.destination(2) }])
+      : fileDestination
     root = createRootLogger(destination)
     generation++
   }
 
   const KEEP_RECENT = 10
+  function productionLogFileName(nextGeneration: number) {
+    const timestamp = new Date().toISOString().split(".")[0].replace(/:/g, "")
+    return `${timestamp}-${process.pid}-${nextGeneration}.log`
+  }
+
   async function cleanup(dir: string) {
-    const files = await Glob.scan("????-??-??T??????.log", {
+    const files = await Glob.scan("*.log", {
       cwd: dir,
       absolute: true,
       include: "file",
     })
-    if (files.length <= KEEP_RECENT) return
-    const filesToDelete = files.slice(0, -KEEP_RECENT)
-    await Promise.all(filesToDelete.map((file) => fs.unlink(file).catch(() => {})))
+    const candidates = await Promise.all(
+      files
+        .filter((file) => path.basename(file) !== "dev.log")
+        .map(async (file) => {
+          const stat = await fs.stat(file)
+          return { file, modified: stat.mtimeMs }
+        }),
+    )
+    if (candidates.length <= KEEP_RECENT) return
+    const filesToDelete = candidates
+      .sort((left, right) => left.modified - right.modified || left.file.localeCompare(right.file))
+      .slice(0, -KEEP_RECENT)
+    await Promise.all(filesToDelete.map((entry) => fs.unlink(entry.file)))
   }
 
   export async function files(): Promise<FileInfo[]> {
@@ -134,17 +154,27 @@ export namespace Log {
 
   export async function read(input: { file?: FileName; lines: number }): Promise<ReadResult> {
     const dir = directory()
-    const pathname = input.file ? path.join(dir, input.file) : logpath
+    const requestedFile = input.file ? FileName.parse(input.file) : undefined
+    const pathname = requestedFile ? path.join(dir, requestedFile) : logpath
     if (!pathname) {
-      return {
+      throw new FileNotFoundError({
         directory: dir,
+        file: requestedFile ?? "",
         path: "",
-        file: "",
-        lines: [],
-      }
+        message: requestedFile
+          ? `Log file does not exist: ${requestedFile}`
+          : "Current log file is not initialized",
+      })
     }
     const content = await fs.readFile(pathname, "utf8").catch((error) => {
-      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return ""
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+        throw new FileNotFoundError({
+          directory: dir,
+          file: requestedFile ?? path.basename(pathname),
+          path: pathname,
+          message: `Log file does not exist: ${requestedFile ?? path.basename(pathname)}`,
+        })
+      }
       throw error
     })
     const lines = content

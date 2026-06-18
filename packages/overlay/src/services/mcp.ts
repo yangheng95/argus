@@ -95,14 +95,14 @@ export async function connectMcp(name: string): Promise<void> {
 export async function disconnectMcp(name: string): Promise<void> {
   await apiJson(`mcp/${encodeURIComponent(name)}/disconnect`, {
     method: "POST",
-  }).catch(() => undefined)
+  })
 }
 
 /** Removes stored OAuth/auth credentials for an MCP server by name. */
 export async function removeMcpAuth(name: string): Promise<void> {
   await apiJson(`mcp/${encodeURIComponent(name)}/auth`, {
     method: "DELETE",
-  }).catch(() => undefined)
+  })
 }
 
 /**
@@ -112,6 +112,10 @@ export async function removeMcpAuth(name: string): Promise<void> {
 export async function deleteAllMcp(): Promise<void> {
   const names = Object.keys(appStore.mcp ?? {})
   if (names.length === 0) return
-  await Promise.all(names.map((name) => disconnectMcp(name)))
-  await Promise.all(names.map((name) => removeMcpAuth(name)))
+  for (const name of names) {
+    await disconnectMcp(name)
+  }
+  for (const name of names) {
+    await removeMcpAuth(name)
+  }
 }

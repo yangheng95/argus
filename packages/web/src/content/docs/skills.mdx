@@ -16,7 +16,7 @@ my-skill/
 └── references/       # optional — reference documents
 ```
 
-Frontmatter fields (`src/skill/skill.ts:26-45`):
+Frontmatter fields (`src/skill/skill.ts`):
 
 | Field                      | Type                             | Description                                                                                                           |
 | -------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -50,14 +50,14 @@ Built-in skills get `allow` policy by default (`src/skill/manager.ts`).
 ## Adding a local skill
 
 **A**: drop into `.opencorvus/skill/<name>/SKILL.md` (project or global).
-**B**: Claude Code layout — `.claude/skills/` or `.agents/skills/` also discovered (`src/skill/skill.ts:68-69`).
+**B**: Claude Code layout — `.claude/skills/` or `.agents/skills/` also discovered (`src/skill/skill.ts`).
 **C**: declare paths in `opencorvus.jsonc`:
 
 ```jsonc
 { "skills": { "paths": ["./my-skills", "~/shared/skills"] } }
 ```
 
-All `**/SKILL.md` under each path load (`src/skill/skill.ts:200-217`).
+All `**/SKILL.md` under each path load (`src/skill/skill.ts`).
 
 ## Loading from a remote URL
 
@@ -65,9 +65,9 @@ All `**/SKILL.md` under each path load (`src/skill/skill.ts:200-217`).
 { "skills": { "urls": ["https://skills.example.com/my-pack/"] } }
 ```
 
-OpenCorvus fetches `{url}/index.json` (`{ skills: [{ name, description, files[] }] }`), downloads each file, caches under `~/.cache/opencorvus/skills/`, loads `SKILL.md` (`src/skill/discovery.ts:39-97`).
+OpenCorvus fetches `{url}/index.json` (`{ skills: [{ name, description, files[] }] }`), downloads each file, caches under `~/.cache/opencorvus/skills/`, loads `SKILL.md` (`src/skill/discovery.ts`).
 
-Built-in marketplace entries (`src/skill/manager.ts:107-165`): `openai-skills`, `anthropic-skills` (official); `skills-sh`, `skillstore` (curated); `skills-pub` (community).
+Built-in marketplace entries (`src/skill/manager.ts`): `openai-skills`, `anthropic-skills` (official); `skills-sh`, `skillstore` (curated); `skills-pub` (community).
 
 ## Installing from Git
 
@@ -76,7 +76,7 @@ opencorvus skill install --git https://github.com/owner/repo.git
 # shorthand: opencorvus skill install owner/repo
 ```
 
-Clones into `~/.config/opencorvus/skills-market/<slug>/`, appends to `skills.paths`, writes `.opencorvus-skill-source.json` (`src/skill/manager.ts:285-302`).
+Clones into `~/.config/opencorvus/skills-market/<slug>/`, appends to `skills.paths`, writes `.opencorvus-skill-source.json` (`src/skill/manager.ts`).
 
 ## Permission config
 
@@ -92,7 +92,7 @@ Clones into `~/.config/opencorvus/skills-market/<slug>/`, appends to `skills.pat
 }
 ```
 
-Built-in → `allow`; community/external → `ask`; skills with a `scripts/` directory → `ask` (high risk) (`src/skill/manager.ts:493-498`).
+Built-in → `allow`; community/external → `ask`; skills with a `scripts/` directory → `ask` (high risk) (`src/skill/manager.ts`).
 
 ## Disabling external discovery
 
@@ -100,4 +100,4 @@ Built-in → `allow`; community/external → `ask`; skills with a `scripts/` dir
 OPENCORVUS_DISABLE_EXTERNAL_SKILLS=1
 ```
 
-Skips `.claude/` and `.agents/` discovery. Does not affect `skills.paths` or `skills.urls` (`src/flag/flag.ts:134-139`).
+Skips `.claude/` and `.agents/` discovery. Does not affect `skills.paths` or `skills.urls` (`src/flag/flag.ts`).

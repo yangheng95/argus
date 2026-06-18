@@ -3,6 +3,9 @@ import { Database } from "@/storage/db"
 import { EngineArtifactTable, type EngineArtifactKind, type EngineMetadata } from "@/engine/engine.sql"
 import { Identifier } from "@/id/id"
 import { processOwner } from "./lease"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "engine.tool-ownership" })
 
 export type OrchestratorToolOwnershipScope = "task" | "goal"
 export type OrchestratorToolOwnershipOutcome = "completed" | "failed" | "cancelled"
@@ -122,6 +125,16 @@ export function completeOrchestratorToolOwnership(input: {
       ...(input.error ? { error: input.error } : {}),
     },
   })
+  void import("@/engine/queue")
+    .then(({ drainQueuedTaskEventIfUnowned }) => {
+      drainQueuedTaskEventIfUnowned(input.taskID)
+    })
+    .catch((error) => {
+      log.error("failed to drain queued task event after orchestrator tool ownership completion", {
+        taskID: input.taskID,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
 }
 
 export function listLatestOrchestratorToolOwnership(taskID: string): OrchestratorToolOwnershipRow[] {

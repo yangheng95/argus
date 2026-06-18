@@ -139,15 +139,9 @@ export namespace PromptCatalog {
       const configuredPrompt = promptMode === "append" ? (agentCfg?.prompt_append ?? null) : (agentCfg?.prompt ?? null)
       const nativeDefault = agent.native ? Agent.nativeDefaultPrompt(agent.name) : undefined
       const defaultPrompt = nativeDefault ?? agent.prompt ?? ""
-      const basePrompt =
-        promptMode === "append"
-          ? defaultPrompt
-          : (configuredPrompt ?? defaultPrompt)
+      const basePrompt = promptMode === "append" ? defaultPrompt : (configuredPrompt ?? defaultPrompt)
       const userAppend = promptMode === "append" ? configuredPrompt : null
-      const editablePrompt =
-        promptMode === "append"
-          ? (userAppend ?? "")
-          : basePrompt
+      const editablePrompt = promptMode === "append" ? (userAppend ?? "") : basePrompt
       const profilePrompt = PromptProfile.overlayFor(agent.name, cfg) ?? null
       const effectivePrompt = PromptProfile.composeAgentPrompt({
         agentID: agent.name,

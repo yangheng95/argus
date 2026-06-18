@@ -161,11 +161,17 @@ function defaultCollisionToolCallID(toolCallID: string, salt: number): string {
 }
 
 function mistralToolCallIDCandidate(toolCallID: string): string {
-  return toolCallID.replace(/[^a-zA-Z0-9]/g, "").substring(0, 9).padEnd(9, "0")
+  return toolCallID
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .substring(0, 9)
+    .padEnd(9, "0")
 }
 
 function mistralCollisionToolCallID(toolCallID: string, salt: number): string {
-  const prefix = toolCallID.replace(/[^a-zA-Z0-9]/g, "").substring(0, 4).padEnd(4, "0")
+  const prefix = toolCallID
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .substring(0, 4)
+    .padEnd(4, "0")
   return `${prefix}${stableBase36(`${toolCallID}:${salt}`).slice(0, 5).padStart(5, "0")}`.substring(0, 9)
 }
 

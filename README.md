@@ -6,7 +6,7 @@
 
 <p align="center"><em>An open-source harness for AI coding agents</em></p>
 
-Coding agents are powerful, but raw model output is unreliable. OpenCorvus is the **harness** that turns one-shot coding agents into durable, evaluator-driven development workflows. You hand it a task. It promotes the request into an executable spec, decomposes it into goals, plans the execution, dispatches a coding agent, evaluates the acceptance against the spec, and either completes, retries, or replans — autonomously.
+Coding agents are powerful, but raw model output is unreliable. OpenCorvus is the **harness** that turns one-shot coding agents into durable, evidence-driven development workflows. You hand it a task. It captures requirements, decomposes them into independently verifiable goals, dispatches build agents, reviews the result with integrity evidence, and keeps iterating until the acceptance contract is satisfied or a real blocker is surfaced.
 
 ### Why a Harness
 
@@ -14,51 +14,50 @@ A coding agent writes code. A harness makes sure the code is correct.
 
 Without a harness, you get a single attempt with no structured verification. With OpenCorvus, every task goes through a multi-agent pipeline where each stage has a clear contract:
 
-- **Spec agent** — researches the codebase and turns a vague request into a precise, testable specification
+- **Requirements agent** — turns a vague request into bounded, testable requirements and foundational decisions
 - **Architect agent** — analyzes boundaries and decomposes the spec into at least two modest, independently verifiable implementation goals
-- **Planning tool role** — expands goals into an execution plan with subtasks, risks, and assumptions
 - **Executor** — dispatches to OpenCorvus, Codex, or Claude Code against the real repo
-- **Acceptance review** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `Playwright`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
-- **Acceptance review** — performs end-to-end verification before publishing
+- **Integrity review** — consolidates build evidence, specialist checks, runtime/visual evidence, and LLM review into the final workflow verdict
 
 The result is **delegated development**: durable task orchestration with SQLite state persistence, scoped project memory shared across sessions, human-in-the-loop permission handling, and evaluator-driven retry loops — accessible from the headless HTTP API, overlay UI, Slack, or any of the 14 channel adapters in `packages/channel-runtime`.
 
 ### How It Works
 
 ```
-task → spec → goals → plan → execute → evaluate ─┬→ deliver → done
-                        ↑                         │
-                        └── replan (on failure) ───┘
+task → requirements → goals → build → integrity ─┬→ done
+                         ↑                       │
+                         └── correction evidence ┘
 ```
 
 1. Accept a task from API, Slack, or a local session.
-2. **Spec**: research, clarify, and write the specification with acceptance criteria.
+2. **Requirements**: research, clarify, and write bounded requirements with acceptance criteria.
 3. **Goals**: analyze boundaries, then decompose the spec into at least two independent implementation goals.
-4. **Plan**: expand goals into an execution plan with subtasks and risks.
-5. **Execute**: dispatch a coding agent against the repo.
-6. **Evaluate**: run checks with `spec check` enabled by default.
-7. Accept only when required spec items are satisfied accurately and completely; otherwise retry the same plan or create a new plan version until the budget is exhausted.
+4. **Build**: dispatch a coding agent against the repo.
+5. **Review**: run targeted checks and integrity review against the requirement/goal evidence.
+6. Accept only when required items are satisfied accurately and completely; otherwise use the evidence to dispatch the next correction.
 
 ### Installation
 
 ```bash
-# Install script
-curl -fsSL https://opencorvus.ai/install | bash
-
-# Package managers
-npm i -g opencorvus-ai@latest     # or bun/pnpm/yarn
-brew install yangheng95/tap/opencorvus
-scoop install opencorvus
-choco install opencorvus
+git clone https://github.com/yangheng95/opencorvus.git
+cd opencorvus
+bun install
+bun run --cwd packages/opencorvus build
+bun packages/opencorvus/src/index.ts doctor
 ```
+
+The repository-local, verifiable install path is the source build above. Do not
+publish install-script or package-manager commands here until the repository owns
+an automated verification check for that distribution channel.
 
 ### Quick Start
 
 Start the headless server in the repository you want OpenCorvus to work on:
 
 ```bash
+OPENCORVUS_SOURCE=/path/to/opencorvus/packages/opencorvus/src/index.ts
 cd /path/to/your/repo
-opencorvus serve
+bun "$OPENCORVUS_SOURCE" serve
 ```
 
 Open the local overlay UI at `http://127.0.0.1:7878/ui/`, then create a task over HTTP:
@@ -162,7 +161,7 @@ No. The repo includes a headless API server, overlay UI, GitHub Action, and a br
 
 #### Does it keep state between runs?
 
-Yes. Tasks, plans, runs, interactions, deliveries, evaluations, session state, and project knowledge are persisted locally in SQLite.
+Yes. Tasks, requirements, goals, runs, interactions, artifacts, acceptance evidence, session state, and project knowledge are persisted locally in SQLite.
 OpenCorvus now keeps both session-scoped and global memory/preferences. New memory and preference entries default to global so they are available across future sessions in the same project.
 
 #### Is it finished?

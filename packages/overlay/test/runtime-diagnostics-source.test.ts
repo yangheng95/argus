@@ -7,7 +7,7 @@ describe("overlay runtime diagnostics", () => {
   test("global runtime failures are routed to AppLog and notifications", () => {
     expect(source).toContain("function reportOverlayRuntimeError")
     expect(source).toContain('AppLog.error("runtime", scope')
-    expect(source).toContain("notifyError({")
+    expect(source).toContain("notificationID: `runtime:${scope}`")
     expect(source).toContain('"error"')
     expect(source).toContain('"unhandledrejection"')
   })
@@ -17,8 +17,8 @@ describe("overlay runtime diagnostics", () => {
     expect(source).toContain(
       "const diagnosticDetails = details ? `source: ${scope}\\n\\n${details}` : `source: ${scope}`",
     )
-    expect(source).toContain("message,")
-    expect(source).toContain("details: diagnosticDetails")
+    expect(source).toContain("notificationMessage: message")
+    expect(source).toContain("notificationDetails: diagnosticDetails")
     expect(source).not.toContain("message: scope")
   })
 

@@ -7,7 +7,7 @@ OpenCorvus 的 LLM 抽象构建在 [Vercel AI SDK](https://sdk.vercel.ai/) 之�
 
 ## 内置 provider
 
-从 `packages/opencorvus/package.json:52-90` 实际声明的依赖：
+从 `packages/opencorvus/package.json` 实际声明的依赖：
 
 | Provider                                                                                | 包                                                     |
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
@@ -73,20 +73,20 @@ export DASHSCOPE_API_KEY=sk-...             # 标准 intl
 
 OpenCorvus 在三种场景选模型：
 
-| 场景              | 配置位置                                                                                  |
-| ----------------- | ----------------------------------------------------------------------------------------- |
-| 默认执行模型      | `model` 字段                                                                              |
-| 按 agent 模型     | `agent.<name>.model`（独立设置，见 `packages/opencorvus/src/config/config.ts:1053-1067`） |
-| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL`                                                                 |
+| 场景              | 配置位置                                                                        |
+| ----------------- | ------------------------------------------------------------------------------- |
+| 默认执行模型      | `model` 字段                                                                    |
+| 按 agent 模型     | `agent.<name>.model`（独立设置，见 `packages/opencorvus/src/config/config.ts`） |
+| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL`                                                       |
 
 计划阶段与执行阶段分离的目的：**用强但慢的模型规划，用快但够用的模型执行**。典型配置：
 
 ```jsonc
 {
   "model": "openai/gpt-5.5",
-  "assistant": {
+  "agent": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "planner": { "model": "anthropic/claude-sonnet-4-6" },
+    "architect": { "model": "anthropic/claude-sonnet-4-6" },
   },
 }
 ```

@@ -28,7 +28,7 @@ The experiment in `.scratch/economy-tv-compare-20260615085702` compared TradingV
 1. The feature belongs to `BrowserEvidenceRunner`, not to Build, Browser MCP, Visual QA, or overlay.
 2. MCP may expose a convenience tool only as a runner client. MCP-local pages, screenshots, logs, monitor frames, and attachments are not task evidence.
 3. Build must see the generated side-by-side image in the same agent turn that requested comparison, before reporting success.
-3a. When source/reference evidence and a local preview target both exist, Build should use region comparison before standalone screenshots for the changed surface. Standalone screenshots are surrounding context; they are not the primary repair-loop evidence for reference-parity regions with bindings.
+   3a. When source/reference evidence and a local preview target both exist, Build should use region comparison before standalone screenshots for the changed surface. Standalone screenshots are surrounding context; they are not the primary repair-loop evidence for reference-parity regions with bindings.
 4. Source region authority comes from frontend-design/source-capture evidence, preferably `SourceRegion.bbox`. Build must not invent source bounding boxes during implementation.
 5. Local region authority comes from implementation-owned bindings such as `data-oc-region`, `data-testid`, role/name, or a declared component selector. No `nth-child`, broad text search, or screenshot matching fallback is allowed.
 6. Comparison scores are evidence only. They do not become a workflow gate, host gate, or pass/fail shortcut.
@@ -257,19 +257,19 @@ The report explains why something blocks production. The manifest explains where
 
 ## Call Point Inventory
 
-| Surface | Current behavior | Required change |
-| --- | --- | --- |
-| `packages/opencorvus/src/browser-preview/evidence-runner.ts` | Supports `preview-capture` manifest and screenshots. | Add `reference-comparison` operation with source crop, implementation crop, side-by-side, optional diff, and region diagnostics. |
-| `packages/opencorvus/src/browser-preview/verification-core.ts` | Persists single capture by viewport. | Add comparison verification path or a sibling module that persists operation-aware region evidence. |
-| `packages/opencorvus/src/browser-preview/persist.ts` | Evidence payload is target/viewport/capture oriented. | Add operation kind, region ID, manifest path, artifact selector support. |
-| `packages/opencorvus/src/server/routes/browser-preview.ts` | Has `/capture` and `/evidence/:id/capture.png`. | Add `/compare` and artifact read route. |
-| `packages/opencorvus/src/tool/browser-preview.ts` | Starts preview service and persists target. | Keep as target owner; do not add comparison here unless it delegates to backend route. |
-| Build agent tools | Build can start preview but has no direct runner-backed compare tool. | Add `browser_preview_compare_region` as runner client. |
-| Browser MCP tools | Can screenshot/observe MCP-local pages. | Do not persist MCP-local outputs as task evidence; optional MCP tool must call backend compare route. |
-| Visual QA schema | Supports visual evidence and production blockers. | Add or document comparison collage evidence refs. |
-| `VisualEvidenceBundle` | Has reference/rendered/evaluation/vision/regions, no collage. | Add comparison artifact section. |
-| Overlay preview panel | Displays preview screenshots and live view. | Display comparison artifacts from manifest; iframe remains display-only. |
-| OpenAPI/SDK | Knows current capture route. | Regenerate route types for compare and artifact read. |
+| Surface                                                        | Current behavior                                                      | Required change                                                                                                                  |
+| -------------------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/browser-preview/evidence-runner.ts`   | Supports `preview-capture` manifest and screenshots.                  | Add `reference-comparison` operation with source crop, implementation crop, side-by-side, optional diff, and region diagnostics. |
+| `packages/opencorvus/src/browser-preview/verification-core.ts` | Persists single capture by viewport.                                  | Add comparison verification path or a sibling module that persists operation-aware region evidence.                              |
+| `packages/opencorvus/src/browser-preview/persist.ts`           | Evidence payload is target/viewport/capture oriented.                 | Add operation kind, region ID, manifest path, artifact selector support.                                                         |
+| `packages/opencorvus/src/server/routes/browser-preview.ts`     | Has `/capture` and `/evidence/:id/capture.png`.                       | Add `/compare` and artifact read route.                                                                                          |
+| `packages/opencorvus/src/tool/browser-preview.ts`              | Starts preview service and persists target.                           | Keep as target owner; do not add comparison here unless it delegates to backend route.                                           |
+| Build agent tools                                              | Build can start preview but has no direct runner-backed compare tool. | Add `browser_preview_compare_region` as runner client.                                                                           |
+| Browser MCP tools                                              | Can screenshot/observe MCP-local pages.                               | Do not persist MCP-local outputs as task evidence; optional MCP tool must call backend compare route.                            |
+| Visual QA schema                                               | Supports visual evidence and production blockers.                     | Add or document comparison collage evidence refs.                                                                                |
+| `VisualEvidenceBundle`                                         | Has reference/rendered/evaluation/vision/regions, no collage.         | Add comparison artifact section.                                                                                                 |
+| Overlay preview panel                                          | Displays preview screenshots and live view.                           | Display comparison artifacts from manifest; iframe remains display-only.                                                         |
+| OpenAPI/SDK                                                    | Knows current capture route.                                          | Regenerate route types for compare and artifact read.                                                                            |
 
 ## Test Plan
 

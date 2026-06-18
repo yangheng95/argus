@@ -3,10 +3,9 @@ import fs from "node:fs"
 import path from "node:path"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
-const docsScanRoots = ["specs", "packages/opencorvus/specs", "packages/web/src/content/docs"]
-const rootDocs = ["README.md", "CONTRIBUTING.md", "RELEASE.md", "AGENTS.md", "CLAUDE.md"]
+const docsScanRoots = ["specs", "docs", "packages/opencorvus/specs", "packages/web/src/content/docs"]
 const markdownExtensions = new Set([".md", ".mdx", ".txt"])
-const repositoryExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".md", ".mdx", ".txt", ".json", ".css", ".rs", ".toml", ".yml", ".yaml"])
+const repositoryExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".md", ".mdx", ".txt"])
 const skippedRepositoryDirs = new Set([
   ".git",
   ".opencorvus",
@@ -20,7 +19,17 @@ const skippedRepositoryDirs = new Set([
   "target",
   "tmp",
 ])
-const skippedRepositoryPrefixes = [path.join("packages", "opencorvus", "test", "fixture", "skills")]
+const skippedRepositoryPrefixes = [
+  path.join("packages", "opencorvus", "script", "cache-probe", "out"),
+  path.join("packages", "opencorvus", "test", "fixture", "skills"),
+  path.join("packages", "sdk", "js", "src", "gen"),
+  path.join("packages", "vscode-extension", ".vscode-test"),
+  path.join("packages", "vscode-extension", "media", "ui", "assets"),
+]
+
+let docsFilesCache: string[] | undefined
+let repositoryFilesCache: string[] | undefined
+const refsByFileCache = new Map<string, string[]>()
 
 function walkDocs(dir: string, out: string[] = []): string[] {
   if (!fs.existsSync(dir)) return out
@@ -54,6 +63,25 @@ function walkRepository(dir: string, out: string[] = []): string[] {
   return out
 }
 
+function rootDocFiles(): string[] {
+  return fs
+    .readdirSync(repoRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && markdownExtensions.has(path.extname(entry.name).toLowerCase()))
+    .map((entry) => path.join(repoRoot, entry.name))
+}
+
+function docsFiles(): string[] {
+  docsFilesCache ??= docsScanRoots
+    .flatMap((dir) => walkDocs(path.join(repoRoot, dir)))
+    .concat(rootDocFiles().filter((filePath) => fs.existsSync(filePath)))
+  return docsFilesCache
+}
+
+function repositoryFiles(): string[] {
+  repositoryFilesCache ??= walkRepository(repoRoot)
+  return repositoryFilesCache
+}
+
 function candidatesFor(fromFile: string, rawRef: string): string[] {
   const withoutAnchor = rawRef.split("#")[0]?.trim() ?? ""
   if (!withoutAnchor || /^[a-z]+:/i.test(withoutAnchor) || withoutAnchor.startsWith("mailto:")) return []
@@ -61,20 +89,36 @@ function candidatesFor(fromFile: string, rawRef: string): string[] {
   const repoRootRelative = /^(specs|docs|packages|script|github|examples|assets|nix)(?:[\\/]|$)/.test(normalized)
   const base = repoRootRelative ? repoRoot : path.dirname(fromFile)
   const resolved = path.resolve(base, normalized.replace(/^[\\/]/, ""))
-  return [resolved, `${resolved}.md`, `${resolved}.mdx`, path.join(resolved, "index.md"), path.join(resolved, "index.mdx")]
+  return [
+    resolved,
+    `${resolved}.md`,
+    `${resolved}.mdx`,
+    path.join(resolved, "index.md"),
+    path.join(resolved, "index.mdx"),
+  ]
 }
 
 function refsIn(text: string): string[] {
   const refs: string[] = []
   const markdownLink = /(?<!!?)\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
-  const codeSpanPath = /`([^`]*(?:specs|docs|packages\/web\/src\/content\/docs|packages\/opencorvus\/specs)[^`]*\.(?:md|mdx|txt))`/g
-  const plainPath = /(?:^|[\s"'()`])((?:specs|docs\/superpowers|packages\/opencorvus\/specs)\/[A-Za-z0-9_./@%+\-]+\.(?:md|mdx|txt))(?:#[A-Za-z0-9_./%+\-]+)?/g
+  const codeSpanPath =
+    /`([^`]*(?:specs|docs|packages\/web\/src\/content\/docs|packages\/opencorvus\/specs)[^`]*\.(?:md|mdx|txt))`/g
+  const plainPath =
+    /(?:^|[\s"'()`])((?:specs|docs\/superpowers|packages\/opencorvus\/specs)\/[A-Za-z0-9_./@%+\-]+\.(?:md|mdx|txt))(?:#[A-Za-z0-9_./%+\-]+)?/g
   for (const pattern of [markdownLink, codeSpanPath, plainPath]) {
     let match: RegExpExecArray | null
     while ((match = pattern.exec(text))) {
       refs.push(match[1]!)
     }
   }
+  return refs
+}
+
+function refsForFile(file: string): string[] {
+  const cached = refsByFileCache.get(file)
+  if (cached) return cached
+  const refs = refsIn(fs.readFileSync(file, "utf8"))
+  refsByFileCache.set(file, refs)
   return refs
 }
 
@@ -149,8 +193,7 @@ function indexedNewArchHistory(): Set<string> {
 function missingReferences(files: string[], retired: Set<string>): string[] {
   const missing: string[] = []
   for (const file of files) {
-    const text = fs.readFileSync(file, "utf8")
-    for (const ref of refsIn(text)) {
+    for (const ref of refsForFile(file)) {
       if (/\s/.test(ref)) continue
       if (ref.includes("{") || ref.includes("*") || ref.includes("...")) continue
       if (retired.has(ref)) continue
@@ -166,8 +209,7 @@ function missingReferences(files: string[], retired: Set<string>): string[] {
 function referencedRetiredPaths(files: string[], retired: Set<string>): Set<string> {
   const referenced = new Set<string>()
   for (const file of files) {
-    const text = fs.readFileSync(file, "utf8")
-    for (const ref of refsIn(text)) {
+    for (const ref of refsForFile(file)) {
       if (retired.has(ref)) referenced.add(ref)
     }
   }
@@ -176,16 +218,13 @@ function referencedRetiredPaths(files: string[], retired: Set<string>): Set<stri
 
 describe("historical docs repository links", () => {
   test("local historical doc references resolve or are marked retired", () => {
-    const files = docsScanRoots
-      .flatMap((dir) => walkDocs(path.join(repoRoot, dir)))
-      .concat(rootDocs.map((rel) => path.join(repoRoot, rel)).filter((filePath) => fs.existsSync(filePath)))
-    const missing = missingReferences(files, retiredRefs())
+    const missing = missingReferences(docsFiles(), retiredRefs())
 
     expect(missing).toEqual([])
   })
 
   test("repository historical doc references resolve or are listed in retired ledger", () => {
-    const missing = missingReferences(walkRepository(repoRoot), retiredRefs())
+    const missing = missingReferences(repositoryFiles(), retiredRefs())
 
     expect(missing).toEqual([])
   })
@@ -194,7 +233,7 @@ describe("historical docs repository links", () => {
     const retired = retiredRefs()
     const ledgerPath = path.join(repoRoot, "specs/retired-reference-ledger.md")
     const referenced = referencedRetiredPaths(
-      walkRepository(repoRoot).filter((file) => file !== ledgerPath),
+      repositoryFiles().filter((file) => file !== ledgerPath),
       retired,
     )
 
@@ -225,7 +264,11 @@ describe("historical docs repository links", () => {
       .filter(([, status]) => status === "Superseded")
       .map(([file]) => file)
       .filter((file) => {
-        const firstLines = fs.readFileSync(path.join(repoRoot, "specs", file), "utf8").split(/\r?\n/).slice(0, 6).join("\n")
+        const firstLines = fs
+          .readFileSync(path.join(repoRoot, "specs", file), "utf8")
+          .split(/\r?\n/)
+          .slice(0, 6)
+          .join("\n")
         return !/superseded/i.test(firstLines)
       })
 

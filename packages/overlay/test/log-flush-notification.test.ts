@@ -5,7 +5,9 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 import { AppLog, waitForLogDrain } from "../src/utils/log"
 import { clearNotifications, notificationStore } from "../src/services/notify"
 
-function logTransport(responder: (req: TransportRequest) => TransportResponse<unknown> | Promise<TransportResponse<unknown>>): HostTransport {
+function logTransport(
+  responder: (req: TransportRequest) => TransportResponse<unknown> | Promise<TransportResponse<unknown>>,
+): HostTransport {
   return {
     kind: "browser",
     capabilities: HOST_CAPABILITIES.browser,
@@ -20,6 +22,14 @@ function logTransport(responder: (req: TransportRequest) => TransportResponse<un
       throw new Error("not used")
     },
   }
+}
+
+function transportBody(req: TransportRequest): Record<string, unknown> {
+  const body = req.body as { kind?: string; value?: unknown } | undefined
+  if (body?.kind === "json" && body.value && typeof body.value === "object") {
+    return body.value as Record<string, unknown>
+  }
+  throw new Error("expected JSON transport body")
 }
 
 afterEach(async () => {
@@ -68,10 +78,12 @@ test("overlay error logs create notification-center diagnostics through AppLog",
 
 test("overlay log upload failure creates a semantic notification and retries the queued entry", async () => {
   let requests = 0
+  const bodies: Array<Record<string, unknown>> = []
   __setHostTransportForTest(
     logTransport((req) => {
       expect(req.path).toBe("log")
       requests++
+      bodies.push(transportBody(req))
       if (requests === 1) {
         return {
           status: 500,
@@ -93,7 +105,23 @@ test("overlay log upload failure creates a semantic notification and retries the
 
   await waitForLogDrain(2_500)
 
-  expect(requests).toBe(2)
+  expect(requests).toBeGreaterThanOrEqual(3)
+  expect(bodies).toContainEqual(
+    expect.objectContaining({
+      service: "overlay:system",
+      level: "error",
+      message: "Overlay log upload failed",
+    }),
+  )
+  expect(
+    bodies.some((body) => {
+      const extra = body.extra as Record<string, unknown> | undefined
+      return (
+        extra?.notificationID === "system:overlay-log-upload-failed" &&
+        String(extra.notificationDetails || "").includes("LOG_WRITE_FAILED")
+      )
+    }),
+  ).toBe(true)
   const loggedError = notificationStore.items.find(
     (entry) => entry.id === "log:error:unit:cannot persist overlay diagnostics",
   )

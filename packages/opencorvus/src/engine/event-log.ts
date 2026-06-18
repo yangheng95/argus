@@ -1,10 +1,10 @@
 import { mkdirSync, appendFileSync } from "fs"
 import { dirname } from "path"
-import { Bus } from "@/bus"
 import { requireTask } from "@/engine/store"
 import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
+import { ProtocolStore } from "@/protocol/store"
 
 /**
  * Accumulated event logger.
@@ -16,23 +16,23 @@ import { Log } from "@/util/log"
  */
 
 const LOGGED_TYPES = new Set([
-  "engine.task.created",
-  "engine.task.updated",
-  "engine.task.completed",
-  "engine.task.failed",
-  "engine.task.cancelled",
-  "engine.spec.created",
-  "engine.spec.updated",
-  "engine.plan.created",
-  "engine.plan.activated",
-  "engine.run.created",
-  "engine.run.updated",
-  "engine.run.progress",
-  "engine.run.output",
-  "engine.interaction.requested",
-  "engine.interaction.resolved",
-  "engine.acceptance.ready",
-  "engine.evaluation.completed",
+  "task.created",
+  "task.updated",
+  "task.completed",
+  "task.failed",
+  "task.cancelled",
+  "spec.created",
+  "spec.updated",
+  "plan.created",
+  "plan.activated",
+  "run.created",
+  "run.updated",
+  "run.progress",
+  "run.output",
+  "interaction.requested",
+  "interaction.resolved",
+  "acceptance.ready",
+  "evaluation.completed",
 ])
 
 /** run.progress type values that are pure noise */
@@ -73,6 +73,7 @@ type TaskCtx = {
 export namespace EngineEventLog {
   const log = Log.create({ service: "engine.event-log" })
   const tasks = new Map<string, TaskCtx>()
+  let stopProtocolSubscription: (() => void) | undefined
 
   // -- I/O helpers --
 
@@ -203,62 +204,62 @@ export namespace EngineEventLog {
     const ms = Date.now() - ctx.t0
 
     switch (type) {
-      case "engine.task.created":
+      case "task.created":
         tl(ctx, `[${elapsed(ctx)}] TASK created  ${taskID}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, status, summary })
         break
-      case "engine.task.updated":
+      case "task.updated":
         flushStage(ctx)
         ctx.stage = null
         flushTurn(ctx)
         tl(ctx, `[${elapsed(ctx)}] TASK → ${status}  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, status, summary })
         break
-      case "engine.task.completed":
-      case "engine.task.failed":
-      case "engine.task.cancelled": {
-        const verb = type.slice("engine.task.".length).toUpperCase()
+      case "task.completed":
+      case "task.failed":
+      case "task.cancelled": {
+        const verb = type.slice("task.".length).toUpperCase()
         tl(ctx, `[${elapsed(ctx)}] TASK ${verb}  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, status, summary })
         break
       }
-      case "engine.spec.created":
-      case "engine.spec.updated": {
+      case "spec.created":
+      case "spec.updated": {
         const label = type.endsWith("created") ? "SPEC created" : "SPEC updated"
         tl(ctx, `[${elapsed(ctx)}] ${label}  "${clip(summary)}"`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
       }
-      case "engine.plan.created":
+      case "plan.created":
         tl(ctx, `[${elapsed(ctx)}] PLAN created  "${clip(summary)}"`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
-      case "engine.plan.activated":
+      case "plan.activated":
         tl(ctx, `[${elapsed(ctx)}] PLAN ▸ activated`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
-      case "engine.run.created":
+      case "run.created":
         tl(ctx, `[${elapsed(ctx)}] RUN created  ${runID}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, runID, status, summary })
         break
-      case "engine.run.updated":
+      case "run.updated":
         flushTurn(ctx)
         tl(ctx, `[${elapsed(ctx)}] RUN → ${status}  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, runID, status, summary })
         break
-      case "engine.interaction.requested":
+      case "interaction.requested":
         tl(ctx, `[${elapsed(ctx)}] INTERACTION requested  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
-      case "engine.interaction.resolved":
+      case "interaction.resolved":
         tl(ctx, `[${elapsed(ctx)}] INTERACTION resolved  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
-      case "engine.acceptance.ready":
+      case "acceptance.ready":
         tl(ctx, `[${elapsed(ctx)}] ACCEPTANCE ready  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
         break
-      case "engine.evaluation.completed": {
+      case "evaluation.completed": {
         const verdict = String(p.verdict ?? "")
         tl(ctx, `[${elapsed(ctx)}] EVAL completed  verdict=${verdict}  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, verdict, status, summary })
@@ -270,10 +271,11 @@ export namespace EngineEventLog {
   // -- Entry point --
 
   export function init() {
-    Bus.subscribeAll((event: any) => {
+    if (stopProtocolSubscription) return
+    stopProtocolSubscription = ProtocolStore.subscribeEvents((event) => {
       const type = event?.type as string | undefined
       if (!type || !LOGGED_TYPES.has(type)) return
-      const p = event.properties ?? {}
+      const p = event.payload ?? {}
       const taskID = String(p.taskID ?? p.task_id ?? "")
       if (!taskID) return
 
@@ -298,9 +300,15 @@ export namespace EngineEventLog {
 
       const ctx = tasks.get(taskID)!
 
-      if (type === "engine.run.progress") return handleRunProgress(ctx, p)
-      if (type === "engine.run.output") return // text deltas — skip
+      if (type === "run.progress") return handleRunProgress(ctx, p)
+      if (type === "run.output") return // text deltas — skip
       handleMilestone(ctx, type, p)
-    })
+    }, { aggregate: "task" })
+  }
+
+  export function disposeForTest() {
+    stopProtocolSubscription?.()
+    stopProtocolSubscription = undefined
+    tasks.clear()
   }
 }

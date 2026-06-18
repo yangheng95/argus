@@ -63,7 +63,6 @@ export namespace OpencorvusExecutor {
       // tasks that jump the project queue) maps to inner "high".
       priority: input.priority === "critical" ? "high" : input.priority,
     })
-    void TaskQueueService.runNow()
     return {
       sessionID: input.sessionID,
       queueTaskID,

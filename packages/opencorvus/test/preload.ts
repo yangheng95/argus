@@ -7,6 +7,7 @@ import { afterAll } from "bun:test"
 
 // Set XDG env vars FIRST, before any src/ imports
 const dir = path.join(os.tmpdir(), "opencorvus-test-data-" + process.pid)
+await fs.rm(dir, { recursive: true, force: true })
 await fs.mkdir(dir, { recursive: true })
 afterAll(async () => {
   const { Database } = await import("../src/storage/db")

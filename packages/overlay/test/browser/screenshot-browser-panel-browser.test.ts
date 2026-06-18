@@ -85,127 +85,233 @@ function conversationPayload() {
   }
 }
 
-test("right screenshots activity opens grouped thumbnails from the visible card tree", async () => {
-  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
-  assert.equal(typeof globalThis.Bun, "undefined")
-
-  const server = await startBrowserFixture(async (req) => {
-    const url = new URL(req.url)
-    const path = route(url)
-    if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
-    const staticResponse = await overlayStaticResponse(path)
-    if (staticResponse) return staticResponse
-    if (path === "/attachment/project/screenshot.png") {
-      return new Response(PNG_BYTES, { headers: { "content-type": "image/png" } })
-    }
-    if (path === "/global/health") return json({ version: "1.2.3" })
-    if (path === "/tasks" || path === "/global/tasks") return json({ tasks: [{ task: TASK }] })
-    if (path === "/task/tsk_screenshot_browser/conversation") return json(conversationPayload())
-    if (path === "/task/tsk_screenshot_browser/events") {
-      return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
-    }
-    if (path === "/path") return json({ directory: TASK.directory })
-    if (path === "/vcs") {
-      return json({
-        branch: "dev",
-        clean: true,
-        dirty: false,
-        staged: 0,
-        modified: 0,
-        untracked: 0,
-        conflicts: 0,
-        ahead: 0,
-        behind: 0,
-      })
-    }
-    if (path === "/provider") return json({ all: [], connected: [], default: {} })
-    if (path === "/provider/auth") return json({})
-    if (path === "/config/providers") return json({ providers: [] })
-    if (path === "/config") return json({ model: "" })
-    if (path === "/agent") return json([])
-    if (path === "/channel") return json([])
-    if (path === "/executor") return json([])
-    if (path === "/mission") return json([])
-    if (path === "/session") return json([])
-    if (path === "/coding/sessions") return json({ sessions: [] })
-    if (path === "/skill/installed" || path === "/skill") return json([])
-    if (path === "/mcp") return json({})
-    if (path === "/file") return json({ entries: [] })
-    if (path === "/find/file") return json({ entries: [] })
-    return json({})
-  })
-
-  const browser = await launchBrowser(["--disable-dev-shm-usage"])
-  try {
-    const page = await browser.newPage()
-    await page.setViewport({ width: 1440, height: 900 })
-    await page.evaluateOnNewDocument((serverUrl) => {
-      localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
-      localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.setItem("oc_workspace_task", "tsk_screenshot_browser")
-      localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
-      localStorage.setItem("oc_right_panel_collapsed", "false")
-    }, server.origin)
-
-    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
-    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
-    await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']")
-    await page.waitForSelector(".screenshot-browser-card")
-    await page.waitForFunction(() => {
-      const img = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
-      return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
-    })
-
-    const state = await page.evaluate(() => ({
-      screenshotsOpen: document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open,
-      buttonActive: document.querySelector<HTMLElement>(
-        '[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]',
-      )?.dataset.active,
-      title: document.querySelector<HTMLElement>(".screenshot-browser-panel .oc-surface-header__title")
-        ?.textContent,
-      groupRole: document.querySelector<HTMLElement>(".screenshot-browser-group")?.dataset.agentRole,
-      groupTitle: document.querySelector<HTMLElement>(".screenshot-browser-group__header span")?.textContent,
-      cardTitle: document.querySelector<HTMLElement>(".screenshot-browser-card__body strong")?.textContent,
-      cardCount: document.querySelectorAll(".screenshot-browser-card").length,
-    }))
-
-    assert.deepEqual(state, {
-      screenshotsOpen: "true",
-      buttonActive: "true",
-      title: "Screenshots",
-      groupRole: "visual-qa",
-      groupTitle: "Visual QA",
-      cardTitle: "visual-check.png",
-      cardCount: 1,
-    })
-
-    const thumbLayout = await page.evaluate(() => {
-      const trigger = document.querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
-      const image = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
-      const triggerRect = trigger?.getBoundingClientRect()
-      const imageRect = image?.getBoundingClientRect()
-      return {
-        triggerWidth: triggerRect?.width ?? 0,
-        triggerHeight: triggerRect?.height ?? 0,
-        imageWidth: imageRect?.width ?? 0,
-        imageHeight: imageRect?.height ?? 0,
-        naturalWidth: image?.naturalWidth ?? 0,
-        naturalHeight: image?.naturalHeight ?? 0,
-      }
-    })
-    assert.ok(thumbLayout.triggerWidth >= 120, JSON.stringify(thumbLayout))
-    assert.ok(thumbLayout.triggerHeight >= 80, JSON.stringify(thumbLayout))
-    assert.ok(thumbLayout.imageWidth >= thumbLayout.triggerWidth - 1, JSON.stringify(thumbLayout))
-    assert.ok(thumbLayout.imageHeight >= thumbLayout.triggerHeight - 1, JSON.stringify(thumbLayout))
-
-    const screenshotPath = resolve(".scratch/screenshot-browser-panel-browser.png")
-    mkdirSync(resolve(".scratch"), { recursive: true })
-    const screenshot = await page.screenshot({ fullPage: false })
-    assert.ok(screenshot.length > 0)
-    writeFileSync(screenshotPath, screenshot)
-  } finally {
-    await browser.close()
-    await server.close()
+function promptProfileCatalog() {
+  return {
+    active: "frontend",
+    project_active: "frontend",
+    session_active: null,
+    default: "frontend",
+    targets: [],
+    profiles: [
+      {
+        id: "frontend",
+        label: "Frontend",
+        description: "Frontend profile.",
+        built_in: true,
+        editable: false,
+        agents: {},
+      },
+    ],
   }
-}, { timeout: 180_000 })
+}
+
+test(
+  "right screenshots activity opens grouped thumbnails from the visible card tree",
+  async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
+    const unexpectedRequests: string[] = []
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/favicon.ico") return new Response(null, { status: 204 })
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/attachment/project/screenshot.png") {
+        return new Response(PNG_BYTES, { headers: { "content-type": "image/png" } })
+      }
+      if (path === "/global/health") return json({ version: "1.2.3" })
+      if (path === "/global/projects/discover") return json([])
+      if (path === "/project/current/worktrees") return json([])
+      if (path === "/tasks" || path === "/global/tasks") return json({ tasks: [{ task: TASK }] })
+      if (path === "/task/tsk_screenshot_browser/board") {
+        return json(conversationPayload().board, { headers: { etag: '"board-screenshot-browser"' } })
+      }
+      if (path === "/task/tsk_screenshot_browser/operator-model-context") return json({ selected: null, candidates: [] })
+      if (path === "/task/tsk_screenshot_browser/conversation") return json(conversationPayload())
+      if (path === "/task/tsk_screenshot_browser/transcript") return json(conversationPayload().transcript)
+      if (path === "/control/timeline") return json([])
+      if (path === "/task/tsk_screenshot_browser/browser-preview") {
+        return json({
+          taskID: "tsk_screenshot_browser",
+          kind: "missing",
+          status: "missing",
+          projectRoot: TASK.directory,
+          viewports: [],
+          diagnostics: ["No browser preview target for screenshot browser fixture."],
+          candidates: [],
+          source: "none",
+        })
+      }
+      if (path === "/task/tsk_screenshot_browser/trace") {
+        return json({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace", enabled: true })
+      }
+      if (path === "/task/tsk_screenshot_browser/events") {
+        return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+      }
+      if (path === "/task/events") {
+        return new Response("", { headers: { "content-type": "text/event-stream; charset=utf-8" } })
+      }
+      if (path === "/path") return json({ directory: TASK.directory })
+      if (path === "/vcs") {
+        return json({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      }
+      if (path === "/provider") return json({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return json({})
+      if (path === "/config/providers") return json({ providers: [] })
+      if (path === "/config/prompt-profile") return json(promptProfileCatalog())
+      if (path === "/config") return json({ model: "" })
+      if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json({ profiles: [] })
+      if (path === "/agent") return json([])
+      if (path === "/channel") return json([])
+      if (path === "/executor") return json([])
+      if (path === "/mission") return json([])
+      if (path === "/session") return json([])
+      if (path === "/coding/sessions") return json({ sessions: [] })
+      if (path === "/skill/installed" || path === "/skill") return json([])
+      if (path === "/skill/market") return json([])
+      if (path === "/mcp") return json({})
+      if (path === "/panel/knowledge/memory") return json([])
+      if (path === "/panel/knowledge/preference") return json([])
+      if (path === "/file") return json({ entries: [] })
+      if (path === "/find/file") return json({ entries: [] })
+      if (path === "/log" && req.method === "POST") return json({ ok: true })
+      unexpectedRequests.push(`${req.method} ${path}`)
+      return json({ error: "unexpected screenshot browser fixture request", path }, { status: 404 })
+    })
+
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 1440, height: 900 })
+      await page.evaluateOnNewDocument((serverUrl) => {
+        localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_server_url", serverUrl)
+        localStorage.setItem("oc_workspace_task", "tsk_screenshot_browser")
+        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_right_panel_collapsed", "false")
+      }, server.origin)
+
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']")
+      await page.waitForSelector(".screenshot-browser-card")
+      await page.waitForFunction(() => {
+        const img = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
+        return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+      })
+
+      const state = await page.evaluate(() => ({
+        screenshotsOpen: document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open,
+        buttonActive: document.querySelector<HTMLElement>(
+          '[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]',
+        )?.dataset.active,
+        title: document.querySelector<HTMLElement>(".screenshot-browser-panel .oc-surface-header__title")?.textContent,
+        groupRole: document.querySelector<HTMLElement>(".screenshot-browser-group")?.dataset.agentRole,
+        groupTitle: document.querySelector<HTMLElement>(".screenshot-browser-group__header span")?.textContent,
+        cardTitle: document.querySelector<HTMLElement>(".screenshot-browser-card__body strong")?.textContent,
+        cardCount: document.querySelectorAll(".screenshot-browser-card").length,
+      }))
+
+      assert.deepEqual(state, {
+        screenshotsOpen: "true",
+        buttonActive: "true",
+        title: "Screenshots",
+        groupRole: "visual-qa",
+        groupTitle: "Visual QA",
+        cardTitle: "visual-check.png",
+        cardCount: 1,
+      })
+
+      const thumbLayout = await page.evaluate(() => {
+        const trigger = document.querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
+        const image = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
+        const triggerRect = trigger?.getBoundingClientRect()
+        const imageRect = image?.getBoundingClientRect()
+        return {
+          triggerWidth: triggerRect?.width ?? 0,
+          triggerHeight: triggerRect?.height ?? 0,
+          imageWidth: imageRect?.width ?? 0,
+          imageHeight: imageRect?.height ?? 0,
+          naturalWidth: image?.naturalWidth ?? 0,
+          naturalHeight: image?.naturalHeight ?? 0,
+        }
+      })
+      assert.ok(thumbLayout.triggerWidth >= 120, JSON.stringify(thumbLayout))
+      assert.ok(thumbLayout.triggerHeight >= 80, JSON.stringify(thumbLayout))
+      assert.ok(thumbLayout.imageWidth >= thumbLayout.triggerWidth - 1, JSON.stringify(thumbLayout))
+      assert.ok(thumbLayout.imageHeight >= thumbLayout.triggerHeight - 1, JSON.stringify(thumbLayout))
+
+      const screenshotPath = resolve(".scratch/screenshot-browser-panel-browser.png")
+      mkdirSync(resolve(".scratch"), { recursive: true })
+      const screenshot = await page.screenshot({ fullPage: false })
+      assert.ok(screenshot.length > 0)
+      writeFileSync(screenshotPath, screenshot)
+
+      await page.evaluate(() => {
+        const workbench = document.getElementById("centerWorkbench")
+        const screenshots = document.getElementById("centerWorkbenchScreenshots")
+        workbench?.style.setProperty("flex", "0 0 128px")
+        workbench?.style.setProperty("width", "128px")
+        screenshots?.style.setProperty("flex", "0 0 128px")
+        screenshots?.style.setProperty("width", "128px")
+      })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      const narrowLayout = await page.evaluate(() => {
+        const box = (selector: string) => {
+          const node = document.querySelector<HTMLElement>(selector)
+          if (!node) return null
+          const rect = node.getBoundingClientRect()
+          return {
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+            scrollWidth: node.scrollWidth,
+            clientWidth: node.clientWidth,
+          }
+        }
+        const panel = box("#centerWorkbenchScreenshots")
+        const grid = box(".screenshot-browser-grid")
+        const card = box(".screenshot-browser-card")
+        const thumb = box(".screenshot-browser__thumb-trigger")
+        return {
+          bodyOverflowX: document.documentElement.scrollWidth - window.innerWidth,
+          panel,
+          grid,
+          card,
+          thumb,
+          cardEscaped: !!panel && !!card && (card.left < panel.left - 1 || card.right > panel.right + 1),
+          thumbEscaped: !!panel && !!thumb && (thumb.left < panel.left - 1 || thumb.right > panel.right + 1),
+        }
+      })
+      assert.ok(narrowLayout.panel?.width && narrowLayout.panel.width <= 130, JSON.stringify(narrowLayout))
+      assert.ok((narrowLayout.grid?.scrollWidth ?? 0) <= (narrowLayout.grid?.clientWidth ?? 0) + 1, JSON.stringify(narrowLayout))
+      assert.equal(narrowLayout.cardEscaped, false, JSON.stringify(narrowLayout))
+      assert.equal(narrowLayout.thumbEscaped, false, JSON.stringify(narrowLayout))
+      assert.ok(narrowLayout.bodyOverflowX <= 1, JSON.stringify(narrowLayout))
+
+      const narrowScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-narrow.png")
+      const narrowScreenshot = await page.screenshot({ fullPage: false })
+      assert.ok(narrowScreenshot.length > 0)
+      writeFileSync(narrowScreenshotPath, narrowScreenshot)
+      assert.deepEqual(unexpectedRequests, [])
+    } finally {
+      await browser.close()
+      await server.close()
+    }
+  },
+  { timeout: 180_000 },
+)

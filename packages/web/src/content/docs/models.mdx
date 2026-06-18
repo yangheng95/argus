@@ -7,11 +7,11 @@ OpenCorvus picks a model in three scenarios; configure each independently. See [
 
 ## Three knobs
 
-| Scenario                          | Where to set                                                                                                    |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Default execution model           | `model` field in [config](/docs/config/)                                                                        |
-| Per-agent model                   | `agent.<name>.model` (see `packages/opencorvus/src/config/config.ts:1053-1067`, `1191`, `1232`, `1239`, `1246`) |
-| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` env                                                                                   |
+| Scenario                          | Where to set                                                          |
+| --------------------------------- | --------------------------------------------------------------------- |
+| Default execution model           | `model` field in [config](/docs/config/)                              |
+| Per-agent model                   | `agent.<name>.model` (see `packages/opencorvus/src/config/config.ts`) |
+| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` env                                         |
 
 Example splitting plan vs execute:
 
@@ -20,13 +20,13 @@ Example splitting plan vs execute:
   "model": "openai/gpt-5.5",
   "agent": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "planner": { "model": "anthropic/claude-sonnet-4-6" },
+    "architect": { "model": "anthropic/claude-sonnet-4-6" },
     "frontend-design": { "model": "anthropic/claude-sonnet-4-6" },
   },
 }
 ```
 
-The `model` key per agent is read by `Agent.state()` in `packages/opencorvus/src/agent/agent.ts:480` (`Provider.parseModel(value.model)`). Step / skill knobs for the same agents live separately under `assistant.<name>` — see [Agents](/docs/agents/#agent-budgets).
+The `model` key per agent is read by `Agent.state()` in `packages/opencorvus/src/agent/agent.ts` (`Provider.parseModel(value.model)`). Step / skill knobs for the same agents live separately under `assistant.<name>` — see [Agents](/docs/agents/#agent-budgets).
 
 ## models.dev
 
@@ -37,10 +37,11 @@ You can override the snapshot location at build time via `MODELS_DEV_API_JSON` (
 ## Listing available models
 
 ```bash
-opencorvus models --list
+opencorvus models
+opencorvus models openai --verbose
 ```
 
-This filters models by which providers currently have credentials configured. Disabling a provider via env (or `disabled_providers` in config) removes its models from the list.
+This lists models from configured providers. Passing a provider ID restricts output to that provider. Disabling a provider through `disabled_providers` in config removes its models from the list.
 
 ## Model variants
 

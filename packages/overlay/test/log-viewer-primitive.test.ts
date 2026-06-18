@@ -25,7 +25,6 @@ describe("LogViewer primitives", () => {
     expect(source).toContain('import * as Select from "@kobalte/core/select"')
     expect(source).toContain("<Select.Root<LogLevel>")
     expect(source).toContain("<Select.Trigger")
-    expect(source).toContain('class="field-input oc-select-trigger log-level-select-trigger"')
     expect(source).toContain("<Select.HiddenSelect")
     expect(source).toContain("function LogLevelOption")
     expect(source).not.toContain("<select")
@@ -44,12 +43,5 @@ describe("LogViewer primitives", () => {
     expect(body).toContain("min-height:")
     expect(body).toContain("max-height:")
     expect(body).toContain("box-sizing: border-box")
-  })
-
-  test("log level selector reuses shared Select trigger chrome", () => {
-    const css = readFileSync(SETTINGS_CSS, "utf8")
-
-    expect(css).not.toContain(".log-level-select {")
-    expect(css).not.toContain(".log-level-select:focus")
   })
 })

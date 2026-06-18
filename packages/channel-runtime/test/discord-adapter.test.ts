@@ -13,6 +13,7 @@ type Msg = {
 
 let sends: Array<any> = []
 let lastClient: any
+let sendFailure: Error | undefined
 
 class FakeClient {
   handlers = new Map<string, (msg: Msg) => Promise<void> | void>()
@@ -22,6 +23,7 @@ class FakeClient {
       isTextBased: () => true,
       send: async (payload: any) => {
         sends.push(payload)
+        if (sendFailure) throw sendFailure
       },
     }),
   }
@@ -71,6 +73,7 @@ const { DiscordAdapter } = await import("../src/adapters/discord")
 
 beforeEach(() => {
   sends = []
+  sendFailure = undefined
 })
 
 describe("discord adapter", () => {
@@ -112,6 +115,38 @@ describe("discord adapter", () => {
     expect(sends).toHaveLength(1)
     expect(sends[0]).toMatchObject({
       content: "done",
+      reply: {
+        messageReference: "root-9",
+      },
+    })
+  })
+
+  test("does not retry Discord text sends without the reply reference", async () => {
+    const adapter = new DiscordAdapter({ token: "x" })
+    sendFailure = new Error("reply reference failed")
+
+    await expect(adapter.sendMessage("ch-1", "root-9", "done")).rejects.toThrow("reply reference failed")
+
+    expect(sends).toHaveLength(1)
+    expect(sends[0]).toMatchObject({
+      content: "done",
+      reply: {
+        messageReference: "root-9",
+      },
+    })
+  })
+
+  test("does not retry Discord image sends without the reply reference", async () => {
+    const adapter = new DiscordAdapter({ token: "x" })
+    sendFailure = new Error("image reply failed")
+
+    await expect(adapter.uploadImage("ch-1", "root-9", Buffer.from("png"), "overlay.png", "capture")).rejects.toThrow(
+      "image reply failed",
+    )
+
+    expect(sends).toHaveLength(1)
+    expect(sends[0]).toMatchObject({
+      content: "capture",
       reply: {
         messageReference: "root-9",
       },

@@ -217,8 +217,14 @@ export async function collectSourceRegionCandidates(input: {
   candidates.push(
     ...(await readVisualSurfaceCandidates(path.join(paths.sourcePackageAbsolute, "visual-surface-candidates.json"))),
   )
-  candidates.push(...(await readLayoutMapCandidates(path.join(paths.sourcePackageAbsolute, "source-ir", "layout-map.json"))))
-  candidates.push(...(await readSourceDomRegionCandidates(path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomRegions.ts"))))
+  candidates.push(
+    ...(await readLayoutMapCandidates(path.join(paths.sourcePackageAbsolute, "source-ir", "layout-map.json"))),
+  )
+  candidates.push(
+    ...(await readSourceDomRegionCandidates(
+      path.join(paths.skeletonProjectAbsolute, "src", "data", "sourceDomRegions.ts"),
+    )),
+  )
   const deduped = dedupeCandidates(candidates)
   if (deduped.length === 0) {
     throw new Error(
@@ -251,6 +257,16 @@ export function selectSourceRegionCandidate(input: {
   const selected = scored[0]
   if (!selected) {
     throw new Error(`No source candidate matched local module anchors: ${anchors.slice(0, 12).join(", ")}`)
+  }
+  const ambiguous = scored.filter(
+    (candidate) => candidate.score === selected.score && candidateArea(candidate) === candidateArea(selected),
+  )
+  if (ambiguous.length > 1) {
+    throw new Error(
+      `Ambiguous source candidates matched local module anchors with the same score and area: ${ambiguous
+        .map(sourceCandidateLabel)
+        .join(", ")}`,
+    )
   }
   return selected
 }
@@ -341,20 +357,31 @@ async function captureLocalModule(input: {
 
 async function readVisualSurfaceCandidates(file: string): Promise<SourceRegionCandidate[]> {
   const json = await readJsonFile(file)
-  const rows = Array.isArray(asRecord(json).candidates) ? (asRecord(json).candidates as unknown[]) : []
+  if (json === undefined) return []
+  const rows = asRecord(json).candidates
+  if (!Array.isArray(rows)) {
+    throw new Error(`Malformed visual surface candidates JSON: ${file}: expected candidates array`)
+  }
   return rows.flatMap((row, index) => {
     const record = asRecord(row)
     const bbox = readBounds(record.bounds)
     if (!bbox) return []
     const id = readString(record.id) ?? `visual-surface-${index + 1}`
     const text = [...readStringArray(record.textPreview), readString(record.name)].filter(Boolean).join(" ")
+    const rootNodeID = readString(record.rootNodeId)
+    const sourceRefs = [
+      "web-clone-source/visual-surface-candidates.json",
+      `candidate:${id}`,
+      rootNodeID ? `root:${rootNodeID}` : undefined,
+      ...readStringArray(record.sourceRefs).map((sourceRef) => `node:${sourceRef}`),
+    ].filter((sourceRef): sourceRef is string => typeof sourceRef === "string")
     return [
       {
         id,
         source: "visual-surface-candidate" as const,
         bbox,
         text,
-        sourceRefs: ["web-clone-source/visual-surface-candidates.json", `candidate:${id}`],
+        sourceRefs,
       },
     ]
   })
@@ -362,20 +389,32 @@ async function readVisualSurfaceCandidates(file: string): Promise<SourceRegionCa
 
 async function readLayoutMapCandidates(file: string): Promise<SourceRegionCandidate[]> {
   const json = await readJsonFile(file)
-  const rows = Array.isArray(asRecord(json).elements) ? (asRecord(json).elements as unknown[]) : []
+  if (json === undefined) return []
+  const rows = asRecord(json).elements
+  if (!Array.isArray(rows)) {
+    throw new Error(`Malformed layout map JSON: ${file}: expected elements array`)
+  }
   return rows.flatMap((row, index) => {
     const record = asRecord(row)
     const bbox = readBounds(record.bounds)
     const text = readString(record.textPreview) ?? ""
     if (!bbox || !text.trim() || bbox.width < 80 || bbox.height < 24) return []
     const id = readString(record.nodeId) ?? `layout-map-${index + 1}`
+    const selector = readString(record.selector)
+    const role = readString(record.role)
+    const sourceRefs = [
+      "web-clone-source/source-ir/layout-map.json",
+      `node:${id}`,
+      selector ? `selector:${selector}` : undefined,
+      role ? `role:${role}` : undefined,
+    ].filter((sourceRef): sourceRef is string => typeof sourceRef === "string")
     return [
       {
         id,
         source: "layout-map" as const,
         bbox,
         text,
-        sourceRefs: ["web-clone-source/source-ir/layout-map.json", `node:${id}`],
+        sourceRefs,
       },
     ]
   })
@@ -385,69 +424,190 @@ async function readSourceDomRegionCandidates(file: string): Promise<SourceRegion
   let text: string
   try {
     text = await fs.readFile(file, "utf8")
-  } catch {
-    return []
+  } catch (error) {
+    if (isFileNotFoundError(error)) return []
+    throw new Error(`Cannot read source DOM regions file: ${file}: ${errorMessage(error)}`)
+  }
+  if (!text.trim()) {
+    throw new Error(`Malformed source DOM regions file: ${file}: empty file`)
   }
   const match = text.match(/export const sourceDomRegions = ([\s\S]*?) as const/)
-  if (!match) return []
-  const rows = JSON.parse(match[1]!) as unknown[]
+  if (!match) {
+    throw new Error(`Malformed source DOM regions file: ${file}`)
+  }
+  let rows: unknown[]
+  try {
+    rows = JSON.parse(match[1]!) as unknown[]
+  } catch (error) {
+    throw new Error(`Malformed source DOM regions JSON: ${file}: ${errorMessage(error)}`)
+  }
+  if (!Array.isArray(rows)) {
+    throw new Error(`Malformed source DOM regions JSON: ${file}: expected array`)
+  }
   return rows.flatMap((row, index) => {
     const record = asRecord(row)
     const bbox = readBounds(record.sourceBounds)
     if (!bbox) return []
     const componentName = readString(record.componentName) ?? `SourceDomRegion${index + 1}`
-    const regionText = [componentName, readString(record.heading), readString(record.textPreview)].filter(Boolean).join(" ")
+    const regionText = [componentName, readString(record.heading), readString(record.textPreview)]
+      .filter(Boolean)
+      .join(" ")
+    const sourceNodeID = readString(record.sourceNodeId)
+    const sourceSegmentID = readString(record.sourceSegmentId)
+    const sourceRefs = [
+      "frontend-design-skeleton/src/data/sourceDomRegions.ts",
+      `component:${componentName}`,
+      sourceNodeID ? `node:${sourceNodeID}` : undefined,
+      sourceSegmentID ? `segment:${sourceSegmentID}` : undefined,
+    ].filter((sourceRef): sourceRef is string => typeof sourceRef === "string")
     return [
       {
         id: componentName,
         source: "source-dom-region" as const,
         bbox,
         text: regionText,
-        sourceRefs: ["frontend-design-skeleton/src/data/sourceDomRegions.ts", `component:${componentName}`],
+        sourceRefs,
       },
     ]
   })
 }
 
-async function readJsonFile(file: string): Promise<unknown> {
+async function readJsonFile(file: string): Promise<unknown | undefined> {
+  let text: string
   try {
-    return JSON.parse(await fs.readFile(file, "utf8"))
-  } catch {
-    return {}
+    text = await fs.readFile(file, "utf8")
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return undefined
+    }
+    throw new Error(`Cannot read source evidence JSON: ${file}: ${errorMessage(error)}`)
+  }
+  if (!text.trim()) {
+    throw new Error(`Malformed source evidence JSON: ${file}: empty file`)
+  }
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    throw new Error(`Malformed source evidence JSON: ${file}: ${errorMessage(error)}`)
   }
 }
 
-function scoreCandidate(candidate: SourceRegionCandidate, anchors: string[], localArea: number): SourceRegionCandidate & {
+function isFileNotFoundError(error: unknown): boolean {
+  return asRecord(error).code === "ENOENT"
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function scoreCandidate(
+  candidate: SourceRegionCandidate,
+  anchors: string[],
+  localArea: number,
+): SourceRegionCandidate & {
   score: number
   matchedAnchors: string[]
 } {
-  const haystack = normalizeText(candidate.text)
-  const matchedAnchors = anchors.filter((anchor) => haystack.includes(anchor))
-  const sourceWeight = candidate.source === "source-dom-region" ? 45 : candidate.source === "visual-surface-candidate" ? 25 : 0
-  const completeSizeWeight = candidateArea(candidate) >= localArea * 0.2 ? 15 : -25
-  const phraseWeight = matchedAnchors.reduce((sum, anchor) => sum + Math.min(anchor.length, 24), 0)
+  const haystack = normalizeText([candidate.id, candidate.text, ...candidate.sourceRefs].join(" "))
+  const matchedAnchors = anchors.filter((anchor) => anchorMatchesNormalizedText(haystack, anchor))
+  const sourceRefHaystack = normalizeText(candidate.sourceRefs.join(" "))
+  const matchedSourceRefAnchors = anchors.filter((anchor) => anchorMatchesNormalizedText(sourceRefHaystack, anchor))
+  const sourceWeight =
+    candidate.source === "source-dom-region" ? 45 : candidate.source === "visual-surface-candidate" ? 35 : 5
+  const candidateID = normalizeText(expandAnchorText(candidate.id).join(" "))
+  const identityWeight = matchedAnchors.some((anchor) => anchorMatchesNormalizedText(candidateID, anchor)) ? 90 : 0
+  const anchorScore = Math.min(
+    360,
+    matchedAnchors.reduce((sum, anchor) => sum + anchorWeight(anchor), 0),
+  )
+  const sourceRefScore = Math.min(
+    240,
+    matchedSourceRefAnchors.reduce((sum, anchor) => sum + anchorWeight(anchor), 0),
+  )
+  const areaWeight = candidateAreaWeight(candidateArea(candidate), localArea)
   return {
     ...candidate,
-    score: matchedAnchors.length * 100 + phraseWeight + sourceWeight + completeSizeWeight,
+    score: anchorScore + sourceRefScore + identityWeight + sourceWeight + areaWeight,
     matchedAnchors,
   }
 }
 
 function normalizeAnchors(values: string[]): string[] {
-  const stop = new Set(["src", "components", "component", "region", "tsx", "jsx", "index", "the", "and", "for"])
+  const stop = new Set([
+    "src",
+    "components",
+    "component",
+    "region",
+    "tsx",
+    "jsx",
+    "index",
+    "the",
+    "and",
+    "for",
+    "module",
+    "container",
+    "wrapper",
+    "candidate",
+    "node",
+    "root",
+    "segment",
+  ])
   const out = new Set<string>()
   for (const value of values) {
-    const normalized = normalizeText(value)
-    if (normalized.length >= 3 && !stop.has(normalized)) out.add(normalized)
-    for (const token of normalized.split(/\s+/g)) {
-      if (token.length >= 4 && !stop.has(token)) out.add(token)
+    for (const expanded of expandAnchorText(value)) {
+      const normalized = normalizeText(expanded)
+      if (normalized.length >= 3 && !stop.has(normalized)) out.add(normalized)
+      for (const token of normalized.split(/\s+/g)) {
+        if (token.length >= 4 && !stop.has(token)) out.add(token)
+      }
     }
   }
-  return Array.from(out).slice(0, 40)
+  return Array.from(out).slice(0, 60)
+}
+
+function expandAnchorText(value: string): string[] {
+  const spaced = value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[-_.\\/]+/g, " ")
+  return [value, spaced]
 }
 
 function normalizeText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9%.$]+/g, " ").replace(/\s+/g, " ").trim()
+  return value
+    // NFKC is Unicode Normalization Form KC; it folds fullwidth metric text to ASCII equivalents.
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/(?:\p{L}\.){2,}/gu, (match) => match.replace(/\./g, ""))
+    // S&P means Standard & Poor's; source captures often include the ampersand while local text uses SP.
+    .replace(/(?<![\p{L}\p{N}])(\p{L})\s*&\s*(\p{L})(?![\p{L}\p{N}])/gu, "$1$2")
+    // QoQ, YoY, and MoM mean quarter-over-quarter, year-over-year, and month-over-month.
+    .replace(/\bq\s*\/\s*q\b/gu, "qoq")
+    .replace(/\by\s*\/\s*y\b/gu, "yoy")
+    .replace(/\bm\s*\/\s*m\b/gu, "mom")
+    .replace(/\u2212/g, "-")
+    // Normalize locale decimal commas before preserving thousands group separators.
+    .replace(/(?<=\p{N}),(?=\p{N}{1,2}(?!\p{N}))/gu, ".")
+    .replace(/(?<=\p{N}),(?=\p{N})/gu, "\uE000")
+    // Preserve numeric ranges separately from signed values.
+    .replace(/(?<=[\p{N}%])[-\u2013\u2014](?=\p{N})/gu, "\uE002")
+    .replace(/(?<![\p{L}\p{N}%])-(?=\p{N})/gu, "\uE001")
+    .replace(/[^\p{L}\p{N}%.$+\uE000\uE001\uE002]+/gu, " ")
+    .replace(/\uE000/g, ",")
+    .replace(/\uE001/g, "-")
+    .replace(/\uE002/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function anchorMatchesNormalizedText(haystack: string, anchor: string): boolean {
+  if (!anchor) return false
+  if (anchorHasUnspacedScript(anchor)) return haystack.includes(anchor)
+  return ` ${haystack} `.includes(` ${anchor} `)
+}
+
+function anchorHasUnspacedScript(anchor: string): boolean {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(anchor)
 }
 
 function dedupeCandidates(candidates: SourceRegionCandidate[]): SourceRegionCandidate[] {
@@ -590,8 +750,35 @@ function candidateArea(candidate: Pick<SourceRegionCandidate, "bbox">): number {
   return candidate.bbox.width * candidate.bbox.height
 }
 
+function sourceCandidateLabel(candidate: Pick<SourceRegionCandidate, "id" | "source">): string {
+  return `${candidate.id} (${candidate.source})`
+}
+
+function anchorWeight(anchor: string): number {
+  const generic = new Set(["overview", "section", "content", "page", "card", "item", "list"])
+  if (generic.has(anchor)) return 5
+  const words = anchor.split(/\s+/g).filter(Boolean).length
+  return Math.min(anchor.length, 32) * (words > 1 ? 8 : 5)
+}
+
+function candidateAreaWeight(candidateAreaValue: number, localArea: number): number {
+  if (!Number.isFinite(localArea) || localArea <= 0) return 0
+  const ratio = candidateAreaValue / localArea
+  if (ratio > 12) return -420
+  if (ratio > 6) return -240
+  if (ratio > 3) return -120
+  if (ratio < 0.05) return -140
+  if (ratio < 0.12) return -70
+  return 40 - Math.round(Math.abs(Math.log2(ratio)) * 18)
+}
+
 function safeSegment(input: string): string {
-  return input.trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "region"
+  return (
+    input
+      .trim()
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "region"
+  )
 }
 
 function boxLabel(box: BrowserPreviewRegionBox): string {
@@ -607,7 +794,8 @@ function readString(value: unknown): string | undefined {
 }
 
 function readStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+  if (Array.isArray(value))
+    return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
   const stringValue = readString(value)
   return stringValue ? [stringValue] : []
 }
@@ -662,11 +850,11 @@ async function main() {
     const page = await context.newPage();
     await page.goto(routeUrl(input.url, input.route), { waitUntil: "networkidle", timeout: 30000 });
     const locator = await findNode(page, input.locator);
-    const visible = await locator.isVisible().catch(() => false);
+    const visible = await locator.isVisible();
     if (!visible) throw new Error("Implementation locator did not match any visible element.");
     await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
     await page.waitForTimeout(200);
-    const box = await locator.boundingBox().catch(() => null);
+    const box = await locator.boundingBox();
     if (!box || box.width <= 0 || box.height <= 0) {
       throw new Error("Implementation locator did not match any visible element.");
     }
@@ -706,7 +894,7 @@ async function main() {
     process.stdout.write(JSON.stringify({ ok: false, message: error?.message || String(error), stack: error?.stack }));
     process.exitCode = 1;
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (browser) await browser.close();
   }
 }
 

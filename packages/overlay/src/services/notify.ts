@@ -86,6 +86,14 @@ export const [notificationStore, setNotificationStore] = createStore<{ items: Ap
   items: [],
 })
 
+async function logNotificationDiagnostic(message: string, error: unknown): Promise<void> {
+  const { AppLog } = await import("../utils/log")
+  AppLog.warn("notify", message, {
+    message,
+    details: formatErrorDetails(error),
+  })
+}
+
 async function readHostPermission(): Promise<HostPermission> {
   const transport = getHostTransport()
   if (!transport.capabilities.nativeCommands["notification.permission"]) return "unsupported"
@@ -93,12 +101,13 @@ async function readHostPermission(): Promise<HostPermission> {
     const result = (await transport.native({ kind: "notification.permission" })) as HostPermission
     return result
   } catch (err) {
-    console.warn("[notify] permission probe failed", err)
+    await logNotificationDiagnostic("Desktop notification permission check failed", err)
     showNotification({
       id: "system:notification-permission-probe-failed",
       tone: "warning",
       title: "Desktop notification permission check failed",
-      message: "OpenCorvus could not read the desktop notification permission state. OS notifications will not be sent until this is fixed.",
+      message:
+        "OpenCorvus could not read the desktop notification permission state. OS notifications will not be sent until this is fixed.",
       details: formatErrorDetails(err),
       centerHistory: true,
       timeoutMs: 0,
@@ -114,7 +123,7 @@ async function requestHostPermission(): Promise<HostPermission> {
     const result = (await transport.native({ kind: "notification.requestPermission" })) as HostPermission
     return result
   } catch (err) {
-    console.warn("[notify] permission request failed", err)
+    await logNotificationDiagnostic("Desktop notification permission request failed", err)
     showNotification({
       id: "system:notification-permission-request-failed",
       tone: "warning",
@@ -134,12 +143,13 @@ async function sendHostNotification(title: string, body: string, tag: string): P
   try {
     await transport.native({ kind: "notification.send", title, body, tag })
   } catch (err) {
-    console.warn("[notify] failed to dispatch notification", err)
+    await logNotificationDiagnostic("Desktop notification send failed", err)
     showNotification({
       id: `system:notification-send-failed:${tag}`,
       tone: "warning",
       title: "Desktop notification failed",
-      message: "OpenCorvus could not dispatch the OS notification. The in-app notification remains available in the notification center.",
+      message:
+        "OpenCorvus could not dispatch the OS notification. The in-app notification remains available in the notification center.",
       details: formatErrorDetails(err),
       centerHistory: true,
       timeoutMs: 0,

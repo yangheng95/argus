@@ -4,6 +4,7 @@ import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { Database, eq } from "../../src/storage/db"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { Message } from "../../src/session/message"
 import { SessionSummary } from "../../src/session/summary"
 import { Bus } from "../../src/bus"
@@ -11,6 +12,14 @@ import { PermissionNext } from "../../src/permission/next"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+
+async function waitForMockCalls(spy: { mock: { calls: unknown[] } }, count: number) {
+  for (let i = 0; i < 100; i += 1) {
+    if (spy.mock.calls.length >= count) return
+    await Bun.sleep(20)
+  }
+  throw new Error(`mock was called ${spy.mock.calls.length} time(s), expected at least ${count}`)
+}
 
 describe("executor.opencorvus", () => {
   afterEach(async () => {
@@ -20,7 +29,11 @@ describe("executor.opencorvus", () => {
 
   test("resume enqueues a follow-up prompt on the same session", async () => {
     await using tmp = await tmpdir({ git: true })
-    spyOn(TaskQueueService, "runNow").mockResolvedValue()
+    const runNow = spyOn(TaskQueueService, "runNow")
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+      info: {} as never,
+      parts: [],
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -36,8 +49,12 @@ describe("executor.opencorvus", () => {
         )
         expect(row?.session_id).toBe(session.id)
         expect(row?.source).toBe("engine.task")
+        await waitForMockCalls(prompt, 1)
       },
     })
+
+    expect(runNow).not.toHaveBeenCalled()
+    expect(prompt).toHaveBeenCalledTimes(1)
   })
 
   test("events streams session-scoped bus activity", async () => {

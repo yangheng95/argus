@@ -37,7 +37,9 @@ const VisualRegionBindingInputSchema = z.object({
   sourceImagePath: z
     .string()
     .min(1)
-    .describe("Full-page source reference PNG. Use a task-runtime PNG such as fd/webpage-evidence/desktop-reference-full.png."),
+    .describe(
+      "Full-page source reference PNG. Use a task-runtime PNG such as fd/webpage-evidence/desktop-reference-full.png.",
+    ),
   manifestPath: z
     .string()
     .min(1)
@@ -67,12 +69,7 @@ const VisualRegionCoordinateAtlasInputSchema = z.object({
     .positive()
     .optional()
     .describe("Height of each vertical coordinate band in source pixels. Default 900."),
-  gridStep: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe("Grid spacing in source pixels. Default 100."),
+  gridStep: z.number().int().positive().optional().describe("Grid spacing in source pixels. Default 100."),
 })
 
 type VisualRegionBindingInput = z.infer<typeof VisualRegionBindingInputSchema>
@@ -234,7 +231,8 @@ export async function materializeVisualRegionCoordinateAtlas(
   gridStep: number
   atlasImages: MaterializedVisualRegionAtlasImage[]
 }> {
-  if (!input.taskID) throw new Error("create_visual_region_coordinate_atlas requires a task-scoped frontend_design taskID")
+  if (!input.taskID)
+    throw new Error("create_visual_region_coordinate_atlas requires a task-scoped frontend_design taskID")
 
   const sourceImagePath = resolveProjectPath(input.sourceImagePath, "sourceImagePath")
   if (path.extname(sourceImagePath).toLowerCase() !== ".png") {
@@ -243,7 +241,8 @@ export async function materializeVisualRegionCoordinateAtlas(
 
   const sourceMeta = await sharp(sourceImagePath).metadata()
   if (!sourceMeta.width || !sourceMeta.height) throw new Error(`Cannot read source PNG dimensions: ${sourceImagePath}`)
-  if (sourceMeta.format !== "png") throw new Error(`VisualRegionBinding source image must decode as PNG: ${sourceImagePath}`)
+  if (sourceMeta.format !== "png")
+    throw new Error(`VisualRegionBinding source image must decode as PNG: ${sourceImagePath}`)
 
   const bandHeight = input.bandHeight ?? 900
   const gridStep = input.gridStep ?? 100
@@ -328,7 +327,8 @@ export async function materializeVisualRegionBindingPackage(
   contactSheetArtifact: string
   regions: MaterializedVisualRegionBinding[]
 }> {
-  if (!input.taskID) throw new Error("create_visual_region_binding_package requires a task-scoped frontend_design taskID")
+  if (!input.taskID)
+    throw new Error("create_visual_region_binding_package requires a task-scoped frontend_design taskID")
 
   const sourceImagePath = resolveProjectPath(input.sourceImagePath, "sourceImagePath")
   if (path.extname(sourceImagePath).toLowerCase() !== ".png") {
@@ -337,7 +337,8 @@ export async function materializeVisualRegionBindingPackage(
 
   const sourceMeta = await sharp(sourceImagePath).metadata()
   if (!sourceMeta.width || !sourceMeta.height) throw new Error(`Cannot read source PNG dimensions: ${sourceImagePath}`)
-  if (sourceMeta.format !== "png") throw new Error(`VisualRegionBinding source image must decode as PNG: ${sourceImagePath}`)
+  if (sourceMeta.format !== "png")
+    throw new Error(`VisualRegionBinding source image must decode as PNG: ${sourceImagePath}`)
 
   const runtimePaths = ProjectRuntimePaths.frontendDesignPaths(Instance.directory, input.taskID)
   const packageName = safePathSegment(input.packageName ?? manifestStem(input.manifestPath ?? "visual-region-binding"))
@@ -382,7 +383,10 @@ export async function materializeVisualRegionBindingPackage(
     sourceDimensions: { width: sourceMeta.width, height: sourceMeta.height },
     regions,
   })
-  const contactSheetPath = path.join(cropDirectory, `region-contact-sheet__src${sourceMeta.width}x${sourceMeta.height}.png`)
+  const contactSheetPath = path.join(
+    cropDirectory,
+    `region-contact-sheet__src${sourceMeta.width}x${sourceMeta.height}.png`,
+  )
   await writeContactSheet({ outputPath: contactSheetPath, cropArtifacts })
 
   const manifestPath = resolveManifestPath(input.manifestPath)
@@ -459,11 +463,13 @@ function cropFileNameFor(
 ): string {
   const box = region.source_bbox
   const ordinal = String(index + 1).padStart(2, "0")
-  return [
-    `${ordinal}-${safePathSegment(region.region_id)}`,
-    `src${sourceDimensions.width}x${sourceDimensions.height}`,
-    `x${box.x}-y${box.y}-w${box.width}-h${box.height}`,
-  ].join("__") + ".png"
+  return (
+    [
+      `${ordinal}-${safePathSegment(region.region_id)}`,
+      `src${sourceDimensions.width}x${sourceDimensions.height}`,
+      `x${box.x}-y${box.y}-w${box.width}-h${box.height}`,
+    ].join("__") + ".png"
+  )
 }
 
 async function writeBBoxOverlay(input: {
@@ -554,7 +560,10 @@ async function writeCoordinateBand(input: {
   const header = `<rect x="0" y="0" width="${input.sourceDimensions.width}" height="30" fill="#ffffff" opacity="0.84"/>
     <text x="12" y="21" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#111827">absolute screenshot coordinates: src=${input.sourceDimensions.width}x${input.sourceDimensions.height}, band y=${input.y}-${input.y + input.height}</text>`
   const overlay = `<svg width="${input.sourceDimensions.width}" height="${input.height}" xmlns="http://www.w3.org/2000/svg">${verticalLines.join("\n")}${horizontalLines.join("\n")}${header}</svg>`
-  await sharp(crop).composite([{ input: Buffer.from(overlay), left: 0, top: 0 }]).png().toFile(input.outputPath)
+  await sharp(crop)
+    .composite([{ input: Buffer.from(overlay), left: 0, top: 0 }])
+    .png()
+    .toFile(input.outputPath)
 }
 
 async function writeContactSheet(input: {
@@ -605,11 +614,7 @@ function overlayColor(index: number): string {
 }
 
 function escapeXml(input: string): string {
-  return input
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
+  return input.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
 }
 
 async function buildFrontendDesignImageResult(input: {

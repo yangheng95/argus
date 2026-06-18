@@ -19,7 +19,6 @@ Log.init({ print: false })
  * handler must map each NamedError class to a stable status code so
  * the overlay can act on the failure structurally:
  *   - DirectoryRequiredError    → 400  (user must supply a directory)
- *   - RequestOriginForbiddenError → 403  (request Origin is not trusted)
  *   - InvalidDirectoryError     → 400  (cross-platform / unparseable)
  *   - WorktreeNotGitError       → 412  (precondition: directory exists,
  *                                       but is not a git repo — overlay
@@ -55,7 +54,6 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
       if (err.name === "NotFoundError") status = 404
       else if (err.name === "ProviderModelNotFoundError") status = 400
       else if (err.name === "DirectoryRequiredError") status = 400
-      else if (err.name === "RequestOriginForbiddenError") status = 403
       else if (err.name === "InvalidDirectoryError") status = 400
       else if (err.name === "ChildSessionConfigError") status = 400
       else if (err.name === "WorktreeNotGitError") status = 412
@@ -91,20 +89,6 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       400,
       "DirectoryRequiredError",
-    )
-  })
-
-  test("RequestOriginForbiddenError maps to 403", async () => {
-    await expectMapping(
-      () => {
-        throw new Server.RequestOriginForbiddenError({
-          message: "Request Origin is not allowed: https://evil.example",
-          origin: "https://evil.example",
-          host: "127.0.0.1:7878",
-        })
-      },
-      403,
-      "RequestOriginForbiddenError",
     )
   })
 

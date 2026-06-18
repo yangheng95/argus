@@ -83,9 +83,10 @@ export namespace Bus {
     def: Definition,
     properties: z.output<Definition["properties"]>,
   ) {
+    const parsed = BusEvent.parseProperties(def, properties)
     const payload = {
       type: def.type,
-      properties,
+      properties: parsed,
     }
     log.debug("publishing", {
       type: def.type,

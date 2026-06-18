@@ -83,6 +83,13 @@ function conversationPayload(taskID: string, transcript: any[] = [], view = { se
   }
 }
 
+async function waitForRequestCount(requests: unknown[], count: number): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (requests.length >= count) return
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 afterEach(() => {
   __resetEventTimersForTest()
   stopSSE()
@@ -362,6 +369,60 @@ test("rewind clear recovery hydrates the authoritative conversation before resta
       source: "selected-task-recovery",
       resumeSequence: 5,
     }),
+  ])
+})
+
+test("rewind clear recovery is not superseded by selected sequence-gap recovery", async () => {
+  const streams: StreamOpenRequest[] = []
+  const requests: string[] = []
+  const closeCalls = { count: 0 }
+  let releaseHydrate!: (response: TransportResponse<unknown>) => void
+  const hydrate = new Promise<TransportResponse<unknown>>((resolve) => {
+    releaseHydrate = resolve
+  })
+
+  __setHostTransportForTest(
+    fakeTransport({
+      streams,
+      closeCalls,
+      request(req) {
+        requests.push(req.path)
+        expect(req.query?.tail_limit).toBe("80")
+        return hydrate
+      },
+    }),
+  )
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_rewind_clear_gap" })
+  setBoardStore("taskSequence", 2)
+  startSSE({ kind: "task", id: "tsk_rewind_clear_gap" }, 2)
+  pruneCardsAfterCursor(1_779_000_050_000)
+  expect(cardTreeStore.rewindCursor).toBe(1_779_000_050_000)
+
+  const clear = recoverSelectedTaskAfterRewindClear("task rewind cleared", "tsk_rewind_clear_gap")
+  await waitForRequestCount(requests, 1)
+
+  const gap = recoverSelectedTaskConversation("selected task sequence gap", "tsk_rewind_clear_gap")
+  await Promise.resolve()
+  await Promise.resolve()
+
+  expect(requests).toEqual(["task/tsk_rewind_clear_gap/conversation"])
+  expect(streams).toEqual([{ path: "task/tsk_rewind_clear_gap/events", query: { after: "2", after_live: "0" } }])
+  expect(closeCalls.count).toBe(0)
+
+  releaseHydrate({
+    status: 200,
+    ok: true,
+    headers: {},
+    body: conversationPayload("tsk_rewind_clear_gap"),
+  })
+
+  await expect(clear).resolves.toBe(5)
+  await expect(gap).resolves.toBe(5)
+  expect(cardTreeStore.rewindCursor).toBe(null)
+  expect(closeCalls.count).toBe(1)
+  expect(streams).toEqual([
+    { path: "task/tsk_rewind_clear_gap/events", query: { after: "2", after_live: "0" } },
+    { path: "task/tsk_rewind_clear_gap/events", query: { after: "5", after_live: "0" } },
   ])
 })
 

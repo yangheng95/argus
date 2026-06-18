@@ -72,10 +72,7 @@ export const VisualQaFollowUpTaskSchema = z.object({
     .min(1)
     .describe("Evidence-backed reason Visual QA cannot safely repair these blockers inside the current worktree."),
   priority: z.enum(["critical", "high", "normal", "low"]).default("high"),
-  blocker_ids: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe("Production blocker IDs this follow-up task must address."),
+  blocker_ids: z.array(z.string().min(1)).min(1).describe("Production blocker IDs this follow-up task must address."),
 })
 
 export const VisualQaRepairSchema = z.object({

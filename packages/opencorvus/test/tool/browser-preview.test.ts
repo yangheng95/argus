@@ -1,18 +1,25 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { createServer, type Server } from "node:http"
+import fs from "node:fs/promises"
 import path from "node:path"
 import { PassThrough } from "node:stream"
+import sharp from "sharp"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
-import {
-  BrowserPreviewCompareRegionsTool,
-  BrowserPreviewCompareRegionsToolParameters,
-} from "../../src/tool/browser-preview-compare-regions"
+import { BrowserPreviewBindLocalModuleTool } from "../../src/tool/browser-preview-bind-local-module"
+import { BrowserPreviewCompareRegionsTool } from "../../src/tool/browser-preview-compare-regions"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { ProtocolStore } from "../../src/protocol/store"
 import { Database } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { findLatestBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import {
+  findLatestBrowserPreviewTarget,
+  findReadableBrowserPreviewEvidenceByID,
+  persistBrowserPreviewTarget,
+  resolveRuntimeRelativePath,
+} from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -134,6 +141,10 @@ describe("tool.browser_preview", () => {
               expect(payload.target.url).toBe(preview.url)
               expect(payload.diagnostics.join("\n")).toContain("browser_preview_target")
               expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+              const events = ProtocolStore.listTaskEvents(taskID)
+              const event = events.find((item) => item.type === "task.updated" && item.source === "browser-preview.target")
+              expect(event?.payload?.summary).toBe("Browser preview target updated")
+              expect(event?.payload?.taskID).toBe(taskID)
             } finally {
               restore()
             }
@@ -375,45 +386,222 @@ describe("tool.browser_preview", () => {
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )
 
-  test("compare regions tool parameters reject direct URL and output directory fields", () => {
-    const binding = {
-      region_id: "economy",
-      viewport_id: "desktop",
-      region_scope: "page-section",
-      source: {
-        reference_artifact_id: "reference.png",
-        bbox: { x: 0, y: 0, width: 100, height: 80 },
-        semantic_role: "economy section",
-      },
-      implementation: {
-        route: "/",
-        locator: { kind: "data-oc-region", value: "economy" },
-      },
-    }
+  test(
+    "bind local module tool feeds compare regions tool and persists reference comparison evidence",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await writeBindingToolReference(paths.sourcePackageAbsolute)
+      const server = await startBindingToolPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const tool = await BrowserPreviewBindLocalModuleTool.init()
+            const result = await tool.execute(
+              {
+                targetID: target.id,
+                viewportID: "desktop",
+                regionID: "tool-local-module",
+                route: "/",
+                implementationLocator: { kind: "data-oc-region", value: "tool-local-module" },
+                componentFiles: ["src/ToolLocalModule.tsx"],
+                sourceReferenceArtifactID: "reference.png",
+                textAnchors: ["Tool Local Module", "Binding Anchor"],
+                sourcePadding: 0,
+                localPadding: 0,
+              },
+              { ...baseCtx, extra: { taskID } },
+            )
 
-    expect(() =>
-      BrowserPreviewCompareRegionsToolParameters.parse({
-        targetID: "art_previewtarget_1",
-        viewportIDs: ["desktop"],
-        inlineBindings: [binding],
-        url: "http://127.0.0.1:5173/",
-      }),
-    ).toThrow(/url/)
+            expect(result.title).toBe("Local module source binding completed")
+            expect(result.attachments).toHaveLength(1)
+            expect(result.metadata.status).toBe("passed")
+            expect(result.metadata.binding.region_id).toBe("tool-local-module")
+            expect(result.metadata.binding.source.bbox).toEqual({ x: 24, y: 30, width: 180, height: 92 })
+            expect(result.metadata.binding.implementation.locator).toEqual({
+              kind: "data-oc-region",
+              value: "tool-local-module",
+            })
 
-    expect(() =>
-      BrowserPreviewCompareRegionsToolParameters.parse({
-        targetID: "art_previewtarget_1",
-        viewportIDs: ["desktop"],
-        inlineBindings: [
+            const compareTool = await BrowserPreviewCompareRegionsTool.init()
+            const comparison = await compareTool.execute(
+              {
+                targetID: target.id,
+                viewportIDs: ["desktop"],
+                inlineBindings: [result.metadata.binding],
+                includeDiff: true,
+              },
+              { ...baseCtx, extra: { taskID } },
+            )
+            const comparisonPayload = JSON.parse(comparison.output)
+            const evidenceID = comparison.metadata.evidenceIDs["desktop:tool-local-module"]
+            const evidence = await findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID,
+            })
+
+            expect(comparison.title).toBe("Region comparison completed")
+            expect(comparison.attachments).toHaveLength(1)
+            expect(comparison.metadata.status).toBe("passed")
+            expect(comparisonPayload.operation).toBe("reference-comparison")
+            const comparedRegion = comparisonPayload.regions[0]
+            const artifacts = comparedRegion.artifacts
+            expect(artifacts.source_crop).toEndWith("source.png")
+            expect(artifacts.implementation_crop).toEndWith("implementation.png")
+            expect(artifacts.side_by_side).toEndWith("side-by-side.png")
+            expect(artifacts.diff).toEndWith("diff.png")
+            expect(evidence?.operationKind).toBe("reference-comparison")
+            expect(evidence?.regionID).toBe("tool-local-module")
+            expect(evidence?.artifactPaths?.source_crop).toBe(artifacts.source_crop)
+            expect(evidence?.artifactPaths?.implementation_crop).toBe(artifacts.implementation_crop)
+            expect(evidence?.artifactPaths?.side_by_side).toBe(artifacts.side_by_side)
+            expect(evidence?.artifactPaths?.diff).toBe(artifacts.diff)
+
+            const sourceCropPath = resolveRuntimeRelativePath(tmp.path, artifacts.source_crop)
+            const implementationCropPath = resolveRuntimeRelativePath(tmp.path, artifacts.implementation_crop)
+            const sideBySidePath = resolveRuntimeRelativePath(tmp.path, artifacts.side_by_side)
+            const diffPath = resolveRuntimeRelativePath(tmp.path, artifacts.diff)
+            expect(await fileExists(sourceCropPath)).toBe(true)
+            expect(await fileExists(implementationCropPath)).toBe(true)
+            expect(await fileExists(sideBySidePath)).toBe(true)
+            expect(await fileExists(diffPath)).toBe(true)
+            const sourceDimensions = {
+              width: Math.ceil(comparedRegion.source_bbox.width),
+              height: Math.ceil(comparedRegion.source_bbox.height),
+            }
+            const implementationDimensions = {
+              width: Math.ceil(comparedRegion.implementation_bbox.width),
+              height: Math.ceil(comparedRegion.implementation_bbox.height),
+            }
+            await expectPngDimensions(sourceCropPath, sourceDimensions)
+            await expectPngDimensions(implementationCropPath, implementationDimensions)
+            await expectPngDimensions(diffPath, sourceDimensions)
+            await expectPngDimensions(sideBySidePath, {
+              width: sourceDimensions.width + implementationDimensions.width + 16,
+              height: 44 + 32 + Math.max(sourceDimensions.height, implementationDimensions.height),
+            })
+            await expectPngHasColorDiversity(sourceCropPath)
+            await expectPngHasColorDiversity(implementationCropPath)
+            await expectPngHasColorDiversity(sideBySidePath)
+            await expectPngHasColorDiversity(diffPath)
+          },
+        })
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: 60_000 },
+  )
+})
+
+async function fileExists(input: string): Promise<boolean> {
+  try {
+    await fs.access(input)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function expectPngDimensions(input: string, expected: { width: number; height: number }): Promise<void> {
+  const metadata = await sharp(input).metadata()
+  expect(metadata.format).toBe("png")
+  expect({ width: metadata.width, height: metadata.height }).toEqual(expected)
+}
+
+async function expectPngHasColorDiversity(input: string): Promise<void> {
+  const stats = await sharp(input).stats()
+  expect(stats.channels.some((channel) => channel.min !== channel.max)).toBe(true)
+}
+
+async function writeBindingToolReference(sourcePackageAbsolute: string): Promise<void> {
+  await fs.mkdir(sourcePackageAbsolute, { recursive: true })
+  await sharp({
+    create: {
+      width: 360,
+      height: 220,
+      channels: 4,
+      background: "#ffffff",
+    },
+  })
+    .composite([
+      {
+        input: Buffer.from(
+          `<svg width="180" height="92" xmlns="http://www.w3.org/2000/svg">
+            <rect width="180" height="92" fill="#fef3c7"/>
+            <text x="14" y="38" font-family="Arial" font-size="20" fill="#78350f">Tool Local Module</text>
+            <text x="14" y="68" font-family="Arial" font-size="16" fill="#92400e">Binding Anchor</text>
+          </svg>`,
+        ),
+        left: 24,
+        top: 30,
+      },
+    ])
+    .png()
+    .toFile(path.join(sourcePackageAbsolute, "reference.png"))
+  await fs.writeFile(
+    path.join(sourcePackageAbsolute, "visual-surface-candidates.json"),
+    JSON.stringify(
+      {
+        candidates: [
           {
-            ...binding,
-            implementation: {
-              ...binding.implementation,
-              outDir: ".opencorvus/other",
-            },
+            id: "ToolLocalModuleSurface",
+            name: "Tool Local Module",
+            bounds: { x: 24, y: 30, w: 180, h: 92 },
+            textPreview: ["Tool Local Module", "Binding Anchor"],
           },
         ],
-      }),
-    ).toThrow(/outDir/)
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  )
+}
+
+async function startBindingToolPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((_req, res) => {
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Binding tool preview</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 48px; }
+            [data-oc-region="tool-local-module"] {
+              width: 210px;
+              height: 112px;
+              box-sizing: border-box;
+              padding: 16px;
+              background: #fef3c7;
+              color: #78350f;
+            }
+            h2 { margin: 0 0 12px; font-size: 22px; }
+            p { margin: 0; font-size: 16px; color: #92400e; }
+          </style>
+        </head>
+        <body><main><section data-oc-region="tool-local-module"><h2>Tool Local Module</h2><p>Binding Anchor</p></section></main></body>
+      </html>`
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
   })
-})
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("binding tool test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}

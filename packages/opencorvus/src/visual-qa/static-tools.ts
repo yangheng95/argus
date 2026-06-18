@@ -11,6 +11,8 @@ export const VISUAL_QA_CONTEXT_TOOL_IDS = [
 
 export const VISUAL_QA_IMPLEMENTATION_TOOL_IDS = [
   "browser_preview",
+  "browser_preview_bind_local_module",
+  "browser_preview_compare_regions",
   "bash",
   "edit",
   "write",

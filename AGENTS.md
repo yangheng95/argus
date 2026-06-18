@@ -157,8 +157,8 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 - Windows host 是唯一 git 记录和代码编辑准源。所有代码、文档、测试修改必须先落在 Windows host 工作区；WSL 只作为运行镜像，不允许直接编辑 WSL 文件，也不允许在 WSL 里制造 git 记录。
 - 如果 WSL 中出现未同步的新内容，必须先用同步脚本把差异带回 Windows host 进行人工审查和合并；合并完成后再从 Windows host 同步回 WSL。禁止绕过 Windows host 直接把 WSL 作为准源继续开发。
 - 同步边界只包含源码、配置、文档、测试和静态资源。构建产物 / 运行产物（例如 `dist-vite`、`dist`、二进制包、缓存目录）不得作为跨端同步对象；WSL 运行所需产物必须在 WSL 内基于已同步源码重新编译生成。
-- 默认先执行 dry-run：`powershell -ExecutionPolicy Bypass -File script/sync-host-wsl.ps1`。
-- 确认无冲突后再执行：`powershell -ExecutionPolicy Bypass -File script/sync-host-wsl.ps1 -Apply`。
+- 默认先执行 dry-run：`powershell -ExecutionPolicy Bypass -File script/sync-host-wsl.ps1 -WslRoot /home/<wsl-user>/myhexin-local/opecorvus`。
+- 确认无冲突后再执行：`powershell -ExecutionPolicy Bypass -File script/sync-host-wsl.ps1 -WslRoot /home/<wsl-user>/myhexin-local/opecorvus -Apply`。
 - 脚本会在 `.scratch/sync-host-wsl-*` 下保存两边 `HEAD`、changed 列表、diff 和文件备份；禁止绕过备份直接覆盖。
 - 两边都改且内容不同、或两边 `HEAD` 不同导致 clean tracked 文件内容不同，默认必须视为冲突并停止；不要猜测哪边更新。
 - 冲突只能在人工检查 `conflicts.tsv` 后显式指定方向解决：host 确认为准时使用 `-PreferHostForConflicts`，WSL 确认为准时使用 `-PreferWslForConflicts`。脚本会把这类覆盖写入 `resolved-conflicts.tsv`。

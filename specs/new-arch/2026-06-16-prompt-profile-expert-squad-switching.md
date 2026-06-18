@@ -15,17 +15,17 @@ framework, or orchestration flow.
 
 Prompt ownership is already split into several real runtime surfaces:
 
-| Surface | Current behavior | Evidence |
-| --- | --- | --- |
-| Native agent registry | `Agent.buildState()` imports core prompt files and assigns `Agent.Info.prompt` per native agent. Append-mode agents store user additions in `promptAppend`, not by replacing the code-owned core. | `packages/opencorvus/src/agent/agent.ts` |
-| Agent role contract | Prompt editability and config mode are per agent: override, append, or none. Workflow agents such as `build`, `requirements`, `architect`, `frontend-design`, `visual-qa`, `mission`, `deep-research`, and `frontend-research` are append-mode. `orchestrator` and `integrity` are not prompt-editable through the catalog. | `packages/opencorvus/src/agent/role-contract.ts` |
-| Prompt catalog API | `GET /config/prompt` returns effective system and agent prompts and the current configured override/append text. It is an editor for individual slots, not a profile switcher. | `packages/opencorvus/src/config/prompt-catalog.ts`, `packages/opencorvus/src/server/routes/config.ts` |
-| Overlay Prompt UI | The settings prompt panel renders one card per prompt entry and saves to `config.prompt.*` or `config.agent.<id>.prompt(_append)`. | `packages/overlay/src/components/settings/PromptCatalog.tsx`, `packages/overlay/src/services/config.ts` |
-| Worker agent runner | Most workflow child agents run through `runAgentSession()`, which composes `core + config.agent.<kind>.prompt_append + live task context`. | `packages/opencorvus/src/agent/runner.ts` |
-| Direct session prompt path | Direct `SessionPrompt` calls use `LLM.composeSystem()` with `Agent.resolveSessionAgent()` and the active session overlay. | `packages/opencorvus/src/session/llm.ts`, `packages/opencorvus/src/session/prompt/parts.ts` |
-| Orchestrator | Orchestrator does not use `runAgentSession()`. It builds `[ORCHESTRATOR_CORE, dynamic task context]` per wake in `buildSystemParts()`. | `packages/opencorvus/src/orchestrator/agent.ts` |
-| Effective config | Runtime config is live project config plus root-session `metadata.configOverlay`. `taskConfigSnapshot` is metadata and permission seed, not runtime prompt/model source. | `packages/opencorvus/src/config/effective.ts`, `packages/opencorvus/src/agent/model.ts`, `specs/new-arch/2026-06-10-task-config-overrides-immediate-effect.md` |
-| Session overlay | Session overlay can already override model, system prompts, and per-agent prompt/prompt_append. Child sessions inherit root overlay. | `packages/opencorvus/src/config/config.ts`, `packages/opencorvus/src/agent/model.ts` |
+| Surface                    | Current behavior                                                                                                                                                                                                                                                                                                            | Evidence                                                                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native agent registry      | `Agent.buildState()` imports core prompt files and assigns `Agent.Info.prompt` per native agent. Append-mode agents store user additions in `promptAppend`, not by replacing the code-owned core.                                                                                                                           | `packages/opencorvus/src/agent/agent.ts`                                                                                                                       |
+| Agent role contract        | Prompt editability and config mode are per agent: override, append, or none. Workflow agents such as `build`, `requirements`, `architect`, `frontend-design`, `visual-qa`, `mission`, `deep-research`, and `frontend-research` are append-mode. `orchestrator` and `integrity` are not prompt-editable through the catalog. | `packages/opencorvus/src/agent/role-contract.ts`                                                                                                               |
+| Prompt catalog API         | `GET /config/prompt` returns effective system and agent prompts and the current configured override/append text. It is an editor for individual slots, not a profile switcher.                                                                                                                                              | `packages/opencorvus/src/config/prompt-catalog.ts`, `packages/opencorvus/src/server/routes/config.ts`                                                          |
+| Overlay Prompt UI          | The settings prompt panel renders one card per prompt entry and saves to `config.prompt.*` or `config.agent.<id>.prompt(_append)`.                                                                                                                                                                                          | `packages/overlay/src/components/settings/PromptCatalog.tsx`, `packages/overlay/src/services/config.ts`                                                        |
+| Worker agent runner        | Most workflow child agents run through `runAgentSession()`, which composes `core + config.agent.<kind>.prompt_append + live task context`.                                                                                                                                                                                  | `packages/opencorvus/src/agent/runner.ts`                                                                                                                      |
+| Direct session prompt path | Direct `SessionPrompt` calls use `LLM.composeSystem()` with `Agent.resolveSessionAgent()` and the active session overlay.                                                                                                                                                                                                   | `packages/opencorvus/src/session/llm.ts`, `packages/opencorvus/src/session/prompt/parts.ts`                                                                    |
+| Orchestrator               | Orchestrator does not use `runAgentSession()`. It builds `[ORCHESTRATOR_CORE, dynamic task context]` per wake in `buildSystemParts()`.                                                                                                                                                                                      | `packages/opencorvus/src/orchestrator/agent.ts`                                                                                                                |
+| Effective config           | Runtime config is live project config plus root-session `metadata.configOverlay`. `taskConfigSnapshot` is metadata and permission seed, not runtime prompt/model source.                                                                                                                                                    | `packages/opencorvus/src/config/effective.ts`, `packages/opencorvus/src/agent/model.ts`, `specs/new-arch/2026-06-10-task-config-overrides-immediate-effect.md` |
+| Session overlay            | Session overlay can already override model, system prompts, and per-agent prompt/prompt_append. Child sessions inherit root overlay.                                                                                                                                                                                        | `packages/opencorvus/src/config/config.ts`, `packages/opencorvus/src/agent/model.ts`                                                                           |
 
 Existing prompt design docs already reject scenario-specific prompt duplication
 inside core prompts. `2026-06-01-general-build-agent-prompt-decontamination.md`
@@ -144,10 +144,10 @@ changing runtime wiring.
 
 Minimum target matrix for the initial built-ins:
 
-| Scene | Targets that must receive explicit overlay guidance |
-| --- | --- |
-| `frontend` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `frontend-design`, `frontend-research`, `build`, `visual-qa`, `integrity`, `orchestrator` |
-| `backend` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `integrity`, `orchestrator` |
+| Scene       | Targets that must receive explicit overlay guidance                                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend`  | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `frontend-design`, `frontend-research`, `build`, `visual-qa`, `integrity`, `orchestrator`    |
+| `backend`   | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `integrity`, `orchestrator`                          |
 | `algorithm` | `coding`, `coding-assistant`, `mission`, `intent-analysis`, `requirements`, `architect`, `build`, `deep-research`, `fact-check`, `goal-workload-analyst`, `integrity`, `orchestrator` |
 
 The matrix belongs in the backend registry (`src/agent/prompt-profile.ts`) as a
@@ -246,19 +246,20 @@ visible, single setting.
      or `config.agent.<id>.prompt`.
 
 4. Add profile API.
-  - `GET /config/prompt-profile`: list built-in and configured profiles,
-    active project profile, and active session profile when a session id is supplied.
-   - The response must expose the full visible prompt-profile catalog, not only
-     labels:
-     - `targets[]`: target id, label, description, and whether the target is
-       editable by user-defined profiles or built-in-only.
-    - `profiles[]`: id, label, description, built-in/editable flags, and the
-      exact per-target prompt overlay strings that the runtime uses.
-   - Built-in profiles are read-only in the API contract; user-defined
-     profiles are editable project config records.
-   - Project-level change uses existing `PATCH /config`.
-   - Current-task/session change uses existing `PATCH /session/{sessionID}/config`.
-   - OpenAPI and SDK generated files must be updated after route/schema changes.
+
+- `GET /config/prompt-profile`: list built-in and configured profiles,
+  active project profile, and active session profile when a session id is supplied.
+- The response must expose the full visible prompt-profile catalog, not only
+  labels:
+  - `targets[]`: target id, label, description, and whether the target is
+    editable by user-defined profiles or built-in-only.
+- `profiles[]`: id, label, description, built-in/editable flags, and the
+  exact per-target prompt overlay strings that the runtime uses.
+- Built-in profiles are read-only in the API contract; user-defined
+  profiles are editable project config records.
+- Project-level change uses existing `PATCH /config`.
+- Current-task/session change uses existing `PATCH /session/{sessionID}/config`.
+- OpenAPI and SDK generated files must be updated after route/schema changes.
 
 5. Add Overlay UI.
    - Add a Prompt Profiles area to the existing Prompts settings tab or a
@@ -266,25 +267,26 @@ visible, single setting.
      new tab is needed.
    - Use mature primitives already present in the UI, e.g. the same select/list
      pattern used by agent model settings.
-  - The UI must let the user inspect every built-in expert-squad prompt
-    overlay per target without leaving the app.
-  - The UI must let the user create, duplicate, edit, and delete custom
-    prompt profiles stored under `config.prompt_profile.profiles`, while
-    keeping built-ins read-only.
-  - When duplicating a built-in profile, the UI must copy only user-editable
-    targets. Built-in-only targets such as `orchestrator` and `integrity`
-    remain visible in the built-in inspector but must not be copied into the
-    editable project profile payload.
-  - Creating or deleting a custom profile must refresh the chat-composer
-    selector catalog so the newly available profiles are immediately
-    selectable for task/session-scoped switching.
-  - Provide two explicit scopes:
-    - Project active profile: writes `PATCH /config`.
-    - Selected task/session active profile: writes `PATCH /session/{rootSessionID}/config`.
-  - The UI must show which scope is currently being inspected. When a selected
-    task/session root exists, the visible active badge and selector state for
-    that scope must come from session-effective config, not only project config.
-  - Do not have the UI loop over all agents and write prompt_append fields.
+
+- The UI must let the user inspect every built-in expert-squad prompt
+  overlay per target without leaving the app.
+- The UI must let the user create, duplicate, edit, and delete custom
+  prompt profiles stored under `config.prompt_profile.profiles`, while
+  keeping built-ins read-only.
+- When duplicating a built-in profile, the UI must copy only user-editable
+  targets. Built-in-only targets such as `orchestrator` and `integrity`
+  remain visible in the built-in inspector but must not be copied into the
+  editable project profile payload.
+- Creating or deleting a custom profile must refresh the chat-composer
+  selector catalog so the newly available profiles are immediately
+  selectable for task/session-scoped switching.
+- Provide two explicit scopes:
+  - Project active profile: writes `PATCH /config`.
+  - Selected task/session active profile: writes `PATCH /session/{rootSessionID}/config`.
+- The UI must show which scope is currently being inspected. When a selected
+  task/session root exists, the visible active badge and selector state for
+  that scope must come from session-effective config, not only project config.
+- Do not have the UI loop over all agents and write prompt_append fields.
 
 6. Add tests.
    - Config schema:
@@ -317,35 +319,35 @@ visible, single setting.
 
 ## Call-Site Inventory
 
-| Call site | Required action |
-| --- | --- |
-| `packages/opencorvus/src/config/config.ts` | Add schema for `prompt_profile`, overlay subset, semantic validation, and merge handling. |
-| `packages/opencorvus/src/agent/agent.ts` | Keep native defaults and role contracts; do not bake scenario profile text into `Agent.Info.prompt`. |
-| `packages/opencorvus/src/agent/role-contract.ts` | Add no new role ids for frontend/backend/algorithm. Profiles are not agents. |
-| `packages/opencorvus/src/agent/prompt-profile.ts` | New single source for built-in profiles, profile target allowlists, validation helpers, and compiler output. |
-| `packages/opencorvus/src/agent/runner.ts` | Replace direct `core + userAppend` composition with the profile compiler. |
-| `packages/opencorvus/src/session/llm.ts` | Apply the same profile compiler only to non-complete direct SessionPrompt composition. Preserve complete-system semantics. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | Apply the profile overlay explicitly because orchestrator bypasses `runAgentSession()`. Preserve static/dynamic split. |
-| `packages/opencorvus/src/config/prompt-catalog.ts` | Report active profile and profile contribution, not only default/configured prompt. |
-| `packages/opencorvus/src/server/routes/config.ts` | Add profile catalog route or extend config routes with `GET /config/prompt-profile`. |
-| `packages/opencorvus/src/server/routes/session.ts` | Existing session config route should validate profile overlay through `Config.Overlay`. |
-| `packages/overlay/src/components/settings/PromptCatalog.tsx` | Add profile selector/preview or delegate to a new Profile panel; keep individual prompt editor explicit. |
-| `packages/overlay/src/services/config.ts` | Add load/save helpers for project profile and selected session profile. |
-| `packages/overlay/src/store/dialog.ts`, `ConfigDialogHost.tsx`, i18n | Only needed if implemented as a new settings tab. |
-| `packages/sdk/openapi.json`, `packages/sdk/js/src/gen/*` | Regenerate after API/schema changes. |
-| Docs | Update `docs/product/*/reference/api.md` and configuration docs. |
+| Call site                                                            | Required action                                                                                                                      |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/config/config.ts`                           | Add schema for `prompt_profile`, overlay subset, semantic validation, and merge handling.                                            |
+| `packages/opencorvus/src/agent/agent.ts`                             | Keep native defaults and role contracts; do not bake scenario profile text into `Agent.Info.prompt`.                                 |
+| `packages/opencorvus/src/agent/role-contract.ts`                     | Add no new role ids for frontend/backend/algorithm. Profiles are not agents.                                                         |
+| `packages/opencorvus/src/agent/prompt-profile.ts`                    | New single source for built-in profiles, profile target allowlists, validation helpers, and compiler output.                         |
+| `packages/opencorvus/src/agent/runner.ts`                            | Replace direct `core + userAppend` composition with the profile compiler.                                                            |
+| `packages/opencorvus/src/session/llm.ts`                             | Apply the same profile compiler only to non-complete direct SessionPrompt composition. Preserve complete-system semantics.           |
+| `packages/opencorvus/src/orchestrator/agent.ts`                      | Apply the profile overlay explicitly because orchestrator bypasses `runAgentSession()`. Preserve static/dynamic split.               |
+| `packages/opencorvus/src/config/prompt-catalog.ts`                   | Report active profile and profile contribution, not only default/configured prompt.                                                  |
+| `packages/opencorvus/src/server/routes/config.ts`                    | Add profile catalog route or extend config routes with `GET /config/prompt-profile`.                                                 |
+| `packages/opencorvus/src/server/routes/session.ts`                   | Existing session config route should validate profile overlay through `Config.Overlay`.                                              |
+| `packages/overlay/src/components/settings/PromptCatalog.tsx`         | Add profile selector/preview or delegate to a new Profile panel; keep individual prompt editor explicit.                             |
+| `packages/overlay/src/services/config.ts`                            | Add load/save helpers for project profile and selected session profile.                                                              |
+| `packages/overlay/src/store/dialog.ts`, `ConfigDialogHost.tsx`, i18n | Only needed if implemented as a new settings tab.                                                                                    |
+| `packages/sdk/openapi.json`, `packages/sdk/js/src/gen/*`             | Regenerate after API/schema changes.                                                                                                 |
+| Docs                                                                 | Update canonical `packages/web/src/content/docs/{reference/api,zh-cn/reference/api}.mdx` generated API pages and configuration docs. |
 
 ## Explicit Non-Profile Prompt Surfaces
 
 The following prompts remain outside prompt profiles in this design:
 
-| Surface | Reason |
-| --- | --- |
+| Surface                                   | Reason                                                                                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core_header` / `SystemPrompt.provider()` | System-wide provider header is already a global config slot. Mixing scene profiles into it would apply text to non-agent helper calls and create a second global prompt source. |
-| `agent_generate` | Agent generator prompt creates config snippets; it is not a runtime expert-squad participant. |
-| `summary` follow-up prompt | The caller builds its own summary prompt inline for a specific follow-up output; profile text would change summarization semantics rather than task expertise. |
-| `compaction` prompt builders | Compaction preserves transcript fidelity and must not inherit scene-specific implementation guidance. |
-| `title` | Title generation should remain concise metadata generation, not task-domain reasoning. |
+| `agent_generate`                          | Agent generator prompt creates config snippets; it is not a runtime expert-squad participant.                                                                                   |
+| `summary` follow-up prompt                | The caller builds its own summary prompt inline for a specific follow-up output; profile text would change summarization semantics rather than task expertise.                  |
+| `compaction` prompt builders              | Compaction preserves transcript fidelity and must not inherit scene-specific implementation guidance.                                                                           |
+| `title`                                   | Title generation should remain concise metadata generation, not task-domain reasoning.                                                                                          |
 
 ## Non-Goals
 

@@ -153,9 +153,9 @@ test(
         localStorage.setItem(
           "oc_recent_directories",
           JSON.stringify([
-            "C:/Users/chuan/myhexin-local/vibecodingclient",
-            "C:/Users/chuan/myhexin-local/demos/invest复刻",
-            "C:/Users/chuan/myhexin-local/Hithink.PrefabLibrary",
+            "C:/Users/example/workspace/vibecodingclient",
+            "C:/Users/example/workspace/demos/invest-replica",
+            "C:/Users/example/workspace/Hithink.PrefabLibrary",
           ]),
         )
         localStorage.setItem("oc_server_url", serverUrl)
@@ -354,7 +354,7 @@ test(
         true,
       )
       assert.equal(
-        projectMenu.rows.every((row) => row.pathText.startsWith("C:/Users/chuan/myhexin-local")),
+        projectMenu.rows.every((row) => row.pathText.startsWith("C:/Users/example/workspace")),
         true,
       )
       await page.keyboard.press("Escape")

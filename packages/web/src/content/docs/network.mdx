@@ -3,9 +3,36 @@ title: Network
 description: HTTP/HTTPS proxy configuration for OpenCorvus.
 ---
 
-OpenCorvus reads standard proxy environment variables; there is no separate proxy field in `opencorvus.jsonc`.
+OpenCorvus stores explicit proxy settings under the single `network.proxy` config entry. The Overlay Network panel edits this same field and its **Test Proxy** button sends one request through the edited proxy draft, reporting the HTTP status code and elapsed time.
 
-## Supported variables
+## Config
+
+```jsonc
+{
+  "network": {
+    "proxy": {
+      "url": "http://127.0.0.1:7890",
+      "username": "optional",
+      "password": "optional",
+      "llmProvider": true,
+      "webResearch": true,
+    },
+  },
+}
+```
+
+| Field                   | Purpose                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `url`                   | HTTP(S) proxy URL. Supports `http://` and `https://`; credentials must stay in `username` / `password`. |
+| `username` / `password` | Optional proxy authentication fields. `password` requires `username`.                                   |
+| `llmProvider`           | Routes model provider HTTP requests through the proxy.                                                  |
+| `webResearch`           | Routes websearch and webfetch requests through the proxy.                                               |
+
+The proxy test uses the edited form values directly, so you can test before saving. It does not retry through a direct connection when the proxy fails.
+
+## Environment Variables
+
+OpenCorvus still reads standard proxy environment variables for runtime paths that are outside `network.proxy`.
 
 | Variable                      | Purpose                                 |
 | ----------------------------- | --------------------------------------- |
@@ -13,29 +40,9 @@ OpenCorvus reads standard proxy environment variables; there is no separate prox
 | `HTTPS_PROXY` / `https_proxy` | Proxy for HTTPS traffic                 |
 | `NO_PROXY` / `no_proxy`       | Comma-separated host patterns to bypass |
 
-The detection helper lives in `packages/opencorvus/src/util/proxied.ts`:
+## TLS / Custom CA
 
-```ts
-export function proxied() {
-  return !!(process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy)
-}
-```
-
-Bun's runtime honors these natively for `fetch()`, so all LLM providers, MCP transports, and the share endpoint route through the proxy automatically.
-
-## Usage
-
-```bash
-export HTTPS_PROXY=http://127.0.0.1:7890
-export HTTP_PROXY=http://127.0.0.1:7890
-export NO_PROXY=localhost,127.0.0.1,*.internal
-
-opencorvus serve
-```
-
-## TLS / custom CA
-
-For self-signed corporate certs, use Bun's standard `NODE_EXTRA_CA_CERTS` or the OS trust store:
+For self-signed corporate certificates, use Bun's standard `NODE_EXTRA_CA_CERTS` or the OS trust store:
 
 ```bash
 export SSL_CERT_FILE=/etc/ssl/certs/corp-ca.pem
@@ -43,9 +50,5 @@ opencorvus serve
 ```
 
 :::caution
-OpenCorvus does **not** ship a built-in option to disable TLS verification. If you must, use a Bun-level workaround at your own risk — it is not a supported configuration.
+OpenCorvus does **not** ship a built-in option to disable TLS verification. If you must, use a Bun-level workaround at your own risk; it is not a supported configuration.
 :::
-
-## Behavior with proxy enabled
-
-The presence of either proxy var causes some adapters (notably the share endpoint and certain telemetry hooks) to take alternate code paths — see usages of `proxied()` to find them.

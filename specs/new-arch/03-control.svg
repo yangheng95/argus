@@ -57,12 +57,12 @@
   <text class="code" x="780" y="140">acp/</text>
   <text class="body" x="780" y="160">外部编辑器 (Zed 等)</text>
   <text class="body" x="780" y="176">编辑器 = client</text>
-  <text class="body" x="780" y="192">argus = agent</text>
+  <text class="body" x="780" y="192">OpenCorvus = agent</text>
 
   <rect class="http" x="940" y="104" width="260" height="96"/>
   <text class="h2" x="1070" y="124" style="fill:#047857">HTTP / SSE</text>
   <text class="code" x="1070" y="140">server/routes/...</text>
-  <text class="body" x="1070" y="160">overlay · CLI · TUI</text>
+  <text class="body" x="1070" y="160">overlay · CLI</text>
   <text class="body" x="1070" y="176">task-event SSE 路由</text>
   <text class="body" x="1070" y="192">消费 Bus 事件</text>
 
@@ -138,8 +138,8 @@
   <text class="body" x="480" y="652">非执行器语义的工具</text>
   <text class="body" x="480" y="668">不产出 diff</text>
   <text class="body" x="480" y="690" style="font-weight:600">示例:</text>
-  <text class="code" x="480" y="708">plugin/codex.ts</text>
-  <text class="code" x="480" y="724">plugin/copilot.ts</text>
+  <text class="code" x="480" y="708">plugin/index.ts</text>
+  <text class="code" x="480" y="724">plugin/isolate.ts</text>
   <text class="body" x="480" y="752" style="fill:#94a3b8;font-style:italic">in-process 紧耦合</text>
   <text class="body" x="480" y="768" style="fill:#94a3b8;font-style:italic">类型共享</text>
 
@@ -149,7 +149,7 @@
   <text class="body" x="780" y="652">Model Context Protocol</text>
   <text class="body" x="780" y="668">接入外部工具服务</text>
   <text class="body" x="780" y="690" style="font-weight:600">方向:</text>
-  <text class="body" x="780" y="708">argus = client / host</text>
+  <text class="body" x="780" y="708">OpenCorvus = client / host</text>
   <text class="body" x="780" y="724">调用 remote MCP server</text>
   <text class="body" x="780" y="752" style="fill:#94a3b8;font-style:italic">远程协议 · 序列化开销</text>
 
@@ -160,7 +160,7 @@
   <text class="body" x="1070" y="668">外部编辑器集成</text>
   <text class="body" x="1070" y="690" style="font-weight:600">方向:</text>
   <text class="body" x="1070" y="708">编辑器 = client</text>
-  <text class="body" x="1070" y="724">argus = agent</text>
+  <text class="body" x="1070" y="724">OpenCorvus = agent</text>
   <text class="body" x="1070" y="752" style="fill:#94a3b8;font-style:italic">入站路径之一</text>
 
   <!-- 警告条 -->

@@ -91,6 +91,7 @@ let browserQueue: Promise<void> = Promise.resolve()
 const browserLockDir = join(tmpdir(), "pptr-overlay-browser-lock")
 const browserLockHeartbeat = join(browserLockDir, "heartbeat")
 const STALE_BROWSER_LOCK_MS = 120_000
+const BROWSER_RPC_INACTIVITY_TIMEOUT_MS = 30_000
 
 function lockedOwnerIsDead() {
   try {
@@ -191,7 +192,10 @@ export async function launchBrowser(extraArgs?: string[], options: LaunchBrowser
 class OverlayBrowserSidecar {
   private child: ChildProcessWithoutNullStreams | undefined
   private nextId = 1
-  private pending = new Map<number, { resolve: (value: JsonValue) => void; reject: (error: Error) => void }>()
+  private pending = new Map<
+    number,
+    { resolve: (value: JsonValue) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
+  >()
   private pageHandlers = new Map<string, Map<string, EventHandler[]>>()
   private buffer = ""
   private disconnectedHandlers: Array<() => void> = []
@@ -375,6 +379,7 @@ class OverlayBrowserSidecar {
     const pending = this.pending.get(message.id)
     if (!pending) return
     this.pending.delete(message.id)
+    clearTimeout(pending.timer)
     if (message.ok) pending.resolve(decode(message.result))
     else pending.reject(Object.assign(new Error(message.error), { stack: message.stack }))
   }
@@ -385,7 +390,12 @@ class OverlayBrowserSidecar {
     const request: RpcRequest = { id, method, params: encode(params) as JsonValue }
     this.child.stdin.write(`${JSON.stringify(request)}\n`)
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      const timer = setTimeout(() => {
+        this.pending.delete(id)
+        reject(new Error(`Overlay browser RPC timed out after ${BROWSER_RPC_INACTIVITY_TIMEOUT_MS}ms: ${method}`))
+        this.child?.kill()
+      }, BROWSER_RPC_INACTIVITY_TIMEOUT_MS)
+      this.pending.set(id, { resolve, reject, timer })
     })
   }
 
@@ -536,7 +546,7 @@ function decode(value) {
 }
 
 async function findBrowser() {
-  const explicit = process.env.OPENCORVUS_BROWSER_EXECUTABLE || process.env.BROWSER_EXECUTABLE;
+  const explicit = process.env.OPENCORVUS_BROWSER_EXECUTABLE;
   if (explicit) return explicit;
   for (const item of browsers) {
     try {
@@ -606,6 +616,8 @@ async function handle(request) {
   }
   if (method === "newPage") {
     const page = await browser.newPage();
+    page.setDefaultTimeout(15000);
+    page.setDefaultNavigationTimeout(30000);
     const pageId = "page_" + nextPageId++;
     pages.set(pageId, page);
     return ok(id, pageId);

@@ -107,12 +107,7 @@ describe("tool.web_clone_prepare_context", () => {
   test("accepts a compiled source-skeleton handoff without raw extraction diagnostics", async () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
-    for (const file of [
-      "capture.html",
-      "extracted-page.json",
-      "segments.json",
-      "codegen-context.json",
-    ]) {
+    for (const file of ["capture.html", "extracted-page.json", "segments.json", "codegen-context.json"]) {
       await fs.rm(path.join(webpageEvidenceDir, file), { force: true })
     }
 

@@ -274,7 +274,8 @@ export async function discoverPackageRoot(changedFiles?: unknown) {
   const root = Instance.directory
   const candidates = new Map<string, number>()
   const items = Array.isArray(changedFiles)
-    ? changedFiles.filter((item): item is string => typeof item === "string" && item.length > 0)
+    ? changedFiles
+        .filter((item): item is string => typeof item === "string" && item.length > 0)
         .filter(ProjectRuntimePaths.isSourceEnumerationAllowed)
     : []
 

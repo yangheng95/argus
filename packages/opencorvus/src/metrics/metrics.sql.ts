@@ -3,8 +3,6 @@ import { EngineTaskTable, EngineGoalTable } from "@/engine/engine.sql"
 import { Timestamps } from "@/storage/schema.sql"
 import type {
   ArbiterVerdict,
-  CounterexampleSeverity,
-  CounterexampleTargetScope,
   MetricCreatedBy,
   MetricDirection,
   MetricEvaluatorKind,
@@ -81,39 +79,6 @@ export const EngineMetricResultTable = sqliteTable(
   (table) => [
     index("engine_metric_result_task_iter_idx").on(table.task_id, table.iteration),
     index("engine_metric_result_spec_idx").on(table.metric_spec_id),
-  ],
-)
-
-/**
- * Counterexample evidence (read-only after legacy acceptance hardening was
- * retired; the table is preserved for legacy acceptance reads, but no production
- * writer exists today). iteration_resolved NULL ⇔ still open. novelty_hash
- * dedups re-surfacing of the same reproducer.
- */
-export const EngineCounterexampleTable = sqliteTable(
-  "engine_counterexample",
-  {
-    id: text().primaryKey(),
-    task_id: text()
-      .notNull()
-      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    iteration_found: integer().notNull(),
-    iteration_resolved: integer(),
-    novelty_hash: text().notNull(),
-    target_scope: text().notNull().$type<CounterexampleTargetScope>(),
-    target_ref: text().notNull(),
-    claim: text().notNull(),
-    reproducer: text().notNull(),
-    severity: text().notNull().$type<CounterexampleSeverity>(),
-    linked_metric_spec_id: text().references(() => EngineMetricSpecTable.id, {
-      onDelete: "set null",
-    }),
-    ...Timestamps,
-  },
-  (table) => [
-    index("engine_counterexample_task_idx").on(table.task_id),
-    index("engine_counterexample_open_idx").on(table.task_id, table.iteration_resolved),
-    index("engine_counterexample_novelty_idx").on(table.task_id, table.novelty_hash),
   ],
 )
 

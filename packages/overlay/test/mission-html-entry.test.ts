@@ -33,7 +33,7 @@ test("Mission and Chat header actions are scoped by the focused left activity", 
   expect(taskActions).toContain('data-left-action="tasks"')
   expect(taskActions).toContain('data-left-action="mission"')
   expect(taskActions).toContain('data-left-action="assistant"')
-  expect(MAIN).toContain('button.hidden = button.dataset.leftAction !== activity')
+  expect(MAIN).toContain("button.hidden = button.dataset.leftAction !== activity")
 })
 
 test("project directory bar remains page-level chrome above the panel", () => {
@@ -51,7 +51,7 @@ test("main.tsx mounts Mission through the left activity system", () => {
   expect(MAIN).toContain('mission: "leftPanelMissions"')
   expect(MAIN).not.toContain("LEFT_ACTIVITY_TITLE_KEYS")
   expect(MAIN).toContain("const titleKey = activityDefinition.labelKey")
-  expect(MAIN).toContain('taskActions.dataset.i18nAriaLabel = titleKey')
+  expect(MAIN).toContain("taskActions.dataset.i18nAriaLabel = titleKey")
   expect(MAIN).toContain('document.getElementById("missionListPanel")')
   expect(MAIN).toContain("<Mission")
   expect(MAIN).toContain("refreshToken={missionSharedRefreshToken()}")

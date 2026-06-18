@@ -187,7 +187,7 @@ export function evaluationContextText(board: any, goals: any[]): string {
     for (const item of goalStatuses) {
       const goal = goals[item.goal_index]
       const icon = item.status === "passed" ? "\u2705" : item.status === "failed" ? "\u274C" : "\u23F3"
-      const label = goal?.title || t("evaluation.context.goal_fallback", { index: item.goal_index + 1 })
+      const label = goal?.title || t("evaluation.context.goal_missing", { index: item.goal_index + 1 })
       lines.push(`- ${icon} ${label}: ${item.evidence || item.status}`)
     }
   }

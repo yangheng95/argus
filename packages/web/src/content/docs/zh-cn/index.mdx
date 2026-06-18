@@ -37,9 +37,13 @@ OpenCorvus 把「一次性的代码生成」包装成**可重复、可验收、�
 ## 快速上手
 
 ```bash
-curl -fsSL https://github.com/yangheng95/argus/releases/latest/download/install.sh | bash
+git clone https://github.com/yangheng95/opencorvus.git
+cd opencorvus
+bun install
+bun run --cwd packages/opencorvus build
+OPENCORVUS_SOURCE=/path/to/opencorvus/packages/opencorvus/src/index.ts
 cd /path/to/your/repo
-opencorvus serve
+bun "$OPENCORVUS_SOURCE" serve
 # 打开 http://127.0.0.1:7878/ui/
 ```
 
@@ -54,4 +58,4 @@ opencorvus serve
 - [**CLI**](/docs/zh-cn/cli/)、[**Server**](/docs/zh-cn/server/)、[**SDK**](/docs/zh-cn/sdk/) — 运行参考
 - [**故障排查**](/docs/zh-cn/troubleshooting/) — 按症状定位
 
-仓库：[yangheng95/argus](https://github.com/yangheng95/argus)。
+仓库：[yangheng95/opencorvus](https://github.com/yangheng95/opencorvus)。

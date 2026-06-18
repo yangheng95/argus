@@ -16,6 +16,7 @@ import { CronService } from "../scheduler/cron-service"
 import { EventService } from "../scheduler/event-service"
 import { TaskQueueService } from "../scheduler/task-queue-service"
 import { EngineService } from "@/task-api"
+import { EngineEventLog } from "@/engine/event-log"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Config } from "@/config/config"
 import { ensureTaskMessageProtocolBridge } from "@/orchestrator/protocol/message-bridge"
@@ -40,6 +41,7 @@ export async function InstanceBootstrap() {
   EventService.init()
   TaskQueueService.init()
   EngineService.init()
+  EngineEventLog.init()
   ensureTaskMessageProtocolBridge()
   await TerminalProfile.ensureProjectDefaultProfile()
   await ChannelSupervisor.sync(await Config.get()).catch((error) => {

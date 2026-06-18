@@ -1,6 +1,13 @@
 # Build Agent Integrity Review Uptake - 2026-05-23
 
-Status: design draft. No runtime code is changed by this document.
+Status: implemented history as of 2026-06-17. Current runtime sources are
+`packages/opencorvus/src/integrity/build-feedback.ts`,
+`packages/opencorvus/src/integrity/root-history.ts`,
+`packages/opencorvus/src/orchestrator/tools.ts`, and the build-feedback tests
+under `packages/opencorvus/test/integrity/`,
+`packages/opencorvus/test/build-agent/`, and
+`packages/opencorvus/test/orchestrator/`. This file is retained as historical
+design evidence, not as a pending implementation checklist.
 
 CLAUDE.md rules that govern this change:
 

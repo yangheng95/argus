@@ -7,9 +7,7 @@ const createTaskOwnerLocks = new Map<string, Promise<unknown>>()
 export function taskCreationOwnerKeys(input: z.infer<typeof CreateTaskInput>): string[] {
   const keys: string[] = []
   if (input.channelBinding) {
-    keys.push(
-      `channel:${input.channelBinding.platform}:${input.channelBinding.channel}:${input.channelBinding.thread}`,
-    )
+    keys.push(`channel:${input.channelBinding.platform}:${input.channelBinding.channel}:${input.channelBinding.thread}`)
   }
   const metadata = input.metadata
   if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {

@@ -13,22 +13,22 @@ Each thread maps to one OpenCorvus session; all messages in a thread share the s
 
 ## Supported 14 channels
 
-| Channel                         | Adapter                      | Transport             |
-| ------------------------------- | ---------------------------- | --------------------- |
-| [Slack](./slack.md)             | `src/adapters/slack.ts`      | Socket Mode           |
-| [Telegram](./telegram.md)       | `src/adapters/telegram.ts`   | Long polling          |
-| [Discord](./discord.md)         | `src/adapters/discord.ts`    | Gateway WebSocket     |
-| [Feishu / Lark](./feishu.md)    | `src/adapters/feishu.ts`     | Webhook               |
-| [WhatsApp](./whatsapp.md)       | `src/adapters/whatsapp.ts`   | Webhook (WA Business) |
-| [Google Chat](./googlechat.md)  | `src/adapters/googlechat.ts` | Webhook               |
-| [Microsoft Teams](./msteams.md) | `src/adapters/msteams.ts`    | Webhook               |
-| [LINE](./line.md)               | `src/adapters/line.ts`       | Webhook               |
-| [Matrix](./matrix.md)           | `src/adapters/matrix.ts`     | Long polling          |
-| [Mattermost](./mattermost.md)   | `src/adapters/mattermost.ts` | Webhook               |
-| [Signal](./signal.md)           | `src/adapters/signal.ts`     | signal-cli REST       |
-| [WeCom](./wecom.md)             | `src/adapters/wecom.ts`      | Webhook               |
-| [DingTalk](./dingtalk.md)       | `src/adapters/dingtalk.ts`   | Webhook               |
-| [QQ](./qq.md)                   | `src/adapters/qq.ts`         | QQ Bot                |
+| Channel                         | Adapter                                               | Transport             |
+| ------------------------------- | ----------------------------------------------------- | --------------------- |
+| [Slack](./slack.md)             | `packages/channel-runtime/src/adapters/slack.ts`      | Socket Mode           |
+| [Telegram](./telegram.md)       | `packages/channel-runtime/src/adapters/telegram.ts`   | Long polling          |
+| [Discord](./discord.md)         | `packages/channel-runtime/src/adapters/discord.ts`    | Gateway WebSocket     |
+| [Feishu / Lark](./feishu.md)    | `packages/channel-runtime/src/adapters/feishu.ts`     | Webhook               |
+| [WhatsApp](./whatsapp.md)       | `packages/channel-runtime/src/adapters/whatsapp.ts`   | Webhook (WA Business) |
+| [Google Chat](./googlechat.md)  | `packages/channel-runtime/src/adapters/googlechat.ts` | Webhook               |
+| [Microsoft Teams](./msteams.md) | `packages/channel-runtime/src/adapters/msteams.ts`    | Webhook               |
+| [LINE](./line.md)               | `packages/channel-runtime/src/adapters/line.ts`       | Webhook               |
+| [Matrix](./matrix.md)           | `packages/channel-runtime/src/adapters/matrix.ts`     | Long polling          |
+| [Mattermost](./mattermost.md)   | `packages/channel-runtime/src/adapters/mattermost.ts` | Webhook               |
+| [Signal](./signal.md)           | `packages/channel-runtime/src/adapters/signal.ts`     | signal-cli REST       |
+| [WeCom](./wecom.md)             | `packages/channel-runtime/src/adapters/wecom.ts`      | Webhook               |
+| [DingTalk](./dingtalk.md)       | `packages/channel-runtime/src/adapters/dingtalk.ts`   | Webhook               |
+| [QQ](./qq.md)                   | `packages/channel-runtime/src/adapters/qq.ts`         | QQ Bot                |
 
 Registry: `packages/channel-config/src/index.ts` `ChannelCatalog`.
 
@@ -40,7 +40,7 @@ cp .env.example .env
 bun run dev
 ```
 
-`registerAdapters()` (`src/registry.ts:242`) auto-scans env and **starts only the channels with required tokens**; others are skipped. It does not crash when one channel is unconfigured.
+`registerAdapters()` (`packages/channel-runtime/src/registry.ts`) auto-scans env and **starts only the channels with required tokens**; others are skipped. It does not crash when one channel is unconfigured.
 
 ## Backend comms
 
@@ -63,7 +63,7 @@ User posts on IM
   ↓
 <Platform>Adapter.onMessage(IncomingMessage)
   ↓
-ChannelRuntime.handleMessage()          [src/core.ts:235]
+ChannelRuntime.handleMessage()          [packages/channel-runtime/src/core.ts]
   ├─ audio → STTPipeline.transcribe()
   ├─ SessionCoordinator.get(threadKey)
   ├─ new thread → client.session.create()
@@ -71,7 +71,7 @@ ChannelRuntime.handleMessage()          [src/core.ts:235]
 
 Backend processes → SSE pushes events back
   ↓
-handleEvent(event)                      [src/core.ts:1132]
+handleEvent(event)                      [packages/channel-runtime/src/core.ts]
   ├─ task.report → safeSend() progress
   ├─ message.updated → text buffer → safeSend()
   ├─ part.updated(image) → uploadImage()
@@ -81,8 +81,8 @@ handleEvent(event)                      [src/core.ts:1132]
 ## Adding a new channel
 
 1. **Register** — add a `define({...})` entry to `ChannelCatalog` in `packages/channel-config/src/index.ts`; add the id to the `ChannelId` enum.
-2. **Adapter** — implement the `ChannelAdapter` interface (`src/adapter.ts:9`): `start / stop / sendMessage / onMessage`; optionally `uploadImage / startThread`.
-3. **Wire** — add a case to `AdapterOptions` and `build()` in `packages/channel-runtime/src/registry.ts`; pass the factory into `registerAdapters()` in `main.ts`.
+2. **Adapter** — implement the `ChannelAdapter` interface (`packages/channel-runtime/src/adapter.ts`): `start / stop / sendMessage / onMessage`; optionally `uploadImage / startThread`.
+3. **Wire** — add a case to `AdapterOptions` and `build()` in `packages/channel-runtime/packages/channel-runtime/src/registry.ts`; pass the factory into `registerAdapters()` in `packages/channel-runtime/src/main.ts`.
 
 Reference: [Slack implementation](./slack.md).
 
@@ -90,7 +90,7 @@ Reference: [Slack implementation](./slack.md).
 
 | Feature            | Env control                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------- |
-| STT                | `STT_PROVIDERS=groq,openai-whisper,deepgram,google-gemini,local-cli`                  |
+| STT                | `STT_PROVIDER=groq`                                                                   |
 | Vision             | `OPENCORVUS_VISION_MODEL`                                                             |
 | Permission profile | `OPENCORVUS_CHANNEL_PERMISSION_PROFILE=restricted\|standard\|permissive\|passthrough` |
 | Attachment upload  | `POST /channel/attachment`                                                            |

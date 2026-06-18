@@ -1,7 +1,8 @@
-DEPRECATED for visual / clone / layout work. Dispatch `frontend_design` for
-webpage reference extraction and frontend template synthesis. `webfetch` returns flat
-text/markdown/html and throws away visual and structural signals such as DOM
-tree, per-element computed styles, reference screenshots, and asset manifests.
+Text-only retrieval boundary: dispatch `frontend_design` for webpage reference
+extraction and frontend template synthesis. `webfetch` returns flat
+text/markdown/html and does not preserve visual and structural signals such as
+DOM tree, per-element computed styles, reference screenshots, and asset
+manifests.
 
 Use `webfetch` only for pure-text content where no visual or structural
 analysis is needed: API documentation, README files, plain JSON / XML
@@ -11,7 +12,7 @@ through `frontend_design` instead.
 
 Usage notes:
   - Visual reference extraction is owned by frontend-design. Do not use
-    `webfetch` as a fallback for missing frontend-design evidence.
+    `webfetch` to replace missing frontend-design evidence.
   - The URL must be a fully-formed valid URL (http/https).
   - Format options: "markdown" (default), "text", or "html".
   - This tool is read-only and does not modify any files.

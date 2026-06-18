@@ -5,10 +5,10 @@ import { AttachmentStore } from "../../src/storage/attachment-store"
 // receiving 64-character sha names like
 // `529bae80ab6f536429433755ed5710e9bba81299a98ceaa34aaf30c85969b690.png`
 // in the attachment inventory. Root cause was three call sites each
-// implementing their own `filename ?? sha` fallback — when the upload
+// implementing their own `filename ?? sha` substitute — when the upload
 // path lost the original name, the sha leaked through. These tests
 // pin the single-source helper down so any future caller (rule 9)
-// gets a readable handle without re-inventing the fallback.
+// gets a readable handle without re-inventing another naming policy.
 
 describe("AttachmentStore.displayFilename", () => {
   test("returns the original name when it is shell-safe", () => {
@@ -33,7 +33,7 @@ describe("AttachmentStore.displayFilename", () => {
     ).toBe("另一个 截图.png")
   })
 
-  test("falls back to attachment-<i>-<sha8>.<ext> when name is missing", () => {
+  test("generates attachment-<i>-<sha8>.<ext> when name is missing", () => {
     expect(
       AttachmentStore.displayFilename({
         filename: undefined,
@@ -44,7 +44,7 @@ describe("AttachmentStore.displayFilename", () => {
     ).toBe("attachment-1-529bae80.png")
   })
 
-  test("falls back when name contains shell-unsafe characters", () => {
+  test("generates a display name when name contains shell-unsafe characters", () => {
     expect(
       AttachmentStore.displayFilename({
         filename: "evil$name|with;chars.png",
@@ -55,7 +55,7 @@ describe("AttachmentStore.displayFilename", () => {
     ).toBe("attachment-3-01234567.png")
   })
 
-  test("falls back when name contains a path separator", () => {
+  test("generates a display name when name contains a path separator", () => {
     expect(
       AttachmentStore.displayFilename({
         filename: "../etc/passwd",

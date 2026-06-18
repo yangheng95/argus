@@ -3,7 +3,7 @@ title: GitHub Action
 description: 在 PR 或 Issue 评论区用 /oc 或 /opencorvus 触发 AI 编码代理，无需离开 GitHub。
 ---
 
-源码：`github/action.yml`（Action 定义）、`github/index.ts`（运行时）。
+源码：`github/action.yml`（Action 定义）、`packages/opencorvus/src/cli/cmd/github.ts`（运行时）。
 
 ## 定位
 
@@ -14,25 +14,24 @@ description: 在 PR 或 Issue 评论区用 /oc 或 /opencorvus 触发 AI 编码�
 3. 解析 GitHub 事件 payload，构造 prompt，通过 `@opencorvus-ai/sdk` 发给本地服务
 4. 结果经 Octokit 写回 Issue/PR 评论；代码有变动时自动 commit、push、开 PR
 
-支持触发事件（`github/index.ts:127-128`）：
+支持触发事件（`packages/opencorvus/src/cli/cmd/github.ts`）：
 
 - `issue_comment` — Issue 评论、PR 评论（通过 `issue.pull_request` 区分）
 - `pull_request_review_comment` — PR "Files" 标签页的行级 review 评论
 
 ## 输入参数
 
-| 参数               | 必填 | 默认                        | 说明                                                      |
-| ------------------ | ---- | --------------------------- | --------------------------------------------------------- |
-| `model`            | ✓    | —                           | `provider/model`，如 `anthropic/claude-sonnet-4-20250514` |
-| `agent`            | —    | config 的 `default_agent`   | 主 agent；subagent 不生效                                 |
-| `share`            | —    | 公开仓库 `true`             | 是否共享到 `opencorvus.ai/s/<id>`                         |
-| `prompt`           | —    | —                           | 自定义 prompt，覆盖默认行为                               |
-| `use_github_token` | —    | `false`                     | 用 `GITHUB_TOKEN` 直通，跳过 OIDC 流程                    |
-| `mentions`         | —    | `/opencorvus,/oc`           | 触发短语（逗号分隔，大小写不敏感）                        |
-| `variant`          | —    | —                           | provider 推理等级（`high` / `max` / `minimal`）           |
-| `oidc_base_url`    | —    | `https://api.opencorvus.ai` | 自定义 App 安装时的 OIDC 换 token 接口                    |
+| 参数               | 必填 | 默认                        | 说明                                            |
+| ------------------ | ---- | --------------------------- | ----------------------------------------------- |
+| `model`            | ✓    | —                           | `provider/model`，如 `alibaba-cn/qwen3.5-plus`  |
+| `share`            | —    | 公开仓库 `true`             | 是否共享到 `opencorvus.ai/s/<id>`               |
+| `prompt`           | —    | —                           | 自定义 prompt，覆盖默认行为                     |
+| `use_github_token` | —    | `false`                     | 用 `GITHUB_TOKEN` 直通，跳过 OIDC 流程          |
+| `mentions`         | —    | `/opencorvus,/oc`           | 触发短语（逗号分隔，大小写不敏感）              |
+| `variant`          | —    | —                           | provider 推理等级（`high` / `max` / `minimal`） |
+| `oidc_base_url`    | —    | `https://api.opencorvus.ai` | 自定义 App 安装时的 OIDC 换 token 接口          |
 
-（`github/action.yml:7-39`）
+（`github/action.yml`）
 
 ## 产物
 
@@ -41,9 +40,9 @@ Action 无 `outputs:` 字段。运行期产物：
 - **评论更新**：立即创建 `[Working...](<run-url>)` 占位评论，完成后替换为 AI 回复
 - **代码提交**：工作树脏 → 自动 commit + push；author=`opencorvus-agent[bot]`，co-author=触发用户
 - **PR 创建**：Issue 场景下有代码变更时自动开 PR，title=AI 摘要（≤40 字符），body 含 `Closes #<issue>`
-- **共享链接**（可选）：附 `opencorvus.ai/s/<shareId>` 与社交卡片
+- **共享链接**（可选）：附 `opencorvus.ai/s/<shareId>`
 
-（`github/index.ts:141-208`）
+（`packages/opencorvus/src/cli/cmd/github.ts`）
 
 ## Secrets 配置
 
@@ -68,13 +67,24 @@ env:
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-跳过 OIDC 与权限校验（`github/index.ts:762-764`）。
+跳过 OIDC 与权限校验。
 
 ## GITHUB_TOKEN 权限
+
+默认 App/OIDC 安装保持 `GITHUB_TOKEN` 只读。写权限来自 OIDC 换到的 App Token：
 
 ```yaml
 permissions:
   id-token: write # OIDC（方式 A 必需）
+  contents: read
+  pull-requests: read
+  issues: read
+```
+
+使用 `use_github_token: true` 时，workflow 直接使用 `GITHUB_TOKEN`，必须显式授予写权限：
+
+```yaml
+permissions:
   contents: write # git push / 分支
   pull-requests: write # 开 PR / 评论
   issues: write # 创建/更新 Issue 评论
@@ -84,11 +94,11 @@ permissions:
 
 ## 权限校验
 
-用户发 `/oc` 时校验其仓库权限必须为 `admin` 或 `write`；失败拒绝执行。方式 B 跳过（`github/index.ts:757-782`）。
+用户发 `/oc` 时校验其仓库权限必须为 `admin` 或 `write`；失败拒绝执行。方式 B 跳过。
 
 ## 完整 workflow 示例
 
-### 默认配置（App + Anthropic）
+### 默认配置（App + DashScope）
 
 ```yaml
 name: opencorvus
@@ -105,17 +115,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: write
-      pull-requests: write
-      issues: write
+      contents: read
+      pull-requests: read
+      issues: read
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 1 }
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: yangheng95/opencorvus/github@latest
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
         with:
-          model: anthropic/claude-sonnet-4-20250514
+          model: alibaba-cn/qwen3.5-plus
 ```
 
 ### 阿里云 DashScope（本仓库实际配置）
@@ -134,7 +145,9 @@ jobs:
       pull-requests: read
       issues: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: yangheng95/opencorvus/github@latest
         env:
           DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
@@ -142,7 +155,7 @@ jobs:
             {"provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}
           OPENCORVUS_PERMISSION: '{"bash": "deny"}'
         with:
-          model: openai/gpt-5.5
+          model: alibaba-cn/qwen3.5-plus
 ```
 
 ## 使用示例
@@ -164,24 +177,19 @@ issue_comment / pull_request_review_comment
   └─ Issue → checkoutNewBranch → chat → pushToNewBranch → createPR
 ```
 
-（`github/index.ts:163-208`）
+（`packages/opencorvus/src/cli/cmd/github.ts`）
 
 ## 本地调试
 
 ```bash
 cd /path/to/test-repo
 
-MODEL=anthropic/claude-sonnet-4-20250514 \
-  ANTHROPIC_API_KEY=sk-ant-... \
+MODEL=alibaba-cn/qwen3.5-plus \
+  DASHSCOPE_API_KEY=sk-... \
   GITHUB_RUN_ID=dummy \
   MOCK_TOKEN=github_pat_... \
   MOCK_EVENT='{"eventName":"issue_comment","repo":{"owner":"o","repo":"r"},"actor":"u","payload":{"issue":{"number":1},"comment":{"id":1,"body":"/opencorvus explain"}}}' \
-  bun /path/to/opencorvus/github/index.ts
+  bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run
 ```
 
-`MOCK_TOKEN` 需 `admin` 或 `write` 权限的 PAT（`github/README.md:110-166`）。
-
-## 已知问题
-
-- `isScheduleEvent()` 在 `github/index.ts:580` 被调用但**未定义**——cron 触发未实装
-- `cron` / `schedule` 事件不在 `assertContextEvent()` 白名单（`github/index.ts:292-298`），即使配置也会被直接拒绝
+`MOCK_TOKEN` 需 `admin` 或 `write` 权限的 PAT。

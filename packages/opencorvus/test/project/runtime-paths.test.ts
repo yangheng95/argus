@@ -14,7 +14,9 @@ describe("ProjectRuntimePaths short runtime layout", () => {
     const taskKey = Identifier.directoryKey(taskID)
 
     expect(taskKey).toMatch(/^[0-9A-Za-z]{8}$/)
-    expect(ProjectRuntimePaths.taskRoot(root, taskID)).toBe(path.join(root, ".opencorvus", "r", "t", ...fanout(taskKey)))
+    expect(ProjectRuntimePaths.taskRoot(root, taskID)).toBe(
+      path.join(root, ".opencorvus", "r", "t", ...fanout(taskKey)),
+    )
     expect(ProjectRuntimePaths.intentPaths(root, taskID).relative).toBe(
       path.posix.join(".opencorvus", "r", "t", ...fanout(taskKey), "intent", "request.md"),
     )
@@ -91,6 +93,20 @@ describe("ProjectRuntimePaths short runtime layout", () => {
     expect(ProjectRuntimePaths.isInternalRuntimeRelativePath(".opencorvus/opencorvus.jsonc")).toBe(false)
   })
 
+  test("internalRuntimeRelativePaths keeps only host-owned runtime paths", () => {
+    expect(
+      ProjectRuntimePaths.internalRuntimeRelativePaths([
+        "./.opencorvus/r/t/ab/cdef12/stage1/evidence-manifest-prd.md",
+        ".opencorvus\\runtime\\tasks\\legacy\\frontend-design\\frontend-template.md",
+        ".opencorvus/opencorvus.jsonc",
+        "docs/reference/world-economy/stage1/evidence-manifest-prd.md",
+      ]),
+    ).toEqual([
+      "./.opencorvus/r/t/ab/cdef12/stage1/evidence-manifest-prd.md",
+      ".opencorvus\\runtime\\tasks\\legacy\\frontend-design\\frontend-template.md",
+    ])
+  })
+
   test("mission roots use git-style fanout under the short runtime root", () => {
     const root = "C:\\repo"
     const missionID = "tv-replay"
@@ -122,7 +138,9 @@ describe("ProjectRuntimePaths short runtime layout", () => {
     const newDirectory = ProjectRuntimePaths.worktreeDir(root, taskID, goalID, runID)
     const newBranch = ProjectRuntimePaths.worktreeBranch({ taskID, goalID, runID })
 
-    expect(oldDirectory.length + oldBranch.length - (newDirectory.length + newBranch.length)).toBeGreaterThanOrEqual(120)
+    expect(oldDirectory.length + oldBranch.length - (newDirectory.length + newBranch.length)).toBeGreaterThanOrEqual(
+      120,
+    )
   })
 
   test("goal worktree paths do not collide for same-millisecond goal IDs", () => {

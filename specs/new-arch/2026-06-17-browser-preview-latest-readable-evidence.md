@@ -10,14 +10,14 @@ capture, and later failed to load the evidence route.
 
 ## Call Points
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Latest evidence query | `packages/opencorvus/src/browser-preview/persist.ts` | Return only latest readable `preview-capture` evidence per viewport; unreadable rows are skipped. |
-| Readable evidence helpers | `packages/opencorvus/src/browser-preview/persist.ts` | Require explicit `projectRoot` for artifact readability checks; no helper infers it from ambient instance state. |
-| Target resolution | `packages/opencorvus/src/browser-preview/target.ts` | Await readable latest IDs before returning a ready target. |
-| Server browser preview routes | `packages/opencorvus/src/server/routes/browser-preview.ts` | Pass `Instance.directory` as the task project root into every evidence read helper. |
-| Verification result | `packages/opencorvus/src/browser-preview/verification-core.ts` | Keep freshly persisted evidence IDs from the capture operation. |
-| Route tests | `packages/opencorvus/test/server/browser-preview-routes.test.ts` | Cover newer corrupt evidence plus older readable evidence. |
+| Surface                       | File                                                             | Decision                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Latest evidence query         | `packages/opencorvus/src/browser-preview/persist.ts`             | Return only latest readable `preview-capture` evidence per viewport; unreadable rows are skipped.                |
+| Readable evidence helpers     | `packages/opencorvus/src/browser-preview/persist.ts`             | Require explicit `projectRoot` for artifact readability checks; no helper infers it from ambient instance state. |
+| Target resolution             | `packages/opencorvus/src/browser-preview/target.ts`              | Await readable latest IDs before returning a ready target.                                                       |
+| Server browser preview routes | `packages/opencorvus/src/server/routes/browser-preview.ts`       | Pass `Instance.directory` as the task project root into every evidence read helper.                              |
+| Verification result           | `packages/opencorvus/src/browser-preview/verification-core.ts`   | Keep freshly persisted evidence IDs from the capture operation.                                                  |
+| Route tests                   | `packages/opencorvus/test/server/browser-preview-routes.test.ts` | Cover newer corrupt evidence plus older readable evidence.                                                       |
 
 ## Implementation
 

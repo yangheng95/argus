@@ -1,37 +1,39 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { mkdir } from "node:fs/promises"
+import { createRequire } from "node:module"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { chromium } from "../../../packages/overlay/node_modules/playwright/index.mjs"
+
+const overlayRequire = createRequire(new URL("../../../packages/overlay/package.json", import.meta.url))
+const { chromium } = overlayRequire("playwright")
 
 const artifactRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const screenshotsDir = resolve(artifactRoot, "screenshots")
-const port = 4197
-const chromePath = "C:/Program Files/Google/Chrome/Application/chrome.exe"
 
 await mkdir(screenshotsDir, { recursive: true })
 
 const server = spawn(process.execPath, ["server.mjs"], {
   cwd: artifactRoot,
-  env: { ...process.env, PORT: String(port) },
+  env: { ...process.env, PORT: "0" },
   stdio: ["ignore", "pipe", "pipe"],
 })
 
 const serverReady = new Promise((resolveReady, rejectReady) => {
   const timer = setTimeout(() => rejectReady(new Error("Static server did not start")), 8000)
   server.stdout.on("data", (chunk) => {
-    if (chunk.toString().includes(`http://127.0.0.1:${port}`)) {
+    const match = chunk.toString().match(/http:\/\/127\.0\.0\.1:(\d+)/)
+    if (match) {
       clearTimeout(timer)
-      resolveReady()
+      resolveReady(Number(match[1]))
     }
   })
   server.stderr.on("data", (chunk) => rejectReady(new Error(chunk.toString())))
 })
 
 try {
-  await serverReady
-  const browser = await chromium.launch({ headless: true, executablePath: chromePath })
+  const port = await serverReady
+  const browser = await chromium.launch({ headless: true })
   for (const viewport of [
     { name: "desktop", width: 1440, height: 1400 },
     { name: "mobile", width: 390, height: 1200 },

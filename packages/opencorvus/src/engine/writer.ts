@@ -206,7 +206,7 @@ async function finalizeInterruptedQueueTasks(queueTaskIDs: Array<string | undefi
         time_completed: now,
         time_updated: now,
       })
-      .where(and(inArray(TaskQueueTable.id, ids), inArray(TaskQueueTable.status, ["queued", "retrying", "running"])))
+      .where(and(inArray(TaskQueueTable.id, ids), inArray(TaskQueueTable.status, ["queued", "running"])))
       .run(),
   )
 }
@@ -520,11 +520,6 @@ function affectedRunsForGoalRuns(taskID: string, goalRuns: GoalRunRow[]): RunRow
   })
 }
 
-function latestRunWasTerminalizedByReason(taskID: string, reason: string): boolean {
-  const run = findRuns(taskID)[0]
-  return !!run && (run.status === "failed" || run.status === "aborted") && run.error === reason
-}
-
 async function abortRunsForRows(rows: RunRow[], reason: string): Promise<number> {
   const unique = new Map(rows.map((row) => [row.id, row]))
   return abortRuns([...unique.values()], reason)
@@ -607,49 +602,34 @@ export async function abortCurrentProcessLiveExecution(input: {
   return { tasks, sessions, toolParts, goalRuns, runs, ownerships, corruptTasks }
 }
 
-/**
- * Startup convergence for live goal attempts whose owning process is gone.
- *
- * This records physical death as terminal facts. It does not dispatch, wake,
- * retry, or synthesize operator messages.
- */
+/** Read-only startup inspection for live goal attempts whose owning process is gone. */
 export async function convergeDeadOwnerLiveExecution(input: {
   reason: string
 }): Promise<AbortProcessLiveExecutionResult> {
   let tasks = 0
-  let sessions = 0
-  let toolParts = 0
   let goalRuns = 0
   let runs = 0
   let corruptTasks = 0
+  void input.reason
 
   for (const task of listActiveTasks()) {
     await provideTaskRootSessionDirectory(task, async () => {
       const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
         (row) => row.status !== "queued" && isGoalRunOrphaned(row),
       )
-      if (orphanGoalRuns.length === 0 && !latestRunWasTerminalizedByReason(task.id, input.reason)) return
+      if (orphanGoalRuns.length === 0) return
+      tasks += 1
       if (task.project_id === "global") {
         corruptTasks += 1
-        log.error("convergeDeadOwnerLiveExecution: corrupt global task terminalized", { taskID: task.id })
+        log.error("convergeDeadOwnerLiveExecution: corrupt global task has dead-owner execution", { taskID: task.id })
       }
 
-      if (orphanGoalRuns.length > 0) {
-        goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)
-        const affectedRuns = affectedRunsForGoalRuns(task.id, orphanGoalRuns)
-        runs += await abortRunsForRows(affectedRuns, input.reason)
-      }
-      const taskResult = await terminateTaskOwnedSessionsAndFail({
-        task: findTask(task.id) ?? task,
-        reason: input.reason,
-      })
-      tasks += taskResult.tasks
-      sessions += taskResult.sessions
-      toolParts += taskResult.toolParts
+      goalRuns += new Set(orphanGoalRuns.map((row) => row.id)).size
+      runs += new Set(affectedRunsForGoalRuns(task.id, orphanGoalRuns).map((row) => row.id)).size
     })
   }
 
-  return { tasks, sessions, toolParts, goalRuns, runs, ownerships: 0, corruptTasks }
+  return { tasks, sessions: 0, toolParts: 0, goalRuns, runs, ownerships: 0, corruptTasks }
 }
 
 /**

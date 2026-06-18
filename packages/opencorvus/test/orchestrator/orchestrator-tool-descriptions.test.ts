@@ -96,17 +96,15 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   })
 
   test("frontend tool schemas expose one registered field per tool input", () => {
-    expect(Object.keys(tools.frontend_design.inputSchema!.shape)).toEqual([
-      "reason",
-      "url",
-      "urls",
-      "figma_url",
-      "materials",
-    ])
+    expect(Object.keys(tools.frontend_design.inputSchema!.shape)).toEqual(["reason", "urls", "figma_url", "materials"])
     expect(
       tools.frontend_design.inputSchema!.safeParse({ reason: "visual reference", urls: ["https://example.com"] })
         .success,
     ).toBe(true)
+    expect(
+      tools.frontend_design.inputSchema!.safeParse({ reason: "old single-url field", url: "https://example.com" })
+        .success,
+    ).toBe(false)
     expect(tools.frontend_design.inputSchema!.safeParse({ urls: ["https://example.com"] }).success).toBe(false)
 
     expect(Object.keys(tools.frontend_research.inputSchema!.shape)).toEqual(["reason", "source_urls", "focus"])
@@ -132,5 +130,27 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     ])
     expect(tools.browser_preview.inputSchema!.safeParse({ command: "npm run dev" }).success).toBe(true)
     expect(tools.browser_preview.inputSchema!.safeParse({ url: "http://127.0.0.1:5173/" }).success).toBe(false)
+  })
+
+  test("subagent control tools expose goal_run_id as its own field", () => {
+    expect(tools.steer_subagent.description).not.toContain("backward compatibility")
+    expect(tools.steer_subagent.description).not.toContain("via session_id")
+    expect(Object.keys(tools.steer_subagent.inputSchema!.shape)).toEqual([
+      "session_id",
+      "goal_id",
+      "goal_run_id",
+      "message",
+      "reason",
+    ])
+
+    expect(tools.cancel_subagent.description).not.toContain("backward compatibility")
+    expect(tools.cancel_subagent.description).not.toContain("via session_id")
+    expect(Object.keys(tools.cancel_subagent.inputSchema!.shape)).toEqual([
+      "session_id",
+      "goal_id",
+      "goal_run_id",
+      "mode",
+      "reason",
+    ])
   })
 })

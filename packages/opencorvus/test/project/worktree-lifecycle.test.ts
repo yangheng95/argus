@@ -62,7 +62,13 @@ function seedTask(
   )
 }
 
-function seedBuildSession(input: { projectID: string; taskID: string; rootSessionID: string; buildSessionID: string; directory: string }) {
+function seedBuildSession(input: {
+  projectID: string
+  taskID: string
+  rootSessionID: string
+  buildSessionID: string
+  directory: string
+}) {
   const now = Date.now()
   Database.use((db) =>
     db.transaction((tx) => {
@@ -248,9 +254,7 @@ describe("Worktree lifecycle", () => {
 
     expect(reused.directory).toBe(info.directory)
     expect(await Filesystem.exists(path.join(reused.directory, paths.sourcePackageRelative, "README.md"))).toBe(false)
-    expect(await Filesystem.exists(path.join(reused.directory, paths.skeletonProjectRelative, "README.md"))).toBe(
-      false,
-    )
+    expect(await Filesystem.exists(path.join(reused.directory, paths.skeletonProjectRelative, "README.md"))).toBe(false)
     const status = await $`git status --porcelain=v1`.cwd(reused.directory).quiet()
     expect(status.stdout.toString().trim()).toBe("")
   }, 30_000)

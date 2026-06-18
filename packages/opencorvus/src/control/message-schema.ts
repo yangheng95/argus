@@ -32,7 +32,10 @@ export const ControlAttachment = z.object({
 export const ControlStoredAttachment = ControlAttachment.extend({
   url: z
     .string()
-    .regex(STORED_ATTACHMENT_URL, "Control result attachments must reference stored /attachment/<projectID>/<name> resources"),
+    .regex(
+      STORED_ATTACHMENT_URL,
+      "Control result attachments must reference stored /attachment/<projectID>/<name> resources",
+    ),
 })
 
 export const ControlMessageResult = z.object({

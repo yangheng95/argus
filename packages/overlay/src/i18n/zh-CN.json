@@ -720,6 +720,7 @@
   "browser_preview.capture_loading": "正在捕获证据",
   "browser_preview.candidates.label": "预览候选页",
   "browser_preview.empty.failed": "预览目标解析失败。",
+  "browser_preview.empty.live_decode_failed": "浏览器实时预览截图解码失败。",
   "browser_preview.empty.live_failed": "实时预览截图失败。",
   "browser_preview.empty.missing": "当前任务没有保存浏览器预览目标。",
   "browser_preview.empty.selection_failed": "预览目标选择失败。",

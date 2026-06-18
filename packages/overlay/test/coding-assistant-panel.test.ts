@@ -61,7 +61,7 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(main).toContain(
     'boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())',
   )
-  expect(main).toContain('missionLauncherActive()')
+  expect(main).toContain("missionLauncherActive()")
   expect(main).toContain('t("mission.launcher.title")')
   expect(main).toContain('t("chat.panel_title")')
   expect(main).toContain("<CodingAssistantSessionList")
@@ -90,11 +90,13 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(main).toContain("<ChatComposer")
   expect(main).toContain("panelMessage(text, attachments")
   expect(main).toContain("assistantSubmitActive()")
-  expect(main).toContain('textareaDataUI={')
+  expect(main).toContain("textareaDataUI={")
   expect(main).toContain('"coding-assistant-composer-input"')
   expect(main).toContain('"coding-assistant-composer-submit"')
   expect(main).toContain('composerDraftKey("assistant", "new", directory)')
-  expect(main).toMatch(/if \(assistantSubmitActive\(\)\)[\s\S]+?await createCodingAssistantSession\(\)[\s\S]+?return await panelMessage/)
+  expect(main).toMatch(
+    /if \(assistantSubmitActive\(\)\)[\s\S]+?await createCodingAssistantSession\(\)[\s\S]+?return await panelMessage/,
+  )
   expect(main).toContain('composerDraftKey("session", sessionID)')
   expect(chat).toContain("session/${encodeURIComponent(sessionID)}/prompt_async")
   expect(chat).toContain("await patchSessionConfig(sessionID, { prompt_profile: { active: promptProfile } })")

@@ -16,11 +16,11 @@ walkthrough translation can fail even though tests pass with an old mock shape.
 
 ## Call Point Sweep
 
-| Surface | Call point | Decision |
-| --- | --- | --- |
-| Translator | `packages/opencorvus/src/acceptance/checks/walkthrough/translate.ts` `fullStream` loop | Parse `part.input` for `tool-call` events. |
-| Type guard | `translate.ts` `isToolCallPart` | Guard `input`, not retired `args`. |
-| Tests | `packages/opencorvus/src/acceptance/checks/walkthrough/translate.test.ts` | Use real AI SDK v6 `input` shape in success/failure tests and assert retired `args` alone does not satisfy the translator. |
+| Surface    | Call point                                                                             | Decision                                                                                                                   |
+| ---------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Translator | `packages/opencorvus/src/acceptance/checks/walkthrough/translate.ts` `fullStream` loop | Parse `part.input` for `tool-call` events.                                                                                 |
+| Type guard | `translate.ts` `isToolCallPart`                                                        | Guard `input`, not retired `args`.                                                                                         |
+| Tests      | `packages/opencorvus/src/acceptance/checks/walkthrough/translate.test.ts`              | Use real AI SDK v6 `input` shape in success/failure tests and assert retired `args` alone does not satisfy the translator. |
 
 ## Acceptance
 

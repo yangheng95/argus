@@ -7,7 +7,7 @@ Worker session 内部是一个**标准的 agentic loop**：LLM 出 tool-call →
 
 ## 三个状态
 
-`SessionLoop`（`packages/opencorvus/src/session/loop.ts:50`）在任何时刻都处于以下三态之一：
+`SessionLoop`（`packages/opencorvus/src/session/loop.ts`）在任何时刻都处于以下三态之一：
 
 | 状态          | 含义                                        | 退出条件            |
 | ------------- | ------------------------------------------- | ------------------- |
@@ -28,7 +28,7 @@ LLM 返回的每个 tool-call 由 `SessionToolResolver`（`src/session/tool-reso
 
 ## 子任务
 
-子任务由 `TaskTool` 发起，在 `runSubtask`（`src/session/loop.ts:88`）里递归进入新的 SessionLoop。这让 agent 可以多层嵌套：主 agent → 研究子 agent → ... → 执行工具。
+子任务由 `TaskTool` 发起，在 `runSubtask`（`src/session/loop.ts`）里递归进入新的 SessionLoop。这让 agent 可以多层嵌套：主 agent → 研究子 agent → ... → 执行工具。
 
 ## 外层循环的触发
 
@@ -53,7 +53,7 @@ reasoning 模型必须用 `toolChoice: "auto"`，不能用 `"required"`。用 re
 
 ### 3. 无活动超时，不是总时长超时
 
-Tool 调用超时必须是"无输出后的真实超时"，不能从启动时刻机械计时。长时间跑 build/test 的 tool 调用是合法的，只要 stdout/stderr 还在流。`OPENCORVUS_TOOL_TIMEOUT_MS` 控制的是**无活动超时**。
+Tool 调用超时必须是"无输出后的真实超时"，不能从启动时刻机械计时。长时间跑 build/test 的 tool 调用是合法的，只要 stdout/stderr 还在流。Bash 使用 bash tool 的无活动超时；`opencorvus run` 事件流 stall 可用 `OPENCORVUS_RUN_STALL_TIMEOUT_MS` 调整。
 
 ### 4. Tool-call 结果必须结构化
 

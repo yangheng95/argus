@@ -1,5 +1,11 @@
 # Coding Agent TUI Independent Plugin Spec - 2026-06-06
 
+> **Status (2026-06-17): Superseded.** The embedded Coding Agent TUI plugin is
+> retired by `specs/new-arch/2026-06-10-tui-removal-plan.md`. Current tests
+> assert that `packages/coding-agent-tui`, `packages/tui-app`, and
+> `/tui/embed/*` stay absent. This file is retained only as historical evidence
+> of the plugin-extraction path that was later abandoned.
+
 ## Problem
 
 The current Coding Agent TUI integration is not an independent plugin.

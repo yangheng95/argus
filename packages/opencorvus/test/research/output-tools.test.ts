@@ -255,7 +255,11 @@ describe("research output tools", () => {
     const draft = kit.getCollector().draft
     if (!draft) throw new Error("draft missing")
 
-    const bundleRoot = ProjectRuntimePaths.deepResearchPaths("", "tsk_research_digest", "ses_research_digest").relativeDir
+    const bundleRoot = ProjectRuntimePaths.deepResearchPaths(
+      "",
+      "tsk_research_digest",
+      "ses_research_digest",
+    ).relativeDir
     const brief = buildResearchBriefFromDraft({
       draft,
       metadata: {

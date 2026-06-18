@@ -144,7 +144,7 @@ describe("feishu adapter", () => {
     await adapter.stop()
   })
 
-  test("falls back to chat send when reply endpoint fails", async () => {
+  test("does not send a new chat message when reply endpoint fails", async () => {
     const calls: Array<{ url: string; body?: string }> = []
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString()
@@ -162,11 +162,7 @@ describe("feishu adapter", () => {
       if (calls.length === 2) {
         return new Response("not found", { status: 404 })
       }
-      return Response.json({
-        data: {
-          message_id: "om_new",
-        },
-      })
+      throw new Error(`unexpected Feishu request: ${url}`)
     }) as typeof globalThis.fetch
 
     const adapter = new FeishuAdapter({
@@ -175,20 +171,10 @@ describe("feishu adapter", () => {
       serve: () => ({ hostname: "127.0.0.1", port: 16666, stop() {} }) as Server,
     })
 
-    await adapter.sendMessage("oc_9", "om_root", "done")
+    await expect(adapter.sendMessage("oc_9", "om_root", "done")).rejects.toThrow("Feishu reply failed: 404 not found")
 
-    expect(calls).toHaveLength(3)
+    expect(calls).toHaveLength(2)
     expect(calls[0]?.url).toContain("/auth/v3/tenant_access_token/internal")
     expect(calls[1]?.url).toContain("/im/v1/messages/om_root/reply")
-    expect(calls[2]?.url).toContain("/im/v1/messages?receive_id_type=chat_id")
-
-    const payload = JSON.parse(calls[2]!.body!) as {
-      receive_id: string
-      msg_type: string
-      content: string
-    }
-    expect(payload.receive_id).toBe("oc_9")
-    expect(payload.msg_type).toBe("text")
-    expect(JSON.parse(payload.content)).toEqual({ text: "done" })
   })
 })

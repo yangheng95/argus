@@ -4,12 +4,8 @@
 // `CardKind`, `CardStatus`, `BoundaryPart`, `StepPayload`) is
 // `store/card-tree.ts`. Per CLAUDE.md rule 22 (no dual-source), this file
 // re-exports those types so consumers can keep importing from utils
-// without forking the type — and holds:
-//
-//  1. `shouldPromoteTool` — historical render heuristic retained for
-//     compatibility with older callers and policy discussions.
-//  2. `defaultExpandedForNode` / `collectCardText` — render-side helpers
-//     used by Card / CardHeader.
+// without forking the type, and holds render-side helpers used by Card /
+// CardHeader.
 import { cardTreeStore } from "../store/card-tree"
 import type {
   CardNode,
@@ -29,7 +25,7 @@ export type { CardNode, CardKind, CardStatus, StepPayload, BoundaryPart } from "
 // fields are never populated. Store-backed cards always carry the cache after
 // the first `flushCardStats` call. Detecting "transient" precisely is hard, so
 // we use a conservative rule: a node with inline children OR without cached
-// counts falls back to the recursive walk below.
+// counts uses the recursive walk below.
 function shouldUseCachedStats(node: CardNode): boolean {
   if (!node) return false
   if (Array.isArray(node.children) && node.children.length > 0) return false
@@ -59,55 +55,10 @@ function normGoalStatus(raw: any): CardStatus | undefined {
   return normStatus(raw)
 }
 
-// ── Tool expansion heuristic ──
-// Historical name kept because downstream code already imports it. The
-// function answers the historical question: which tool outputs are substantial
-// enough to deserve card-style treatment or default expansion policy?
-// Current CardParts behavior renders every tool as a card and leaves completed
-// tools collapsed by default, but the heuristic is kept as a single policy hook.
-
 // Todo tools render a structured checklist; inline chips would hide the list,
 // and a collapsed completed card would hide the plan itself — so they stay
-// both promoted and expanded regardless of completion status.
+// expanded regardless of completion status.
 const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"])
-const ALWAYS_PROMOTE_TOOLS = new Set(["task", "agent", "spawnagent", "subagent", ...TODO_TOOLS])
-const CODE_WRITE_TOOLS = new Set(["write", "writefile", "edit", "editfile", "applypatch"])
-
-const PROMOTE_OUTPUT_CHARS = 500
-const PROMOTE_READ_LINES = 20
-const PROMOTE_BASH_LINES = 10
-
-function countLines(s: string): number {
-  if (!s) return 0
-  let n = 1
-  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++
-  return n
-}
-
-export function shouldPromoteTool(part: any): boolean {
-  if (!part || part.type !== "tool") return false
-  const key = toolNameKey(part.tool || "")
-  if (ALWAYS_PROMOTE_TOOLS.has(key)) return true
-  const state = part.state || {}
-  const status = state.status
-  const input = state.input || {}
-  const output = String(state.output || "")
-  const error = String(state.error || "")
-  if (status === "error" && (error || output)) return true
-  if (CODE_WRITE_TOOLS.has(key)) {
-    // Promoting write/edit even while running gives users a container to
-    // watch the diff accumulate.
-    if (input && (input.content || input.new_string || input.text)) return true
-  }
-  if (key === "read" || key === "readfile") {
-    if (countLines(output) > PROMOTE_READ_LINES) return true
-  }
-  if (key === "bash" || key === "shellcommand" || key === "runcommand") {
-    if (countLines(output) > PROMOTE_BASH_LINES) return true
-  }
-  if (output.length > PROMOTE_OUTPUT_CHARS) return true
-  return false
-}
 
 // ── Part flattening ──
 
@@ -417,8 +368,7 @@ export function collectLatestActivityText(node: CardNode): string {
 // shared by the Board streaming surfaces and the ConversationAgentRail
 // "latest message" preview. Role is preserved verbatim (empty string when
 // the boundary carried none); callers that require a role assert it
-// themselves rather than this splitter inventing an assistant fallback
-// (一个萝卜一个坑).
+// themselves rather than this splitter inventing an assistant role.
 
 export interface CardMessageSegment {
   id: string
@@ -434,7 +384,7 @@ export function cardMessageSegments(card: CardNode): CardMessageSegment[] {
   let boundary: BoundaryPart | null = null
   let buffer: any[] = []
   // A message-turn card IS one message and carries no in-card boundary
-  // (the card itself is the boundary). Fall back to the card's own
+  // (the card itself is the boundary). Use the card's own
   // role/stage for that single segment. Phase-absorbed cards still carry
   // boundary parts (they fold N sub-sessions) and split exactly as before.
   const cardRole =

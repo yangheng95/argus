@@ -37,13 +37,13 @@ Package the Linux x64 binary version of OpenCorvus and run it in WSL against pro
 
 Full-repo grep for `stdio.mjs`, `http.mjs`, `mcpHttpBundle`, `mcpBundle`, `buildBrowserMcpNodeBundle`, and `browser-mcp-node` found these call points:
 
-| Surface | Files | Action |
-| --- | --- | --- |
-| Packaged Browser MCP build | `packages/opencorvus/script/build.ts`, `packages/opencorvus/script/build.local.ts` | Replace the two packaged entrypoints with one Browser MCP bundle file. |
-| Packaged Browser MCP runtime paths | `packages/opencorvus/src/browser/runtime/node-sidecar.ts`, `packages/opencorvus/src/mcp/browser/node-launcher.ts` | Resolve one packaged bundle path and pass the desired transport as an argument when spawning Node. |
-| Packaging and container checks | `packages/opencorvus/test/script/package-linux-binary.test.ts`, `packages/opencorvus/Dockerfile`, `docs/packaging.md` | Assert one packaged Browser MCP bundle file instead of separate `stdio.mjs` and `http.mjs`. |
-| Runtime tests | `packages/opencorvus/test/browser/node-sidecar.test.ts`, `packages/opencorvus/test/mcp/browser-node-launcher.test.ts` | Pin the one-file packaged bundle contract for both transports. |
-| Historical specs | `specs/new-arch/2026-06-02-overlay-browser-mcp-self-contained-runtime.md`, `specs/new-arch/2026-06-03-browser-node-runtime-convergence.md` | Keep historical notes unchanged except this WSL packaging plan now records the newer single-file requirement. |
+| Surface                            | Files                                                                                                                                      | Action                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Packaged Browser MCP build         | `packages/opencorvus/script/build.ts`, `packages/opencorvus/script/build.local.ts`                                                         | Replace the two packaged entrypoints with one Browser MCP bundle file.                                        |
+| Packaged Browser MCP runtime paths | `packages/opencorvus/src/browser/runtime/node-sidecar.ts`, `packages/opencorvus/src/mcp/browser/node-launcher.ts`                          | Resolve one packaged bundle path and pass the desired transport as an argument when spawning Node.            |
+| Packaging and container checks     | `packages/opencorvus/test/script/package-linux-binary.test.ts`, `packages/opencorvus/Dockerfile`, `docs/packaging.md`                      | Assert one packaged Browser MCP bundle file instead of separate `stdio.mjs` and `http.mjs`.                   |
+| Runtime tests                      | `packages/opencorvus/test/browser/node-sidecar.test.ts`, `packages/opencorvus/test/mcp/browser-node-launcher.test.ts`                      | Pin the one-file packaged bundle contract for both transports.                                                |
+| Historical specs                   | `specs/new-arch/2026-06-02-overlay-browser-mcp-self-contained-runtime.md`, `specs/new-arch/2026-06-03-browser-node-runtime-convergence.md` | Keep historical notes unchanged except this WSL packaging plan now records the newer single-file requirement. |
 
 ## Acceptance
 

@@ -40,7 +40,10 @@ describe("control message attachment references", () => {
   })
 
   test("attachment url parser matches the served route shape", () => {
-    expect(AttachmentStore.nameFromUrl("/attachment/project/sha.png")).toEqual({ projectID: "project", name: "sha.png" })
+    expect(AttachmentStore.nameFromUrl("/attachment/project/sha.png")).toEqual({
+      projectID: "project",
+      name: "sha.png",
+    })
     expect(AttachmentStore.nameFromUrl("/attachment/project/sha.png/extra")).toBeUndefined()
     expect(AttachmentStore.nameFromUrl("/attachment/project/sha.png?x=1")).toBeUndefined()
     expect(AttachmentStore.nameFromUrl("/attachment/project/sha.png#x")).toBeUndefined()

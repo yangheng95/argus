@@ -35,9 +35,4 @@ export {
 export { ProtocolEventTable, ProtocolInboxTable } from "../protocol/protocol.sql"
 export { QuickNoteTable } from "../quicknote/quicknote.sql"
 export { DecisionLogTable } from "../decision-log/schema"
-export {
-  EngineMetricSpecTable,
-  EngineMetricResultTable,
-  EngineCounterexampleTable,
-  EngineIterationTable,
-} from "../metrics/metrics.sql"
+export { EngineMetricSpecTable, EngineMetricResultTable, EngineIterationTable } from "../metrics/metrics.sql"

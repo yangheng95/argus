@@ -13,9 +13,9 @@
 //     is string[] so moving a child between parents is two targeted writes.
 //   - Unknown event types throw. No fallback per project rule 1.
 //
-// Behavioural equivalence goal: for the P0 fixture, the tree produced here
-// must match the old-pipeline snapshot byte-for-byte. The equivalence test
-// in `test/new-writer-equivalence.test.ts` enforces this.
+// Behavioural fixture: for the P0 trace, the tree produced here must match the
+// checked-in snapshot byte-for-byte. The equivalence test in
+// `test/new-writer-equivalence.test.ts` enforces this.
 
 import { batch, createEffect } from "solid-js"
 import { produce } from "solid-js/store"
@@ -836,9 +836,41 @@ interface EnsuredPartProjection {
   partID: string
   messageID: string
   sessionID: string
+  displayRole: string
 }
 
-function ensurePartProjection(part: any, opts: { observationTime?: number } = {}): EnsuredPartProjection | null {
+type PartEventRouteMeta = {
+  channel?: unknown
+  resolvedRole?: unknown
+  parentSessionID?: unknown
+  goalID?: unknown
+}
+
+function requirePartEventRouteMeta(meta: PartEventRouteMeta | undefined, messageID: string): {
+  channel: string
+  resolvedRole: string
+  parentSessionID: string
+  goalID: string
+} {
+  const channel = String(meta?.channel || "").trim()
+  const resolvedRole = String(meta?.resolvedRole || "").trim()
+  if (!channel || !resolvedRole) {
+    throw new Error(
+      `message.part.updated for ${messageID} missing top-level channel/resolvedRole; backend bridge must stamp routing metadata outside part`,
+    )
+  }
+  return {
+    channel,
+    resolvedRole,
+    parentSessionID: String(meta?.parentSessionID || ""),
+    goalID: String(meta?.goalID || ""),
+  }
+}
+
+function ensurePartProjection(
+  part: any,
+  opts: { observationTime?: number; routeMeta?: PartEventRouteMeta } = {},
+): EnsuredPartProjection | null {
   if (!part || typeof part !== "object") throw new Error("message.part.updated missing part")
   const partID = String(part.id || "")
   const messageID = String(part.messageID || "")
@@ -850,20 +882,25 @@ function ensurePartProjection(part: any, opts: { observationTime?: number } = {}
   const existingSession = sessions.get(sessionID)
   let session = existingSession
   let cardID = session?.messageCardIDs.get(messageID)
+  let displayRole = messages.get(messageID)?.resolvedRole || ""
+  const eventResolvedRole = String(opts.routeMeta?.resolvedRole || "").trim()
+  if (!displayRole && eventResolvedRole) displayRole = displayRoleForResolvedRole(eventResolvedRole)
 
   if (!session || !cardID) {
-    // Bridge stamps channel/goalID/parentSessionID onto the part. A part can
-    // arrive before its message.updated (saveMessage is silent; updatePart
-    // fires before updateMessage). Because messageID is already known, the
-    // turn card's deterministic id is too — build it now at observation
-    // time. The later message.updated overwrites `time` with the
+    // Bridge stamps channel/goalID/parentSessionID onto the event payload.
+    // A part can arrive before its message.updated (saveMessage is silent;
+    // updatePart fires before updateMessage). Because messageID is already
+    // known, the turn card's deterministic id is too — build it now at
+    // observation time. The later message.updated overwrites `time` with the
     // authoritative server timestamp; no synthetic stub / rename.
-    const stage = deriveSessionStage(part)
+    const route = requirePartEventRouteMeta(opts.routeMeta, messageID)
+    const stage = deriveSessionStage(route)
     if (stage === "filtered") return null
+    displayRole = displayRoleForResolvedRole(route.resolvedRole)
     session = ensureSessionProjection(sessionID, {
       stage,
-      parentSessionID: String(part.parentSessionID || ""),
-      goalID: String(part.goalID || ""),
+      parentSessionID: route.parentSessionID,
+      goalID: route.goalID,
     })
     cardID = session.messageCardIDs.get(messageID)
   }
@@ -873,12 +910,15 @@ function ensurePartProjection(part: any, opts: { observationTime?: number } = {}
   }
   if (!cardID) {
     if (!conversationPartHasDisplay(part)) return null
+    if (!displayRole) {
+      throw new Error(`message.part.updated for ${messageID} missing resolved display role`)
+    }
     const observationTime = opts.observationTime ?? Date.now()
     const message = messages.get(messageID)
     const ensured = ensureMessageTurnProjection(session, messageID, {
       stage: session.stage,
       goalID: session.goalID,
-      role: String(part.resolvedRole || session.stage),
+      role: displayRole,
       time: message?.time || observationTime,
       stampServerTime: Boolean(message?.time),
     })
@@ -888,7 +928,7 @@ function ensurePartProjection(part: any, opts: { observationTime?: number } = {}
         session,
         cardID,
         messageID,
-        String(part.resolvedRole || session.stage),
+        displayRole,
         message?.time || observationTime,
       )
     }
@@ -897,21 +937,25 @@ function ensurePartProjection(part: any, opts: { observationTime?: number } = {}
   }
 
   upsertPart(session, messageID, cardID, partID, { ...part })
-  return { session, cardID, partID, messageID, sessionID }
+  if (!displayRole) {
+    throw new Error(`message.part.updated for ${messageID} could not resolve display role from message or event metadata`)
+  }
+  return { session, cardID, partID, messageID, sessionID, displayRole }
 }
 
 function handlePartUpdated(event: any): void {
-  const part = propsOf(event).part
-  const projection = ensurePartProjection(part)
+  const props = propsOf(event)
+  const part = props.part
+  const projection = ensurePartProjection(part, { routeMeta: props })
   if (!projection) return
-  const { session, cardID, messageID } = projection
+  const { session, cardID, messageID, displayRole } = projection
   if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
     const message = messages.get(messageID)
     ensureBoundaryPart(
       session,
       cardID,
       messageID,
-      String(part?.resolvedRole || session.stage),
+      displayRole,
       message?.time || Date.now(),
     )
     reorderPhaseCardParts(cardID)
@@ -1286,7 +1330,11 @@ function handleStandaloneQuestion(event: any): void {
   }
   const session = sessions.get(sessionID)
   const isKnownMissionSession = session?.stage === "mission"
-  if (!isSelectedStandaloneSession(sessionID) && !isKnownMissionSession && !standaloneQuestionInteractions.has(requestID)) {
+  if (
+    !isSelectedStandaloneSession(sessionID) &&
+    !isKnownMissionSession &&
+    !standaloneQuestionInteractions.has(requestID)
+  ) {
     return
   }
 
@@ -1857,11 +1905,11 @@ function deriveSessionStage(info: any): string {
   // the session's DB `kind` plus the message role, so every semantically
   // distinct bubble already has a correct stage at the source.
   //
-  // Reading this as a fallback chain (channel → agent → resolvedRole →
+  // Reading this as a cascading derivation (channel → agent → resolvedRole →
   // role) previously routed root-session user messages to stage="build"
   // because `info.agent` on user rows is `Agent.defaultAgent()` (="build"
   // under OpenCorvus config). That cascade turned a user bubble into an
-  // orange 「构建」 card — a classic rule-1 fallback bug.
+  // orange 「构建」 card — a classic rule-1 hidden-derivation bug.
   //
   // Channel values:
   //   "main"      → root-session user bubble → stage "user"

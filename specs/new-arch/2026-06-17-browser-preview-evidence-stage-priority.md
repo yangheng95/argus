@@ -29,13 +29,13 @@ rg -n "liveImageUrl|renderedEvidence|data-ui=\"browser-preview-screenshot\"|brow
 
 Findings:
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Stage branch order | `BrowserPreviewPanel.tsx` matches `liveImageUrl()` before `renderedEvidence()`. | Render evidence before live when evidence exists. |
-| Evidence image route | `loadTaskBrowserPreviewEvidenceCaptureObjectUrl` already loads the persisted PNG through the task-scoped route. | Keep service contract unchanged. |
-| Live image route | `loadTaskBrowserPreviewLiveSnapshotObjectUrl` remains a live interaction surface. | Keep live for no-evidence states; do not use it as acceptance evidence. |
-| Browser test | Existing test checks live screenshot and evidence route usage, but not evidence stage visibility. | Add DOM/image-loaded assertions for `[data-ui="browser-preview-screenshot"]`. |
-| Source test | Existing source test checks selector presence only. | Add ordering guard: evidence branch must precede live branch. |
+| Surface              | Evidence                                                                                                        | Decision                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Stage branch order   | `BrowserPreviewPanel.tsx` matches `liveImageUrl()` before `renderedEvidence()`.                                 | Render evidence before live when evidence exists.                             |
+| Evidence image route | `loadTaskBrowserPreviewEvidenceCaptureObjectUrl` already loads the persisted PNG through the task-scoped route. | Keep service contract unchanged.                                              |
+| Live image route     | `loadTaskBrowserPreviewLiveSnapshotObjectUrl` remains a live interaction surface.                               | Keep live for no-evidence states; do not use it as acceptance evidence.       |
+| Browser test         | Existing test checks live screenshot and evidence route usage, but not evidence stage visibility.               | Add DOM/image-loaded assertions for `[data-ui="browser-preview-screenshot"]`. |
+| Source test          | Existing source test checks selector presence only.                                                             | Add ordering guard: evidence branch must precede live branch.                 |
 
 ## Fix
 

@@ -3,6 +3,11 @@
 Date: 2026-06-15
 Status: independent-agent consensus record
 
+> 2026-06-17 follow-up: the manual URL branch was retired, not implemented.
+> Current browser-preview route tests reject direct URL request bodies, and the
+> strict request-schema note keeps task-scoped preview target/evidence as the
+> only source.
+
 ## Acronyms
 
 - UI: User Interface, the visible overlay toolbar and preview panel.
@@ -30,21 +35,20 @@ The long-term invariant is:
 - The explicit `browser_preview` tool is the only automation path that may start
   a long-lived preview service and persist a target from its explicit URL or its
   own startup output.
-- Operator-entered URL is unresolved: the 2026-06-11 manual URL spec requires
-  it, but current code and tests reject it. This must be resolved by either
-  implementing it as backend artifact persistence or formally retiring that
-  spec. Leaving both in place is not acceptable.
+- Operator-entered URL was unresolved in this consensus record. It was later
+  resolved by formally retiring the 2026-06-11 manual URL spec and keeping
+  route tests that reject direct URL bodies.
 
 ## Independent Findings
 
 Four read-only agents inspected disjoint surfaces.
 
-| Agent scope | Consensus finding |
-| --- | --- |
+| Agent scope            | Consensus finding                                                                                                                                                                                                                                                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Frontend trigger chain | `RIGHT_ACTIVITIES` registers `browser`; clicking it toggles `centerWorkbenchPanels`. `BrowserPreviewPanel` is mounted at startup, loads target when `taskID` and directory exist, and only starts live/capture when the resolved target is ready. Message HTTP links open/refresh the panel but do not save the clicked URL. |
-| Backend target chain | Production target writes flow through `persistBrowserPreviewTarget`, `promoteBrowserPreviewTarget`, and explicit `BrowserPreviewTool`. Ordinary bash/session/MCP output currently does not write target. `browser_preview` scans `startup.metadata.output` only after background bash returns. |
-| Spec history | 2026-06-10/11 automatic stream materialization was superseded by 2026-06-12 explicit tool and 2026-06-14 diagnostics. The manual URL input spec was not explicitly superseded but current implementation/tests contradict it. |
-| Tests and gaps | Tests lock individual pieces but no E2E covers `browser_preview` tool -> target artifact -> `task.updated` -> overlay toolbar open -> live PNG visible. Existing browser tests mock the backend target and PNG instead of proving real target creation. |
+| Backend target chain   | Production target writes flow through `persistBrowserPreviewTarget`, `promoteBrowserPreviewTarget`, and explicit `BrowserPreviewTool`. Ordinary bash/session/MCP output currently does not write target. `browser_preview` scans `startup.metadata.output` only after background bash returns.                               |
+| Spec history           | 2026-06-10/11 automatic stream materialization was superseded by 2026-06-12 explicit tool and 2026-06-14 diagnostics. At the time of this record, the manual URL input spec was not explicitly superseded even though implementation/tests contradicted it.                                                                  |
+| Tests and gaps         | Tests lock individual pieces but no E2E covers `browser_preview` tool -> target artifact -> `task.updated` -> overlay toolbar open -> live PNG visible. Existing browser tests mock the backend target and PNG instead of proving real target creation.                                                                      |
 
 ## Root Causes
 
@@ -55,11 +59,11 @@ no saved target exists, opening Browser can only show a missing state.
 
 Relevant call points:
 
-| Surface | Current behavior |
-| --- | --- |
-| `packages/overlay/src/main.tsx` `RIGHT_ACTIVITIES` | Registers `browser` as a right toolbar activity. |
-| `packages/overlay/src/components/SideActivityToolbar.tsx` | Button click calls `onSelect(activity.id)`. |
-| `packages/overlay/src/main.tsx` `selectRightActivity` | Toggles `centerWorkbenchPanels`; does not persist target. |
+| Surface                                                   | Current behavior                                                |
+| --------------------------------------------------------- | --------------------------------------------------------------- |
+| `packages/overlay/src/main.tsx` `RIGHT_ACTIVITIES`        | Registers `browser` as a right toolbar activity.                |
+| `packages/overlay/src/components/SideActivityToolbar.tsx` | Button click calls `onSelect(activity.id)`.                     |
+| `packages/overlay/src/main.tsx` `selectRightActivity`     | Toggles `centerWorkbenchPanels`; does not persist target.       |
 | `packages/overlay/src/components/BrowserPreviewPanel.tsx` | Resolves target from backend route; does not infer URL locally. |
 
 ### 2. Real dev-server startup can miss the persistence window
@@ -76,11 +80,11 @@ shows a preview: the task never receives a `browser_preview_target`.
 
 Relevant call points:
 
-| Surface | Current behavior |
-| --- | --- |
-| `packages/opencorvus/src/tool/browser-preview.ts` | Scans only the `startup.metadata.output` returned by background bash. |
-| `packages/opencorvus/src/tool/bash.ts` | Background command returns after readiness wait while process continues. |
-| `packages/opencorvus/src/browser-preview/liveness.ts` | Reachability probing is bounded and not tied to later stream activity. |
+| Surface                                               | Current behavior                                                         |
+| ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| `packages/opencorvus/src/tool/browser-preview.ts`     | Scans only the `startup.metadata.output` returned by background bash.    |
+| `packages/opencorvus/src/tool/bash.ts`                | Background command returns after readiness wait while process continues. |
+| `packages/opencorvus/src/browser-preview/liveness.ts` | Reachability probing is bounded and not tied to later stream activity.   |
 
 ### 3. Manual URL is a contradictory contract
 
@@ -94,12 +98,12 @@ repair a missed target from the toolbar without asking an agent to rerun
 
 Relevant conflict:
 
-| Source | Claim |
-| --- | --- |
-| `specs/new-arch/2026-06-11-browser-preview-manual-url-input.md` | `PUT /task/:taskID/browser-preview/target` should accept exactly one of `targetID` or `url`. |
-| `packages/opencorvus/src/server/routes/browser-preview.ts` | Current validator accepts only `{ targetID }`. |
-| `packages/opencorvus/test/server/browser-preview-routes.test.ts` | Current test expects `{ url }` to be rejected. |
-| `packages/overlay/test/browser-preview-panel.test.ts` | Current source test expects no `url: input.url`. |
+| Source                                                           | Claim                                                                                        |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `specs/new-arch/2026-06-11-browser-preview-manual-url-input.md`  | `PUT /task/:taskID/browser-preview/target` should accept exactly one of `targetID` or `url`. |
+| `packages/opencorvus/src/server/routes/browser-preview.ts`       | Current validator accepts only `{ targetID }`.                                               |
+| `packages/opencorvus/test/server/browser-preview-routes.test.ts` | Current test expects `{ url }` to be rejected.                                               |
+| `packages/overlay/test/browser-preview-panel.test.ts`            | Current source test expects no `url: input.url`.                                             |
 
 ### 4. Right toolbar state still has a residual second source
 
@@ -134,8 +138,9 @@ They do not prove the user-visible chain:
 5. Repair `browser_preview` startup capture so real long-running servers do not
    lose late or briefly-unreachable URLs.
 6. Resolve manual URL as an explicit backend artifact write or retire the
-   2026-06-11 spec. The preferred closure is to implement it because otherwise
-   operators cannot recover from missed target persistence from the Preview UI.
+   2026-06-11 spec. This record originally preferred implementation; the
+   2026-06-17 follow-up chose retirement to keep the strict backend artifact
+   contract.
 7. Remove residual `selectedRightActivity` after the preview behavior is pinned
    by tests, so toolbar active state has one source.
 
@@ -156,17 +161,11 @@ They do not prove the user-visible chain:
 
 ### Manual URL Contract
 
-Choose one and make code, tests, SDK, and docs agree:
+Resolved on 2026-06-17 by choosing the retire branch and keeping code, tests,
+SDK, and docs aligned:
 
-- Implement: extend the target route schema to accept exactly one of `targetID`
-  or `url`; normalize URL with `normalizeBrowserPreviewUrl`; persist through
-  `persistBrowserPreviewTarget`; overlay form submits URL and then reloads the
-  target.
 - Retire: mark the 2026-06-11 manual URL spec superseded and keep current tests
   rejecting URL bodies.
-
-Consensus preference: implement, because it preserves the artifact invariant and
-gives the operator a visible recovery path without adding another preview source.
 
 ### Frontend
 

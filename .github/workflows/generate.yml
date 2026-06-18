@@ -12,11 +12,11 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      APP_ID: ${{ vars.OPENCORVUS_APP_ID || vars.ARGUS_APP_ID }}
-      APP_SECRET: ${{ secrets.OPENCORVUS_APP_SECRET || secrets.ARGUS_APP_SECRET }}
+      APP_ID: ${{ vars.OPENCORVUS_APP_ID }}
+      APP_SECRET: ${{ secrets.OPENCORVUS_APP_SECRET }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ github.token }}
 

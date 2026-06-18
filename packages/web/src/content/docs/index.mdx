@@ -37,9 +37,13 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evidence-driven, 
 ## Quick start
 
 ```bash
-curl -fsSL https://github.com/yangheng95/argus/releases/latest/download/install.sh | bash
+git clone https://github.com/yangheng95/opencorvus.git
+cd opencorvus
+bun install
+bun run --cwd packages/opencorvus build
+OPENCORVUS_SOURCE=/path/to/opencorvus/packages/opencorvus/src/index.ts
 cd /path/to/your/repo
-opencorvus serve
+bun "$OPENCORVUS_SOURCE" serve
 # open http://127.0.0.1:7878/ui/
 ```
 
@@ -54,4 +58,4 @@ opencorvus serve
 - [**CLI**](/docs/cli/), [**Server**](/docs/server/), [**SDK**](/docs/sdk/) — operational reference
 - [**Troubleshooting**](/docs/troubleshooting/) — symptom-driven debugging
 
-Repo: [yangheng95/argus](https://github.com/yangheng95/argus).
+Repo: [yangheng95/opencorvus](https://github.com/yangheng95/opencorvus).

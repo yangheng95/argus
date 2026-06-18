@@ -10,16 +10,16 @@ normalization path as the main session stream. Several helpers called
 
 ## Call-point sweep
 
-| Call point | Current risk | Decision |
-| --- | --- | --- |
-| `src/session/llm.ts` | Canonical session path already wraps with `ProviderLLM.wrapModel`. | Keep. |
-| `src/agent/agent.ts` `agent-generate` | Raw `model: language`; raw `Output.object({ schema: helperSchema })`. | Wrap model and use provider-bound output schema. |
-| `src/task-api/index.ts` `task-followup` | Raw `model: language`; raw `Output.object({ schema: z.object(...) })`. | Wrap model and use provider-bound output schema. |
-| `src/acceptance/checks/walkthrough/translate.ts` | Raw `model: language`; raw walkthrough tool `inputSchema`. | Resolve the `Provider.Model`, wrap the language model, and use provider-bound tool input schema. |
-| `src/server/routes/provider.ts` provider probe | Raw `model: language` in production endpoint. | Wrap model; keep probe-specific timeout and OAuth options. |
-| `src/frontend-design/tools/webpage-vision-judge.ts` | Model already wrapped; raw `Output.object({ schema: VerdictSchema })`. | Use provider-bound output schema. |
-| `script/cache-probe/trace-aisdk-wire.ts` | Raw SDK use. | Keep. This is a diagnostic script intentionally observing unwrapped wire payloads. |
-| Tests using raw `streamText` | Local diagnostics or direct wrapper tests. | Keep. |
+| Call point                                          | Current risk                                                           | Decision                                                                                         |
+| --------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `src/session/llm.ts`                                | Canonical session path already wraps with `ProviderLLM.wrapModel`.     | Keep.                                                                                            |
+| `src/agent/agent.ts` `agent-generate`               | Raw `model: language`; raw `Output.object({ schema: helperSchema })`.  | Wrap model and use provider-bound output schema.                                                 |
+| `src/task-api/index.ts` `task-followup`             | Raw `model: language`; raw `Output.object({ schema: z.object(...) })`. | Wrap model and use provider-bound output schema.                                                 |
+| `src/acceptance/checks/walkthrough/translate.ts`    | Raw `model: language`; raw walkthrough tool `inputSchema`.             | Resolve the `Provider.Model`, wrap the language model, and use provider-bound tool input schema. |
+| `src/server/routes/provider.ts` provider probe      | Raw `model: language` in production endpoint.                          | Wrap model; keep probe-specific timeout and OAuth options.                                       |
+| `src/frontend-design/tools/webpage-vision-judge.ts` | Model already wrapped; raw `Output.object({ schema: VerdictSchema })`. | Use provider-bound output schema.                                                                |
+| `script/cache-probe/trace-aisdk-wire.ts`            | Raw SDK use.                                                           | Keep. This is a diagnostic script intentionally observing unwrapped wire payloads.               |
+| Tests using raw `streamText`                        | Local diagnostics or direct wrapper tests.                             | Keep.                                                                                            |
 
 ## Design
 

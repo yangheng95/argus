@@ -24,7 +24,15 @@ import { MemoryPanel } from "./components/MemoryPanel"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
-import { loadTasks, boardStore, loadBoard, activeTaskID, activeSessionID, rootTaskSessionID, setBoardStore } from "./store/board"
+import {
+  loadTasks,
+  boardStore,
+  loadBoard,
+  activeTaskID,
+  activeSessionID,
+  rootTaskSessionID,
+  setBoardStore,
+} from "./store/board"
 import { clearMessages, messageStore, setChatAttachments } from "./store/messages"
 import { appStore } from "./store/app"
 import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, renameTask } from "./services/task"
@@ -163,12 +171,10 @@ function reportOverlayRuntimeError(scope: string, error: unknown): void {
   AppLog.error("runtime", scope, {
     message,
     details,
-  })
-  notifyError({
-    id: `runtime:${scope}`,
-    title: t("common.error"),
-    message,
-    details: diagnosticDetails,
+    notificationID: `runtime:${scope}`,
+    notificationTitle: t("common.error"),
+    notificationMessage: message,
+    notificationDetails: diagnosticDetails,
   })
 }
 
@@ -341,7 +347,11 @@ function isRightActivityOpen(activity: RightActivity): boolean {
 
 function isLeftActivityOpen(activity: LeftActivity): boolean {
   if (activity === "assistant") {
-    return selectedLeftActivity() === "assistant" && primaryCenterPanel() === "chat" && isCenterWorkbenchPanelOpen("workflow")
+    return (
+      selectedLeftActivity() === "assistant" &&
+      primaryCenterPanel() === "chat" &&
+      isCenterWorkbenchPanelOpen("workflow")
+    )
   }
   return selectedLeftActivity() === activity
 }
@@ -360,7 +370,9 @@ function leftActivityCenterPanel(activity: PrimaryLeftActivity): PrimaryCenterPa
   return LEFT_PRIMARY_CENTER_PANEL[activity]
 }
 
-function focusedLeftActivityOwnsPrimaryPanel(activity: LeftActivity = selectedLeftActivity()): activity is PrimaryLeftActivity {
+function focusedLeftActivityOwnsPrimaryPanel(
+  activity: LeftActivity = selectedLeftActivity(),
+): activity is PrimaryLeftActivity {
   return isPrimaryLeftActivity(activity)
 }
 
@@ -1630,7 +1642,7 @@ disposers.push(
           : assistantSubmitActive()
             ? t("coding_assistant.launcher.title")
             : primaryCenterPanel() === "mission"
-            ? t("mission.title")
+              ? t("mission.title")
               : primaryCenterPanel() === "chat" || isCodingAssistantSource()
                 ? t("chat.panel_title")
                 : t("task.panel_title")
@@ -1804,16 +1816,10 @@ function startCenterWorkbenchPanelResize(event: PointerEvent, leftPanel: CenterW
 }
 
 function updateCenterWorkbenchPanelWeights(
-  metrics: Pick<
-    CenterWorkbenchPanelResize,
-    "leftPanel" | "rightPanel" | "totalWidth" | "totalWeight" | "minWidth"
-  >,
+  metrics: Pick<CenterWorkbenchPanelResize, "leftPanel" | "rightPanel" | "totalWidth" | "totalWeight" | "minWidth">,
   rawLeftWidth: number,
 ): void {
-  const leftWidth = Math.min(
-    Math.max(rawLeftWidth, metrics.minWidth),
-    metrics.totalWidth - metrics.minWidth,
-  )
+  const leftWidth = Math.min(Math.max(rawLeftWidth, metrics.minWidth), metrics.totalWidth - metrics.minWidth)
   const leftWeight = metrics.totalWeight * (leftWidth / metrics.totalWidth)
   const rightWeight = metrics.totalWeight - leftWeight
   setSettingsStore("centerWorkbenchPanelWeights", {

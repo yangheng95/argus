@@ -226,15 +226,13 @@ test(
           })
 
           assert.equal(geometry.triggers.includes("product"), false)
-          assert.ok(geometry.triggers.includes("workspace"))
           assert.equal(geometry.triggers.includes("model"), false)
           assert.equal(geometry.triggers.includes("agent"), false)
-          assert.ok(geometry.triggers.includes("provider"))
-          assert.ok(geometry.triggers.includes("tools"))
+          assert.deepEqual(geometry.triggers, ["workspace", "provider", "run", "view", "settings", "help"])
+          assert.equal(geometry.triggers.includes("tools"), false)
           assert.equal(geometry.triggers.includes("skill"), false)
           assert.equal(geometry.triggers.includes("mcp"), false)
           assert.equal(geometry.triggers.includes("memory"), false)
-          assert.ok(geometry.triggers.includes("settings"))
           assert.deepEqual(geometry.outOfBounds, [])
           assert.deepEqual(geometry.overlaps, [])
           assert.ok(geometry.brandWidth > 24)
@@ -265,7 +263,7 @@ test(
               true,
             )
           }
-          for (const menu of ["workspace", "provider", "run", "tools", "settings", "view", "help"]) {
+          for (const menu of ["workspace", "provider", "run", "view", "settings", "help"]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
             await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
             const panelBounds = await page.$eval(`[data-testid="titlebar-menu-${menu}"]`, (node) => {
@@ -644,19 +642,13 @@ test(
         }
       })
       assert.ok(themeRadioState.count >= 3)
-      assert.deepEqual(
-        [...new Set(themeRadioState.roles)],
-        ["menuitemradio"],
-      )
+      assert.deepEqual([...new Set(themeRadioState.roles)], ["menuitemradio"])
       assert.equal(themeRadioState.legacyRadioCount, 0)
-      assert.deepEqual(
-        themeRadioState.checked.find((item) => item.testid === "titlebar-theme-vscode-dark"),
-        {
-          testid: "titlebar-theme-vscode-dark",
-          ariaChecked: "true",
-          active: "true",
-        },
-      )
+      assert.deepEqual(themeRadioState.checked.find((item) => item.testid === "titlebar-theme-vscode-dark"), {
+        testid: "titlebar-theme-vscode-dark",
+        ariaChecked: "true",
+        active: "true",
+      })
       await page.click('[data-testid="titlebar-theme-light"]')
       await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
       await page.waitForSelector('[data-testid="titlebar-theme-light"][aria-checked="true"]', { visible: true })

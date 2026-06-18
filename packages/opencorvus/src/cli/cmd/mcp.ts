@@ -53,6 +53,7 @@ function isMcpDisabledOverride(config: McpEntry): config is McpDisabled {
 }
 
 type McpRemote = Extract<McpConfigured, { type: "remote" }>
+type McpRemoteTransport = NonNullable<McpRemote["transport"]>
 function isMcpRemote(config: McpEntry): config is McpRemote {
   return isMcpConfigured(config) && config.type === "remote"
 }
@@ -223,7 +224,8 @@ export const McpAuthCommand = cmd({
   "mcp": {
     "my-server": {
       "type": "remote",
-      "url": "https://example.com/mcp"
+      "url": "https://example.com/mcp",
+      "transport": "streamable-http"
     }
   }`)
           prompts.outro("Done")
@@ -309,6 +311,7 @@ export const McpAuthCommand = cmd({
     "${serverName}": {
       "type": "remote",
       "url": "${serverConfig.url}",
+      "transport": "${serverConfig.transport}",
       "oauth": {
         "clientId": "your-client-id",
         "clientSecret": "your-client-secret"
@@ -566,6 +569,23 @@ export const McpAddCommand = cmd({
           })
           if (prompts.isCancel(url)) throw new UI.CancelledError()
 
+          const transport = await prompts.select({
+            message: "Select remote MCP transport",
+            options: [
+              {
+                label: "Streamable HTTP",
+                value: "streamable-http" satisfies McpRemoteTransport,
+                hint: "Use for standard remote MCP endpoints",
+              },
+              {
+                label: "SSE",
+                value: "sse" satisfies McpRemoteTransport,
+                hint: "Use only when the server requires SSE",
+              },
+            ],
+          })
+          if (prompts.isCancel(transport)) throw new UI.CancelledError()
+
           const useOAuth = await prompts.confirm({
             message: "Does this server require OAuth authentication?",
             initialValue: false,
@@ -606,6 +626,7 @@ export const McpAddCommand = cmd({
               mcpConfig = {
                 type: "remote",
                 url,
+                transport,
                 oauth: {
                   clientId,
                   ...(clientSecret && { clientSecret }),
@@ -615,6 +636,7 @@ export const McpAddCommand = cmd({
               mcpConfig = {
                 type: "remote",
                 url,
+                transport,
                 oauth: {},
               }
             }
@@ -622,6 +644,7 @@ export const McpAddCommand = cmd({
             mcpConfig = {
               type: "remote",
               url,
+              transport,
             }
           }
 

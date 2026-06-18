@@ -30,7 +30,8 @@ test(
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
-      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
@@ -140,7 +141,9 @@ test(
         const min = Number(resizer?.getAttribute("aria-valuemin"))
         return !!sidebar && Math.abs(sidebar.getBoundingClientRect().width - min) <= 1
       })
-      const before = await page.evaluate(() => document.querySelector<HTMLElement>("#configSidebar")!.getBoundingClientRect().width)
+      const before = await page.evaluate(
+        () => document.querySelector<HTMLElement>("#configSidebar")!.getBoundingClientRect().width,
+      )
       await page.keyboard.press("ArrowRight")
       await page.waitForFunction(
         (previous) => document.querySelector<HTMLElement>("#configSidebar")!.getBoundingClientRect().width > previous,

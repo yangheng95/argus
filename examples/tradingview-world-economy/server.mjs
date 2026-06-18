@@ -42,5 +42,7 @@ const server = createServer(async (request, response) => {
 })
 
 server.listen(port, "127.0.0.1", () => {
-  console.log(`TradingView world economy clone: http://127.0.0.1:${port}`)
+  const address = server.address()
+  const boundPort = typeof address === "object" && address ? address.port : port
+  console.log(`TradingView world economy clone: http://127.0.0.1:${boundPort}`)
 })

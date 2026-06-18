@@ -329,9 +329,10 @@ download_and_install() {
     local tmp_dir="${TMPDIR:-/tmp}/opencorvus_install_$$"
     mkdir -p "$tmp_dir"
 
-    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
-        # Fallback to standard curl on Windows, non-TTY environments, or if custom progress fails
+    if [[ "$os" == "windows" ]] || ! [ -t 2 ]; then
         curl -# -L -o "$tmp_dir/$filename" "$url"
+    else
+        download_with_progress "$url" "$tmp_dir/$filename"
     fi
 
     if [ "$os" = "linux" ]; then

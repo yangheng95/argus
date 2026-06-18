@@ -11,16 +11,17 @@ The registry currently ships with the agents below. `mode` controls how the agen
 
 | Agent          | Mode             | Purpose                                                                                                                                                                                                                                                |
 | -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `coding`       | primary          | Interactive coding agent for ordinary local sessions.                                                                                                                                                                                                  |
 | `build`        | primary (hidden) | Implementation agent. Executes read / edit / bash-style implementation tools when dispatched by the orchestrator or direct workflow.                                                                                                                   |
+| `visual-qa`    | primary (hidden) | Visual QA stage agent with a fixed visual evidence tool surface.                                                                                                                                                                                       |
 | `general`      | subagent         | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool.                                                                                                                                                             |
 | `explore`      | subagent         | Codebase exploration — fast file / code search, read-only by default.                                                                                                                                                                                  |
-| `acceptance`   | primary (hidden) | Acceptance-review slot used by review streams and arbitration paths.                                                                                                                                                                                   |
 | `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools such as `frontend_design`, `frontend_research`, `analyze_intent`, `requirements`, `architect`, `build`, `integrity`, `modify_goal`, and `restart_from_stage`. |
 | `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions.                                                                                                                                                                   |
 
-Other registered agents (`architect`, `frontend-design`, `frontend-research`, `intent-analysis`, `integrity`, `visual-qa`, `prosecutor`, `summary`, `title`, `compaction`, `mission`, `control`) are stage / utility slots invoked internally by the orchestrator, mission runtime, or session loop. They surface in config (model + prompt overrides) but are not user-selectable unless a dedicated runtime exposes them.
+Other registered agents (`architect`, `frontend-design`, `frontend-research`, `intent-analysis`, `integrity`, `fact-check`, `deep-research`, `goal-workload-analyst`, `summary`, `title`, `compaction`, `mission`, `control`) are stage / utility slots invoked internally by the orchestrator, mission runtime, or session loop. They surface in config (model + prompt overrides) but are not user-selectable unless a dedicated runtime exposes them.
 
-See `packages/opencorvus/src/agent/agent.ts:144-463` for the canonical definitions.
+See `packages/opencorvus/src/agent/agent.ts` for the canonical definitions.
 
 ## Sub-agent dispatch
 
@@ -30,7 +31,7 @@ When the orchestrator runs the `pipeline` workflow, the Architect creates goals,
 
 ## Per-agent model
 
-Each agent's model is set under `agent.<name>.model` — see `packages/opencorvus/src/config/config.ts:1053-1067` (`agent` is `z.object({...}).catchall(Agent)`). The describe lines on the related `assistant.<name>` blocks call this out explicitly (e.g. `config.ts:1191`, `1232`, `1239`, `1246`).
+Each agent's model is set under `agent.<name>.model` — see `packages/opencorvus/src/config/config.ts` (`agent` is `z.object({...}).catchall(Agent)`). The related `assistant.<name>` blocks are described in the same config schema.
 
 ```jsonc
 {
@@ -60,30 +61,30 @@ You can define agents inline in your config or as markdown under `~/.config/open
 }
 ```
 
-Custom agents inherit the default permission ruleset (built up in `Agent.state()` from the `defaults` block at `agent.ts:77-140`).
+Custom agents inherit the default permission ruleset (built up in `Agent.state()` from the `defaults` block at `agent.ts`).
 
 ## Default agent
 
-Set `default_agent` to pick the agent used when none is specified explicitly. Must be a primary, non-hidden agent — `Agent.defaultAgent()` (`agent.ts:570-585`) rejects subagent / hidden choices.
+Set `default_agent` to pick the agent used when none is specified explicitly. Must be a primary, non-hidden agent — `Agent.defaultAgent()` (`agent.ts`) rejects subagent / hidden choices.
 
 ## Agent budgets
 
-Per-agent step budgets and skill paths live under `assistant.<name>` (config.ts:1176-1283):
+Per-agent step budgets and skill paths live under `assistant.<name>` (config.ts):
 
 ```jsonc
 {
   "assistant": {
     "requirements": { "max_steps": 20 },
     "architect": { "max_steps": 40 },
-    "acceptance": { "max_steps": 160, "max_retries": 3 },
     "frontend_design": { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },
     "build": { "max_steps": 80 },
+    "integrity": { "max_steps": 160 },
   },
 }
 ```
 
-Top-level orchestrator budgets sit directly on `assistant` (config.ts:1255-1257):
+Top-level orchestrator budgets sit directly on `assistant` (config.ts):
 
 - `assistant.max_runs` — maximum total task runs
 - `assistant.max_fix_runs` — maximum fix runs after failure

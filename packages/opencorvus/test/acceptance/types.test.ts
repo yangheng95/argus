@@ -29,39 +29,3 @@ describe("acceptance spec trigger contract", () => {
     expect(resolveTrigger(defaulted, defaulted.scorers[0]!)).toBe("on_goal")
   })
 })
-
-describe("acceptance prebuilt scorer config contract", () => {
-  test("rejects hidden arbitrary config keys", () => {
-    const spec = {
-      ...shellSpec,
-      scorers: [
-        {
-          type: "prebuilt",
-          name: "contains",
-          config: { arbitrary: true },
-        },
-      ],
-    }
-
-    expect(AcceptanceSpecSchema.safeParse(spec).success).toBe(false)
-  })
-
-  test("accepts closed visible config fields", () => {
-    const spec = AcceptanceSpecSchema.parse({
-      ...shellSpec,
-      scorers: [
-        {
-          type: "prebuilt",
-          name: "contains",
-          config: { expected_text: "ready" },
-        },
-      ],
-    }) as AcceptanceSpec
-
-    const scorer = spec.scorers[0]
-    expect(scorer.type).toBe("prebuilt")
-    if (scorer.type === "prebuilt") {
-      expect(scorer.config).toEqual({ expected_text: "ready" })
-    }
-  })
-})

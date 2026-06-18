@@ -120,26 +120,6 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
   process.env.OPENCORVUS_SERVER_URL = serverUrl
   console.log(`opencorvus server listening on ${serverUrl}`)
   console.log(`overlay UI available at ${serverUrl}/ui/`)
-  try {
-    const { convergeDeadOwnerLiveExecution } = await import("../../engine/writer")
-    const converged = await convergeDeadOwnerLiveExecution({
-      reason: "Server startup: previous owner process died before terminalization",
-    })
-    if (
-      converged.tasks > 0 ||
-      converged.goalRuns > 0 ||
-      converged.runs > 0 ||
-      converged.sessions > 0 ||
-      converged.toolParts > 0 ||
-      converged.corruptTasks > 0
-    ) {
-      console.log(
-        `[serve] converged dead-owner execution tasks=${converged.tasks} runs=${converged.runs} goalRuns=${converged.goalRuns} sessions=${converged.sessions} toolParts=${converged.toolParts} corruptTasks=${converged.corruptTasks}`,
-      )
-    }
-  } catch (error) {
-    console.error("[serve] startup owner-death convergence failed:", error)
-  }
 
   let shutdownPromise: Promise<void> | null = null
   const requestShutdown = (trigger: string) => {

@@ -3,7 +3,7 @@
  * Quick Playwright screenshot helper for the overlay UI.
  *
  * Usage:
- *   bun run script/screenshot.ts <out.png> [url] [w] [h]
+ *   bun run script/screenshot-overlay.ts <out.png> [url] [w] [h]
  *
  * Defaults: url=http://localhost:5173/, viewport=1280x800.
  * Requires Chrome / Edge installed (auto-detected).
@@ -14,7 +14,7 @@ import path from "node:path"
 
 const out = process.argv[2]
 if (!out) {
-  console.error("usage: bun run script/screenshot.ts <out.png> [url] [w] [h]")
+  console.error("usage: bun run script/screenshot-overlay.ts <out.png> [url] [w] [h]")
   process.exit(2)
 }
 const url = process.argv[3] ?? "http://localhost:5173/"

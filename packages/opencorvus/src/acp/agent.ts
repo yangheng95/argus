@@ -1235,6 +1235,7 @@ export namespace ACP {
         if ("type" in server) {
           mcpServers[server.name] = {
             url: server.url,
+            transport: "sse",
             headers: server.headers.reduce<Record<string, string>>((acc, { name, value }) => {
               acc[name] = value
               return acc

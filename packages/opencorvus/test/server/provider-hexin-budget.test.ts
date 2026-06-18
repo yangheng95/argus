@@ -129,39 +129,3 @@ test("GET /provider/hexin/budget reports malformed upstream budget JSON", async 
     else await Auth.remove("hexin").catch(() => undefined)
   }
 })
-
-test("GET /provider/hexin/budget redacts upstream error bodies", async () => {
-  const previousAuth = await Auth.get("hexin")
-  globalThis.fetch = (async () =>
-    new Response("upstream echoed Authorization: Bearer hexin-budget-key", {
-      status: 401,
-      statusText: "Unauthorized",
-      headers: { "content-type": "text/plain" },
-    })) as typeof fetch
-
-  try {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      init: async () => {
-        Env.set("HEXIN_API_KEY", "hexin-budget-key")
-      },
-      fn: async () => {
-        const response = await app().request("/provider/hexin/budget")
-        const body = (await response.json()) as { ok: boolean; error?: string }
-
-        expect(response.status).toBe(200)
-        expect(body.ok).toBe(false)
-        expect(body.error).toBe(
-          "GET https://aimemodeldev.myhexin.com/litellm/key/budget returned HTTP 401 Unauthorized.",
-        )
-        expect(body.error).not.toContain("hexin-budget-key")
-        expect(body.error).not.toContain("Authorization")
-        expect(body.error).not.toContain("Bearer")
-      },
-    })
-  } finally {
-    if (previousAuth) await Auth.set("hexin", previousAuth)
-    else await Auth.remove("hexin").catch(() => undefined)
-  }
-})

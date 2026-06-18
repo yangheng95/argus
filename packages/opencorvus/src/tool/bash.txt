@@ -56,7 +56,7 @@ Usage notes:
 
 # Committing changes with git
 
-Only create commits when requested by the user. If unclear, ask first. When the user asks you to create a new git commit, follow these steps carefully:
+Follow the user's request and the repository's project instructions for commits and pushes. If an AGENTS.md / CLAUDE.md / task plan requires commit or push, treat that as the active Git requirement. When no user or project instruction asks for Git history updates, leave changes unstaged and report the files changed. When creating a commit, follow these steps carefully:
 
 Git Safety Protocol:
 - NEVER update the git config
@@ -69,7 +69,7 @@ Git Safety Protocol:
   (3) Commit has NOT been pushed to remote (verify: git status shows "Your branch is ahead")
 - CRITICAL: If commit FAILED or was REJECTED by hook, NEVER amend - fix the issue and create a NEW commit
 - CRITICAL: If you already pushed to remote, NEVER amend unless user explicitly requests it (requires force push)
-- NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTANT to only commit when explicitly asked, otherwise the user will feel that you are being too proactive.
+- NEVER commit unrelated changes or files you have not audited. Stage only the paths required for the current task.
 
 1. You can call multiple tools in a single response. When multiple independent pieces of information are requested and all commands are likely to succeed, run multiple tool calls in parallel for optimal performance. run the following bash commands in parallel, each using the Bash tool:
   - Run a git status command to see all untracked files.
@@ -90,7 +90,7 @@ Git Safety Protocol:
 Important notes:
 - NEVER run additional commands to read or explore code, besides git bash commands
 - NEVER use the TodoWrite or Task tools
-- DO NOT push to the remote repository unless the user explicitly asks you to do so
+- Push only when the user request or project instructions require it, and never bypass hooks.
 - IMPORTANT: Never use git commands with the -i flag (like git rebase -i or git add -i) since they require interactive input which is not supported.
 - If there are no changes to commit (i.e., no untracked files and no modifications), do not create an empty commit
 

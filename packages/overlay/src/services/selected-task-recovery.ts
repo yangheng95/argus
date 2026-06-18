@@ -11,6 +11,8 @@ import { startSSE } from "./sse"
 
 let recoveryGeneration = 0
 let recoveryAbort: AbortController | null = null
+let rewindClearTaskID = ""
+let rewindClearPromise: Promise<number> | null = null
 
 function abortError(message: string): DOMException {
   return new DOMException(message, "AbortError")
@@ -55,6 +57,9 @@ export async function recoverSelectedTaskConversation(
   if (!taskID) throw new Error(`selected-task recovery requires a taskID: ${reason}`)
   if (activeTaskID() !== taskID) {
     throw abortError("Selected task recovery task changed")
+  }
+  if (rewindClearPromise && rewindClearTaskID === taskID) {
+    return rewindClearPromise
   }
 
   recoveryAbort?.abort(abortError("Selected task recovery superseded"))
@@ -124,12 +129,16 @@ export async function recoverSelectedTaskAfterRewindClear(
   if (activeTaskID() !== taskID) {
     throw abortError("Rewind clear recovery task changed")
   }
+  if (rewindClearPromise && rewindClearTaskID === taskID) {
+    return rewindClearPromise
+  }
 
   recoveryAbort?.abort(abortError("Selected task recovery superseded"))
   const controller = new AbortController()
   recoveryAbort = controller
   const generation = ++recoveryGeneration
   const startedAt = Date.now()
+  rewindClearTaskID = taskID
 
   recordConversationRecoveryStarted({
     channel: "rewind-clear",
@@ -138,41 +147,50 @@ export async function recoverSelectedTaskAfterRewindClear(
     source: "selected-task-recovery",
   })
 
-  try {
-    assertCurrentRecovery(taskID, generation, controller.signal)
-    resetSelectedLiveCursor()
-    const sequence = await hydrateTaskConversation(taskID, {
-      signal: controller.signal,
-      scrollIntent: "bottom",
-      resetCause: "task-rewind-clear",
-    })
-    assertCurrentRecovery(taskID, generation, controller.signal)
-    startSSE({ kind: "task", id: taskID }, sequence)
-    recordConversationRecoverySucceeded({
-      channel: "rewind-clear",
-      reason,
-      taskID,
-      source: "selected-task-recovery",
-      durationMs: Date.now() - startedAt,
-      resumeSequence: sequence,
-    })
-    return sequence
-  } catch (error) {
-    const input = {
-      channel: "rewind-clear",
-      reason,
-      taskID,
-      source: "selected-task-recovery",
-      durationMs: Date.now() - startedAt,
-      error: errorMessage(error),
+  let run: Promise<number>
+  run = (async () => {
+    try {
+      assertCurrentRecovery(taskID, generation, controller.signal)
+      resetSelectedLiveCursor()
+      const sequence = await hydrateTaskConversation(taskID, {
+        signal: controller.signal,
+        scrollIntent: "bottom",
+        resetCause: "task-rewind-clear",
+      })
+      assertCurrentRecovery(taskID, generation, controller.signal)
+      startSSE({ kind: "task", id: taskID }, sequence)
+      recordConversationRecoverySucceeded({
+        channel: "rewind-clear",
+        reason,
+        taskID,
+        source: "selected-task-recovery",
+        durationMs: Date.now() - startedAt,
+        resumeSequence: sequence,
+      })
+      return sequence
+    } catch (error) {
+      const input = {
+        channel: "rewind-clear",
+        reason,
+        taskID,
+        source: "selected-task-recovery",
+        durationMs: Date.now() - startedAt,
+        error: errorMessage(error),
+      }
+      if (isAbortLike(error)) {
+        recordConversationRecoveryAborted(input)
+      } else {
+        recordConversationRecoveryFailed(input)
+      }
+      throw error
+    } finally {
+      if (recoveryAbort === controller) recoveryAbort = null
+      if (rewindClearPromise === run) {
+        rewindClearPromise = null
+        rewindClearTaskID = ""
+      }
     }
-    if (isAbortLike(error)) {
-      recordConversationRecoveryAborted(input)
-    } else {
-      recordConversationRecoveryFailed(input)
-    }
-    throw error
-  } finally {
-    if (recoveryAbort === controller) recoveryAbort = null
-  }
+  })()
+  rewindClearPromise = run
+  return run
 }

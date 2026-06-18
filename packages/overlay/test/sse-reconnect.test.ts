@@ -27,6 +27,8 @@ import { setSettingsStore } from "../src/store/settings"
 import { resetSelectedLiveCursor } from "../src/services/selected-stream-cursor"
 import { selectTask } from "../src/services/task"
 import { setLocale, setLocaleData } from "../src/utils/i18n"
+import { AppLog, waitForLogDrain } from "../src/utils/log"
+import { clearNotifications, notificationStore } from "../src/services/notify"
 
 /**
  * Reconnect policy regression tests.
@@ -46,6 +48,7 @@ interface Spy {
   restartCalls: Array<[BoardSource, number, SseStartOptions | undefined]>
   retryCalls: number
   consoleErrors: unknown[][]
+  logs: Array<Record<string, unknown>>
 }
 
 const ROOT = path.resolve(import.meta.dir, "..")
@@ -56,6 +59,13 @@ beforeAll(async () => {
   setLocaleData("en-US", REAL_EN_US)
   setLocaleData("zh-CN", REAL_ZH_CN)
   await setLocale("en-US")
+})
+
+afterEach(async () => {
+  await waitForLogDrain(2_500)
+  AppLog.clear()
+  clearNotifications()
+  __setHostTransportForTest(undefined)
 })
 
 function makeDeps(opts: {
@@ -72,6 +82,7 @@ function makeDeps(opts: {
     restartCalls: [],
     retryCalls: 0,
     consoleErrors: [],
+    logs: [],
   }
   const deps: SseReconnectDeps = {
     taskID: opts.taskID,
@@ -92,6 +103,42 @@ function makeDeps(opts: {
     retryDelayMs: opts.retryDelayMs ?? 3000,
   }
   return { deps, spy }
+}
+
+function installLogTransport(logs: Array<Record<string, unknown>> = []): void {
+  __setHostTransportForTest({
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    request: async <T>(input: TransportRequest) => {
+      if (input.path === "global/tasks") {
+        return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T }
+      }
+      if (input.path !== "log") throw new Error(`unexpected request: ${input.path}`)
+      logs.push(transportBody(input))
+      return { status: 200, ok: true, headers: {}, body: { ok: true } as T }
+    },
+    openStream() {
+      throw new Error("not used")
+    },
+    native: async () => null,
+    subscribeUiCommand: () => ({ unsubscribe() {} }),
+  })
+}
+
+function transportBody(req: TransportRequest): Record<string, unknown> {
+  const body = req.body as { kind?: string; value?: unknown } | undefined
+  if (body?.kind === "json" && body.value && typeof body.value === "object") {
+    return body.value as Record<string, unknown>
+  }
+  throw new Error("expected JSON transport body")
+}
+
+async function waitForUploadedLogs(logs: Array<Record<string, unknown>>, min = 1): Promise<void> {
+  const deadline = Date.now() + 2_500
+  while (logs.length < min && Date.now() < deadline) {
+    await waitForLogDrain(500)
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
 }
 
 function conversationPayload(taskID: string, lastSequence: number) {
@@ -143,67 +190,61 @@ describe("performSseReconnect (audit W2-V10)", () => {
   })
 
   test("restart throw is caught and a retry is scheduled (no unhandled rejection)", async () => {
-    const errs: unknown[][] = []
-    const orig = console.error
-    console.error = (...a: unknown[]) => {
-      errs.push(a)
-    }
-    try {
-      const { deps, spy } = makeDeps({
-        taskID: "tsk_b",
-        after: 100,
-        currentTaskID: () => "tsk_b",
-        resumeAfter: () => 100,
-        restart: () => {
-          throw new Error("network down")
-        },
-      })
-      await expect(performSseReconnect(deps)).resolves.toBeUndefined()
-      expect(spy.resumeAfterCalls).toBe(1)
-      // Retry was scheduled.
-      expect(spy.retryCalls).toBe(1)
-      await new Promise((r) => setTimeout(r, 0))
-      expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_b" }, 100, undefined]])
-      // The throw was logged (not silently swallowed).
-      expect(errs.length).toBeGreaterThanOrEqual(1)
-      const msg = errs[0]!.map(String).join(" ")
-      expect(msg).toMatch(/reconnect restart failed/)
-      expect(msg).toMatch(/tsk_b/)
-    } finally {
-      console.error = orig
-    }
+    const logs: Array<Record<string, unknown>> = []
+    installLogTransport(logs)
+    const { deps, spy } = makeDeps({
+      taskID: "tsk_b",
+      after: 100,
+      currentTaskID: () => "tsk_b",
+      resumeAfter: () => 100,
+      restart: () => {
+        throw new Error("network down")
+      },
+    })
+    await expect(performSseReconnect(deps)).resolves.toBeUndefined()
+    expect(spy.resumeAfterCalls).toBe(1)
+    // Retry was scheduled.
+    expect(spy.retryCalls).toBe(1)
+    await new Promise((r) => setTimeout(r, 0))
+    await waitForUploadedLogs(logs)
+    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_b" }, 100, undefined]])
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        service: "overlay:sse",
+        level: "error",
+        message: "reconnect restart failed for task tsk_b",
+      }),
+    )
+    const item = notificationStore.items.find((entry) => entry.id === "sse:reconnect-failed:tsk_b")
+    expect(item?.title).toBe("Live stream disconnected")
+    expect(item?.details).toContain("network down")
   })
 
   test("restart retry re-reads the current resume sequence instead of using a stale cursor", async () => {
     let attempts = 0
     const sequences = [100, 123]
-    const orig = console.error
-    console.error = () => {}
-    try {
-      const { deps, spy } = makeDeps({
-        taskID: "tsk_retry",
-        after: 100,
-        currentTaskID: () => "tsk_retry",
-        fireRetry: true,
-        resumeAfter: () => sequences[Math.min(attempts, sequences.length - 1)]!,
-        restart: () => {
-          attempts += 1
-          if (attempts === 1) throw new Error("network down")
-        },
-      })
+    installLogTransport()
+    const { deps, spy } = makeDeps({
+      taskID: "tsk_retry",
+      after: 100,
+      currentTaskID: () => "tsk_retry",
+      fireRetry: true,
+      resumeAfter: () => sequences[Math.min(attempts, sequences.length - 1)]!,
+      restart: () => {
+        attempts += 1
+        if (attempts === 1) throw new Error("network down")
+      },
+    })
 
-      await performSseReconnect(deps)
-      await new Promise((r) => setTimeout(r, 0))
+    await performSseReconnect(deps)
+    await new Promise((r) => setTimeout(r, 0))
 
-      expect(spy.resumeAfterCalls).toBe(2)
-      expect(spy.retryCalls).toBe(1)
-      expect(spy.restartCalls).toEqual([
-        [{ kind: "task", id: "tsk_retry" }, 100, undefined],
-        [{ kind: "task", id: "tsk_retry" }, 123, undefined],
-      ])
-    } finally {
-      console.error = orig
-    }
+    expect(spy.resumeAfterCalls).toBe(2)
+    expect(spy.retryCalls).toBe(1)
+    expect(spy.restartCalls).toEqual([
+      [{ kind: "task", id: "tsk_retry" }, 100, undefined],
+      [{ kind: "task", id: "tsk_retry" }, 123, undefined],
+    ])
   })
 
   test("task-switch BEFORE reconnect: skip without reading cursor or restarting", async () => {
@@ -239,32 +280,24 @@ describe("performSseReconnect (audit W2-V10)", () => {
 
   test("task-switch AFTER restart failure: retry MUST NOT fire restart for the stale task", async () => {
     let currentTask = "tsk_f"
-    const errs: unknown[][] = []
-    const orig = console.error
-    console.error = (...a: unknown[]) => {
-      errs.push(a)
-    }
-    try {
-      const { deps, spy } = makeDeps({
-        taskID: "tsk_f",
-        after: 0,
-        currentTaskID: () => currentTask,
-        resumeAfter: () => 8,
-        restart: () => {
-          // User switches tasks at the same moment restart fails.
-          currentTask = "tsk_g"
-          throw new Error("transient")
-        },
-      })
-      await performSseReconnect(deps)
-      // The retry-schedule branch sees currentTaskID !== "tsk_f"
-      // and returns without scheduling. No restart, no retry.
-      expect(spy.resumeAfterCalls).toBe(1)
-      expect(spy.retryCalls).toBe(0)
-      expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_f" }, 8, undefined]])
-    } finally {
-      console.error = orig
-    }
+    installLogTransport()
+    const { deps, spy } = makeDeps({
+      taskID: "tsk_f",
+      after: 0,
+      currentTaskID: () => currentTask,
+      resumeAfter: () => 8,
+      restart: () => {
+        // User switches tasks at the same moment restart fails.
+        currentTask = "tsk_g"
+        throw new Error("transient")
+      },
+    })
+    await performSseReconnect(deps)
+    // The retry-schedule branch sees currentTaskID !== "tsk_f"
+    // and returns without scheduling. No restart, no retry.
+    expect(spy.resumeAfterCalls).toBe(1)
+    expect(spy.retryCalls).toBe(0)
+    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_f" }, 8, undefined]])
   })
 })
 

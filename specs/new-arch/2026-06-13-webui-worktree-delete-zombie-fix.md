@@ -9,12 +9,12 @@
 
 ## Call Point Sweep
 
-| Area | Current behavior | Decision |
-| --- | --- | --- |
-| `Worktree.remove()` | Registered entries always try `git worktree remove --force` first. | If the registered entry lacks `.git` linkage, prune the broken registry entry, verify it disappeared, then clean the directory and delete the branch. |
-| `ProjectRoutes DELETE /project/current/worktrees` | Removes git worktree only. | Also remove the project sandbox pointer after successful worktree removal. |
-| `ExperimentalRoutes DELETE /experimental/worktree` | Removes worktree and sandbox pointer. | Leave unchanged; it is the existing parity source. |
-| `ProjectWorktreeDropdown` | Logs deletion errors but does not render them. | Leave for a separate UI pass to avoid touching currently dirty overlay files. |
+| Area                                               | Current behavior                                                   | Decision                                                                                                                                              |
+| -------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Worktree.remove()`                                | Registered entries always try `git worktree remove --force` first. | If the registered entry lacks `.git` linkage, prune the broken registry entry, verify it disappeared, then clean the directory and delete the branch. |
+| `ProjectRoutes DELETE /project/current/worktrees`  | Removes git worktree only.                                         | Also remove the project sandbox pointer after successful worktree removal.                                                                            |
+| `ExperimentalRoutes DELETE /experimental/worktree` | Removes worktree and sandbox pointer.                              | Leave unchanged; it is the existing parity source.                                                                                                    |
+| `ProjectWorktreeDropdown`                          | Logs deletion errors but does not render them.                     | Leave for a separate UI pass to avoid touching currently dirty overlay files.                                                                         |
 
 ## Tests
 

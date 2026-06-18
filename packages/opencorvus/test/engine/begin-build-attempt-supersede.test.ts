@@ -3,9 +3,9 @@ import { and, Database, desc, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { beginBuildAttempt, createGoalRun, startNewAttempt, updateGoalRun } from "../../src/engine/persist"
-import { goalStatusByID } from "../../src/engine/describe"
+import { describeGoal, goalStatusByID } from "../../src/engine/describe"
 import { processOwner } from "../../src/engine/lease"
-import { findLatestTipGoalRun, findGoalRun, listGoalRunsByGoal } from "../../src/engine/store"
+import { findGoal, findLatestTipGoalRun, findGoalRun, listGoalRunsByGoal } from "../../src/engine/store"
 import { resetDatabase } from "../fixture/db"
 
 /**
@@ -13,8 +13,8 @@ import { resetDatabase } from "../fixture/db"
  * scheduler-fix-plan-2026-04-30.md P0. The bug: retry attempts created via
  * `beginBuildAttempt` left supersede_of=null on the new running goal_run row.
  * findLatestTipGoalRun then projected the patched-old terminal row as the
- * live tip and deriveGoalStatus returned `pending` while the build was
- * actually running. Two retry shapes both reach beginBuildAttempt and both
+ * live tip while the build was actually running. Two retry shapes both reach
+ * beginBuildAttempt and both
  * must populate supersede_of; codex 3rd-pass identified the
  * startNewAttempt-then-beginBuildAttempt path as a separate failure mode
  * from the beginBuildAttempt-only retry.
@@ -195,17 +195,18 @@ describe("beginBuildAttempt — supersede_of population", () => {
     insertTerminalGoalRun({ id: oldRunID, status: "failed" })
 
     // Step 1: orchestrator/acceptance calls startNewAttempt → patches old row's
-    // superseded_reason. Goal projects to pending.
+    // superseded_reason. Goal status remains failed; retry intent is a fact.
     const sna = startNewAttempt({ goalID, reason: "acceptance_rework" })
     expect(sna.supersededTipID).toBe(oldRunID)
     expect(findGoalRun(oldRunID)?.superseded_reason).toBe("acceptance_rework")
-    expect(goalStatusByID(goalID)).toBe("pending")
+    expect(goalStatusByID(goalID)).toBe("failed")
+    expect(describeGoal(findGoal(goalID)!).needs_redispatch).toBe(true)
 
     // Step 2: build tool runs beginBuildAttempt. openGoalImplementationVersion
     // sees tip is already superseded → returns no supersededTipID. Without
     // P0's findLatestTipGoalRun fallback, the new row would get
-    // supersede_of=null and the goal would stay `pending` despite an active
-    // running attempt. With the fix, supersede_of points at oldRunID.
+    // supersede_of=null and the old failed tip would remain visible despite
+    // an active running attempt. With the fix, supersede_of points at oldRunID.
     const newRunID = beginBuildAttempt({
       taskID,
       goalID,
@@ -218,7 +219,7 @@ describe("beginBuildAttempt — supersede_of population", () => {
     expect(newRow?.supersede_of).toBe(oldRunID)
     // Live tip is now the new running row.
     expect(findLatestTipGoalRun(goalID)?.id).toBe(newRunID)
-    // Goal status flips from pending → running on this transition.
+    // Goal status flips from failed → running on this explicit build attempt.
     expect(goalStatusByID(goalID)).toBe("running")
   })
 
@@ -337,8 +338,8 @@ describe("beginBuildAttempt — supersede_of population", () => {
     // owner-orphan-aware, so re-dispatch of a restart orphan threw.
     const orphanID = `grun_orphan_${Date.now()}`
     insertGoalRun({ id: orphanID, status: "running", owner: "999999:dead:beef00" })
-    // The overlay/board projection no longer shows it running (owner-aware).
-    expect(goalStatusByID(goalID)).toBe("failed")
+    // Owner-orphan is a confidence fact, not a lifecycle projection.
+    expect(goalStatusByID(goalID)).toBe("running")
 
     const newRunID = beginBuildAttempt({
       taskID,

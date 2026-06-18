@@ -60,4 +60,3 @@ defects:
 
 - `bun test packages/opencorvus/test/architect/output-tools.test.ts`
 - `bun test packages/opencorvus/test/architect/grep-only-as-rejection.test.ts`
-

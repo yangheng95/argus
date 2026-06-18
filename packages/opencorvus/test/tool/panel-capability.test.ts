@@ -61,9 +61,7 @@ test("mission panel tool schema requires create_task semantic title", async () =
     },
   })
   const schema = z.toJSONSchema(tool.parameters)
-  const createTask = (schema as any).anyOf.find(
-    (item: any) => item?.properties?.action?.const === "create_task",
-  )
+  const createTask = (schema as any).anyOf.find((item: any) => item?.properties?.action?.const === "create_task")
 
   expect(createTask.required).toContain("title")
   expect(tool.parameters.safeParse({ action: "create_task", request: "do thing" }).success).toBe(false)

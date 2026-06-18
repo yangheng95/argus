@@ -18,7 +18,7 @@ Source: `packages/opencorvus/src/plugin/index.ts`, `packages/plugin/src/index.ts
 
 ## Default plugins
 
-**GitLab Auth** (internal) — `@gitlab/opencode-gitlab-auth` statically imported, no npm install (`src/plugin/index.ts:12-23`).
+**GitLab Auth** (internal) — `@gitlab/opencode-gitlab-auth` statically imported, no npm install (`src/plugin/index.ts`).
 
 Third-party npm plugins load only when declared explicitly in the `plugin` config array.
 
@@ -55,7 +55,7 @@ export const MyPlugin: Plugin = async (ctx) => {
 }
 ```
 
-Full hooks: `packages/plugin/src/index.ts:148-337`.
+Full hooks: `packages/plugin/src/index.ts`.
 
 | Hook                                 | When                      |
 | ------------------------------------ | ------------------------- |
@@ -76,7 +76,7 @@ Full hooks: `packages/plugin/src/index.ts:148-337`.
 }
 ```
 
-Files in `.opencorvus/plugin/*.{ts,js}` auto-discovered (`src/config/config.ts:467-479`).
+Files in `.opencorvus/plugin/*.{ts,js}` auto-discovered (`src/config/config.ts`).
 
 ## Relation to providers and executors
 

@@ -63,6 +63,19 @@ describe("log routes", () => {
     expect(response.status).toBe(400)
   })
 
+  test("GET /log returns a typed 404 for valid but missing named log files", async () => {
+    const app = Server.App()
+    const response = await app.request(`/log?file=${encodeURIComponent("missing.log")}`)
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      name: "LogFileNotFoundError",
+      data: {
+        file: "missing.log",
+        directory: Log.directory(),
+      },
+    })
+  })
+
   test("GET /log/tail delegates to the unified log reader", async () => {
     await Log.init({ print: false, dev: true, level: "DEBUG" })
     Log.create({ service: "log-route-test" }).info("tail route probe")
@@ -91,5 +104,31 @@ describe("log routes", () => {
 
     expect(body.lines).toHaveLength(1)
     expect(JSON.parse(body.lines[0]!).message).toBe("last tail line")
+  })
+
+  test("POST /log remains readable through GET /log when print mode is enabled", async () => {
+    await Log.init({ print: true, dev: true, level: "DEBUG" })
+    const marker = `print-log-route-${Date.now()}`
+    const app = Server.App()
+
+    const written = await app.request("/log", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        service: "overlay:test",
+        level: "error",
+        message: "print mode route probe",
+        extra: { marker },
+      }),
+    })
+    expect(written.status).toBe(200)
+
+    await Bun.sleep(50)
+    const response = await app.request("/log?n=500")
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { path: string; lines: string[] }
+
+    expect(body.path).toBe(Log.file())
+    expect(body.lines.some((line) => JSON.parse(line).marker === marker)).toBe(true)
   })
 })

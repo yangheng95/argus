@@ -13,22 +13,22 @@ platform : channel : thread
 
 ## 已支持的 14 个 Channel
 
-| Channel                         | 适配器                       | 典型连接方式                 |
-| ------------------------------- | ---------------------------- | ---------------------------- |
-| [Slack](./slack.md)             | `src/adapters/slack.ts`      | Socket Mode                  |
-| [Telegram](./telegram.md)       | `src/adapters/telegram.ts`   | Long polling                 |
-| [Discord](./discord.md)         | `src/adapters/discord.ts`    | Gateway WebSocket            |
-| [飞书 / Lark](./feishu.md)      | `src/adapters/feishu.ts`     | Webhook                      |
-| [WhatsApp](./whatsapp.md)       | `src/adapters/whatsapp.ts`   | Webhook（WhatsApp Business） |
-| [Google Chat](./googlechat.md)  | `src/adapters/googlechat.ts` | Webhook                      |
-| [Microsoft Teams](./msteams.md) | `src/adapters/msteams.ts`    | Webhook                      |
-| [LINE](./line.md)               | `src/adapters/line.ts`       | Webhook                      |
-| [Matrix](./matrix.md)           | `src/adapters/matrix.ts`     | Long polling                 |
-| [Mattermost](./mattermost.md)   | `src/adapters/mattermost.ts` | Webhook                      |
-| [Signal](./signal.md)           | `src/adapters/signal.ts`     | Signal-CLI 本地代理          |
-| [企业微信](./wecom.md)          | `src/adapters/wecom.ts`      | Webhook                      |
-| [钉钉](./dingtalk.md)           | `src/adapters/dingtalk.ts`   | Webhook                      |
-| [QQ](./qq.md)                   | `src/adapters/qq.ts`         | QQ Bot 协议                  |
+| Channel                         | 适配器                                                | 典型连接方式                 |
+| ------------------------------- | ----------------------------------------------------- | ---------------------------- |
+| [Slack](./slack.md)             | `packages/channel-runtime/src/adapters/slack.ts`      | Socket Mode                  |
+| [Telegram](./telegram.md)       | `packages/channel-runtime/src/adapters/telegram.ts`   | Long polling                 |
+| [Discord](./discord.md)         | `packages/channel-runtime/src/adapters/discord.ts`    | Gateway WebSocket            |
+| [飞书 / Lark](./feishu.md)      | `packages/channel-runtime/src/adapters/feishu.ts`     | Webhook                      |
+| [WhatsApp](./whatsapp.md)       | `packages/channel-runtime/src/adapters/whatsapp.ts`   | Webhook（WhatsApp Business） |
+| [Google Chat](./googlechat.md)  | `packages/channel-runtime/src/adapters/googlechat.ts` | Webhook                      |
+| [Microsoft Teams](./msteams.md) | `packages/channel-runtime/src/adapters/msteams.ts`    | Webhook                      |
+| [LINE](./line.md)               | `packages/channel-runtime/src/adapters/line.ts`       | Webhook                      |
+| [Matrix](./matrix.md)           | `packages/channel-runtime/src/adapters/matrix.ts`     | Long polling                 |
+| [Mattermost](./mattermost.md)   | `packages/channel-runtime/src/adapters/mattermost.ts` | Webhook                      |
+| [Signal](./signal.md)           | `packages/channel-runtime/src/adapters/signal.ts`     | Signal-CLI 本地代理          |
+| [企业微信](./wecom.md)          | `packages/channel-runtime/src/adapters/wecom.ts`      | Webhook                      |
+| [钉钉](./dingtalk.md)           | `packages/channel-runtime/src/adapters/dingtalk.ts`   | Webhook                      |
+| [QQ](./qq.md)                   | `packages/channel-runtime/src/adapters/qq.ts`         | QQ Bot 协议                  |
 
 注册表在 `packages/channel-config/src/index.ts` 的 `ChannelCatalog`。
 
@@ -37,10 +37,10 @@ platform : channel : thread
 ```bash
 cd packages/channel-runtime
 cp .env.example .env    # 填入你要启用的 channel 的 token
-bun run dev             # 实际执行 bun run src/main.ts
+bun run dev             # 实际执行 bun run src/packages/channel-runtime/src/main.ts
 ```
 
-`registerAdapters()`（`src/registry.ts:242`）会自动扫描 env，**只启动配置了必要 token 的 channel**，其他跳过——不会因为某个 channel 没配置就崩。
+`registerAdapters()`（`packages/channel-runtime/src/registry.ts`）会自动扫描 env，**只启动配置了必要 token 的 channel**，其他跳过——不会因为某个 channel 没配置就崩。
 
 ## 与 OpenCorvus 后端的通信
 
@@ -63,7 +63,7 @@ SDK：`@opencorvus-ai/sdk`。
   ↓
 <Platform>Adapter.onMessage(IncomingMessage)
   ↓
-ChannelRuntime.handleMessage()      [src/core.ts:235]
+ChannelRuntime.handleMessage()      [packages/channel-runtime/src/core.ts]
   ├─ 若是音频 → STTPipeline.transcribe()
   ├─ SessionCoordinator.get(threadKey) 查已有 session
   ├─ 无 session → client.session.create() 创建新 session
@@ -71,7 +71,7 @@ ChannelRuntime.handleMessage()      [src/core.ts:235]
 
 OpenCorvus 后端处理中 → SSE 事件流回
   ↓
-handleEvent(event)                  [src/core.ts:1132]
+handleEvent(event)                  [packages/channel-runtime/src/core.ts]
   ├─ task.report → safeSend() 进度/完成/失败
   ├─ message.updated → 文本累积 → safeSend()
   ├─ part.updated(image) → uploadImage()
@@ -81,8 +81,8 @@ handleEvent(event)                  [src/core.ts:1132]
 ## 扩展新 channel 的三步
 
 1. **注册**：在 `packages/channel-config/src/index.ts` 的 `ChannelCatalog` 里 `define({...})`，声明 id、必填字段、对应 env 名。
-2. **适配器**：在 `packages/channel-runtime/src/adapters/` 下实现 `ChannelAdapter` 接口（`src/adapter.ts:9`），至少实现 `start / stop / sendMessage / onMessage`，可选 `uploadImage / startThread`。
-3. **接线**：在 `packages/channel-runtime/src/registry.ts` 的 `AdapterOptions` 与 `build()` switch 里加 case；在 `main.ts` 的 `registerAdapters()` 传入工厂函数。
+2. **适配器**：在 `packages/channel-runtime/packages/channel-runtime/src/adapters/` 下实现 `ChannelAdapter` 接口（`packages/channel-runtime/src/adapter.ts`），至少实现 `start / stop / sendMessage / onMessage`，可选 `uploadImage / startThread`。
+3. **接线**：在 `packages/channel-runtime/packages/channel-runtime/src/registry.ts` 的 `AdapterOptions` 与 `build()` switch 里加 case；在 `packages/channel-runtime/src/main.ts` 的 `registerAdapters()` 传入工厂函数。
 
 详见 [Slack 实现](./slack.md) 作为参考样板。
 
@@ -90,7 +90,7 @@ handleEvent(event)                  [src/core.ts:1132]
 
 | 能力            | 控制 env                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------- |
-| 语音识别（STT） | `STT_PROVIDERS=groq,openai-whisper,deepgram,google-gemini,local-cli`                        |
+| 语音识别（STT） | `STT_PROVIDER=groq`                                                                         |
 | Vision          | `OPENCORVUS_VISION_MODEL`                                                                   |
 | 权限模板        | `OPENCORVUS_CHANNEL_PERMISSION_PROFILE=restricted \| standard \| permissive \| passthrough` |
 | 附件上传端点    | `POST /channel/attachment`                                                                  |

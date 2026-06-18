@@ -19,13 +19,13 @@ Prompt wording alone cannot fix this because the agent needs direct visual coord
 
 `rg "submit_frontend_template|record_frontend_region_selection|webpage_render|FRONTEND_DESIGN_SESSION_TOOL_IDS|browser_preview_compare_regions|cropPng" packages/opencorvus/src packages/opencorvus/test`
 
-| Area | Current behavior | Decision |
-| --- | --- | --- |
-| `frontend-design/agent.ts` | Builds the frontend-design tool surface and finalizes through `submit_frontend_template`. | Add `create_visual_region_coordinate_atlas` and `create_visual_region_binding_package` to the normal frontend-design tool surface. |
-| `frontend-design/static-tools.ts` | Static tool ID lists omit any VisualRegionBinding materializer. | Add both tool IDs to static/session lists. They are session handoff materializers, not source-editing implementation tools. |
-| `frontend-design-core.txt` | Requires visual evidence but does not provide a concrete binding materialization step. | Instruct agents to call the materializer when the task requires VisualRegionBinding/per-region binding evidence. |
-| `browser-preview/region-comparison.ts` | Crops source and implementation images for build/integrity comparison. | Keep build comparison separate; frontend-design gets source crop + binding manifest materialization only. |
-| `frontend-design/tools/output-dir.ts` | Constrains webpage evidence writes under `webpage-evidence/`. | Leave unchanged. Region binding artifacts should live under the frontend-design runtime package, not masquerade as webpage extraction output. |
+| Area                                   | Current behavior                                                                          | Decision                                                                                                                                      |
+| -------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend-design/agent.ts`             | Builds the frontend-design tool surface and finalizes through `submit_frontend_template`. | Add `create_visual_region_coordinate_atlas` and `create_visual_region_binding_package` to the normal frontend-design tool surface.            |
+| `frontend-design/static-tools.ts`      | Static tool ID lists omit any VisualRegionBinding materializer.                           | Add both tool IDs to static/session lists. They are session handoff materializers, not source-editing implementation tools.                   |
+| `frontend-design-core.txt`             | Requires visual evidence but does not provide a concrete binding materialization step.    | Instruct agents to call the materializer when the task requires VisualRegionBinding/per-region binding evidence.                              |
+| `browser-preview/region-comparison.ts` | Crops source and implementation images for build/integrity comparison.                    | Keep build comparison separate; frontend-design gets source crop + binding manifest materialization only.                                     |
+| `frontend-design/tools/output-dir.ts`  | Constrains webpage evidence writes under `webpage-evidence/`.                             | Leave unchanged. Region binding artifacts should live under the frontend-design runtime package, not masquerade as webpage extraction output. |
 
 ## Design
 

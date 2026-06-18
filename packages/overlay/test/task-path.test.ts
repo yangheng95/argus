@@ -15,8 +15,8 @@ describe("taskScopedPath", () => {
   })
 
   test("encodes both the task id and the directory", () => {
-    expect(taskScopedPath("task/with spaces", "C:/Users/chuan/my temp/project", "/replan")).toBe(
-      "task/task%2Fwith%20spaces/replan?directory=C%3A%2FUsers%2Fchuan%2Fmy+temp%2Fproject",
+    expect(taskScopedPath("task/with spaces", "C:/Users/example/my temp/project", "/replan")).toBe(
+      "task/task%2Fwith%20spaces/replan?directory=C%3A%2FUsers%2Fexample%2Fmy+temp%2Fproject",
     )
   })
 })

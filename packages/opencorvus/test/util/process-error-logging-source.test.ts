@@ -15,7 +15,7 @@ describe("process error logging", () => {
   })
 
   test("process-level failures rethrow after logging so the runtime owns fatal exit semantics", () => {
-    expect(source).toContain('process.removeAllListeners(event)')
+    expect(source).toContain("process.removeAllListeners(event)")
     expect(source).toContain("throw reason")
     expect(source).toContain('rethrowAfterProcessError("unhandledRejection", reason)')
     expect(source).toContain('rethrowAfterProcessError("uncaughtException", error)')

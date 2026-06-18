@@ -7,7 +7,7 @@ OpenCorvus's LLM layer sits on top of [Vercel AI SDK](https://sdk.vercel.ai/), u
 
 ## Built-in providers
 
-From `packages/opencorvus/package.json:52-90`:
+From `packages/opencorvus/package.json`:
 
 | Provider                                                                                | Package                                                |
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
@@ -73,20 +73,20 @@ In `opencorvus.jsonc`:
 
 Three knobs:
 
-| Scenario                          | Config                                                                                             |
-| --------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Default execution model           | `model` field                                                                                      |
-| Per-agent models                  | `agent.<name>.model` (independently set, see `packages/opencorvus/src/config/config.ts:1053-1067`) |
-| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL`                                                                          |
+| Scenario                          | Config                                                                                   |
+| --------------------------------- | ---------------------------------------------------------------------------------------- |
+| Default execution model           | `model` field                                                                            |
+| Per-agent models                  | `agent.<name>.model` (independently set, see `packages/opencorvus/src/config/config.ts`) |
+| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL`                                                                |
 
 Splitting planning from execution lets you **plan with a strong/slow model and execute with a fast/cheaper one**:
 
 ```jsonc
 {
   "model": "openai/gpt-5.5",
-  "assistant": {
+  "agent": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "planner": { "model": "anthropic/claude-sonnet-4-6" },
+    "architect": { "model": "anthropic/claude-sonnet-4-6" },
   },
 }
 ```

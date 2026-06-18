@@ -16,14 +16,24 @@ import {
   __setHostTransportForTest,
   type HostTransport,
   type NativeCommand,
+  type TransportRequest,
 } from "../src/services/host-transport"
 import { setBoardStore } from "../src/store/board"
 import { setSettingsStore } from "../src/store/settings"
 import { setLocaleData } from "../src/utils/i18n"
+import { AppLog, waitForLogDrain } from "../src/utils/log"
 ;(globalThis as any).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 let events: typeof import("../src/services/events")
 const originalDocument = globalThis.document
+
+function transportBody(req: TransportRequest): Record<string, unknown> {
+  const body = req.body as { kind?: string; value?: unknown } | undefined
+  if (body?.kind === "json" && body.value && typeof body.value === "object") {
+    return body.value as Record<string, unknown>
+  }
+  throw new Error("expected JSON transport body")
+}
 
 beforeAll(async () => {
   mock.module("../src/utils/icon-html", () => ({
@@ -36,13 +46,15 @@ beforeAll(async () => {
   setLocaleData("en-US", await Bun.file(path.resolve(import.meta.dir, "../src/i18n/en-US.json")).json())
 })
 
-function installTransport(input: {
-  kind?: "tauri" | "browser"
-  permissionState?: "granted" | "denied" | "default"
-  sendError?: Error
-  permissionError?: Error
-  requestError?: Error
-} = {}) {
+function installTransport(
+  input: {
+    kind?: "tauri" | "browser"
+    permissionState?: "granted" | "denied" | "default"
+    sendError?: Error
+    permissionError?: Error
+    requestError?: Error
+  } = {},
+) {
   const calls = {
     sends: 0,
     permission: 0,
@@ -50,12 +62,20 @@ function installTransport(input: {
     attention: 0,
     lastBadge: undefined as number | undefined,
     lastAttention: undefined as boolean | undefined,
+    logs: [] as Array<Record<string, unknown>>,
   }
   const transport: HostTransport = {
     kind: input.kind ?? "tauri",
     capabilities: HOST_CAPABILITIES[input.kind ?? "tauri"],
-    async request() {
-      throw new Error("not used")
+    async request(req) {
+      if (req.path !== "log") throw new Error(`unexpected request: ${req.path}`)
+      calls.logs.push(transportBody(req))
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: { ok: true },
+      }
     },
     openStream() {
       throw new Error("not used")
@@ -116,6 +136,14 @@ async function flushNotifications(): Promise<void> {
   await Promise.resolve()
 }
 
+async function waitForUploadedLogs(calls: { logs: Array<Record<string, unknown>> }, min = 1): Promise<void> {
+  const deadline = Date.now() + 2_500
+  while (calls.logs.length < min && Date.now() < deadline) {
+    await waitForLogDrain(500)
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+}
+
 function taskItem(input: {
   id: string
   status?: string
@@ -149,8 +177,10 @@ beforeEach(() => {
   replaceBadgeAcksForTest([])
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await waitForLogDrain(2_500)
   __setHostTransportForTest(undefined)
+  AppLog.clear()
   clearNotifications()
   setBoardStore("selectedSource", null)
   setBoardStore("tasks", [])
@@ -231,7 +261,7 @@ describe("routeNotification tier matrix", () => {
   })
 
   test("native notification send failures surface as semantic in-app diagnostics", async () => {
-    installTransport({ sendError: new Error("native bridge down") })
+    const calls = installTransport({ sendError: new Error("native bridge down") })
 
     routeNotification({ type: "task.completed", taskID: "tsk_notify", notify: { tier: 2 } })
     await flushNotifications()
@@ -242,10 +272,18 @@ describe("routeNotification tier matrix", () => {
     expect(diagnostic?.message).toContain("OpenCorvus could not dispatch the OS notification")
     expect(diagnostic?.details).toContain("native bridge down")
     expect(diagnostic?.centerHistory).toBe(true)
+    await waitForUploadedLogs(calls)
+    expect(calls.logs).toContainEqual(
+      expect.objectContaining({
+        service: "overlay:notify",
+        level: "warn",
+        message: "Desktop notification send failed",
+      }),
+    )
   })
 
   test("permission probe failures surface as semantic in-app diagnostics", async () => {
-    installTransport({ kind: "browser", permissionError: new Error("permission API unavailable") })
+    const calls = installTransport({ kind: "browser", permissionError: new Error("permission API unavailable") })
 
     routeNotification({ type: "task.completed", taskID: "tsk_notify", notify: { tier: 2 } })
     await flushNotifications()
@@ -254,18 +292,40 @@ describe("routeNotification tier matrix", () => {
     expect(diagnostic?.tone).toBe("warning")
     expect(diagnostic?.title).toBe("Desktop notification permission check failed")
     expect(diagnostic?.details).toContain("permission API unavailable")
+    await waitForUploadedLogs(calls)
+    expect(calls.logs).toContainEqual(
+      expect.objectContaining({
+        service: "overlay:notify",
+        level: "warn",
+        message: "Desktop notification permission check failed",
+      }),
+    )
   })
 
   test("permission request failures keep the thrown cause in notification details", async () => {
-    installTransport({ kind: "browser", permissionState: "default", requestError: new Error("browser denied gesture") })
+    const calls = installTransport({
+      kind: "browser",
+      permissionState: "default",
+      requestError: new Error("browser denied gesture"),
+    })
 
     const result = await ensureDesktopNotificationPermission()
 
     expect(result).toBe("denied")
-    const diagnostic = notificationStore.items.find((item) => item.id === "system:notification-permission-request-failed")
+    const diagnostic = notificationStore.items.find(
+      (item) => item.id === "system:notification-permission-request-failed",
+    )
     expect(diagnostic?.tone).toBe("warning")
     expect(diagnostic?.title).toBe("Desktop notification permission request failed")
     expect(diagnostic?.details).toContain("browser denied gesture")
+    await waitForUploadedLogs(calls)
+    expect(calls.logs).toContainEqual(
+      expect.objectContaining({
+        service: "overlay:notify",
+        level: "warn",
+        message: "Desktop notification permission request failed",
+      }),
+    )
   })
 })
 

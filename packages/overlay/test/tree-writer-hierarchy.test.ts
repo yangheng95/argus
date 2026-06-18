@@ -44,10 +44,18 @@ function stampedInfo(channel: string, info: Record<string, any>) {
 }
 
 function stampedPart(channel: string, part: Record<string, any>) {
+  const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
+  return cleanPart
+}
+
+function stampedPartEvent(channel: string, part: Record<string, any>) {
+  const { resolvedRole, channel: _channel, parentSessionID, goalID, ...cleanPart } = part
   return {
-    ...part,
-    resolvedRole: part.resolvedRole ?? channel,
+    part: cleanPart,
+    resolvedRole: resolvedRole ?? channel,
     channel,
+    ...(parentSessionID ? { parentSessionID } : {}),
+    ...(goalID ? { goalID } : {}),
   }
 }
 
@@ -177,7 +185,7 @@ test("executor sessions surface when they contain visible reasoning", () => {
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("executor", {
+      ...stampedPartEvent("executor", {
         id: reasoningPartID,
         messageID: "msg_executor_reasoning",
         sessionID: EXECUTOR_SID,
@@ -249,7 +257,7 @@ test("non-goal agent message shells stay hidden until display content arrives", 
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("architect", {
+      ...stampedPartEvent("architect", {
         id: "part_architect_visible",
         messageID: "msg_architect_blank",
         sessionID: "ses_architect_blank",
@@ -312,7 +320,7 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "part_root",
         messageID: "msg_root",
         sessionID: ROOT_SID,
@@ -325,7 +333,7 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("architect", {
+      ...stampedPartEvent("architect", {
         id: "part_architect",
         messageID: "msg_architect",
         sessionID: "ses_architect",
@@ -379,7 +387,7 @@ test("follow-up user sessions render as plain user bubbles without boundary chro
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("main", {
+      ...stampedPartEvent("main", {
         id: "prt_user_followup",
         messageID: "msg_user_followup",
         sessionID: USER_SID,
@@ -711,7 +719,7 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_root",
         messageID: "msg_root",
         sessionID: ROOT_ASSISTANT_SID,
@@ -750,7 +758,7 @@ test("channel-stamped part.updated materializes the correct session card immedia
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("planner", {
+      ...stampedPartEvent("planner", {
         id: "prt_stream",
         messageID: "msg_race",
         sessionID: "ses_race",
@@ -805,7 +813,7 @@ test("channel-stamped part.updated materializes the correct session card immedia
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_root_race",
         messageID: "msg_root",
         sessionID: ROOT_SID,
@@ -1366,7 +1374,7 @@ test("message arrival applies buffered lifecycle status without creating a dupli
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("frontend-design", {
+      ...stampedPartEvent("frontend-design", {
         id: "prt_frontend_design_lifecycle",
         messageID: "msg_frontend_design_lifecycle",
         sessionID,
@@ -1504,7 +1512,7 @@ test("session.error with channel buffers until a real assistant message card exi
   applyEvent({
     type: "message.part.updated",
     properties: {
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "part_queue_error",
         messageID: "msg_queue_error",
         sessionID,
@@ -1566,7 +1574,7 @@ test("orchestrator turns stay in one complete session card around child agents",
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_o1",
         messageID: "msg_o1",
         sessionID: ROOT_SID,
@@ -1595,7 +1603,7 @@ test("orchestrator turns stay in one complete session card around child agents",
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("architect", {
+      ...stampedPartEvent("architect", {
         id: "prt_child",
         messageID: "msg_child",
         sessionID: "ses_child",
@@ -1623,7 +1631,7 @@ test("orchestrator turns stay in one complete session card around child agents",
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_o2",
         messageID: "msg_o2",
         sessionID: ROOT_SID,
@@ -1671,7 +1679,7 @@ test("late child agent event does not split an already-arrived orchestrator sess
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_late_o1",
         messageID: "msg_late_o1",
         sessionID: ROOT_SID,
@@ -1702,7 +1710,7 @@ test("late child agent event does not split an already-arrived orchestrator sess
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_late_o2",
         messageID: "msg_late_o2",
         sessionID: ROOT_SID,
@@ -1731,7 +1739,7 @@ test("late child agent event does not split an already-arrived orchestrator sess
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("architect", {
+      ...stampedPartEvent("architect", {
         id: "prt_late_child",
         messageID: "msg_late_child",
         sessionID: "ses_late_child",
@@ -1771,7 +1779,7 @@ test("consecutive messages from the same agent stay in one card", () => {
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_c1",
         messageID: "msg_c1",
         sessionID: ROOT_SID,
@@ -1799,7 +1807,7 @@ test("consecutive messages from the same agent stay in one card", () => {
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_c2",
         messageID: "msg_c2",
         sessionID: ROOT_SID,
@@ -1846,7 +1854,7 @@ test("repeated message.updated for the same agent message does not reset card st
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("frontend-research", {
+      ...stampedPartEvent("frontend-research", {
         id: "prt_timer_stable",
         messageID: "msg_timer_stable",
         sessionID: "ses_timer_stable",
@@ -1903,7 +1911,7 @@ test("explore channel owns the card while resolvedRole owns in-card authorship",
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("explore", {
+      ...stampedPartEvent("explore", {
         id: "prt_explore_1",
         messageID: "msg_explore_1",
         sessionID: "ses_explore_mixed",
@@ -1932,7 +1940,7 @@ test("explore channel owns the card while resolvedRole owns in-card authorship",
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("explore", {
+      ...stampedPartEvent("explore", {
         id: "prt_explore_2",
         messageID: "msg_explore_2",
         sessionID: "ses_explore_mixed",
@@ -2055,7 +2063,7 @@ test("phase-absorbed agent does not split a later orchestrator turn", () => {
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_phase_i1",
         messageID: "msg_phase_i1",
         sessionID: ROOT_SID,
@@ -2145,7 +2153,7 @@ test("phase-absorbed empty build messages do not create timestamp-only boundarie
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("build", {
+      ...stampedPartEvent("build", {
         id: "prt_empty_step",
         messageID,
         sessionID,
@@ -2163,7 +2171,7 @@ test("phase-absorbed empty build messages do not create timestamp-only boundarie
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("build", {
+      ...stampedPartEvent("build", {
         id: "prt_visible_text",
         messageID,
         sessionID,
@@ -2209,7 +2217,7 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("build", {
+      ...stampedPartEvent("build", {
         id: "prt_phase_prompt_order_assistant",
         messageID: assistantMessageID,
         sessionID,
@@ -2241,7 +2249,7 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("build", {
+      ...stampedPartEvent("build", {
         id: "prt_phase_prompt_order_user",
         messageID: promptMessageID,
         sessionID,
@@ -2260,11 +2268,7 @@ test("phase-absorbed build card orders prompt parts before later assistant outpu
       .filter((part: any) => part.type === "text" || part.type === "boundary")
       .map((part: any) => part.messageID),
   ).toEqual([promptMessageID, promptMessageID, assistantMessageID, assistantMessageID])
-  expect(
-    phaseCard.parts
-      .filter((part: any) => part.type === "text")
-      .map((part: any) => part.text),
-  ).toEqual([
+  expect(phaseCard.parts.filter((part: any) => part.type === "text").map((part: any) => part.text)).toEqual([
     "## Visual Reference Contract (binding for this dispatch)\nreference.png",
     "assistant started implementation",
   ])
@@ -2426,7 +2430,7 @@ test("late part.delta lands on the original turn card after a newer message star
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_d1",
         messageID: "msg_d1",
         sessionID: ROOT_SID,
@@ -2454,7 +2458,7 @@ test("late part.delta lands on the original turn card after a newer message star
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: stampedPart("assistant", {
+      ...stampedPartEvent("assistant", {
         id: "prt_d2",
         messageID: "msg_d2",
         sessionID: ROOT_SID,

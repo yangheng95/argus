@@ -20,13 +20,13 @@ Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具�
 
 ### GitLab Auth（内部）
 
-`@gitlab/opencode-gitlab-auth` 编译时静态导入，无需 npm（`src/plugin/index.ts:12-23`）。
+`@gitlab/opencode-gitlab-auth` 编译时静态导入，无需 npm（`src/plugin/index.ts`）。
 
 第三方 npm 插件只在 `plugin` 配置数组中显式声明后加载。
 
 ## 3. 加载流程
 
-`Plugin.state()`（`src/plugin/index.ts:25-102`）：
+`Plugin.state()`（`src/plugin/index.ts`）：
 
 1. 加载 `INTERNAL_PLUGINS`（GitLab Auth）
 2. 合并 config 的 `plugin` 数组，逐项：
@@ -35,7 +35,7 @@ Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具�
 3. 对每个导出的 Plugin 函数，调用 `fn(ctx)` 得到 `Hooks` 对象推入全局 hooks
 
 ```typescript
-// packages/plugin/src/index.ts:35
+// packages/plugin/src/index.ts
 export type Plugin = (input: PluginInput) => Promise<Hooks>
 ```
 
@@ -88,7 +88,7 @@ export const MyPlugin: Plugin = async (ctx) => {
 
 ## 5. 全部 Hooks
 
-完整列表见 `packages/plugin/src/index.ts:148-337`。常用：
+完整列表见 `packages/plugin/src/index.ts`。常用：
 
 | Hook                                 | 时机                              |
 | ------------------------------------ | --------------------------------- |
@@ -118,7 +118,7 @@ export const MyPlugin: Plugin = async (ctx) => {
 }
 ```
 
-或把插件文件放在 `.opencorvus/plugin/` 目录（`*.ts` / `*.js`），自动发现（`src/config/config.ts:467-479`）。
+或把插件文件放在 `.opencorvus/plugin/` 目录（`*.ts` / `*.js`），自动发现（`src/config/config.ts`）。
 
 ## 7. Plugin vs Provider vs Executor
 

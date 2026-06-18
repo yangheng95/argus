@@ -138,7 +138,7 @@ describe("protocol interaction resolution", () => {
     })
   })
 
-  test("syncRun clears resolved coordinator question blockers without queue refs", async () => {
+  test("syncRun does not rewrite resolved coordinator question blockers without queue refs", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -197,8 +197,8 @@ describe("protocol interaction resolution", () => {
         await EngineRuntime.syncRun(runID, hooks())
 
         const run = findRun(runID)
-        expect(run?.status).toBe("running")
-        expect(run?.blocking_reason).toBeNull()
+        expect(run?.status).toBe("blocked")
+        expect(run?.blocking_reason).toBe("question")
       },
     })
   })

@@ -28,13 +28,13 @@ Mission-created tasks remain normal task rows with `source: "mission"`.
 
 ## Call Point Sweep
 
-| Surface | Current use | Decision |
-| --- | --- | --- |
-| `packages/overlay/src/components/Mission.tsx` | Owns Mission list resource and Mission record actions. | Keep Mission list backed only by `/mission`; add no task-list fallback. |
-| `packages/overlay/src/main.tsx` | Owns left activity selection and passes `active` / `refreshToken` into `Mission`. | Add an explicit Mission activation token and increment it when Mission is selected. |
-| `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` | Real browser coverage for left activity switching. | Add the missing Mission -> Tasks -> Mission assertion. |
-| `/mission` route | Canonical Mission session list. | Unchanged. |
-| `/global/tasks` route | Ordinary task sidebar list. | Unchanged; do not reinsert Mission sessions here. |
+| Surface                                                               | Current use                                                                       | Decision                                                                            |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/Mission.tsx`                         | Owns Mission list resource and Mission record actions.                            | Keep Mission list backed only by `/mission`; add no task-list fallback.             |
+| `packages/overlay/src/main.tsx`                                       | Owns left activity selection and passes `active` / `refreshToken` into `Mission`. | Add an explicit Mission activation token and increment it when Mission is selected. |
+| `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` | Real browser coverage for left activity switching.                                | Add the missing Mission -> Tasks -> Mission assertion.                              |
+| `/mission` route                                                      | Canonical Mission session list.                                                   | Unchanged.                                                                          |
+| `/global/tasks` route                                                 | Ordinary task sidebar list.                                                       | Unchanged; do not reinsert Mission sessions here.                                   |
 
 ## Design
 

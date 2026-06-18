@@ -51,9 +51,10 @@ import { EffectiveConfig } from "@/config/effective"
 import { PromptProfile } from "@/agent/prompt-profile"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
-import { INFORMATION_MISSING_FALLBACK_TEXT } from "@/prompt/information-missing"
+import { INFORMATION_MISSING_DIAGNOSTIC_TEXT } from "@/prompt/information-missing"
 import {
   AgentRunError,
+  buildInformationMissingError,
   buildHardErrorFromFinalMessage,
   messageHasInformationMissing,
   extractInformationMissingBlock,
@@ -94,6 +95,11 @@ import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 import { AgentTrace } from "@/trace"
 import { paragraphSummary } from "@/agent/report"
 import { NamedError } from "@opencorvus-ai/util/error"
+import {
+  isOrchestratorNoDecisionObservationToolName,
+  ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY,
+  type OrchestratorDecisionEffect,
+} from "./stateful-tool-names"
 
 const log = Log.create({ service: "orchestrator" })
 // MAX_STEPS lives on agent.orchestrator.steps in src/agent/agent.ts. SessionLoop
@@ -106,6 +112,88 @@ export interface OrchestratorTaskErrorEnvelope {
 }
 
 export const ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER = "\n[orchestrator-error-envelope]"
+
+const TOOL_CALL_TEXT_SENTINELS = ["<|tool_call_argument_begin|>", "<|tool_calls_section_end|>"]
+
+export class OrchestratorNoDecisionStopError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "OrchestratorNoDecisionStopError"
+  }
+}
+
+export interface OrchestratorWakeToolDecision {
+  name: string
+  decisionEffect?: OrchestratorDecisionEffect
+}
+
+export function classifyOrchestratorDecisionStop(input: {
+  taskTerminal: boolean
+  finish?: string
+  finalText?: string
+  providerVisiblePartCount: number
+  wakeTools: OrchestratorWakeToolDecision[]
+}): string | undefined {
+  if (input.taskTerminal) return undefined
+
+  const finalText = input.finalText?.trim() ?? ""
+  const wakeToolNames = input.wakeTools.map((tool) => tool.name)
+  if (TOOL_CALL_TEXT_SENTINELS.some((sentinel) => finalText.includes(sentinel))) {
+    return (
+      "Orchestrator emitted provider tool-call protocol text instead of a real tool call. " +
+      `wake_tools=[${wakeToolNames.join(",") || "none"}]; text=${JSON.stringify(snippet(finalText, 280))}`
+    )
+  }
+
+  if (!input.finish && input.providerVisiblePartCount === 0) {
+    return (
+      "Orchestrator produced an empty assistant turn with no finish reason and no persisted parts. " +
+      `wake_tools=[${wakeToolNames.join(",") || "none"}]`
+    )
+  }
+
+  if (input.finish === "tool-calls") return undefined
+  if (!input.finish) {
+    return (
+      "Orchestrator ended without a finish reason on an active task. " +
+      `wake_tools=[${wakeToolNames.join(",") || "none"}]; text=${JSON.stringify(snippet(finalText, 280))}`
+    )
+  }
+  if (input.finish !== "stop") {
+    return (
+      `Orchestrator ended with finish=${input.finish} instead of a completed stop. ` +
+      `wake_tools=[${wakeToolNames.join(",") || "none"}]; text=${JSON.stringify(snippet(finalText, 280))}`
+    )
+  }
+  if (input.wakeTools.length === 0) {
+    return `Orchestrator stopped without calling any tool. text=${JSON.stringify(snippet(finalText, 280))}`
+  }
+
+  const hasDecisionEffect = input.wakeTools.some((tool) => tool.decisionEffect === "decision")
+  const onlyObservationTools = input.wakeTools.every(
+    (tool) => tool.decisionEffect === "observation" || isOrchestratorNoDecisionObservationToolName(tool.name),
+  )
+  if (onlyObservationTools) {
+    return (
+      "Orchestrator stopped after only observation or pause tools; no task decision was made. " +
+      `wake_tools=[${wakeToolNames.join(",")}]; text=${JSON.stringify(snippet(finalText, 280))}`
+    )
+  }
+  if (!hasDecisionEffect) {
+    return (
+      "Orchestrator stopped after tool calls that produced no task decision effect. " +
+      `wake_tools=[${wakeToolNames.join(",")}]; effects=[${input.wakeTools.map((tool) => tool.decisionEffect ?? "missing").join(",")}]; ` +
+      `text=${JSON.stringify(snippet(finalText, 280))}`
+    )
+  }
+
+  return undefined
+}
+
+function snippet(input: string, max: number): string {
+  if (input.length <= max) return input
+  return `${input.slice(0, max)}...`
+}
 
 export function parseOrchestratorTaskErrorEnvelope(input?: string | null): OrchestratorTaskErrorEnvelope | undefined {
   if (!input) return undefined
@@ -133,7 +221,7 @@ function serializeOrchestratorTaskError(error: unknown): {
   message: string
   taskError: string
 } {
-  const envelope = orchestratorErrorEnvelope(error)
+  const envelope = error instanceof AgentRunError ? hardErrorEnvelope(error) : orchestratorErrorEnvelope(error)
   const message = envelope.message
   return {
     envelope,
@@ -177,6 +265,55 @@ export function recordOrchestratorTraceReportForSession(
   })
 }
 
+function finalTextFromMessage(finalMessage: Message.WithParts | undefined): string | undefined {
+  return finalMessage?.parts
+    ?.filter((part) => part.type === "text")
+    .map((part) => (part as { text: string }).text)
+    .join("\n\n")
+}
+
+function providerVisiblePartCount(finalMessage: Message.WithParts | undefined): number {
+  return finalMessage?.parts.filter((part) => part.type === "text" || part.type === "tool").length ?? 0
+}
+
+async function collectOrchestratorWakeToolNames(input: {
+  sessionID: string
+  boundaryMessageID?: string
+}): Promise<OrchestratorWakeToolDecision[]> {
+  const tools: OrchestratorWakeToolDecision[] = []
+  for await (const message of Message.stream(input.sessionID)) {
+    if (input.boundaryMessageID && message.info.id === input.boundaryMessageID) break
+    if (message.info.role !== "assistant") continue
+    for (const part of message.parts) {
+      if (part.type !== "tool") continue
+      const toolName = (part as Message.ToolPart).tool
+      const state = (part as Message.ToolPart).state
+      const metadata = "metadata" in state ? state.metadata : undefined
+      const rawEffect = metadata?.[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]
+      const decisionEffect =
+        rawEffect === "decision" || rawEffect === "observation" || rawEffect === "none" ? rawEffect : undefined
+      if (toolName) tools.push({ name: toolName, decisionEffect })
+    }
+  }
+  return tools.reverse()
+}
+
+async function latestSessionMessageID(sessionID: string): Promise<string | undefined> {
+  for await (const message of Message.stream(sessionID)) {
+    return message.info.id
+  }
+  return undefined
+}
+
+interface OrchestratorSessionErrorRecordResult {
+  fuse: { tripped: boolean; consecutive: number; windowMs: number }
+  selfWakeDispatched: boolean
+}
+
+function isOrchestratorNoDecisionEnvelope(envelope: OrchestratorTaskErrorEnvelope): boolean {
+  return envelope.errorName === "OrchestratorNoDecisionStopError"
+}
+
 async function recordOrchestratorSessionHardError(input: { taskID: string; sessionID: string; error: AgentRunError }) {
   return recordOrchestratorSessionErrorEnvelope({
     taskID: input.taskID,
@@ -191,10 +328,11 @@ async function recordOrchestratorSessionErrorEnvelope(input: {
   sessionID: string
   envelope: OrchestratorTaskErrorEnvelope
   summaryPrefix: string
-}) {
+}): Promise<OrchestratorSessionErrorRecordResult> {
   const { recordOrchestratorStreamError, maybeTripOrchestratorStreamErrorFuse } = await import("@/engine/persist")
   const now = Date.now()
   const reason = `${input.envelope.errorName}: ${input.envelope.message}`
+  const noDecision = isOrchestratorNoDecisionEnvelope(input.envelope)
   recordOrchestratorStreamError({
     taskID: input.taskID,
     reason,
@@ -202,23 +340,56 @@ async function recordOrchestratorSessionErrorEnvelope(input: {
     sessionID: input.sessionID,
     now,
   })
-  await blockActiveRunForTask(input.taskID, {
-    blockingReason: "orchestrator_stream_error",
-    error: reason,
-    summary: `${input.summaryPrefix}: ${reason}`,
-  })
   const fuse = await maybeTripOrchestratorStreamErrorFuse({
     taskID: input.taskID,
     now,
     lastReason: reason,
   })
   if (fuse.tripped) {
+    await blockActiveRunForTask(input.taskID, {
+      blockingReason: "orchestrator_stream_error",
+      error: reason,
+      summary: `${input.summaryPrefix}: ${reason}`,
+    })
     log.error("orchestrator stream-error fuse tripped — task marked failed", {
       taskID: input.taskID,
       consecutive: fuse.consecutive,
       windowMs: fuse.windowMs,
     })
+    return { fuse, selfWakeDispatched: false }
   }
+
+  if (noDecision) {
+    const { dispatchTaskLoop } = await import("@/engine/queue")
+    const dispatchResult = await dispatchTaskLoop({
+      taskID: input.taskID,
+      event: {
+        note: OrchestratorEventNote.noDecisionRecovery({ reason, consecutive: fuse.consecutive }),
+      },
+    })
+    if (dispatchResult === "ignored") {
+      await blockActiveRunForTask(input.taskID, {
+        blockingReason: "orchestrator_stream_error",
+        error: reason,
+        summary: `${input.summaryPrefix}: ${reason}; recovery dispatch was ignored`,
+      })
+      log.error("orchestrator no-decision recovery dispatch ignored", { taskID: input.taskID })
+      return { fuse, selfWakeDispatched: false }
+    }
+    log.warn("orchestrator no-decision recovery wake scheduled", {
+      taskID: input.taskID,
+      consecutive: fuse.consecutive,
+      dispatchResult,
+    })
+    return { fuse, selfWakeDispatched: true }
+  }
+
+  await blockActiveRunForTask(input.taskID, {
+    blockingReason: "orchestrator_stream_error",
+    error: reason,
+    summary: `${input.summaryPrefix}: ${reason}`,
+  })
+  return { fuse, selfWakeDispatched: false }
 }
 
 // ---------------------------------------------------------------------------
@@ -368,19 +539,19 @@ export namespace Orchestrator {
       //    existing visible user message and carry fresh task state through
       //    the runtime contract instead of synthesizing another user turn.
       const system = await buildSystemParts(task, event, workflow, workflowState)
-      // INFORMATION MISSING fallback — single source per rule 8. The runner.ts
+      // INFORMATION MISSING diagnostic — single source per rule 8. The runner.ts
       // path injects this for every worker agent (build / architect / acceptance
       // / ...); the orchestrator uses its own SessionPrompt.prompt path
       // (see file header for why) and so must inject here. Without this, a
       // toggle flipped ON would silently leave the orchestrator without
       // the diagnostic — the whole point is "every agent's prompt receives
-      // the fallback" so that whoever lost their context surfaces it.
+      // the diagnostic" so that whoever lost their context surfaces it.
       // Appended as a separate array element so it lands after the static
       // ORCHESTRATOR_INSTRUCTIONS + the per-wake describe block, matching
-      // the runner's "fallback last" placement.
+      // the runner's "diagnostic last" placement.
       const debugCfg = (await EngineConfig.get()).debug
       if (debugCfg.fail_on_information_missing) {
-        system.push(INFORMATION_MISSING_FALLBACK_TEXT)
+        system.push(INFORMATION_MISSING_DIAGNOSTIC_TEXT)
       }
       const appendUserMessage = Boolean(
         event?.note || event?.operatorMessage || !(await sessionHasUserMessage(agentSession.id)),
@@ -523,7 +694,7 @@ export namespace Orchestrator {
         // The published payload is a NamedError-shaped object produced by
         // Message.fromError(...).toObject(): { name, data: { message, ... } }.
         // Reading `props.error.message` directly comes back undefined and
-        // surfaced as the fallback "unknown session error" — hiding the
+        // surfaced as the generic "unknown session error" — hiding the
         // actual provider error (e.g. HTTP 429 quota) from the orchestrator
         // wake context. Unwrap data.message first so the real reason flows
         // into the artifact and the next decision turn.
@@ -539,6 +710,7 @@ export namespace Orchestrator {
       // 5. Run the orchestrator session — tools via SessionRuntimeContract.
       //    Step limit lives on agent.orchestrator.steps.
       let finalMessage: Message.WithParts | undefined
+      const promptBoundaryMessageID = await latestSessionMessageID(agentSession.id)
       try {
         SessionPrompt.setSessionRuntimeContract(agentSession.id, {
           identity: {
@@ -584,15 +756,12 @@ export namespace Orchestrator {
 
       // INFORMATION MISSING signal — same contract as the worker path in
       // agent/runner.ts. When the operator has flipped the toggle and the
-      // orchestrator emits the XML diagnostic block (because its own wake
-      // input dropped required context — e.g. event.note empty + no
-      // describe snapshot can resolve the next action), exit the process
-      // immediately so the operator sees the dispatcher-side context drop
-      // instead of a long log of guessed-default work. Mirrors the
-      // injection above (rule 8 single source).
+      // orchestrator emits the XML diagnostic block, fail this wake with a
+      // non-retryable AgentRunError so the error is persisted without killing
+      // the sidecar. Mirrors the injection above (rule 8 single source).
       if (debugCfg.fail_on_information_missing && finalMessage && messageHasInformationMissing(finalMessage)) {
         const block = extractInformationMissingBlock(finalMessage) ?? "<INFORMATION MISSING>...</INFORMATION MISSING>"
-        log.error("INFORMATION MISSING signal — terminating process", {
+        log.error("INFORMATION MISSING signal — failing orchestrator wake", {
           agentName: "orchestrator",
           taskID,
           sessionID: agentSession.id,
@@ -600,12 +769,12 @@ export namespace Orchestrator {
         })
         // eslint-disable-next-line no-console
         console.error(
-          `\n[FATAL] INFORMATION MISSING detected in orchestrator stream — terminating process.\n` +
+          `\n[FATAL] INFORMATION MISSING detected in orchestrator stream — failing wake.\n` +
             `Task: ${taskID}\n` +
             `Session: ${agentSession.id}\n` +
             `${block}\n`,
         )
-        process.exit(99)
+        throw buildInformationMissingError({ kind: "orchestrator", agentName: "orchestrator", block })
       }
 
       if (finalMessage) {
@@ -633,11 +802,29 @@ export namespace Orchestrator {
         }
       }
 
+      if (!ctrl.signal.aborted && streamErrors.length === 0) {
+        const taskTerminal = isTaskTerminal(requireTask(taskID))
+        const wakeTools = await collectOrchestratorWakeToolNames({
+          sessionID: agentSession.id,
+          boundaryMessageID: promptBoundaryMessageID,
+        })
+        const noDecision = classifyOrchestratorDecisionStop({
+          taskTerminal,
+          finish: assistantInfo?.finish,
+          finalText: finalTextFromMessage(finalMessage),
+          providerVisiblePartCount: providerVisiblePartCount(finalMessage),
+          wakeTools,
+        })
+        if (noDecision) {
+          throw new AgentRunError("orchestrator", `No-decision orchestrator wake: ${noDecision}`, {
+            nonRetryable: true,
+            cause: new OrchestratorNoDecisionStopError(noDecision),
+          })
+        }
+      }
+
       if (AgentTrace.isEnabled()) {
-        const finalText = finalMessage?.parts
-          ?.filter((p) => p.type === "text")
-          .map((p) => (p as { text: string }).text)
-          .join("\n\n")
+        const finalText = finalTextFromMessage(finalMessage)
         recordOrchestratorTraceReportForSession(agentSession, {
           sessionID: agentSession.id,
           parentSessionID: task.session_id ?? undefined,
@@ -684,14 +871,11 @@ export namespace Orchestrator {
           summary: `Orchestrator stream error: ${reason}`,
         })
 
-        // Retry circuit breaker. When stream early-death produces a malformed
-        // assistant turn (or any provider-side rejection that recurs on
-        // replay), `monitorRuns` would otherwise wake the task once per
-        // second and burn provider 4xx in a tight loop. The structural side
-        // of that bug is fixed at `session/message.ts::toModelMessages`, but
-        // any future error class can recur it; this fuse is the resource
-        // bound. See engine/persist.ts::maybeTripOrchestratorStreamErrorFuse
-        // and specs/new-arch/2026-05-08-stream-early-death-and-retry-fuse.md.
+        // Retry circuit breaker for repeated stream early-death on the same
+        // task. The structural side of the historical bug is fixed at
+        // `session/message.ts::toModelMessages`; this preserves the resource
+        // bound for future provider-side recurrence without involving runtime
+        // monitoring or scheduler control.
         const fuse = await maybeTripOrchestratorStreamErrorFuse({
           taskID,
           now,
@@ -739,6 +923,7 @@ export namespace Orchestrator {
         return "orchestrator aborted"
       })()
       const logLevel = wasCtrlAborted ? log.info : log.error
+      let noDecisionSelfWakeDispatched = false
       logLevel(wasCtrlAborted ? "orchestrator aborted mid-prompt" : "orchestrator failed", {
         taskID,
         note: event?.note,
@@ -761,11 +946,15 @@ export namespace Orchestrator {
       }
       if (agentSessionID) {
         if (error instanceof AgentRunError) {
-          await recordOrchestratorSessionHardError({
+          const recordResult = await recordOrchestratorSessionHardError({
             taskID,
             sessionID: agentSessionID,
             error,
           })
+          noDecisionSelfWakeDispatched =
+            isOrchestratorNoDecisionEnvelope(structured.envelope) &&
+            recordResult.selfWakeDispatched &&
+            !recordResult.fuse.tripped
         } else if (wasCtrlAborted) {
           // Abort path: synthesize an envelope from the ctrl reason so the
           // artifact reads "OrchestratorAborted: task loop dispatch interrupt"
@@ -797,7 +986,7 @@ export namespace Orchestrator {
       // aborts are control-flow signals (operator-driven restart or explicit
       // cancel), not "task broken" — task.error would mislead the UI and
       // orphan-recovery into treating the next wake as stuck on a hard failure.
-      if (!wasCtrlAborted) {
+      if (!wasCtrlAborted && !noDecisionSelfWakeDispatched) {
         try {
           const current = requireTask(taskID)
           const { isTaskTerminal } = await import("@/engine/task-status")
@@ -881,6 +1070,16 @@ export const OrchestratorEventNote = {
   retry(task: TaskRow): string {
     const previousError = parseOrchestratorTaskErrorEnvelope(task.error)?.message ?? task.error
     return `User requested retry.${previousError ? ` Previous error: ${previousError}` : ""}\nDecide how to proceed.`
+  },
+
+  noDecisionRecovery(input: { reason: string; consecutive: number }): string {
+    return [
+      "This is a wake message, not a user-authored message.",
+      "The previous orchestrator wake ended without a workflow decision; a visible orchestrator-stream-error artifact was recorded.",
+      `Consecutive orchestrator stream-error artifacts in the fuse window: ${input.consecutive}.`,
+      `Error: ${input.reason}`,
+      "Read current task state and decide how to proceed.",
+    ].join("\n")
   },
 
   acceptanceRework(input: { reason: string; iteration: number; summary?: string; affectedGoalCount?: number }): string {

@@ -1,7 +1,7 @@
 param(
   [string]$HostRoot = (Get-Location).Path,
   [string]$WslDistro = "Ubuntu-24.04",
-  [string]$WslRoot = "/home/yangheng/myhexin-local/opecorvus",
+  [string]$WslRoot,
   [switch]$PreferHostForConflicts,
   [switch]$PreferWslForConflicts,
   [switch]$PreferHostForWslChanges,

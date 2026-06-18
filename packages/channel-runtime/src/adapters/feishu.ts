@@ -117,15 +117,13 @@ export class FeishuAdapter implements ChannelAdapter {
     this.server = undefined
   }
 
-  async sendMessage(channel: string, thread: string, text: string): Promise<void> {
+  async sendMessage(_channel: string, thread: string, text: string): Promise<void> {
     const token = await this.tenant()
     const payload: Payload = {
       msg_type: "text",
       content: JSON.stringify({ text }),
     }
-    const sent = await this.reply(token, thread, payload)
-    if (sent) return
-    await this.create(token, channel, payload)
+    await this.reply(token, thread, payload)
   }
 
   async uploadImage(
@@ -163,8 +161,7 @@ export class FeishuAdapter implements ChannelAdapter {
       msg_type: "image",
       content: JSON.stringify({ image_key: imageKey }),
     }
-    const sent = await this.reply(token, thread, payload)
-    if (!sent) await this.create(token, channel, payload)
+    await this.reply(token, thread, payload)
     if (!title || title === filename) return
     await this.sendMessage(channel, thread, title)
   }
@@ -255,7 +252,7 @@ export class FeishuAdapter implements ChannelAdapter {
   }
 
   private async reply(token: string, thread: string, payload: Payload) {
-    if (!thread) return false
+    if (!thread) throw new Error("Feishu reply failed: missing thread")
     const res = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages/${encodeURIComponent(thread)}/reply`, {
       method: "POST",
       headers: {
@@ -265,8 +262,7 @@ export class FeishuAdapter implements ChannelAdapter {
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(30_000),
     })
-    if (res.ok) return true
-    if (res.status === 400 || res.status === 404) return false
+    if (res.ok) return
     throw new Error(`Feishu reply failed: ${res.status} ${await res.text()}`)
   }
 

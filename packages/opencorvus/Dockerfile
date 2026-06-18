@@ -7,6 +7,7 @@ ARG BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
 # so no sibling ui directory is copied into the image.
 ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
 ENV OPENCORVUS_BIN=/opt/opencorvus/opencorvus
+ENV OPENCORVUS_HOME=/var/lib/opencorvus
 ENV OPENCORVUS_PROJECT_DIR=/workspace
 ENV OPENCORVUS_HOSTNAME=0.0.0.0
 ENV OPENCORVUS_PORT=7878
@@ -30,10 +31,11 @@ COPY packages/opencorvus/dist/binary/${OPENCORVUS_BINARY_NAME}/opencorvus-bundle
 COPY script/opencorvus-container-entrypoint.sh /usr/local/bin/opencorvus-container-entrypoint
 
 RUN rm -rf /opt/opencorvus \
-  && mkdir -p /opt/opencorvus \
+  && mkdir -p /opt/opencorvus /var/lib/opencorvus /workspace \
   && tar -xzf /tmp/opencorvus-bundle.tar.gz -C /opt/opencorvus \
   && rm /tmp/opencorvus-bundle.tar.gz \
   && chmod +x /opt/opencorvus/opencorvus /opt/opencorvus/browser-mcp-node/node /usr/local/bin/opencorvus-container-entrypoint \
+  && chmod 0777 /var/lib/opencorvus /workspace \
   && /opt/opencorvus/opencorvus --version \
   && test -x /opt/opencorvus/browser-mcp-node/node \
   && test -f /opt/opencorvus/browser-mcp-node/browser.mjs \

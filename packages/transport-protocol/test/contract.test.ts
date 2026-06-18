@@ -315,6 +315,7 @@ describe("route directory policy", () => {
       "/path",
       "/vcs",
       "/config/providers",
+      "/config/proxy/test",
       "/config/prompt-profile",
       "/session/session_123/conversation",
       "/mission/wake",

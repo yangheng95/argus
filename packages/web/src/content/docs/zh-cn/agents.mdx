@@ -11,16 +11,17 @@ OpenCorvus 的编排围绕 **agent** 构建。代理注册表（名称、模式�
 
 | Agent          | 模式              | 角色                                                                                                                                                                                                               |
 | -------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `coding`       | primary           | 普通本地会话的交互式 coding agent。                                                                                                                                                                                |
 | `build`        | primary（hidden） | 实现 agent。由 orchestrator 或 direct workflow 派发后执行 read / edit / bash 类实现工具。                                                                                                                          |
+| `visual-qa`    | primary（hidden） | 视觉 QA 阶段 agent，使用固定视觉证据工具面。                                                                                                                                                                       |
 | `general`      | subagent          | 通用多步研究 / 并行工作 agent，由 `task` 工具派发。                                                                                                                                                                |
 | `explore`      | subagent          | 代码库探索——快速文件 / 代码搜索，默认只读。                                                                                                                                                                        |
-| `acceptance`   | primary（hidden） | Acceptance review 槽位，用于 review stream 与 arbitration 路径。                                                                                                                                                   |
 | `orchestrator` | primary（hidden） | 编排 agent。拥有任务生命周期决策权，并调用 `frontend_design`、`frontend_research`、`analyze_intent`、`requirements`、`architect`、`build`、`integrity`、`modify_goal`、`restart_from_stage` 等显式 workflow 工具。 |
 | `requirements` | primary（hidden） | 需求阶段。抽取用户需求和基础技术决策。                                                                                                                                                                             |
 
-其他注册的代理（`architect`、`frontend-design`、`frontend-research`、`intent-analysis`、`integrity`、`visual-qa`、`prosecutor`、`summary`、`title`、`compaction`、`mission`、`control`）是由 orchestrator、mission runtime 或 session loop 内部调用的 stage / 工具槽。它们在 config 中可见（可覆盖 model、prompt），但除非有专门 runtime 暴露，否则不可用户选择。
+其他注册的代理（`architect`、`frontend-design`、`frontend-research`、`intent-analysis`、`integrity`、`fact-check`、`deep-research`、`goal-workload-analyst`、`summary`、`title`、`compaction`、`mission`、`control`）是由 orchestrator、mission runtime 或 session loop 内部调用的 stage / 工具槽。它们在 config 中可见（可覆盖 model、prompt），但除非有专门 runtime 暴露，否则不可用户选择。
 
-权威定义见 `packages/opencorvus/src/agent/agent.ts:144-463`。
+权威定义见 `packages/opencorvus/src/agent/agent.ts`。
 
 ## 子代理派发
 
@@ -30,7 +31,7 @@ orchestrator 跑 `pipeline` 工作流时，Architect 创建 goals，每个 block
 
 ## 按 agent 配置模型
 
-每个 agent 的模型在 `agent.<name>.model` 下设置——见 `packages/opencorvus/src/config/config.ts:1053-1067`（`agent` 是 `z.object({...}).catchall(Agent)`）。相关 `assistant.<name>` 块的 describe 文案明确声明（如 `config.ts:1191`、`1232`、`1239`、`1246`）。
+每个 agent 的模型在 `agent.<name>.model` 下设置——见 `packages/opencorvus/src/config/config.ts`（`agent` 是 `z.object({...}).catchall(Agent)`）。相关 `assistant.<name>` 块在同一 config schema 中声明。
 
 ```jsonc
 {
@@ -60,30 +61,30 @@ orchestrator 跑 `pipeline` 工作流时，Architect 创建 goals，每个 block
 }
 ```
 
-自定义 agent 继承默认权限规则集（在 `agent.ts:77-140` 的 `defaults` 块构建）。
+自定义 agent 继承默认权限规则集（在 `agent.ts` 的 `defaults` 块构建）。
 
 ## 默认 Agent
 
-`default_agent` 指定无显式选择时使用的 agent，必须是 primary 且非 hidden——`Agent.defaultAgent()`（`agent.ts:570-585`）会拒绝 subagent / hidden 选项。
+`default_agent` 指定无显式选择时使用的 agent，必须是 primary 且非 hidden——`Agent.defaultAgent()`（`agent.ts`）会拒绝 subagent / hidden 选项。
 
 ## Agent 预算
 
-各 agent 的 step 预算 / skill 路径在 `assistant.<name>` 下（config.ts:1176-1283）：
+各 agent 的 step 预算 / skill 路径在 `assistant.<name>` 下（config.ts）：
 
 ```jsonc
 {
   "assistant": {
     "requirements": { "max_steps": 20 },
     "architect": { "max_steps": 40 },
-    "acceptance": { "max_steps": 160, "max_retries": 3 },
     "frontend_design": { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },
     "build": { "max_steps": 80 },
+    "integrity": { "max_steps": 160 },
   },
 }
 ```
 
-orchestrator 顶层预算直接挂在 `assistant` 下（config.ts:1255-1257）：
+orchestrator 顶层预算直接挂在 `assistant` 下（config.ts）：
 
 - `assistant.max_runs` — 任务总 run 上限
 - `assistant.max_fix_runs` — 失败后修复 run 上限

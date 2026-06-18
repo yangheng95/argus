@@ -46,7 +46,6 @@ export namespace Identifier {
     decision_log: "dlog",
     metric_spec: "mts",
     metric_result: "mtr",
-    counterexample: "cex",
     /** LLM provider call lifecycle (one logical request, including its
      *  internal retries / heartbeats). See packages/opencorvus/src/llm/activity.ts. */
     activity: "act",

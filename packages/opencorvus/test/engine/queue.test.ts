@@ -338,7 +338,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("internal event to a terminal task is ignored instead of reopening it", async () => {
+  test("internal event to a terminal task is scheduled instead of being status-gated", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
@@ -374,13 +374,17 @@ describe("engine queue", () => {
         expect(taskStatus(terminalID)).toBe("failed")
         expect(task.time_completed).not.toBeNull()
         expect(task.error).toBe("terminal failure")
-        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID: terminalID,
+          event: { note: "internal batch settled" },
+        })
       },
     })
   })
 
   test(
-    "operator message wake to a terminal task is ignored even with an active same-cwd task",
+    "operator message wake to a terminal task is scheduled even with an active same-cwd task",
     async () => {
       await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
@@ -434,14 +438,21 @@ describe("engine queue", () => {
           expect(taskStatus(activeID)).toBe("active")
           expect(taskStatus(terminalID)).toBe("completed")
           expect(findTask(terminalID)?.time_completed).not.toBeNull()
-          expect(runTaskLoop).not.toHaveBeenCalled()
+          expect(runTaskLoop).toHaveBeenCalledTimes(1)
+          expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+            taskID: terminalID,
+            event: {
+              note: "operator follow-up",
+              operatorMessage: { text: "continue after failure" },
+            },
+          })
         },
       })
     },
     { timeout: 10_000 },
   )
 
-  test("runTaskLoop ignores terminal tasks before orchestrator processing", async () => {
+  test("runTaskLoop forwards terminal task wakes to orchestrator processing", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
@@ -473,11 +484,11 @@ describe("engine queue", () => {
         await TaskLoop.runTaskLoop({
           taskID,
           event: { note: "stale wake" },
-          hooks: {} as any,
         })
 
         expect(taskStatus(taskID)).toBe("failed")
-        expect(processTask).not.toHaveBeenCalled()
+        expect(processTask).toHaveBeenCalledTimes(1)
+        expect(processTask).toHaveBeenCalledWith(taskID, { note: "stale wake" })
       },
     })
   })

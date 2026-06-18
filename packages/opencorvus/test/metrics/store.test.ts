@@ -162,7 +162,6 @@ describe("computeIterationSnapshot + writeIterationSnapshot — integration", ()
       specs: readSpecsForTask(taskID),
       currentResults: readResultsForIteration(taskID, 0),
       previousResults: [],
-      counterexamples: [],
       previousAggregateScore: 0,
     })
     // alpha=beta=0.5 defaults; only global scope contributes; per-goal=0.
@@ -206,7 +205,6 @@ describe("computeIterationSnapshot + writeIterationSnapshot — integration", ()
       specs: readSpecsForTask(taskID),
       currentResults: readResultsForIteration(taskID, 0),
       previousResults: [],
-      counterexamples: [],
       previousAggregateScore: 0,
     })
     // Stale evidence means the metric doesn't contribute AND still counts

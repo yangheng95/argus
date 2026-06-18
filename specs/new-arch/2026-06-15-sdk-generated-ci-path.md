@@ -17,11 +17,11 @@ as `packages/sdk/openapi.json` is unchanged.
 
 ## Call Point Sweep
 
-| Surface | Call point | Decision |
-| --- | --- | --- |
-| Workflow | `.github/workflows/typecheck.yml` `Verify generated SDK and OpenAPI` | Diff `packages/sdk/js/src/gen` and `packages/sdk/openapi.json`. |
-| Generator | `packages/sdk/js/script/build.ts` `rmWithinPackage("src/gen")` and `generate("./src/gen")` | Keep as the single generated SDK output. |
-| Tests | `packages/opencorvus/test/script/sdk-build-format-contract.test.ts` | Assert the workflow checks `src/gen` and does not mention retired `src/v2/gen`. |
+| Surface   | Call point                                                                                 | Decision                                                                        |
+| --------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Workflow  | `.github/workflows/typecheck.yml` `Verify generated SDK and OpenAPI`                       | Diff `packages/sdk/js/src/gen` and `packages/sdk/openapi.json`.                 |
+| Generator | `packages/sdk/js/script/build.ts` `rmWithinPackage("src/gen")` and `generate("./src/gen")` | Keep as the single generated SDK output.                                        |
+| Tests     | `packages/opencorvus/test/script/sdk-build-format-contract.test.ts`                        | Assert the workflow checks `src/gen` and does not mention retired `src/v2/gen`. |
 
 ## Acceptance
 

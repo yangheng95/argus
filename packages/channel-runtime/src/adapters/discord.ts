@@ -86,21 +86,13 @@ export class DiscordAdapter implements ChannelAdapter {
       allowedMentions: { parse: [] },
     }
 
-    try {
-      await channel.send({
-        ...opts,
-        reply: {
-          messageReference: thread,
-          failIfNotExists: false,
-        },
-      })
-      return
-    } catch {
-      // Reply reference may fail if the original message was deleted or the
-      // thread is no longer accessible — fall back to a plain send below.
-    }
-
-    await channel.send(opts)
+    await channel.send({
+      ...opts,
+      reply: {
+        messageReference: thread,
+        failIfNotExists: false,
+      },
+    })
   }
 
   async sendMessage(channel: string, thread: string, text: string): Promise<void> {
@@ -118,27 +110,16 @@ export class DiscordAdapter implements ChannelAdapter {
     const ch = await this.textChannel(channel)
     const file = new AttachmentBuilder(imageBuffer, { name: filename })
 
-    try {
-      await ch.send({
-        content: title,
-        files: [file],
-        reply: {
-          messageReference: thread,
-          failIfNotExists: false,
-        },
-        allowedMentions: { parse: [] },
-      })
-      return
-    } catch {
-      // Reply reference failed (message deleted / thread inaccessible) —
-      // retry without the reply reference.
-      await ch.send({
-        content: title,
-        files: [file],
-        flags: MessageFlags.SuppressNotifications,
-        allowedMentions: { parse: [] },
-      })
-    }
+    await ch.send({
+      content: title,
+      files: [file],
+      reply: {
+        messageReference: thread,
+        failIfNotExists: false,
+      },
+      flags: MessageFlags.SuppressNotifications,
+      allowedMentions: { parse: [] },
+    })
   }
 
   onMessage(handler: MessageHandler): void {

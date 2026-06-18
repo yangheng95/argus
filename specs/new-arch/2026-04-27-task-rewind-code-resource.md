@@ -237,21 +237,21 @@ TaskRewound: {
 
 ## 9. 实施步骤（线性依赖，每步 commit + push）
 
-| #   | 步骤                                                               | 文件                                             | 估时  | 依赖 |
-| --- | ------------------------------------------------------------------ | ------------------------------------------------ | ----- | ---- |
-| 1   | 加 config `rewind.abortGracePeriodMs`                              | `config/config.ts`                               | 30min | —    |
-| 2   | `lookupRunAbort` 导出                                              | `engine/runtime.ts`                              | 30min | —    |
-| 3   | test fixture: task-builder                                         | `test/fixture/task-builder.ts`                   | 4h    | —    |
-| 4   | `engine/rewind.ts` 重写（PHASE 0-5）                               | `engine/rewind.ts`                               | 6h    | 1, 2 |
-| 5   | API 路由更新                                                       | `server/routes/orchestrator.ts`                  | 1h    | 4    |
-| 6   | Event.TaskRewound schema 扩 impacts                                | `engine/model.ts`                                | 30min | 4    |
-| 7   | 测试 1-9（单元）                                                   | `test/engine/rewind.test.ts`                     | 5h    | 3, 4 |
-| 8   | 测试 10（集成）                                                    | `test/engine/rewind-integration.test.ts`         | 4h    | 3, 4 |
-| 9   | Web timeline + rewind UI                                           | `packages/web/src/...`                           | 6h    | 5, 6 |
-| 10  | Overlay timeline + rewind UI                                       | `packages/opencorvus/overlay/...`                | 7h    | 5, 6 |
-| 11  | TUI `/rewind` 命令                                                 | TUI 入口                                         | 1h    | 5    |
+| #   | 步骤                                                               | 文件                                                                                | 估时  | 依赖 |
+| --- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ----- | ---- |
+| 1   | 加 config `rewind.abortGracePeriodMs`                              | `config/config.ts`                                                                  | 30min | —    |
+| 2   | `lookupRunAbort` 导出                                              | `engine/runtime.ts`                                                                 | 30min | —    |
+| 3   | test fixture: task-builder                                         | `test/fixture/task-builder.ts`                                                      | 4h    | —    |
+| 4   | `engine/rewind.ts` 重写（PHASE 0-5）                               | `engine/rewind.ts`                                                                  | 6h    | 1, 2 |
+| 5   | API 路由更新                                                       | `server/routes/orchestrator.ts`                                                     | 1h    | 4    |
+| 6   | Event.TaskRewound schema 扩 impacts                                | `engine/model.ts`                                                                   | 30min | 4    |
+| 7   | 测试 1-9（单元）                                                   | `test/engine/rewind.test.ts`                                                        | 5h    | 3, 4 |
+| 8   | 测试 10（集成）                                                    | `test/engine/rewind-integration.test.ts`                                            | 4h    | 3, 4 |
+| 9   | Web timeline + rewind UI                                           | `packages/web/src/...`                                                              | 6h    | 5, 6 |
+| 10  | Overlay timeline + rewind UI                                       | `packages/opencorvus/overlay/...`                                                   | 7h    | 5, 6 |
+| 11  | TUI `/rewind` 命令                                                 | TUI 入口                                                                            | 1h    | 5    |
 | 12  | 文档：zh-CN + en                                                   | `packages/web/src/content/docs/{concepts/agent-loop,zh-cn/concepts/agent-loop}.mdx` | 1h    | —    |
-| 13  | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE 改写为 IN-SCOPE） | `engine/rewind.ts`                               | —     | 4    |
+| 13  | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE 改写为 IN-SCOPE） | `engine/rewind.ts`                                                                  | —     | 4    |
 
 **总工时**：~36h ≈ **5 工作日**（单人，含调试）。
 
@@ -364,22 +364,22 @@ rewind 后，下一次用户消息进来时，orchestrator 会重读 task → de
 
 ## 19. 实施步骤更新表（替代 §9）
 
-| #     | 步骤                                                          | 文件                                             | 估时     | 依赖    |
-| ----- | ------------------------------------------------------------- | ------------------------------------------------ | -------- | ------- |
-| **0** | **`Worktree.reset` 加 `baseRef` 参数 + 测试**                 | `worktree/index.ts`                              | **1h**   | —       |
-| 1     | 加 config `rewind.abortGracePeriodMs`                         | `config/config.ts`                               | 30min    | —       |
-| 2     | `lookupRunAbort` 导出 + JSDoc                                 | `engine/runtime.ts`                              | 30min    | —       |
-| 3     | test fixture: task-builder                                    | `test/fixture/task-builder.ts`                   | 4h       | —       |
-| 4     | `engine/rewind.ts` 重写（PHASE 0-5）+ 注释更新                | `engine/rewind.ts`                               | 6h       | 0, 1, 2 |
-| 5     | API 路由更新                                                  | `server/routes/orchestrator.ts`                  | 1h       | 4       |
-| 6     | grep `TaskRewound` schema → 按 §17.3 决议扩 impacts           | `engine/model.ts` + 消费者                       | 30min~2h | 4       |
-| 7     | 测试 1-9（单元）                                              | `test/engine/rewind.test.ts`                     | 5h       | 3, 4    |
-| 8     | 测试 10（集成）                                               | `test/engine/rewind-integration.test.ts`         | 4h       | 3, 4    |
-| 9     | Web timeline + rewind UI                                      | `packages/web/src/...`                           | 6h       | 5, 6    |
-| 10    | Overlay timeline + rewind UI                                  | `packages/opencorvus/overlay/...`                | 7h       | 5, 6    |
-| 11    | TUI `/rewind` 命令                                            | TUI 入口                                         | 1h       | 5       |
+| #     | 步骤                                                          | 文件                                                                                | 估时     | 依赖    |
+| ----- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------- | ------- |
+| **0** | **`Worktree.reset` 加 `baseRef` 参数 + 测试**                 | `worktree/index.ts`                                                                 | **1h**   | —       |
+| 1     | 加 config `rewind.abortGracePeriodMs`                         | `config/config.ts`                                                                  | 30min    | —       |
+| 2     | `lookupRunAbort` 导出 + JSDoc                                 | `engine/runtime.ts`                                                                 | 30min    | —       |
+| 3     | test fixture: task-builder                                    | `test/fixture/task-builder.ts`                                                      | 4h       | —       |
+| 4     | `engine/rewind.ts` 重写（PHASE 0-5）+ 注释更新                | `engine/rewind.ts`                                                                  | 6h       | 0, 1, 2 |
+| 5     | API 路由更新                                                  | `server/routes/orchestrator.ts`                                                     | 1h       | 4       |
+| 6     | grep `TaskRewound` schema → 按 §17.3 决议扩 impacts           | `engine/model.ts` + 消费者                                                          | 30min~2h | 4       |
+| 7     | 测试 1-9（单元）                                              | `test/engine/rewind.test.ts`                                                        | 5h       | 3, 4    |
+| 8     | 测试 10（集成）                                               | `test/engine/rewind-integration.test.ts`                                            | 4h       | 3, 4    |
+| 9     | Web timeline + rewind UI                                      | `packages/web/src/...`                                                              | 6h       | 5, 6    |
+| 10    | Overlay timeline + rewind UI                                  | `packages/opencorvus/overlay/...`                                                   | 7h       | 5, 6    |
+| 11    | TUI `/rewind` 命令                                            | TUI 入口                                                                            | 1h       | 5       |
 | 12    | 文档：zh-CN + en                                              | `packages/web/src/content/docs/{concepts/agent-loop,zh-cn/concepts/agent-loop}.mdx` | 1h       | —       |
-| 13    | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE → IN-SCOPE） | `engine/rewind.ts`                               | —        | 4       |
+| 13    | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE → IN-SCOPE） | `engine/rewind.ts`                                                                  | —        | 4       |
 
 **总工时**：~37h ≈ **5 工作日**（单人）。
 

@@ -2,15 +2,19 @@
 
 Date: 2026-06-04
 Reviewed again: 2026-06-05
-Status: staged implementation log and remaining plan; implementation is in progress
+Status: superseded historical implementation log
 Upstream baseline: `anomalyco/opencode` local snapshot `730ea6d2e3eedc5f3a5b4151cdaabd2d744fd828`
 Upstream license: MIT
 
+> **Status (2026-06-17): Superseded.** The embedded/right-sidebar TUI surface was retired by
+> `2026-06-10-tui-removal-plan.md`; `packages/opencorvus/src/tui`,
+> `packages/opencorvus/src/cli/cmd/tui`, and `/tui/*` route contracts are no longer current.
+> This file is retained as historical evidence of the abandoned TUI-copy path; statements below
+> that describe current TUI work or remaining TUI repairs are historical, not active targets.
+
 ## 0. Hard Acceptance
 
-The right sidebar coding assistant must become an embedded OpenCode-style TUI host. The current browser transcript/composer is rejected and must be deleted, not patched.
-
-Accepted outcome:
+Historical accepted outcome for the abandoned TUI-copy path:
 
 - The right sidebar tab is at the same level as file manager and other right-panel tools.
 - The right sidebar renders the canonical OpenTUI process through a mature terminal renderer.

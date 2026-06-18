@@ -331,10 +331,6 @@ export async function updateRun(row: RunRow, values: Partial<RunRow>, summary: s
       ),
     )
   })
-  if (statusChanged && (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted")) {
-    const { PerRunState } = await import("./per-run-state")
-    PerRunState.finalize(row.id)
-  }
   return findRun(row.id) ?? requireRun(row.id)
 }
 

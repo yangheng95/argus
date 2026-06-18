@@ -143,12 +143,10 @@
   max-width: min(calc(560px * var(--ui-scale)), calc(100vw - 32px));
 }
 
-
 .browser-preview-candidate-option {
   min-width: 0;
   cursor: pointer;
 }
-
 
 .browser-preview-candidate-option span:first-child {
   min-width: 0;
@@ -156,7 +154,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 
 .browser-preview-controls {
   min-width: 0;
@@ -168,37 +165,6 @@
 
 .browser-preview-controls .oc-button[data-size="sm"] {
   flex: 0 0 auto;
-}
-
-.browser-preview-url-form {
-  min-width: 0;
-  min-height: calc(30px * var(--ui-scale));
-  flex: 1 1 calc(240px * var(--ui-scale));
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) calc(30px * var(--ui-scale));
-  align-items: stretch;
-  gap: calc(4px * var(--ui-scale));
-}
-
-.browser-preview-url-input {
-  min-width: 0;
-  height: calc(30px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  padding: 0 calc(8px * var(--ui-scale));
-  font: inherit;
-  font-size: var(--ui-font-control);
-  line-height: 1.3;
-  outline: 0;
-}
-
-.browser-preview-url-input:focus {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-}
-
-.browser-preview-url-input::placeholder {
-  color: var(--text-muted);
 }
 
 .browser-preview-viewport-controls {
@@ -459,7 +425,6 @@
   }
 
   .browser-preview-candidate-select,
-  .browser-preview-url-form,
   .browser-preview-viewport-controls,
   .browser-preview-evidence-status {
     flex-basis: 100%;
@@ -479,7 +444,6 @@
 
   .browser-preview-status,
   .browser-preview-candidate-select,
-  .browser-preview-url-form,
   .browser-preview-viewport-controls,
   .browser-preview-evidence-status {
     flex-basis: 100%;

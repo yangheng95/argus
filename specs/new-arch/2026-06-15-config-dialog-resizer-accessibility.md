@@ -8,12 +8,12 @@ separator semantics or current width values.
 
 ## Call-point Sweep
 
-| Call point | Decision |
-| --- | --- |
-| `ConfigDialogHost.tsx` pointer drag | Keep existing pointer behavior, but route width clamping through shared helpers. |
+| Call point                             | Decision                                                                                                                                                  |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConfigDialogHost.tsx` pointer drag    | Keep existing pointer behavior, but route width clamping through shared helpers.                                                                          |
 | `ConfigDialogHost.tsx` resizer element | Add `role="separator"`, `aria-orientation`, `aria-controls`, `aria-valuemin`, `aria-valuemax`, `aria-valuenow`, `tabIndex`, title, and keyboard handling. |
-| `services/dialog.ts` | Keep `setConfigSidebarWidth` as the single persistence/update path. |
-| `config-panel-sizing.test.ts` | Add structural and helper tests proving keyboard resize and ARIA semantics exist. |
+| `services/dialog.ts`                   | Keep `setConfigSidebarWidth` as the single persistence/update path.                                                                                       |
+| `config-panel-sizing.test.ts`          | Add structural and helper tests proving keyboard resize and ARIA semantics exist.                                                                         |
 
 ## Design
 

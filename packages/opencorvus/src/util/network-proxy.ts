@@ -1,9 +1,15 @@
 import type { Config } from "../config/config"
+import { ProxyAgent, type Dispatcher } from "undici"
 
 export type NetworkProxyScope = "llmProvider" | "webResearch"
 
 export type ProxyFetchInit = RequestInit & {
   proxy?: string | { url: string; headers?: Bun.HeadersInit }
+  dispatcher?: Dispatcher
+}
+
+function isBunRuntime(): boolean {
+  return typeof Bun !== "undefined" && typeof Bun.version === "string"
 }
 
 export function resolveNetworkProxy(config: Config.Info, scope: NetworkProxyScope): string | undefined {
@@ -18,10 +24,23 @@ export function resolveNetworkProxy(config: Config.Info, scope: NetworkProxyScop
   return authenticatedProxyUrl(url, proxy.username, proxy.password)
 }
 
-export function proxiedFetchInit<T extends ProxyFetchInit>(init: T, proxyUrl?: string): T & { proxy?: string } {
+export function proxiedFetchInit<T extends ProxyFetchInit>(
+  init: T,
+  proxyUrl?: string,
+): T & { proxy?: ProxyFetchInit["proxy"]; dispatcher?: Dispatcher } {
+  if (!proxyUrl) return init
+
+  if (isBunRuntime()) {
+    return {
+      ...init,
+      proxy: proxyUrl,
+    }
+  }
+
   return {
     ...init,
-    ...(proxyUrl ? { proxy: proxyUrl } : {}),
+    proxy: proxyUrl,
+    dispatcher: new ProxyAgent(proxyUrl),
   }
 }
 

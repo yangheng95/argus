@@ -86,6 +86,20 @@ export namespace LSPClient {
     })
   }
 
+  function observeConnectionRequest<T>(input: {
+    method: string
+    promise: Promise<T>
+    log: ReturnType<typeof log.clone>
+  }): Promise<T> {
+    input.promise.catch((error) => {
+      input.log.warn("LSP request rejected", {
+        method: input.method,
+        error: String(error),
+      })
+    })
+    return input.promise
+  }
+
   export async function create(input: { serverID: string; server: LSPServer.Handle; root: string }) {
     const l = log.clone().tag("serverID", input.serverID)
     l.info("starting client")
@@ -127,45 +141,44 @@ export namespace LSPClient {
 
     l.info("sending initialize")
     try {
-      await withTimeout(
-        rejectOnServerExit(
-          input.server,
-          connection.sendRequest("initialize", {
-            rootUri: pathToFileURL(input.root).href,
-            processId: input.server.process.pid,
-            workspaceFolders: [
-              {
-                name: "workspace",
-                uri: pathToFileURL(input.root).href,
-              },
-            ],
-            initializationOptions: {
-              ...input.server.initialization,
+      const initializeRequest = observeConnectionRequest({
+        method: "initialize",
+        log: l,
+        promise: connection.sendRequest("initialize", {
+          rootUri: pathToFileURL(input.root).href,
+          processId: input.server.process.pid,
+          workspaceFolders: [
+            {
+              name: "workspace",
+              uri: pathToFileURL(input.root).href,
             },
-            capabilities: {
-              window: {
-                workDoneProgress: true,
-              },
-              workspace: {
-                configuration: true,
-                didChangeWatchedFiles: {
-                  dynamicRegistration: true,
-                },
-              },
-              textDocument: {
-                synchronization: {
-                  didOpen: true,
-                  didChange: true,
-                },
-                publishDiagnostics: {
-                  versionSupport: true,
-                },
+          ],
+          initializationOptions: {
+            ...input.server.initialization,
+          },
+          capabilities: {
+            window: {
+              workDoneProgress: true,
+            },
+            workspace: {
+              configuration: true,
+              didChangeWatchedFiles: {
+                dynamicRegistration: true,
               },
             },
-          }),
-        ),
-        45_000,
-      )
+            textDocument: {
+              synchronization: {
+                didOpen: true,
+                didChange: true,
+              },
+              publishDiagnostics: {
+                versionSupport: true,
+              },
+            },
+          },
+        }),
+      })
+      await withTimeout(rejectOnServerExit(input.server, initializeRequest), 45_000)
     } catch (err) {
       connection.end()
       connection.dispose()
@@ -299,7 +312,12 @@ export namespace LSPClient {
       },
       async shutdown() {
         l.info("shutting down")
-        await withTimeout(connection.sendRequest("shutdown"), 1_000).catch(() => {})
+        const shutdownRequest = observeConnectionRequest({
+          method: "shutdown",
+          log: l,
+          promise: connection.sendRequest("shutdown"),
+        })
+        await withTimeout(shutdownRequest, 1_000).catch(() => {})
         await connection.sendNotification("exit").catch(() => {})
         connection.end()
         connection.dispose()

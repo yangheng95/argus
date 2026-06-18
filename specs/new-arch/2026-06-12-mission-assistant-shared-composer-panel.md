@@ -8,14 +8,14 @@ Mission start still renders an inline launcher shell inside the left activity pa
 
 ## Grep Evidence
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `src/index.html` | `#leftPanelMissions`, `#leftPanelAssistant`, `#centerWorkbenchWorkflow`, `#solidChatComposer` | Keep static shell as the single panel area and composer mount. |
-| `src/main.tsx` | `CodingAssistantSessionList`, `<Mission`, `<ChatComposer`, `panelMessage`, `activeSessionID()` | Route Mission launch from main composer; keep Coding Assistant session submission through `panelMessage`. |
-| `src/components/Mission.tsx` | `MissionComposer`, inline `<ChatComposer`, `wakeMission` | Delete inline launcher and expose `onCreateMission` to the panel owner. |
-| `src/services/coding-assistant.ts` | `selectedSource: { kind: "session" }`, `startSSE(source)` | Keep Assistant as a shared session source; no dedicated Assistant panel. |
-| `src/services/mission.ts` | `wakeMission` | Reuse endpoint from main composer submit path. |
-| tests | `mission-session-source`, `mission-launcher-component`, `composer-textarea-unification`, `coding-assistant-panel` | Update string-contract tests to reject inline Mission composer and require main composer binding. |
+| Surface                            | Evidence                                                                                                          | Decision                                                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `src/index.html`                   | `#leftPanelMissions`, `#leftPanelAssistant`, `#centerWorkbenchWorkflow`, `#solidChatComposer`                     | Keep static shell as the single panel area and composer mount.                                            |
+| `src/main.tsx`                     | `CodingAssistantSessionList`, `<Mission`, `<ChatComposer`, `panelMessage`, `activeSessionID()`                    | Route Mission launch from main composer; keep Coding Assistant session submission through `panelMessage`. |
+| `src/components/Mission.tsx`       | `MissionComposer`, inline `<ChatComposer`, `wakeMission`                                                          | Delete inline launcher and expose `onCreateMission` to the panel owner.                                   |
+| `src/services/coding-assistant.ts` | `selectedSource: { kind: "session" }`, `startSSE(source)`                                                         | Keep Assistant as a shared session source; no dedicated Assistant panel.                                  |
+| `src/services/mission.ts`          | `wakeMission`                                                                                                     | Reuse endpoint from main composer submit path.                                                            |
+| tests                              | `mission-session-source`, `mission-launcher-component`, `composer-textarea-unification`, `coding-assistant-panel` | Update string-contract tests to reject inline Mission composer and require main composer binding.         |
 
 ## Implementation
 

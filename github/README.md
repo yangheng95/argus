@@ -79,21 +79,23 @@ This will walk you through installing the GitHub app, creating the workflow, and
          contains(github.event.comment.body, '/opencorvus')
        runs-on: ubuntu-latest
        permissions:
-         id-token: write
+         contents: write
+         issues: write
+         pull-requests: write
        steps:
-          - name: Checkout repository
-            uses: actions/checkout@v6
-            with:
-              fetch-depth: 1
-              persist-credentials: false
+         - name: Checkout repository
+           uses: actions/checkout@v6
+           with:
+             fetch-depth: 1
+             persist-credentials: false
 
-          - name: Run opencorvus
+         - name: Run opencorvus
            uses: yangheng95/opencorvus/github@latest
            env:
-             ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+             DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
            with:
-             model: anthropic/claude-sonnet-4-20250514
+             model: alibaba-cn/qwen3.5-plus
              use_github_token: true
    ```
 
@@ -116,20 +118,20 @@ To test locally:
 2. Run:
 
    ```bash
-   MODEL=anthropic/claude-sonnet-4-20250514 \
-     ANTHROPIC_API_KEY=sk-ant-api03-1234567890 \
+   MODEL=alibaba-cn/qwen3.5-plus \
+     DASHSCOPE_API_KEY=sk-1234567890 \
      GITHUB_RUN_ID=dummy \
      MOCK_TOKEN=github_pat_1234567890 \
      MOCK_EVENT='{"eventName":"issue_comment",...}' \
-     bun /path/to/opencorvus/github/index.ts
+     bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run
    ```
 
    - `MODEL`: The model used by opencorvus. Same as the `MODEL` defined in the GitHub workflow.
-   - `ANTHROPIC_API_KEY`: Your model provider API key. Same as the keys defined in the GitHub workflow.
+   - `DASHSCOPE_API_KEY`: Your model provider API key. Same as the keys defined in the GitHub workflow.
    - `GITHUB_RUN_ID`: Dummy value to emulate GitHub action environment.
    - `MOCK_TOKEN`: A GitHub personal access token. This token is used to verify you have `admin` or `write` access to the test repo. Generate a token [here](https://github.com/settings/personal-access-tokens).
    - `MOCK_EVENT`: Mock GitHub event payload (see templates below).
-   - `/path/to/opencorvus`: Path to your cloned opencorvus repo. `bun /path/to/opencorvus/github/index.ts` runs your local version of `opencorvus`.
+   - `/path/to/opencorvus`: Path to your cloned opencorvus repo. `bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run` runs the current CLI GitHub Action runtime.
 
 ### Issue comment event
 

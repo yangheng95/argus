@@ -13,6 +13,7 @@ import { EffectiveConfig } from "../config/effective"
 import { PermissionNext } from "@/permission/next"
 import { resolveAgentModelRef } from "@/agent/model"
 import type { SessionKind } from "@/session/session.sql"
+import { ExploreAgent } from "@/explore/agent"
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
@@ -36,6 +37,18 @@ const taskToolSubagentMetadataKey = "taskToolSubagent"
 export function taskToolSessionMetadata(agentName: string): Record<string, unknown> {
   return {
     [taskToolSubagentMetadataKey]: agentName,
+  }
+}
+
+function taskToolPromptSwitches(input: {
+  hasTaskPermission: boolean
+  primaryTools?: readonly string[]
+}): Record<string, boolean> {
+  return {
+    todowrite: false,
+    todoread: false,
+    ...(input.hasTaskPermission ? {} : { task: false }),
+    ...Object.fromEntries((input.primaryTools ?? []).map((toolName) => [toolName, false])),
   }
 }
 
@@ -171,6 +184,55 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         },
       })
 
+      const promptSwitches = taskToolPromptSwitches({
+        hasTaskPermission,
+        primaryTools: config.experimental?.primary_tools,
+      })
+
+      if (agent.name === "explore") {
+        const promptParts = await SessionPrompt.resolvePromptParts(params.prompt, { config })
+        const unsupportedPromptParts = promptParts.filter((part) => part.type !== "text" && part.type !== "file")
+        if (unsupportedPromptParts.length > 0) {
+          throw new Error(
+            `Explore task prompt does not support ${unsupportedPromptParts
+              .map((part) => part.type)
+              .join(", ")} prompt parts; use a text or file prompt instead.`,
+          )
+        }
+        const explorePromptParts = promptParts.filter(
+          (part): part is Extract<(typeof promptParts)[number], { type: "text" | "file" }> =>
+            part.type === "text" || part.type === "file",
+        )
+        const exploreResult = await ExploreAgent.run({
+          existingSessionID: session.id,
+          parentSessionID: ctx.sessionID,
+          sessionTitle: session.title,
+          model: {
+            modelID: model.modelID,
+            providerID: model.providerID,
+          },
+          signal: ctx.abort,
+          prompt: params.prompt,
+          toolSwitches: promptSwitches,
+          buildUserParts: async () => explorePromptParts,
+        })
+
+        return {
+          title: params.description,
+          metadata: {
+            sessionId: session.id,
+            model,
+          },
+          output: [
+            `task_id: ${session.id} (for resuming to continue this task if needed)`,
+            "",
+            "<task_result>",
+            exploreResult.finalText,
+            "</task_result>",
+          ].join("\n"),
+        }
+      }
+
       const messageID = Identifier.ascending("message")
 
       function cancel() {
@@ -190,12 +252,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
             providerID: model.providerID,
           },
           agent: agent.name,
-          tools: {
-            todowrite: false,
-            todoread: false,
-            ...(hasTaskPermission ? {} : { task: false }),
-            ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
-          },
+          tools: promptSwitches,
           parts: promptParts,
         })
       } catch (err) {

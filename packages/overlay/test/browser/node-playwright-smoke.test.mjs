@@ -16,7 +16,7 @@ const browserCandidates = [
 ]
 
 async function findBrowserExecutable() {
-  const explicit = process.env.OPENCORVUS_BROWSER_EXECUTABLE || process.env.BROWSER_EXECUTABLE
+  const explicit = process.env.OPENCORVUS_BROWSER_EXECUTABLE
   if (explicit) return explicit
   for (const candidate of browserCandidates) {
     try {

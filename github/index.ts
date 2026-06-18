@@ -172,8 +172,7 @@ try {
         const summary = await summarize(response)
         await pushToLocalBranch(summary)
       }
-      const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${useShareUrl()}/s/${shareId}`))
-      await updateComment(`${response}${footer({ image: !hasShared })}`)
+      await updateComment(`${response}${footer()}`)
     }
     // Fork PR
     else {
@@ -184,8 +183,7 @@ try {
         const summary = await summarize(response)
         await pushToForkBranch(summary, prData)
       }
-      const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${useShareUrl()}/s/${shareId}`))
-      await updateComment(`${response}${footer({ image: !hasShared })}`)
+      await updateComment(`${response}${footer()}`)
     }
   }
   // Issue
@@ -201,11 +199,11 @@ try {
         repoData.data.default_branch,
         branch,
         summary,
-        `${response}\n\nCloses #${useIssueId()}${footer({ image: true })}`,
+        `${response}\n\nCloses #${useIssueId()}${footer()}`,
       )
-      await updateComment(`Created PR #${pr}${footer({ image: true })}`)
+      await updateComment(`Created PR #${pr}${footer()}`)
     } else {
-      await updateComment(`${response}${footer({ image: true })}`)
+      await updateComment(`${response}${footer()}`)
     }
   }
 } catch (e: any) {
@@ -812,20 +810,9 @@ async function createPR(base: string, branch: string, title: string, body: strin
   return pr.data.number
 }
 
-function footer(opts?: { image?: boolean }) {
-  const { providerID, modelID } = useEnvModel()
-
-  const image = (() => {
-    if (!shareId) return ""
-    if (!opts?.image) return ""
-
-    const titleAlt = encodeURIComponent(session.title.substring(0, 50))
-    const title64 = Buffer.from(session.title.substring(0, 700), "utf8").toString("base64")
-
-    return `<a href="${useShareUrl()}/s/${shareId}"><img width="200" alt="${titleAlt}" src="https://social-cards.sst.dev/opencorvus-share/${title64}.png?model=${providerID}/${modelID}&version=${session.version}&id=${shareId}" /></a>\n`
-  })()
+function footer() {
   const shareUrl = shareId ? `[opencorvus session](${useShareUrl()}/s/${shareId})&nbsp;&nbsp;|&nbsp;&nbsp;` : ""
-  return `\n\n${image}${shareUrl}[github run](${useEnvRunUrl()})`
+  return `\n\n${shareUrl}[github run](${useEnvRunUrl()})`
 }
 
 async function fetchRepo() {

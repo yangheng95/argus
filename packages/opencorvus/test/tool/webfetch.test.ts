@@ -38,6 +38,7 @@ describe("tool.webfetch", () => {
     "uses configured authenticated proxy for web research fetches",
     async () => {
       let seenProxy: unknown
+      let seenDispatcher: unknown
       await using tmp = await tmpdir({
         init: async (dir) => {
           await Bun.write(
@@ -61,6 +62,7 @@ describe("tool.webfetch", () => {
       await withFetch(
         async (_input, init) => {
           seenProxy = (init as any)?.proxy
+          seenDispatcher = (init as any)?.dispatcher
           return new Response("proxied webfetch", {
             status: 200,
             headers: { "content-type": "text/plain; charset=utf-8" },
@@ -74,6 +76,7 @@ describe("tool.webfetch", () => {
               const result = await webfetch.execute({ url: "https://example.com/file.txt", format: "text" }, ctx)
               expect(result.output).toBe("proxied webfetch")
               expect(seenProxy).toBe("http://hexin:hx300033@10.217.133.185:30100/")
+              expect(seenDispatcher).toBeUndefined()
             },
           })
         },
@@ -86,6 +89,7 @@ describe("tool.webfetch", () => {
     "uses configured authenticated proxy for Exa MCP web research transport",
     async () => {
       let seenProxy: unknown
+      let seenDispatcher: unknown
       await using tmp = await tmpdir({
         init: async (dir) => {
           await Bun.write(
@@ -109,6 +113,7 @@ describe("tool.webfetch", () => {
       await withFetch(
         async (_input, init) => {
           seenProxy = (init as any)?.proxy
+          seenDispatcher = (init as any)?.dispatcher
           return new Response(
             'data: {"jsonrpc":"2.0","result":{"content":[{"type":"text","text":"proxied search"}]}}\n',
             {
@@ -129,6 +134,7 @@ describe("tool.webfetch", () => {
               })
               expect(text).toBe("proxied search")
               expect(seenProxy).toBe("http://hexin:hx300033@10.217.133.185:30100/")
+              expect(seenDispatcher).toBeUndefined()
             },
           })
         },

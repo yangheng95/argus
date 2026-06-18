@@ -1,8 +1,8 @@
 /**
  * Hexin gateway prompt-cache probe.
  *
- * Hits https://aimemodeldev.myhexin.com/litellm/v1 directly
- * (no ai-sdk wrapper) so we observe raw OpenAI-compatible usage fields.
+ * Hits the explicitly configured Hexin OpenAI-compatible gateway directly
+ * (no ai-sdk wrapper) so we observe raw usage fields.
  *
  * The gateway sits in front of Azure OpenAI / OpenAI upstreams and uses
  * LiteLLM-style round-robin across a pool of upstream API keys. The
@@ -24,8 +24,9 @@
  *   6. ttl-decay               — warm cache, then wait 0/30/120/300/600s
  *
  * Usage:
- *   HEXIN_API_KEY=... bun script/cache-probe/hexin-cache-probe.ts \
- *     [--model=gpt-5.4] [--out=./out] [--skip=ttl] [--only=baseline-with-sticky]
+ *   HEXIN_OPENAI_URL=https://gateway.example.com/litellm HEXIN_API_KEY=... \
+ *     bun script/cache-probe/hexin-cache-probe.ts --out=.scratch/cache-probe \
+ *     [--model=gpt-5.4] [--skip=ttl] [--only=baseline-with-sticky]
  *
  * Output:
  *   <out>/hexin-cache-probe.ndjson   one row per HTTP call
@@ -36,36 +37,30 @@ import path from "path"
 import fs from "fs"
 import { performance } from "perf_hooks"
 
-const HEXIN_URL = process.env.HEXIN_OPENAI_URL?.trim()
-  ? `${process.env.HEXIN_OPENAI_URL.replace(/\/+$/, "")}/v1`
-  : "https://aimemodeldev.myhexin.com/litellm/v1"
-// Embedded fallback removed — operator must export HEXIN_API_KEY before
-// running the cache probe (rule 7: no fallback / rule 10: no hardcoded
-// credentials).
-const API_KEY = process.env.HEXIN_API_KEY?.trim()
-if (!API_KEY) {
-  console.error("HEXIN_API_KEY is not set — export it before running this script.")
-  process.exit(1)
+function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim()
+  if (!value) {
+    console.error(`${name} is not set — export it before running this script.`)
+    process.exit(1)
+  }
+  return value
 }
+
+const HEXIN_URL = `${requiredEnv("HEXIN_OPENAI_URL").replace(/\/+$/, "")}/v1`
+const API_KEY = requiredEnv("HEXIN_API_KEY")
 
 type Vendor = "openai" | "anthropic"
 
 interface Args {
   model: string
   vendor: Vendor
-  out: string
+  out?: string
   only?: string
   skip: Set<string>
 }
 
 function parseArgs(): Args {
-  // Resolve relative to this script file, not cwd, so we don't get
-  // packages/opencorvus/packages/opencorvus/... when invoked from package root.
-  const defaultOut = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")),
-    "out",
-  )
-  const args: Args = { model: "gpt-5.4", vendor: "openai", out: defaultOut, skip: new Set() }
+  const args: Args = { model: "gpt-5.4", vendor: "openai", skip: new Set() }
   for (const a of process.argv.slice(2)) {
     if (a.startsWith("--model=")) args.model = a.slice(8)
     else if (a.startsWith("--vendor=")) args.vendor = a.slice(9) as Vendor
@@ -80,6 +75,10 @@ function parseArgs(): Args {
   // is clearly Claude. Saves a flag in the common case.
   if (!process.argv.some((a) => a.startsWith("--vendor=")) && /^claude/i.test(args.model)) {
     args.vendor = "anthropic"
+  }
+  if (!args.out) {
+    console.error("--out is required; write probe output under .scratch/ or another explicit report directory.")
+    process.exit(1)
   }
   // Suffix vendor onto output filenames so OpenAI + Anthropic runs don't
   // overwrite each other.
@@ -580,9 +579,9 @@ function summarize(): Summary[] {
 }
 
 function writeReports(args: Args) {
-  fs.mkdirSync(args.out, { recursive: true })
+  fs.mkdirSync(args.out!, { recursive: true })
   const suffix = args.vendor === "anthropic" ? "-anthropic" : ""
-  const ndjsonPath = path.join(args.out, `hexin-cache-probe${suffix}.ndjson`)
+  const ndjsonPath = path.join(args.out!, `hexin-cache-probe${suffix}.ndjson`)
   fs.writeFileSync(ndjsonPath, rows.map((r) => JSON.stringify(r)).join("\n") + "\n")
 
   const summary = summarize()
@@ -613,7 +612,7 @@ function writeReports(args: Args) {
       `| ${r.probe} | ${r.variant} | ${r.iteration} | ${r.status} | ${r.prompt_tokens ?? "-"} | ${r.cached_tokens ?? "-"} | ${r.cache_hit_ratio !== undefined ? (r.cache_hit_ratio * 100).toFixed(1) + "%" : "-"} | ${r.latency_ms} | ${r.sticky_key ?? "-"} | ${r.upstream ?? "-"} |`,
     )
   }
-  const mdPath = path.join(args.out, `hexin-cache-probe${suffix}.md`)
+  const mdPath = path.join(args.out!, `hexin-cache-probe${suffix}.md`)
   fs.writeFileSync(mdPath, md.join("\n") + "\n")
 
   console.error(`\nndjson  → ${ndjsonPath}`)

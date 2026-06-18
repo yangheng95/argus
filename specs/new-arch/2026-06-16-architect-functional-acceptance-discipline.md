@@ -49,4 +49,3 @@ Update Architect prompt only:
 ## Verification
 
 - `bun test packages/opencorvus/test/architect/grep-only-as-rejection.test.ts`
-

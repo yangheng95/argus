@@ -400,14 +400,8 @@ function viewportKey(viewport) {
   return viewport.width + "x" + viewport.height;
 }
 
-async function ensurePage(command) {
+async function ensurePage(command, options = {}) {
   const key = viewportKey(command.viewport);
-  if (page && currentUrl === command.url && currentViewport === key) return page;
-  if (context) {
-    await context.close().catch(() => undefined);
-    context = undefined;
-    page = undefined;
-  }
   if (!browser) {
     browser = await chromium.launch({
       executablePath: process.env.OPENCORVUS_BROWSER_EXECUTABLE,
@@ -416,14 +410,24 @@ async function ensurePage(command) {
       timeout: Number(process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS || "300000"),
     });
   }
-  context = await browser.newContext({
-    viewport: { width: command.viewport.width, height: command.viewport.height },
-    deviceScaleFactor: 1,
-  });
-  page = await context.newPage();
-  await page.goto(command.url, { waitUntil: "load", timeout: command.navigationTimeoutMs });
-  currentUrl = command.url;
-  currentViewport = key;
+  if (!page || currentViewport !== key) {
+    if (context) {
+      await context.close().catch(() => undefined);
+    }
+    context = undefined;
+    page = undefined;
+    context = await browser.newContext({
+      viewport: { width: command.viewport.width, height: command.viewport.height },
+      deviceScaleFactor: 1,
+    });
+    page = await context.newPage();
+    currentUrl = "";
+    currentViewport = key;
+  }
+  if (currentUrl !== command.url || options.reload === true) {
+    await page.goto(command.url, { waitUntil: "load", timeout: command.navigationTimeoutMs });
+    currentUrl = command.url;
+  }
   return page;
 }
 
@@ -432,7 +436,7 @@ async function settle(ms) {
 }
 
 async function capture(command) {
-  const activePage = await ensurePage(command);
+  const activePage = await ensurePage(command, { reload: command.kind === "snapshot" });
   await settle(command.settleMs);
   const png = await activePage.screenshot({ type: "png" });
   return {

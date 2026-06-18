@@ -1,7 +1,7 @@
 import { createMemo, createResource, For, Show } from "solid-js"
-import { messageStore } from "../store/messages"
+import { cardTreeStore } from "../store/card-tree"
 import {
-  collectScreenshotBrowserItems,
+  collectScreenshotBrowserItemsFromCardTree,
   groupScreenshotBrowserItems,
   type ScreenshotBrowserItem,
 } from "../utils/screenshot-browser"
@@ -44,7 +44,11 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
 
 export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
   const active = createMemo(() => props.active())
-  const items = createMemo(() => (active() ? collectScreenshotBrowserItems(messageStore.messages) : []))
+  const items = createMemo(() => {
+    if (!active()) return []
+    void cardTreeStore.visibleVersion
+    return collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)
+  })
   const groups = createMemo(() => groupScreenshotBrowserItems(items()))
 
   return (

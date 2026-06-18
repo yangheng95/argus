@@ -1,9 +1,8 @@
 import { Database } from "bun:sqlite"
+import { requiredEnv } from "./inspect-env"
 
-const TASK = process.env.TASK_ID ?? "tsk_ddc67008f001pRQAXurqfkwPtT"
-const DB =
-  process.env.OPENCORVUS_DB ??
-  "D:/myhexin-local/argus/packages/overlay/dist/opencorvus-overlay-windows-x64/.opencorvus/opencorvus.db"
+const TASK = requiredEnv("TASK_ID")
+const DB = requiredEnv("OPENCORVUS_DB")
 const db = new Database(DB, { readonly: true })
 
 function show(label: string, sql: string) {

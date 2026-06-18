@@ -5,9 +5,12 @@ import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { AgentRuntimeMetadata } from "../../src/session/agent-runtime-metadata"
+import { AutomaticCompaction } from "../../src/session/auto-compaction"
 import { SessionCompaction } from "../../src/session/compaction"
 import { SessionControl } from "../../src/session/control"
 import { SessionLoop } from "../../src/session/loop"
+import { SESSION_KINDS, type SessionKind } from "../../src/session/session.sql"
 import { tmpdir } from "../fixture/fixture"
 
 describe("SessionCompaction continuation", () => {
@@ -20,10 +23,7 @@ describe("SessionCompaction continuation", () => {
       },
     })
 
-  function installRuntimeContinuation(input: {
-    sessionID: string
-    kind: "build" | "frontend-design" | "integrity" | "visual-qa"
-  }) {
+  function installRuntimeContinuation(input: { sessionID: string; kind: SessionKind }) {
     const descriptor = WorkerTurnDescriptor.create({
       sessionID: input.sessionID,
       payload: {
@@ -148,7 +148,131 @@ describe("SessionCompaction continuation", () => {
     })
   })
 
-  for (const kind of ["build", "frontend-design", "integrity", "visual-qa"] as const) {
+  test("automatic compaction metadata partitions every session kind explicitly", () => {
+    const partitions = [
+      ...AgentRuntimeMetadata.DIRECT_AUTOMATIC_COMPACTION_SESSION_KINDS,
+      ...AgentRuntimeMetadata.LIVE_RUNTIME_CONTINUATION_SESSION_KINDS,
+      ...AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS,
+    ]
+    const unique = new Set<SessionKind>(partitions)
+
+    expect([...unique].sort()).toEqual([...SESSION_KINDS].sort())
+    expect(unique.size).toBe(partitions.length)
+    for (const kind of AgentRuntimeMetadata.AGENT_OWNED_SESSION_KINDS) {
+      expect(unique.has(kind)).toBe(true)
+    }
+  })
+
+  test("automatic compaction decision has an explicit outcome for every agent-owned kind", () => {
+    for (const kind of AgentRuntimeMetadata.AGENT_OWNED_SESSION_KINDS) {
+      const coldDecision = AutomaticCompaction.decision({ sessionKind: kind })
+      if (AgentRuntimeMetadata.LIVE_RUNTIME_CONTINUATION_SESSION_KIND_SET.has(kind)) {
+        expect(coldDecision).toEqual({ enabled: false, reason: "runtime_contract_required" })
+        expect(AutomaticCompaction.decision({ sessionKind: kind, runtimeContinuationReady: true })).toEqual({
+          enabled: true,
+          reason: "runtime_continuation_ready",
+        })
+      } else if (AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KIND_SET.has(kind)) {
+        expect(coldDecision).toEqual({ enabled: false, reason: "unsupported_workflow_kind" })
+      } else {
+        expect(coldDecision).toEqual({ enabled: true, reason: "allowed" })
+      }
+    }
+  })
+
+  test("uncategorized session kinds do not silently enable automatic compaction", () => {
+    expect(AutomaticCompaction.decision({ sessionKind: "future-agent-kind" })).toEqual({
+      enabled: false,
+      reason: "uncategorized_session_kind",
+    })
+  })
+
+  test("queues automatic compaction for every directly allowed agent-owned kind", async () => {
+    const directAgentKinds = AgentRuntimeMetadata.DIRECT_AUTOMATIC_COMPACTION_SESSION_KINDS.filter((kind) =>
+      AgentRuntimeMetadata.AGENT_OWNED_SESSION_KIND_SET.has(kind),
+    )
+    expect(directAgentKinds).toEqual(["mission"])
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (const kind of directAgentKinds) {
+          const session = await Session.create({ kind, title: `${kind} direct auto compaction` })
+          const source = await Session.updateMessage({
+            id: Identifier.ascending("message"),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: kind,
+            model: { providerID: "provider-a", modelID: "model-a" },
+          })
+          expect(source.role).toBe("user")
+          if (source.role !== "user") return
+
+          await SessionCompaction.create({
+            sessionID: session.id,
+            source,
+            auto: true,
+            overflow: true,
+          })
+
+          const messages = await Session.messages({ sessionID: session.id })
+          expect(messages.filter((message) => message.parts.some((part) => part.type === "compaction"))).toEqual([])
+
+          const controls = SessionControl.pending(session.id)
+          expect(controls).toHaveLength(1)
+          expect(controls[0]).toMatchObject({
+            kind: "compaction_request",
+            payload: {
+              source_user_message_id: source.id,
+              overflow: true,
+            },
+          })
+        }
+      },
+    })
+  })
+
+  test("rejects automatic compaction for every disabled agent-owned workflow kind", async () => {
+    const disabledAgentKinds = AgentRuntimeMetadata.DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS.filter((kind) =>
+      AgentRuntimeMetadata.AGENT_OWNED_SESSION_KIND_SET.has(kind),
+    )
+    expect(disabledAgentKinds).toEqual(["acceptance", "orchestrator"])
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (const kind of disabledAgentKinds) {
+          const session = await Session.create({ kind, title: `${kind} disabled auto compaction` })
+          const source = await Session.updateMessage({
+            id: Identifier.ascending("message"),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: kind,
+            model: { providerID: "provider-a", modelID: "model-a" },
+          })
+          expect(source.role).toBe("user")
+          if (source.role !== "user") return
+
+          await expect(
+            SessionCompaction.create({
+              sessionID: session.id,
+              source,
+              auto: true,
+              overflow: true,
+            }),
+          ).rejects.toThrow("reason=unsupported_workflow_kind")
+
+          expect(SessionControl.pending(session.id)).toEqual([])
+        }
+      },
+    })
+  })
+
+  for (const kind of AgentRuntimeMetadata.LIVE_RUNTIME_CONTINUATION_SESSION_KINDS) {
     test(`queues automatic compaction for ${kind} workflow sessions with live runtime continuation`, async () => {
       await using tmp = await tmpdir()
       await Instance.provide({

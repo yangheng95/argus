@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
+import { createServer, type Server } from "node:http"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
@@ -8,6 +9,7 @@ import { findReadableBrowserPreviewEvidenceByID, persistBrowserPreviewTarget } f
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { verifyBrowserPreview } from "../../src/browser-preview/verification"
 import { verifyBrowserPreviewForTest } from "../../src/browser-preview/verification-test-harness"
+import { runBrowserPreviewEvidenceJob } from "../../src/browser-preview/evidence-runner"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -257,6 +259,37 @@ describe("browser preview verification", () => {
     expect(evidence?.diagnostics).toEqual(["runtime capture failed: server refused connection"])
   })
 
+  test(
+    "product evidence runner captures Chinese, Japanese, and Korean glyphs with default browser launch arguments",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const server = await startEastAsianGlyphServer()
+      try {
+        const target = await persistBrowserPreviewTarget({ taskID, url: server.url })
+        const result = await runBrowserPreviewEvidenceJob({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+        })
+        const capture = result.captures.desktop
+
+        expect(capture?.captured).toBe(true)
+        if (!capture?.captured) return
+        expect(capture.passed).toBe(true)
+        expect(capture.layers.glyph.passed).toBe(true)
+        expect(capture.layers.glyph.checked).toBeGreaterThan(0)
+        expect(capture.layers.glyph.failed).toEqual([])
+        expect(capture.layers.js.console_errors).toEqual([])
+        expect(capture.summary).toContain("all runtime capture layers passed")
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: 120_000 },
+  )
+
   test("product verification path does not import direct runtime page capture", () => {
     const source = readFileSync(new URL("../../src/browser-preview/verification.ts", import.meta.url), "utf8")
     const coreSource = readFileSync(new URL("../../src/browser-preview/verification-core.ts", import.meta.url), "utf8")
@@ -300,12 +333,56 @@ describe("browser preview verification", () => {
   })
 })
 
+async function startEastAsianGlyphServer(): Promise<{ url: string; close(): Promise<void> }> {
+  let server: Server | undefined
+  const html = [
+    "<!doctype html>",
+    '<html lang="zh-CN">',
+    '<head><meta charset="utf-8"><title>East Asian glyph runner probe</title>',
+    "<style>",
+    "body{margin:0;padding:32px;background:#fff;color:#111;font-size:22px;line-height:1.7}",
+    ".arial{font-family:Arial,sans-serif}",
+    ".ainvest{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',Robot,'Source Han Sans',sans-serif}",
+    ".windows{font-family:'Segoe UI','Microsoft YaHei UI','Microsoft YaHei',sans-serif}",
+    ".noto{font-family:'NotoSans','Noto Sans CJK SC','Source Han Sans SC',sans-serif}",
+    ".grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:20px}",
+    "</style></head><body>",
+    '<main data-oc-region="glyph-probe">',
+    '<h1 class="windows">按钮 图标 尺寸 状态 中文测试</h1>',
+    '<p class="arial">Arial/sans: 按钮 图标 尺寸 状态 中文测试</p>',
+    '<p class="ainvest">AInvest base stack: 按钮 图标 尺寸 状态 中文测试</p>',
+    '<p class="windows">Windows East Asian stack: 按钮 图标 尺寸 状态 中文测试</p>',
+    '<p class="noto">Noto stack: 按钮 图标 尺寸 状态 中文测试</p>',
+    '<section class="grid">',
+    ...Array.from({ length: 24 }, (_, index) => `<span>中文样本 ${index} 按钮图标尺寸状态</span>`),
+    "</section>",
+    "</main></body></html>",
+  ].join("")
+  await new Promise<void>((resolve, reject) => {
+    server = createServer((request, response) => {
+      if (request.url === "/favicon.ico") {
+        response.writeHead(204).end()
+        return
+      }
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+      response.end(html)
+    })
+    server.once("error", reject)
+    server.listen(7778, "127.0.0.1", resolve)
+  })
+  return {
+    url: "http://127.0.0.1:7778/",
+    close: () => new Promise<void>((resolve) => server?.close(() => resolve())),
+  }
+}
+
 function passedLayers(screenshotPath: string): RuntimeCaptureSuccess["layers"] {
   return {
     http: { passed: true, status: 200, content_type: "text/html", body_length: 240, reason: "" },
     asset: { passed: true, total: 1, failed: [] },
     dom: { passed: true, body_descendants: 20, required: 20 },
     js: { passed: true, console_errors: [], page_errors: [] },
+    glyph: { passed: true, checked: 0, failed: [] },
     pixel: { passed: true, variance: 64, floor: 25, screenshot_path: screenshotPath },
     expected: { passed: true, missing_selectors: [], missing_texts: [] },
   }

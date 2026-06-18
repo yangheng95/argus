@@ -120,9 +120,7 @@ export namespace Memory {
   }
 
   function ftsInsert(db: Database.TxOrDb, chunkId: string, projectId: string, content: string) {
-    db.run(
-      sql`INSERT INTO memory_fts (content, chunk_id, project_id) VALUES (${content}, ${chunkId}, ${projectId})`,
-    )
+    db.run(sql`INSERT INTO memory_fts (content, chunk_id, project_id) VALUES (${content}, ${chunkId}, ${projectId})`)
   }
 
   function ftsDeleteInProject(db: Database.TxOrDb, chunkId: string, projectId: string) {

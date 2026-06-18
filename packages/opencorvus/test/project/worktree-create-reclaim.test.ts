@@ -21,13 +21,17 @@ import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
 describe("Worktree.create — deterministic name reclaim (no fallback)", () => {
+  test("schema rejects the retired checkout option", () => {
+    expect(Worktree.CreateInput.safeParse({ name: "retired-checkout", checkout: "sync" }).success).toBe(false)
+  })
+
   test("second create with the same name reuses the exact path; no randomized suffix", async () => {
     await using tmp = await tmpdir({ git: true })
     const name = `reclaim-test-${Date.now().toString(36)}`
 
     const first = await Instance.provide({
       directory: tmp.path,
-      fn: () => Worktree.create({ name, checkout: "sync" }),
+      fn: () => Worktree.create({ name }),
     })
 
     expect(first.name).toBe(name)
@@ -39,7 +43,7 @@ describe("Worktree.create — deterministic name reclaim (no fallback)", () => {
     // return the SAME directory — not a randomized alternative.
     const second = await Instance.provide({
       directory: tmp.path,
-      fn: () => Worktree.create({ name, checkout: "sync" }),
+      fn: () => Worktree.create({ name }),
     })
 
     expect(second.name).toBe(name)
@@ -72,7 +76,7 @@ describe("Worktree.create — deterministic name reclaim (no fallback)", () => {
 
     const info = await Instance.provide({
       directory: tmp.path,
-      fn: () => Worktree.create({ name, checkout: "sync" }),
+      fn: () => Worktree.create({ name }),
     })
 
     expect(info.name).toBe(name)

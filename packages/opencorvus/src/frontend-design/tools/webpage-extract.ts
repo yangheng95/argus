@@ -58,7 +58,9 @@ Use this only when URL evidence is missing for the requested output directory. D
       .number()
       .int()
       .positive()
-      .describe(`Mobile reference viewport width in logical pixels. Default ${DEFAULT_MOBILE_REFERENCE_VIEWPORT.width}.`)
+      .describe(
+        `Mobile reference viewport width in logical pixels. Default ${DEFAULT_MOBILE_REFERENCE_VIEWPORT.width}.`,
+      )
       .optional(),
     mobile_viewport_height: z
       .number()

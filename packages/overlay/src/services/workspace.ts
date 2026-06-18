@@ -751,7 +751,7 @@ export async function ensureDefaultDirectory(): Promise<boolean> {
     setSettingsStore("directory", settingsStore.savedDirectory)
     return true
   }
-  const discovery = await loadDiscoveredProjects().catch(() => ({ root: "", defaultDirectory: "", projects: [] }))
+  const discovery = await loadDiscoveredProjects()
   if (discovery.defaultDirectory) {
     setSettingsStore("directory", discovery.defaultDirectory)
     return true

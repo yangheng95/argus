@@ -26,18 +26,18 @@ rg -n "queryWithDirectory\(|apiUrl\(|apiRequest\(|routeRequiresProjectDirectory\
 rg -n "deleteTask\(|function deleteTask|requireTask|project_id" packages/opencorvus/src packages/overlay/src/services
 ```
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Server directory middleware | `packages/opencorvus/src/server/server.ts` | Keep as the single enforcement point. Make it call a method-aware shared policy. |
-| Shared route policy | `packages/transport-protocol/src/index.ts` | Change. Add method-aware record-level task route exemptions. |
-| Overlay URL/query injection | `packages/overlay/src/services/api.ts` | Change. Pass the HTTP method into shared route policy so `DELETE /task/:id` and task conversation reads do not inject stale `directory`. |
-| VS Code transport injection | `packages/overlay/src/services/vscode-transport.ts` | Change. Pass request/stream method into shared route policy through `queryWithDirectory`. |
-| Task conversation route | `packages/opencorvus/src/server/routes/orchestrator.ts` | Keep handler semantics. It already reads task/session/message data by `taskID` and `task.project_id`. |
-| Task delete route | `packages/opencorvus/src/server/routes/orchestrator.ts` | Keep handler semantics. `EngineService.deleteTask(taskID)` is a DB/session cleanup operation and should be reachable without physical project bootstrap. |
-| Task board projection | `packages/opencorvus/src/workbench/board.ts` | Change. Stop reading `Instance.directory`; derive task directory from session/project rows so conversation hydrate works outside `Instance.provide()`. |
-| Project bootstrap | `packages/opencorvus/src/project/instance.ts` | Do not change. `ensureGitignore()` must still run for real project-scoped routes. |
-| `ensureGitignore()` | `packages/opencorvus/src/engine/git.ts` | Do not change. Missing directories should not be silently created or swallowed. |
-| Existing stale selection frontend plan | `specs/new-arch/2026-06-05-overlay-deleted-session-stale-card-plan.md` | Related but insufficient. It clears stale UI selection only after task list refresh; this bug is server bootstrap before record deletion. |
+| Surface                                | File                                                                   | Decision                                                                                                                                                 |
+| -------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server directory middleware            | `packages/opencorvus/src/server/server.ts`                             | Keep as the single enforcement point. Make it call a method-aware shared policy.                                                                         |
+| Shared route policy                    | `packages/transport-protocol/src/index.ts`                             | Change. Add method-aware record-level task route exemptions.                                                                                             |
+| Overlay URL/query injection            | `packages/overlay/src/services/api.ts`                                 | Change. Pass the HTTP method into shared route policy so `DELETE /task/:id` and task conversation reads do not inject stale `directory`.                 |
+| VS Code transport injection            | `packages/overlay/src/services/vscode-transport.ts`                    | Change. Pass request/stream method into shared route policy through `queryWithDirectory`.                                                                |
+| Task conversation route                | `packages/opencorvus/src/server/routes/orchestrator.ts`                | Keep handler semantics. It already reads task/session/message data by `taskID` and `task.project_id`.                                                    |
+| Task delete route                      | `packages/opencorvus/src/server/routes/orchestrator.ts`                | Keep handler semantics. `EngineService.deleteTask(taskID)` is a DB/session cleanup operation and should be reachable without physical project bootstrap. |
+| Task board projection                  | `packages/opencorvus/src/workbench/board.ts`                           | Change. Stop reading `Instance.directory`; derive task directory from session/project rows so conversation hydrate works outside `Instance.provide()`.   |
+| Project bootstrap                      | `packages/opencorvus/src/project/instance.ts`                          | Do not change. `ensureGitignore()` must still run for real project-scoped routes.                                                                        |
+| `ensureGitignore()`                    | `packages/opencorvus/src/engine/git.ts`                                | Do not change. Missing directories should not be silently created or swallowed.                                                                          |
+| Existing stale selection frontend plan | `specs/new-arch/2026-06-05-overlay-deleted-session-stale-card-plan.md` | Related but insufficient. It clears stale UI selection only after task list refresh; this bug is server bootstrap before record deletion.                |
 
 ## Route Policy
 

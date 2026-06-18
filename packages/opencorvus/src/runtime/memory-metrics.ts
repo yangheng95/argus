@@ -61,7 +61,9 @@ export namespace ServeRuntimeMemoryMetrics {
     return Math.floor(parsed)
   }
 
-  export async function collect(input: { providers?: () => Record<string, unknown> | Promise<Record<string, unknown>> } = {}): Promise<RuntimeMemorySnapshot> {
+  export async function collect(
+    input: { providers?: () => Record<string, unknown> | Promise<Record<string, unknown>> } = {},
+  ): Promise<RuntimeMemorySnapshot> {
     const mem = process.memoryUsage()
     return {
       pid: process.pid,

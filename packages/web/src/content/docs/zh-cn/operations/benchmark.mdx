@@ -19,27 +19,32 @@ ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
 bun run script/benchmark/overlay-web-benchmark.ts \
   "--request-file=D:/path/to/prd.txt" \
-  "--stall-timeout-ms=1200000" \
-  "--planning-stall-timeout-ms=7200000"
+  "--idle-timeout-ms=2700000"
 ```
 
-**注意**：flag 必须用 `=` 连接值，不能用空格分隔（脚本解析差异）。
+**注意**：flag 支持 `--name=value` 和 `--name value`；路径中有空格时必须加引号。
 
 ## 关键 flag
 
-| flag                                        | 说明                                                    |
-| ------------------------------------------- | ------------------------------------------------------- |
-| `--request-file=PATH`                       | 任务描述文件（PRD）                                     |
-| `--model=MODEL`                             | 指定模型（默认自动探测）                                |
-| `--executor=opencorvus\|codex\|claude-code` | 执行器：OpenCorvus / Codex / Claude Code                |
-| `--title=TITLE`                             | 任务标题                                                |
-| `--report=PATH`                             | 输出报告 JSON                                           |
-| `--max-runs=N`                              | 最大 Run 次数                                           |
-| `--stall-timeout-ms=MS`                     | 执行/评估阶段**无活动超时**                             |
-| `--planning-stall-timeout-ms=MS`            | 规划阶段**无活动超时**（规划 agent 可能"静默思考"较久） |
-| `--tool-timeout-ms=MS`                      | 单个工具调用**无活动超时**                              |
-| `--no-keep`                                 | 任务结束删除临时目录                                    |
-| `--skip-local-verify`                       | 跳过本地二次验证                                        |
+| flag                                        | 说明                                                 |
+| ------------------------------------------- | ---------------------------------------------------- |
+| `--request-file=PATH`                       | 任务描述文件（PRD）                                  |
+| `--request-attachment=PATH`                 | 附加请求文件，而不是从 `--request-file` 读取任务文本 |
+| `--reference-images=PATHS`                  | 逗号分隔的视觉参考图                                 |
+| `--acceptance-verify-cmd=CMD`               | 显式本地验收验证命令                                 |
+| `--executor=opencorvus\|codex\|claude-code` | 执行器：OpenCorvus / Codex / Claude Code             |
+| `--title=TITLE`                             | 任务标题                                             |
+| `--report=PATH`                             | 输出报告 JSON                                        |
+| `--max-runs=N`                              | 最大 Run 次数                                        |
+| `--max-fix-runs=N`                          | 最大修复 Run 次数                                    |
+| `--max-executor-groups=N`                   | 最大并行 executor group 数                           |
+| `--idle-timeout-ms=MS`                      | benchmark **无活动超时**                             |
+| `--resume-task-id=ID`                       | 续跑已有 benchmark task                              |
+| `--resume-home-dir=PATH`                    | 原始运行的 OpenCorvus home 目录                      |
+| `--resume-message=TEXT`                     | 续跑时注入的消息                                     |
+| `--figma-url=URL`                           | 使用 Figma 输入的任务 URL                            |
+| `--no-keep`                                 | 任务结束删除临时目录                                 |
+| `--stop-after-architect`                    | architect 输出后停止                                 |
 
 ## Env 显式注入
 
@@ -95,16 +100,6 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
       "--report=report.json"
 ```
 
-## E2E 评测套件
+## 本地定向探针
 
-`packages/opencorvus/script/eval-e2e.ts` 是更小粒度的 eval 套件，用于日常回归。需先启动 server：
-
-```bash
-cd packages/opencorvus
-DASHSCOPE_API_KEY=sk-... OPENCORVUS_CHANNEL=local \
-  bun src/index.ts serve --port 7878
-```
-
-然后另开终端跑 `bun run script/eval-e2e.ts`。
-
-Server 必须带 `DASHSCOPE_API_KEY`，否则 executor 返回空响应，所有任务在 10 秒内失败。
+更小粒度的检查使用 `packages/opencorvus/script/benchmark/` 下维护中的脚本，例如 `html-skeleton-workflow-check.ts`、`visual-diff.ts` 和 `review-deliverable.ts`。每个探针的可用参数写在脚本顶部。

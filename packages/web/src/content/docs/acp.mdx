@@ -24,7 +24,7 @@ On startup:
 3. Opens a JSON-RPC channel over **stdin/stdout** via `ndJsonStream` from `@agentclientprotocol/sdk`
 4. Instantiates `ACP.Agent`, waits for client messages
 
-Transport: **newline-delimited JSON over stdio** — no external TCP port (`src/cli/cmd/acp.ts:28-67`).
+Transport: **newline-delimited JSON over stdio** — no external TCP port (`src/cli/cmd/acp.ts`).
 
 ## Connecting Zed
 
@@ -41,7 +41,7 @@ Transport: **newline-delimited JSON over stdio** — no external TCP port (`src/
 }
 ```
 
-Zed spawns `opencorvus acp` on demand and communicates via stdin/stdout (`src/acp/README.md:67-78`).
+Zed spawns `opencorvus acp` on demand and communicates via stdin/stdout (`src/acp/README.md`).
 
 ## Supported ACP methods
 
@@ -51,7 +51,7 @@ Zed spawns `opencorvus acp` on demand and communicates via stdin/stdout (`src/ac
 | ------------ | ---------------------------------------------------------- |
 | `initialize` | Negotiates protocol version (`1`), advertises capabilities |
 
-Advertised (`src/acp/agent.ts:539-555`): `loadSession: true`; MCP `http`, `sse`; prompt `embeddedContext`, `image`; session `fork`, `list`, `resume`.
+Advertised (`src/acp/agent.ts`): `loadSession: true`; MCP `http`, `sse`; prompt `embeddedContext`, `image`; session `fork`, `list`, `resume`.
 
 ### Session management
 
@@ -88,14 +88,14 @@ Via `connection.sessionUpdate()`:
 ### Authentication
 
 :::caution
-`authenticate` is **not implemented** — throws `"Authentication not implemented"` (`src/acp/agent.ts:564-566`).
+`authenticate` is **not implemented** — throws `"Authentication not implemented"` (`src/acp/agent.ts`).
 :::
 
 ## Permission handling
 
 ACP forwards internal `permission.asked` events to the client via `connection.requestPermission()`: `once` / `always` / `reject`.
 
-For `edit` permissions, after client approval, ACP calls `connection.writeTextFile()` to push the patched content to the editor (`src/acp/agent.ts:184-261`).
+For `edit` permissions, after client approval, ACP calls `connection.writeTextFile()` to push the patched content to the editor (`src/acp/agent.ts`).
 
 ## MCP server support
 
@@ -129,7 +129,7 @@ ACP calls `sdk.mcp.add()` to register each server into the internal opencorvus i
 
 ## Current limitations
 
-(`src/acp/README.md:109-119`)
+(`src/acp/README.md`)
 
 - **Authentication**: `authenticate` throws immediately
 - **Session persistence**: `session/load` replays messages but does not restore working-directory snapshot

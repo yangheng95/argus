@@ -140,6 +140,32 @@ describe("Worktree.mergeSafely", () => {
     await expect(fs.stat(path.join(tmp.path, "web-clone-source", "README.md"))).rejects.toThrow()
   })
 
+  test("blocks committed internal runtime files from merge_back", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `safe-runtime-committed-${Date.now().toString(36)}` }),
+    })
+    const runtimeDoc = ".opencorvus/r/t/ab/cdef12/stage1/evidence-manifest-prd.md"
+    await fs.mkdir(path.join(info.directory, path.dirname(runtimeDoc)), { recursive: true })
+    await fs.writeFile(path.join(info.directory, runtimeDoc), "stage one evidence\n")
+    await $`git add -f ${runtimeDoc}`.cwd(info.directory).quiet()
+    await $`git ${gitEnv} commit -m "bad runtime artifact commit"`.cwd(info.directory).quiet()
+
+    const outcome = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.mergeSafely({ branch: info.branch, worktreeDir: info.directory }),
+    })
+
+    expect(outcome.status).toBe("blocked")
+    if (outcome.status !== "blocked") throw new Error(`unexpected outcome ${outcome.status}`)
+    expect(outcome.reason).toContain("refusing to merge committed OpenCorvus internal runtime files")
+    expect(outcome.reason).toContain(runtimeDoc)
+    await expect(fs.stat(path.join(tmp.path, runtimeDoc))).rejects.toThrow()
+  })
+
   test("committed reference files are normal project files, not frontend evidence gates", async () => {
     await using tmp = await tmpdir({ git: true })
     await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()

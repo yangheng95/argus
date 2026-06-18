@@ -1,4 +1,4 @@
-import { describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
@@ -10,13 +10,36 @@ import { tmpdir } from "../fixture/fixture"
 
 const TEST_MODEL = { providerID: "test", modelID: "test-model" }
 
+function loopResult(sessionID: string) {
+  return {
+    info: {
+      id: "message_assistant_mock",
+      sessionID,
+      role: "assistant",
+      time: { created: Date.now() },
+      modelID: "mock",
+      providerID: "mock",
+      agent: "assistant",
+      path: { cwd: "", root: "" },
+      cost: 0,
+      tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    },
+    parts: [],
+  } as never
+}
+
 describe("session prompt_async route", () => {
+  afterEach(() => {
+    mock.restore()
+  })
+
   test("mission session prompt_async preserves mission agent identity", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ kind: "mission" })
+        spyOn(SessionPrompt, "loop").mockResolvedValue(loopResult(session.id))
         const app = Server.App()
         const response = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
@@ -47,6 +70,7 @@ describe("session prompt_async route", () => {
           agent: "mission",
           parts: [{ type: "text", text: "continue mission" }],
         })
+        await TaskQueueService.runNow()
         expect(json.user_message.info.agent).toBe("mission")
         expect(json.user_message.info.channel).toBe("main")
         expect(json.user_message.info.resolvedRole).toBe("user")
@@ -60,6 +84,7 @@ describe("session prompt_async route", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ kind: "explore" })
+        spyOn(SessionPrompt, "loop").mockResolvedValue(loopResult(session.id))
         const app = Server.App()
         const response = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
@@ -90,6 +115,7 @@ describe("session prompt_async route", () => {
           agent: "explore",
           parts: [{ type: "text", text: "continue investigation" }],
         })
+        await TaskQueueService.runNow()
         expect(json.user_message.info.agent).toBe("explore")
         expect(json.user_message.info.channel).toBe("main")
         expect(json.user_message.info.resolvedRole).toBe("user")
@@ -130,12 +156,13 @@ describe("session prompt_async route", () => {
     })
   })
 
-  test("returns taskID and enqueues queued task", async () => {
+  test("returns taskID and starts the queued task explicitly", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ kind: "assistant" })
+        const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(loopResult(session.id))
         const app = Server.App()
         const response = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
@@ -163,10 +190,15 @@ describe("session prompt_async route", () => {
         const row = Database.use((db) =>
           db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, json.taskID)).get(),
         )
-        expect(row?.status).toBe("queued")
+        await TaskQueueService.runNow()
+        const completed = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, json.taskID)).get(),
+        )
         expect(row?.session_id).toBe(session.id)
+        expect(completed?.status).toBe("completed")
         expect(row?.metadata.kind).toBe("session_wake")
         expect(row?.metadata.messageID).toBe(json.user_message.info.id)
+        expect(loop).toHaveBeenCalledTimes(1)
       },
     })
   })
@@ -178,6 +210,7 @@ describe("session prompt_async route", () => {
       fn: async () => {
         const session = await Session.create({ kind: "assistant" })
         const app = Server.App()
+        const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(loopResult(session.id))
         const response = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
           headers: {
@@ -205,28 +238,8 @@ describe("session prompt_async route", () => {
           user_message.info.id,
         ])
 
-        const loop = spyOn(SessionPrompt, "loop").mockResolvedValue({
-          info: {
-            id: "message_assistant_mock",
-            sessionID: session.id,
-            role: "assistant",
-            parentID: user_message.info.id,
-            time: { created: Date.now() },
-            modelID: "mock",
-            providerID: "mock",
-            agent: "assistant",
-            path: { cwd: tmp.path, root: tmp.path },
-            cost: 0,
-            tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-          },
-          parts: [],
-        } as never)
-        try {
-          await TaskQueueService.runNow()
-          expect(loop).toHaveBeenCalledTimes(1)
-        } finally {
-          mock.restore()
-        }
+        await TaskQueueService.runNow()
+        expect(loop).toHaveBeenCalledTimes(1)
 
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
         expect(row?.status).toBe("completed")
@@ -244,6 +257,7 @@ describe("session prompt_async route", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ kind: "assistant" })
+        spyOn(SessionPrompt, "loop").mockResolvedValue(loopResult(session.id))
         const app = Server.App()
         const created = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
@@ -264,6 +278,7 @@ describe("session prompt_async route", () => {
 
         expect(created.status).toBe(202)
         const { taskID } = (await created.json()) as { taskID: string }
+        await TaskQueueService.runNow()
         const status = await app.request(`/session/${session.id}/prompt_async/${taskID}`, {
           method: "GET",
           headers: {
@@ -276,12 +291,10 @@ describe("session prompt_async route", () => {
           taskID: string
           sessionID: string
           status: string
-          retryCount: number
         }
         expect(body.taskID).toBe(taskID)
         expect(body.sessionID).toBe(session.id)
-        expect(body.status).toBe("queued")
-        expect(body.retryCount).toBe(0)
+        expect(body.status).toBe("completed")
       },
     })
   })
@@ -312,18 +325,28 @@ describe("session prompt_async route", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ kind: "assistant" })
-        const taskID = TaskQueueService.enqueuePrompt({
-          sessionID: session.id,
-          prompt: {
-            parts: [
-              {
-                type: "text",
-                text: "queued prompt",
+        const now = Date.now()
+        const taskID = "task_non_prompt_async_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id: taskID,
+              session_id: session.id,
+              prompt: "queued prompt",
+              status: "queued",
+              source: "test",
+              metadata: {
+                kind: "session_prompt",
+                input: {
+                  parts: [{ type: "text", text: "queued prompt" }],
+                },
               },
-            ],
-          },
-          source: "test",
-        })
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
         const app = Server.App()
         const response = await app.request(`/session/${session.id}/prompt_async/${taskID}`, {
           method: "GET",
@@ -343,6 +366,14 @@ describe("session prompt_async route", () => {
       fn: async () => {
         const session = await Session.create({ kind: "assistant" })
         const app = Server.App()
+        let releaseLoop: (() => void) | undefined
+        const loopReleased = new Promise<void>((resolve) => {
+          releaseLoop = resolve
+        })
+        spyOn(SessionPrompt, "loop").mockImplementation((async () => {
+          await loopReleased
+          return loopResult(session.id)
+        }) as never)
         const created = await app.request(`/session/${session.id}/prompt_async`, {
           method: "POST",
           headers: {
@@ -373,6 +404,8 @@ describe("session prompt_async route", () => {
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get())
         expect(row?.status).toBe("failed")
         expect(row?.error_message).toBe("session aborted")
+        releaseLoop?.()
+        await TaskQueueService.runNow()
       },
     })
   })

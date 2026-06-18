@@ -19,6 +19,8 @@ describe("browser preview evidence runner contract", () => {
     )
 
     expect(source).toContain("collectPageSize(page)")
+    expect(source).toContain("collectGlyphCoverage(page)")
+    expect(source).toContain('failedLayers.push("glyph")')
     expect(source).toContain("fullPage: true")
     expect(source).not.toContain("clip: { x: 0, y: 0")
   })
@@ -48,8 +50,10 @@ describe("browser preview evidence runner contract", () => {
     expect(source).toContain("runBrowserNodeSidecar")
     expect(source).toContain("BROWSER_PREVIEW_REGION_COMPARISON_SCRIPT")
     expect(source).toContain("runBrowserPreviewRegionComparisonCapture")
-    expect(source).toContain('import type { BrowserPreviewRegionBinding, BrowserPreviewRegionBox } from "./region-comparison"')
-    expect(source).not.toContain('import { BrowserPreviewRegionBinding')
+    expect(source).toContain(
+      'import type { BrowserPreviewRegionBinding, BrowserPreviewRegionBox } from "./region-comparison"',
+    )
+    expect(source).not.toContain("import { BrowserPreviewRegionBinding")
   })
 
   test("product runner rejects an unknown target before creating a runtime job", async () => {
@@ -197,6 +201,94 @@ describe("browser preview evidence runner contract", () => {
     expect(result.capture.size).toEqual({ width: 12, height: 96 })
     expect(result.capture.viewport).toEqual({ width: 1440, height: 1080, capped: false })
   })
+
+  test("includes first JavaScript console error in failed layer summaries", async () => {
+    await using tmp = await tmpdir()
+    const screenshotPath = path.join(tmp.path, "desktop.png")
+    await writePng(screenshotPath, "noise")
+    const layers = passedLayers(screenshotPath)
+    layers.js = {
+      passed: false,
+      console_errors: ["forwardRef render functions accept exactly two parameters: props and ref."],
+      page_errors: [],
+    }
+
+    const result = await finalizeBrowserPreviewSidecarCapture({
+      capture: sidecarCapture({
+        path: screenshotPath,
+        layers,
+        dom: populatedDom(),
+      }),
+      url: "http://127.0.0.1:5173/",
+      outDir: tmp.path,
+    })
+
+    expect(result.capture.captured).toBe(true)
+    if (!result.capture.captured) return
+    expect(result.capture.summary).toBe(
+      "failed layers: js; js console error: forwardRef render functions accept exactly two parameters: props and ref.",
+    )
+  })
+
+  test("surfaces missing glyph coverage as a first-class failed layer", async () => {
+    await using tmp = await tmpdir()
+    const screenshotPath = path.join(tmp.path, "desktop.png")
+    await writePng(screenshotPath, "noise")
+
+    const layers = passedLayers(screenshotPath)
+    layers.glyph = {
+      passed: false,
+      checked: 1,
+      failed: [
+        {
+          text: "按钮",
+          font_family: "MissingCjkFont, sans-serif",
+          font_spec: "normal normal 400 14px MissingCjkFont, sans-serif",
+          reason: "canvas glyph matched missing-glyph sentinel",
+          missing_chars: ["按", "钮"],
+        },
+      ],
+    }
+
+    const result = await finalizeBrowserPreviewSidecarCapture({
+      capture: sidecarCapture({
+        path: screenshotPath,
+        layers,
+        dom: populatedDom(),
+      }),
+      url: "http://127.0.0.1:5173/",
+      outDir: tmp.path,
+    })
+
+    expect(result.capture.captured).toBe(true)
+    if (!result.capture.captured) return
+    expect(result.capture.passed).toBe(false)
+    expect(result.capture.summary).toBe("failed layers: glyph")
+    expect(result.capture.layers.glyph.failed[0]?.missing_chars).toEqual(["按", "钮"])
+  })
+
+  test("treats a missing required glyph layer as failed evidence", async () => {
+    await using tmp = await tmpdir()
+    const screenshotPath = path.join(tmp.path, "desktop.png")
+    await writePng(screenshotPath, "noise")
+    const layers = passedLayers(screenshotPath) as unknown as Record<string, unknown>
+    delete layers.glyph
+
+    const result = await finalizeBrowserPreviewSidecarCapture({
+      capture: sidecarCapture({
+        path: screenshotPath,
+        layers: layers as RuntimeCaptureSuccess["layers"],
+        dom: populatedDom(),
+      }),
+      url: "http://127.0.0.1:5173/",
+      outDir: tmp.path,
+    })
+
+    expect(result.capture.captured).toBe(true)
+    if (!result.capture.captured) return
+    expect(result.capture.passed).toBe(false)
+    expect(result.capture.summary).toBe("failed layers: glyph")
+  })
 })
 
 function sidecarCapture(input: {
@@ -255,6 +347,7 @@ function passedLayers(screenshotPath: string): RuntimeCaptureSuccess["layers"] {
     asset: { passed: true, total: 1, failed: [] },
     dom: { passed: true, body_descendants: 20, required: 20 },
     js: { passed: true, console_errors: [], page_errors: [] },
+    glyph: { passed: true, checked: 0, failed: [] },
     pixel: { passed: true, variance: 240, floor: 1, screenshot_path: screenshotPath },
     expected: { passed: true, missing_selectors: [], missing_texts: [] },
   }

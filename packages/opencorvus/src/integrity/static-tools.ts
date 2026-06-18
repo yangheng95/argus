@@ -1,11 +1,14 @@
-import { BrowserPreviewTool } from "@/tool/browser-preview"
-import { BrowserPreviewBindLocalModuleTool } from "@/tool/browser-preview-bind-local-module"
-import { BrowserPreviewCompareRegionsTool } from "@/tool/browser-preview-compare-regions"
+import { BROWSER_PREVIEW_REPAIR_TOOL_IDS } from "@/tool/browser-preview-tool-ids"
+import type { Tool } from "@/tool/tool"
 
-export const INTEGRITY_PREVIEW_TOOL_INFOS = [
-  BrowserPreviewTool,
-  BrowserPreviewBindLocalModuleTool,
-  BrowserPreviewCompareRegionsTool,
-] as const
+export const INTEGRITY_PREVIEW_TOOL_IDS = [...BROWSER_PREVIEW_REPAIR_TOOL_IDS] as const
 
-export const INTEGRITY_PREVIEW_TOOL_IDS = INTEGRITY_PREVIEW_TOOL_INFOS.map((tool) => tool.id)
+export async function loadIntegrityPreviewToolInfos(): Promise<readonly Tool.Info[]> {
+  const [{ BrowserPreviewTool }, { BrowserPreviewBindLocalModuleTool }, { BrowserPreviewCompareRegionsTool }] =
+    await Promise.all([
+      import("@/tool/browser-preview"),
+      import("@/tool/browser-preview-bind-local-module"),
+      import("@/tool/browser-preview-compare-regions"),
+    ])
+  return [BrowserPreviewTool, BrowserPreviewBindLocalModuleTool, BrowserPreviewCompareRegionsTool] as const
+}

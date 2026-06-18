@@ -1,6 +1,13 @@
 # Orchestrator stuck in integrity build-and-retry loop — 2026-05-23
 
-Status: spec only. No runtime code is changed by this document.
+Status: implemented history as of 2026-06-17. Current runtime sources are
+`packages/opencorvus/src/integrity/root-history.ts`,
+`packages/opencorvus/src/integrity/build-feedback.ts`,
+`packages/opencorvus/src/integrity/replay-context.ts`, and
+`packages/opencorvus/src/orchestrator/tools.ts`, with regression tests under
+`packages/opencorvus/test/integrity/` and
+`packages/opencorvus/test/orchestrator/`. This file is retained as historical
+incident evidence, not as a pending implementation checklist.
 
 This spec follows `CLAUDE.md` rules that matter for this change:
 

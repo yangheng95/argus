@@ -2,9 +2,11 @@
 set -eu
 
 OPENCORVUS_BIN="${OPENCORVUS_BIN:-/opt/opencorvus/opencorvus}"
+OPENCORVUS_HOME="${OPENCORVUS_HOME:-/var/lib/opencorvus}"
 OPENCORVUS_PROJECT_DIR="${OPENCORVUS_PROJECT_DIR:-/workspace}"
 OPENCORVUS_HOSTNAME="${OPENCORVUS_HOSTNAME:-0.0.0.0}"
 OPENCORVUS_PORT="${PORT:-${OPENCORVUS_PORT:-7878}}"
+export OPENCORVUS_HOME
 
 log() {
   printf '[opencorvus-entrypoint] %s\n' "$*" >&2
@@ -12,6 +14,8 @@ log() {
 
 log "starting"
 log "binary=$OPENCORVUS_BIN"
+log "runtime_home=$OPENCORVUS_HOME"
+log "log_dir=$OPENCORVUS_HOME/data/log"
 log "project_dir=$OPENCORVUS_PROJECT_DIR"
 log "hostname=$OPENCORVUS_HOSTNAME"
 log "port=$OPENCORVUS_PORT"
@@ -38,7 +42,17 @@ if [ ! -x "$OPENCORVUS_BIN" ]; then
   exit 126
 fi
 
-mkdir -p "$OPENCORVUS_PROJECT_DIR" /root/.opencorvus
+mkdir -p "$OPENCORVUS_PROJECT_DIR" "$OPENCORVUS_HOME/data/log" "$OPENCORVUS_HOME/config" "$OPENCORVUS_HOME/state" "$OPENCORVUS_HOME/cache"
+
+if [ ! -w "$OPENCORVUS_HOME" ]; then
+  log "fatal: runtime home is not writable: $OPENCORVUS_HOME"
+  exit 73
+fi
+
+if [ ! -w "$OPENCORVUS_PROJECT_DIR" ]; then
+  log "fatal: project directory is not writable: $OPENCORVUS_PROJECT_DIR"
+  exit 73
+fi
 
 log "version probe"
 "$OPENCORVUS_BIN" --version >&2

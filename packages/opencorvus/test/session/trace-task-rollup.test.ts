@@ -295,7 +295,10 @@ test("llm request trace redacts data URLs by default", async () => {
         tools: [],
       })
 
-      const raw = fs.readFileSync(ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(tempDir, taskID, "trace.jsonl"), "utf8")
+      const raw = fs.readFileSync(
+        ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(tempDir, taskID, "trace.jsonl"),
+        "utf8",
+      )
       expect(raw).not.toContain(dataURL)
       expect(raw).toContain("[redacted data URL")
     },

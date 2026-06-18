@@ -1,9 +1,5 @@
-import { ExecutorRegistry } from "@/executor/registry"
-import { Config } from "@/config/config"
-
 import { Instance } from "@/project/instance"
 import { Database, and, eq, sql } from "@/storage/db"
-import { Log } from "@/util/log"
 import {
   EngineArtifactTable,
   EngineInteractionRequestTable,
@@ -13,39 +9,19 @@ import {
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { orchestratorState } from "./orchestrator-state"
-import { persistFailedRunEvaluation, updateGoalRun } from "./persist"
 
 import {
-  findAcceptanceByRun,
-  findEvaluationByRun,
   findInteractionByExternal,
   findPendingInteractions,
   findRun,
   findActiveRunForTask,
   findTask,
-  listActiveGoalRunsForRun,
   listGoalRunsForRun,
   listLiveRunsForProject,
-  requireTask,
   type RunRow,
 } from "./store"
 import { Identifier } from "@/id/id"
-import { EXECUTOR_ACTIVE_RUN_STATUSES, RUNTIME_MONITORED_RUN_STATUSES, isLiveGoalRunStatus } from "./catalog"
-import { PerRunState } from "./per-run-state"
-import { isInteractionBlockingReason } from "./run-blocking"
-import { isTaskCancelled } from "./task-status"
-
-const log = Log.create({ service: "engine-runtime" })
-const ACCEPTANCE_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_ACCEPTANCE_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.acceptance() (git operations can be slow on Windows with large repos)
-const SYNC_RUN_TIMEOUT_MS = parseInt(
-  process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(ACCEPTANCE_FETCH_TIMEOUT_MS + 15 * 60 * 1000),
-  10,
-) // must exceed fetch + Orchestrator eval/verify/publish time
-const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
-
-const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
-
-const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "300000", 10) // auto-reject stale interactions (5min default)
+import { EXECUTOR_ACTIVE_RUN_STATUSES, isLiveGoalRunStatus } from "./catalog"
 
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
 export function hasActiveSessions(): boolean {
@@ -58,35 +34,21 @@ export function hasActiveSessions(): boolean {
 }
 
 export namespace EngineRuntime {
-  /**
-   * Monitor active runs (executor status). No pipeline advancement.
-   * Pipeline advancement is now driven by the Orchestrator.
-   */
   export async function monitorRuns(hooks: RuntimeHooks) {
     const current = orchestratorState()
-
-    // Sync active runs — guarded to prevent overlapping sync waves.
-    if (current.syncing) return
+    if (current.syncing) return { observedRuns: 0 }
     current.syncing = true
     try {
-      const rows = listLiveRunsForProject(Instance.project.id)
-        .filter((r) => (RUNTIME_MONITORED_RUN_STATUSES as readonly string[]).includes(r.status))
-        .map((r) => ({ id: r.id }))
-      await Promise.allSettled(
-        rows.map((row) =>
-          Promise.race([
-            syncRun(row.id, hooks),
-            new Promise<void>((_, reject) =>
-              setTimeout(() => reject(new Error(`syncRun timeout for run ${row.id}`)), SYNC_RUN_TIMEOUT_MS),
-            ),
-          ]).catch((err) => {
-            log.error("syncRun failed or timed out", {
-              runID: row.id,
-              error: err instanceof Error ? err.message : String(err),
-            })
-          }),
-        ),
-      )
+      const rows = listLiveRunsForProject(Instance.project.id).filter((row) => {
+        const task = findTask(row.task_id)
+        if (!task || task.time_completed !== null) return false
+        return findActiveRunForTask(row.task_id)?.id === row.id
+      })
+      const noLiveGoalWakes = await Promise.all(rows.map((row) => syncRun(row.id, hooks)))
+      return {
+        observedRuns: rows.length,
+        dispatchedLivenessWakes: noLiveGoalWakes.filter(Boolean).length,
+      }
     } finally {
       current.syncing = false
     }
@@ -98,43 +60,23 @@ export namespace EngineRuntime {
    * Startup orphan cleanup was moved to engine/recovery.ts so runtime polling
    * no longer tries to reconcile previous-process state here.
    */
-  async function syncGoalRuns(runID: string, hooks: RuntimeHooks) {
+  async function syncNoLiveGoalRuns(runID: string, _hooks: RuntimeHooks): Promise<boolean> {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
     const goalRuns = listGoalRunsForRun(runID)
-    if (goalRuns.length === 0) return
-    if (goalRuns.some((goalRun) => isLiveGoalRunStatus(goalRun.status))) return
+    if (goalRuns.some((goalRun) => isLiveGoalRunStatus(goalRun.status))) return false
 
     const pending = findPendingInteractions(run.id)
-    if (pending.length > 0) {
-      if (run.status !== "blocked") {
-        await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
-      }
-      return
-    }
+    if (pending.length > 0) return false
 
-    const fingerprint = terminalGoalBatchFingerprint(goalRuns)
-    if (hasGoalBatchNotification({ taskID: run.task_id, runID: run.id, fingerprint })) return
+    const fingerprint = noLiveGoalWakeFingerprint(goalRuns)
+    if (hasNoLiveGoalWakeFact({ taskID: run.task_id, runID: run.id, fingerprint })) return false
 
-    if (run.status === "blocked") {
-      await hooks.updateRun(run, { status: "running", blocking_reason: null, error: null }, "Goal runs settled")
-    }
-
-    const task = findTask(run.task_id)
-    if (task && isTaskCancelled(task)) {
-      log.info("goal batch settled after task cancellation; not waking orchestrator", {
-        taskID: run.task_id,
-        runID: run.id,
-      })
-      return
-    }
     const { dispatchTaskLoop } = await import("@/engine/queue")
-    const dispatchResult = await dispatchTaskLoop({
-      taskID: run.task_id,
-    })
-    if (dispatchResult === "started") {
-      recordGoalBatchNotification({ taskID: run.task_id, runID: run.id, fingerprint, goalRuns })
-    }
+    const dispatchResult = await dispatchTaskLoop({ taskID: run.task_id })
+    if (dispatchResult !== "started") return false
+    recordNoLiveGoalWakeFact({ taskID: run.task_id, runID: run.id, fingerprint, goalRuns })
+    return true
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -145,218 +87,39 @@ export namespace EngineRuntime {
     await syncRun(activeRun.id, hooks)
   }
 
-  export async function syncRun(runID: string, hooks: RuntimeHooks) {
+  export async function syncRun(runID: string, hooks: RuntimeHooks): Promise<boolean> {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
+    const task = findTask(run.task_id)
+    if (!task || task.time_completed !== null) return false
+    if (findActiveRunForTask(run.task_id)?.id !== run.id) return false
 
-    // Per-goal parallel mode: if this run has ANY goal runs (active or completed),
-    // delegate to syncGoalRuns which handles both active-goal polling and pipeline continuation.
-    // Using listGoalRunsForRun (ALL statuses) to detect per-goal mode even when
-    // all goals have already completed but the run hasn't been finalized yet.
+    // Runtime sync is an observation surface. It records no-live-goal
+    // liveness wakes only; it does not poll executor queues, auto-reject
+    // interactions, or rewrite run status.
     if (run.status !== "completed" && run.status !== "failed" && run.status !== "aborted") {
-      const allGoalRuns = listGoalRunsForRun(runID)
-      if (allGoalRuns.length > 0) {
-        await syncGoalRuns(runID, hooks)
-        return
-      }
+      return syncNoLiveGoalRuns(runID, hooks)
     }
-
-    const task = requireTask(run.task_id)
-    const acceptance = findAcceptanceByRun(run.id)
-    const queueTaskID = run.executor_ref?.queue_task_id
-    const pending = findPendingInteractions(run.id)
-    if (pending.length > 0) {
-      const now = Date.now()
-      const cfg = await Config.get()
-      const autoQuestion = cfg.experimental?.auto_question === true
-      const stale = pending.filter((p) => {
-        if (now - (p.time_created ?? 0) <= INTERACTION_STALE_MS) return false
-        if (p.request_type === "question") return autoQuestion
-        return false
-      })
-      if (stale.length > 0) {
-        for (const interaction of stale) {
-          log.info("auto-rejecting stale interaction", {
-            id: interaction.id,
-            type: interaction.request_type,
-            ageMs: now - (interaction.time_created ?? 0),
-          })
-          Database.use((db) =>
-            db
-              .update(EngineInteractionRequestTable)
-              .set({ status: "rejected", time_resolved: now, time_updated: now })
-              .where(eq(EngineInteractionRequestTable.id, interaction.id))
-              .run(),
-          )
-        }
-        // Phase-6-f-4: task.blocking_reason cache column removed. Blocking is
-        // a run-scoped signal now (run.blocking_reason + pending interactions).
-        const stillPending = findPendingInteractions(run.id)
-        if (stillPending.length === 0) {
-          if (run.status === "blocked") {
-            await hooks.updateRun(
-              run,
-              { status: "accepted", blocking_reason: null },
-              "Stale interactions auto-rejected",
-            )
-          }
-        } else {
-          if (run.status !== "blocked") {
-            await hooks.updateRun(
-              run,
-              { status: "blocked", blocking_reason: stillPending[0].request_type },
-              "Run blocked",
-            )
-          }
-          return
-        }
-      } else {
-        if (run.status !== "blocked") {
-          await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
-        }
-        return
-      }
-    }
-
-    if (!queueTaskID) {
-      if (run.status === "blocked" && isInteractionBlockingReason(run.blocking_reason)) {
-        await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run resumed")
-      }
-      return
-    }
-
-    if (run.status === "completed") {
-      // Already-completed runs reach this branch only when syncRun's downstream
-      // path (queue.status === "completed") hasn't yet handled this run. That
-      // path claims via PerRunState.claimAgentNotification in the same tick,
-      // so by the time we'd otherwise re-enter here the run.status check above
-      // already short-circuited. After process restart, completed runs are
-      // filtered out before syncRun reaches them (queueTaskID check below).
-      // Nothing left for this branch to do — just return.
-      return
-    }
-
-    if (run.status === "failed" || run.status === "aborted") {
-      return
-    }
-
-    const executor = ExecutorRegistry.require(run.executor)
-    const queue = await Promise.race([
-      executor.status(queueTaskID),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`executor.status() timeout (${EXECUTOR_STATUS_TIMEOUT_MS}ms)`)),
-          EXECUTOR_STATUS_TIMEOUT_MS,
-        ),
-      ),
-    ])
-
-    if (queue.status === "queued" || queue.status === "retrying") {
-      if (run.status === "blocked") {
-        await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
-      }
-      // Phase-6-f-4: task.blocking_reason cache removed — run-scoped only.
-      return
-    }
-
-    if (queue.status === "running") {
-      // Single-session operator runs: use DB timestamps for inactivity detection.
-      // (GoalPool-managed runs don't reach this path.)
-      const RUN_STALL_MS = 60 * 60 * 1000 // 60 min
-      const lastActivity = run.time_updated ?? run.time_started ?? run.time_created ?? Date.now()
-      const inactiveMs = Date.now() - lastActivity
-      if (inactiveMs > RUN_STALL_MS) {
-        log.warn("run stalled — no activity", { runID: run.id, inactiveMs })
-        try {
-          await executor.abort({ sessionID: run.session_id ?? undefined, queueTaskID })
-        } catch {}
-        await failRun(run, `Run stalled — no activity for ${Math.round(inactiveMs / 60000)}min`, hooks)
-        return
-      }
-      if (run.status !== "running") {
-        await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
-      }
-      // Phase-6-f-2/4: task.status / blocking_reason caches removed.
-      // Promote to active via time_started stamp if not yet started.
-      if (task.time_started == null) {
-        await hooks.updateTask(task, { status: "active" }, "Run executing")
-      }
-      return
-    }
-
-    if (queue.status === "failed") {
-      await failRun(run, queue.error ?? "Executor run failed", hooks)
-      return
-    }
-
-    if (queue.status === "completed") {
-      // Single-executor path: mark run completed and trigger task loop.
-      if (PerRunState.claimAgentNotification(run.id)) {
-        stopEventBridge(run.id)
-        // updateRun → engine/state.ts detects the terminal transition and
-        // calls PerRunState.finalize(run.id), so no manual cleanup here.
-        await hooks.updateRun(
-          run,
-          { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() },
-          "Run completed",
-        )
-        // No auto-restart of runTaskLoop here. If the task loop is already
-        // in flight it is awaiting pool.drain and will continue naturally.
-        // If it is not (rare race on crash recovery), the next user message
-        // will start a fresh loop via continueTaskMessage. Silent background
-        // restart contradicts the user-message-driven model.
-      }
-    }
-  }
-}
-
-async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
-  stopEventBridge(run.id) // serial bridge
-  // Stop all per-goal event bridges (abort propagates to executor via consumeExecutorEvents)
-  // Infrastructure only writes goal_run.status — goal.status is Orchestrator's decision
-  const goalRuns = listActiveGoalRunsForRun(run.id)
-  for (const gr of goalRuns) {
-    stopEventBridge(gr.id) // aborts the controller → consumeExecutorEvents loop breaks → executor.abort() called
-    updateGoalRun(gr.id, { status: "failed", error: `Parent run failed: ${error}`, time_completed: Date.now() })
-  }
-  // PerRunState.finalize is driven by updateRun's terminal transition below.
-  const task = requireTask(run.task_id)
-  const now = Date.now()
-  if (!findEvaluationByRun(run.id)) {
-    persistFailedRunEvaluation({ task, run, error, now })
-  }
-  await hooks.updateRun(run, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
-  // Task loop detects run failure via task status check and re-enters Decision Point.
-  // No fire-and-forget trigger needed.
-  if (findActiveRunForTask(task.id)?.id === run.id) {
-    log.info("run failed, task loop will detect and re-decide", { taskID: task.id, runID: run.id })
-  }
-}
-
-/** Stop the event bridge for a run (called when run completes/fails/aborts). */
-function stopEventBridge(runID: string) {
-  const ctrl = eventBridgeAborts.get(runID)
-  if (ctrl) {
-    ctrl.abort()
-    eventBridgeAborts.delete(runID)
+    return false
   }
 }
 
 type RuntimeHooks = import("./runtime-hooks").RuntimeHooks
 
-function terminalGoalBatchFingerprint(
+function noLiveGoalWakeFingerprint(
   goalRuns: Array<{
     id: string
     status: string
   }>,
 ) {
+  if (goalRuns.length === 0) return "no-goal-runs"
   return goalRuns
     .map((goalRun) => [goalRun.id, goalRun.status].join(":"))
     .sort()
     .join("|")
 }
 
-function hasGoalBatchNotification(input: { taskID: string; runID: string; fingerprint: string }) {
+function hasNoLiveGoalWakeFact(input: { taskID: string; runID: string; fingerprint: string }) {
   return Boolean(
     Database.use((db) =>
       db
@@ -376,7 +139,7 @@ function hasGoalBatchNotification(input: { taskID: string; runID: string; finger
   )
 }
 
-function recordGoalBatchNotification(input: {
+function recordNoLiveGoalWakeFact(input: {
   taskID: string
   runID: string
   fingerprint: string
@@ -392,7 +155,7 @@ function recordGoalBatchNotification(input: {
         run_id: input.runID,
         goal_run_id: null,
         kind: "goal_batch_notification" as EngineArtifactKind,
-        label: "goal-batch-wake-dispatched",
+        label: input.goalRuns.length === 0 ? "no-live-goal-wake-dispatched" : "goal-batch-wake-dispatched",
         payload: {
           task_id: input.taskID,
           run_id: input.runID,

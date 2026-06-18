@@ -35,6 +35,7 @@ import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { entries, values as objectValues } from "@/util/object"
 import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS, WEBPAGE_EVIDENCE_TOOL_IDS } from "@/frontend-design/tools/ids"
 import { VISUAL_QA_STATIC_TOOL_IDS } from "@/visual-qa/static-tools"
+import { INTEGRITY_PREVIEW_TOOL_IDS } from "@/integrity/static-tools"
 
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
@@ -206,6 +207,8 @@ export namespace Agent {
             webpage_text_diff: "allow",
             webpage_vision_judge: "allow",
             browser_preview: "allow",
+            browser_preview_bind_local_module: "allow",
+            browser_preview_compare_regions: "allow",
           }),
         ),
         mode: "primary",
@@ -574,8 +577,8 @@ export namespace Agent {
         description: AgentRoleContract.description("integrity"),
         prompt: INTEGRITY_RUNTIME_PROMPT,
         steps: 1000,
-        // Verdict and acceptance tools are injected per run; registry tools only bloat the schema.
-        tools: { include: ["browser_preview"] },
+        // Verdict and acceptance tools are injected per run; preview repair tools are the shared task-scoped runtime surface.
+        tools: { include: [...INTEGRITY_PREVIEW_TOOL_IDS] },
         options: {},
         mode: "primary",
         native: true,

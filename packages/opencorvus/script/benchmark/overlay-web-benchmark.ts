@@ -91,6 +91,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
+import { BrowserRuntime } from "../../src/browser/runtime"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Shell } from "../../src/shell/shell"
 import { decodePNG, nonWhiteDensity, uniqueColorBucketCount } from "../../src/util/pixel-stats"
@@ -1839,7 +1840,7 @@ function resolveModuleBlocks(progress: any, board: any, request: string) {
 }
 
 async function launchBrowser() {
-  const executablePath = await findBrowser()
+  const executablePath = await BrowserRuntime.findBrowserExecutable()
   return puppeteer.launch({
     executablePath,
     headless: false,
@@ -1857,19 +1858,6 @@ async function launchBrowser() {
       "--window-size=1600,1200",
     ],
   })
-}
-
-async function findBrowser() {
-  const list = [
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-  ]
-  for (const item of list) {
-    if (await Bun.file(item).exists()) return item
-  }
-  throw new Error("No local Edge/Chrome executable found for overlay benchmark")
 }
 
 async function cleanup(label: string, run: () => Promise<unknown>, force?: () => void | Promise<void>) {
@@ -2324,7 +2312,10 @@ async function overlaySnapshot(page: Page) {
       taskList: taskListPanel?.textContent?.trim() || "",
       taskListPanelVisible: viewportVisible(taskListPanel),
       taskRows: taskRowSamples.slice(0, 5),
-      visibleTaskRowIDs: taskRowSamples.filter((row) => row.viewportVisible).map((row) => row.id).slice(0, 5),
+      visibleTaskRowIDs: taskRowSamples
+        .filter((row) => row.viewportVisible)
+        .map((row) => row.id)
+        .slice(0, 5),
       visibleTaskRowCount: taskRowSamples.filter((row) => row.viewportVisible).length,
       pendingTaskRows: pendingTaskRowSamples.slice(0, 5),
       pendingTaskRowCount: pendingTaskRowSamples.filter((row) => row.viewportVisible).length,
@@ -2381,13 +2372,19 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
     "build",
     "integrity",
     "acceptance",
-    // legacy stage names kept so old reports remain comparable
-    "spec",
-    "evaluator",
-    "task",
-    "decompose",
-    "eval",
   ]
+  const terminalSubmitTools = new Set([
+    "submit_requirements",
+    "submit_frontend_template",
+    "submit_architect",
+    "submit_workload_analysis",
+    "submit_integrity_review_plan",
+    "submit_reviewer_report",
+    "submit_integrity_consensus",
+    "submit_acceptance_verdict",
+    "submit_visual_qa_report",
+    "submit_research_brief",
+  ])
   const stages = stageNames.flatMap((stage) => {
     const list = agents.filter((item) => item.stage === stage)
     if (list.length === 0) return []
@@ -2415,13 +2412,8 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
           first_tool_call_ms: list.find((item) => item.kind === "tool_call")?.elapsed_ms ?? null,
           first_tool_result_ms: list.find((item) => item.kind === "tool_result")?.elapsed_ms ?? null,
           submit_tool_ms:
-            list.find(
-              (item) =>
-                item.kind === "tool_call" &&
-                (item.toolName === "submit_spec" ||
-                  item.toolName === "submit_plan" ||
-                  item.toolName === "submit_analysis"),
-            )?.elapsed_ms ?? null,
+            list.find((item) => item.kind === "tool_call" && terminalSubmitTools.has(String(item.toolName ?? "")))
+              ?.elapsed_ms ?? null,
           error_ms: list.find((item) => item.kind === "error")?.elapsed_ms ?? null,
           last_event_ms: list.at(-1)?.elapsed_ms ?? null,
           kind_counts: byKind,

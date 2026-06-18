@@ -19,14 +19,14 @@ present in the real conversation stream.
 
 ## Call Point Sweep
 
-| Surface | Call point | Decision |
-| --- | --- | --- |
-| Vendor transform | `packages/opencorvus/src/provider/vendor-messages.ts` `claudeSanitizeToolCallIds` | Replace per-part rewrite with a request-local original-ID to normalized-ID mapping that preserves uniqueness and tool-call/tool-result pairing. |
-| Vendor transform | `vendor-messages.ts` `mistralToolCallIdPadAndSeq` | Use the same mapping discipline while keeping Mistral's exact nine-character alphanumeric constraint. |
-| Vendor transform | `vendor-messages.ts` `mistralToolCallIdPadAndSeq` tool-to-user bridge | Remove the synthetic assistant message; message sequence issues must be handled by real conversation construction or explicit provider failure, not hidden content. |
-| Shared transform | `packages/opencorvus/src/provider/transform.ts` | No contract change; it remains the dispatcher through `normalizeVendorMessages`. |
-| Tests | `packages/opencorvus/test/provider/transform.test.ts` | Add collision tests for Claude and Mistral plus a no-synthetic-bridge assertion. |
-| Existing request contract | `packages/opencorvus/test/provider/request-body-contract.test.ts` | Existing single-ID sanitization expectation remains valid for non-colliding IDs. |
+| Surface                   | Call point                                                                        | Decision                                                                                                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vendor transform          | `packages/opencorvus/src/provider/vendor-messages.ts` `claudeSanitizeToolCallIds` | Replace per-part rewrite with a request-local original-ID to normalized-ID mapping that preserves uniqueness and tool-call/tool-result pairing.                     |
+| Vendor transform          | `vendor-messages.ts` `mistralToolCallIdPadAndSeq`                                 | Use the same mapping discipline while keeping Mistral's exact nine-character alphanumeric constraint.                                                               |
+| Vendor transform          | `vendor-messages.ts` `mistralToolCallIdPadAndSeq` tool-to-user bridge             | Remove the synthetic assistant message; message sequence issues must be handled by real conversation construction or explicit provider failure, not hidden content. |
+| Shared transform          | `packages/opencorvus/src/provider/transform.ts`                                   | No contract change; it remains the dispatcher through `normalizeVendorMessages`.                                                                                    |
+| Tests                     | `packages/opencorvus/test/provider/transform.test.ts`                             | Add collision tests for Claude and Mistral plus a no-synthetic-bridge assertion.                                                                                    |
+| Existing request contract | `packages/opencorvus/test/provider/request-body-contract.test.ts`                 | Existing single-ID sanitization expectation remains valid for non-colliding IDs.                                                                                    |
 
 ## Acceptance
 

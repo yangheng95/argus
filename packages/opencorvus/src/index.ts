@@ -129,7 +129,7 @@ cli = cli
   .strict()
 
 try {
-  await cli.parse()
+  await cli.parseAsync()
 } catch (e) {
   let data: Record<string, any> = {}
   if (e instanceof NamedError) {
@@ -167,10 +167,4 @@ try {
     process.stderr.write((e instanceof Error ? e.message : String(e)) + EOL)
   }
   process.exitCode = 1
-} finally {
-  // Some subprocesses don't react properly to SIGTERM and similar signals.
-  // Most notably, some docker-container-based MCP servers don't handle such signals unless
-  // run using `docker run --init`.
-  // Explicitly exit to avoid any hanging subprocesses.
-  process.exit()
 }

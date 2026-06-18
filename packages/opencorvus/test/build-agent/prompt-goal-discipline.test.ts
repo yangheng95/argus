@@ -63,6 +63,9 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("Each file-changing pass must include observing the rendered result")
     expect(normalized).toContain("task-scoped backend browser evidence runner")
     expect(normalized).toContain("task preview target evidence route")
+    expect(normalized).toContain("call `browser_preview` with the real dev/preview command")
+    expect(normalized).toContain("Ordinary `bash` output does not update Preview targets")
+    expect(normalized).toContain("task-scoped `browser_preview_target` artifact created by `browser_preview`")
     expect(normalized).toContain("Do not only write files and infer success from static code")
     expect(normalized).toContain("open the affected surface in a real browser/preview")
     expect(normalized).toContain("capture fresh screenshot evidence")
@@ -123,7 +126,9 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("Do not convert a reference-parity task into a new target-styled design")
     expect(normalized).toContain("treat that as a verification failure to repair")
     expect(normalized).toContain("must not be used to accept a mismatch")
-    expect(normalized).toContain("screenshots, source Document Object Model (DOM), style evidence, or interaction evidence")
+    expect(normalized).toContain(
+      "screenshots, source Document Object Model (DOM), style evidence, or interaction evidence",
+    )
   })
 
   test("treats pre-checker verification failures as toolchain blockers", async () => {
@@ -140,6 +145,18 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("rerun the exact required command")
     expect(normalized).toContain("do not bypass the required command with a lower-level executable")
     expect(normalized).toContain("as if product code failed")
+  })
+
+  test("forbids committing OpenCorvus internal runtime paths as deliverables", async () => {
+    const prompt = await readBuildPrompt()
+    const normalized = prompt.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("Never stage or commit `.opencorvus/r/`")
+    expect(normalized).toContain("`.opencorvus/runtime/`")
+    expect(normalized).toContain("`.opencorvus/worktrees/`")
+    expect(normalized).toContain("per-machine engine state")
+    expect(normalized).toContain("durable deliverable there")
+    expect(normalized).toContain("project source/docs path")
   })
 
   test("keeps scenario policy out of the build role core", async () => {

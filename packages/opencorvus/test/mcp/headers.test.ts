@@ -20,6 +20,7 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
     async start() {
       throw new Error("Mock transport cannot connect")
     }
+    async close() {}
   },
 }))
 
@@ -35,6 +36,7 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
     async start() {
       throw new Error("Mock transport cannot connect")
     }
+    async close() {}
   },
 }))
 
@@ -48,26 +50,7 @@ const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
 
 test("headers are passed to transports when oauth is enabled (default)", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        `${dir}/opencorvus.json`,
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          mcp: {
-            "test-server": {
-              type: "remote",
-              url: "https://example.com/mcp",
-              headers: {
-                Authorization: "Bearer test-token",
-                "X-Custom-Header": "custom-value",
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
+  await using tmp = await tmpdir()
 
   await Instance.provide({
     directory: tmp.path,
@@ -82,8 +65,7 @@ test("headers are passed to transports when oauth is enabled (default)", async (
         },
       }).catch(() => {})
 
-      // Both transports should have been created with headers
-      expect(transportCalls.length).toBeGreaterThanOrEqual(1)
+      expect(transportCalls.map((call) => call.type)).toEqual(["streamable"])
 
       for (const call of transportCalls) {
         expect(call.options.requestInit).toBeDefined()
@@ -115,7 +97,7 @@ test("headers are passed to transports when oauth is explicitly disabled", async
         },
       }).catch(() => {})
 
-      expect(transportCalls.length).toBeGreaterThanOrEqual(1)
+      expect(transportCalls.map((call) => call.type)).toEqual(["streamable"])
 
       for (const call of transportCalls) {
         expect(call.options.requestInit).toBeDefined()
@@ -142,12 +124,31 @@ test("no requestInit when headers are not provided", async () => {
         url: "https://example.com/mcp",
       }).catch(() => {})
 
-      expect(transportCalls.length).toBeGreaterThanOrEqual(1)
+      expect(transportCalls.map((call) => call.type)).toEqual(["streamable"])
 
       for (const call of transportCalls) {
         // No headers means requestInit should be undefined
         expect(call.options.requestInit).toBeUndefined()
       }
+    },
+  })
+})
+
+test("remote MCP uses SSE only when transport is explicit", async () => {
+  await using tmp = await tmpdir()
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      transportCalls.length = 0
+
+      await MCP.add("test-server-sse", {
+        type: "remote",
+        transport: "sse",
+        url: "https://example.com/mcp",
+      }).catch(() => {})
+
+      expect(transportCalls.map((call) => call.type)).toEqual(["sse"])
     },
   })
 })

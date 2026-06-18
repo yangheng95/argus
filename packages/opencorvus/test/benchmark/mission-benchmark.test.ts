@@ -256,7 +256,7 @@ describe("mission benchmark executable wiring", () => {
     expect(src).not.toContain("skippedVerify")
     expect(src).not.toContain('status: "not_run"')
     expect(src).toContain("const localVerify = await runLocalVerify")
-    expect(src).toContain('Shell.run(cmd, { cwd, idleTimeoutMs })')
+    expect(src).toContain("Shell.run(cmd, { cwd, idleTimeoutMs })")
     expect(src).toContain('status: result.idleTimedOut ? "idle_timeout" : "completed"')
     expect(src).not.toContain("Bun.spawn")
     expect(src).not.toContain("proc.exited")

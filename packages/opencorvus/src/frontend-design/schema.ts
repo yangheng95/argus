@@ -246,7 +246,7 @@ export const FrontendTemplateFinalSchema = z.object({
     .default([])
     .describe("Preferred compact replacement for a long fillable_modules string. Use one item per module or slot."),
   component_inventory: OptionalMarkdownField(
-    "Legacy compatibility summary only. Do not use this as a standalone component checklist; keep it concise and direct downstream agents to component_reuse_plan, quality_project_contract, completeness_review, open_questions, and named source artifacts. If omitted, it is rendered as a compact reuse-family summary from component_reuse_plan.",
+    "Concise component-family cross-check. Do not use this as a standalone checklist; direct downstream agents to component_reuse_plan, quality_project_contract, completeness_review, open_questions, and named source artifacts. If omitted, it is rendered as a compact reuse-family summary from component_reuse_plan.",
   ),
   component_reuse_plan: z
     .array(ComponentReusePlanItemSchema)

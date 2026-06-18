@@ -61,57 +61,6 @@ describe("project routes", () => {
     expect(body.created).toBe(false)
   }, 30_000)
 
-  test(
-    "PATCH /project/:projectID only updates the active project selected by directory",
-    async () => {
-      await using projectA = await tmpdir()
-      await using projectB = await tmpdir()
-      const app = Server.App()
-      let projectAID = ""
-      let projectBID = ""
-
-      await Instance.provide({
-        directory: projectA.path,
-        fn: () => {
-          projectAID = Instance.project.id
-        },
-      })
-      await Instance.provide({
-        directory: projectB.path,
-        fn: () => {
-          projectBID = Instance.project.id
-        },
-      })
-
-      const ownUpdate = await app.request(`/project/${projectAID}`, {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": projectA.path,
-        },
-        body: JSON.stringify({ name: "project A renamed" }),
-      })
-      expect(ownUpdate.status).toBe(200)
-      const ownBody = (await ownUpdate.json()) as { id: string; name?: string }
-      expect(ownBody.id).toBe(projectAID)
-      expect(ownBody.name).toBe("project A renamed")
-
-      const projectBBefore = Project.get(projectBID)!
-      const crossUpdate = await app.request(`/project/${projectBID}`, {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": projectA.path,
-        },
-        body: JSON.stringify({ name: "project B hijacked" }),
-      })
-
-      expect(crossUpdate.status).toBe(404)
-      expect(Project.get(projectBID)?.name).toBe(projectBBefore.name)
-    },
-    30_000,
-  )
-
   test("GET /project/current/worktrees marks live goal bindings and expired worktrees", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()

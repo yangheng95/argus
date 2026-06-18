@@ -29,7 +29,7 @@
 > - `engine_artifact.kind="orchestrator-stream-error"`（`engine.sql.ts:120`、
 >   `engine/persist.ts:1964`）记录 orchestrator session 流式异常；与 verification-evidence
 >   并列，不是同一 kind。
-> - 集成度审计已迁出 evidence 管线：参考 `integrity/agent.ts` 的 post-build
+> - 集成度审计已迁出 evidence 管线：参考 `integrity/team-agent.ts` 的 post-build
 >   `Requirement Status Snapshot` 与 `contract_audit` / `ContractIR` /
 >   `architect/linker.ts` 链路。
 > - Acceptance review/tool/service surface 已删除；runtime screenshot capture 归属

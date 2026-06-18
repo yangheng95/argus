@@ -8,10 +8,10 @@ import path from "node:path"
  * deliberately bypasses `runAgentSession` (see file header in
  * `orchestrator/agent.ts`), composing its own two-part system prompt and
  * dispatching directly through `SessionPrompt.prompt`. That means the
- * fallback injection in `agent/runner.ts` does NOT reach the orchestrator;
+ * diagnostic injection in `agent/runner.ts` does NOT reach the orchestrator;
  * the orchestrator must wire its own injection. Without this guard the
  * toggle silently no-ops on the orchestrator while the workers still
- * receive the fallback — debugging that asymmetry burns a full
+ * receive the diagnostic — debugging that asymmetry burns a full
  * benchmark run before the operator notices the orchestrator never
  * had the section in its trace.
  *
@@ -21,10 +21,10 @@ import path from "node:path"
 const orchestratorAgentPath = path.resolve(import.meta.dir, "../../src/orchestrator/agent.ts")
 
 describe("orchestrator INFORMATION MISSING toggle wiring", () => {
-  test("imports the single-source fallback constant", async () => {
+  test("imports the single-source diagnostic constant", async () => {
     const text = await Bun.file(orchestratorAgentPath).text()
     expect(text).toMatch(
-      /import\s*\{\s*INFORMATION_MISSING_FALLBACK_TEXT\s*\}\s*from\s*["']@\/prompt\/information-missing["']/,
+      /import\s*\{\s*INFORMATION_MISSING_DIAGNOSTIC_TEXT\s*\}\s*from\s*["']@\/prompt\/information-missing["']/,
     )
   })
 
@@ -41,24 +41,24 @@ describe("orchestrator INFORMATION MISSING toggle wiring", () => {
     expect(text).toMatch(/debugCfg\.fail_on_information_missing/)
   })
 
-  test("conditionally pushes INFORMATION_MISSING_FALLBACK_TEXT onto the system array when toggle is on", async () => {
+  test("conditionally pushes INFORMATION_MISSING_DIAGNOSTIC_TEXT onto the system array when toggle is on", async () => {
     const text = await Bun.file(orchestratorAgentPath).text()
     expect(text).toMatch(
-      /if\s*\(debugCfg\.fail_on_information_missing\)\s*\{[\s\S]*?system\.push\(\s*INFORMATION_MISSING_FALLBACK_TEXT\s*\)/,
+      /if\s*\(debugCfg\.fail_on_information_missing\)\s*\{[\s\S]*?system\.push\(\s*INFORMATION_MISSING_DIAGNOSTIC_TEXT\s*\)/,
     )
   })
 
-  test("calls process.exit(99) on detection of <INFORMATION MISSING> in the orchestrator's final message", async () => {
+  test("fails the orchestrator wake without killing the host process", async () => {
     const text = await Bun.file(orchestratorAgentPath).text()
-    // Same fatal-signal contract as the worker path in agent/runner.ts.
     expect(text).toMatch(/messageHasInformationMissing\(finalMessage\)/)
     expect(text).toMatch(/extractInformationMissingBlock\(finalMessage\)/)
-    expect(text).toMatch(/process\.exit\(99\)/)
+    expect(text).toMatch(/throw buildInformationMissingError\(\{ kind: "orchestrator"/)
+    expect(text).not.toMatch(/process\.exit\(99\)/)
   })
 
-  test("logs the detection block via console.error and the structured logger before exiting", async () => {
+  test("logs the detection block via console.error and the structured logger before failing", async () => {
     const text = await Bun.file(orchestratorAgentPath).text()
-    expect(text).toMatch(/INFORMATION MISSING signal — terminating process/)
-    expect(text).toMatch(/\[FATAL\] INFORMATION MISSING detected in orchestrator stream/)
+    expect(text).toMatch(/INFORMATION MISSING signal — failing orchestrator wake/)
+    expect(text).toMatch(/\[FATAL\] INFORMATION MISSING detected in orchestrator stream — failing wake/)
   })
 })

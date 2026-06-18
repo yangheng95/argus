@@ -161,21 +161,12 @@ export async function resolveBenchmarkModel(
     directory: root,
     fn: async () => {
       const providers = await Provider.list()
-      const explicit = env(...(options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]))
-      if (explicit) return explicitModel(providers, explicit)
-      if (providers["alibaba-coding-plan-cn"]?.models["kimi-k2.5"]) return "alibaba-coding-plan-cn/kimi-k2.5"
-      if (providers["alibaba-coding-plan-cn"]?.models["glm-5"]) return "alibaba-coding-plan-cn/glm-5"
-      if (providers["hexin"]?.models["gpt-5.4-mini"]) return "hexin/gpt-5.4-mini"
-
-      for (const providerID of preferredProviders) {
-        const provider = providers[providerID]
-        if (!provider) continue
-        const [model] = Provider.sort(Object.values(provider.models))
-        if (model) return `${providerID}/${model.id}`
+      const explicitKeys = options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]
+      const explicit = env(...explicitKeys)
+      if (!explicit) {
+        throw new Error(`benchmark model must be configured explicitly via ${explicitKeys.join(" or ")}`)
       }
-
-      const fallback = await Provider.defaultModel()
-      return `${fallback.providerID}/${fallback.modelID}`
+      return explicitModel(providers, explicit)
     },
   })
 }

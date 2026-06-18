@@ -31,13 +31,13 @@ A later part for that original message then resolves the stale card id from
 
 Relevant surfaces:
 
-| Surface | Decision |
-| --- | --- |
-| `ensurePartProjection()` | Keep materializing displayable part-before-message cards. This is the durable reconstruction path required by the projection audit. |
-| `ensureMessageTurnProjection()` | Keep as the sole owner of `messageCardIDs.set()`. Do not add a second ownership source. |
-| `regroupTimelineSegments()` | Must not delete part-first cards whose message metadata has not entered `messages` yet. If it removes a card, it must not leave an ownership mapping pointing at a deleted card. |
-| `removeCardReferences()` | Keep as card-tree deletion only; do not make it scan session indexes implicitly because callers need explicit ownership decisions. |
-| `appendSessionPart()` | Keep loud. Do not fallback-create `parts: []`; that would hide ownership/index corruption. |
+| Surface                         | Decision                                                                                                                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ensurePartProjection()`        | Keep materializing displayable part-before-message cards. This is the durable reconstruction path required by the projection audit.                                              |
+| `ensureMessageTurnProjection()` | Keep as the sole owner of `messageCardIDs.set()`. Do not add a second ownership source.                                                                                          |
+| `regroupTimelineSegments()`     | Must not delete part-first cards whose message metadata has not entered `messages` yet. If it removes a card, it must not leave an ownership mapping pointing at a deleted card. |
+| `removeCardReferences()`        | Keep as card-tree deletion only; do not make it scan session indexes implicitly because callers need explicit ownership decisions.                                               |
+| `appendSessionPart()`           | Keep loud. Do not fallback-create `parts: []`; that would hide ownership/index corruption.                                                                                       |
 
 ## Acceptance
 

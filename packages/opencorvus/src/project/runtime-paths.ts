@@ -66,6 +66,10 @@ export namespace ProjectRuntimePaths {
     )
   }
 
+  export function internalRuntimeRelativePaths(inputs: readonly string[]): string[] {
+    return inputs.filter((input) => isInternalRuntimeRelativePath(input))
+  }
+
   export function isSourceEnumerationAllowed(relativePath: string): boolean {
     return !isInternalRuntimeRelativePath(relativePath)
   }
@@ -117,7 +121,11 @@ export namespace ProjectRuntimePaths {
   }
 
   export function sessionRoot(projectDir: string, taskID: string, sessionID: string): string {
-    return path.join(projectRuntimeRoot(projectDir), "s", ...scopedFanout("task-session", taskSessionKey(taskID, sessionID)))
+    return path.join(
+      projectRuntimeRoot(projectDir),
+      "s",
+      ...scopedFanout("task-session", taskSessionKey(taskID, sessionID)),
+    )
   }
 
   export function sessionRootFromRuntimeRoot(runtimeRoot: string, taskID: string, sessionID: string): string {
@@ -340,7 +348,11 @@ export namespace ProjectRuntimePaths {
   }
 
   export function worktreeDir(projectDir: string, taskID: string, goalID: string, runID: string): string {
-    return path.join(worktreesRoot(projectDir), ...scopedFanout("goal-run", goalRunKey(taskID, goalID, runID)), "worktree")
+    return path.join(
+      worktreesRoot(projectDir),
+      ...scopedFanout("goal-run", goalRunKey(taskID, goalID, runID)),
+      "worktree",
+    )
   }
 
   export function directBuildWorktreeDir(projectDir: string, taskID: string, sessionID: string): string {

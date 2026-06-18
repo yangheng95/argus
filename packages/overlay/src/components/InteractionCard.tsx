@@ -2,7 +2,6 @@
 // Single self-contained component used wherever the UI surfaces a pending
 // `permission` or `question` interaction:
 //   • inline in the conversation timeline (CardParts)
-//   • in the workflow sidebar (Board)
 // Owns its own busy / error / draft state and dispatches replies through
 // the shared `interaction-reply` service (which carries a per-id mutex), so
 // callers don't need to wire callbacks. Body markdown is always rendered
@@ -260,16 +259,5 @@ export function InteractionCard(props: { interaction: InteractionData }) {
         </Show>
       </div>
     </div>
-  )
-}
-
-export function InteractionCardList(props: { interactions: InteractionData[] }) {
-  const pending = createMemo(() => (props.interactions || []).filter((it) => it?.status === "pending"))
-  return (
-    <Show when={pending().length > 0}>
-      <div class="interaction-card-list">
-        <For each={pending()}>{(item) => <InteractionCard interaction={item} />}</For>
-      </div>
-    </Show>
   )
 }

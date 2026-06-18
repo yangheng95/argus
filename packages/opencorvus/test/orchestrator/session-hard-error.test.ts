@@ -4,6 +4,7 @@ import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sq
 import { findRun } from "../../src/engine/store"
 import { Identifier } from "../../src/id/id"
 import { Orchestrator } from "../../src/orchestrator/agent"
+import { ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY } from "../../src/orchestrator/stateful-tool-names"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
@@ -68,6 +69,45 @@ function streamErrorArtifacts(taskID: string) {
   )
 }
 
+async function persistDecisionToolMessage(input: { sessionID: string; now: number }) {
+  const messageID = Identifier.ascending("message")
+  await Session.persistMessage({
+    info: {
+      id: messageID,
+      role: "assistant",
+      sessionID: input.sessionID,
+      time: { created: input.now, completed: input.now },
+      parentID: "",
+      finish: "tool-calls",
+      agent: "orchestrator",
+      providerID: "mock-control",
+      modelID: "control",
+      path: { cwd: Instance.directory, root: Instance.directory },
+      cost: 0,
+      tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    },
+    parts: [
+      {
+        id: Identifier.ascending("part"),
+        sessionID: input.sessionID,
+        messageID,
+        type: "tool",
+        callID: "normal-build",
+        tool: "build",
+        state: {
+          status: "completed",
+          input: {},
+          output: "build dispatched",
+          title: "build",
+          metadata: { [ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]: "decision" },
+          time: { start: input.now, end: input.now },
+        },
+      } satisfies Message.ToolPart,
+    ],
+    touchSessionID: input.sessionID,
+  })
+}
+
 function finalAssistantMessage(
   input: Parameters<typeof SessionPrompt.prompt>[0],
   now: number,
@@ -126,8 +166,10 @@ describe("orchestrator session hard-error funnel", () => {
         }
 
         const normal = await createActiveTask("Normal orchestrator task")
-        prompt.mockImplementation((async (input) =>
-          finalAssistantMessage(input, normal.now, { text: "Current task state recorded." })) as never)
+        prompt.mockImplementation((async (input) => {
+          await persistDecisionToolMessage({ sessionID: input.sessionID, now: Date.now() })
+          return finalAssistantMessage(input, normal.now, { text: "Current task state recorded." })
+        }) as never)
 
         await Orchestrator.processTask(normal.taskID)
 

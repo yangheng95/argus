@@ -7,13 +7,13 @@ Slack is OpenCorvus's **primary remote channel** and the most mature channel-run
 
 ## Status
 
-**Production-ready.** `README.md:133` lists it as Available.
+**Production-ready.** `README.md` lists it as Available.
 
 ## Quick setup
 
 ### 1. Create the Slack App
 
-At [api.slack.com/apps](https://api.slack.com/apps). **Socket Mode is required** (the adapter forces `socketMode: true` at `src/adapters/slack.ts:22`).
+At [api.slack.com/apps](https://api.slack.com/apps). **Socket Mode is required** (the adapter forces `socketMode: true` at `packages/channel-runtime/src/adapters/slack.ts`).
 
 ### 2. Scopes
 
@@ -40,7 +40,7 @@ Subscribe to:
 - `message.channels`
 - `message.im`
 
-(`.env.example:38-39`)
+(`.env.example`)
 
 ### 4. Environment
 
@@ -83,11 +83,11 @@ bun run dev
 ```
 User posts in Slack channel/DM
   ↓ Socket Mode
-SlackAdapter.app.message()                [src/adapters/slack.ts:41]
+SlackAdapter.app.message()                [packages/channel-runtime/src/adapters/slack.ts]
   ↓
 Filter: skip bot_id, unsupported subtypes, dedup
   ↓ IncomingMessage { platform: "slack", channel: C..., thread_ts: 123.456 }
-ChannelRuntime.handleMessage()            [src/core.ts:235]
+ChannelRuntime.handleMessage()            [packages/channel-runtime/src/core.ts]
   ↓
 SessionCoordinator.get("slack:C...:123")
   ↓  new thread → new session; existing → reuse
@@ -101,7 +101,7 @@ Thread semantics: Slack's `thread_ts` uniquely identifies a conversation; subseq
 ```
 OpenCorvus SSE pushes events
   ↓
-handleEvent(event)                        [src/core.ts:1132]
+handleEvent(event)                        [packages/channel-runtime/src/core.ts]
   ↓
 task.report        → safeSend() progress / completion / needs-input
 message.updated    → text buffering → safeSend()
@@ -129,7 +129,7 @@ The adapter immediately reacts with an emoji when a message is received, confirm
 
 ## Voice messages
 
-Slack's `file_share` subtype (voice) downloads and runs through the STT pipeline (`STT_PROVIDERS`); the transcript becomes a regular message.
+Slack's `file_share` subtype (voice) downloads and runs through the configured STT pipeline (`STT_PROVIDER`); the transcript becomes a regular message.
 
 ## Troubleshooting
 

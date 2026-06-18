@@ -195,7 +195,11 @@ test("recordAgentReport writes the typed report payload", async () => {
   })
 
   const raw = readFileSync(
-    ProjectRuntimePaths.tracePathFromRuntimeRoot(AgentTrace.getTraceDir(), "tsk_report_contract", "ses_report_contract"),
+    ProjectRuntimePaths.tracePathFromRuntimeRoot(
+      AgentTrace.getTraceDir(),
+      "tsk_report_contract",
+      "ses_report_contract",
+    ),
     "utf8",
   ).trim()
   const event = JSON.parse(raw)

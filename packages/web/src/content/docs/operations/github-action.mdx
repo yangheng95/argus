@@ -5,7 +5,7 @@ description: Trigger the OpenCorvus AI coding agent from a PR or Issue comment w
 
 The OpenCorvus GitHub Action triggers the AI coding agent from a PR or Issue comment using `/oc` or `/opencorvus`, without leaving GitHub.
 
-Source: `github/action.yml` (Action definition), `github/index.ts` (runtime).
+Source: `github/action.yml` (Action definition), `packages/opencorvus/src/cli/cmd/github.ts` (runtime).
 
 ## What it does
 
@@ -16,25 +16,24 @@ Published as a **composite action**. Runtime sequence:
 3. Parses the GitHub event payload, builds a prompt, sends it via `@opencorvus-ai/sdk`
 4. Writes the reply back via Octokit; on dirty working tree, commits, pushes, and opens a PR
 
-Supported triggers (`github/index.ts:127-128`):
+Supported triggers (`packages/opencorvus/src/cli/cmd/github.ts`):
 
 - `issue_comment` — Issue & PR comments (distinguished by `issue.pull_request`)
 - `pull_request_review_comment` — line-level review comments
 
 ## Inputs
 
-| Parameter          | Required | Default                     | Description                                                 |
-| ------------------ | -------- | --------------------------- | ----------------------------------------------------------- |
-| `model`            | ✓        | —                           | `provider/model`, e.g. `anthropic/claude-sonnet-4-20250514` |
-| `agent`            | —        | config `default_agent`      | Primary agent; subagents rejected                           |
-| `share`            | —        | `true` (public repos)       | Share at `opencorvus.ai/s/<id>`                             |
-| `prompt`           | —        | —                           | Custom prompt overriding default                            |
-| `use_github_token` | —        | `false`                     | Use `GITHUB_TOKEN` directly; skip OIDC & permission check   |
-| `mentions`         | —        | `/opencorvus,/oc`           | Comma-separated trigger phrases                             |
-| `variant`          | —        | —                           | Provider reasoning variant (`high`, `max`, `minimal`)       |
-| `oidc_base_url`    | —        | `https://api.opencorvus.ai` | OIDC exchange URL for custom App installs                   |
+| Parameter          | Required | Default                     | Description                                               |
+| ------------------ | -------- | --------------------------- | --------------------------------------------------------- |
+| `model`            | ✓        | —                           | `provider/model`, e.g. `alibaba-cn/qwen3.5-plus`          |
+| `share`            | —        | `true` (public repos)       | Share at `opencorvus.ai/s/<id>`                           |
+| `prompt`           | —        | —                           | Custom prompt overriding default                          |
+| `use_github_token` | —        | `false`                     | Use `GITHUB_TOKEN` directly; skip OIDC & permission check |
+| `mentions`         | —        | `/opencorvus,/oc`           | Comma-separated trigger phrases                           |
+| `variant`          | —        | —                           | Provider reasoning variant (`high`, `max`, `minimal`)     |
+| `oidc_base_url`    | —        | `https://api.opencorvus.ai` | OIDC exchange URL for custom App installs                 |
 
-(`github/action.yml:7-39`)
+(`github/action.yml`)
 
 ## Outputs
 
@@ -45,7 +44,7 @@ No declared `outputs:`. Runtime artifacts:
 - **PR**: on Issue triggers with code changes, new branch + PR; title = AI summary (≤40 chars); body includes `Closes #<issue>`
 - **Share link** (optional): `opencorvus.ai/s/<shareId>` appended
 
-(`github/index.ts:141-208`)
+(`packages/opencorvus/src/cli/cmd/github.ts`)
 
 ## Secrets
 
@@ -68,13 +67,26 @@ env:
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-Skips OIDC and the permission check (`github/index.ts:762-764`).
+Skips OIDC and the permission check.
 
 ## `GITHUB_TOKEN` permissions
+
+Default App/OIDC installs keep `GITHUB_TOKEN` read-only. Write access comes from
+the App token after OIDC exchange:
 
 ```yaml
 permissions:
   id-token: write # OIDC (Option A)
+  contents: read
+  pull-requests: read
+  issues: read
+```
+
+When `use_github_token: true`, the workflow uses `GITHUB_TOKEN` directly and
+must grant write permissions explicitly:
+
+```yaml
+permissions:
   contents: write # git push / branches
   pull-requests: write # open PRs / comment
   issues: write # create/update Issue comments
@@ -84,11 +96,11 @@ This repo's own `.github/workflows/opencorvus.yml` declares `read`-only because 
 
 ## Permission check
 
-When a user posts `/oc`, collaboration permission must be `admin` or `write`; otherwise rejected. Skipped under Option B (`github/index.ts:757-782`).
+When a user posts `/oc`, collaboration permission must be `admin` or `write`; otherwise rejected. Skipped under Option B.
 
 ## Workflow examples
 
-### Default (App + Anthropic)
+### Default (App + DashScope)
 
 ```yaml
 name: opencorvus
@@ -105,17 +117,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: write
-      pull-requests: write
-      issues: write
+      contents: read
+      pull-requests: read
+      issues: read
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 1 }
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: yangheng95/opencorvus/github@latest
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
         with:
-          model: anthropic/claude-sonnet-4-20250514
+          model: alibaba-cn/qwen3.5-plus
 ```
 
 ### Alibaba DashScope (this repo's actual config)
@@ -133,7 +146,9 @@ jobs:
       pull-requests: read
       issues: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: yangheng95/opencorvus/github@latest
         env:
           DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
@@ -141,7 +156,7 @@ jobs:
             {"provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}
           OPENCORVUS_PERMISSION: '{"bash": "deny"}'
         with:
-          model: openai/gpt-5.5
+          model: alibaba-cn/qwen3.5-plus
 ```
 
 ## Comment triggers
@@ -163,24 +178,19 @@ issue_comment / pull_request_review_comment
   └─ Issue → checkoutNewBranch → chat → pushToNewBranch → createPR
 ```
 
-(`github/index.ts:163-208`)
+(`packages/opencorvus/src/cli/cmd/github.ts`)
 
 ## Local testing
 
 ```bash
 cd /path/to/test-repo
 
-MODEL=anthropic/claude-sonnet-4-20250514 \
-  ANTHROPIC_API_KEY=sk-ant-... \
+MODEL=alibaba-cn/qwen3.5-plus \
+  DASHSCOPE_API_KEY=sk-... \
   GITHUB_RUN_ID=dummy \
   MOCK_TOKEN=github_pat_... \
   MOCK_EVENT='{"eventName":"issue_comment","repo":{"owner":"o","repo":"r"},"actor":"u","payload":{"issue":{"number":1},"comment":{"id":1,"body":"/opencorvus explain"}}}' \
-  bun /path/to/opencorvus/github/index.ts
+  bun /path/to/opencorvus/packages/opencorvus/src/index.ts github run
 ```
 
-`MOCK_TOKEN` needs a PAT with `admin` or `write` (`github/README.md:110-166`).
-
-## Known issues
-
-- `isScheduleEvent()` is referenced at `github/index.ts:580` but **never defined** — scheduled triggers are not implemented
-- `cron` / `schedule` events are not allowed by `assertContextEvent()` (`github/index.ts:292-298`) and would be rejected anyway
+`MOCK_TOKEN` needs a PAT with `admin` or `write`.

@@ -1,5 +1,10 @@
 # Task Execution Terminalization - 2026-06-16
 
+> **Status (2026-06-17): Superseded symptom note.** The root cause is covered by
+> `specs/remove-global-project-sentinel-2026-06-16.md`: project discovery must
+> not create a shared `global` project identity. This file is retained as
+> historical shutdown/startup evidence, not the current project identity design.
+
 ## Evidence
 
 - Economy task shutdown logs showed `aborted live execution project=global` even
@@ -26,14 +31,14 @@ rg -n "TaskGlobalProjectBindingError|assertTaskProjectIsConcrete|prepareProject|
 
 Relevant findings:
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Global task guard | `task-api/index.ts::assertTaskProjectIsConcrete`, `prepareProject`, `handleTaskMessage`; `engine/pipeline.ts::persistQueuedTask`. | Keep hard failures. Add missing wake/file/recovery boundaries. |
-| Shutdown scope | `cli/cmd/serve.ts::abortLiveExecutionOnShutdown` derives `projectID` from `Instance.project.id`. | Replace ambient-project shutdown with task/ownership-scoped shutdown. |
-| Active session source | `engine/store.ts::listActiveSessionsForTask` filters durable active session rows by current-process `SessionStatus`. | Shutdown should consume current-process session ownership and terminate those task trees. |
-| Goal owner source | `engine/store.ts::GoalRunRow.owner`; `engine/orphan.ts::isGoalRunOrphaned`. | Dead-owner rows are physical facts and must converge to terminal artifacts when the process starts. |
-| Tool ownership | `engine/tool-ownership.ts::listLiveOrchestratorToolOwnership`; `writer.ts::abortLiveOrchestratorToolOwnership`. | Reuse existing ownership writer; do not add a second teardown path. |
-| Stream errors | `persist.ts::recordOrchestratorStreamError` and fuse tests already exist. | Do not swallow process-level errors; owner-bound execution paths must write durable terminal facts. |
+| Area                  | Evidence                                                                                                                          | Decision                                                                                            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Global task guard     | `task-api/index.ts::assertTaskProjectIsConcrete`, `prepareProject`, `handleTaskMessage`; `engine/pipeline.ts::persistQueuedTask`. | Keep hard failures. Add missing wake/file/recovery boundaries.                                      |
+| Shutdown scope        | `cli/cmd/serve.ts::abortLiveExecutionOnShutdown` derives `projectID` from `Instance.project.id`.                                  | Replace ambient-project shutdown with task/ownership-scoped shutdown.                               |
+| Active session source | `engine/store.ts::listActiveSessionsForTask` filters durable active session rows by current-process `SessionStatus`.              | Shutdown should consume current-process session ownership and terminate those task trees.           |
+| Goal owner source     | `engine/store.ts::GoalRunRow.owner`; `engine/orphan.ts::isGoalRunOrphaned`.                                                       | Dead-owner rows are physical facts and must converge to terminal artifacts when the process starts. |
+| Tool ownership        | `engine/tool-ownership.ts::listLiveOrchestratorToolOwnership`; `writer.ts::abortLiveOrchestratorToolOwnership`.                   | Reuse existing ownership writer; do not add a second teardown path.                                 |
+| Stream errors         | `persist.ts::recordOrchestratorStreamError` and fuse tests already exist.                                                         | Do not swallow process-level errors; owner-bound execution paths must write durable terminal facts. |
 
 ## Fix
 

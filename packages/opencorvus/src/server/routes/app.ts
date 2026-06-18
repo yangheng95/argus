@@ -42,6 +42,7 @@ import { Env } from "@/runtime/env"
 import { AppDocumentation } from "./documentation"
 import { serverErrorResponse } from "../error-handler"
 import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
+import { Event as ServerEvent, payload as serverEventPayload } from "../event"
 
 const log = Log.create({ service: "server" })
 const LogReadResponse = z.object({
@@ -320,7 +321,7 @@ export function AppRoutes(root: Hono) {
               },
             },
           },
-          ...errors(400),
+          ...errors(400, 404),
         },
       }),
       validator(
@@ -372,7 +373,7 @@ export function AppRoutes(root: Hono) {
               },
             },
           },
-          ...errors(400),
+          ...errors(400, 404),
         },
       }),
       validator("query", LogReadQuery),
@@ -421,12 +422,12 @@ export function AppRoutes(root: Hono) {
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator(
         "query",
         z.object({
-          directory: z.string().optional(),
           n: z.coerce.number().int().min(1).max(5000).default(500),
         }),
       ),
@@ -522,10 +523,7 @@ export function AppRoutes(root: Hono) {
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
           stream.writeSSE({
-            data: JSON.stringify({
-              type: "server.connected",
-              properties: {},
-            }),
+            data: JSON.stringify(serverEventPayload(ServerEvent.Connected, {})),
           })
           const unsub = Bus.subscribeAll(async (event) => {
             await stream.writeSSE({
@@ -538,10 +536,7 @@ export function AppRoutes(root: Hono) {
 
           const heartbeat = setInterval(() => {
             stream.writeSSE({
-              data: JSON.stringify({
-                type: "server.heartbeat",
-                properties: {},
-              }),
+              data: JSON.stringify(serverEventPayload(ServerEvent.Heartbeat, {})),
             })
           }, 10_000)
 

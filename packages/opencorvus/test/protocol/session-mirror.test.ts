@@ -235,8 +235,10 @@ describe("session mirror", () => {
         const delta = mirrored.find((event) => event.type === "message.part.delta")
         expect(updated?.payload.info.channel).toBe("assistant")
         expect(updated?.payload.info.resolvedRole).toBe("assistant")
-        expect(partUpdated?.payload.part.channel).toBe("assistant")
-        expect(partUpdated?.payload.part.resolvedRole).toBe("assistant")
+        expect(partUpdated?.payload.channel).toBe("assistant")
+        expect(partUpdated?.payload.resolvedRole).toBe("assistant")
+        expect(partUpdated?.payload.part.channel).toBeUndefined()
+        expect(partUpdated?.payload.part.resolvedRole).toBeUndefined()
         expect(delta?.payload.channel).toBe("assistant")
         expect(delta?.payload.resolvedRole).toBe("assistant")
       },
@@ -342,10 +344,12 @@ describe("session mirror", () => {
 
         expect((transcript[0]!.info as any).channel).toBe("main")
         expect((transcript[0]!.info as any).resolvedRole).toBe("user")
-        expect((transcript[0]!.parts[0] as any).channel).toBe("main")
+        expect((transcript[0]!.parts[0] as any).channel).toBeUndefined()
+        expect((transcript[0]!.parts[0] as any).resolvedRole).toBeUndefined()
         expect((transcript[1]!.info as any).channel).toBe("assistant")
         expect((transcript[1]!.info as any).resolvedRole).toBe("assistant")
-        expect((transcript[1]!.parts[0] as any).channel).toBe("assistant")
+        expect((transcript[1]!.parts[0] as any).channel).toBeUndefined()
+        expect((transcript[1]!.parts[0] as any).resolvedRole).toBeUndefined()
       },
     })
   })

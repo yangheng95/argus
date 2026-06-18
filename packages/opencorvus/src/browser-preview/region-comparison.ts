@@ -13,12 +13,14 @@ const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
 const SOURCE_REFERENCE_FILES = new Set(["reference.png", "reference-mobile.png"])
 
-export const BrowserPreviewRegionBox = z.object({
-  x: z.number().finite().nonnegative(),
-  y: z.number().finite().nonnegative(),
-  width: z.number().finite().positive(),
-  height: z.number().finite().positive(),
-}).strict()
+export const BrowserPreviewRegionBox = z
+  .object({
+    x: z.number().finite().nonnegative(),
+    y: z.number().finite().nonnegative(),
+    width: z.number().finite().positive(),
+    height: z.number().finite().positive(),
+  })
+  .strict()
 export type BrowserPreviewRegionBox = z.infer<typeof BrowserPreviewRegionBox>
 
 export const BrowserPreviewRegionLocator = z.discriminatedUnion("kind", [
@@ -472,10 +474,6 @@ function sanitizeSegment(value: string): string {
 
 function regionDirectoryKey(binding: BrowserPreviewRegionBinding): string {
   return sanitizeSegment(`${binding.viewport_id}:${binding.region_id}`)
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
 }
 
 function escapeXml(value: string): string {

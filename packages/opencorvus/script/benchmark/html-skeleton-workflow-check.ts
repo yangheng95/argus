@@ -673,9 +673,7 @@ function normalizePath(input: string): string {
 
 async function main() {
   const report = await runHtmlSkeletonWorkflowCheck(parseHtmlSkeletonWorkflowCheckArgs())
-  const visual = report.visualDiff
-    ? ` ${summarizeVisualReport(report.visualDiff)}`
-    : " visual-skipped"
+  const visual = report.visualDiff ? ` ${summarizeVisualReport(report.visualDiff)}` : " visual-skipped"
   console.log(
     `[html-skeleton-workflow-check] ${report.passed ? "PASS" : "FAIL"}${visual} report=${path.join(report.outDir, "html-skeleton-workflow-report.json")}`,
   )

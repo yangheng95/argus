@@ -1125,11 +1125,7 @@ export async function generateWebCloneSourceProject(
     ],
   })
 
-  const writtenFiles = [
-    ...files.keys(),
-    "src/data/sourceProjectManifest.json",
-    ...copiedReferenceFiles,
-  ].sort()
+  const writtenFiles = [...files.keys(), "src/data/sourceProjectManifest.json", ...copiedReferenceFiles].sort()
 
   return {
     framework,

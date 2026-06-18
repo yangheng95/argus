@@ -257,7 +257,7 @@ describe("task message routes", () => {
         }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.message).toBe("Operator note recorded. Scheduler notified.")
+        expect(body.message).toBe("Operator note recorded. Task wake dispatched.")
         expect(body.should_resume).toBe(true)
         expect(body.user_message?.info.sessionID).toBe(root.id)
         expect(body.user_message?.info.extra).toEqual({
@@ -508,7 +508,7 @@ describe("task message routes", () => {
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(row).toBeDefined()
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
         expect(row?.time_completed).toBeNull()
         expect(row?.error).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
@@ -573,7 +573,7 @@ describe("task message routes", () => {
         expect(await Session.messages({ sessionID: root.id })).toHaveLength(2)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
         expect(row?.time_completed).toBeNull()
         expect(row?.error).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
@@ -637,7 +637,7 @@ describe("task message routes", () => {
         expect(await Session.messages({ sessionID: root.id })).toHaveLength(2)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
         expect(row?.time_completed).toBeNull()
         expect(row?.error).toBeNull()
         expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBeUndefined()
@@ -974,7 +974,7 @@ describe("task message routes", () => {
         const body = (await response.json()) as { kind: string; message: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.message).toBe("Operator note recorded. Scheduler notified.")
+        expect(body.message).toBe("Operator note recorded. Task wake dispatched.")
         expect(body.should_resume).toBe(true)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         // V35: trigger schema replaced with `event.operatorMessage`.
@@ -1166,7 +1166,6 @@ describe("task message routes", () => {
           appended: boolean
           orchestratorWoken: boolean
           executorResumed: boolean
-          resumed: boolean
           status: string
         }
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -1174,13 +1173,12 @@ describe("task message routes", () => {
           appended: true,
           orchestratorWoken: true,
           executorResumed: false,
-          resumed: false,
-          status: "queued",
+          status: "active",
         })
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -1291,7 +1289,6 @@ describe("task message routes", () => {
           appended: boolean
           orchestratorWoken: boolean
           executorResumed: boolean
-          resumed: boolean
           status: string
         }
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -1299,7 +1296,6 @@ describe("task message routes", () => {
           appended: true,
           orchestratorWoken: true,
           executorResumed: false,
-          resumed: false,
           status: "active",
         })
         expect(resumeCalls).toBe(0)

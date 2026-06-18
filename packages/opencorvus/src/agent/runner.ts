@@ -22,7 +22,7 @@
  *
  * Per CLAUDE.md rule 24, this is the deliberate abstraction of a repeating
  * pattern. Per rule 22, no worker agent owns its own copy of this loop. Per
- * rule 1 there is no fallback path: a missing model, an aborted signal, or a
+ * rule 1 there is no alternate default path: a missing model, an aborted signal, or a
  * collector that violates its agent's own contract throws.
  *
  * ── NON-GOAL: the orchestrator agent does NOT use this entry point ─────────
@@ -71,7 +71,7 @@ import { PromptProfile } from "@/agent/prompt-profile"
 import { Provider } from "@/provider/provider"
 import { EffectiveConfig } from "@/config/effective"
 import { EngineConfig } from "@/engine"
-import { appendInformationMissingFallback } from "@/prompt/information-missing"
+import { appendInformationMissingDiagnostic } from "@/prompt/information-missing"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
@@ -195,9 +195,7 @@ export interface RunAgentSessionInput<C> {
    *  text part from `buildUserPrompt`. The text from `buildUserPrompt`
    *  is still built and prepended as the first part so the prompt
    *  user-text is never silently dropped. */
-  buildUserParts?: () => Promise<
-    Array<{ type: "text"; text: string } | { type: "file"; url: string; mime: string; filename?: string }>
-  >
+  buildUserParts?: () => Promise<SessionPrompt.PromptInput["parts"]>
   /** When set, registers a JSON-schema StructuredOutput format. The
    *  resulting `Message.Assistant.structured` value is returned to the
    *  caller alongside the collector. */
@@ -441,14 +439,14 @@ async function recordToolExecuteErrorsForFinalMessage(input: {
  * Pure check: does the final assistant message carry an INFORMATION
  * MISSING XML diagnostic block? When the operator flips
  * `debug.fail_on_information_missing` (default OFF), the host appends
- * the fallback section to every agent's system prompt at runtime
- * (`appendInformationMissingFallback`); the prompt then instructs the
+ * the diagnostic section to every agent's system prompt at runtime
+ * (`appendInformationMissingDiagnostic`); the prompt then instructs the
  * agent to emit this block (and ONLY this block) when invocation
  * context drops required information, and the host treats the block
- * as a fatal signal and exits the process. Spec — 2026-05-07
+ * as a non-retryable run failure. Spec — 2026-05-07
  * INFORMATION MISSING debug toggle; `prompt/information-missing.ts`
- * owns the fallback text. The companion test
- * `test/agent/information-missing-fallback.test.ts` pins (a) the
+ * owns the diagnostic text. The companion test
+ * `test/agent/information-missing-diagnostic.test.ts` pins (a) the
  * helper / constant surface and (b) the contract that .txt core
  * prompts must NOT carry the section so the toggle stays binary.
  *
@@ -474,7 +472,7 @@ export function messageHasInformationMissing(finalMessage: {
 /**
  * Returns the verbatim INFORMATION MISSING XML block from the first
  * matching text part, or null when no part carries the marker. Used
- * by the runner to log the agent's diagnostic before exiting.
+ * by the runner to log the agent's diagnostic before failing the run.
  */
 export function extractInformationMissingBlock(finalMessage: {
   info: { role: string }
@@ -491,6 +489,17 @@ export function extractInformationMissingBlock(finalMessage: {
     return part.text.slice(start, end + "</INFORMATION MISSING>".length)
   }
   return null
+}
+
+export function buildInformationMissingError(input: {
+  kind: SessionKind
+  agentName: string
+  block: string
+}): AgentRunError {
+  return new AgentRunError(input.kind, `INFORMATION MISSING detected in ${input.agentName}: ${input.block}`, {
+    nonRetryable: true,
+    cause: new Error(input.block),
+  })
 }
 
 export function terminalToolMissingErrorFor(input: {
@@ -633,7 +642,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     ? { prompt: input.core }
     : await composeSystemPrompt(agentName, input.core, configScope)
   const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
-  // INFORMATION MISSING debug toggle: when on, append the fallback block
+  // INFORMATION MISSING debug toggle: when on, append the diagnostic block
   // to the system prompt; the matching host-side detection further down
   // exits the process when any agent emits <INFORMATION MISSING>. Toggle
   // is exposed via overlay GeneralPanel → PATCH /config →
@@ -644,15 +653,12 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     .filter((section): section is string => typeof section === "string" && section.trim().length > 0)
     .join("\n\n")
   const systemPrompt = debugCfg.fail_on_information_missing
-    ? appendInformationMissingFallback(baseSystemPrompt)
+    ? appendInformationMissingDiagnostic(baseSystemPrompt)
     : baseSystemPrompt
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
   const userText = await input.buildUserPrompt()
-  let parts: Array<
-    | { type: "text"; text: string; id?: string }
-    | { type: "file"; url: string; mime: string; filename?: string; id?: string }
-  >
+  let parts: SessionPrompt.PromptInput["parts"]
   if (input.buildUserParts) {
     parts = await input.buildUserParts()
   } else {
@@ -863,6 +869,8 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
       installedAt: Date.now(),
     },
     tools: input.toolKit.tools,
+    system: [systemPrompt],
+    systemMode: "complete",
     terminalToolContract,
     structuredOutputGuard: input.format?.validate,
     stream: input.stream,
@@ -880,6 +888,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
           systemMode: "complete",
           tools: enableMap,
           extra: {
+            taskID: input.taskID,
             workerTurnDescriptor: {
               id: descriptor.id,
               hash: descriptor.hash,
@@ -917,20 +926,20 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     }
     // INFORMATION MISSING signal — when the operator has flipped
     // `debug.fail_on_information_missing`, the host injected the
-    // fallback section into the system prompt above and now runs
+    // diagnostic section into the system prompt above and now runs
     // detection on the final assistant message. The agent emits
     // `<INFORMATION MISSING><item>...</item></INFORMATION MISSING>`
     // (and ONLY that block) when this invocation arrived with required
     // context dropped. The host treats the block as a fatal diagnostic
-    // and exits the entire process so the operator immediately sees
-    // the upstream-context drop signal instead of a long log of
-    // guessed-default work. When the toggle is off, this guard is a
+    // and fails the current run so the operator immediately sees the
+    // upstream-context drop signal instead of a long log of guessed-default
+    // work. When the toggle is off, this guard is a
     // no-op — production runs are unaffected. Spec — 2026-05-07
     // INFORMATION MISSING debug toggle; detection helpers pinned via
     // test/agent/information-missing-detection.test.ts.
     if (debugCfg.fail_on_information_missing && messageHasInformationMissing(finalMessage)) {
       const block = extractInformationMissingBlock(finalMessage) ?? "<INFORMATION MISSING>...</INFORMATION MISSING>"
-      log.error("INFORMATION MISSING signal — terminating process", {
+      log.error("INFORMATION MISSING signal — failing run", {
         agentName,
         kind,
         sessionID: session.id,
@@ -938,18 +947,18 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
       })
       // eslint-disable-next-line no-console
       console.error(
-        `\n[FATAL] INFORMATION MISSING detected in ${agentName} (${kind}) stream — terminating process.\n` +
+        `\n[FATAL] INFORMATION MISSING detected in ${agentName} (${kind}) stream — failing run.\n` +
           `Session: ${session.id}\n` +
           `${block}\n`,
       )
-      process.exit(99)
+      throw buildInformationMissingError({ kind, agentName, block })
     }
     // Propagate hard LLM errors (HTTP 4xx/5xx, schema-rejected payloads,
     // missing terminal-tool calls). The processor stamps them onto the
     // assistant message via `processor.message.error` and returns "stop"
     // without throwing, which historically let runAgentSession return
     // success with an empty collector + structured=undefined — every
-    // worker tool wrapper then projected fallback defaults forward as if
+    // worker tool wrapper then projected invented defaults forward as if
     // the agent had succeeded (rule 7 violation; root cause of the
     // intent-analysis "秒退" silent-completed incident on tsk_ddf383614,
     // 2026-04-30). Surface the error here so the orchestrator-tool catch

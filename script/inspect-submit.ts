@@ -1,7 +1,8 @@
 import { Database } from "bun:sqlite"
+import { requiredEnv } from "./inspect-env"
 
-const ARCH_SES = "ses_223a4a190ffdSDv1U30R9UkAkK"
-const DB = "D:/myhexin-local/argus/packages/overlay/dist/opencorvus-overlay-windows-x64/.opencorvus/opencorvus.db"
+const ARCH_SES = requiredEnv("ARCHITECT_SESSION_ID")
+const DB = requiredEnv("OPENCORVUS_DB")
 const db = new Database(DB, { readonly: true })
 
 const submits = db

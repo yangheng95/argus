@@ -3,7 +3,10 @@ import { createServer, type Server } from "node:http"
 import fs from "node:fs/promises"
 import path from "node:path"
 import sharp from "sharp"
-import { compareBrowserPreviewRegions, type BrowserPreviewRegionBinding } from "../../src/browser-preview/region-comparison"
+import {
+  compareBrowserPreviewRegions,
+  type BrowserPreviewRegionBinding,
+} from "../../src/browser-preview/region-comparison"
 import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"

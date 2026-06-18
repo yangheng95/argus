@@ -386,10 +386,7 @@ async function persistRenderedPaneWidths(
   const sidebarWidth = Number.isFinite(sidebarPx) ? Math.round(sidebarPx) : null
   const sectionsWidth = Number.isFinite(sectionsPx) ? Math.round(sectionsPx) : null
 
-  await callbacks.onWidthsChanged(
-    side === "left" ? sidebarWidth : null,
-    side === "right" ? sectionsWidth : null,
-  )
+  await callbacks.onWidthsChanged(side === "left" ? sidebarWidth : null, side === "right" ? sectionsWidth : null)
 }
 
 async function stopPaneResize(callbacks: PaneCallbacks): Promise<void> {

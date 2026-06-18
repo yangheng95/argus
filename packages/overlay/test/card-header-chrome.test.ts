@@ -12,3 +12,14 @@ test("CardHeader does not render status or copy chrome in the message header", (
   expect(CARD_HEADER_TSX).not.toContain('name="copy"')
   expect(CARD_CSS).not.toContain(".card__copy")
 })
+
+test("CardHeader groups metadata separately from icon controls", () => {
+  expect(CARD_HEADER_TSX).toContain('class="card__meta-actions"')
+  expect(CARD_HEADER_TSX).toContain('class="card__control-actions"')
+  expect(CARD_HEADER_TSX.indexOf('class="card__meta-actions"')).toBeLessThan(
+    CARD_HEADER_TSX.indexOf('class="card__control-actions"'),
+  )
+  expect(CARD_CSS).toContain(".card__meta-actions,")
+  expect(CARD_CSS).toContain(".card__control-actions")
+  expect(CARD_CSS).toContain(".card__actions > .card__control-actions:first-child")
+})

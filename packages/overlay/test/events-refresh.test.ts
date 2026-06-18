@@ -1,5 +1,6 @@
 import { afterEach, expect, mock, test } from "bun:test"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
+import { installRealOverlayI18n } from "./fixtures/i18n"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 mock.module("../src/utils/icon-html", () => ({
@@ -27,6 +28,8 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
 }
 
 const CONFIG_REFRESH_DIRECTORY = "D:/overlay/config-refresh"
+
+installRealOverlayI18n()
 
 function fakeConfigTransport(paths: string[]): HostTransport {
   return {
@@ -97,6 +100,13 @@ async function waitForStreamCount(
 ): Promise<void> {
   for (let i = 0; i < 20; i += 1) {
     if (streams.length >= count) return
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+async function waitForRequestCount(requests: unknown[], count: number): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (requests.length >= count) return
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
 }
@@ -729,6 +739,88 @@ test("consumed sequenced task rewound advances selected cursor and avoids false 
   await new Promise((resolve) => setTimeout(resolve, 0))
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(streams).toEqual([])
+})
+
+test("reset-worktree task rewound schedules authoritative board sync without fake snapshot version", async () => {
+  resetWriter()
+  const requests: Array<{ path: string; query?: Record<string, string> }> = []
+  configure({ directory: CONFIG_REFRESH_DIRECTORY })
+  __setHostTransportForTest({
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push({ path: req.path, query: req.query })
+      if (req.path === "task/tsk_refresh/board") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            snapshotVersion: "board-reset",
+            task: {
+              id: "tsk_refresh",
+              sessionID: "ses_refresh",
+              status: "active",
+              request: "reset worktree rewind",
+              time: { created: 1_776_000_000_000 },
+              attachments: [],
+            },
+            goalWorkflows: [],
+            interactions: [],
+          } as T,
+        }
+      }
+      throw new Error(`unexpected route ${req.path}`)
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  } satisfies HostTransport)
+  selectTaskForTest("tsk_refresh")
+  setBoardStore("taskSequence", 5)
+  setBoardStore("snapshotVersion", "board-before")
+  setBoardStore("board", {
+    snapshotVersion: "board-before",
+    task: {
+      id: "tsk_refresh",
+      sessionID: "ses_refresh",
+      status: "active",
+      request: "before reset",
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  })
+
+  expect(
+    routeSSEEvent({
+      type: "task.rewound",
+      taskID: "tsk_refresh",
+      sequence: 6,
+      properties: {
+        taskID: "tsk_refresh",
+        cursorTime: 1_776_000_100_000,
+        resetWorktree: true,
+      },
+    }),
+  ).toBe(true)
+
+  expect(boardStore.taskSequence).toBe(6)
+  await waitForRequestCount(requests, 1)
+  await Promise.resolve()
+  expect(requests).toHaveLength(1)
+  expect(requests[0]?.path).toBe("task/tsk_refresh/board")
+  expect(requests[0]?.query?.sync).toBe("1")
+  expect(requests[0]?.query?.directory).toBe(CONFIG_REFRESH_DIRECTORY)
+  expect(boardStore.snapshotVersion).toBe("board-reset")
+  expect(boardStore.boardSyncPending).toBe(false)
 })
 
 test("selected task sequence gap triggers recovery without advancing cursor", async () => {

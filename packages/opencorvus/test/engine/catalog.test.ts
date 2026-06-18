@@ -5,7 +5,6 @@ import {
   GOAL_RUN_RESETTABLE_STATUSES,
   LIVE_GOAL_RUN_STATUSES,
   LIVE_RUN_STATUSES,
-  RUNTIME_MONITORED_RUN_STATUSES,
   doesGoalRunSatisfyGoal,
   isDispatchableRunStatus,
   isLiveGoalRunStatus,
@@ -35,7 +34,6 @@ describe("engine status catalog", () => {
     expect(LIVE_RUN_STATUSES).toEqual(["queued", "accepted", "running", "blocked"])
     expect(DISPATCHABLE_RUN_STATUSES).toEqual(["accepted", "running", "blocked"])
     expect(EXECUTOR_ACTIVE_RUN_STATUSES).toEqual(["accepted", "running"])
-    expect(RUNTIME_MONITORED_RUN_STATUSES).toEqual(["accepted", "running", "blocked", "completed"])
 
     expect(isLiveRunStatus("queued")).toBe(true)
     expect(isDispatchableRunStatus("queued")).toBe(false)

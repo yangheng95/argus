@@ -73,7 +73,7 @@ cli
   .strict()
 
 try {
-  await cli.parse()
+  await cli.parseAsync()
 } catch (e) {
   let data: Record<string, any> = {}
   if (e instanceof NamedError) {
@@ -111,6 +111,4 @@ try {
     process.stderr.write((e instanceof Error ? e.message : String(e)) + EOL)
   }
   process.exitCode = 1
-} finally {
-  process.exit()
 }

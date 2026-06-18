@@ -15,7 +15,7 @@ test("center workbench panels use the shared solid surface header", () => {
 
   for (const source of [explorer, changes, preview]) {
     expect(source).toContain('from "./ui/SurfaceHeader"')
-    expect(source).toContain('<SurfaceHeader')
+    expect(source).toContain("<SurfaceHeader")
     expect(source).toContain('variant="panel"')
   }
 

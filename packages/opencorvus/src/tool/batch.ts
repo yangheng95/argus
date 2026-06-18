@@ -70,7 +70,9 @@ export function createBatchTool(visibleTools: InitializedTool[]): Tool.Info {
 
             const tool = toolMap.get(call.tool)
             if (!tool) {
-              const availableToolsList = Array.from(toolMap.keys()).filter((name) => !FILTERED_FROM_SUGGESTIONS.has(name))
+              const availableToolsList = Array.from(toolMap.keys()).filter(
+                (name) => !FILTERED_FROM_SUGGESTIONS.has(name),
+              )
               throw new Error(
                 `Tool '${call.tool}' not in registry. External tools (MCP, environment) cannot be batched - call them directly. Available tools: ${availableToolsList.join(", ")}`,
               )

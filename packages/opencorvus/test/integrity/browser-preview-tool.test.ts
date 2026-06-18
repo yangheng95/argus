@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
 import { IntegrityTestHooks } from "../../src/integrity/team-agent"
-import { INTEGRITY_PREVIEW_TOOL_IDS, INTEGRITY_PREVIEW_TOOL_INFOS } from "../../src/integrity/static-tools"
+import { INTEGRITY_PREVIEW_TOOL_IDS, loadIntegrityPreviewToolInfos } from "../../src/integrity/static-tools"
 import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
 import { tmpdir } from "../fixture/fixture"
@@ -25,7 +25,10 @@ describe("integrity browser preview tool surface", () => {
           goals: [],
         })
 
-        for (const info of INTEGRITY_PREVIEW_TOOL_INFOS) {
+        const toolInfos = await loadIntegrityPreviewToolInfos()
+        expect(toolInfos.map((info) => info.id)).toEqual([...INTEGRITY_PREVIEW_TOOL_IDS])
+
+        for (const info of toolInfos) {
           const initialized = await info.init()
           const runtimeTool = kit.tools[info.id] as unknown as {
             description?: string

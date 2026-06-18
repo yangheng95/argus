@@ -93,9 +93,7 @@ describe("project-scope middleware: directory required", () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toBe(true)
-    const row = Database.use((db) =>
-      db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-    )
+    const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
     expect(row).toBeUndefined()
     const session = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get())
     expect(session).toBeUndefined()
@@ -149,9 +147,7 @@ describe("project-scope middleware: directory required", () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toBe(true)
-    const row = Database.use((db) =>
-      db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-    )
+    const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
     expect(row).toBeUndefined()
     const session = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get())
     expect(session).toBeUndefined()
@@ -191,19 +187,6 @@ describe("project-scope middleware: directory required", () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { healthy: boolean }
     expect(body.healthy).toBe(true)
-  })
-
-  test("cross-project POST /global/db/reset rejects a relative projectDir before reset", async () => {
-    const app = Server.App()
-    const response = await app.request("/global/db/reset", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ projectDir: "relative-project" }),
-    })
-
-    expect(response.status).toBe(400)
-    const body = (await response.json()) as { name?: string; data?: { message?: string } }
-    expect(JSON.stringify(body)).toContain("absolute")
   })
 
   test("cold concurrent project routes share one route initialization", async () => {

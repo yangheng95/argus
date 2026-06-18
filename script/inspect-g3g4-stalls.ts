@@ -1,11 +1,12 @@
 import { Database } from "bun:sqlite"
+import { requiredEnv } from "./inspect-env"
 
-const TASK = "tsk_ddc529dfd0011ajJTgBqdlroyk"
-const G3 = "gol_ddc5e098c003cNznIITC54ee1X"
-const G4 = "gol_ddc5e098c004cknLf0UADTvjw1"
-const G3_SES = "ses_22391f4bfffcPbbRbmjwOOmI7M"
-const G4_SES = "ses_22391d7b3ffct2d0B3xXyceErk"
-const DB = "D:/myhexin-local/argus/packages/overlay/dist/opencorvus-overlay-windows-x64/.opencorvus/opencorvus.db"
+const TASK = requiredEnv("TASK_ID")
+const G3 = requiredEnv("GOAL_3_ID")
+const G4 = requiredEnv("GOAL_4_ID")
+const G3_SES = requiredEnv("GOAL_3_SESSION_ID")
+const G4_SES = requiredEnv("GOAL_4_SESSION_ID")
+const DB = requiredEnv("OPENCORVUS_DB")
 const db = new Database(DB, { readonly: true })
 
 console.log("===== G3 (frontend) full message timeline =====")

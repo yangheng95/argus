@@ -23,14 +23,14 @@ Command:
 rg -n "z\.object|capture|compare|live/snapshot|live/input|targetID|viewportID|outDir|url" packages/opencorvus/src/server/routes/browser-preview.ts packages/opencorvus/src/browser-preview/region-comparison.ts packages/opencorvus/src/tool/browser-preview-compare-regions.ts packages/opencorvus/test/server packages/opencorvus/test/browser-preview packages/opencorvus/test/tool -g "*.ts"
 ```
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Target selection | Already uses `.strict()`. | Keep as the reference behavior. |
-| Capture route | Inline request schema accepts extra keys. | Extract and make strict. |
-| Live snapshot/input routes | Shared request schema and nested input variants accept extra keys. | Make top-level and input variants strict. |
-| Region comparison route | `BrowserPreviewRegionComparisonRequest` and nested bindings accept extra keys. | Make request, binding, locator, source, implementation, output, and box schemas strict. |
-| Tool params | `BrowserPreviewCompareRegionsToolParameters` accepts extra keys. | Make strict and add schema regression coverage. |
-| OpenAPI/SDK | Generated request bodies reflect schema strictness. | Regenerate/update generated API artifacts after source changes. |
+| Surface                    | Evidence                                                                       | Decision                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Target selection           | Already uses `.strict()`.                                                      | Keep as the reference behavior.                                                         |
+| Capture route              | Inline request schema accepts extra keys.                                      | Extract and make strict.                                                                |
+| Live snapshot/input routes | Shared request schema and nested input variants accept extra keys.             | Make top-level and input variants strict.                                               |
+| Region comparison route    | `BrowserPreviewRegionComparisonRequest` and nested bindings accept extra keys. | Make request, binding, locator, source, implementation, output, and box schemas strict. |
+| Tool params                | `BrowserPreviewCompareRegionsToolParameters` accepts extra keys.               | Make strict and add schema regression coverage.                                         |
+| OpenAPI/SDK                | Generated request bodies reflect schema strictness.                            | Regenerate/update generated API artifacts after source changes.                         |
 
 ## Fix
 

@@ -1,6 +1,11 @@
 # Integrity Adversarial Review Team - 2026-05-23
 
-Status: design draft for implementation.
+Status: implemented history as of 2026-06-17. Current runtime sources are
+`packages/opencorvus/src/integrity/team-agent.ts`,
+`packages/opencorvus/src/prompt/core/integrity-team-core.txt`,
+`packages/opencorvus/src/integrity/team-schema.ts`, and the integrity tests
+under `packages/opencorvus/test/integrity/`. This file is retained as
+historical design evidence, not as a pending implementation checklist.
 
 Independent review inputs:
 

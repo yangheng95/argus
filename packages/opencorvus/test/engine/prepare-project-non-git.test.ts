@@ -3,11 +3,7 @@ import { existsSync } from "fs"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
-import {
-  EngineChannelBindingTable,
-  EngineProgressSnapshotTable,
-  EngineTaskTable,
-} from "../../src/engine/engine.sql"
+import { EngineChannelBindingTable, EngineProgressSnapshotTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { EngineService } from "@/task-api"
 import { Worktree } from "../../src/worktree"
 import { MessageTable, SessionTable } from "../../src/session/session.sql"

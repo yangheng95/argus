@@ -57,34 +57,65 @@ function scheduleFlush(): void {
   }
 }
 
-function reportFlushFailure(entry: AppLogEntry, error: unknown): void {
-  if (_flushFailureReported) return
-  _flushFailureReported = true
-  showNotification({
-    id: "system:overlay-log-upload-failed",
-    tone: "error",
-    title: "Overlay log upload failed",
-    message: `OpenCorvus could not write overlay log entry "${entry.message}" to the backend log store.`,
-    details: formatErrorDetails(error),
-    centerHistory: true,
-    timeoutMs: 0,
-  })
-}
-
 function notifyLoggedError(entry: AppLogEntry): void {
   if (entry.level !== "error") return
   const extra = isRecord(entry.extra) ? entry.extra : undefined
-  const summary = typeof extra?.message === "string" && extra.message.trim() ? extra.message : entry.message
-  const details = formatErrorDetails(entry.extra)
+  const summary =
+    typeof extra?.notificationMessage === "string" && extra.notificationMessage.trim()
+      ? extra.notificationMessage
+      : typeof extra?.message === "string" && extra.message.trim()
+        ? extra.message
+        : entry.message
+  const details =
+    typeof extra?.notificationDetails === "string" ? extra.notificationDetails : formatErrorDetails(entry.extra)
   showNotification({
-    id: entry.service === "runtime" ? `runtime:${entry.message}` : `log:error:${entry.service}:${entry.message}`,
+    id:
+      typeof extra?.notificationID === "string" && extra.notificationID.trim()
+        ? extra.notificationID
+        : entry.service === "runtime"
+          ? `runtime:${entry.message}`
+          : `log:error:${entry.service}:${entry.message}`,
     tone: "error",
-    title: entry.service === "runtime" ? "Overlay runtime error" : `Overlay ${entry.service} error`,
+    title:
+      typeof extra?.notificationTitle === "string" && extra.notificationTitle.trim()
+        ? extra.notificationTitle
+        : entry.service === "runtime"
+          ? "Overlay runtime error"
+          : `Overlay ${entry.service} error`,
     message: summary,
     details,
     centerHistory: true,
     timeoutMs: 0,
   })
+}
+
+function appendStoreEntry(entry: AppLogEntry): void {
+  const storeEntry: LogEntry = {
+    ts: entry.ts,
+    level: entry.level,
+    service: entry.service,
+    delta: "",
+    message: entry.message,
+    fields: entry.extra && typeof entry.extra === "object" ? (entry.extra as Record<string, unknown>) : {},
+    raw: "",
+    source: "overlay",
+  }
+  appendLog(storeEntry)
+}
+
+function reportFlushFailure(entry: AppLogEntry, error: unknown): void {
+  if (_flushFailureReported) return
+  _flushFailureReported = true
+  const diagnostic = add("error", "system", "Overlay log upload failed", {
+    failedEntry: entry,
+    notificationID: "system:overlay-log-upload-failed",
+    notificationTitle: "Overlay log upload failed",
+    notificationMessage: `OpenCorvus could not write overlay log entry "${entry.message}" to the backend log store.`,
+    notificationDetails: formatErrorDetails(error),
+  })
+  appendStoreEntry(diagnostic)
+  notifyLoggedError(diagnostic)
+  persist(diagnostic)
 }
 
 function flush(): void {
@@ -145,20 +176,7 @@ export async function waitForLogDrain(timeoutMs = 2_000): Promise<void> {
 function log(level: LogLevel, service: string, message: string, extra?: unknown): AppLogEntry {
   const entry = add(level, service, message, extra)
   persist(entry)
-
-  // Mirror entry into the Solid reactive store (store/app.ts) so the log
-  // viewer component can display overlay log entries reactively.
-  const storeEntry: LogEntry = {
-    ts: entry.ts,
-    level: entry.level,
-    service: entry.service,
-    delta: "",
-    message: entry.message,
-    fields: entry.extra && typeof entry.extra === "object" ? (entry.extra as Record<string, unknown>) : {},
-    raw: "",
-    source: "overlay",
-  }
-  appendLog(storeEntry)
+  appendStoreEntry(entry)
   notifyLoggedError(entry)
 
   return entry

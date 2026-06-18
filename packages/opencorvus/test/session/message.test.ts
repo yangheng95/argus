@@ -170,6 +170,8 @@ describe("session.message.toModelMessage", () => {
     expect(Message.Part.safeParse({ ...base, synthetic: true }).success).toBe(false)
     expect(Message.Part.safeParse({ ...base, ignored: true }).success).toBe(false)
     expect(Message.Part.safeParse({ ...base, audience: { ui: false } }).success).toBe(false)
+    expect(Message.Part.safeParse({ ...base, channel: "assistant" }).success).toBe(false)
+    expect(Message.Part.safeParse({ ...base, resolvedRole: "assistant" }).success).toBe(false)
   })
 
   test("filters out messages with no parts", async () => {

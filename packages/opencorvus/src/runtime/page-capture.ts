@@ -5,6 +5,7 @@ import { renderPage } from "@/runtime/visual-page"
 import {
   normalizeRuntimeCaptureRequest,
   normalizeRuntimeCaptureViewport,
+  runtimeCaptureFailureSummary,
   runtimeCaptureFailedLayers,
   type RuntimeCaptureInput,
   type RuntimeCaptureResult,
@@ -70,7 +71,7 @@ export async function captureRuntimePage(input: RuntimeCaptureInput): Promise<Ru
       summary:
         failedLayers.length === 0
           ? `all runtime capture layers passed on ${args.url}`
-          : `failed layers: ${failedLayers.join(", ")}`,
+          : runtimeCaptureFailureSummary(rendered.capture.layers),
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

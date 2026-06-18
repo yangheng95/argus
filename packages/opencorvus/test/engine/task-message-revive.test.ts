@@ -6,10 +6,10 @@ import { EngineArtifactTable, EngineInteractionRequestTable, EngineTaskTable } f
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
-import { reopenActiveRunForOperatorWake } from "../../src/engine/task-message-open"
 import { findRun, findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { EngineService } from "../../src/task-api"
+import { ProtocolStore } from "../../src/protocol/store"
 import { Session } from "../../src/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -20,149 +20,8 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-describe("reopenActiveRunForOperatorWake", () => {
-  test("clears stale non-interaction blockers through a durable run artifact", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const taskID = Identifier.ascending("task")
-        const runID = Identifier.ascending("run")
-        const now = Date.now()
-        Database.use((db) => {
-          db.insert(EngineTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              source: "test",
-              title: "Blocked task",
-              request: "continue",
-              priority: "normal",
-              time_created: now,
-              time_updated: now,
-              time_started: now,
-            } as any)
-            .run()
-          db.insert(EngineArtifactTable)
-            .values({
-              id: runID,
-              task_id: taskID,
-              run_id: runID,
-              kind: "run",
-              label: "run-blocked",
-              payload: {
-                plan_version_id: null,
-                session_id: null,
-                executor: "opencorvus",
-                status: "blocked",
-                phase: "dispatch",
-                blocking_reason: "orchestrator_stream_error",
-                error: "MessageAbortedError: total deadline",
-                retry_count: 0,
-                executor_ref: null,
-                metadata: null,
-                time_started: now,
-                time_completed: null,
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-        })
-
-        const task = findTask(taskID)
-        expect(task).toBeDefined()
-        await reopenActiveRunForOperatorWake(task!)
-
-        const reopened = findRun(runID)
-        expect(reopened?.status).toBe("running")
-        expect(reopened?.blocking_reason).toBeNull()
-        expect(reopened?.error).toBeNull()
-        expect(reopened?.time_updated).toBeGreaterThan(now)
-      },
-    })
-  })
-
-  test("preserves blocked runs while a real interaction is pending", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const taskID = Identifier.ascending("task")
-        const runID = Identifier.ascending("run")
-        const interactionID = Identifier.ascending("interaction")
-        const now = Date.now()
-        Database.use((db) => {
-          db.insert(EngineTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              source: "test",
-              title: "Permission blocked task",
-              request: "continue",
-              priority: "normal",
-              time_created: now,
-              time_updated: now,
-              time_started: now,
-            } as any)
-            .run()
-          db.insert(EngineArtifactTable)
-            .values({
-              id: runID,
-              task_id: taskID,
-              run_id: runID,
-              kind: "run",
-              label: "run-blocked",
-              payload: {
-                plan_version_id: null,
-                session_id: null,
-                executor: "opencorvus",
-                status: "blocked",
-                phase: "dispatch",
-                blocking_reason: "permission",
-                error: null,
-                retry_count: 0,
-                executor_ref: null,
-                metadata: null,
-                time_started: now,
-                time_completed: null,
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          db.insert(EngineInteractionRequestTable)
-            .values({
-              id: interactionID,
-              task_id: taskID,
-              run_id: runID,
-              session_id: null,
-              external_id: "ext_pending",
-              request_type: "permission",
-              status: "pending",
-              title: "Need permission",
-              body: "Need permission",
-              payload: {},
-              time_created: now,
-              time_updated: now,
-            } as any)
-            .run()
-        })
-
-        const task = findTask(taskID)
-        expect(task).toBeDefined()
-        await reopenActiveRunForOperatorWake(task!)
-
-        const blocked = findRun(runID)
-        expect(blocked?.status).toBe("blocked")
-        expect(blocked?.blocking_reason).toBe("permission")
-      },
-    })
-  })
-})
-
-describe("EngineService.retryTask — active blocked run reopen", () => {
-  test("retry clears a stale active run blocker instead of queuing an already active task", async () => {
+describe("EngineService.retryTask — active blocked run wake", () => {
+  test("retry wakes without rewriting a blocked active run", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -216,17 +75,17 @@ describe("EngineService.retryTask — active blocked run reopen", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("active")
-        const reopened = findRun(runID)
-        expect(reopened?.status).toBe("running")
-        expect(reopened?.blocking_reason).toBeNull()
-        expect(reopened?.error).toBeNull()
+        const blocked = findRun(runID)
+        expect(blocked?.status).toBe("blocked")
+        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
+        expect(blocked?.error).toBe("MessageAbortedError: total deadline")
       },
     })
   })
 })
 
-describe("EngineService.recordOperatorNote — active blocked run reopen", () => {
-  test("operator notes reopen the active run instead of creating an operator run", async () => {
+describe("EngineService.recordOperatorNote — active blocked run wake", () => {
+  test("operator notes wake without rewriting the active run", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -282,10 +141,10 @@ describe("EngineService.recordOperatorNote — active blocked run reopen", () =>
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(result.resumed).toBe(true)
-        const reopened = findRun(runID)
-        expect(reopened?.status).toBe("running")
-        expect(reopened?.blocking_reason).toBeNull()
-        expect(reopened?.error).toBeNull()
+        const blocked = findRun(runID)
+        expect(blocked?.status).toBe("blocked")
+        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
+        expect(blocked?.error).toBe("MessageAbortedError: total deadline")
         const runArtifacts = Database.use((db) =>
           db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
         )
@@ -301,7 +160,7 @@ describe("EngineService.recordOperatorNote — active blocked run reopen", () =>
     })
   })
 
-  test("operator notes on failed tasks reopen the task before waking the active run", async () => {
+  test("operator notes on failed tasks reactivate the task without rewriting the active run", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -365,10 +224,95 @@ describe("EngineService.recordOperatorNote — active blocked run reopen", () =>
         expect(task.error).toBeNull()
         expect(task.time_completed).toBeNull()
         expect((task.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
-        const reopened = findRun(runID)
-        expect(reopened?.status).toBe("running")
-        expect(reopened?.blocking_reason).toBeNull()
-        expect(reopened?.error).toBeNull()
+        const blocked = findRun(runID)
+        expect(blocked?.status).toBe("blocked")
+        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
+        expect(blocked?.error).toBe("session prompt loop finished")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+      },
+    })
+  })
+
+  test("operator notes on completed tasks reactivate and dispatch without requiring retry", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "completed note wake" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Operator note completed task",
+              request: "continue",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now - 10,
+              time_completed: now,
+              error: null,
+            } as any)
+            .run()
+        })
+
+        const result = await EngineService.recordOperatorNote(taskID, "continue this completed task")
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result.resumed).toBe(true)
+        const task = findTask(taskID)!
+        expect(deriveTaskStatus(task)).toBe("active")
+        expect(task.error).toBeNull()
+        expect(task.time_completed).toBeNull()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+      },
+    })
+  })
+
+  test("operator notes on cancelled tasks clear cancelled metadata and dispatch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "cancelled note wake" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Operator note cancelled task",
+              request: "continue",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now - 10,
+              time_completed: now,
+              error: "task cancelled",
+              metadata: { cancelled: true, decision_log: ["keep-me"] },
+            } as any)
+            .run()
+        })
+
+        const result = await EngineService.recordOperatorNote(taskID, "continue this cancelled task")
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result.resumed).toBe(true)
+        const task = findTask(taskID)!
+        expect(deriveTaskStatus(task)).toBe("active")
+        expect(task.error).toBeNull()
+        expect(task.time_completed).toBeNull()
+        expect((task.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBeUndefined()
+        expect((task.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
@@ -376,7 +320,57 @@ describe("EngineService.recordOperatorNote — active blocked run reopen", () =>
 })
 
 describe("EngineService.handleTaskMessage — active blocked run wake", () => {
-  test("service-level messages clear stale active run blockers before dispatch", async () => {
+  test("service-level message clears task rewind cursor for the new branch", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "message clears rewind" })
+        await seedRootSession(root.id)
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Message clears rewind task",
+              request: "continue",
+              priority: "normal",
+              rewind_cursor_time: now - 500,
+              rewind_cursor_event_id: "evt_rewind_anchor",
+              rewind_count: 1,
+              time_created: now - 1_000,
+              time_updated: now,
+              time_started: now,
+            } as any)
+            .run()
+        })
+
+        const result = await EngineService.handleTaskMessage(taskID, {
+          text: "Continue from the rewound point.",
+          source: "panel",
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result.should_resume).toBe(true)
+        expect(findTask(taskID)?.rewind_cursor_time).toBeNull()
+        expect(findTask(taskID)?.rewind_cursor_event_id).toBeNull()
+        const rewindEvent = ProtocolStore.listTaskEvents(taskID).find((event) => event.type === "task.rewound")
+        expect(rewindEvent?.payload).toMatchObject({
+          taskID,
+          cursorTime: 0,
+          resetWorktree: false,
+        })
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+      },
+    })
+  })
+
+  test("service-level messages dispatch without rewriting stale active run blockers", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
     await Instance.provide({
       directory: tmp.path,
@@ -436,10 +430,10 @@ describe("EngineService.handleTaskMessage — active blocked run wake", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(result.should_resume).toBe(true)
-        const reopened = findRun(runID)
-        expect(reopened?.status).toBe("running")
-        expect(reopened?.blocking_reason).toBeNull()
-        expect(reopened?.error).toBeNull()
+        const blocked = findRun(runID)
+        expect(blocked?.status).toBe("blocked")
+        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
+        expect(blocked?.error).toBe("MessageAbortedError: total deadline")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
           taskID,

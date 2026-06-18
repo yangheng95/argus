@@ -10,9 +10,10 @@ import {
   startNewAttempt,
   updateGoalWorkspace,
 } from "../../src/engine/persist"
-import { goalStatusByID } from "../../src/engine/describe"
+import { describeGoal, goalStatusByID } from "../../src/engine/describe"
 import {
   findAcceptanceByGoalRun,
+  findGoal,
   findGoalLatestWorkspace,
   findGoalRun,
   findRun,
@@ -24,10 +25,10 @@ import { resetDatabase } from "../fixture/db"
 
 /**
  * Contract tests for Goal.startNewAttempt — the single atomic entry-point
- * that flips a goal back to `pending` when its tip is terminal. These are
- * load-bearing: every retry path (manual_retry, acceptance_rework,
- * modify_contract, restart_stage) funnels through this one function, and
- * its mechanism decoupling from LLM decisions is the core of the attempt
+ * that records retry intent on a terminal tip without changing lifecycle
+ * projection. These are load-bearing: every retry path (manual_retry,
+ * acceptance_rework, modify_contract, restart_stage) funnels through this one
+ * function, and its mechanism decoupling from LLM decisions is the core of the attempt
  * redesign. A regression here reopens the "status carousel deadlock" bug.
  */
 
@@ -174,8 +175,12 @@ afterEach(async () => {
   await resetDatabase()
 })
 
+function currentGoalDesc() {
+  return describeGoal(findGoal(goalID)!)
+}
+
 describe("Goal.startNewAttempt — terminal-tip supersede", () => {
-  test("completed tip → superseded_reason column set + goal.status projects pending", () => {
+  test("completed tip → superseded_reason column set without lifecycle re-projection", () => {
     const gr = `grun_completed_${Date.now()}`
     insertGoalRun({ id: gr, status: "completed" })
     // Sanity: starting status is the seeded passed.
@@ -189,14 +194,15 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     const tip = findGoalRun(gr)
     expect(tip?.superseded_reason).toBe("acceptance_rework")
     expect(tip?.superseded_at).toBeGreaterThan(0)
-    // FSM state is immutable — supersede never mutates the terminal status.
+    // Persisted state is immutable — supersede never mutates the terminal status.
     expect(tip?.status).toBe("completed")
-    // engine_goal.status is reprojected via syncGoalStatus — readiness picks
-    // it up on the next pool.submit.
-    expect(goalStatusByID(goalID)).toBe("pending")
+    expect(goalStatusByID(goalID)).toBe("passed")
+    const desc = currentGoalDesc()
+    expect(desc.needs_redispatch).toBe(true)
+    expect(desc.is_terminal_ok).toBe(false)
   })
 
-  test("failed tip → pending (manual_retry reason)", () => {
+  test("failed tip → retry intent fact without status reset", () => {
     const gr = `grun_failed_${Date.now()}`
     insertGoalRun({ id: gr, status: "failed" })
     // Pre-project the seeded goal.status to match its only goal_run tip so
@@ -211,7 +217,10 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     expect(result.retryCount).toBe(1)
     expect(getGoalRetryCount(goalID)).toBe(1)
     expect(findGoalRun(gr)?.superseded_reason).toBe("manual_retry")
-    expect(goalStatusByID(goalID)).toBe("pending")
+    expect(goalStatusByID(goalID)).toBe("failed")
+    const desc = currentGoalDesc()
+    expect(desc.needs_redispatch).toBe(true)
+    expect(desc.is_terminal_fail).toBe(false)
   })
 
   test("aborted tip → pending (restart_stage reason)", () => {

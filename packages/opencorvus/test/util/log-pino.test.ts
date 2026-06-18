@@ -41,3 +41,19 @@ test("Log writes Pino JSONL with structured error and timer fields", async () =>
   })
   expect(typeof completed?.duration).toBe("number")
 })
+
+test("Log print mode mirrors to stderr without disabling the durable log file", async () => {
+  await Log.init({ print: true, dev: true, level: "DEBUG" })
+  expect(Log.file()).toBe(path.join(Log.directory(), "dev.log"))
+  const marker = `print-mode-${Date.now()}`
+
+  Log.create({ service: "log-pino-test" }).info("print mode durable probe", { marker })
+
+  await Bun.sleep(50)
+  const lines = readFileSync(Log.file(), "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, any>)
+
+  expect(lines.some((line) => line.marker === marker && line.message === "print mode durable probe")).toBe(true)
+})

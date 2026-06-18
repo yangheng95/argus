@@ -3,16 +3,16 @@ title: CLI
 description: OpenCorvus command-line interface reference.
 ---
 
-`opencorvus` is the unified entry (`packages/opencorvus/bin/opencorvus`); subcommands are registered in `packages/opencorvus/src/index.ts`.
+`opencorvus` is the unified CLI command. Source subcommands are registered in `packages/opencorvus/src/index.ts`; local builds emit binaries under `packages/opencorvus/dist/opencorvus-<platform>/opencorvus`.
 
 ## Global flags
 
-| flag            | purpose         |
-| --------------- | --------------- |
-| `--help`, `-h`  | Help            |
-| `--version`     | Version         |
-| `--verbose`     | Verbose logging |
-| `--config PATH` | Config file     |
+| flag                | purpose                             |
+| ------------------- | ----------------------------------- |
+| `--help`, `-h`      | Show help                           |
+| `--version`, `-v`   | Show version                        |
+| `--print-logs`      | Print logs to stderr                |
+| `--log-level LEVEL` | `DEBUG`, `INFO`, `WARN`, or `ERROR` |
 
 ## Subcommands
 
@@ -24,134 +24,110 @@ Starts the headless HTTP API server.
 opencorvus serve [flags]
 ```
 
-| flag            | default            | purpose                                                    |
-| --------------- | ------------------ | ---------------------------------------------------------- |
-| `--hostname`    | `127.0.0.1`        | Listen address (switched to `0.0.0.0` when `--mdns` is on) |
-| `--port`        | `7878`             | Listen port                                                |
-| `--project-dir` | `cwd()`            | Target repo                                                |
-| `--mdns`        | off                | Enable mDNS discovery                                      |
-| `--mdns-domain` | `opencorvus.local` | mDNS domain                                                |
-| `--cors`        | off                | Enable CORS                                                |
+| flag              | default            | purpose                                                   |
+| ----------------- | ------------------ | --------------------------------------------------------- |
+| `--hostname`      | `127.0.0.1`        | Listen address; `--mdns` uses `0.0.0.0` unless configured |
+| `--port`          | `7878`             | Listen port                                               |
+| `--project-dir`   | `cwd()`            | Target repo                                               |
+| `--mdns`          | off                | Enable mDNS discovery                                     |
+| `--mdns-domain`   | `opencorvus.local` | mDNS domain                                               |
+| `--cors <origin>` | none               | Extra allowed CORS origin; repeat for multiple origins    |
 
-Set `OPENCORVUS_SERVER_PASSWORD` via environment variable (not a CLI flag).
-
-Verified against `packages/opencorvus/src/cli/network.ts:4-31`.
-
-Endpoints:
-
-- `POST /task` — create
-- `GET /tasks` — list
-- `GET /task/<id>` — detail
-- `GET /task/<id>/events` — SSE
-- `POST /task/<id>/message` — append follow-up
-- `POST /task/<id>/retry` — retry
-- `POST /task/<id>/replan` — replan
-- `POST /task/<id>/cancel` — cancel
-- `GET /ui/` — Overlay UI static assets
+Set `OPENCORVUS_SERVER_PASSWORD` via environment variable, not a CLI flag.
 
 ### `opencorvus run`
 
-One-shot task (non-interactive).
+Runs a task from the command line.
 
 ```bash
 opencorvus run "Add unit tests for src/foo.ts" [flags]
 ```
 
-| flag                    | purpose                   |
-| ----------------------- | ------------------------- |
-| `--command CMD`         | Use CMD as task text      |
-| `--continue`, `-c`      | Continue last session     |
-| `--session ID`, `-s ID` | Continue specific session |
-| `--share`               | Produce a share link      |
-
-### `opencorvus slack`
-
-Starts the embedded Slack adapter. Requires `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN`.
-
-### `opencorvus acp`
-
-Starts the [Agent Client Protocol](/docs/acp/) server for ACP clients (e.g., Zed).
+| flag                    | purpose                                               |
+| ----------------------- | ----------------------------------------------------- | ------------------------------------------ |
+| `--command CMD`         | Run `CMD` and use message arguments as command args   |
+| `--continue`, `-c`      | Continue the last session                             |
+| `--session ID`, `-s ID` | Continue a specific session                           |
+| `--fork`                | Fork before continuing a session                      |
+| `--share`               | Produce a share link                                  |
+| `--model MODEL`, `-m`   | Use `provider/model` for the session                  |
+| `--agent NAME`          | Use a named agent                                     |
+| `--format default       | json`                                                 | Select formatted output or raw JSON events |
+| `--file PATH`, `-f`     | Attach one or more files                              |
+| `--title TITLE`         | Set the session title                                 |
+| `--attach URL`          | Attach to a running OpenCorvus server                 |
+| `--dir PATH`            | Run in a directory; remote path when using `--attach` |
+| `--port PORT`           | Local server port                                     |
+| `--variant VALUE`       | Provider-specific reasoning variant                   |
+| `--thinking`            | Show thinking blocks                                  |
 
 ### `opencorvus auth`
 
-LLM provider authentication.
+Provider credentials are managed with explicit subcommands.
 
 ```bash
-opencorvus auth              # login
-opencorvus auth --logout     # logout
+opencorvus auth login [url]
+opencorvus auth logout
+opencorvus auth list
 ```
 
 ### `opencorvus models`
 
-```bash
-opencorvus models --list
-```
-
-### `opencorvus doctor`
-
-Diagnose installation: dependencies, network, provider connectivity, config validity.
-
-### `opencorvus generate`
-
-Config-driven code generation (behavior depends on `generate` in config).
-
-### `opencorvus agent`
-
-Local agent management.
-
-### `opencorvus debug`
+Lists available models. Pass a provider ID to restrict output.
 
 ```bash
-opencorvus debug --task-id <id>
+opencorvus models
+opencorvus models openai --verbose
+opencorvus models --refresh
 ```
 
-### `opencorvus export`
+### `opencorvus mcp`
+
+MCP (Model Context Protocol) servers are managed through the `mcp` command group.
 
 ```bash
-opencorvus export --format html
+opencorvus mcp list
+opencorvus mcp add
+opencorvus mcp auth [name]
+opencorvus mcp auth list
+opencorvus mcp logout [name]
+opencorvus mcp debug <name>
 ```
 
-### `opencorvus db`
+`opencorvus mcp serve` and `opencorvus mcp browser` are internal server entrypoints.
 
-Direct SQLite access.
+### Other common commands
 
-```bash
-opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
-```
+| Command                         | Purpose                                                             |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `opencorvus acp`                | Start the [Agent Client Protocol](/docs/acp/) server                |
+| `opencorvus agent`              | Create or list local agents                                         |
+| `opencorvus db`                 | Open the SQLite shell, run a positional query, print path, or reset |
+| `opencorvus debug`              | Debug config, files, LSP, snapshots, skills, paths, and agents      |
+| `opencorvus doctor`             | Diagnose installation and runtime dependencies                      |
+| `opencorvus export [sessionID]` | Export session data as JSON                                         |
+| `opencorvus generate`           | Run configured generation                                           |
+| `opencorvus github`             | GitHub Action runtime entrypoint                                    |
+| `opencorvus import`             | Import sessions or tasks                                            |
+| `opencorvus pr`                 | Pull-request helpers                                                |
+| `opencorvus session`            | Session management                                                  |
+| `opencorvus slack`              | Start the embedded Slack adapter                                    |
+| `opencorvus stats`              | Statistics                                                          |
+| `opencorvus upgrade`            | Self-upgrade                                                        |
+| `opencorvus uninstall`          | Uninstall                                                           |
 
-### Additional subcommands
-
-`packages/opencorvus/src/index.ts:106-127` also registers these. Flags vary by version; run with `--help`:
-
-| Command                | Purpose                                                                            |
-| ---------------------- | ---------------------------------------------------------------------------------- |
-| `opencorvus stats`     | Statistics                                                                         |
-| `opencorvus upgrade`   | Self-upgrade                                                                       |
-| `opencorvus uninstall` | Uninstall                                                                          |
-| `opencorvus import`    | Import sessions / tasks                                                            |
-| `opencorvus github`    | GitHub Action runtime (typically invoked by the Action itself)                     |
-| `opencorvus pr`        | PR helpers                                                                         |
-| `opencorvus attach`    | Attach to an existing session                                                      |
-| `opencorvus mcp`       | MCP subcommand group (`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`) |
-| `opencorvus session`   | Session management                                                                 |
+Run any command with `--help` for its exact options.
 
 ## Exit codes
 
-The code calls `process.exit(1)` only on error paths (`packages/opencorvus/src/index.ts:144, 186, 192`):
-
-| code | meaning                                              |
-| ---- | ---------------------------------------------------- |
-| 0    | Success (default)                                    |
-| 1    | Any runtime error                                    |
-| 130  | Interrupted via Ctrl+C (Bun default signal behavior) |
+The CLI sets exit code `1` for fatal runtime errors. Successful runs exit with `0`; interrupted processes use the runtime's signal handling.
 
 :::note
-Earlier drafts planned `2` (config error) and `3` (task failure). **Not implemented today.**
+Earlier drafts planned dedicated config and task-failure exit codes. They are not implemented in the current CLI.
 :::
 
-## Shell completions
+## Shell completion
 
 ```bash
-opencorvus completions bash > /etc/bash_completion.d/opencorvus
-opencorvus completions zsh  > ~/.zsh/completions/_opencorvus
+opencorvus completion > opencorvus-completion.sh
 ```

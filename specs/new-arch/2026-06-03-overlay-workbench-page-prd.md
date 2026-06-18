@@ -375,7 +375,7 @@ Line-count requirement: this file intentionally exceeds 1000 lines.
 - COMPONENT-014 RequirementsPanel must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
 - COMPONENT-015 ArchitectPanel must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
 - COMPONENT-016 GoalWorkflowGroup must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
-- COMPONENT-017 EvaluationCriteriaPanel must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
+- COMPONENT-017 Retired task-criteria side panel: `task.criteria_results` remains backend evidence for acceptance and contract-audit readers, but the separate `EvaluationCriteriaPanel` render surface was removed after Board stopped mounting the dead criteria section.
 - COMPONENT-018 TracePanel must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
 - COMPONENT-019 RightPanelTabs must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.
 - COMPONENT-020 FileExplorerPanel must have source owner, visible state, loading state, error state, keyboard path, API/store source, and regression test.

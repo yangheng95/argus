@@ -1,11 +1,11 @@
 # 13 — Agent 通信矩阵（预期 vs 实际）
 
-> 对应代码（2026-05-12 真源）：`src/orchestrator/tools.ts` · `src/orchestrator/loop.ts` ·
+> 对应代码（2026-06-17 真源）：`src/orchestrator/tools.ts` · `src/orchestrator/loop.ts` ·
 > `src/goal/runner.ts`（build tool 的 worktree+executor 执行体） ·
 > `src/build/agent.ts`（build agent；独立包 `agent.ts` / `index.ts` / `report.ts` / `types.ts`） ·
 > `src/agent/sub-agent-protocol.ts`（共享 sub-agent 协议） ·
 > `src/tool/task.ts` · `src/agent/agent.ts` ·
-> `src/intent-analysis/agent.ts` · `src/integrity/agent.ts` ·
+> `src/intent-analysis/agent.ts` · `src/integrity/team-agent.ts` ·
 > `src/requirements/agent.ts` · `src/architect/agent.ts` · `src/frontend-design/agent.ts` ·
 > `src/control/message.ts` · `src/channel/ingress.ts`
 >
@@ -16,25 +16,25 @@
 - 当前运行时的真源不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的 mailbox/registry 协议，而是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / build tool / task subagent` 的混合路径。
 - **Planning tool role 已删除**：the removed planning package 整目录、`src/engine/goal-pool.ts`、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；pipeline build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planning tool role 的替代。
 - **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
-- **`integrity` 是最终 review / acceptance tool**：对应 Integrity reviewer team（多维 review：requirement_fidelity / technical_feasibility / hallucination / solution_quality，并吸收旧对抗性复核职责）。`prosecute` / `prosecutor` 已删除。
+- **`integrity` 是最终 review / acceptance tool**：对应 Integrity reviewer team（动态 reviewer 计划、replay-aware context、severity discipline、build feedback），并吸收旧固定维度 review 与旧对抗性复核职责。`prosecute` / `prosecutor` 已删除。
 - `build -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；acceptance direct 子代理路径已删除；`general -> general` 自递归被权限拒绝。
 - `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：先向用户展示"完善上一个 request 的新任务"候选，用户确认后才创建新 task；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
 - [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的"双向都要声明"规则，`general -> explore` 在 spec 文本上并不成立。
 
 ## 节点缩写
 
-| 缩写  | 节点              | 说明                                                                     |
-| ----- | ----------------- | ------------------------------------------------------------------------ |
-| `SYS` | `system_entry`    | 未来协议里的虚拟外部入口                                                 |
-| `O`   | `orchestrator`    | 任务唯一决策者                                                           |
-| `R`   | `requirements`    | 需求分解                                                                 |
-| `X`   | `frontend-design` | 视觉分析；代码里的 tool 名是 `frontend_design`                           |
-| `A`   | `architect`       | 跨目标契约                                                               |
-| `B`   | `build`           | 实际写代码的执行 agent（自己读 contract，不再有外置 planning tool role） |
+| 缩写  | 节点              | 说明                                                                              |
+| ----- | ----------------- | --------------------------------------------------------------------------------- |
+| `SYS` | `system_entry`    | 未来协议里的虚拟外部入口                                                          |
+| `O`   | `orchestrator`    | 任务唯一决策者                                                                    |
+| `R`   | `requirements`    | 需求分解                                                                          |
+| `X`   | `frontend-design` | 视觉分析；代码里的 tool 名是 `frontend_design`                                    |
+| `A`   | `architect`       | 跨目标契约                                                                        |
+| `B`   | `build`           | 实际写代码的执行 agent（自己读 contract，不再有外置 planning tool role）          |
 | `IT`  | `integrity`       | 多维 integrity review（orchestrator tool: `integrity`），也是最终 acceptance gate |
-| `G`   | `general`         | 通用 subagent                                                            |
-| `E`   | `explore`         | 只读探索 subagent                                                        |
-| `I`   | `intent-analysis` | 已接线（orchestrator tool: `analyze_intent`）                            |
+| `G`   | `general`         | 通用 subagent                                                                     |
+| `E`   | `explore`         | 只读探索 subagent                                                                 |
+| `I`   | `intent-analysis` | 已接线（orchestrator tool: `analyze_intent`）                                     |
 
 > 历史草稿曾保留 `P = planner`、`D = acceptance/deliver`、`PR = prosecutor` 节点；当前 runtime 已无这些独立 agent/tool，相关行被整列移除（不是"代码里没接"，是 agent/tool 本身不存在）。
 
@@ -221,4 +221,4 @@ flowchart LR
 - `src/tool/task.ts`：`general / explore` subagent 的 direct 调用边界
 - `src/agent/agent.ts`：哪些 agent 是 `primary`，哪些是 `subagent`
 - `src/intent-analysis/agent.ts`：`IntentAnalysisAgent.analyze`（已接线，对应 orchestrator tool `analyze_intent`）
-- `src/integrity/agent.ts`：integrity reviewer 入口（多维 review）
+- `src/integrity/team-agent.ts`：integrity reviewer team 入口（动态 adversarial review）

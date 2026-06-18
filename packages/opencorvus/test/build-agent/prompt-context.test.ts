@@ -620,9 +620,7 @@ describe("build agent prompt context", () => {
     const paths = ProjectRuntimePaths.frontendDesignPaths("", "tsk_reference_path_contract")
     expect(prompt).toContain(`web-clone-source/reference.png\` means \`${paths.sourcePackageRelative}/reference.png\``)
     expect(prompt).toContain(`Resolve \`web-clone-source/...\` refs under \`${paths.sourcePackageRelative}/...\``)
-    expect(prompt).toContain(
-      `\`frontend-design-skeleton/...\` refs under \`${paths.skeletonProjectRelative}/...\``,
-    )
+    expect(prompt).toContain(`\`frontend-design-skeleton/...\` refs under \`${paths.skeletonProjectRelative}/...\``)
     expect(prompt).toContain("not `./web-clone-source/reference.png` in the acceptance root")
   })
 })

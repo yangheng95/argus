@@ -10,11 +10,11 @@ be persisted as completed visual evidence.
 
 ## Call Points
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Region sidecar locator resolution | `packages/opencorvus/src/browser-preview/evidence-runner.ts` | Use Playwright locators, require `isVisible()`, and require non-zero bounding boxes before returning a region. |
-| Region comparison orchestration | `packages/opencorvus/src/browser-preview/region-comparison.ts` | Keep failed sidecar regions as failed comparison evidence; do not materialize crops for hidden implementation regions. |
-| Region comparison tests | `packages/opencorvus/test/browser-preview/region-comparison.test.ts` | Add real browser coverage for hidden and zero-size implementation nodes. |
+| Surface                           | File                                                                 | Decision                                                                                                               |
+| --------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Region sidecar locator resolution | `packages/opencorvus/src/browser-preview/evidence-runner.ts`         | Use Playwright locators, require `isVisible()`, and require non-zero bounding boxes before returning a region.         |
+| Region comparison orchestration   | `packages/opencorvus/src/browser-preview/region-comparison.ts`       | Keep failed sidecar regions as failed comparison evidence; do not materialize crops for hidden implementation regions. |
+| Region comparison tests           | `packages/opencorvus/test/browser-preview/region-comparison.test.ts` | Add real browser coverage for hidden and zero-size implementation nodes.                                               |
 
 ## Implementation
 

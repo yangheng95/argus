@@ -485,7 +485,6 @@
   flex: 0 0 auto;
 }
 
-
 /* Memory scope chip: "global" / "session" / "builtin_default"
    tones. The pill-shape declaration (border-radius / padding /
    font) lives in the cross-surface multi-class
@@ -566,7 +565,6 @@
 }
 
 /* ── ExtensionsPanel.tsx (Skill / Channel sections) ─────── */
-
 
 /* Section head: card-shaped header that opens the section body
    beneath. Hover/focus-within wash routed through the shared
@@ -650,7 +648,6 @@
   flex-wrap: wrap;
   flex-shrink: 0;
 }
-
 
 /* ── ChannelsPanel.tsx (channel docs + actions) ──────────── */
 
@@ -831,7 +828,11 @@
    the log lines. The 520px max-height was already calc-wrapped
    in styles.css; everything else converted here. */
 .log-viewer {
-  height: clamp(calc(220px * var(--ui-scale)), calc(100vh - calc(160px * var(--ui-scale))), calc(520px * var(--ui-scale)));
+  height: clamp(
+    calc(220px * var(--ui-scale)),
+    calc(100vh - calc(160px * var(--ui-scale))),
+    calc(520px * var(--ui-scale))
+  );
   max-height: calc(520px * var(--ui-scale));
   min-height: calc(220px * var(--ui-scale));
   overflow-y: auto;
@@ -1429,7 +1430,6 @@
 }
 
 /* ── PromptCatalog.tsx (Prompts tab) ─────────────────────── */
-
 
 .prompt-profile-layout {
   display: grid;

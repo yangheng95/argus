@@ -38,15 +38,15 @@ bypasses or workflow state-machine guards.
 
 ## Call Point Inventory
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `src/visual-qa/product-design-principles.ts` | No reusable product-design principle inventory for Visual QA reports. | Add stable principle IDs for component truth, reference structure, visual hierarchy/readability, interaction states, and production completeness. |
-| `visual-qa-core.txt` | Focuses on GUI fidelity and strict reference mode, but does not require product-design blocker inventory. | Add professional design review language and production-blocker reporting rules; remove reliance on fixed score thresholds as verdict. |
-| `src/visual-qa/schema.ts` | Report has findings but no first-class blocker list. | Add `production_blockers[]` with concrete region/reason/evidence fields and required design principle IDs. |
-| `src/visual-qa/output-tools.ts` | `accepted=true` rejects open critical/major findings only. | Reject `accepted=true` when production blockers exist; require failed reports to include blockers or open critical/major findings; render blockers in report detail. |
-| `src/visual-qa/agent.ts` | Delegation prompt requires 1:1 visual evidence. | Ask for product-design blocker inventory and make `accepted=true` depend on absence of blockers, not a numeric threshold alone. |
-| `src/engine/workflow.ts` | Any `visual_qa` report projects as `completed`. | Parse report/latest summary and project virtual-gate `failed` when accepted is false or production blockers are present. |
-| Tests | Existing tests only cover accepted=true evidence and report presence. | Add regression coverage for production blockers and failed workflow projection. |
+| Surface                                      | Current behavior                                                                                          | Change                                                                                                                                                               |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/visual-qa/product-design-principles.ts` | No reusable product-design principle inventory for Visual QA reports.                                     | Add stable principle IDs for component truth, reference structure, visual hierarchy/readability, interaction states, and production completeness.                    |
+| `visual-qa-core.txt`                         | Focuses on GUI fidelity and strict reference mode, but does not require product-design blocker inventory. | Add professional design review language and production-blocker reporting rules; remove reliance on fixed score thresholds as verdict.                                |
+| `src/visual-qa/schema.ts`                    | Report has findings but no first-class blocker list.                                                      | Add `production_blockers[]` with concrete region/reason/evidence fields and required design principle IDs.                                                           |
+| `src/visual-qa/output-tools.ts`              | `accepted=true` rejects open critical/major findings only.                                                | Reject `accepted=true` when production blockers exist; require failed reports to include blockers or open critical/major findings; render blockers in report detail. |
+| `src/visual-qa/agent.ts`                     | Delegation prompt requires 1:1 visual evidence.                                                           | Ask for product-design blocker inventory and make `accepted=true` depend on absence of blockers, not a numeric threshold alone.                                      |
+| `src/engine/workflow.ts`                     | Any `visual_qa` report projects as `completed`.                                                           | Parse report/latest summary and project virtual-gate `failed` when accepted is false or production blockers are present.                                             |
+| Tests                                        | Existing tests only cover accepted=true evidence and report presence.                                     | Add regression coverage for production blockers and failed workflow projection.                                                                                      |
 
 ## Acceptance
 
