@@ -825,12 +825,6 @@
   color: var(--text-muted);
 }
 
-/* ── LogViewer.tsx (Diagnostics tab) ─────────────────────── */
-
-.log-level-select {
-  min-width: calc(160px * var(--ui-scale));
-}
-
 /* Log viewer container — scrollable mono-font region that holds
    the log lines. The 520px max-height was already calc-wrapped
    in styles.css; everything else converted here. */

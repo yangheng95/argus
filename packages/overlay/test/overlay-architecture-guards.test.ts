@@ -1228,7 +1228,6 @@ describe("overlay architecture guards", () => {
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
     for (const className of [
-      "log-level-select",
       "log-viewer",
       "log-path",
       "log-line",
