@@ -86,23 +86,78 @@ describe("AttachmentStore.stageToWorktree", () => {
     })
   })
 
-  test("idempotent across re-runs (existing destination skipped)", async () => {
+  test("idempotent across re-runs and preserves conflicting staged files", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const projectID = Instance.project.id
-        const a = await AttachmentStore.write(projectID, Buffer.from([0x89, 0x50, 0x4e]), "image/png", "screenshot.png")
+        const bytes = Buffer.from([0x89, 0x50, 0x4e])
+        const a = await AttachmentStore.write(projectID, bytes, "image/png", "screenshot.png")
         const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "worktree-"))
         const first = await AttachmentStore.stageToWorktree(projectID, [a], worktreeDir)
-        const mtimeFirst = (await fs.stat(first[0].absPath)).mtime.getTime()
-        // Mutate destination — second staging must NOT overwrite
+        const secondSame = await AttachmentStore.stageToWorktree(projectID, [a], worktreeDir)
+        expect(secondSame[0].relPath).toBe(first[0].relPath)
+        expect(await fs.readFile(secondSame[0].absPath)).toEqual(bytes)
+
+        // Mutated staged files are preserved; the source blob gets a distinct name.
         await fs.writeFile(first[0].absPath, Buffer.from([0xff, 0xff, 0xff]))
         const second = await AttachmentStore.stageToWorktree(projectID, [a], worktreeDir)
-        expect(second[0].relPath).toBe(first[0].relPath)
-        const bytes = await fs.readFile(first[0].absPath)
-        expect(bytes).toEqual(Buffer.from([0xff, 0xff, 0xff]))
-        void mtimeFirst
+        expect(second[0].relPath).not.toBe(first[0].relPath)
+        expect(second[0].relPath).toMatch(/^references\/screenshot-[0-9a-f]{8}\.png$/)
+        expect(await fs.readFile(first[0].absPath)).toEqual(Buffer.from([0xff, 0xff, 0xff]))
+        expect(await fs.readFile(second[0].absPath)).toEqual(bytes)
+      },
+    })
+  })
+
+  test("stages different same-name attachments to distinct reference files", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const firstBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x01])
+        const secondBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x02])
+        const first = await AttachmentStore.write(projectID, firstBytes, "image/png", "screenshot.png")
+        const second = await AttachmentStore.write(projectID, secondBytes, "image/png", "screenshot.png")
+        const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "worktree-"))
+
+        const staged = await AttachmentStore.stageToWorktree(projectID, [first, second], worktreeDir)
+
+        expect(staged).toHaveLength(2)
+        expect(staged[0].relPath).not.toBe(staged[1].relPath)
+        expect(await fs.readFile(staged[0].absPath)).toEqual(firstBytes)
+        expect(await fs.readFile(staged[1].absPath)).toEqual(secondBytes)
+        expect(staged[1].relPath).toMatch(/^references\/screenshot-[0-9a-f]{8}\.png$/)
+
+        const restagedSecond = await AttachmentStore.stageToWorktree(projectID, [second], worktreeDir)
+        expect(restagedSecond[0].relPath).toBe(staged[1].relPath)
+        expect(await fs.readFile(restagedSecond[0].absPath)).toEqual(secondBytes)
+      },
+    })
+  })
+
+  test("rejects when the deterministic collision filename is occupied by different content", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x03])
+        const attachment = await AttachmentStore.write(projectID, bytes, "image/png", "screenshot.png")
+        const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "worktree-"))
+        const refsDir = path.join(worktreeDir, "references")
+        await fs.mkdir(refsDir, { recursive: true })
+        const suffixPath = path.join(refsDir, `screenshot-${attachment.sha.slice(0, 8)}.png`)
+        await fs.writeFile(path.join(refsDir, "screenshot.png"), Buffer.from([0xaa]))
+        await fs.writeFile(suffixPath, Buffer.from([0xbb]))
+
+        await expect(AttachmentStore.stageToWorktree(projectID, [attachment], worktreeDir)).rejects.toThrow(
+          `AttachmentStore.stageToWorktree: staged filename collision for references/screenshot-${attachment.sha.slice(0, 8)}.png`,
+        )
+        expect(await fs.readFile(path.join(refsDir, "screenshot.png"))).toEqual(Buffer.from([0xaa]))
+        expect(await fs.readFile(suffixPath)).toEqual(Buffer.from([0xbb]))
       },
     })
   })

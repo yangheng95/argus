@@ -4110,3 +4110,58 @@ LINE:
 - Huygens confirmed the repaired tree no longer reproduced the issue for query or header directory transport.
 - Huygens identified PTY websocket connect as a second call point that had to share the same helper.
 - Huygens recommended direct selector coverage plus overlay literal `%2F` transport coverage; both are now in the regression suite.
+
+## Batch P2-BT: BH-043 staged attachment display filenames must not alias different blobs
+
+### Findings
+
+- BH-043 targets `packages/opencorvus/src/storage/attachment-store.ts::AttachmentStore.stageToWorktree(...)`.
+- The old staging logic mapped every multimodal attachment to `references/<displayFilename>`, then skipped `fs.copyFile(...)` whenever that destination already existed.
+- Two different blobs with the same safe display filename, such as two uploaded `screenshot.png` images, therefore returned the same `relPath` and left the second staged reference pointing at the first blob's bytes.
+- The issue is not in the content-addressed blob store. `AttachmentStore.write(...)` already stores distinct bytes under distinct sha names; the loss happened only when converting blob references into human-readable worktree `references/` files.
+- Preserving a pre-existing staged file is still required for goal retries and for user/tool edits inside the worktree. The fix must distinguish "same content, reuse" from "different content, allocate a distinct path" instead of treating every existing path as equivalent.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/storage/attachment-store.ts::stageToWorktree(...)` is the single path allocator for staged multimodal attachment files.
+- `packages/opencorvus/src/build/agent.ts::buildAgent(...)` is the production caller and renders the returned `relPath` values into the build agent prompt through `renderStagedList(...)`.
+- `packages/opencorvus/src/build/agent.ts::collectBuildReferenceAttachments(...)` gathers `task.attachments` plus visual-reference `task.system_artifacts` and deduplicates by `sha ?? url`, not by display filename. Same-name different-content inputs are therefore valid and must be staged distinctly.
+- `packages/opencorvus/src/task-api/index.ts` write paths preserve caller filenames while attachment tables deduplicate by sha, so same-name different-blob attachments can be produced by task creation, later task messages, and visual-reference artifacts.
+- The lower-level `AttachmentStore.write(...)`, `read(...)`, and `resolveAbsolute(...)` APIs remain content-addressed and do not need staging-specific filename policy.
+
+### Fix Shape
+
+- Replace path-existence-only staging with content-aware destination selection.
+- Reuse `references/<displayFilename>` only when the existing file's SHA-256 equals the source blob's SHA-256.
+- When the display path exists with different content, stage the source under deterministic `stem-<sha8><ext>` naming.
+- If that deterministic collision path exists with the same content, reuse it for re-entrant staging.
+- If that deterministic collision path exists with different content, throw `AttachmentStore.stageToWorktree: staged filename collision ...` instead of overwriting, skipping, or inventing another path.
+- Keep the fix inside `stageToWorktree(...)`; no task API merge rule, build-agent prompt rule, fallback path, or compatibility branch was added.
+- Tighten the helper existence check so only `ENOENT` means "absent"; permission and filesystem errors propagate.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/storage/attachment-stage.test.ts`:
+  - same-content re-runs reuse the same staged `relPath`;
+  - mutated/pre-existing staged files are preserved and the source blob is staged under a deterministic sha-suffixed filename;
+  - two different same-name image attachments in the same staging call produce distinct `relPath` values and both staged files match their source bytes;
+  - restaging the second blob alone reuses the same sha-suffixed path;
+  - a pre-existing sha-suffixed path with different content rejects with the explicit hard collision error and leaves both existing files unchanged.
+
+### Verification
+
+- Focused attachment staging tests passed: `bun test packages/opencorvus/test/storage/attachment-stage.test.ts packages/opencorvus/test/storage/attachment-display-filename.test.ts packages/opencorvus/test/storage/attachment-project-isolation.test.ts --timeout 60000`.
+- OpenCorvus typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Root typecheck passed: `bun typecheck`.
+- API route inventory passed: `bun run api:routes-check`.
+- Docs check passed: `bun run docs:check`.
+- Production secret scan passed: `bun run script/secret-scan.ts`.
+- Package test-entry guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Helmholtz confirmed `HEAD` before the repair still reproduced BH-043: both different blobs returned `references/screenshot.png`.
+- Helmholtz confirmed the production entry point is build-agent staging and that upstream task/artifact write paths legitimately allow same display filename with different sha values.
+- Helmholtz recommended keeping the repair boundary inside `AttachmentStore.stageToWorktree(...)` and using deterministic `stem-<sha8><ext>` allocation.
+- Helmholtz requested a hard-collision regression where `references/screenshot-<sha8>.png` is already occupied by different content; that test is now included.
