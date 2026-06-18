@@ -209,9 +209,28 @@ test("Mission task projection selection explicitly rebinds the left toolbar and 
 test("selected task source does not globally steal Mission or Assistant activity focus", () => {
   const taskListMount = MAIN_TSX.indexOf('const taskListEl = document.getElementById("taskListPanel")')
   const beforeTaskListMount = MAIN_TSX.slice(0, taskListMount)
-  expect(beforeTaskListMount).not.toContain('const selectedSource = boardStore.selectedSource')
-  expect(beforeTaskListMount).not.toContain('selectedSource?.kind !== "task"')
-  expect(beforeTaskListMount).not.toContain('boardStore.selectedSource?.kind === "task"')
+  const restoreStart = beforeTaskListMount.indexOf("function focusInitialRestoredTaskWorkspace")
+  const restoreEnd = beforeTaskListMount.indexOf("function selectTaskFromTaskList", restoreStart)
+  const beforeRestore = beforeTaskListMount.slice(0, restoreStart)
+  const afterRestore = restoreEnd >= 0 ? beforeTaskListMount.slice(restoreEnd) : ""
+  const globalFocusSource = `${beforeRestore}\n${afterRestore}`
+  expect(globalFocusSource).not.toContain('const selectedSource = boardStore.selectedSource')
+  expect(globalFocusSource).not.toContain('selectedSource?.kind !== "task"')
+  expect(globalFocusSource).not.toContain('boardStore.selectedSource?.kind === "task"')
+})
+
+test("initial restored task workspace focuses the task surface once after startup", () => {
+  const start = MAIN_TSX.indexOf("function focusInitialRestoredTaskWorkspace")
+  const end = MAIN_TSX.indexOf("function selectTaskFromTaskList", start)
+  const block = MAIN_TSX.slice(start, end)
+  expect(block).toContain('if (!activeTaskID() || boardStore.selectedSource?.kind !== "task") return')
+  expect(block).toContain("setMissionLauncherActive(false)")
+  expect(block).toContain("setAssistantLauncherActive(false)")
+  expect(block).toContain('resetCenterWorkbenchToFocusedPanel("tasks")')
+  expect(block).toContain('setSelectedLeftActivity("tasks")')
+  expect(block).toContain('setSelectedLeftPanelActivity("tasks")')
+  expect(MAIN_TSX).toContain("onConnected: focusInitialRestoredTaskWorkspace")
+  expect(MAIN_TSX).not.toContain("onReconnect: focusInitialRestoredTaskWorkspace")
 })
 
 test("main ChatComposer exposes the standard Mission data-ui hooks for downstream e2e", () => {

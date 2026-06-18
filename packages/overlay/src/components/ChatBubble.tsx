@@ -17,8 +17,8 @@ import { normalizeAgentRole, roleLabel } from "../utils/message"
 import { stageAccent } from "../utils/card-color"
 import { formatDuration, fullStampWithRelative, stamp } from "../utils/time"
 import { useNowTick } from "../services/clock"
-import { apiRequest } from "../services/api"
 import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
+import { submitTaskRewind } from "../services/rewind"
 import { t } from "../utils/i18n"
 import { formatCostUSD, formatTokenCount } from "../utils/format-usage"
 import { useCardHeadActions } from "../hooks/use-card-head-actions"
@@ -210,23 +210,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   const onRewind = async (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => {
     const taskID = activeTaskID()
     if (!taskID) return
-    try {
-      const response = await apiRequest<unknown>(`task/${encodeURIComponent(taskID)}/rewind`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          anchor: { kind: "cursorTime", cursorTime, anchorEventID: anchorID },
-          resetWorktree: opts.resetWorktree,
-          reason: "user rewind card",
-        }),
-        responseKind: "text",
-      })
-      if (!response.ok) {
-        console.error("rewind request failed", response.status, response.body)
-      }
-    } catch (error) {
-      console.error("rewind request errored", error)
-    }
+    await submitTaskRewind({ taskID, cursorTime, anchorID, resetWorktree: opts.resetWorktree })
   }
 
   const onAgentReply = async (sessionID: string, message: string) => {

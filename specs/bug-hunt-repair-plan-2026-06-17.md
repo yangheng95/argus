@@ -3065,3 +3065,55 @@ LINE:
 - Goodall confirmed BH-047 was still present in current HEAD before the local repair.
 - Goodall traced the root cause to `selectCandidate()` setting `pendingSelectedTargetID` without a failure path, while the only cleanup path required a later target resource with the pending ID.
 - Goodall recommended keeping the backend target authority untouched and repairing only overlay action state plus browser/static/service tests; the final implementation follows that boundary.
+
+## Batch P1-AY: BH-048 rewind POST failures must be visible and must not prune locally
+
+### Findings
+
+- BH-048 targets `packages/overlay/src/components/Card.tsx`, `packages/overlay/src/components/ChatBubble.tsx`, and the shared rewind header action hook.
+- Current HEAD no longer had the older optimistic `pruneCardsAfterCursor(...)` call in `Card.tsx` / `ChatBubble.tsx`; authoritative pruning is already driven by backend `task.rewound` events in `packages/overlay/src/services/events.ts`.
+- The remaining P1 bug was still substantive: both card surfaces submitted `POST /task/:taskID/rewind`, then swallowed non-2xx and thrown request errors with `console.error(...)`.
+- `useCardHeadActions(...)` only cleared its pending flag in `finally`, so a 500 response produced no visible UI error. The failed rewind left the timeline unmodified only because the fixture did not emit `task.rewound`, not because the UI had an explicit failure path.
+- Running the required visual benchmark exposed two real blockers from the earlier BH-059 note: missing `titlebar.menu.tools` caused `MissingI18nKeyError` console noise, and initial restored task selection left `primaryCenterPanel()` on Mission, which made the task composer look unavailable even with a selected task, directory, connection, and model.
+
+### Call-point Inventory
+
+- `packages/overlay/src/components/Card.tsx::onRewind(...)` is the store-card rewind submitter.
+- `packages/overlay/src/components/ChatBubble.tsx::onRewind(...)` is the chat-bubble rewind submitter.
+- `packages/overlay/src/hooks/use-card-head-actions.ts::onRewind(...)` owns confirmation, pending state, and now visible failure reporting.
+- `packages/overlay/src/services/rewind.ts::submitTaskRewind(...)` is the single overlay rewind POST entrypoint.
+- `packages/overlay/src/services/api.ts::apiRequest(...)` remains the HostTransport-aware request path that injects the active project directory.
+- `packages/overlay/src/services/events.ts` consumes backend `task.rewound` and is still the only local card-tree prune trigger.
+- `packages/overlay/src/main.tsx::focusInitialRestoredTaskWorkspace(...)` repairs the visual benchmark blocker where restored task state did not focus the task center surface.
+- `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx` reads `titlebar.menu.tools`; both locale catalogs must carry the key.
+- `packages/overlay/test/rewind-service.test.ts`, `packages/overlay/test/use-card-head-actions.test.ts`, `packages/overlay/test/browser/rewind-visual-stress.test.ts`, `packages/overlay/test/mission-launcher-component.test.ts`, and `packages/overlay/test/titlebar-compaction-threshold.test.ts` cover the repaired boundary.
+
+### Fix Shape
+
+- Move the duplicated rewind POST body into `submitTaskRewind(...)`.
+- Throw `RewindRequestError` on non-2xx responses, preserving status, path, and response body for details.
+- Let `Card.tsx` and `ChatBubble.tsx` await the shared service and propagate failure to the hook.
+- Catch rewind failures in `useCardHeadActions(...)` and show a persistent `notifyError(...)` with localized title/message and formatted backend details.
+- Keep failed rewind recovery explicit: do not refresh the conversation, infer a cursor, clear a cursor, or prune local cards after a failed POST.
+- Add the missing `titlebar.menu.tools` key in `en-US` and `zh-CN` to remove unrelated runtime i18n errors from the visual loop.
+- On first successful init only, if a task was restored, focus the Tasks left activity and task center workbench so the restored task composer is not masked by Mission ledger state. Do not bind task selection to a global source-watching effect and do not run this on reconnect.
+- Update the browser stress test to reject console-only rewind recovery, require the visible failed-rewind notification, and assert the restored task composer is truly task-bound before resume.
+
+### Verification
+
+- Focused overlay tests passed: `bun test packages/overlay/test/use-card-head-actions.test.ts packages/overlay/test/rewind-service.test.ts packages/overlay/test/store-card-tree-prune.test.ts packages/overlay/test/events-refresh.test.ts packages/overlay/test/mission-launcher-component.test.ts packages/overlay/test/titlebar-compaction-threshold.test.ts --timeout 60000`.
+- Overlay typecheck passed: `bun run --cwd packages/overlay typecheck`.
+- Real browser visual stress passed with the required Node runner: `cd packages/overlay; node test/browser-runner.mjs test/browser/rewind-visual-stress.test.ts`.
+- Visual screenshots inspected:
+  - `packages/overlay/.scratch/rewind-visual-stress/04-failed-rewind.png` shows the timeline tail still visible with a persistent "Rewind failed" notification.
+  - `packages/overlay/.scratch/rewind-visual-stress/07-resume-branch.png` shows the new resume branch after rewind, with the old final tail absent.
+  - `packages/overlay/.scratch/rewind-visual-stress/08-rapid-clear.png` shows the full tail restored after rapid rewind and clear.
+- `packages/overlay/.scratch/rewind-visual-stress/progress.log` no longer contains the previous `MissingI18nKeyError`; the only allowed console error is the browser resource error for the fixture's intentional 503 response.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Sagan confirmed BH-048 was not fixed in committed HEAD: `Card.tsx` and `ChatBubble.tsx` still swallowed rewind failures with console-only logging, while `use-card-head-actions.ts` had no visible failure path.
+- Sagan also confirmed the optimistic prune half was already gone from HEAD, so the right repair was not another card-tree patch but a single rewind submitter plus visible failure propagation.
+- Lagrange confirmed the browser benchmark blocker was a real restored-task UI binding bug: `restoreInitialWorkspace()` selected the task, but `main.tsx` still defaulted `primaryCenterPanel()` to Mission, causing `missionLedgerActive()` to disable the composer.
+- Lagrange confirmed `titlebar.menu.tools` was a real missing runtime locale key and recommended the focused static/browser tests now included in this batch.

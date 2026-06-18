@@ -20,6 +20,7 @@ mock.module("../src/services/app-dialog", () => ({
 
 const { setLocaleData } = await import("../src/utils/i18n")
 const { useCardHeadActions } = await import("../src/hooks/use-card-head-actions")
+const { clearNotifications, notificationStore } = await import("../src/services/notify")
 
 setLocaleData("en-US", JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")))
 
@@ -48,6 +49,7 @@ function wait(ms: number) {
 afterEach(() => {
   dialogCalls.length = 0
   dialogResult = { confirmed: true, value: "worktree" }
+  clearNotifications()
 })
 
 test("copy writes transcript text and clears copied state after 1200ms", async () => {
@@ -124,6 +126,41 @@ test("rewind prompts for reset-worktree and forwards the selected option", async
   })
 })
 
+test("rewind failure shows a persistent visible notification and clears pending state", async () => {
+  await new Promise<void>((resolve, reject) => {
+    createRoot((dispose) => {
+      const actions = useCardHeadActions({
+        node: () => node(),
+        onRewind: async () => {
+          throw new Error("rewind failed by hook fixture")
+        },
+      })
+      const event = stopEvent()
+      actions.onRewind(event)
+      void (async () => {
+        try {
+          await wait(0)
+          expect(event.stopPropagation).toHaveBeenCalled()
+          expect(notificationStore.items[0]?.title).toBe("Rewind failed")
+          expect(notificationStore.items[0]?.message).toBe(
+            "The visible timeline was left unchanged. Open details for the backend error.",
+          )
+          expect(notificationStore.items[0]?.details).toContain("rewind failed by hook fixture")
+          expect(notificationStore.items[0]?.timeoutMs).toBe(0)
+          expect(actions.state.rewinding()).toBe(true)
+          await wait(850)
+          expect(actions.state.rewinding()).toBe(false)
+          dispose()
+          resolve()
+        } catch (error) {
+          dispose()
+          reject(error)
+        }
+      })()
+    })
+  })
+})
+
 test("cancel uses the injected sessionID and clears pending state after 800ms", async () => {
   const calls: string[] = []
 
@@ -162,8 +199,14 @@ test("rewind submitters do not optimistically prune the visible tree", () => {
   const card = readFileSync(join(import.meta.dir, "../src/components/Card.tsx"), "utf8")
   const bubble = readFileSync(join(import.meta.dir, "../src/components/ChatBubble.tsx"), "utf8")
   const cardTree = readFileSync(join(import.meta.dir, "../src/store/card-tree.ts"), "utf8")
+  const rewindService = readFileSync(join(import.meta.dir, "../src/services/rewind.ts"), "utf8")
 
   expect(card).not.toContain("pruneCardsAfterCursor")
   expect(bubble).not.toContain("pruneCardsAfterCursor")
   expect(cardTree).not.toContain("clearPruneCursor")
+  expect(card).toContain("submitTaskRewind")
+  expect(bubble).toContain("submitTaskRewind")
+  expect(card).not.toContain("rewind request failed")
+  expect(bubble).not.toContain("rewind request failed")
+  expect(rewindService).toContain("throw new RewindRequestError")
 })

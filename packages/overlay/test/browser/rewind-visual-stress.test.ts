@@ -331,10 +331,7 @@ function assertNoLayoutBreakage(snapshot: Awaited<ReturnType<typeof visualSnapsh
 }
 
 function isExpectedFailedRewindConsole(text: string): boolean {
-  return (
-    text === "Failed to load resource: the server responded with a status of 503 ()" ||
-    text === "rewind request failed 503 rewind failed by visual stress fixture"
-  )
+  return text === "Failed to load resource: the server responded with a status of 503 ()"
 }
 
 async function sendButtonState(page: OverlayPage) {
@@ -355,6 +352,11 @@ async function sendButtonState(page: OverlayPage) {
       selectedSource: boardStore?.selectedSource ?? null,
       boardTaskID: boardStore?.board?.task?.id ?? null,
       activeModel: appStore?.config?.model ?? null,
+      workflowView: document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")?.dataset.workbenchView ?? null,
+      workflowOpen: document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")?.dataset.open ?? null,
+      tasksPanelActive: document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active ?? null,
+      missionPanelActive: document.querySelector<HTMLElement>("#leftPanelMissions")?.dataset.active ?? null,
+      assistantPanelActive: document.querySelector<HTMLElement>("#leftPanelAssistant")?.dataset.active ?? null,
     }
   }) as Promise<Record<string, unknown>>
 }
@@ -872,11 +874,22 @@ test(
       await waitForVisualState(
         page,
         "failed rewind leaves authoritative tail visible",
-        (item) => item.rewindCursor === null && item.text.includes("RW-T8 final orchestration tail"),
+        (item) =>
+          item.rewindCursor === null &&
+          item.text.includes("RW-T8 final orchestration tail") &&
+          item.notifications.some(
+            (text) => text.includes("Rewind failed") && text.includes("The visible timeline was left unchanged"),
+          ),
         () => ({ requestLog, rewindRequests, errors }),
       )
       snapshot = await visualSnapshot(page)
       assertCardsContain(snapshot, ["RW-T3 architecture ready", "RW-T8 final orchestration tail"])
+      assert.ok(
+        snapshot.notifications.some(
+          (text) => text.includes("Rewind failed") && text.includes("The visible timeline was left unchanged"),
+        ),
+        `expected visible rewind failure notification\n${JSON.stringify(snapshot, null, 2)}`,
+      )
       screenshots.push({ name: "04-failed-rewind", ...(await screenshotPanel(page, "04-failed-rewind")) })
 
       await clickRewind(page, "planner:session:ses_plan:message:msg_plan_1")
@@ -918,6 +931,17 @@ test(
         (item) => item.rewindCursor === times.t4 && !item.text.includes("RW-T8 final orchestration tail"),
         () => ({ requestLog, errors }),
       )
+      await page.waitForFunction(
+        () => {
+          const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
+          return !!textarea && !textarea.disabled
+        },
+        { timeout: 5_000 },
+      ).catch(async (error) => {
+        const state = await sendButtonState(page)
+        mark("composer-disabled", state)
+        throw new Error(`chat textarea stayed disabled before resume branch: ${JSON.stringify(state)}\n${(error as Error).message}`)
+      })
       await page.type("#solidChatComposer textarea", "Continue from the rewound point with a new branch")
       await page.waitForFunction(
         () => {
@@ -930,6 +954,15 @@ test(
         mark("send-disabled", state)
         throw new Error(`chat send stayed disabled before resume branch: ${JSON.stringify(state)}\n${(error as Error).message}`)
       })
+      const resumeComposerState = await sendButtonState(page)
+      assert.equal(resumeComposerState.disabled, false, `resume send button disabled\n${JSON.stringify(resumeComposerState)}`)
+      assert.equal(resumeComposerState.workflowView, "task", `resume workflow not task-bound\n${JSON.stringify(resumeComposerState)}`)
+      assert.equal(resumeComposerState.tasksPanelActive, "true", `resume tasks panel inactive\n${JSON.stringify(resumeComposerState)}`)
+      assert.equal(
+        resumeComposerState.missionPanelActive,
+        "false",
+        `resume mission panel still active\n${JSON.stringify(resumeComposerState)}`,
+      )
       await page.click("#chatSend")
       await waitForVisualState(
         page,

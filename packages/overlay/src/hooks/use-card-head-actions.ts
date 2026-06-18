@@ -4,6 +4,7 @@ import type { CardNode } from "../store/card-tree"
 import { collectCardText } from "../utils/card-tree"
 import { t } from "../utils/i18n"
 import { showAppDialog } from "../services/app-dialog"
+import { formatErrorDetails, notifyError } from "../services/notify"
 
 export interface UseCardHeadActionsInput {
   node: () => CardNode
@@ -95,6 +96,13 @@ export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadA
         const node = input.node()
         await input.onRewind!(node.time, node.id, {
           resetWorktree: choice.value === "worktree",
+        })
+      } catch (error) {
+        notifyError({
+          id: `card-rewind:${input.node().id}`,
+          title: t("card.rewind_failed_title"),
+          message: t("card.rewind_failed_message"),
+          details: formatErrorDetails(error),
         })
       } finally {
         setTimeout(() => setRewinding(false), 800)
