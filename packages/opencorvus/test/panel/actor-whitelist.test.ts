@@ -31,11 +31,27 @@ const MISSION_ALLOWED = [
   ["reject_interaction", { interactionID: "i_1" }],
 ] as const
 
+const VALID_ACCEPTANCE_SPEC = {
+  id: "acc-goal-1",
+  source_requirement_id: "REQ-1",
+  goal_id: "g_1",
+  title: "Goal is updated",
+  scorers: [
+    {
+      type: "heuristic",
+      name: "goal-check",
+      spec: { kind: "shell", cmd: "echo ok" },
+      expect: { exit_code: 0 },
+    },
+  ],
+  severity: "essential",
+} as const
+
 const MISSION_DENIED = [
   ["retry_task", { taskID: "task_1" }],
   ["replan_task", { taskID: "task_1" }],
   ["update_checks", { taskID: "task_1" }],
-  ["update_goal", { goalID: "g_1", description: "x", acceptance_specs: [{}] }],
+  ["update_goal", { goalID: "g_1", description: "x", acceptance_specs: [VALID_ACCEPTANCE_SPEC] }],
   ["delete_goal", { goalID: "g_1" }],
   ["fork_session", { sessionID: "s_1" }],
   ["delete_session", { sessionID: "s_1" }],
