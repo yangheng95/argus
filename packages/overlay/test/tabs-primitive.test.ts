@@ -45,6 +45,7 @@ test("Tabs primitive exposes the canonical data-attribute contract", () => {
   expect(source).toContain('export const TABS_SIZES = ["sm", "md"] as const')
   expect(source).toContain('export const TABS_TONES = ["neutral"] as const')
   expect(source).toContain('import { Tabs as KobalteTabs } from "@kobalte/core/tabs"')
+  expect(source).toContain('Omit<JSX.HTMLAttributes<HTMLDivElement>, "classList" | "role" | "onChange">')
   expect(source).toContain('Omit<JSX.HTMLAttributes<HTMLDivElement>, "class" | "classList" | "role" | "onChange">')
   expect(source).toContain(
     'Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList" | "role" | "type" | "onClick">',
@@ -53,6 +54,7 @@ test("Tabs primitive exposes the canonical data-attribute contract", () => {
   expect(source).toContain('class="oc-tab"')
   expect(source).toContain("<KobalteTabs.List")
   expect(source).toContain("<KobalteTabs.Trigger")
+  expect(source).toContain("<KobalteTabs.Content")
   expect(source).toContain('data-active={local.active ? "true" : "false"}')
   expect(source).not.toMatch(/\b(?:right-panel-tab|btn|workspace-toggle)\b/)
 })
@@ -61,9 +63,12 @@ test("Tabs primitive delegates tab semantics to Kobalte", () => {
   const source = readFileSync(TABS_SOURCE, "utf8")
 
   expect(source).toContain("<KobalteTabs")
+  expect(source).toContain("export function TabList")
+  expect(source).toContain("export function TabPanel")
   expect(source).toContain('activationMode="manual"')
   expect(source).not.toContain('role="tablist"')
   expect(source).not.toContain('role="tab"')
+  expect(source).not.toContain('role="tabpanel"')
 })
 
 test("retired WorkspacePanel does not keep a hand-written tab surface", () => {
@@ -71,18 +76,17 @@ test("retired WorkspacePanel does not keep a hand-written tab surface", () => {
 })
 
 test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA", () => {
-  for (const sourcePath of [
-    EXECUTOR_SELECTOR_SOURCE,
-    FILE_CHANGES_PANEL_SOURCE,
-    BROWSER_PREVIEW_PANEL_SOURCE,
-  ]) {
+  for (const sourcePath of [EXECUTOR_SELECTOR_SOURCE, FILE_CHANGES_PANEL_SOURCE]) {
     const source = readFileSync(sourcePath, "utf8")
 
     expect(source).toContain("<Tabs")
+    expect(source).toContain("<TabList")
     expect(source).toContain("<Tab")
+    expect(source).toContain("<TabPanel")
     expect(source).toContain("onValueChange")
     expect(source).not.toContain('role="tablist"')
     expect(source).not.toContain('role="tab"')
+    expect(source).not.toContain('role="tabpanel"')
     expect(source).not.toContain("aria-selected")
     expect(source).not.toContain("file-changes-tab")
     const tabOpenTags = source.match(/<Tab\b[^>]*>/g) ?? []
@@ -91,6 +95,19 @@ test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA",
       expect(tag).not.toContain("onClick=")
     }
   }
+})
+
+test("Browser Preview viewport choices do not pretend to be tab panels", () => {
+  const source = readFileSync(BROWSER_PREVIEW_PANEL_SOURCE, "utf8")
+
+  expect(source).toContain('from "./ui/SegmentedControl"')
+  expect(source).toContain("<SegmentedControl<BrowserPreviewViewportID>")
+  expect(source).not.toContain('from "./ui/Tabs"')
+  expect(source).not.toContain("<Tabs")
+  expect(source).not.toContain("<Tab")
+  expect(source).toContain('data-ui="browser-preview-viewports"')
+  expect(source).toContain('class="oc-tabs"')
+  expect(source).toContain('itemClass="oc-tab"')
 })
 
 test("Tabs primitive TypeScript API and CSS data variants stay in lockstep", () => {

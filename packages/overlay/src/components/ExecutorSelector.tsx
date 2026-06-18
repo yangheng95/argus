@@ -46,7 +46,7 @@ import { loadProviderInfo } from "../services/init"
 import { activeDirectory } from "../services/workspace"
 import { localeTag, t } from "../utils/i18n"
 import { Button } from "./ui/Button"
-import { Tab, Tabs } from "./ui/Tabs"
+import { Tab, TabList, TabPanel, Tabs } from "./ui/Tabs"
 
 interface ModelParts {
   provider: string
@@ -191,11 +191,7 @@ function budgetErrorMessage(error: unknown): string {
   return String(error || "")
 }
 
-function HexinBudgetInline(props: {
-  response: HexinBudgetResponse | undefined
-  loading: boolean
-  error: unknown
-}) {
+function HexinBudgetInline(props: { response: HexinBudgetResponse | undefined; loading: boolean; error: unknown }) {
   const budget = createMemo(() => (props.response?.ok ? props.response.budget : undefined))
   const lowBudget = createMemo(() => {
     const value = budget()
@@ -296,10 +292,7 @@ export function ExecutorSelector() {
   })
   createEffect(() => {
     if (!hexinBudgetBaseKey()) return
-    const timer = window.setInterval(
-      () => setHexinBudgetRefreshTick((value) => value + 1),
-      HEXIN_BUDGET_REFRESH_MS,
-    )
+    const timer = window.setInterval(() => setHexinBudgetRefreshTick((value) => value + 1), HEXIN_BUDGET_REFRESH_MS)
     onCleanup(() => window.clearInterval(timer))
   })
   const hexinBudgetKey = createMemo(() => {
@@ -565,62 +558,65 @@ export function ExecutorSelector() {
               <span class="executor-popover-hint">{t("executor.external_popover_hint")}</span>
             </div>
             <Tabs
-              size="sm"
-              tone="neutral"
               value={isExternalActive() ? focusedExternalID() : EXTERNAL_DISABLED_TAB_ID}
               onValueChange={changeExternalTab}
-              data-ui="executor-popover-tabs"
             >
-              <Tab
-                value={EXTERNAL_DISABLED_TAB_ID}
-                active={!isExternalActive()}
-                size="sm"
-                tone="neutral"
-                data-ui="executor-popover-tab"
-              >
-                {t("executor.external_disabled")}
-              </Tab>
+              <TabList size="sm" tone="neutral" data-ui="executor-popover-tabs">
+                <Tab
+                  value={EXTERNAL_DISABLED_TAB_ID}
+                  active={!isExternalActive()}
+                  size="sm"
+                  tone="neutral"
+                  data-ui="executor-popover-tab"
+                >
+                  {t("executor.external_disabled")}
+                </Tab>
+                <For each={externalTabs()}>
+                  {(tab) => (
+                    <Tab
+                      value={tab.id}
+                      active={isExternalActive() && tab.id === focusedExternalID()}
+                      size="sm"
+                      tone="neutral"
+                      data-ui="executor-popover-tab"
+                      disabled={!tab.selectable}
+                      title={tab.title}
+                    >
+                      {tab.label}
+                    </Tab>
+                  )}
+                </For>
+              </TabList>
+              <TabPanel value={EXTERNAL_DISABLED_TAB_ID} class="executor-popover-panel">
+                <div class="executor-popover-empty">{t("executor.external_disabled_hint")}</div>
+              </TabPanel>
               <For each={externalTabs()}>
                 {(tab) => (
-                  <Tab
-                    value={tab.id}
-                    active={tab.id === focusedExternalID()}
-                    size="sm"
-                    tone="neutral"
-                    data-ui="executor-popover-tab"
-                    disabled={!tab.selectable}
-                    title={tab.title}
-                  >
-                    {tab.label}
-                  </Tab>
+                  <TabPanel value={tab.id} class="executor-popover-panel">
+                    <Show
+                      when={focusedGroups().length > 0}
+                      fallback={
+                        <div class="executor-popover-empty">
+                          {providerLoading() ? t("common.loading") : t("executor.external_no_models")}
+                        </div>
+                      }
+                    >
+                      <div class="executor-popover-body">
+                        <For each={focusedGroups()}>
+                          {(group) => (
+                            <ProviderModelGroup
+                              group={group}
+                              currentModel={focusedCurrentModel()}
+                              onPick={(modelID) => void pickExternalModel(tab.id, modelID)}
+                            />
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                  </TabPanel>
                 )}
               </For>
             </Tabs>
-            <Show
-              when={isExternalActive()}
-              fallback={<div class="executor-popover-empty">{t("executor.external_disabled_hint")}</div>}
-            >
-              <Show
-                when={focusedGroups().length > 0}
-                fallback={
-                  <div class="executor-popover-empty">
-                    {providerLoading() ? t("common.loading") : t("executor.external_no_models")}
-                  </div>
-                }
-              >
-                <div class="executor-popover-body">
-                  <For each={focusedGroups()}>
-                    {(group) => (
-                      <ProviderModelGroup
-                        group={group}
-                        currentModel={focusedCurrentModel()}
-                        onPick={(modelID) => void pickExternalModel(focusedExternalID(), modelID)}
-                      />
-                    )}
-                  </For>
-                </div>
-              </Show>
-            </Show>
           </>
         </ExecutorChip>
       </div>
