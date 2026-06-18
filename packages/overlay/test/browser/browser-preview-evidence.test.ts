@@ -777,7 +777,13 @@ test(
         return evidence ? send(evidence) : send({ message: "missing" }, { status: 404 })
       }
       const captureMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)/capture\\.png$`))
-      if (captureMatch) return new Response(pngBytes, { headers: { "content-type": "image/png" } })
+      if (captureMatch) {
+        if (captureMatch[1] === evidenceByID.art_previewevidence_tablet_persisted.id) {
+          await new Promise((resolve) => setTimeout(resolve, 300))
+          return send({ message: "tablet capture image intentionally missing" }, { status: 404 })
+        }
+        return new Response(pngBytes, { headers: { "content-type": "image/png" } })
+      }
       return send({})
     })
     serverOrigin = server.origin
@@ -828,6 +834,7 @@ test(
       }, server.origin)
       page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`))
       page.on("response", (response) => {
+        if (response.url().includes("/art_previewevidence_tablet_persisted/capture.png")) return
         if (response.status() >= 400) errors.push(`response${response.status()}: ${response.url()}`)
       })
       page.on("console", (msg) => {
@@ -883,6 +890,23 @@ test(
       assert.match(text, /persisted desktop evidence passed/)
       assert.doesNotMatch(text, /persisted mobile evidence passed/)
 
+      await page.click('[data-ui="browser-preview-viewport"][data-viewport-id="tablet"]')
+      await waitForPageText(page, "persisted tablet evidence passed", "tablet persisted evidence")
+      await waitForPageState(
+        page,
+        () => {
+          const stage = document.querySelector<HTMLElement>(".browser-preview-stage")
+          const evidence = stage?.querySelector<HTMLElement>('[data-ui="browser-preview-evidence"]')
+          const img = stage?.querySelector<HTMLImageElement>('[data-ui="browser-preview-screenshot"]')
+          return evidence?.textContent?.includes("persisted tablet evidence passed") === true && !img
+        },
+        "stale desktop persisted screenshot hidden when tablet capture image fails",
+        () => ({ errors, requestLog }),
+      )
+      text = await page.evaluate(() => document.querySelector(".browser-preview-evidence-status")?.textContent || "")
+      assert.match(text, /persisted tablet evidence passed/)
+      assert.doesNotMatch(text, /persisted desktop evidence passed/)
+
       await page.click('[data-ui="browser-preview-viewport"][data-viewport-id="mobile"]')
       await waitForPageText(page, "persisted mobile evidence passed", "mobile persisted evidence")
       await waitForPageState(
@@ -896,6 +920,7 @@ test(
             evidence?.textContent?.includes("persisted mobile evidence passed") === true &&
             !live &&
             !!img &&
+            img.dataset.evidenceId === "art_previewevidence_mobile_persisted" &&
             img.complete &&
             img.naturalWidth > 0 &&
             img.naturalHeight > 0

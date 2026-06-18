@@ -31,6 +31,13 @@ type BrowserPreviewLiveImage = {
   url: string
 }
 
+type BrowserPreviewEvidenceImage = {
+  taskID: string
+  evidenceID: string
+  viewportID: BrowserPreviewViewportID
+  url: string
+}
+
 export interface BrowserPreviewPanelProps {
   active: () => boolean
   directory: () => string
@@ -149,24 +156,40 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     }
     return evidence
   })
-  const [captureImageUrl] = createResource(
+  const [captureImage] = createResource(
     () => {
       const evidence = renderedEvidence()
       if (!evidence?.capture?.captured) return undefined
       return { taskID: evidence.taskID, evidenceID: evidence.id, viewportID: evidence.viewportID }
     },
-    (scope) => loadTaskBrowserPreviewEvidenceCaptureObjectUrl(scope),
+    async (scope): Promise<BrowserPreviewEvidenceImage> => ({
+      ...scope,
+      url: await loadTaskBrowserPreviewEvidenceCaptureObjectUrl(scope),
+    }),
   )
+  const currentCaptureImage = createMemo(() => {
+    const evidence = renderedEvidence()
+    const image = captureImage()
+    if (!evidence || !image) return undefined
+    if (
+      image.taskID !== evidence.taskID ||
+      image.evidenceID !== evidence.id ||
+      image.viewportID !== evidence.viewportID
+    ) {
+      return undefined
+    }
+    return image
+  })
 
-  createEffect<string | undefined>((previous) => {
-    const current = captureImageUrl()
-    if (previous && previous !== current) URL.revokeObjectURL(previous)
+  createEffect<BrowserPreviewEvidenceImage | undefined>((previous) => {
+    const current = captureImage()
+    if (previous?.url && previous.url !== current?.url) URL.revokeObjectURL(previous.url)
     return current
   })
 
   onCleanup(() => {
-    const current = captureImageUrl()
-    if (current) URL.revokeObjectURL(current)
+    const current = captureImage()
+    if (current) URL.revokeObjectURL(current.url)
     const live = liveImage()
     if (live) URL.revokeObjectURL(live.url)
   })
@@ -565,10 +588,16 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   <code>{evidence().id}</code>
                 </div>
                 <p>{evidence().summary}</p>
-                <Show when={captureImageUrl()}>
-                  {(url) => (
+                <Show when={currentCaptureImage()}>
+                  {(image) => (
                     <figure class="browser-preview-evidence-shot">
-                      <img src={url()} alt={evidence().summary} data-ui="browser-preview-screenshot" decoding="async" />
+                      <img
+                        src={image().url}
+                        alt={evidence().summary}
+                        data-ui="browser-preview-screenshot"
+                        data-evidence-id={image().evidenceID}
+                        decoding="async"
+                      />
                     </figure>
                   )}
                 </Show>
