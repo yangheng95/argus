@@ -4729,3 +4729,44 @@ LINE:
 - Noether traced production callers through question/permission routes and task interaction reply handlers.
 - Noether confirmed existing HEAD tests preserved the bad behavior and that permission reply tests with empty rulesets were fake pending cases.
 - Noether recommended fixing the service layer as the single source, correcting the permission tests, and adding route-level 404/no-event coverage.
+
+## Batch P2-CE: BH-079 web README commands must match package scripts
+
+### Findings
+
+- BH-079 targets `packages/web/README.md` and `packages/web/package.json`.
+- The web package README documents `bun run --cwd packages/web check`.
+- `packages/web/package.json` already has `@astrojs/check` and `typescript` dev dependencies, but its `scripts` block did not expose a `check` script.
+- Existing document health tests included `packages/web/README.md` in text scans but did not parse command examples into package-script assertions.
+
+### Call-point Inventory
+
+- `packages/web/README.md` is the command source shown to contributors for the Astro documentation package.
+- `packages/web/package.json` owns the executable package script list used by `bun run --cwd packages/web <script>`.
+- `packages/opencorvus/test/script/document-health.test.ts` already owns public documentation health regressions and scans the web README.
+- `packages/web` has no local test directory or package-level test script, so the repository-level document-health suite is the right place for this cross-file command contract.
+
+### Fix Shape
+
+- Add `check: astro check` to `packages/web/package.json`, using the package's existing Astro checker dependency.
+- Add a document-health regression that parses `bun run --cwd <package> <script>` commands from package README files and asserts each script exists in the targeted `package.json`.
+- Do not delete the README command and do not add an empty/no-op script.
+
+### Regression Tests
+
+- `packages/opencorvus/test/script/document-health.test.ts` now parses `packages/web/README.md`, verifies that the `check` command is actually parsed, and fails if any parsed package command points at a missing package script.
+
+### Verification
+
+- `bun run --cwd packages/web check` passed with 0 errors; Astro reported three existing hints.
+- First full `document-health.test.ts` run exposed a parser bug in this batch's new command regex; fixed before final verification.
+- Focused README/script contract test passed: `bun test packages/opencorvus/test/script/document-health.test.ts -t "package README bun run commands point at package scripts" --timeout 60000`.
+- Diff whitespace check passed: `git diff --check -- packages/web/package.json packages/opencorvus/test/script/document-health.test.ts specs/bug-hunt-repair-plan-2026-06-17.md`.
+- The same full run also exposed unrelated existing document-health failures in generated SDK status text, channel supervisor source assertion drift, and a developer-profile path in an overlay browser test. Those are not caused by BH-079 and remain later repair targets.
+
+### Independent Review Feedback
+
+- Bernoulli confirmed BH-079 was present: README commands were `dev`, `build`, and `check`, while package scripts were `dev`, `start`, `build`, `preview`, and `astro`.
+- Bernoulli confirmed the target files had no local diff before this batch.
+- Bernoulli found the same suitable regression home in `document-health.test.ts`.
+- Bernoulli recommended adding the real `astro check` script because the package already depends on `@astrojs/check` and `typescript`.

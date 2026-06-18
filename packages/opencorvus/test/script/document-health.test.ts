@@ -9,6 +9,15 @@ function read(relativePath: string) {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8")
 }
 
+function packageReadmeBunRunCommands(readmePath: string) {
+  const text = read(readmePath)
+  return [...text.matchAll(/^bun run --cwd ([^\s]+) ([^\s]+)[^\r\n]*$/gm)].map((match) => ({
+    packageDir: match[1]!,
+    script: match[2]!,
+    command: match[0],
+  }))
+}
+
 function walkTextFiles(relativeDir: string, out: string[] = []) {
   const dir = path.join(repoRoot, relativeDir)
   if (!fs.existsSync(dir)) return out
@@ -230,6 +239,26 @@ describe("document health audit regressions", () => {
     expect(read("github/index.ts")).not.toContain("social-cards.sst.dev")
     expect(read("packages/web/src/content/docs/commands.mdx")).not.toContain("OpenCorvus inherits OpenCorvus")
     expect(read("packages/web/src/content/docs/zh-cn/commands.mdx")).not.toContain("OpenCorvus 继承 OpenCorvus")
+  })
+
+  test("package README bun run commands point at package scripts", () => {
+    const packageReadmes = ["packages/web/README.md"]
+    const missingScripts: string[] = []
+    const parsedCommands: string[] = []
+
+    for (const readmePath of packageReadmes) {
+      for (const command of packageReadmeBunRunCommands(readmePath)) {
+        parsedCommands.push(`${readmePath}: ${command.command}`)
+        const packageJsonPath = path.join(command.packageDir, "package.json").replace(/\\/g, "/")
+        const packageJson = JSON.parse(read(packageJsonPath)) as { scripts?: Record<string, string> }
+        if (!packageJson.scripts?.[command.script]) {
+          missingScripts.push(`${readmePath}: ${command.command} -> ${packageJsonPath}#scripts.${command.script}`)
+        }
+      }
+    }
+
+    expect(parsedCommands).toContain("packages/web/README.md: bun run --cwd packages/web check")
+    expect(missingScripts).toEqual([])
   })
 
   test("public website docs do not pin source references to brittle line numbers", () => {
