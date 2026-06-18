@@ -474,7 +474,7 @@ export function findAcceptanceByRun(runID: string): AcceptanceRow | undefined {
           isNull(EngineArtifactTable.goal_run_id),
         ),
       )
-      .orderBy(desc(EngineArtifactTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all(),
   )
   const latest = latestPerAcceptance(rows)[0]
@@ -488,7 +488,7 @@ export function findLatestAcceptanceForRun(runID: string): AcceptanceRow | undef
       .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.run_id, runID), eq(EngineArtifactTable.kind, "acceptance")))
-      .orderBy(desc(EngineArtifactTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all(),
   )
   const latest = latestPerAcceptance(rows)[0]
@@ -501,7 +501,7 @@ export function findDeliveriesForTask(taskID: string): AcceptanceRow[] {
       .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "acceptance")))
-      .orderBy(desc(EngineArtifactTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all(),
   )
   return latestPerAcceptance(rows).map(artifactRowToAcceptanceRow)
@@ -513,7 +513,7 @@ export function findAcceptanceByGoalRun(goalRunID: string): AcceptanceRow | unde
       .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.goal_run_id, goalRunID), eq(EngineArtifactTable.kind, "acceptance")))
-      .orderBy(desc(EngineArtifactTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all(),
   )
   const latest = latestPerAcceptance(rows)[0]
@@ -521,7 +521,8 @@ export function findAcceptanceByGoalRun(goalRunID: string): AcceptanceRow | unde
 }
 
 /** Phase-6-c helper: collapse the append-only acceptance artifact stream into
- *  one row per acceptance_id (the newest, since input arrives `time_created desc`).
+ *  one row per acceptance_id (the newest, since input arrives `time_created desc,
+ *  id desc`).
  *  Preserves input order so callers that want "latest acceptance overall" just
  *  take [0]. */
 function latestPerAcceptance(
