@@ -332,6 +332,7 @@ test("prompt profile selector options remain readable on the light popup surface
           .join(" ")
         return {
           label,
+          selectedAttribute: option.getAttribute("aria-selected"),
           selected: option.hasAttribute("data-selected") || option.getAttribute("aria-selected") === "true",
           color: style.color,
           background: style.backgroundColor,
@@ -368,8 +369,19 @@ test("prompt profile selector options remain readable on the light popup surface
         "Algorithm Correctness and benchmark squad.",
       ],
     )
-    const unselectedOptions = result.options.filter((option) => !option.selected)
-    assert.equal(unselectedOptions.length >= 3, true)
+    assert.deepEqual(
+      result.options.map((option) => option.selectedAttribute),
+      ["false", "true", "false", "false"],
+    )
+    const unselectedOptions = result.options.filter((option) => option.selectedAttribute === "false")
+    assert.deepEqual(
+      unselectedOptions.map((option) => option.label),
+      [
+        "General Baseline prompt set.",
+        "Backend Contract and data integrity squad.",
+        "Algorithm Correctness and benchmark squad.",
+      ],
+    )
     assert.equal(result.options.every((option) => option.color !== "rgba(0, 0, 0, 0)"), true)
     assert.equal(result.options.every((option) => option.surfaceAlpha === 1), true)
     assert.equal(result.options.every((option) => option.contrast >= 4.5), true)
