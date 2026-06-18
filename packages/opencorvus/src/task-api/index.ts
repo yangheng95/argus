@@ -70,7 +70,11 @@ import {
 } from "@/engine/queue"
 import { reopenActiveRunForOperatorWake } from "@/engine/task-message-open"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
-import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
+import {
+  updateGoal as updateGoalRow,
+  deleteGoal as deleteGoalRow,
+  supersedePriorActivePlansForTask,
+} from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
 import { EngineRuntime } from "@/engine/runtime"
 import { hooks, updateRun, updateTask, upsertTaskCriteria as upsertTaskCriteriaImpl } from "@/engine/state"
@@ -1895,13 +1899,21 @@ export namespace EngineService {
     delete metadata.cancelled
     const liveRun = findActiveRunForTask(task.id)
     const label = intent === "retry" ? "Retry" : "Replan"
+    if (intent === "replan") {
+      const now = Date.now()
+      Database.transaction((db) => {
+        supersedePriorActivePlansForTask(db, { taskID: task.id, now })
+      })
+    }
     const openedTask =
       isTaskTerminal(task) || !liveRun
         ? await updateTask(task, { status: "queued", error: null, metadata }, `${label} requested by operator`)
         : await updateTask(task, { error: null, metadata }, `${label} requested by operator`)
-    await reopenActiveRunForOperatorWake(openedTask, `${label} reopened blocked run`)
+    if (intent === "retry") {
+      await reopenActiveRunForOperatorWake(openedTask, `${label} reopened blocked run`)
+    }
     const note = intent === "retry" ? OrchestratorEventNote.retry(task) : OrchestratorEventNote.replan(task)
-    void dispatchTaskLoop({ taskID, event: { note } })
+    void dispatchTaskLoop({ taskID, event: { note, operatorIntent: { kind: intent } } })
     return viewTask(requireTaskInCurrentProject(taskID))
   }
 
