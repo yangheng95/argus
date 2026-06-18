@@ -196,6 +196,13 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).toContain("chooseRecentDirectory(project.directory)")
   })
 
+  test("cwd popup mirrors current location state onto focusable menu items", () => {
+    expect(TASK_DIR_BAR.match(/aria-current=\{isActive\(\) \? "location" : undefined\}/g)?.length).toBe(2)
+    expect(TASK_DIR_BAR).toContain('<div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>')
+    expect(TASK_DIR_BAR).not.toContain('aria-selected={isActive()')
+    expect(TASK_DIR_BAR).not.toContain('aria-pressed={isActive()')
+  })
+
   test("path breadcrumb markup does not nest a second task-dir shell", () => {
     expect(DOM_UTILS).not.toMatch(/<span class="task-dir-shell"/)
     expect(DOM_UTILS).toMatch(/<span class="task-dir-path">/)
