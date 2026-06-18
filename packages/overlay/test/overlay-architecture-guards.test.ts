@@ -2600,14 +2600,15 @@ describe("overlay architecture guards", () => {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
       const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
-      const hasRightPanelEmptyHint =
-        /\.section-body\s*>\s*\.empty-hint\b/.test(selector) || /#solidChangesPanel\s*>\s*\.empty-hint\b/.test(selector)
+      const hasRightPanelEmptyHint = /#solidChangesPanel\s*>\s*\.empty-hint\b/.test(selector)
       if (!isThemeSelector || !hasRightPanelEmptyHint) continue
 
       expect(body).not.toMatch(/\b(?:gap|padding(?:-[a-z]+)?|border(?:-[a-z]+)?|border-radius)\s*:/)
     }
 
-    const body = soloRuleBody(styles, ".section-body > .empty-hint,\n#solidChangesPanel > .empty-hint")
+    expect(styles).not.toMatch(new RegExp("(?:^|[\\s,])\\.section" + "-body\\s*>"))
+    expect(styles).not.toMatch(/\.oc-section__body\s*>\s*\.empty-hint/)
+    const body = soloRuleBody(styles, "#solidChangesPanel > .empty-hint")
     for (const declaration of [
       "gap: calc(4px * var(--ui-scale))",
       "padding: calc(6px * var(--ui-scale))",
@@ -2801,7 +2802,8 @@ describe("overlay architecture guards", () => {
   })
 
   test("right panel card radius and body padding are canonical, not theme scoped", () => {
-    // After Step 9.E migration, .section → .oc-section, .section-body → .oc-section__body.
+    // After Step 9.E migration, the legacy section shell migrated to the
+    // oc-section primitive family.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")))
 

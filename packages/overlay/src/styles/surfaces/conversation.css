@@ -1732,7 +1732,7 @@
   overflow: hidden;
 }
 
-.section-body > *,
+.oc-section__body > *,
 .config-section-body > *,
 .sidebar-body > *,
 .chat-scroll > * {
