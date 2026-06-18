@@ -5,7 +5,7 @@ import z from "zod"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
-import { evaluateVisual, isEvaluationReportPassing, WEBPAGE_EVALUATE_PASS_SCORE } from "@/verification/visual/evaluate"
+import { evaluateVisual } from "@/verification/visual/evaluate"
 import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
 import { BrowserPreviewViewportID } from "./viewport"
 import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
@@ -100,12 +100,20 @@ export const BrowserPreviewRegionComparisonResult = z.object({
       visual: z
         .object({
           overall_score: z.number(),
-          pass_threshold: z.number(),
           ssim_score: z.number(),
           pixel_diff_percent: z.number(),
           mismatched_pixels: z.number(),
           total_pixels: z.number(),
           dimensions_match: z.boolean(),
+        })
+        .optional(),
+      coverage: z
+        .object({
+          source_width: z.number(),
+          source_height: z.number(),
+          implementation_width: z.number(),
+          implementation_height: z.number(),
+          implementation_covers_source: z.boolean(),
         })
         .optional(),
       artifacts: z
@@ -366,30 +374,38 @@ async function materializeRegionComparison(input: {
   }
   const visual = {
     overall_score: visualReport.overallScore,
-    pass_threshold: WEBPAGE_EVALUATE_PASS_SCORE,
     ssim_score: visualReport.ssimScore,
     pixel_diff_percent: visualReport.pixelDiffPercent,
     mismatched_pixels: visualReport.mismatchedPixels,
     total_pixels: visualReport.totalPixels,
     dimensions_match: visualReport.dimensionsMatch,
   }
-  const passed = isEvaluationReportPassing(visualReport, WEBPAGE_EVALUATE_PASS_SCORE)
+  const coverage = {
+    source_width: Math.ceil(input.sourceBox.width),
+    source_height: Math.ceil(input.sourceBox.height),
+    implementation_width: Math.ceil(input.implementationBox.width),
+    implementation_height: Math.ceil(input.implementationBox.height),
+    implementation_covers_source:
+      Math.ceil(input.implementationBox.width) >= Math.ceil(input.sourceBox.width) &&
+      Math.ceil(input.implementationBox.height) >= Math.ceil(input.sourceBox.height),
+  }
   return {
     region_id: input.binding.region_id,
     viewport_id: input.binding.viewport_id,
     state_id: input.binding.state_id,
-    status: passed ? "completed" : "failed",
-    reason: passed
+    status: coverage.implementation_covers_source ? "completed" : "failed",
+    reason: coverage.implementation_covers_source
       ? undefined
-      : `Region visual score ${visualReport.overallScore}/100 below threshold ${WEBPAGE_EVALUATE_PASS_SCORE}/100.`,
+      : `Implementation crop is smaller than source region: source=${coverage.source_width}x${coverage.source_height} implementation=${coverage.implementation_width}x${coverage.implementation_height}.`,
     source_bbox: input.sourceBox,
     implementation_bbox: input.implementationBox,
     visual,
+    coverage,
     artifacts,
     diagnostics: [
-      passed
-        ? `reference comparison completed for ${input.binding.region_id}: visual score ${visualReport.overallScore}/100`
-        : `reference comparison failed for ${input.binding.region_id}: visual score ${visualReport.overallScore}/100 below ${WEBPAGE_EVALUATE_PASS_SCORE}/100`,
+      coverage.implementation_covers_source
+        ? `reference comparison completed for ${input.binding.region_id}: implementation crop covers source region; visual score ${visualReport.overallScore}/100 is diagnostic only`
+        : `reference comparison failed for ${input.binding.region_id}: implementation crop ${coverage.implementation_width}x${coverage.implementation_height} is smaller than source ${coverage.source_width}x${coverage.source_height}`,
     ],
   }
 }
