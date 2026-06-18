@@ -129,104 +129,96 @@ export function CardHeader(props: {
     <div
       class="card__head"
       classList={{ "card__head--with-meta": hasSecondaryText() }}
-      role={props.collapsible ? "button" : undefined}
-      tabindex={props.collapsible ? 0 : undefined}
-      aria-expanded={props.collapsible ? props.expanded : undefined}
-      onClick={() => {
-        if (!props.collapsible) return
-        props.onToggle()
-      }}
-      onKeyDown={(e) => {
-        if (!props.collapsible) return
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          props.onToggle()
-        }
-      }}
     >
-      <Show when={glyph()}>
-        <span class="card__icon">{glyph()}</span>
-      </Show>
-      <div class="card__main">
-        <div class="card__title-row">
-          <Show
-            when={stepRevisionLabel()}
-            fallback={
-              <Show when={(props.node.round ?? 0) > 0}>
-                <span class="card__round card__round--lead">#{props.node.round}</span>
-              </Show>
-            }
-          >
-            <span class="card__round card__round--lead">{stepRevisionLabel()}</span>
-          </Show>
-          <span class="card__title">{cardTitleText(props.node.title)}</span>
-          <Show when={durationText()}>
-            <span
-              class="card__duration"
-              title={t("card.duration_tooltip", { value: durationText() })}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {durationText()}
-            </span>
-          </Show>
-          <Show when={props.node.subtitle}>
-            <span class="card__subtitle" title={props.node.subtitle}>
-              {props.node.subtitle}
-            </span>
-          </Show>
-          <Show when={props.node.status === "error" && !!props.node.errorReason}>
-            <button
-              type="button"
-              class="card__error-reason"
-              classList={{ "card__error-reason--copied": reasonCopied() }}
-              title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
-              aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
-              onClick={async (e) => {
-                e.stopPropagation()
-                const reason = props.node.errorReason || ""
-                if (!reason) return
-                const ok = await writeClipboard(reason)
-                if (!ok) return
-                setReasonCopied(true)
-                setTimeout(() => setReasonCopied(false), 1200)
-              }}
-            >
-              {props.node.errorReason}
-            </button>
-          </Show>
-          <span class="card__title-spacer" aria-hidden="true" />
-        </div>
-        <Show when={collapsedPreview()}>
-          <div class="card__preview-row">
-            <span class="card__collapsed-preview" title={collapsedPreview()}>
-              {collapsedPreview()}
-            </span>
-          </div>
+      <button
+        type="button"
+        class="card__head-main"
+        aria-expanded={props.collapsible ? props.expanded : undefined}
+        onClick={() => {
+          if (!props.collapsible) return
+          props.onToggle()
+        }}
+      >
+        <Show when={glyph()}>
+          <span class="card__icon">{glyph()}</span>
         </Show>
-        <Show when={todoSummary()}>
-          {(summary) => (
-            <div
-              class="card__todo-summary"
-              title={`${summary().completed}/${summary().total} done${summary().current ? ` · ${summary().current}` : ""}`}
+        <span class="card__main">
+          <span class="card__title-row">
+            <Show
+              when={stepRevisionLabel()}
+              fallback={
+                <Show when={(props.node.round ?? 0) > 0}>
+                  <span class="card__round card__round--lead">#{props.node.round}</span>
+                </Show>
+              }
             >
-              <span
-                class="card__todo-progress"
-                role="progressbar"
-                aria-valuenow={summary().completed}
-                aria-valuemin={0}
-                aria-valuemax={summary().total}
-                style={{ "--pct": `${todoProgressPct()}%` }}
-              />
-              <span class="card__todo-count">
-                {summary().completed}/{summary().total}
+              <span class="card__round card__round--lead">{stepRevisionLabel()}</span>
+            </Show>
+            <span class="card__title">{cardTitleText(props.node.title)}</span>
+            <Show when={durationText()}>
+              <span class="card__duration" title={t("card.duration_tooltip", { value: durationText() })}>
+                {durationText()}
               </span>
-              <Show when={summary().current}>
-                <span class="card__todo-current">{summary().current}</span>
-              </Show>
-            </div>
-          )}
-        </Show>
-      </div>
+            </Show>
+            <Show when={props.node.subtitle}>
+              <span class="card__subtitle" title={props.node.subtitle}>
+                {props.node.subtitle}
+              </span>
+            </Show>
+            <span class="card__title-spacer" aria-hidden="true" />
+          </span>
+          <Show when={collapsedPreview()}>
+            <span class="card__preview-row">
+              <span class="card__collapsed-preview" title={collapsedPreview()}>
+                {collapsedPreview()}
+              </span>
+            </span>
+          </Show>
+          <Show when={todoSummary()}>
+            {(summary) => (
+              <span
+                class="card__todo-summary"
+                title={`${summary().completed}/${summary().total} done${summary().current ? ` · ${summary().current}` : ""}`}
+              >
+                <span
+                  class="card__todo-progress"
+                  role="progressbar"
+                  aria-valuenow={summary().completed}
+                  aria-valuemin={0}
+                  aria-valuemax={summary().total}
+                  style={{ "--pct": `${todoProgressPct()}%` }}
+                />
+                <span class="card__todo-count">
+                  {summary().completed}/{summary().total}
+                </span>
+                <Show when={summary().current}>
+                  <span class="card__todo-current">{summary().current}</span>
+                </Show>
+              </span>
+            )}
+          </Show>
+        </span>
+      </button>
+      <Show when={props.node.status === "error" && !!props.node.errorReason}>
+        <button
+          type="button"
+          class="card__error-reason"
+          classList={{ "card__error-reason--copied": reasonCopied() }}
+          title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
+          aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
+          onClick={async (e) => {
+            e.stopPropagation()
+            const reason = props.node.errorReason || ""
+            if (!reason) return
+            const ok = await writeClipboard(reason)
+            if (!ok) return
+            setReasonCopied(true)
+            setTimeout(() => setReasonCopied(false), 1200)
+          }}
+        >
+          {props.node.errorReason}
+        </button>
+      </Show>
       <div class="card__actions">
         <Show when={hasMetaActions()}>
           <div class="card__meta-actions">

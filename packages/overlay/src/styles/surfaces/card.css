@@ -248,7 +248,7 @@ body {
   font-size: var(--card-title-size);
   color: var(--text-strong);
   user-select: none;
-  cursor: pointer;
+  cursor: default;
   line-height: 1.35;
   min-height: calc(34px * var(--ui-scale, 1));
   box-sizing: border-box;
@@ -259,7 +259,7 @@ body {
 .card__head--with-meta {
   align-items: flex-start;
 }
-.card__head[role="button"]:hover {
+.card__head:hover {
   background: color-mix(in srgb, var(--card-bg-hover) 68%, transparent);
 }
 .card:not([data-depth="0"]) .card__head {
@@ -267,10 +267,27 @@ body {
   padding: calc(6px * var(--ui-scale, 1)) calc(9px * var(--ui-scale, 1));
 }
 
-.card__head[tabindex] {
+.card__head-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale, 1));
+  padding: 0;
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card__head-main:focus {
   outline: none;
 }
-.card__head[tabindex]:focus-visible {
+.card__head-main:focus-visible {
   box-shadow: inset 0 0 0 calc(2px * var(--ui-scale)) var(--accent-dim);
 }
 
@@ -348,6 +365,10 @@ body {
 
 .card__head--with-meta .card__actions {
   padding-top: calc(1px * var(--ui-scale));
+}
+
+.card__head > .card__error-reason {
+  flex: 0 1 auto;
 }
 
 .card__title {
@@ -988,7 +1009,7 @@ body {
 }
 
 /* card__error-reason — clickable button-styled chip on cards that flipped
-   to status="error". Lives in the title row so the operator sees WHY a
+   to status="error". Lives beside the disclosure title so the operator sees WHY a
    session failed without expanding the card. Truncates with ellipsis;
    the full reason lives in the title tooltip and click copies it to the
    clipboard for pasting into a bug report. data-copied flips to --good

@@ -324,57 +324,51 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
           <div
             class="chat-bubble__head"
             data-align={align()}
-            role="button"
-            tabindex={0}
-            aria-expanded={expanded()}
-            onClick={toggleExpanded}
-            onKeyDown={(event) => {
-              if (event.target !== event.currentTarget) return
-              if (event.key !== "Enter" && event.key !== " ") return
-              event.preventDefault()
-              toggleExpanded()
-            }}
           >
             <div class="chat-bubble__title-row">
-              <div class="chat-bubble__identity" data-align={align()}>
-                <Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />
-                <div class="chat-bubble__identity-copy">
-                  <div class="chat-bubble__title-line" data-align={align()}>
-                    <span class="chat-bubble__title">{roleTitle()}</span>
-                    <Show when={durationText()}>
-                      <span
-                        class="card__duration"
-                        title={t("card.duration_tooltip", { value: durationText() })}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {durationText()}
-                      </span>
-                    </Show>
-                    <Show when={props.node.status === "error" && !!props.node.errorReason}>
-                      <button
-                        type="button"
-                        class="card__error-reason"
-                        classList={{ "card__error-reason--copied": reasonCopied() }}
-                        title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
-                        aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void (async () => {
-                            const reason = props.node.errorReason || ""
-                            if (!reason) return
-                            const ok = await writeClipboard(reason)
-                            if (!ok) return
-                            setReasonCopied(true)
-                            setTimeout(() => setReasonCopied(false), 1200)
-                          })()
-                        }}
-                      >
-                        {props.node.errorReason}
-                      </button>
-                    </Show>
-                  </div>
-                </div>
-              </div>
+              <button
+                type="button"
+                class="chat-bubble__head-main"
+                data-align={align()}
+                aria-expanded={expanded()}
+                onClick={toggleExpanded}
+              >
+                <span class="chat-bubble__identity" data-align={align()}>
+                  <Avatar role={normalizedRole()} status={props.node.status} class="chat-bubble__head-avatar" />
+                  <span class="chat-bubble__identity-copy">
+                    <span class="chat-bubble__title-line" data-align={align()}>
+                      <span class="chat-bubble__title">{roleTitle()}</span>
+                      <Show when={durationText()}>
+                        <span class="card__duration" title={t("card.duration_tooltip", { value: durationText() })}>
+                          {durationText()}
+                        </span>
+                      </Show>
+                    </span>
+                  </span>
+                </span>
+              </button>
+              <Show when={props.node.status === "error" && !!props.node.errorReason}>
+                <button
+                  type="button"
+                  class="card__error-reason"
+                  classList={{ "card__error-reason--copied": reasonCopied() }}
+                  title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
+                  aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void (async () => {
+                      const reason = props.node.errorReason || ""
+                      if (!reason) return
+                      const ok = await writeClipboard(reason)
+                      if (!ok) return
+                      setReasonCopied(true)
+                      setTimeout(() => setReasonCopied(false), 1200)
+                    })()
+                  }}
+                >
+                  {props.node.errorReason}
+                </button>
+              </Show>
               <div class="chat-bubble__actions">
                 <Show when={hasMetaActions()}>
                   <div class="card__meta-actions">

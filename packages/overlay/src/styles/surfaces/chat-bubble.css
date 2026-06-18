@@ -150,7 +150,7 @@
   gap: calc(4px * var(--ui-scale));
   padding-bottom: calc(8px * var(--ui-scale));
   border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--text) 8%, transparent);
-  cursor: pointer;
+  cursor: default;
   user-select: none;
 }
 
@@ -167,13 +167,43 @@
   gap: calc(10px * var(--ui-scale));
 }
 
+.chat-bubble__head-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-bubble__head-main:focus {
+  outline: none;
+}
+
+.chat-bubble__head-main:focus-visible {
+  outline: calc(2px * var(--ui-scale)) solid var(--accent-dim);
+  outline-offset: calc(2px * var(--ui-scale));
+}
+
+.chat-bubble__head-main[data-align="right"] {
+  justify-content: flex-end;
+  text-align: right;
+}
+
 .chat-bubble__head[data-align="right"] .chat-bubble__title-row {
   flex-direction: row-reverse;
 }
 
 .chat-bubble-row[data-role="user"] .chat-bubble__title-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
+  flex-direction: row-reverse;
   align-items: center;
 }
 
@@ -195,7 +225,9 @@
 }
 
 .chat-bubble-row[data-role="user"] .chat-bubble__identity {
-  display: contents;
+  display: flex;
+  flex-direction: row-reverse;
+  text-align: right;
 }
 
 .chat-bubble__identity-copy {
@@ -219,9 +251,8 @@
 }
 
 .chat-bubble-row[data-role="user"] .chat-bubble__identity-copy {
-  grid-column: 1;
-  grid-row: 1;
-  justify-self: stretch;
+  min-width: 0;
+  flex: 1 1 auto;
   text-align: left;
 }
 
@@ -255,16 +286,12 @@
 }
 
 .chat-bubble-row[data-role="user"] .chat-bubble__actions {
-  grid-column: 2;
-  grid-row: 1;
   align-self: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .chat-bubble-row[data-role="user"] .chat-bubble__head-avatar {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
+  flex: none;
 }
 
 .chat-bubble__body {

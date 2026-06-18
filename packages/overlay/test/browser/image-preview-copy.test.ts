@@ -348,8 +348,40 @@ test(
           )}`,
         )
       }
-      await page.click('.card[data-kind="tool"] > .card__head')
+      const toolHeaderSemantics = await page.$eval('.card[data-kind="tool"] > .card__head', (head) => {
+        const header = head as HTMLElement
+        const main = header.querySelector<HTMLElement>(".card__head-main")
+        const actions = header.querySelector<HTMLElement>(".card__actions")
+        const actionButton = actions?.querySelector("button") ?? null
+        return {
+          headerRole: header.getAttribute("role"),
+          headerTabIndex: header.getAttribute("tabindex"),
+          mainTag: main?.tagName || "",
+          mainExpanded: main?.getAttribute("aria-expanded") || "",
+          actionsInsideMain: !!main && !!actions && main.contains(actions),
+          actionButtonInsideMain: !!main && !!actionButton && main.contains(actionButton),
+        }
+      })
+      assert.deepEqual(toolHeaderSemantics, {
+        headerRole: null,
+        headerTabIndex: null,
+        mainTag: "BUTTON",
+        mainExpanded: "false",
+        actionsInsideMain: false,
+        actionButtonInsideMain: false,
+      })
+      await page.focus('.card[data-kind="tool"] > .card__head .card__head-main')
+      await page.keyboard.press("Enter")
       await page.waitForSelector(".msg-browser-evidence__trigger")
+      const expandedToolHeader = await page.$eval('.card[data-kind="tool"] > .card__head .card__head-main', (main) =>
+        main.getAttribute("aria-expanded"),
+      )
+      assert.equal(expandedToolHeader, "true")
+      const toolCard = await page.$('.card[data-kind="tool"]')
+      assert.ok(toolCard)
+      const toolHeaderScreenshotPath = resolve(".scratch", "card-header-sibling-controls.png")
+      mkdirSync(resolve(".scratch"), { recursive: true })
+      writeFileSync(toolHeaderScreenshotPath, await toolCard.screenshot({}))
       await page.click(".msg-browser-evidence__trigger")
       await page.waitForSelector("#imagePreviewDialog")
       await page.waitForFunction(() => {

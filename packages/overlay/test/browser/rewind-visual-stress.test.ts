@@ -284,6 +284,31 @@ async function visualSnapshot(page: OverlayPage) {
         overlap: overlaps(metaBox, controlBox),
       }
     })
+    const headerSemantics = Array.from(
+      document.querySelectorAll<HTMLElement>(".card__head, .chat-bubble__head"),
+    ).map((element) => {
+      const isBubble = element.classList.contains("chat-bubble__head")
+      const parent = element.closest<HTMLElement>("[data-card-id]")
+      const main = element.querySelector<HTMLButtonElement>(
+        isBubble ? ":scope .chat-bubble__head-main" : ":scope .card__head-main",
+      )
+      const actions = element.querySelector<HTMLElement>(
+        isBubble ? ":scope .chat-bubble__actions" : ":scope .card__actions",
+      )
+      const actionButton = actions?.querySelector<HTMLButtonElement>("button") ?? null
+      return {
+        cardID: parent?.dataset.cardId || "",
+        kind: isBubble ? "bubble" : "card",
+        role: element.getAttribute("role"),
+        tabIndex: element.getAttribute("tabindex"),
+        mainTag: main?.tagName || "",
+        mainExpanded: main?.getAttribute("aria-expanded") || "",
+        actionsInsideMain: !!main && !!actions && main.contains(actions),
+        actionButtonInsideMain: !!main && !!actionButton && main.contains(actionButton),
+        main: box(main),
+        actions: box(actions),
+      }
+    })
     const notifications = Array.from(document.querySelectorAll<HTMLElement>(".app-notification")).map(
       (element) => element.textContent?.trim().replace(/\s+/g, " ").slice(0, 240) || "",
     )
@@ -308,6 +333,7 @@ async function visualSnapshot(page: OverlayPage) {
       visibleCards,
       headerControls,
       headerActionGroups,
+      headerSemantics,
       notifications,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
@@ -329,6 +355,18 @@ async function visualSnapshot(page: OverlayPage) {
       meta: Record<string, number> | null
       controls: Record<string, number> | null
       overlap: boolean
+    }>
+    headerSemantics: Array<{
+      cardID: string
+      kind: string
+      role: string | null
+      tabIndex: string | null
+      mainTag: string
+      mainExpanded: string
+      actionsInsideMain: boolean
+      actionButtonInsideMain: boolean
+      main: Record<string, number> | null
+      actions: Record<string, number> | null
     }>
     notifications: string[]
     viewportWidth: number
@@ -463,6 +501,22 @@ function assertNoLayoutBreakage(snapshot: Awaited<ReturnType<typeof visualSnapsh
     snapshot.headerActionGroups.some((item) => item.hasMeta && item.hasControls),
     `header action meta/control grouping missing\n${JSON.stringify(snapshot.headerActionGroups, null, 2)}`,
   )
+  assert.ok(
+    snapshot.headerSemantics.length >= 1,
+    `header semantics missing\n${JSON.stringify(snapshot.headerSemantics, null, 2)}`,
+  )
+  for (const item of snapshot.headerSemantics) {
+    assert.equal(item.role, null, `header container still has role\n${JSON.stringify(item, null, 2)}`)
+    assert.equal(item.tabIndex, null, `header container still has tabindex\n${JSON.stringify(item, null, 2)}`)
+    assert.equal(item.mainTag, "BUTTON", `header disclosure is not a native button\n${JSON.stringify(item, null, 2)}`)
+    assert.match(item.mainExpanded, /^(true|false)$/, `header disclosure lacks aria-expanded\n${JSON.stringify(item)}`)
+    assert.equal(item.actionsInsideMain, false, `header actions nested in disclosure\n${JSON.stringify(item, null, 2)}`)
+    assert.equal(
+      item.actionButtonInsideMain,
+      false,
+      `header action button nested in disclosure\n${JSON.stringify(item, null, 2)}`,
+    )
+  }
   for (const item of snapshot.headerControls) {
     assert.ok(Number(item.width) >= 12 && Number(item.height) >= 12, `bad rewind control box ${JSON.stringify(item)}`)
     assert.ok(

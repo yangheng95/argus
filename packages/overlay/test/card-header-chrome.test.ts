@@ -23,3 +23,19 @@ test("CardHeader groups metadata separately from icon controls", () => {
   expect(CARD_CSS).toContain(".card__control-actions")
   expect(CARD_CSS).toContain(".card__actions > .card__control-actions:first-child")
 })
+
+test("CardHeader keeps disclosure and action buttons as sibling controls", () => {
+  expect(CARD_HEADER_TSX).toContain('class="card__head-main"')
+  expect(CARD_HEADER_TSX).toContain("aria-expanded={props.collapsible ? props.expanded : undefined}")
+  expect(CARD_HEADER_TSX).not.toContain('role={props.collapsible ? "button" : undefined}')
+  expect(CARD_HEADER_TSX).not.toContain("tabindex={props.collapsible ? 0 : undefined}")
+  expect(CARD_CSS).toContain(".card__head-main")
+  expect(CARD_CSS).toContain(".card__head-main:focus-visible")
+
+  const mainButton = CARD_HEADER_TSX.indexOf('class="card__head-main"')
+  const errorButton = CARD_HEADER_TSX.indexOf('class="card__error-reason"')
+  const actions = CARD_HEADER_TSX.indexOf('class="card__actions"')
+  expect(mainButton).toBeGreaterThan(0)
+  expect(errorButton).toBeGreaterThan(mainButton)
+  expect(actions).toBeGreaterThan(errorButton)
+})
