@@ -14,21 +14,17 @@ function readCss(rel: string): string {
   return readFileSync(join(OVERLAY_ROOT, "src/styles", rel), "utf8")
 }
 
+function overlayStyleHrefs(): string[] {
+  const html = readFileSync(join(OVERLAY_ROOT, "src/index.html"), "utf8")
+  const hrefs = Array.from(html.matchAll(/<link\s+rel="stylesheet"\s+href="styles\/([^"]+)"/g), (match) => match[1])
+  if (hrefs.length === 0) throw new Error("No overlay stylesheet links found in src/index.html")
+  return hrefs
+}
+
+const OVERLAY_STYLE_HREFS = overlayStyleHrefs()
+
 function overlayCss(): string {
-  return [
-    "tokens/design-language.css",
-    "cascade/base.css",
-    "cascade/dark.css",
-    "cascade/vscode-dark.css",
-    "cascade/light.css",
-    "surfaces/field.css",
-    "surfaces/composer.css",
-    "surfaces/dialog.css",
-    "surfaces/inspector.css",
-    "surfaces/settings.css",
-  ]
-    .map(readCss)
-    .join("\n")
+  return OVERLAY_STYLE_HREFS.map(readCss).join("\n")
 }
 
 async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
@@ -243,6 +239,7 @@ test("shared Select popup consumers keep readable options on a light popup surfa
             })
           return {
             text: option.textContent?.trim().replace(/\s+/g, " ") ?? "",
+            selectedAttribute: option.getAttribute("aria-selected"),
             selected: option.getAttribute("aria-selected") === "true" || option.hasAttribute("data-selected"),
             color: getComputedStyle(option).color,
             background: getComputedStyle(option).backgroundColor,
@@ -281,6 +278,11 @@ test("shared Select popup consumers keep readable options on a light popup surfa
       result.map((sample) => sample.id),
       ["prompt-profile", "agent-model", "settings-form", "app-dialog", "browser-preview", "log-level"],
     )
+    assert.equal(
+      OVERLAY_STYLE_HREFS.indexOf("surfaces/composer.css") < OVERLAY_STYLE_HREFS.indexOf("surfaces/field.css"),
+      true,
+      "Select matrix must load CSS in the same order as src/index.html",
+    )
 
     for (const sample of result) {
       assert.equal(sample.contentBackgroundAlpha, 1, `${sample.id} popup background must be opaque`)
@@ -288,6 +290,10 @@ test("shared Select popup consumers keep readable options on a light popup surfa
       assert.ok(
         sample.options.some((option) => !option.selected),
         `${sample.id} must cover at least one unselected option`,
+      )
+      assert.ok(
+        sample.options.some((option) => option.selectedAttribute === "false"),
+        `${sample.id} must cover an explicit aria-selected=false option`,
       )
       for (const copy of sample.copyLayouts.filter((layout) => layout.hasDescription)) {
         assert.equal(copy.display, "flex", `${sample.id} described option copy must use shared flex layout`)
