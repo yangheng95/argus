@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import os from "os"
 import { Ownership } from "../../src/engine/ownership"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
 let rootDir = ""
 
@@ -51,8 +52,8 @@ describe("Ownership.Worktree", () => {
     await Ownership.Worktree.record({
       primaryWorktreeDir: rootDir,
       worktreeDir,
-      taskID: "t",
-      sessionID: "s",
+      taskID: "task_clear",
+      sessionID: "sess_clear",
     })
     expect((await Ownership.Worktree.list(rootDir)).length).toBe(1)
     await Ownership.Worktree.clear({ primaryWorktreeDir: rootDir, worktreeDir })
@@ -89,7 +90,7 @@ describe("Ownership.Worktree", () => {
     })
 
     // Drop a bad marker: simulate a partially-written marker file.
-    const badMarkerPath = path.join(rootDir, ".opencorvus", "runtime", "ownership", "worktrees", "garbage.json")
+    const badMarkerPath = path.join(ProjectRuntimePaths.ownershipRoot(rootDir), "worktrees", "garbage.json")
     await fs.mkdir(path.dirname(badMarkerPath), { recursive: true })
     await fs.writeFile(badMarkerPath, "{not-json}\n", { encoding: "utf8" })
 
@@ -121,8 +122,8 @@ describe("Ownership.Process", () => {
       primaryWorktreeDir: rootDir,
       pid: 12345,
       cwd: rootDir,
-      taskID: "task",
-      sessionID: "sess",
+      taskID: "task_process",
+      sessionID: "sess_process",
     })
     const items = await Ownership.Process.list(rootDir)
     expect(items.length).toBe(1)
@@ -135,15 +136,15 @@ describe("Ownership.Process", () => {
       primaryWorktreeDir: rootDir,
       pid: 999_999_999,
       cwd: rootDir,
-      taskID: "dead",
-      sessionID: "s",
+      taskID: "task_dead_process",
+      sessionID: "sess_process",
     })
     await Ownership.Process.record({
       primaryWorktreeDir: rootDir,
       pid: process.pid,
       cwd: rootDir,
-      taskID: "live",
-      sessionID: "s",
+      taskID: "task_live_process",
+      sessionID: "sess_process",
     })
 
     const orphans = await Ownership.Process.orphans({
@@ -151,7 +152,7 @@ describe("Ownership.Process", () => {
       isPidAlive: (pid) => pid === process.pid,
     })
     expect(orphans.length).toBe(1)
-    expect(orphans[0].marker.taskID).toBe("dead")
+    expect(orphans[0].marker.taskID).toBe("task_dead_process")
     expect(orphans[0].reason).toBe("owner-process-dead")
   })
 })
@@ -167,13 +168,13 @@ describe("Ownership.cleanup", () => {
       primaryWorktreeDir: rootDir,
       worktreeDir: liveDir,
       taskID: "task_live",
-      sessionID: "s",
+      sessionID: "sess_live",
     })
     await Ownership.Worktree.record({
       primaryWorktreeDir: rootDir,
       worktreeDir: deadDir,
       taskID: "task_dead",
-      sessionID: "s",
+      sessionID: "sess_dead",
       ownerPid: 999_999_997,
     })
     await Ownership.Process.record({
@@ -181,7 +182,7 @@ describe("Ownership.cleanup", () => {
       pid: 999_999_996,
       cwd: rootDir,
       taskID: "task_dead_proc",
-      sessionID: "s",
+      sessionID: "sess_dead_proc",
     })
 
     const removeCalls: string[] = []
