@@ -1,16 +1,16 @@
 // Regression for iter9 of the design-language audit.
 //
-// Three settings-panel section headers carried the same tier-3 pill
+// Settings-panel section headers carried the same tier-3 pill
 // styling (`text-transform: uppercase` + 0.05em wide tracking) even
 // though they read as section subtitles, not status chips:
 //
 //   - .about-section-title         (About panel: "Runtime", "Shortcuts", …)
-//   - .config-panel-group-title    (Settings panels: "Default Model",
-//                                    "Connections", "Channels", …)
+//   - .oc-surface-header[data-surface="settings-group"]
+//                                  (Settings panels: "Connection", "Database", …)
 //   - .agent-model-tier-label      (Agent Models tier dividers)
 //
 // After iter4 (`.btn`) and iter7 (`.field-label`) the rest of the
-// settings surface renders Title Case. These three were the
+// settings surface renders Title Case. These headers were the
 // remaining tier-2 leaks — sitting in the same panel as a Title
 // Case form label and an underlying Title Case button, but
 // rendering as ALL CAPS themselves. Pin a single contract here so
@@ -61,7 +61,11 @@ function ruleBody(selector: string): string {
 }
 
 describe("settings-panel section headers render Title Case", () => {
-  for (const sel of [".about-section-title", ".config-panel-group-title", ".agent-model-tier-label"]) {
+  for (const sel of [
+    ".about-section-title",
+    '.oc-surface-header[data-surface="settings-group"]',
+    ".agent-model-tier-label",
+  ]) {
     test(`${sel} does not force-uppercase`, () => {
       expect(ruleBody(sel)).not.toContain("text-transform: uppercase")
     })

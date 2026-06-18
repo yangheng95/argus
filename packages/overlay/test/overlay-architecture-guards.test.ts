@@ -3032,8 +3032,16 @@ describe("overlay architecture guards", () => {
     expect(count(/<SurfaceHeader/g, skillMarket)).toBe(3)
 
     const generalPanel = readText(join(OVERLAY_ROOT, "src/components/settings/GeneralPanel.tsx"))
-    expect(count(/<SurfaceHeader/g, generalPanel)).toBe(2)
+    expect(count(/<SurfaceHeader/g, generalPanel)).toBe(3)
+    for (const key of [
+      "settings.section.connection",
+      "settings.section.database",
+      "settings.section.behaviour",
+    ]) {
+      expect(generalPanel).toContain(`<SurfaceHeader variant="settings-group" title={t("${key}")} />`)
+    }
     expect(generalPanel).not.toContain("config-panel-group-title")
+    expect(generalPanel).not.toContain("config-panel-group-head")
 
     const agentModelsPanel = readText(join(OVERLAY_ROOT, "src/components/settings/AgentModelsPanel.tsx"))
     expect(count(/<SurfaceHeader/g, agentModelsPanel)).toBe(1)
@@ -3043,6 +3051,10 @@ describe("overlay architecture guards", () => {
     const providersPanel = readText(join(OVERLAY_ROOT, "src/components/settings/ProvidersPanel.tsx"))
     expect(count(/<SurfaceHeader/g, providersPanel)).toBe(1)
     expect(providersPanel).not.toContain("config-panel-group-title")
+
+    const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
+    expect(settingsSurface).not.toContain(".config-panel-group-title")
+    expect(settingsSurface).not.toContain(".config-panel-group-head")
 
     const conversationAgentRail = readText(join(OVERLAY_ROOT, "src/components/ConversationAgentRail.tsx"))
     expect(conversationAgentRail).not.toContain("<SurfaceHeader")
