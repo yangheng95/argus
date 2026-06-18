@@ -1084,6 +1084,7 @@ export class Executor extends HeyApiClient {
     parameters: {
       executorID: string
       directory?: string
+      model: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1094,6 +1095,7 @@ export class Executor extends HeyApiClient {
           args: [
             { in: "path", key: "executorID" },
             { in: "query", key: "directory" },
+            { in: "body", key: "model" },
           ],
         },
       ],
@@ -1102,6 +1104,11 @@ export class Executor extends HeyApiClient {
       url: "/executor/{executorID}/model",
       ...options,
       ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }

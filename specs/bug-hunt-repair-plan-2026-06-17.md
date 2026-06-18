@@ -4,7 +4,7 @@
 
 Repair the substantive findings recorded in `specs/bug-hunt-2026-06-17.md` by priority. This plan is append-only by batch: each batch records the disk evidence, call-point inventory, fix shape, and regression tests before code changes.
 
-Glossary: TLS means Transport Layer Security. API means Application Programming Interface. HMAC means Hash-based Message Authentication Code. STT means Speech To Text. UI means User Interface. URL means Uniform Resource Locator. DOM means Document Object Model. PNG means Portable Network Graphics.
+Glossary: TLS means Transport Layer Security. API means Application Programming Interface. HMAC means Hash-based Message Authentication Code. STT means Speech To Text. UI means User Interface. URL means Uniform Resource Locator. DOM means Document Object Model. PNG means Portable Network Graphics. JSON means JavaScript Object Notation. SDK means Software Development Kit.
 
 ## Batch P0-A: channel runtime fail-closed inbound security
 
@@ -3117,3 +3117,48 @@ LINE:
 - Sagan also confirmed the optimistic prune half was already gone from HEAD, so the right repair was not another card-tree patch but a single rewind submitter plus visible failure propagation.
 - Lagrange confirmed the browser benchmark blocker was a real restored-task UI binding bug: `restoreInitialWorkspace()` selected the task, but `main.tsx` still defaulted `primaryCenterPanel()` to Mission, causing `missionLedgerActive()` to disable the composer.
 - Lagrange confirmed `titlebar.menu.tools` was a real missing runtime locale key and recommended the focused static/browser tests now included in this batch.
+
+## Batch P1-AZ: BH-084 executor model PATCH must require a JSON model body
+
+### Findings
+
+- BH-084 targets `packages/opencorvus/src/server/routes/executor.ts` and the generated SDK contract in `packages/sdk/openapi.json` plus `packages/sdk/js/src/gen`.
+- HEAD still handled `PATCH /executor/:executorID/model` by calling `c.req.json<{ model?: string }>()` directly, then treating every non-string or missing `model` field as an empty string.
+- For `codex` and `claude-code`, that path called `setModelOverride(executorID, null)` and cleared `OPENCORVUS_EXECUTOR_CODEX_MODEL` or `OPENCORVUS_EXECUTOR_CLAUDE_MODEL` while returning 200.
+- The route also lacked a JSON validator, so OpenAPI did not expose a required request body and the generated SDK exposed `ExecutorSetModelData.body?: never`.
+- The existing native-model design record explicitly keeps validation centralized in `setModelOverride`; this batch preserves that by validating only the body shape at the route boundary and leaving native model value validation in `runtime-env.ts`.
+
+### Call-point Inventory
+
+- `packages/opencorvus/src/server/routes/app.ts` mounts `ExecutorRoutes()` at `/executor`.
+- `packages/opencorvus/src/server/routes/executor.ts::PATCH /:executorID/model` is the only production caller of `setModelOverride(...)`.
+- `packages/opencorvus/src/server/routes/executor.ts::GET /:executorID/model` and executor list rows call `getModelOverride(...)`.
+- `packages/opencorvus/src/executor/runtime-env.ts` maps executor IDs to `OPENCORVUS_EXECUTOR_CODEX_MODEL` and `OPENCORVUS_EXECUTOR_CLAUDE_MODEL`; it trims values, clears empty strings, and rejects OpenCorvus provider/model refs for external executors.
+- `packages/overlay/src/components/ExecutorSelector.tsx::pickExternalModel(...)` calls `packages/overlay/src/services/executor.ts::setExecutorModel(...)`, which sends the overlay model picker value to this PATCH route.
+- SDK generation flows through `packages/opencorvus/src/server/server.ts::openapi()`, `packages/opencorvus/src/cli/cmd/generate.ts::generateOpenApiSpec()`, `packages/opencorvus/script/generate-openapi.ts`, and `packages/sdk/js/script/build.ts`.
+- `packages/opencorvus/test/server/executor-routes.test.ts` previously covered only `GET /executor`; `packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts` already carried static generated-SDK contract checks for browser preview request bodies.
+
+### Fix Shape
+
+- Add one route-local Zod schema, `ExecutorSetModelInput`, requiring `model: string` and rejecting unknown JSON properties.
+- Add `validator("json", ExecutorSetModelInput)` to `PATCH /:executorID/model` and read the body through `c.req.valid("json")`.
+- Keep empty string as the explicit clear operation: `body.model.trim() || null` still clears the executor model override.
+- Add the generic 400 response documentation through the existing `errors(400)` helper.
+- Do not add fallback parsing, model-name compatibility translation, a route gate, or a parallel SDK schema.
+- Let `Server.openapi()` and `packages/sdk/js/script/build.ts` regenerate the OpenAPI and SDK from the validator-owned schema; the generated SDK now exposes required `model: string` and maps it into the JSON body.
+
+### Verification
+
+- Added route regressions in `packages/opencorvus/test/server/executor-routes.test.ts`: `{ model: 42 }` and `{}` return 400 and leave the existing Codex model env unchanged; valid string bodies update the env; empty string still clears it; a valid body for unsupported `opencorvus` still returns 404.
+- Added live OpenAPI regression in `packages/opencorvus/test/server/executor-routes.test.ts`: `/executor/{executorID}/model` PATCH has `requestBody.required === true`, `model` is a string, and `required` contains `model`.
+- Added generated SDK contract regression in `packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts`: tracked OpenAPI requires the body, `ExecutorSetModelData` contains required `body.model`, and `OpenCorvusClient.executor.setModel(...)` requires a flat `model: string` parameter mapped into the request body.
+- Regenerated SDK/OpenAPI with `bun run --cwd packages/sdk/js build`.
+- Focused tests passed: `bun test packages/opencorvus/test/executor/runtime-env.test.ts packages/opencorvus/test/server/executor-routes.test.ts packages/opencorvus/test/script/sdk-open-corvus-client-contract.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Banach confirmed BH-084 was still present in HEAD before the local repair: malformed JSON object bodies could return 200 and clear executor model env state, while generated SDK still had `body?: never`.
+- Banach found no existing PATCH route coverage and identified the existing static SDK contract test as the right place to add generated-client assertions.
+- Banach recommended the same minimal boundary used here: one Zod schema, `validator("json", ...)`, `c.req.valid("json")`, `errors(400)`, SDK regeneration from OpenAPI, and no fallback, gate, compatibility shim, or hand-edited generated contract.

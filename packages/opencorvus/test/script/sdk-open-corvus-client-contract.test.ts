@@ -125,4 +125,32 @@ describe("SDK OpenCorvus client contract", () => {
     expect(types).toContain("export type BrowserPreviewCaptureTaskTargetData = {\n  body: {")
     expect(types).toContain('viewportIDs: Array<"desktop" | "tablet" | "mobile">')
   })
+
+  test("executor set model SDK requires a model request body", () => {
+    const sdk = readRepoFile("packages", "sdk", "js", "src", "gen", "sdk.gen.ts")
+    const types = readRepoFile("packages", "sdk", "js", "src", "gen", "types.gen.ts")
+    const openapi = JSON.parse(readRepoFile("packages", "sdk", "openapi.json")) as {
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            requestBody?: {
+              required?: boolean
+              content?: { "application/json"?: { schema?: { properties?: Record<string, unknown>; required?: string[] } } }
+            }
+          }
+        >
+      >
+    }
+    const schema =
+      openapi.paths["/executor/{executorID}/model"]?.patch?.requestBody?.content?.["application/json"]?.schema
+
+    expect(openapi.paths["/executor/{executorID}/model"]?.patch?.requestBody?.required).toBe(true)
+    expect(schema?.properties).toHaveProperty("model")
+    expect(schema?.required).toContain("model")
+    expect(types).toMatch(/export type ExecutorSetModelData = \{\s+body: \{[^]*model: string\s+\}/)
+    expect(sdk).toContain("{ in: \"body\", key: \"model\" }")
+    expect(sdk).toMatch(/public setModel<[^]*parameters: \{\s+executorID: string\s+directory\?: string\s+model: string\s+\}/)
+  })
 })
