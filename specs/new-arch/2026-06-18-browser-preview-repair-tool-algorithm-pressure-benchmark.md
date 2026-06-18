@@ -87,6 +87,7 @@ last-resort hung-test guard for Playwright calls.
 | Local module located by `data-testid`, ARIA role/name, or owned CSS selector | Local capture | Capture and bind the same visible module through each supported locator kind. |
 | Source bbox outside image bounds | Region comparison | Persist failed reference-comparison evidence with no crops. |
 | Hidden or zero-size implementation region | Region comparison | Persist failed reference-comparison evidence with no one-pixel crop. |
+| Valid source and implementation crops with different visuals | Region comparison | Persist side-by-side and diff artifacts but mark the region comparison failed when visual score is below threshold. |
 | Below-fold implementation region | Region comparison | Crop from a full-page implementation screenshot so valid offscreen module bboxes do not fail as viewport-clipped artifacts. |
 | Mobile source reference artifact | Region comparison | Use `reference-mobile.png` with the mobile viewport and persist mobile source/local comparison artifacts instead of silently comparing desktop evidence. |
 | Multiple visual regions in one route and viewport | Region comparison | Persist independent source crop, implementation crop, side-by-side, diff, and evidence IDs for each region without cross-wiring artifacts. |

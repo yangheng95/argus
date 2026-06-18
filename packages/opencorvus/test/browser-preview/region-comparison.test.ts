@@ -148,6 +148,114 @@ describe("browser preview region comparison", () => {
   )
 
   test(
+    "fails visually different regions even when source and implementation crops are valid",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await sharp({
+        create: {
+          width: 800,
+          height: 600,
+          channels: 4,
+          background: "#ffffff",
+        },
+      })
+        .composite([
+          {
+            input: Buffer.from(
+              `<svg width="280" height="110" xmlns="http://www.w3.org/2000/svg">
+                <rect width="280" height="110" fill="#dcfce7"/>
+                <text x="18" y="44" font-family="Arial" font-size="24" fill="#14532d">Credit Pulse</text>
+                <text x="18" y="78" font-family="Arial" font-size="16" fill="#166534">Reference green</text>
+              </svg>`,
+            ),
+            left: 40,
+            top: 60,
+          },
+        ])
+        .png()
+        .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
+      const server = await startVisualMismatchPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const binding: BrowserPreviewRegionBinding = {
+          region_id: "credit-pulse",
+          viewport_id: "desktop",
+          state_id: "default",
+          region_scope: "card",
+          source: {
+            reference_artifact_id: "reference.png",
+            bbox: { x: 40, y: 60, width: 280, height: 110 },
+            semantic_role: "credit pulse metric card",
+            text_anchors: ["Credit Pulse", "Reference green"],
+            source_refs: ["source screenshot"],
+          },
+          implementation: {
+            route: "/mismatch",
+            locator: { kind: "data-oc-region", value: "credit-pulse" },
+            component_files: ["src/CreditPulse.tsx"],
+          },
+          acceptance_refs: ["credit pulse visual parity"],
+        }
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+          bindings: [binding],
+          includeDiff: true,
+        })
+
+        expect(result.status).toBe("failed")
+        expect(result.regions).toHaveLength(1)
+        const region = result.regions[0]
+        expect(region.region_id).toBe("credit-pulse")
+        expect(region.status).toBe("failed")
+        expect(region.reason).toContain("visual score")
+        expect(region.visual?.overall_score).toBeLessThan(region.visual!.pass_threshold)
+        expect(region.visual?.pixel_diff_percent).toBeGreaterThan(50)
+        expect(region.artifacts?.source_crop).toEndWith("source.png")
+        expect(region.artifacts?.implementation_crop).toEndWith("implementation.png")
+        expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
+        expect(region.artifacts?.diff).toEndWith("diff.png")
+
+        const sourceCropPath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.source_crop)
+        const implementationCropPath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.implementation_crop)
+        const sideBySidePath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side)
+        const diffPath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.diff!)
+        await expectPngDimensions(sourceCropPath, { width: 280, height: 110 })
+        await expectPngDimensions(implementationCropPath, { width: 280, height: 110 })
+        await expectPngDimensions(sideBySidePath, { width: 576, height: 186 })
+        await expectPngDimensions(diffPath, { width: 280, height: 110 })
+        await expectPngContainsColor(sourceCropPath, { red: 220, green: 252, blue: 231 })
+        await expectPngContainsColor(implementationCropPath, { red: 254, green: 202, blue: 202 })
+        await expectPngHasColorDiversity(diffPath)
+
+        const evidenceID = result.evidenceIDs["desktop:default:credit-pulse"]
+        expect(evidenceID).toBeTruthy()
+        const evidence = await Instance.provide({
+          directory: tmp.path,
+          fn: () => findReadableBrowserPreviewEvidenceByID({ projectRoot: tmp.path, taskID, evidenceID }),
+        })
+        expect(evidence?.operationKind).toBe("reference-comparison")
+        expect(evidence?.regionID).toBe("credit-pulse")
+        expect(evidence?.stateID).toBe("default")
+        expect(evidence?.status).toBe("failed")
+        expect(evidence?.artifactPaths?.diff).toBe(region.artifacts?.diff)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "keeps multiple same-route visual region evidence independent",
     async () => {
       await using tmp = await tmpdir({ git: true })
@@ -770,6 +878,51 @@ async function startBelowFoldPreviewServer(): Promise<{ url: string; close: () =
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("below-fold preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function startVisualMismatchPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((req, res) => {
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>Mismatch preview</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 60px 40px; }
+            [data-oc-region="credit-pulse"] {
+              width: 280px;
+              height: 110px;
+              background: #fecaca;
+              color: #7f1d1d;
+              box-sizing: border-box;
+              padding: 18px;
+            }
+            h2 { margin: 0 0 14px; font-size: 24px; line-height: 1; }
+            p { margin: 0; font-size: 16px; color: #991b1b; }
+          </style>
+        </head>
+        <body><main><section data-oc-region="credit-pulse"><h2>Credit Pulse</h2><p>Implementation red</p></section></main></body>
+      </html>`
+    if (req.url !== "/mismatch") {
+      res.writeHead(404, { "content-type": "text/plain" })
+      res.end("not found")
+      return
+    }
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("mismatch preview test server did not bind a TCP address")
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>

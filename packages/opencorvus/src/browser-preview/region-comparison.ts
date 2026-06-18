@@ -5,6 +5,7 @@ import z from "zod"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
+import { evaluateVisual, isEvaluationReportPassing, WEBPAGE_EVALUATE_PASS_SCORE } from "@/verification/visual/evaluate"
 import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
 import { BrowserPreviewViewportID } from "./viewport"
 import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
@@ -96,6 +97,17 @@ export const BrowserPreviewRegionComparisonResult = z.object({
       reason: z.string().optional(),
       source_bbox: BrowserPreviewRegionBox.optional(),
       implementation_bbox: BrowserPreviewRegionBox.optional(),
+      visual: z
+        .object({
+          overall_score: z.number(),
+          pass_threshold: z.number(),
+          ssim_score: z.number(),
+          pixel_diff_percent: z.number(),
+          mismatched_pixels: z.number(),
+          total_pixels: z.number(),
+          dimensions_match: z.boolean(),
+        })
+        .optional(),
       artifacts: z
         .object({
           source_crop: z.string(),
@@ -343,20 +355,42 @@ async function materializeRegionComparison(input: {
     implementation_crop: implementationCrop,
     side_by_side: sideBySide,
   }
+  const visualReport = await evaluateVisual({
+    originalImage: sourceCrop,
+    renderedImage: implementationCrop,
+  })
   if (input.includeDiff) {
     const diff = path.join(dir, "diff.png")
-    await makeDiff({ sourcePath: sourceCrop, implementationPath: implementationCrop, outputPath: diff })
+    await writeDataUrlPng(visualReport.diffImageDataUrl, diff)
     artifacts.diff = diff
   }
+  const visual = {
+    overall_score: visualReport.overallScore,
+    pass_threshold: WEBPAGE_EVALUATE_PASS_SCORE,
+    ssim_score: visualReport.ssimScore,
+    pixel_diff_percent: visualReport.pixelDiffPercent,
+    mismatched_pixels: visualReport.mismatchedPixels,
+    total_pixels: visualReport.totalPixels,
+    dimensions_match: visualReport.dimensionsMatch,
+  }
+  const passed = isEvaluationReportPassing(visualReport, WEBPAGE_EVALUATE_PASS_SCORE)
   return {
     region_id: input.binding.region_id,
     viewport_id: input.binding.viewport_id,
     state_id: input.binding.state_id,
-    status: "completed",
+    status: passed ? "completed" : "failed",
+    reason: passed
+      ? undefined
+      : `Region visual score ${visualReport.overallScore}/100 below threshold ${WEBPAGE_EVALUATE_PASS_SCORE}/100.`,
     source_bbox: input.sourceBox,
     implementation_bbox: input.implementationBox,
+    visual,
     artifacts,
-    diagnostics: [`reference comparison completed for ${input.binding.region_id}`],
+    diagnostics: [
+      passed
+        ? `reference comparison completed for ${input.binding.region_id}: visual score ${visualReport.overallScore}/100`
+        : `reference comparison failed for ${input.binding.region_id}: visual score ${visualReport.overallScore}/100 below ${WEBPAGE_EVALUATE_PASS_SCORE}/100`,
+    ],
   }
 }
 
@@ -453,17 +487,12 @@ async function makeSideBySide(input: {
     .toFile(input.outputPath)
 }
 
-async function makeDiff(input: { sourcePath: string; implementationPath: string; outputPath: string }): Promise<void> {
-  const sourceMeta = await sharp(input.sourcePath).metadata()
-  if (!sourceMeta.width || !sourceMeta.height) throw new Error("Cannot diff without source dimensions.")
-  const implementation = await sharp(input.implementationPath)
-    .resize(sourceMeta.width, sourceMeta.height, { fit: "fill" })
-    .png()
-    .toBuffer()
-  await sharp(input.sourcePath)
-    .composite([{ input: implementation, blend: "difference" }])
-    .png()
-    .toFile(input.outputPath)
+async function writeDataUrlPng(input: string, outputPath: string): Promise<void> {
+  const prefix = "data:image/png;base64,"
+  if (!input.startsWith(prefix)) {
+    throw new Error("Visual comparison diff must be a PNG data URL.")
+  }
+  await fs.writeFile(outputPath, Buffer.from(input.slice(prefix.length), "base64"))
 }
 
 function bindingKey(binding: BrowserPreviewRegionBinding): string {
