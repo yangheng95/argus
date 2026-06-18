@@ -3454,3 +3454,50 @@ LINE:
 - Rawls confirmed BH-072 was still present in HEAD `b6ef153741d5b4ce6e440ec08f3f29c4b44d7c55`: pre-push ran route/docs checks, but route check reduced OpenAPI to method/path sets and docs read the tracked OpenAPI file.
 - Rawls identified that comparing raw `Server.openapi()` to tracked SDK OpenAPI would false-fail because the canonical generator injects `x-codeSamples`; this batch uses `generateOpenApiSpec()` as the shared source instead.
 - Rawls recommended schema-drift, metadata-drift, stable-order, and actual inventory-check regression coverage; the final tests cover those cases.
+
+## Batch P1-BG: BH-074 overlay release bundles must be complete per platform
+
+### Findings
+
+- BH-074 targets `script/check-release-assets.ts::overlay` in release mode with `--require-bundle`.
+- `packages/overlay/script/build.ts` explicitly calls Tauri with complete platform bundle sets: `app dmg` on macOS, `msi nsis` on Windows, and `deb rpm appimage` on Linux.
+- `.github/workflows/build.yml::package-overlay` stages every emitted release bundle into `packages/overlay/dist-artifacts/<platform>` and then calls `check-release-assets.ts overlay --require-bundle` for release builds.
+- The validator already requires both Windows MSI and NSIS bundles through separate checks, but macOS and Linux use a single `requireAny(...)` call. A macOS artifact with only `.dmg` or only `.app.tar.gz` passes, and a Linux artifact with only one of `.AppImage`, `.deb`, or `.rpm` passes.
+
+### Call-point Inventory
+
+- `script/check-release-assets.ts` owns release artifact validation for `cli` and `overlay` modes.
+- `.github/workflows/build.yml::Validate overlay assets` invokes `script/check-release-assets.ts overlay` and adds `--require-bundle` only for release builds.
+- `.github/workflows/build.yml::Stage overlay artifacts` copies bare overlay binaries, macOS `.app.tar.gz`, and bundle files with `.dmg`, `.deb`, `.rpm`, `.AppImage`, `.msi`, and `*-setup.exe` names into the validated directory.
+- `packages/overlay/script/build.ts::bundleTargets()` is the build-side single source for expected release bundle families.
+- `packages/overlay/src-tauri/tauri.conf.json` keeps bundle targets active, but the script-level `--bundles` list is what makes the required release set explicit.
+- `packages/opencorvus/test/script/check-release-assets.test.ts` already covers CLI validation and can own overlay validator regression coverage.
+
+### Fix Shape
+
+- Keep `--require-bundle` as the release-only switch.
+- Add exact per-family bundle checks in overlay mode: macOS requires both DMG and app tarball; Linux requires AppImage, DEB, and RPM; Windows continues to require MSI and NSIS.
+- Do not add alternate fallback bundle sets, platform-specific warning-only behavior, or a "some bundle is enough" compatibility path.
+
+### Regression Tests
+
+- Extend `packages/opencorvus/test/script/check-release-assets.test.ts` with overlay-mode helpers.
+- Assert macOS release validation fails when either `.dmg` or `.app.tar.gz` is missing and passes when both are present.
+- Assert Linux release validation fails when any one of `.AppImage`, `.deb`, or `.rpm` is missing and passes only with all three.
+- Assert Windows release validation fails when either `.msi` or NSIS `*-setup.exe` is missing and passes when both are present.
+- Assert dev snapshot overlay validation still accepts a bare overlay binary when `--require-bundle` is absent.
+- Keep CLI release archive tests unchanged.
+
+### Verification
+
+- Focused release validator tests passed: `bun test packages/opencorvus/test/script/check-release-assets.test.ts --timeout 60000`.
+- Package-script guard passed: `bun test packages/opencorvus/test/script/package-test-entry.test.ts --timeout 60000`.
+- Typecheck passed: `bun run --cwd packages/opencorvus typecheck`.
+- Docs check passed: `bun run docs:check`.
+- Diff whitespace check passed: `git diff --check`.
+
+### Independent Review Feedback
+
+- Sartre confirmed BH-074 was still present in HEAD `9b208f74dc3794d0183504d7ac840c027aaf5100`: macOS and Linux release bundle checks used `requireAny(...)`, so a single bundle satisfied a required bundle set.
+- Sartre confirmed the root cause is validator logic, not staging or ambiguous Tauri targets: `.github/workflows/build.yml` stages all bundle families, and `packages/overlay/script/build.ts::bundleTargets()` explicitly requests the complete platform set.
+- Sartre recommended the final no-fallback boundary used here: keep `--require-bundle` release-only, require every platform bundle family independently, and keep dev snapshot validation to the bare overlay binary.

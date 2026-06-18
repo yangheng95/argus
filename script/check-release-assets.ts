@@ -36,9 +36,9 @@ function requireFile(file: string) {
   }
 }
 
-function requireAny(dir: string, patterns: RegExp[], label: string) {
+function requireMatchingFile(dir: string, pattern: RegExp, label: string) {
   const files = list(dir)
-  if (!patterns.some((pattern) => files.some((file) => pattern.test(file)))) {
+  if (!files.some((file) => pattern.test(file))) {
     throw new Error(`Missing ${label} in ${dir}. Found: ${files.join(", ") || "none"}`)
   }
 }
@@ -110,7 +110,7 @@ if (!dir || !platform || !current) {
   throw new Error("overlay mode requires --dir, --platform and --version")
 }
 
-requireAny(dir, [/^opencorvus-overlay(\.exe)?$/], "overlay binary")
+requireMatchingFile(dir, /^opencorvus-overlay(\.exe)?$/, "overlay binary")
 
 // build-overlay.ts runs `tauri build --no-bundle`, so per-platform
 // installer bundles (deb/rpm/AppImage on Linux, dmg on macOS, msi/nsis on
@@ -119,12 +119,19 @@ requireAny(dir, [/^opencorvus-overlay(\.exe)?$/], "overlay binary")
 // in to this validator with `--require-bundle`.
 if (requireBundle) {
   if (platform.startsWith("windows")) {
-    requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*\\.msi$`)], "Windows MSI bundle")
-    requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*-setup\\.exe$`)], "Windows NSIS bundle")
+    requireMatchingFile(dir, new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*\\.msi$`), "Windows MSI bundle")
+    requireMatchingFile(
+      dir,
+      new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*-setup\\.exe$`),
+      "Windows NSIS bundle",
+    )
   } else if (platform.startsWith("darwin")) {
-    requireAny(dir, [/\.dmg$/, /\.app\.tar\.gz$/], "macOS bundle")
+    requireMatchingFile(dir, /\.dmg$/, "macOS DMG bundle")
+    requireMatchingFile(dir, /\.app\.tar\.gz$/, "macOS app archive bundle")
   } else if (platform.startsWith("linux")) {
-    requireAny(dir, [/\.AppImage$/, /\.deb$/, /\.rpm$/], "Linux bundle")
+    requireMatchingFile(dir, /\.AppImage$/, "Linux AppImage bundle")
+    requireMatchingFile(dir, /\.deb$/, "Linux DEB bundle")
+    requireMatchingFile(dir, /\.rpm$/, "Linux RPM bundle")
   }
 }
 
