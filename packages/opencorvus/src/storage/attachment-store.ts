@@ -418,8 +418,11 @@ export namespace AttachmentStore {
    *
    * Why copy not symlink: cross-FS robustness on Windows (symlinks need admin
    * by default) and content-addressed inputs are small enough that a copy
-   * costs nothing. Existing files at the destination are skipped silently —
-   * staging is idempotent and re-entrant across goal retries.
+   * costs nothing. Existing files with the same content are reused so staging
+   * is idempotent and re-entrant across goal retries. If two different blobs
+   * share a display filename, the later blob is staged under
+   * `<name>-<sha8><ext>`; a pre-existing sha-suffixed path with different
+   * content is a hard collision error.
    *
    * Filename policy: prefer the attachment's original `filename` when it's
    * shell-safe (ASCII alphanumerics + `._-` + spaces preserved as-is — we
@@ -469,24 +472,83 @@ export namespace AttachmentStore {
         sha: a.sha,
         index: i,
       })
-      const destAbs = path.join(refsDir, filename)
-
-      // Idempotent — skip when destination already exists. Content-addressed
-      // sources mean re-running staging on a re-entered worktree (goal retry)
-      // is a no-op.
-      const existing = await fs.stat(destAbs).catch(() => null)
-      if (!existing) {
-        await fs.copyFile(sourceAbs, destAbs)
+      const destination = await selectStagedDestination(refsDir, filename, sourceAbs)
+      if (!destination.exists) {
+        await fs.copyFile(sourceAbs, destination.absPath)
       }
 
       staged.push({
-        relPath: `${STAGED_REFERENCES_SUBDIR}/${filename}`,
-        absPath: destAbs,
+        relPath: `${STAGED_REFERENCES_SUBDIR}/${destination.filename}`,
+        absPath: destination.absPath,
         mime: typeof a.mime === "string" ? a.mime : "application/octet-stream",
         originalFilename: a.filename,
       })
     }
     return staged
+  }
+
+  type StagedDestination = {
+    filename: string
+    absPath: string
+    exists: boolean
+  }
+
+  async function selectStagedDestination(
+    refsDir: string,
+    filename: string,
+    sourceAbs: string,
+  ): Promise<StagedDestination> {
+    const primaryAbs = path.join(refsDir, filename)
+    if (!(await pathExists(primaryAbs))) {
+      return { filename, absPath: primaryAbs, exists: false }
+    }
+
+    const sourceSha = await fileSha256(sourceAbs)
+    if ((await fileSha256(primaryAbs)) === sourceSha) {
+      return { filename, absPath: primaryAbs, exists: true }
+    }
+
+    const distinctFilename = contentAddressedDisplayFilename(filename, sourceSha)
+    const distinctAbs = path.join(refsDir, distinctFilename)
+    if (!(await pathExists(distinctAbs))) {
+      return { filename: distinctFilename, absPath: distinctAbs, exists: false }
+    }
+    if ((await fileSha256(distinctAbs)) === sourceSha) {
+      return { filename: distinctFilename, absPath: distinctAbs, exists: true }
+    }
+    throw new Error(
+      `AttachmentStore.stageToWorktree: staged filename collision for ${STAGED_REFERENCES_SUBDIR}/${distinctFilename}`,
+    )
+  }
+
+  async function pathExists(absPath: string): Promise<boolean> {
+    try {
+      await fs.stat(absPath)
+      return true
+    } catch (error) {
+      if (hasNodeErrorCode(error, "ENOENT")) return false
+      throw error
+    }
+  }
+
+  async function fileSha256(absPath: string): Promise<string> {
+    const bytes = await fs.readFile(absPath)
+    return crypto.createHash("sha256").update(bytes).digest("hex")
+  }
+
+  function contentAddressedDisplayFilename(filename: string, sha: string): string {
+    const ext = path.extname(filename)
+    const stem = filename.slice(0, filename.length - ext.length)
+    return `${stem}-${sha.slice(0, 8)}${ext}`
+  }
+
+  function hasNodeErrorCode(error: unknown, code: string): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === code
+    )
   }
 
   /** Render a markdown bullet list of staged attachment paths for the
