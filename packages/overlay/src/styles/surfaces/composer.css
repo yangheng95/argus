@@ -674,9 +674,6 @@
    popper may shift horizontally so a wide menu stays visible in
    compact one-row composer layouts. */
 .executor-popover {
-  position: absolute;
-  bottom: calc(100% + calc(6px * var(--ui-scale)));
-  left: 0;
   min-width: 100%;
   width: min(calc(420px * var(--ui-scale)), calc(100vw - 24px));
   max-height: calc(360px * var(--ui-scale));
