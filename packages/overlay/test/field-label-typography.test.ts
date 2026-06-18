@@ -47,6 +47,8 @@ const STYLES = stripCssComments(
     .map((f) => readFileSync(f, "utf8"))
     .join("\n"),
 )
+const TYPOGRAPHY_CSS = stripCssComments(readFileSync(path.join(STYLES_ROOT, "cascade", "typography.css"), "utf8"))
+const SETTINGS_CSS = stripCssComments(readFileSync(path.join(STYLES_ROOT, "surfaces", "settings.css"), "utf8"))
 
 function ruleBody(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -62,6 +64,11 @@ describe(".field-label is rendered in Title Case", () => {
   test(".field-label does NOT force-uppercase its text", () => {
     const body = ruleBody(".field-label")
     expect(body).not.toContain("text-transform: uppercase")
+  })
+
+  test("settings extension header field label has a single settings-surface owner", () => {
+    expect(TYPOGRAPHY_CSS).not.toMatch(/(^|\n)\.extension-head \.field-label\s*\{/)
+    expect(SETTINGS_CSS).toMatch(/(^|\n)\.extension-head \.field-label\s*\{/)
   })
 })
 

@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File                                                                                                                                       | Title                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
 | [2026-06-18-titlebar-brand-guide-popover-primitive.md](2026-06-18-titlebar-brand-guide-popover-primitive.md)                               | Titlebar Brand Guide Popover Primitive |
+| [2026-06-18-extension-head-field-label-single-source.md](2026-06-18-extension-head-field-label-single-source.md)                           | Extension Head Field Label Single Source |
 | [2026-06-18-light-popup-active-state-contrast.md](2026-06-18-light-popup-active-state-contrast.md)                                         | Light Popup Active State Contrast |
 | [2026-06-18-left-pane-resizer-browser-max-contract.md](2026-06-18-left-pane-resizer-browser-max-contract.md)                               | Left Pane Resizer Browser Max Contract |
 | [2026-06-18-command-palette-activedescendant.md](2026-06-18-command-palette-activedescendant.md)                                           | Command Palette Active Descendant      |

@@ -28,12 +28,6 @@
   margin-top: var(--ui-gap-xs);
 }
 
-.extension-head .field-label {
-  font-size: var(--ui-font-control);
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0;
-}
-
 .field-label,
 .change-subline,
 .knowledge-item-meta,
