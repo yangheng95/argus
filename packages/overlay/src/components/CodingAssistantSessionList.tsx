@@ -244,6 +244,7 @@ function CodingAssistantSessionRow(props: {
             title={sessionRowTip(props.session)}
             disabled={props.busy}
             aria-disabled={props.busy ? "true" : undefined}
+            aria-current={props.selected ? "page" : undefined}
             onClick={(event) => {
               event.stopPropagation()
               if (!props.busy) props.onSelectSession(props.session)
