@@ -1919,14 +1919,7 @@ async function taskSessionIDs(taskID: string) {
       `Task ${taskID} root session ${rootSessionID} belongs to project ${rootSession.projectID}, expected ${task.project_id}`,
     )
   }
-  const sessionIDs: string[] = []
-  const queue = [rootSessionID]
-  while (queue.length > 0) {
-    const id = queue.shift()!
-    sessionIDs.push(id)
-    const children = await Session.childrenInProject({ parentID: id, projectID: task.project_id })
-    queue.push(...children.map((child) => child.id))
-  }
+  const sessionIDs = await Session.treeInProject({ sessionID: rootSessionID, projectID: task.project_id })
   return { task, rootSessionID, sessionIDs }
 }
 

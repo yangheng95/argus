@@ -798,14 +798,35 @@ export namespace Session {
   })
 
   export const treeInProject = fn(SessionProjectInput, async ({ sessionID, projectID }) => {
+    const rows = Database.use((db) =>
+      db
+        .select({
+          id: SessionTable.id,
+          parentID: SessionTable.parent_id,
+        })
+        .from(SessionTable)
+        .where(eq(SessionTable.project_id, projectID))
+        .orderBy(SessionTable.time_created, SessionTable.id)
+        .all(),
+    )
+    const childrenByParent = new Map<string, string[]>()
+    for (const row of rows) {
+      if (!row.parentID) continue
+      const existing = childrenByParent.get(row.parentID)
+      if (existing) existing.push(row.id)
+      else childrenByParent.set(row.parentID, [row.id])
+    }
     const ids: string[] = [sessionID]
     const queue: string[] = [sessionID]
+    const seen = new Set(ids)
     while (queue.length > 0) {
       const next = queue.shift()!
-      const direct = await childrenInProject({ parentID: next, projectID })
-      for (const child of direct) {
-        ids.push(child.id)
-        queue.push(child.id)
+      const direct = childrenByParent.get(next) ?? []
+      for (const childID of direct) {
+        if (seen.has(childID)) throw new Error(`Session tree cycle detected at ${childID}`)
+        seen.add(childID)
+        ids.push(childID)
+        queue.push(childID)
       }
     }
     return ids

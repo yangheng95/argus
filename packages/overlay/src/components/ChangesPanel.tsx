@@ -52,7 +52,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
     const agentKey = changeGroupsRevisionKey(agentGroups())
     return props.changes !== undefined
       ? `props:${groups[0]?.changes.length ?? 0}`
-      : `${activeTaskID()}:${boardStore.snapshotVersion}:${agentKey}:${changeGroupsRevisionKey(groups)}`
+      : `${activeTaskID()}:${agentKey}:${changeGroupsRevisionKey(groups)}`
   })
 
   const [resolvedGroups] = createResource(requestKey, async () => {

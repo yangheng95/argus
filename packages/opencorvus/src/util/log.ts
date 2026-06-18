@@ -166,7 +166,7 @@ export namespace Log {
           : "Current log file is not initialized",
       })
     }
-    const content = await fs.readFile(pathname, "utf8").catch((error) => {
+    const lines = await readTailLines(pathname, input.lines).catch((error) => {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
         throw new FileNotFoundError({
           directory: dir,
@@ -177,16 +177,42 @@ export namespace Log {
       }
       throw error
     })
-    const lines = content
-      .split("\n")
-      .filter((line) => line.length > 0)
-      .slice(-input.lines)
     return {
       directory: dir,
       path: pathname,
       file: path.basename(pathname),
       lines,
     }
+  }
+
+  const TAIL_READ_CHUNK_BYTES = 64 * 1024
+
+  async function readTailLines(pathname: string, lines: number): Promise<string[]> {
+    const stat = await fs.stat(pathname)
+    if (stat.size === 0) return []
+    const chunks: Buffer[] = []
+    let position = stat.size
+    let newlineCount = 0
+    const handle = await fs.open(pathname, "r")
+    try {
+      while (position > 0 && newlineCount <= lines) {
+        const length = Math.min(TAIL_READ_CHUNK_BYTES, position)
+        position -= length
+        const buffer = Buffer.allocUnsafe(length)
+        const { bytesRead } = await handle.read(buffer, 0, length, position)
+        if (bytesRead === 0) break
+        const chunk = bytesRead === length ? buffer : buffer.subarray(0, bytesRead)
+        chunks.unshift(chunk)
+        for (let index = 0; index < chunk.length; index++) {
+          if (chunk[index] === 10) newlineCount++
+        }
+      }
+    } finally {
+      await handle.close()
+    }
+    const split = Buffer.concat(chunks).toString("utf8").split("\n")
+    if (position > 0) split.shift()
+    return split.filter((line) => line.length > 0).slice(-lines)
   }
 
   function createRootLogger(destination: pino.DestinationStream) {

@@ -75,5 +75,6 @@ test("ChangesPanel acceptance diff key ignores broad visible tree churn", () => 
 
   expect(requestKeyBlock).toContain("const agentKey = changeGroupsRevisionKey(agentGroups())")
   expect(requestKeyBlock).toContain("changeGroupsRevisionKey(groups)")
+  expect(requestKeyBlock).not.toContain("boardStore.snapshotVersion")
   expect(requestKeyBlock).not.toContain("cardTreeStore.visibleVersion")
 })
