@@ -267,7 +267,16 @@ body {
   padding: calc(6px * var(--ui-scale, 1)) calc(9px * var(--ui-scale, 1));
 }
 
-.card__head-main {
+.oc-button[data-ui="card-head-main"].card__head-main {
+  --oc-button-height: auto;
+  --oc-button-padding-x: 0;
+  --oc-button-padding-y: 0;
+  --oc-button-gap: calc(8px * var(--ui-scale, 1));
+  --oc-button-bg: transparent;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: inherit;
+  --oc-button-shadow: none;
+
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -282,6 +291,7 @@ body {
   line-height: inherit;
   text-align: left;
   cursor: pointer;
+  white-space: normal;
 }
 
 .card__head-main:focus {
@@ -289,6 +299,10 @@ body {
 }
 .card__head-main:focus-visible {
   box-shadow: inset 0 0 0 calc(2px * var(--ui-scale)) var(--accent-dim);
+}
+.oc-button[data-ui="card-head-main"].card__head-main:hover,
+.oc-button[data-ui="card-head-main"].card__head-main:focus-visible {
+  --oc-button-bg: transparent;
 }
 
 .card__main {

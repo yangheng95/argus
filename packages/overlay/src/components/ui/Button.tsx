@@ -9,19 +9,20 @@ export type ButtonVariant = (typeof BUTTON_VARIANTS)[number]
 export type ButtonSize = (typeof BUTTON_SIZES)[number]
 export type ButtonTone = (typeof BUTTON_TONES)[number]
 
-export interface ButtonProps extends Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList"> {
+export interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   variant: ButtonVariant
   size: ButtonSize
   tone: ButtonTone
 }
 
 export function Button(props: ButtonProps): JSX.Element {
-  const [local, buttonProps] = splitProps(props, ["variant", "size", "tone"])
+  const [local, buttonProps] = splitProps(props, ["variant", "size", "tone", "class"])
+  const className = () => (local.class ? `oc-button ${local.class}` : "oc-button")
 
   return (
     <button
       {...buttonProps}
-      class="oc-button"
+      class={className()}
       data-variant={local.variant}
       data-size={local.size}
       data-tone={local.tone}
