@@ -173,7 +173,7 @@
 
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"][data-tone="danger"]:hover,
 .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="window-control"][data-tone="danger"]:focus-visible {
-  --oc-button-color: var(--surface);
+  --oc-button-color: var(--text-on-danger);
   --oc-button-bg: color-mix(in srgb, var(--bad) 88%, var(--surface));
   --oc-button-shadow: none;
 }

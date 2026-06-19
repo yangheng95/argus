@@ -25,6 +25,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-20-executor-chip-focus-visible.md](2026-06-20-executor-chip-focus-visible.md)                     | Executor Chip Focus Visible |
 | [2026-06-20-side-activity-toolbar-aria-semantics.md](2026-06-20-side-activity-toolbar-aria-semantics.md)   | Side Activity Toolbar ARIA Semantics |
 | [2026-06-20-tool-diff-open-file-button.md](2026-06-20-tool-diff-open-file-button.md)                       | Tool Diff Open File Button |
+| [2026-06-20-window-control-danger-foreground.md](2026-06-20-window-control-danger-foreground.md)           | Window Control Danger Foreground |
 
 ## 2026-06-19
 

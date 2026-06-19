@@ -28,8 +28,13 @@ describe("window controls use native-style quiet chrome", () => {
     expect(css).toContain('data-chrome="window-control"][data-tone="danger"]')
     expect(css).not.toContain("color-mix(in srgb, var(--bad) 74%, var(--text-strong))")
     expect(css).not.toContain("color-mix(in srgb, var(--border-strong) 58%, transparent)")
-    expect(css).toContain("--oc-button-color: var(--surface);")
     expect(css).toContain("--oc-button-bg: color-mix(in srgb, var(--bad) 88%, var(--surface));")
+    expect(css).toMatch(
+      /\.oc-button\[data-size="icon"\]\[data-variant="ghost"\]\[data-chrome="window-control"\]\[data-tone="danger"\]:hover,[\s\S]*?--oc-button-color:\s*var\(--text-on-danger\);/,
+    )
+    expect(css).not.toMatch(
+      /\.oc-button\[data-size="icon"\]\[data-variant="ghost"\]\[data-chrome="window-control"\]\[data-tone="danger"\]:hover,[\s\S]*?--oc-button-color:\s*var\(--surface\);/,
+    )
   })
 
   test("titlebar surface no longer owns close button contrast directly", () => {
