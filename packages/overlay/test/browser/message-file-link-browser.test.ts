@@ -20,6 +20,32 @@ function send(body: unknown, status = 200): Response {
   })
 }
 
+async function focusSelector(page: any, selector: string, attempts = 200): Promise<boolean> {
+  await page.evaluate(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement) active.blur()
+  })
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await page.keyboard.press("Tab")
+    const focused = await page.$eval(selector, (node: HTMLElement) => document.activeElement === node)
+    if (focused) return true
+  }
+  return false
+}
+
+async function linkFocusState(page: any, selector: string) {
+  return page.$eval(selector, (node: HTMLElement) => {
+    const style = getComputedStyle(node)
+    return {
+      focusVisible: node.matches(":focus-visible"),
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      color: style.color,
+      textDecorationLine: style.textDecorationLine,
+    }
+  })
+}
+
 function taskItem(): any {
   const created = 1_776_200_001_000
   return {
@@ -30,7 +56,7 @@ function taskItem(): any {
       id: "task-file-link-visual",
       requestID: "req-file-link-visual",
       title: "File link visual task",
-      request: "Open `src/main.tsx` before editing.",
+      request: "Open `src/main.tsx` before editing. See [docs](https://example.com/docs).",
       directory: "D:/file-link/workspace",
       status: "active",
       sessionID: "session-file-link-root",
@@ -67,7 +93,7 @@ function transcript(): any[] {
           messageID: "message-file-link-user",
           sessionID: "session-file-link-root",
           type: "text",
-          text: "Open `src/main.tsx` before editing.",
+          text: "Open `src/main.tsx` before editing. See [docs](https://example.com/docs).",
         },
       ],
     },
@@ -278,6 +304,7 @@ test(
         await selectTask(taskID)
       }, item.task.id)
       await page.waitForSelector(".chat-bubble code .file-link", { visible: true })
+      await page.waitForSelector('.chat-bubble .msg-text a[href="https://example.com/docs"]', { visible: true })
 
       const baseState = await page.$eval(".chat-bubble code .file-link", (node: HTMLAnchorElement) => {
         const style = getComputedStyle(node)
@@ -314,6 +341,37 @@ test(
       const screenshotPath = resolve(".scratch", "message-file-link-hover.png")
       mkdirSync(dirname(screenshotPath), { recursive: true })
       writeFileSync(screenshotPath, await bubble.screenshot({}))
+
+      await page.mouse.move(0, 0)
+      const fileLinkFocused = await focusSelector(page, ".chat-bubble code .file-link")
+      assert.equal(fileLinkFocused, true)
+      const fileLinkFocusState = await linkFocusState(page, ".chat-bubble code .file-link")
+      assert.equal(fileLinkFocusState.focusVisible, true)
+      assert.notEqual(fileLinkFocusState.outlineStyle, "none")
+      assert.notEqual(fileLinkFocusState.outlineWidth, "0px")
+      assert.match(fileLinkFocusState.textDecorationLine, /underline/)
+      writeFileSync(resolve(".scratch", "message-file-link-focus-visible.png"), await bubble.screenshot({}))
+
+      await page.keyboard.press("Enter")
+      await page.waitForFunction(() => ((window as any).__OPEN_PATH_CALLS__ || []).length > 0)
+      let openPathCalls = await page.evaluate(() => (window as any).__OPEN_PATH_CALLS__)
+      assert.equal(openPathCalls.length, 1)
+      assert.equal(openPathCalls[0].command, "overlay_open_project_editor")
+      assert.equal(openPathCalls[0].args.path, "D:/file-link/workspace/src/main.tsx")
+      await page.evaluate(() => {
+        ;(window as any).__OPEN_PATH_CALLS__ = []
+      })
+
+      await page.mouse.move(0, 0)
+      const markdownLinkSelector = '.chat-bubble .msg-text a[href="https://example.com/docs"]'
+      const markdownLinkFocused = await focusSelector(page, markdownLinkSelector)
+      assert.equal(markdownLinkFocused, true)
+      const markdownLinkFocusState = await linkFocusState(page, markdownLinkSelector)
+      assert.equal(markdownLinkFocusState.focusVisible, true)
+      assert.notEqual(markdownLinkFocusState.outlineStyle, "none")
+      assert.notEqual(markdownLinkFocusState.outlineWidth, "0px")
+      assert.match(markdownLinkFocusState.textDecorationLine, /underline/)
+      writeFileSync(resolve(".scratch", "message-markdown-link-focus-visible.png"), await bubble.screenshot({}))
 
       await page.mouse.move(0, 0)
       await page.waitForSelector('.card[data-kind="tool"] > .card__head [data-ui="card-head-main"]', { visible: true })
@@ -378,7 +436,7 @@ test(
 
       await page.keyboard.press("Enter")
       await page.waitForFunction(() => ((window as any).__OPEN_PATH_CALLS__ || []).length > 0)
-      const openPathCalls = await page.evaluate(() => (window as any).__OPEN_PATH_CALLS__)
+      openPathCalls = await page.evaluate(() => (window as any).__OPEN_PATH_CALLS__)
       assert.equal(openPathCalls.length, 1)
       assert.equal(openPathCalls[0].command, "overlay_open_project_editor")
       assert.equal(openPathCalls[0].args.path, "D:/file-link/workspace/src/changed.tsx")

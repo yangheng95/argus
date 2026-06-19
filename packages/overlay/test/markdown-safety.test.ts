@@ -51,6 +51,16 @@ test("renderMarkdown keeps safe http links", () => {
   expect(html).toContain('rel="noopener noreferrer"')
 })
 
+test("rendered markdown anchors expose tokenized focus-visible chrome", () => {
+  expect(MARKDOWN_CSS).toMatch(
+    /\.msg-text a:focus-visible,\s*\.md-content a:focus-visible\s*\{[\s\S]*color:\s*var\(--accent-hover\);[\s\S]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/,
+  )
+  expect(MARKDOWN_CSS).toMatch(
+    /\.md-link:focus-visible\s*\{[\s\S]*color:\s*var\(--accent-hover\);[\s\S]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/,
+  )
+  expect(MARKDOWN_CSS).not.toMatch(/(?:\.msg-text a|\.md-content a|\.md-link):focus-visible\s*\{[\s\S]*outline:\s*none/)
+})
+
 test("renderMarkdown uses bounded bare urls and routes them to browser preview", () => {
   const html = renderMarkdown("open https://example.com/path?x=1 and www.example.org/docs")
 
