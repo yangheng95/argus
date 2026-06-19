@@ -74,6 +74,7 @@ test("titlebar controls stay on the surface family", () => {
 test("task and file search share the field primitive", () => {
   expect(bodyOf(SIDEBAR_CSS, ".task-list-search")).not.toMatch(/background|border|border-radius/)
   expect(INSPECTOR_CSS).not.toContain(".file-explorer-search {")
+  expect(INSPECTOR_CSS).not.toContain(".file-explorer-search-input.field-input")
   expect(bodyOf(FIELD_CSS, ".search-field")).toMatch(
     /background:\s*color-mix\(in srgb, var\(--surface-inset\) 94%, transparent\)/,
   )

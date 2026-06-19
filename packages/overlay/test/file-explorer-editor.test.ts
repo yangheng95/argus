@@ -124,6 +124,8 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(explorer).not.toContain('role="tree"')
   expect(explorer).not.toContain('role="treeitem"')
   expect(explorer).not.toContain("aria-selected=")
+  expect(explorer).toContain('class="file-explorer-search-input search-field-input"')
+  expect(explorer).not.toContain("search-field-input field-input")
 
   expect(editor).toContain("apiJson(`file/content?path=")
   expect(editor).toContain('method: "PATCH"')
@@ -173,6 +175,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(inspectorCss).toContain('.file-explorer-list[data-virtualized="true"]')
   expect(inspectorCss).toContain(".file-explorer-row:hover")
   expect(inspectorCss).toContain(".file-explorer-row:focus-visible")
+  expect(inspectorCss).not.toContain(".file-explorer-search-input.field-input")
   expect(inspectorCss).not.toContain(".file-explorer-row:hover,\n.file-explorer-row:focus-visible")
   expect(bodyOf(inspectorCss, ".file-explorer-row:focus-visible")).toMatch(
     /outline:\s*var\(--oc-border-width\)\s+solid\s+var\(--accent\)/,

@@ -522,10 +522,6 @@
   color: var(--bad);
 }
 
-.file-explorer-search-input.field-input {
-  min-height: 0;
-}
-
 .file-explorer-list {
   flex: 1 1 0;
   min-height: 0;

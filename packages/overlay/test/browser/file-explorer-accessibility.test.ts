@@ -186,6 +186,38 @@ test("file explorer current file and directory expansion are exposed on the row 
     await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
     await page.waitForSelector('.file-explorer-row[title="README.md"]', { visible: true })
 
+    await page.focus(".file-explorer-search-input")
+    const searchFocusState = await page.$eval(".file-explorer-search-input", (node) => {
+      const input = node as HTMLInputElement
+      const field = input.closest(".file-explorer-search") as HTMLElement | null
+      const inputStyles = getComputedStyle(input)
+      const fieldStyles = field ? getComputedStyle(field) : null
+      return {
+        active: document.activeElement === input,
+        inputClassName: input.className,
+        hasFieldInputClass: input.classList.contains("field-input"),
+        fieldClassName: field?.className ?? "",
+        inputBoxShadow: inputStyles.boxShadow,
+        inputBorderWidth: inputStyles.borderWidth,
+        inputBackground: inputStyles.backgroundColor,
+        fieldBoxShadow: fieldStyles?.boxShadow ?? "",
+      }
+    })
+    assert.equal(searchFocusState.active, true)
+    assert.match(searchFocusState.inputClassName, /\bsearch-field-input\b/)
+    assert.equal(searchFocusState.hasFieldInputClass, false)
+    assert.match(searchFocusState.fieldClassName, /\bsearch-field\b/)
+    assert.equal(searchFocusState.inputBoxShadow, "none")
+    assert.equal(searchFocusState.inputBorderWidth, "0px")
+    assert.equal(searchFocusState.inputBackground, "rgba(0, 0, 0, 0)")
+    assert.notEqual(searchFocusState.fieldBoxShadow, "none")
+
+    const searchFocusScreenshotPath = resolve(".scratch/file-explorer-search-field-focus.png")
+    mkdirSync(dirname(searchFocusScreenshotPath), { recursive: true })
+    const explorerElementForSearchFocus = await page.$("#centerWorkbenchExplorer")
+    assert.ok(explorerElementForSearchFocus)
+    writeFileSync(searchFocusScreenshotPath, await explorerElementForSearchFocus.screenshot({}))
+
     const initialState = await page.evaluate(() => {
       const list = document.querySelector<HTMLElement>(".file-explorer-list")
       const src = document.querySelector<HTMLButtonElement>('.file-explorer-row[title="src"]')
