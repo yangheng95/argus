@@ -120,17 +120,24 @@ async function verifyProjectGroup(
   },
 ) {
   await page.click(`[data-ui="side-activity-button"][data-side="left"][data-activity="${input.activity}"]`)
-  await page.waitForSelector(`${input.groupSelector} .project-group-heading`, { visible: true, timeout: 10_000 })
+  await page.waitForSelector(`${input.groupSelector} [data-ui="project-group-toggle"]`, {
+    visible: true,
+    timeout: 10_000,
+  })
 
   const openState = await page.$eval(input.groupSelector, (node) => {
     const group = node as HTMLElement
-    const heading = group.querySelector<HTMLButtonElement>(".project-group-heading")
+    const heading = group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')
     const body = group.querySelector<HTMLElement>(".project-group-body")
     return {
       tag: group.tagName,
       className: group.className,
       collapsed: group.dataset.collapsed ?? "",
       headingTag: heading?.tagName ?? "",
+      headingClass: heading?.className ?? "",
+      headingVariant: heading?.dataset.variant ?? "",
+      headingSize: heading?.dataset.size ?? "",
+      headingTone: heading?.dataset.tone ?? "",
       headingExpanded: heading?.getAttribute("aria-expanded") ?? "",
       headingLabel: heading?.getAttribute("aria-label") ?? "",
       headingTabIndex: heading?.tabIndex ?? null,
@@ -143,13 +150,17 @@ async function verifyProjectGroup(
   assert.match(openState.className, /\bproject-group\b/)
   assert.equal(openState.collapsed, "")
   assert.equal(openState.headingTag, "BUTTON")
+  assert.equal(openState.headingClass, "oc-button")
+  assert.equal(openState.headingVariant, "ghost")
+  assert.equal(openState.headingSize, "mini")
+  assert.equal(openState.headingTone, "neutral")
   assert.equal(openState.headingExpanded, "true")
   assert.ok(openState.headingLabel.length > 0)
   assert.equal(openState.headingTabIndex, 0)
   assert.equal(openState.count, input.expectedCount)
   assert.equal(openState.bodyVisible, true)
 
-  await page.focus(`${input.groupSelector} .project-group-heading`)
+  await page.focus(`${input.groupSelector} [data-ui="project-group-toggle"]`)
   await page.keyboard.press("Enter")
   await page.waitForFunction(
     (selector) => document.querySelector<HTMLElement>(selector)?.dataset.collapsed === "true",
@@ -159,13 +170,15 @@ async function verifyProjectGroup(
   const collapsedState = await page.$eval(input.groupSelector, (node) => {
     const group = node as HTMLElement
     return {
-      expanded: group.querySelector<HTMLButtonElement>(".project-group-heading")?.getAttribute("aria-expanded") ?? "",
+      expanded:
+        group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')?.getAttribute("aria-expanded") ??
+        "",
       bodyCount: group.querySelectorAll(".project-group-body").length,
     }
   })
   assert.deepEqual(collapsedState, { expanded: "false", bodyCount: 0 })
 
-  await page.focus(`${input.groupSelector} .project-group-heading`)
+  await page.focus(`${input.groupSelector} [data-ui="project-group-toggle"]`)
   await page.keyboard.press(" ")
   await page.waitForFunction(
     (selector) => document.querySelector<HTMLElement>(selector)?.dataset.collapsed !== "true",

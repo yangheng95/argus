@@ -2,6 +2,7 @@ import { createSignal, Show, type JSX } from "solid-js"
 import { t } from "../utils/i18n"
 import { projectDirectoryKey, projectDirectoryLabel } from "../utils/project-directory"
 import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
 
 export interface ProjectLedgerGroupProps {
   directory: string
@@ -52,9 +53,12 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
       data-ui={props.dataUi}
       data-collapsed={props.collapsed ? "true" : undefined}
     >
-      <button
+      <Button
         type="button"
-        class="project-group-heading"
+        variant="ghost"
+        size="mini"
+        tone="neutral"
+        data-ui="project-group-toggle"
         title={title()}
         aria-expanded={props.collapsed ? "false" : "true"}
         aria-label={
@@ -79,7 +83,7 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
         <span class="project-group-chevron" aria-hidden="true">
           <Icon name={props.collapsed ? "chevron" : "chevron-down"} size={12} />
         </span>
-      </button>
+      </Button>
       <Show when={!props.collapsed}>
         <div class="project-group-body">{props.children}</div>
       </Show>

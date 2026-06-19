@@ -15,8 +15,12 @@ describe("retired sidebar list heading", () => {
 
   test("ProjectLedgerGroup owns grouped sidebar headings", () => {
     expect(TASK_LIST).toContain("ProjectLedgerGroup")
-    expect(PROJECT_LEDGER_GROUP).toContain('class="project-group-heading"')
-    expect(SIDEBAR_CSS).toMatch(/\.project-group-heading\s*\{/)
+    expect(PROJECT_LEDGER_GROUP).toContain('import { Button } from "./ui/Button"')
+    expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-toggle"')
+    expect(PROJECT_LEDGER_GROUP).not.toContain('class="project-group-heading"')
+    expect(PROJECT_LEDGER_GROUP).not.toContain("<button")
+    expect(SIDEBAR_CSS).not.toMatch(/\.project-group-heading\b/)
+    expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-toggle"]')
     expect(SIDEBAR_CSS).toMatch(/\.project-group-copy\s*\{/)
     expect(SIDEBAR_CSS).toMatch(/\.project-group-count\s*\{/)
   })

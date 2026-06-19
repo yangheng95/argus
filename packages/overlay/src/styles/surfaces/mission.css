@@ -61,11 +61,14 @@
   padding-top: calc(5px * var(--ui-scale));
 }
 
-.mission-project-group .project-group-heading {
+.mission-project-group .oc-button[data-ui="project-group-toggle"] {
+  --oc-button-height: calc(24px * var(--ui-scale));
+  --oc-button-padding-x: calc(5px * var(--ui-scale));
+  --oc-button-padding-y: calc(2px * var(--ui-scale));
+
   grid-template-columns: calc(16px * var(--ui-scale)) minmax(0, 1fr) auto calc(14px * var(--ui-scale));
   min-height: calc(24px * var(--ui-scale));
   gap: calc(4px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(5px * var(--ui-scale));
 }
 
 .mission-project-group .project-group-copy {

@@ -50,6 +50,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-task-progress-button-primitive.md](2026-06-19-task-progress-button-primitive.md)                 | Task Progress Button Primitive |
 | [2026-06-19-retire-card-status-badge-residue.md](2026-06-19-retire-card-status-badge-residue.md)             | Retire Card Status Badge Residue |
 | [2026-06-19-titlebar-menubar-trigger-button-primitive.md](2026-06-19-titlebar-menubar-trigger-button-primitive.md) | Titlebar Menubar Trigger Button Primitive |
+| [2026-06-19-project-ledger-group-toggle-button-primitive.md](2026-06-19-project-ledger-group-toggle-button-primitive.md) | Project Ledger Group Toggle Button Primitive |
 
 ## 2026-06-18
 
