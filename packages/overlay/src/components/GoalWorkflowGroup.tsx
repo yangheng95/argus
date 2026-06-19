@@ -15,6 +15,7 @@ import { activeDirectory, openDirectory } from "../services/workspace"
 import { getHostTransport } from "../services/host-transport"
 import { StaticTextPart } from "./TextPart"
 import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
 
 // ── Types ──
 
@@ -130,9 +131,12 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
 
   return (
     <div class="gwg" data-goal-status={props.goal.goalStatus} classList={{ "gwg--expanded": expanded() }}>
-      <button
+      <Button
         type="button"
-        class="gwg-header"
+        variant="ghost"
+        size="mini"
+        tone="neutral"
+        data-ui="gwg-header"
         aria-expanded={expanded()}
         onClick={toggleExpanded}
       >
@@ -166,7 +170,7 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
             and rarely the right action). The `onEditGoal` / `onDeleteGoal`
             props remain on the component so callers don't break;
             they're just no-ops on this surface now. */}
-      </button>
+      </Button>
       <Show when={expanded()}>
         <div class="gwg-body">
           <Show when={props.goal.goalObjective}>
@@ -194,9 +198,11 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
                 </div>
               }
             >
-              <button
+              <Button
                 type="button"
-                class="gwg-worktree"
+                variant="ghost"
+                size="mini"
+                tone="neutral"
                 data-ui="goal-worktree-open"
                 title={props.goal.workspaceDir}
                 aria-label={`${t("cwd.open")}: ${props.goal.workspaceDir ?? ""}`}
@@ -204,7 +210,7 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
                 data-card-dblclick-ignore="true"
               >
                 {worktreeContent()}
-              </button>
+              </Button>
             </Show>
           </Show>
         </div>

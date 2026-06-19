@@ -1691,29 +1691,38 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/rgba\(247,\s*84,\s*100,\s*0\.35\)/)
   })
 
-  test("gwg header + status icon are owned by surfaces/inspector.css", () => {
+  test("gwg header + status icon are owned by Button primitive plus surfaces/inspector.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const goalWorkflowGroup = readText(join(OVERLAY_ROOT, "src/components/GoalWorkflowGroup.tsx"))
 
-    for (const className of ["gwg-header", "gwg-title-row", "gwg-status-icon", "gwg-title", "gwg-revision"]) {
+    for (const className of ["gwg-title-row", "gwg-status-icon", "gwg-title", "gwg-revision"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(goalWorkflowGroup).toContain("<button")
+    expect(goalWorkflowGroup).toContain("<Button")
     expect(goalWorkflowGroup).toContain('type="button"')
-    expect(goalWorkflowGroup).toContain('class="gwg-header"')
+    expect(goalWorkflowGroup).toContain('data-ui="gwg-header"')
+    expect(goalWorkflowGroup).toContain('variant="ghost"')
+    expect(goalWorkflowGroup).toContain('size="mini"')
+    expect(goalWorkflowGroup).toContain('tone="neutral"')
+    expect(goalWorkflowGroup).not.toContain('class="gwg-header"')
     expect(goalWorkflowGroup).toContain("aria-expanded={expanded()}")
     expect(goalWorkflowGroup).not.toContain('role="button"')
     expect(goalWorkflowGroup).not.toContain('tabindex="0"')
     expect(goalWorkflowGroup).not.toContain("onKeyDown={(e) =>")
-    expect(inspectorSurface).toMatch(/\.gwg-header:focus-visible\s*\{/)
-    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?appearance:\s*none;/)
-    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?-webkit-appearance:\s*none;/)
-    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?border:\s*0;/)
-    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?font:\s*inherit;/)
-    expect(inspectorSurface).toMatch(/\.gwg-header\s*\{[\s\S]*?text-align:\s*left;/)
+    expect(inspectorSurface).not.toMatch(/(^|\n)\.gwg-header(?:\s|:|\{|,)/)
+    expect(inspectorSurface).toMatch(/\.gwg > \.oc-button\[data-ui="gwg-header"\]\s*\{/)
+    expect(inspectorSurface).toMatch(
+      /\.gwg > \.oc-button\[data-ui="gwg-header"\]\s*\{[\s\S]*?--oc-button-height:\s*auto;/,
+    )
+    expect(inspectorSurface).toMatch(
+      /\.gwg > \.oc-button\[data-ui="gwg-header"\]\s*\{[\s\S]*?--oc-button-bg:\s*var\(--oc-header-bg\);/,
+    )
+    expect(inspectorSurface).toMatch(
+      /\.gwg > \.oc-button\[data-ui="gwg-header"\]:focus-visible\s*\{[\s\S]*?outline-offset:\s*calc\(-2px \* var\(--ui-scale\)\);/,
+    )
     for (const variant of ["passed", "failed", "running"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`))
       expect(inspectorSurface).toMatch(

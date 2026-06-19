@@ -39,7 +39,11 @@ describe("GoalWorkflowGroup — worktree row contract", () => {
     expect(source).toContain('getHostTransport().capabilities.nativeCommands["open-path"]')
     expect(source).toContain("when={canOpenWorktreeDirectory}")
     expect(source).toContain('<div class="gwg-worktree"')
+    expect(source).toContain("<Button")
     expect(source).toContain('data-ui="goal-worktree-open"')
+    expect(source).toContain('variant="ghost"')
+    expect(source).toContain('size="mini"')
+    expect(source).toContain('tone="neutral"')
     expect(source).toContain("props.goal.workspaceDir")
     expect(source).toContain("openDirectory(props.goal.workspaceDir!)")
   })
@@ -58,7 +62,7 @@ describe("GoalWorkflowGroup — worktree row contract", () => {
     expect(source).not.toMatch(/from\s+["'][^"']*\bshortPath\b/)
     // The label memo returns "" on failure; the <Show when={worktreeLabel()}>
     // hides the row entirely. Assert that <Show> wraps the worktree button.
-    expect(source).toMatch(/<Show when=\{worktreeLabel\(\)\}>[\s\S]*?<button[\s\S]*?gwg-worktree/)
+    expect(source).toMatch(/<Show when=\{worktreeLabel\(\)\}>[\s\S]*?<Button[\s\S]*?data-ui="goal-worktree-open"/)
   })
 
   test("parallel-goal isolation — each card reads its own props.goal, no global aggregation", () => {

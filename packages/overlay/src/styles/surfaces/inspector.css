@@ -996,13 +996,10 @@
   font-family: var(--mono);
 }
 
-/* GWG (Goal-Workflow-Graph) card — flat shell. Status is carried by
+/* GWG (Goal Workflow Group) card — flat shell. Status is carried by
    the icon and header/body content, not a decorative left rail. The
-   richer `.gwg-header` / `-title` / `-revision` /
-   `-objective` / `-step` / `-verdict` / `-checks` family still
-   lives in styles.css until each block gets a token sweep —
-   relocating them piecemeal would explode the surface size before
-   the cleanup pays off. */
+   visible controls render through the shared Button primitive; this
+   surface only owns GWG layout and state tint. */
 .gwg {
   --gwg-surface-base: color-mix(in srgb, var(--surface-inset) 88%, transparent);
   --gwg-surface-hover: color-mix(in srgb, var(--surface-hover) 72%, var(--surface));
@@ -1030,33 +1027,36 @@
    goal title, and optional priority/revision tags. The status-icon child rotates background + color
    through the three status modifier classes — those variants
    live next to the base so per-status chrome stays in one place. */
-.gwg-header {
-  appearance: none;
-  -webkit-appearance: none;
+.gwg > .oc-button[data-ui="gwg-header"] {
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(6px * var(--ui-scale));
+  --oc-button-padding-y: calc(4px * var(--ui-scale));
+  --oc-button-gap: calc(4px * var(--ui-scale));
+  --oc-button-bg: var(--oc-header-bg);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--text-strong);
+  --oc-button-shadow: none;
+
   display: flex;
   width: 100%;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
+  justify-content: flex-start;
   margin: 0;
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border: 0;
   cursor: pointer;
   user-select: none;
-  font: inherit;
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
   min-height: calc(26px * var(--ui-scale));
   line-height: 1.22;
   text-align: left;
-  background: var(--oc-header-bg);
+  white-space: normal;
+  border-radius: 0;
   transition:
-    background var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard);
+    --oc-button-bg var(--ui-duration-base) var(--ui-timing-standard),
+    --oc-button-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
-.gwg-header:focus-visible {
-  outline: calc(2px * var(--ui-scale)) solid var(--accent);
+.gwg > .oc-button[data-ui="gwg-header"]:focus-visible {
   outline-offset: calc(-2px * var(--ui-scale));
 }
 
@@ -1218,7 +1218,8 @@
 /* Worktree row — per-goal persistent workspace pointer. Flat row button
    opens the directory in the host's file manager. Hidden when the
    relative path can't be resolved (rule 7: no shortPath fallback). */
-.gwg-worktree {
+.gwg-worktree,
+.gwg .oc-button[data-ui="goal-worktree-open"] {
   display: flex;
   align-items: center;
   gap: calc(8px * var(--ui-scale));
@@ -1229,15 +1230,30 @@
   border: 0 solid transparent;
   border-radius: 0;
   color: var(--text);
-  font: inherit;
   text-align: left;
-  cursor: pointer;
+  font-family: var(--font);
+  font-size: var(--ui-font-body);
+  font-weight: var(--ui-font-weight-body);
 }
 
-.gwg-worktree:hover,
-.gwg-worktree:focus-visible {
-  background: var(--surface-hover);
-  outline: none;
+.gwg .oc-button[data-ui="goal-worktree-open"] {
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(12px * var(--ui-scale));
+  --oc-button-padding-y: calc(8px * var(--ui-scale));
+  --oc-button-gap: calc(8px * var(--ui-scale));
+  --oc-button-bg: transparent;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--text);
+  --oc-button-shadow: none;
+
+  justify-content: flex-start;
+  cursor: pointer;
+  white-space: normal;
+}
+
+.gwg .oc-button[data-ui="goal-worktree-open"]:hover,
+.gwg .oc-button[data-ui="goal-worktree-open"]:focus-visible {
+  --oc-button-bg: var(--surface-hover);
 }
 
 .gwg-worktree-label {
