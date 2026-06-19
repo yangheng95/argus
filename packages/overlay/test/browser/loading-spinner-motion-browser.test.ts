@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import test from "node:test"
 
@@ -8,6 +8,12 @@ import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
+
+const enUSMessages = JSON.parse(readFileSync(resolve("packages/overlay/src/i18n/en-US.json"), "utf8")) as Record<
+  string,
+  string
+>
+const browserPreviewLoadingText = enUSMessages["browser_preview.loading"]
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -175,6 +181,24 @@ test("loading spinners animate through shared motion tokens and stop for reduced
       visible: true,
       timeout: 15_000,
     })
+    const previewLoadingStatus = await page.evaluate(() => {
+      const stage = document.querySelector<HTMLElement>('.browser-preview-empty[data-status="loading"]')
+      const status = document.querySelector<HTMLElement>('.browser-preview-status[data-status="loading"]')
+      return {
+        stageRole: stage?.getAttribute("role") ?? "",
+        stageLive: stage?.getAttribute("aria-live") ?? "",
+        stageText: stage?.textContent?.trim() ?? "",
+        statusRole: status?.getAttribute("role") ?? "",
+        statusLive: status?.getAttribute("aria-live") ?? "",
+        statusText: status?.textContent?.trim() ?? "",
+      }
+    })
+    assert.equal(previewLoadingStatus.stageRole, "status")
+    assert.equal(previewLoadingStatus.stageLive, "polite")
+    assert.equal(previewLoadingStatus.stageText, browserPreviewLoadingText)
+    assert.equal(previewLoadingStatus.statusRole, "status")
+    assert.equal(previewLoadingStatus.statusLive, "polite")
+    assert.equal(previewLoadingStatus.statusText, browserPreviewLoadingText)
 
     await page.waitForSelector('.app-notifications[data-surface="toast"]', { state: "attached", timeout: 15_000 })
     await page.evaluate(() => {

@@ -491,6 +491,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                     ? "loading"
                     : (currentTarget()?.status ?? "loading")
               }
+              role={target.loading || targetTransitionPending() ? "status" : undefined}
+              aria-live={target.loading || targetTransitionPending() ? "polite" : undefined}
             >
             <Switch
               fallback={
@@ -603,6 +605,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                     renderedEvidence()?.status ??
                     (currentVerificationLoading() ? "loading" : "idle"))
               }
+              role={currentVerificationLoading() ? "status" : undefined}
+              aria-live={currentVerificationLoading() ? "polite" : undefined}
             >
               <Switch>
                 <Match when={currentVerificationError()}>
@@ -667,7 +671,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             )}
           </Match>
           <Match when={target.loading || targetTransitionPending()}>
-            <div class="browser-preview-empty" data-status="loading">
+            <div class="browser-preview-empty" data-status="loading" role="status" aria-live="polite">
               <span class="card__spinner" />
               <p>{t("browser_preview.loading")}</p>
             </div>
@@ -766,7 +770,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             )}
           </Match>
           <Match when={liveLoading()}>
-            <div class="browser-preview-empty" data-status="loading" data-ui="browser-preview-live-loading">
+            <div
+              class="browser-preview-empty"
+              data-status="loading"
+              data-ui="browser-preview-live-loading"
+              role="status"
+              aria-live="polite"
+            >
               <span class="card__spinner" />
               <p>{t("browser_preview.loading")}</p>
               <Show when={targetUrl()}>{(url) => <code>{url()}</code>}</Show>

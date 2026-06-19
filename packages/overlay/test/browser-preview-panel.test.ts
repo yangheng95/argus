@@ -172,6 +172,22 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).not.toContain("browser_preview.viewport.toggle")
   expect(component).toContain('data-ui="browser-preview-evidence"')
   expect(component).toContain('data-ui="browser-preview-evidence-missing"')
+  const targetStatusSourceStart = component.indexOf('class="browser-preview-status"')
+  const targetStatusSource = component.slice(targetStatusSourceStart, component.indexOf("<Switch", targetStatusSourceStart))
+  expect(targetStatusSource).toContain('role={target.loading || targetTransitionPending() ? "status" : undefined}')
+  expect(targetStatusSource).toContain('aria-live={target.loading || targetTransitionPending() ? "polite" : undefined}')
+  const evidenceStatusSourceStart = component.indexOf('class="browser-preview-evidence-status"')
+  const evidenceStatusSource = component.slice(
+    evidenceStatusSourceStart,
+    component.indexOf("<Switch", evidenceStatusSourceStart),
+  )
+  expect(evidenceStatusSource).toContain('role={currentVerificationLoading() ? "status" : undefined}')
+  expect(evidenceStatusSource).toContain('aria-live={currentVerificationLoading() ? "polite" : undefined}')
+  expect(component).toContain('<div class="browser-preview-empty" data-status="loading" role="status" aria-live="polite">')
+  const liveLoadingSourceStart = component.indexOf('data-ui="browser-preview-live-loading"')
+  const liveLoadingSource = component.slice(liveLoadingSourceStart, component.indexOf("<span", liveLoadingSourceStart))
+  expect(liveLoadingSource).toContain('role="status"')
+  expect(liveLoadingSource).toContain('aria-live="polite"')
   const stageSource = component.slice(component.indexOf('class="browser-preview-stage"'))
   expect(stageSource.indexOf('data-ui="browser-preview-live-error"')).toBeLessThan(
     stageSource.indexOf("when={renderedEvidence()}"),
