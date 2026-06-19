@@ -218,7 +218,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                     </div>
                     <form class="recent-dir-edit-form">
                       <label class="recent-dir-edit-label">
-                        <input value="OpenCorvus" aria-label="Rename directory" />
+                        <input class="field-input" value="OpenCorvus" aria-label="Rename directory" />
                       </label>
                       <button
                         class="oc-button"

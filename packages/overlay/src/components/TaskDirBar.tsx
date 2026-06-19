@@ -250,6 +250,7 @@ export function TaskDirContent() {
               <label class="recent-dir-edit-label">
                 <span>{t("cwd.path_label")}</span>
                 <input
+                  class="field-input"
                   value={pathDraft()}
                   onInput={(event) => setPathDraft(event.currentTarget.value)}
                   placeholder={t("workspace_onboarding.browser_path_placeholder")}

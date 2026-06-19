@@ -393,6 +393,33 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     assert.ok(openState.geometry.panelWidth <= openState.geometry.shellWidth)
 
     await page.focus('[data-ui="cwd-path-input"]')
+    const pathInputState = await page.$eval('[data-ui="cwd-path-input"]', (node) => {
+      const input = node as HTMLInputElement
+      const styles = getComputedStyle(input)
+      return {
+        active: document.activeElement === input,
+        className: input.className,
+        appearance: styles.appearance,
+        borderTopColor: styles.borderTopColor,
+        backgroundColor: styles.backgroundColor,
+        color: styles.color,
+        boxShadow: styles.boxShadow,
+      }
+    })
+    assert.equal(pathInputState.active, true)
+    assert.match(pathInputState.className, /\bfield-input\b/)
+    assert.equal(pathInputState.appearance, "none")
+    assert.notEqual(pathInputState.borderTopColor, "rgba(0, 0, 0, 0)")
+    assert.notEqual(pathInputState.backgroundColor, "rgba(0, 0, 0, 0)")
+    assert.notEqual(pathInputState.color, "rgba(0, 0, 0, 0)")
+    assert.notEqual(pathInputState.boxShadow, "none")
+    const focusedInputScreenshot = await saveElementScreenshot(
+      page,
+      ".recent-dir-panel",
+      "task-dirbar-recent-path-input-field-input.png",
+    )
+    assert.ok(focusedInputScreenshot.endsWith("task-dirbar-recent-path-input-field-input.png"))
+
     const tabOrder: Array<{ tag: string; dataUI: string; className: string }> = []
     for (let index = 0; index < 5; index += 1) {
       await page.keyboard.press("Tab")
