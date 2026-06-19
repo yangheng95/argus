@@ -189,6 +189,30 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     await page.waitForSelector(".task-cwd-dropdown", { visible: true })
     await page.waitForSelector(".task-dir-step", { visible: true })
     await page.waitForSelector('[data-ui="cwd-recent-trigger"]', { visible: true })
+    await page.waitForSelector('[data-ui="project-worktree-dropdown"]', { visible: true })
+
+    await page.click('[data-ui="project-worktree-dropdown"]')
+    await page.waitForSelector(".project-worktree-panel", { visible: true })
+    const projectWorktreeOpenState = await page.evaluate(() => {
+      const trigger = document.querySelector('[data-ui="project-worktree-dropdown"]') as HTMLElement | null
+      const panel = document.querySelector(".project-worktree-panel") as HTMLElement | null
+      return {
+        panelVisible: !!panel && !panel.hidden,
+        ariaExpanded: trigger?.getAttribute("aria-expanded") ?? "",
+        dataExpanded: trigger?.hasAttribute("data-expanded") ?? false,
+        dataOpen: trigger?.getAttribute("data-open") ?? null,
+      }
+    })
+    assert.deepEqual(projectWorktreeOpenState, {
+      panelVisible: true,
+      ariaExpanded: "true",
+      dataExpanded: true,
+      dataOpen: null,
+    })
+    const projectWorktreeScreenshot = await saveScreenshot(page, "task-dirbar-project-worktree-expanded-state.png")
+    assert.ok(projectWorktreeScreenshot.endsWith("task-dirbar-project-worktree-expanded-state.png"))
+    await page.keyboard.press("Escape")
+    await page.waitForFunction(() => document.querySelector(".project-worktree-panel") === null)
 
     const semantics = await page.evaluate(() => {
       const trigger = document.querySelector<HTMLElement>('[data-ui="cwd-recent-trigger"]')

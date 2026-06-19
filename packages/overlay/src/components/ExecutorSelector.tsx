@@ -162,10 +162,10 @@ function externalProviderGroups(executorID: string): ProviderGroup[] {
   return buildProviderGroups((id) => wantedSet.has(id), false, "native")
 }
 
-function ChevronCaret(props: { open: boolean }) {
+function ChevronCaret() {
   return (
     <span class="executor-chip-caret" aria-hidden="true">
-      <Icon name={props.open ? "caret-down" : "caret-up"} size={8} />
+      <Icon name="caret-up" size={8} />
     </span>
   )
 }
@@ -665,12 +665,7 @@ function ExecutorChip(props: ExecutorChipProps) {
       gutter={6}
       slide={false}
     >
-      <div
-        ref={setSlotRef}
-        class="executor-chip-slot"
-        data-side={props.side}
-        data-open={props.disclosure.open() ? "true" : "false"}
-      >
+      <div ref={setSlotRef} class="executor-chip-slot" data-side={props.side}>
         <Popover.Trigger
           as={Button}
           type="button"
@@ -689,7 +684,7 @@ function ExecutorChip(props: ExecutorChipProps) {
             </span>
             <ChipModel model={props.model} placeholder={props.modelPlaceholder} />
           </span>
-          <ChevronCaret open={props.disclosure.open()} />
+          <ChevronCaret />
         </Popover.Trigger>
       </div>
       <Popover.Portal>

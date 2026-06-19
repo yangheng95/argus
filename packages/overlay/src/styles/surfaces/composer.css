@@ -523,7 +523,7 @@
   min-width: 0;
 }
 
-.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"] {
+.executor-chip-slot .oc-button[data-ui^="executor-chip-"][data-expanded] {
   --oc-button-bg: color-mix(in srgb, var(--surface-inset) 84%, var(--accent) 16%);
   --oc-button-color: var(--text-strong);
   box-shadow:
@@ -587,6 +587,14 @@
   align-items: center;
   color: var(--text-muted);
   flex: 0 0 auto;
+  transition:
+    transform var(--ui-duration-base) var(--ui-timing-standard),
+    color var(--ui-duration-fast);
+}
+
+.executor-chip-slot .oc-button[data-ui^="executor-chip-"][data-expanded] .executor-chip-caret {
+  color: var(--text-strong);
+  transform: rotate(180deg);
 }
 
 .executor-budget-inline {

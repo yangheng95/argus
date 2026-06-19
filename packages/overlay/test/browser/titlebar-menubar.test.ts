@@ -744,6 +744,8 @@ test(
       )
       const altOpenState = await page.evaluate(() => ({
         expanded: document.querySelector('[data-menu-trigger="view"]')?.getAttribute("aria-expanded"),
+        dataExpanded: document.querySelector('[data-menu-trigger="view"]')?.hasAttribute("data-expanded") ?? false,
+        dataActive: document.querySelector('[data-menu-trigger="view"]')?.getAttribute("data-active") ?? null,
         focusedClass: (document.activeElement as HTMLElement | null)?.className || "",
         focusedRole: (document.activeElement as HTMLElement | null)?.getAttribute("role") || "",
         focusedTestid: (document.activeElement as HTMLElement | null)?.dataset.testid || "",
@@ -751,11 +753,18 @@ test(
         focusedMenuText: (document.activeElement as HTMLElement | null)?.textContent?.trim() || "",
       }))
       assert.equal(altOpenState.expanded, "true")
+      assert.equal(altOpenState.dataExpanded, true)
+      assert.equal(altOpenState.dataActive, null)
       assert.equal(altOpenState.focusedRole, "menuitemradio", JSON.stringify(altOpenState))
       assert.match(altOpenState.focusedClass, /titlebar-theme-option/, JSON.stringify(altOpenState))
       assert.equal(altOpenState.focusedTestid, "titlebar-theme-vscode-dark", JSON.stringify(altOpenState))
       assert.equal(altOpenState.focusedAriaChecked, "true", JSON.stringify(altOpenState))
       assert.ok(altOpenState.focusedMenuText.includes("VS Code Dark"), JSON.stringify(altOpenState))
+      const viewTriggerElement = await page.$('[data-menu-trigger="view"]')
+      assert.ok(viewTriggerElement)
+      const triggerScreenshotPath = resolve(".scratch/titlebar-menubar-trigger-expanded-state.png")
+      mkdirSync(dirname(triggerScreenshotPath), { recursive: true })
+      writeFileSync(triggerScreenshotPath, await viewTriggerElement.screenshot({}))
       const viewMenuElement = await page.$('[data-testid="titlebar-menu-view"]')
       assert.ok(viewMenuElement)
       const screenshotPath = resolve(".scratch/titlebar-view-radio-focus.png")

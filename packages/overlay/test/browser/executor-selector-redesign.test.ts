@@ -543,6 +543,26 @@ test(
       assert.ok(mirrorBody.includes("gpt-5.5-pro"), mirrorBody)
       assert.ok(mirrorBody.includes("gpt-5.5-codex"))
       assert.ok(mirrorBody.includes("kimi-k2.7-code"))
+      const mirrorOpenState = await page.evaluate(() => {
+        const slot = document.querySelector('[data-side="mirror"]') as HTMLElement | null
+        const trigger = document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null
+        return {
+          ariaExpanded: trigger?.getAttribute("aria-expanded") ?? "",
+          dataExpanded: trigger?.hasAttribute("data-expanded") ?? false,
+          triggerDataOpen: trigger?.getAttribute("data-open") ?? null,
+          slotDataOpen: slot?.getAttribute("data-open") ?? null,
+        }
+      })
+      assert.deepEqual(mirrorOpenState, {
+        ariaExpanded: "true",
+        dataExpanded: true,
+        triggerDataOpen: null,
+        slotDataOpen: null,
+      })
+      const openedMirrorChip = await page.$('[data-ui="executor-chip-mirror"]')
+      assert.ok(openedMirrorChip, "opened mirror executor chip should exist before screenshot")
+      const openStateScreenshot = await saveElementScreenshot(openedMirrorChip, "executor-chip-expanded-state.png")
+      assert.ok(openStateScreenshot.target.endsWith("executor-chip-expanded-state.png"))
       const mirrorPlacement = await page.evaluate(() => {
         const slot = document.querySelector('[data-side="mirror"]') as HTMLElement | null
         const trigger = document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null

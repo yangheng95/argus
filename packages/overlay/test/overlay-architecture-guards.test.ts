@@ -810,11 +810,13 @@ describe("overlay architecture guards", () => {
     }
     expect(conversationSurface).toMatch(/\.task-cwd-dropdown:hover,\s*\.task-cwd-dropdown:focus-within\s*\{/)
     expect(conversationSurface).toMatch(/\.task-cwd-dropdown\[data-open="true"\]\s*\{/)
+    expect(conversationSurface).toMatch(/\.oc-button\[data-ui="project-worktree-dropdown"\]\[data-expanded\]\s*\{/)
+    expect(conversationSurface).not.toContain('.oc-button[data-ui="project-worktree-dropdown"][data-open="true"]')
     expect(conversationSurface).toMatch(
       /\.task-dir-menu-actions \.oc-button\[data-ui="cwd-recent-trigger"\]:hover,\s*\.task-dir-menu-actions \.oc-button\[data-ui="cwd-recent-trigger"\]:focus-visible,/,
     )
     expect(conversationSurface).not.toContain(".task-dir-recent-trigger")
-    expect(conversationSurface).toMatch(/\.task-dir-tool\.danger:hover\s*\{/)
+    expect(conversationSurface).toMatch(/\.task-dir-tool\.danger:hover,\s*\.task-dir-tool\.danger:focus-visible\s*\{/)
     expect(conversationSurface).not.toMatch(/#94a3b8/)
     expect(conversationSurface).not.toMatch(/#e5e7eb/)
     expect(conversationSurface).not.toMatch(/rgba\(248,\s*113,\s*113/)
@@ -868,6 +870,8 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome^="workspace-split"]')
     expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-primary"]')
     expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"]')
+    expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded]')
+    expect(conversationSurface).not.toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"]')
     expect(conversationSurface).not.toMatch(/border-radius:\s*999px/)
     expect(conversationSurface).not.toMatch(/rgba\(116,\s*133,\s*184/)
     expect(conversationSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.62\)/)
@@ -882,7 +886,7 @@ describe("overlay architecture guards", () => {
       /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))[\s\S]*?\.task-bar\b/,
     )
     expect(conversationSurface).toMatch(
-      /\.recent-dir-row:hover,\s*\.recent-dir-row:has\(\.recent-dir-item\[data-highlighted\]\)\s*\{/,
+      /\.recent-dir-row:hover,\s*\.recent-dir-row:focus-within\s*\{/,
     )
     expect(conversationSurface).toMatch(/\.recent-dir-row\[data-active="true"\]\s*\{/)
   })
@@ -930,9 +934,8 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(
       /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover,\s*\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:focus-visible\s*\{/,
     )
-    expect(composerSurface).toMatch(
-      /\.executor-chip-slot\[data-open="true"\] \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/,
-    )
+    expect(composerSurface).toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\[data-expanded\]\s*\{/)
+    expect(composerSurface).not.toContain('.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"]')
     expect(composerSurface).toMatch(/\.executor-chip-value\[data-empty="true"\]/)
   })
 

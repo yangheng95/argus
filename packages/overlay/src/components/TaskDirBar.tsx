@@ -437,7 +437,6 @@ export function ProjectWorktreeDropdown() {
         size="sm"
         tone="neutral"
         data-ui="project-worktree-dropdown"
-        data-open={open() ? "true" : "false"}
         title={t("worktree.summary", { active: activeWorktrees().length, expired: expiredWorktrees().length })}
         aria-label={t("worktree.summary", { active: activeWorktrees().length, expired: expiredWorktrees().length })}
       >
