@@ -53,6 +53,7 @@ type BrowserPreviewRegionComparisonRunnerInput = {
   taskID: string
   targetID: string
   viewportIDs: BrowserPreviewViewportID[]
+  viewportByID?: Partial<Record<BrowserPreviewViewportID, { width: number; height: number }>>
   bindings: BrowserPreviewRegionBinding[]
   includeFullpageOverview: boolean
   signal?: AbortSignal
@@ -271,10 +272,11 @@ export async function runBrowserPreviewRegionComparisonCapture(
       executablePath,
       launchArgs: BrowserRuntime.defaultLaunchArgs(),
       launchTimeoutMs,
+      settleMs: RUNTIME_CAPTURE_DEFAULTS.settle_ms,
       viewportIDs: input.viewportIDs,
       viewportByID: Object.fromEntries(
         input.viewportIDs.map((id) => {
-          const viewport = browserPreviewViewportByID(id)
+          const viewport = input.viewportByID?.[id] ?? browserPreviewViewportByID(id)
           return [id, { width: viewport.width, height: viewport.height }]
         }),
       ),
@@ -860,10 +862,11 @@ async function navigateAndDiagnose(page, recorder, input, route, screenshotPath)
   let response = null;
   let navigationError = "";
   try {
-    response = await page.goto(routeUrl(input.url, route), { waitUntil: "networkidle", timeout: 30000 });
+    response = await page.goto(routeUrl(input.url, route), { waitUntil: "load", timeout: 30000 });
   } catch (error) {
     navigationError = error?.message || String(error);
   }
+  await new Promise((resolve) => setTimeout(resolve, input.settleMs ?? 500));
   const status = response ? response.status() : 0;
   const headers = response ? response.headers() : {};
   const contentType = String(headers["content-type"] || "").toLowerCase();
