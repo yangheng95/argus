@@ -26,6 +26,7 @@ const SURFACES_ROOT = join(STYLES_ROOT, "surfaces")
 const BASE_CSS = readFileSync(join(STYLES_ROOT, "cascade", "base.css"), "utf8")
 const CARD_CSS = readFileSync(join(SURFACES_ROOT, "card.css"), "utf8")
 const NOTIFICATIONS_CSS = readFileSync(join(SURFACES_ROOT, "notifications.css"), "utf8")
+const SETTINGS_CSS = readFileSync(join(SURFACES_ROOT, "settings.css"), "utf8")
 const SIDEBAR_CSS = readFileSync(join(SURFACES_ROOT, "sidebar.css"), "utf8")
 
 function listCss(dir: string): string[] {
@@ -201,9 +202,13 @@ describe("flat-redesign Step 8a — motion token coverage", () => {
     expect(cssBlock(NOTIFICATIONS_CSS, ".app-notification__spinner")).toContain(
       "animation: oc-spin var(--ui-duration-loop-notification-spin) linear infinite;",
     )
-    expect(BASE_CSS).toMatch(
-      /\.card__spinner,\s*\.app-notification__spinner\s*\{[\s\S]*animation:\s*none !important;/,
+    expect(cssBlock(SETTINGS_CSS, ".agent-models-loading-spinner")).toContain(
+      "animation: oc-spin var(--ui-duration-loop-agent-spin) linear infinite;",
     )
+    expect(BASE_CSS).toMatch(
+      /\.card__spinner,\s*\.app-notification__spinner,\s*\.agent-models-loading-spinner\s*\{[\s\S]*animation:\s*none !important;/,
+    )
+    expect(BASE_CSS).not.toContain("animation-duration: 2s")
   })
 
   test("task tree active pulse uses the shared loop motion tokens", () => {

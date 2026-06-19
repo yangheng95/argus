@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | [2026-06-19-agent-models-i18n-source.md](2026-06-19-agent-models-i18n-source.md)                               | Agent Models i18n Source |
+| [2026-06-19-agent-models-loading-spinner-motion.md](2026-06-19-agent-models-loading-spinner-motion.md)         | Agent Models Loading Spinner Motion |
 | [2026-06-19-loading-spinner-motion-token-source.md](2026-06-19-loading-spinner-motion-token-source.md)         | Loading Spinner Motion Token Source |
 | [2026-06-19-browser-evidence-title-font-weight-token.md](2026-06-19-browser-evidence-title-font-weight-token.md) | Browser Evidence Title Font Weight Token |
 | [2026-06-19-section-summary-focus-visible.md](2026-06-19-section-summary-focus-visible.md)                     | Section Summary Focus Visible |

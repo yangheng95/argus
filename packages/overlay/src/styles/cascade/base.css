@@ -184,14 +184,12 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
   .card__spinner,
-  .app-notification__spinner {
+  .app-notification__spinner,
+  .agent-models-loading-spinner {
     animation: none !important;
   }
   .task-list-skeleton-row {
     animation: none !important;
-  }
-  .agent-models-loading-spinner {
-    animation-duration: 2s;
   }
   .task-switch-progress[data-active="true"]::before {
     animation: none;
