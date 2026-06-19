@@ -130,11 +130,10 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
     expect(titlebar).not.toMatch(/\.titlebar-task-status:hover/)
   })
 
-  test(".titlebar-menubar-trigger:hover doesn't flip border-color", () => {
-    const combinedHead =
-      '.titlebar-menubar-trigger:hover,\n.titlebar-menubar-trigger:focus-visible,\n.titlebar-menubar-trigger[data-active="true"]'
-    const body = ruleBody(titlebar, combinedHead)
+  test("titlebar menubar trigger active state doesn't flip border-color", () => {
+    const body = ruleBody(titlebar, '.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"]')
     expect(body).not.toMatch(/border-color\s*:/)
+    expect(body).toMatch(/--oc-button-bg\s*:/)
   })
 
   test('.oc-section[data-phase-state="active"] uses bg-tint only, not border-color or rails', () => {

@@ -31,6 +31,21 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).not.toContain('document.addEventListener("pointerdown"')
   })
 
+  test("routes visible top-level menu trigger chrome through Button", () => {
+    expect(SOURCE).toContain('import { Button } from "../ui/Button"')
+    expect(SOURCE).toContain("<Menubar.Trigger")
+    expect(SOURCE).toContain("as={Button}")
+    expect(SOURCE).toContain('variant="ghost"')
+    expect(SOURCE).toContain('size="sm"')
+    expect(SOURCE).toContain('tone="neutral"')
+    expect(SOURCE).not.toContain('class="oc-button"')
+    expect(SOURCE).not.toContain('data-variant="ghost"')
+    expect(SOURCE).not.toContain('data-size="sm"')
+    expect(SOURCE).not.toContain('data-tone="neutral"')
+    expect(CSS).not.toContain(".titlebar-menubar-trigger")
+    expect(CSS).toContain('.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"]')
+  })
+
   test("keeps product Alt access keys outside handwritten menu roles", () => {
     expect(SOURCE).toContain("menuIDForAccessKey")
     expect(SOURCE).toContain("Alt+")
