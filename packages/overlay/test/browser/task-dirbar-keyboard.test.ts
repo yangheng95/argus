@@ -225,6 +225,9 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
 
     const openState = await page.evaluate(() => ({
       panelVisible: !!document.querySelector(".recent-dir-panel"),
+      panelRole: document.querySelector(".recent-dir-panel")?.getAttribute("role") ?? "",
+      panelLabel: document.querySelector(".recent-dir-panel")?.getAttribute("aria-label") ?? "",
+      menuRoleCount: document.querySelectorAll('.recent-dir-panel [role="menu"], .recent-dir-panel [role="menuitem"]').length,
       triggerExpanded: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("aria-expanded") ?? "",
       shellOpen: document.querySelector(".task-cwd-dropdown")?.getAttribute("data-open") ?? "",
       recentRows: document.querySelectorAll('.recent-dir-list[data-kind="recent"] .recent-dir-row').length,
@@ -244,6 +247,8 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
         return shell && panel
           ? {
               leftDelta: Math.abs(Math.round(shell.left) - Math.round(panel.left)),
+              panelLeft: Math.round(panel.left),
+              shellLeft: Math.round(shell.left),
               panelWidth: Math.round(panel.width),
               shellWidth: Math.round(shell.width),
             }
@@ -251,6 +256,9 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
       })(),
     }))
     assert.equal(openState.panelVisible, true)
+    assert.equal(openState.panelRole, "dialog")
+    assert.equal(openState.panelLabel, "Recent")
+    assert.equal(openState.menuRoleCount, 0)
     assert.equal(openState.triggerExpanded, "true")
     assert.equal(openState.shellOpen, "true")
     assert.ok(openState.recentRows >= 3)
@@ -261,14 +269,33 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
       assert.equal(row.pressed, "")
     }
     assert.ok(openState.geometry)
-    assert.ok(openState.geometry.leftDelta <= 2)
+    assert.ok(openState.geometry.leftDelta <= 2, JSON.stringify(openState.geometry))
     assert.ok(openState.geometry.panelWidth > 240)
     assert.ok(openState.geometry.panelWidth <= openState.geometry.shellWidth)
 
+    await page.focus('[data-ui="cwd-path-input"]')
+    const tabOrder: Array<{ tag: string; dataUI: string; className: string }> = []
+    for (let index = 0; index < 5; index += 1) {
+      await page.keyboard.press("Tab")
+      tabOrder.push(
+        await page.evaluate(() => {
+          const active = document.activeElement as HTMLElement | null
+          return {
+            tag: active?.tagName ?? "",
+            dataUI: active?.dataset.ui ?? "",
+            className: active?.className ?? "",
+          }
+        }),
+      )
+    }
+    assert.ok(tabOrder.some((item) => item.dataUI === "recent-dir-edit-submit"), JSON.stringify(tabOrder))
+    assert.ok(tabOrder.some((item) => /\brecent-dir-item\b/.test(item.className)), JSON.stringify(tabOrder))
+    assert.ok(tabOrder.some((item) => item.dataUI === "recent-dir-remove"), JSON.stringify(tabOrder))
+
     await page.focus('.recent-dir-list[data-kind="recent"] .recent-dir-item')
-    await page.waitForSelector('.recent-dir-list[data-kind="recent"] .recent-dir-item[data-highlighted]')
-    const highlightedRecentState = await page.$eval(
-      '.recent-dir-list[data-kind="recent"] .recent-dir-row:has(.recent-dir-item[data-highlighted])',
+    await page.waitForSelector('.recent-dir-list[data-kind="recent"] .recent-dir-row:focus-within')
+    const focusedRecentState = await page.$eval(
+      '.recent-dir-list[data-kind="recent"] .recent-dir-row:focus-within',
       (node) => {
         const row = node as HTMLElement
         const item = row.querySelector<HTMLElement>(".recent-dir-item")
@@ -276,23 +303,23 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
         const rowStyles = getComputedStyle(row)
         const removeStyles = remove ? getComputedStyle(remove) : null
         return {
-          highlighted: item?.hasAttribute("data-highlighted") ?? false,
+          active: document.activeElement === item,
           borderTopColor: rowStyles.borderTopColor,
           removeOpacity: removeStyles?.opacity ?? "",
           removePointerEvents: removeStyles?.pointerEvents ?? "",
         }
       },
     )
-    assert.equal(highlightedRecentState.highlighted, true)
-    assert.notEqual(highlightedRecentState.borderTopColor, "rgba(0, 0, 0, 0)")
-    assert.equal(highlightedRecentState.removeOpacity, "1")
-    assert.equal(highlightedRecentState.removePointerEvents, "auto")
-    const highlightedRecentScreenshot = await saveElementScreenshot(
+    assert.equal(focusedRecentState.active, true)
+    assert.notEqual(focusedRecentState.borderTopColor, "rgba(0, 0, 0, 0)")
+    assert.equal(focusedRecentState.removeOpacity, "1")
+    assert.equal(focusedRecentState.removePointerEvents, "auto")
+    const focusedRecentScreenshot = await saveElementScreenshot(
       page,
       ".recent-dir-panel",
-      "task-dirbar-recent-highlighted-row.png",
+      "task-dirbar-recent-focused-row.png",
     )
-    assert.ok(highlightedRecentScreenshot.endsWith("task-dirbar-recent-highlighted-row.png"))
+    assert.ok(focusedRecentScreenshot.endsWith("task-dirbar-recent-focused-row.png"))
 
     const actionSemantics = await page.evaluate(() => {
       const submit = document.querySelector<HTMLButtonElement>('[data-ui="recent-dir-edit-submit"]')

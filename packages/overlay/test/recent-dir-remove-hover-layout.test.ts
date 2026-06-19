@@ -30,13 +30,11 @@ describe("recent directory remove action hover layout", () => {
     expect(body).toMatch(/position:\s*relative\s*;/)
   })
 
-  test("hover, focus, and Kobalte highlight create an explicit remove action slot", () => {
+  test("hover and keyboard focus create an explicit remove action slot", () => {
     const body = selectorRuleBody('.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):hover')
     expect(body).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--recent-dir-remove-slot-width\)\s*;/)
-    const highlighted = selectorRuleBody(
-      '.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):has(.recent-dir-item[data-highlighted])',
-    )
-    expect(highlighted).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--recent-dir-remove-slot-width\)\s*;/)
+    const focused = selectorRuleBody('.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):focus-within')
+    expect(focused).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--recent-dir-remove-slot-width\)\s*;/)
   })
 
   test("remove button primitive is positioned in the action slot and disabled while hidden", () => {
@@ -51,11 +49,9 @@ describe("recent directory remove action hover layout", () => {
     const body = selectorRuleBody('.recent-dir-row:hover .oc-button[data-ui="recent-dir-remove"]')
     expect(body).toMatch(/opacity:\s*var\(--ui-opacity-full\)\s*;/)
     expect(body).toMatch(/pointer-events:\s*auto\s*;/)
-    const highlighted = selectorRuleBody(
-      '.recent-dir-row:has(.recent-dir-item[data-highlighted]) .oc-button[data-ui="recent-dir-remove"]',
-    )
-    expect(highlighted).toMatch(/opacity:\s*var\(--ui-opacity-full\)\s*;/)
-    expect(highlighted).toMatch(/pointer-events:\s*auto\s*;/)
+    const focused = selectorRuleBody('.recent-dir-row:focus-within .oc-button[data-ui="recent-dir-remove"]')
+    expect(focused).toMatch(/opacity:\s*var\(--ui-opacity-full\)\s*;/)
+    expect(focused).toMatch(/pointer-events:\s*auto\s*;/)
   })
 
   test("recent directory actions route through the shared Button primitive", () => {
@@ -68,5 +64,6 @@ describe("recent directory remove action hover layout", () => {
     expect(TASK_DIR_BAR).not.toContain('class="recent-dir-remove"')
     expect(CONVERSATION_CSS).not.toContain(".recent-dir-edit-submit")
     expect(CONVERSATION_CSS).not.toContain(".recent-dir-remove {")
+    expect(CONVERSATION_CSS).not.toContain("recent-dir-item[data-highlighted]")
   })
 })

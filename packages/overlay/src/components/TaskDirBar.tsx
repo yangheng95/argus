@@ -6,6 +6,7 @@
 // workspace chrome implementation.
 
 import * as DropdownMenu from "@kobalte/core/dropdown-menu"
+import * as Popover from "@kobalte/core/popover"
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { boardStore, loadBoard } from "../store/board"
 import { pathBreadcrumb } from "../utils/dom-utils"
@@ -64,7 +65,7 @@ function compactBranch(value: string): string {
 
 export function TaskDirContent() {
   const nativeCommands = getHostTransport().capabilities.nativeCommands
-  let cwdShellRef: HTMLDivElement | undefined
+  let cwdShellRef: HTMLElement | undefined
   const dir = createMemo(directoryMemo)
   const breadcrumbHtml = createMemo(() =>
     pathBreadcrumb(dir(), {
@@ -80,6 +81,7 @@ export function TaskDirContent() {
   const [discoveredProjects, setDiscoveredProjects] = createSignal<DiscoveredProject[]>([])
   const [discoveryError, setDiscoveryError] = createSignal("")
   const [pathDraft, setPathDraft] = createSignal("")
+  const [recentPanelInlineSize, setRecentPanelInlineSize] = createSignal("")
 
   function syncRecentDirs(): void {
     setRecentDirs(loadRecentDirectories())
@@ -106,12 +108,24 @@ export function TaskDirContent() {
     void syncDiscoveredProjects()
   }
 
+  function syncRecentPanelGeometry(): void {
+    if (!cwdShellRef) throw new Error("TaskDirBar recent panel anchor is not mounted.")
+    const width = cwdShellRef.getBoundingClientRect().width
+    if (!Number.isFinite(width) || width <= 0) {
+      throw new Error(`TaskDirBar recent panel anchor width is invalid: ${width}`)
+    }
+    setRecentPanelInlineSize(`${Math.round(width)}px`)
+  }
+
   function closeRecentPanel(): void {
     setOpen(false)
   }
 
   function setRecentPanelOpen(nextOpen: boolean): void {
-    if (nextOpen) syncPanelData()
+    if (nextOpen) {
+      syncPanelData()
+      syncRecentPanelGeometry()
+    }
     setOpen(nextOpen)
   }
 
@@ -172,17 +186,18 @@ export function TaskDirContent() {
   }
 
   return (
-    <DropdownMenu.Root
+    <Popover.Root
       open={open()}
       onOpenChange={setRecentPanelOpen}
-      placement="bottom-start"
+      anchorRef={() => cwdShellRef}
+      placement="bottom-end"
       gutter={6}
-      sameWidth
-      fitViewport
-      getAnchorRect={() => cwdShellRef?.getBoundingClientRect()}
+      slide={false}
     >
       <div
-        ref={cwdShellRef}
+        ref={(element) => {
+          cwdShellRef = element
+        }}
         class="task-dir-shell task-cwd-dropdown"
         data-open={open() ? "true" : "false"}
         title={dirTitle()}
@@ -195,8 +210,7 @@ export function TaskDirContent() {
           onClick={(event) => void handlePathAction(event)}
         />
         <div class="task-dir-menu-actions">
-          <DropdownMenu.Trigger
-            as={Button}
+          <Button
             type="button"
             variant="ghost"
             size="icon"
@@ -204,15 +218,25 @@ export function TaskDirContent() {
             data-chrome="icon-action"
             data-ui="cwd-recent-trigger"
             data-open={open() ? "true" : "false"}
+            aria-haspopup="dialog"
+            aria-expanded={open()}
+            aria-controls={open() ? "cwd-recent-panel" : undefined}
             aria-label={t("cwd.recent")}
             title={t("cwd.recent")}
+            onClick={() => setRecentPanelOpen(!open())}
           >
             <Icon name="caret-down" size={12} class="task-cwd-caret" />
-          </DropdownMenu.Trigger>
+          </Button>
         </div>
       </div>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content class="recent-dir-panel">
+      <Popover.Portal>
+        <Popover.Content
+          id="cwd-recent-panel"
+          class="recent-dir-panel"
+          role="dialog"
+          aria-label={t("cwd.recent")}
+          style={{ width: recentPanelInlineSize(), "max-width": recentPanelInlineSize() }}
+        >
           <div class="recent-dir-panel-shell">
             <div class="recent-dir-panel-head">
               <div class="recent-dir-panel-title">{t("cwd.recent")}</div>
@@ -259,19 +283,18 @@ export function TaskDirContent() {
                 <div class="recent-dir-section-title" title={discoveredRoot()}>
                   {t("cwd.detected_projects")}
                 </div>
-                <div class="recent-dir-list">
+                <div class="recent-dir-list" role="list">
                   <For each={discoveredProjects()}>
                     {(project) => {
                       const isActive = () => !!dir() && project.directory.toLowerCase() === dir().toLowerCase()
                       return (
-                        <div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>
-                          <DropdownMenu.Item
-                            as="button"
+                        <div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">
+                          <button
                             type="button"
                             class="recent-dir-item"
                             title={project.directory}
                             aria-current={isActive() ? "location" : undefined}
-                            onSelect={() => void chooseRecentDirectory(project.directory)}
+                            onClick={() => void chooseRecentDirectory(project.directory)}
                           >
                             <span class="recent-dir-copy">
                               <span class="recent-dir-label">{project.name}</span>
@@ -282,7 +305,7 @@ export function TaskDirContent() {
                                 •
                               </span>
                             </Show>
-                          </DropdownMenu.Item>
+                          </button>
                         </div>
                       )
                     }}
@@ -291,19 +314,18 @@ export function TaskDirContent() {
               </div>
             </Show>
             <Show when={recentDirs().length > 0} fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}>
-              <div class="recent-dir-list" data-kind="recent">
+              <div class="recent-dir-list" data-kind="recent" role="list">
                 <For each={recentDirs()}>
                   {(recent) => {
                     const isActive = () => !!dir() && recent.toLowerCase() === dir().toLowerCase()
                     return (
-                      <div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>
-                        <DropdownMenu.Item
-                          as="button"
+                      <div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">
+                        <button
                           type="button"
                           class="recent-dir-item"
                           title={recent}
                           aria-current={isActive() ? "location" : undefined}
-                          onSelect={() => void chooseRecentDirectory(recent)}
+                          onClick={() => void chooseRecentDirectory(recent)}
                         >
                           <span class="recent-dir-copy">
                             <span class="recent-dir-label">{recentPathLabel(recent)}</span>
@@ -314,7 +336,7 @@ export function TaskDirContent() {
                               •
                             </span>
                           </Show>
-                        </DropdownMenu.Item>
+                        </button>
                         <Button
                           type="button"
                           variant="ghost"
@@ -338,9 +360,9 @@ export function TaskDirContent() {
               </div>
             </Show>
           </div>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }
 
