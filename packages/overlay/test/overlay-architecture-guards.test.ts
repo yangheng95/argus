@@ -809,12 +809,17 @@ describe("overlay architecture guards", () => {
       expect(conversationSurface).toMatch(new RegExp(`\\.vcs-badge\\[data-tone="${tone}"\\]\\s*\\{`))
     }
     expect(conversationSurface).toMatch(/\.task-cwd-dropdown:hover,\s*\.task-cwd-dropdown:focus-within\s*\{/)
-    expect(conversationSurface).toMatch(/\.task-cwd-dropdown\[data-open="true"\]\s*\{/)
+    expect(conversationSurface).toContain('.task-cwd-dropdown:has(.oc-button[data-ui="cwd-recent-trigger"][data-expanded])')
+    expect(conversationSurface).toContain(
+      '.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"][data-expanded] .task-cwd-caret',
+    )
+    expect(conversationSurface).not.toContain('.task-cwd-dropdown[data-open="true"]')
     expect(conversationSurface).toMatch(/\.oc-button\[data-ui="project-worktree-dropdown"\]\[data-expanded\]\s*\{/)
     expect(conversationSurface).not.toContain('.oc-button[data-ui="project-worktree-dropdown"][data-open="true"]')
     expect(conversationSurface).toMatch(
       /\.task-dir-menu-actions \.oc-button\[data-ui="cwd-recent-trigger"\]:hover,\s*\.task-dir-menu-actions \.oc-button\[data-ui="cwd-recent-trigger"\]:focus-visible,/,
     )
+    expect(conversationSurface).not.toContain('.oc-button[data-ui="cwd-recent-trigger"][data-open="true"]')
     expect(conversationSurface).not.toContain(".task-dir-recent-trigger")
     expect(conversationSurface).toMatch(/\.task-dir-tool\.danger:hover,\s*\.task-dir-tool\.danger:focus-visible\s*\{/)
     expect(conversationSurface).not.toMatch(/#94a3b8/)
