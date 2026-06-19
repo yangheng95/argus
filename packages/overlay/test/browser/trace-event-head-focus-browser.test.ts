@@ -90,8 +90,11 @@ test("Trace event heads expose visible keyboard focus and toggle from keyboard",
             head.addEventListener("click", () => {
               const next = head.getAttribute("aria-expanded") !== "true";
               head.setAttribute("aria-expanded", String(next));
+              if (next) head.setAttribute("aria-controls", "trace-event-fixture-body");
+              else head.removeAttribute("aria-controls");
               event.dataset.open = String(next);
               body.hidden = !next;
+              body.id = next ? "trace-event-fixture-body" : "";
             });
           </script>
         </body>
@@ -118,8 +121,23 @@ test("Trace event heads expose visible keyboard focus and toggle from keyboard",
     assert.equal(focused.outlineStyle, "none")
 
     await page.keyboard.press("Enter")
-    const expanded = await page.$eval(headSelector, (node) => node.getAttribute("aria-expanded"))
-    assert.equal(expanded, "true")
+    const expanded = await page.$eval(headSelector, (node) => {
+      const button = node as HTMLElement
+      const controls = button.getAttribute("aria-controls") ?? ""
+      const body = controls ? document.getElementById(controls) : null
+      return {
+        expanded: button.getAttribute("aria-expanded"),
+        controls,
+        bodyClass: body?.className ?? "",
+        bodyHidden: body instanceof HTMLElement ? body.hidden : true,
+      }
+    })
+    assert.deepEqual(expanded, {
+      expanded: "true",
+      controls: "trace-event-fixture-body",
+      bodyClass: "trace-event-body",
+      bodyHidden: false,
+    })
 
     const stage = await page.$(".trace-focus-stage")
     assert.ok(stage)

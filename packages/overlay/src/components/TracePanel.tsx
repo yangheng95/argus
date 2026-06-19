@@ -136,11 +136,23 @@ function eventHeadline(event: TraceEvent): string {
   }
 }
 
+function traceEventBodyElementID(event: TraceEvent): string {
+  const raw = `trace-event-${event.kind}-${event.ts}-${event.sessionID ?? "task"}-body`
+  return raw.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "trace-event-body"
+}
+
 function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
   const [open, setOpen] = createSignal(!!props.defaultOpen)
+  const bodyElementID = () => traceEventBodyElementID(props.event)
   return (
     <div class="trace-event" data-kind={props.event.kind} data-open={open() ? "true" : "false"}>
-      <button type="button" class="trace-event-head" aria-expanded={open()} onClick={() => setOpen((v) => !v)}>
+      <button
+        type="button"
+        class="trace-event-head"
+        aria-expanded={open()}
+        aria-controls={open() ? bodyElementID() : undefined}
+        onClick={() => setOpen((v) => !v)}
+      >
         <span class="trace-event-ts">{formatTime(props.event.ts)}</span>
         <span class="trace-event-kind">{eventHeadline(props.event)}</span>
         <Show when={props.event.sessionID}>
@@ -153,7 +165,7 @@ function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
         </span>
       </button>
       <Show when={open()}>
-        <pre class="trace-event-body">{payloadJson(props.event)}</pre>
+        <pre id={bodyElementID()} class="trace-event-body">{payloadJson(props.event)}</pre>
       </Show>
     </div>
   )

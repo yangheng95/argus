@@ -109,6 +109,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-18-integrity-panel-token-source.md](2026-06-18-integrity-panel-token-source.md)                                                   | Integrity Panel Token Source |
 | [2026-06-18-task-progress-pill-focus.md](2026-06-18-task-progress-pill-focus.md)                                                           | Task Progress Pill Focus |
 | [2026-06-18-trace-event-head-focus.md](2026-06-18-trace-event-head-focus.md)                                                               | Trace Event Head Focus |
+| [2026-06-19-trace-event-disclosure-controls.md](2026-06-19-trace-event-disclosure-controls.md) | Trace Event Disclosure Controls |
 | [2026-06-18-css-token-closure.md](2026-06-18-css-token-closure.md)                                                                         | CSS Token Closure |
 | [2026-06-18-select-control-static-coverage-alignment.md](2026-06-18-select-control-static-coverage-alignment.md)                           | Select Control Static Coverage Alignment |
 | [2026-06-18-coding-cli-icon-token-source.md](2026-06-18-coding-cli-icon-token-source.md)                                                     | Coding CLI Icon Token Source |
