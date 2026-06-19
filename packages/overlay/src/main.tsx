@@ -1358,6 +1358,7 @@ if (rightActivityToolbarEl) {
         activities={RIGHT_ACTIVITIES}
         active={activeRightActivity}
         isActive={isRightActivityOpen}
+        activeSemantics="pressed-toggle"
         ariaLabelKey="activity.right"
         onSelect={selectRightActivity}
       />
@@ -1375,6 +1376,7 @@ if (leftActivityToolbarEl) {
         activities={LEFT_ACTIVITIES}
         active={activeLeftActivity}
         isActive={isLeftActivityOpen}
+        activeSemantics="current-page"
         ariaLabelKey="activity.left"
         onSelect={selectLeftActivity}
       />

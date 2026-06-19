@@ -448,6 +448,8 @@ test(
       const activeState = async () =>
         await page.evaluate(() => {
           const active = (selector: string) => document.querySelector<HTMLElement>(selector)?.dataset.active ?? ""
+          const attr = (selector: string, name: string) =>
+            document.querySelector<HTMLElement>(selector)?.getAttribute(name) ?? ""
           const display = (selector: string) => getComputedStyle(document.querySelector<HTMLElement>(selector)!).display
           const leftHeaderActions = document.querySelector<HTMLElement>("#leftPanelTaskActions")
           return {
@@ -473,26 +475,74 @@ test(
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
               )?.dataset.active ?? "",
+            leftTasksCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+              "aria-current",
+            ),
+            leftTasksPressed: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+              "aria-pressed",
+            ),
             leftMissionButton:
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]',
               )?.dataset.active ?? "",
+            leftMissionCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]',
+              "aria-current",
+            ),
+            leftMissionPressed: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]',
+              "aria-pressed",
+            ),
             leftAssistantButton:
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
               )?.dataset.active ?? "",
+            leftAssistantCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
+              "aria-current",
+            ),
+            leftAssistantPressed: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
+              "aria-pressed",
+            ),
             leftSkillButton:
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]',
               )?.dataset.active ?? "",
+            leftSkillCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]',
+              "aria-current",
+            ),
+            leftSkillPressed: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]',
+              "aria-pressed",
+            ),
             leftMcpButton:
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]',
               )?.dataset.active ?? "",
+            leftMcpCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]',
+              "aria-current",
+            ),
+            leftMcpPressed: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]',
+              "aria-pressed",
+            ),
             leftMemoryButton:
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]',
               )?.dataset.active ?? "",
+            leftMemoryCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]',
+              "aria-current",
+            ),
+            leftMemoryPressed: attr(
+              '[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]',
+              "aria-pressed",
+            ),
             rightToolbarDisplay: display("#solidRightActivityToolbar"),
             centerResizerHidden: document.querySelector<HTMLElement>("#centerWorkbenchResizer")?.hidden ?? true,
             rightActivityButtons: document.querySelectorAll('[data-ui="side-activity-button"][data-side="right"]')
@@ -504,6 +554,14 @@ test(
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]',
               )?.dataset.active ?? "",
+            rightWorkflowCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]',
+              "aria-current",
+            ),
+            rightWorkflowPressed: attr(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]',
+              "aria-pressed",
+            ),
             rightExplorerButton:
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]',
@@ -523,6 +581,14 @@ test(
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
               )?.dataset.active ?? "",
+            rightInspectorCurrent: attr(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+              "aria-current",
+            ),
+            rightInspectorPressed: attr(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+              "aria-pressed",
+            ),
             rightNotificationsButton:
               document.querySelector<HTMLElement>(
                 '[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]',
@@ -613,21 +679,37 @@ test(
         leftToolbarExists: true,
         leftActivityButtons: 6,
         leftTasksButton: "false",
+        leftTasksCurrent: "",
+        leftTasksPressed: "",
         leftMissionButton: "true",
+        leftMissionCurrent: "page",
+        leftMissionPressed: "",
         leftAssistantButton: "false",
+        leftAssistantCurrent: "",
+        leftAssistantPressed: "",
         leftSkillButton: "false",
+        leftSkillCurrent: "",
+        leftSkillPressed: "",
         leftMcpButton: "false",
+        leftMcpCurrent: "",
+        leftMcpPressed: "",
         leftMemoryButton: "false",
+        leftMemoryCurrent: "",
+        leftMemoryPressed: "",
         rightToolbarDisplay: "flex",
         centerResizerHidden: true,
         rightActivityButtons: 7,
         rightTuiButtonExists: false,
         rightWorkflowButton: "true",
+        rightWorkflowCurrent: "",
+        rightWorkflowPressed: "true",
         rightExplorerButton: "false",
         rightDiffButton: "false",
         rightAssistantButtonExists: false,
         rightPreviewButton: "false",
         rightInspectorButton: "false",
+        rightInspectorCurrent: "",
+        rightInspectorPressed: "false",
         rightNotificationsButton: "false",
         rightNotifications: "false",
         notificationPanelExists: true,
@@ -638,6 +720,11 @@ test(
         notificationTitle: "Notifications",
         workbenchStartsAtWorkspace: true,
       })
+      const leftToolbarElement = await page.$("#solidLeftActivityToolbar")
+      assert.ok(leftToolbarElement, "left activity toolbar should exist before screenshot")
+      const leftActivityScreenshotPath = resolve(".scratch/left-activity-toolbar-current-page.png")
+      mkdirSync(dirname(leftActivityScreenshotPath), { recursive: true })
+      writeFileSync(leftActivityScreenshotPath, await leftToolbarElement.screenshot({}))
 
       await page.setViewport({ width: 960, height: 720 })
       await page.waitForFunction(
@@ -986,7 +1073,11 @@ test(
         leftTasks: "true",
         leftMission: "false",
         leftTasksButton: "true",
+        leftTasksCurrent: "page",
+        leftTasksPressed: "",
         leftMissionButton: "false",
+        leftMissionCurrent: "",
+        leftMissionPressed: "",
         leftHeaderTitle: "Recent Tasks",
         leftHeaderAriaLabel: "Recent Tasks",
         leftHeaderI18nKey: "task.ledger.title",
@@ -1024,6 +1115,8 @@ test(
         leftHeaderActionScope: "skill",
         leftHeaderActionsActive: "false",
         leftSkillButton: "true",
+        leftSkillCurrent: "page",
+        leftSkillPressed: "",
       })
       const skillPanelState = await page.evaluate(() => {
         const panel = document.querySelector<HTMLElement>("#leftPanelSkills")!
@@ -1102,6 +1195,14 @@ test(
         detail: "Connected",
         status: "Connected",
       })
+      assertMatchObject(await activeState(), {
+        leftMcpButton: "true",
+        leftMcpCurrent: "page",
+        leftMcpPressed: "",
+        leftTasksButton: "false",
+        leftTasksCurrent: "",
+        leftTasksPressed: "",
+      })
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
       await page.waitForFunction(
@@ -1126,6 +1227,14 @@ test(
       assert.equal(memoryPanelState.meta.startsWith("memory.md"), true)
       assert.equal(memoryPanelState.scope.length > 0, true)
       assert.equal(memoryPanelState.empty, "")
+      assertMatchObject(await activeState(), {
+        leftMemoryButton: "true",
+        leftMemoryCurrent: "page",
+        leftMemoryPressed: "",
+        leftTasksButton: "false",
+        leftTasksCurrent: "",
+        leftTasksPressed: "",
+      })
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
       await page.waitForFunction(
@@ -1137,7 +1246,11 @@ test(
         centerOpen: "true",
         centerWorkflow: "true",
         rightWorkflowButton: "true",
+        rightWorkflowCurrent: "",
+        rightWorkflowPressed: "true",
         rightInspectorButton: "false",
+        rightInspectorCurrent: "",
+        rightInspectorPressed: "false",
       })
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
@@ -1145,6 +1258,8 @@ test(
         centerOpen: "true",
         centerWorkflow: "true",
         rightWorkflowButton: "true",
+        rightWorkflowCurrent: "",
+        rightWorkflowPressed: "true",
         chatTitle: "Task",
       })
 
@@ -1153,7 +1268,10 @@ test(
       assertMatchObject(twoPanelState, {
         centerWorkflow: "true",
         centerInspector: "true",
+        rightWorkflowPressed: "true",
         rightInspectorButton: "true",
+        rightInspectorCurrent: "",
+        rightInspectorPressed: "true",
         appDialogOpen: false,
       })
       assert.deepEqual(twoPanelState.openPanels, ["task", "inspector"])
