@@ -59,50 +59,9 @@
   margin: calc(4px * var(--ui-scale)) 0 calc(6px * var(--ui-scale));
 }
 
-.changes-filter-field {
-  display: flex;
+.changes-filter-field.search-field {
   flex: 1 1 0;
   min-width: 0;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  min-height: calc(24px * var(--ui-scale));
-  padding: 0 calc(7px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
-  color: var(--text-muted);
-}
-
-.changes-filter-field:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
-  color: var(--accent);
-}
-
-.changes-filter-input.field-input {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: calc(22px * var(--ui-scale));
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-strong);
-  font-size: var(--ui-font-control);
-  line-height: 1.35;
-  box-shadow: none;
-}
-
-.changes-filter-input.field-input:focus {
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.changes-toolbar .oc-button[data-ui="file-changes-filter-clear"] {
-  --oc-button-height: calc(24px * var(--ui-scale));
-  --oc-button-padding-x: 0;
-
-  width: calc(24px * var(--ui-scale));
-  min-width: calc(24px * var(--ui-scale));
 }
 
 .changes-status-strip {

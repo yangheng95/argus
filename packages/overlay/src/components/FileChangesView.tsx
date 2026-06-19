@@ -418,15 +418,16 @@ export function FileChangesView(props: FileChangesViewProps) {
 
         <Show when={shouldShowFilter()}>
           <div class="changes-toolbar">
-            <label class="changes-filter-field">
-              <Icon name="search" size={12} />
+            <label class="changes-filter-field search-field">
+              <Icon name="search" size={12} class="changes-filter-icon search-field-icon" />
               <input
                 ref={filterInputEl}
-                class="changes-filter-input field-input"
+                class="changes-filter-input search-field-input"
                 type="search"
                 value={filterQuery()}
                 placeholder={t("files.filter_placeholder")}
                 aria-label={t("files.filter_placeholder")}
+                data-ui="file-changes-search-input"
                 onInput={(event) => setFilterQuery(event.currentTarget.value)}
                 onKeyDown={onFilterKeyDown}
               />
@@ -438,7 +439,7 @@ export function FileChangesView(props: FileChangesViewProps) {
                 size="icon"
                 tone="neutral"
                 data-chrome="icon-action"
-                data-ui="file-changes-filter-clear"
+                data-ui="file-changes-search-clear"
                 aria-label={t("files.clear_filter")}
                 title={t("files.clear_filter")}
                 onClick={() => {

@@ -644,9 +644,26 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.equal(initialFilterControlState.options.every((item) => item.className.includes("oc-tab")), true)
     assert.equal(initialFilterControlState.options.find((item) => item.status === "all")?.dataPressed, true)
 
-    await page.type(".changes-filter-input", "added-filter")
-    await page.waitForSelector('[data-ui="file-changes-filter-clear"]')
-    const clearFilterState = await page.$eval('[data-ui="file-changes-filter-clear"]', (node) => {
+    await page.focus('[data-ui="file-changes-search-input"]')
+    const focusedSearchState = await page.$eval('[data-ui="file-changes-search-input"]', (node) => {
+      const input = node as HTMLInputElement
+      const field = input.closest(".changes-filter-field") as HTMLElement | null
+      const fieldStyle = field ? getComputedStyle(field) : null
+      return {
+        active: document.activeElement === input,
+        className: input.className,
+        fieldClassName: field?.className ?? "",
+        fieldBoxShadow: fieldStyle?.boxShadow ?? "",
+      }
+    })
+    assert.equal(focusedSearchState.active, true)
+    assert.match(focusedSearchState.className, /\bsearch-field-input\b/)
+    assert.match(focusedSearchState.fieldClassName, /\bsearch-field\b/)
+    assert.notEqual(focusedSearchState.fieldBoxShadow, "none")
+
+    await page.type('[data-ui="file-changes-search-input"]', "added-filter")
+    await page.waitForSelector('[data-ui="file-changes-search-clear"]')
+    const clearFilterState = await page.$eval('[data-ui="file-changes-search-clear"]', (node) => {
       const button = node as HTMLButtonElement
       const box = button.getBoundingClientRect()
       return {
@@ -671,8 +688,8 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.ok(changesPanel)
     writeFileSync(filterScreenshotPath, await changesPanel.screenshot({}))
 
-    await page.click('[data-ui="file-changes-filter-clear"]')
-    const clearedFilterState = await page.$eval(".changes-filter-input", (node) => ({
+    await page.click('[data-ui="file-changes-search-clear"]')
+    const clearedFilterState = await page.$eval('[data-ui="file-changes-search-input"]', (node) => ({
       value: (node as HTMLInputElement).value,
       focused: document.activeElement === node,
     }))
