@@ -1888,7 +1888,7 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toMatch(/(^|\n)\.(?:chat-goals-strip|goal-chip)(?:\s|\.|:|\{|,|\[)/)
     expect(conversationSurface).not.toMatch(/(^|\n)\.(?:chat-goals-strip|goal-chip)(?:\s|\.|:|\{|,|\[)/)
     expect(conversationSource).toContain("<TaskProgressBar />")
-    expect(cardSurface).toMatch(/(^|\n)\.task-progress__pill\s*\{/)
+    expect(cardSurface).toMatch(/(^|\n)\.task-progress \.oc-button\[data-ui="task-progress-pill"\]\s*\{/)
   })
 
   test("retired goal item list selectors stay absent while GWG remains canonical", () => {

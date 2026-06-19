@@ -153,8 +153,12 @@ test("conversation agent rail and conversation owner surfaces stay flat", () => 
   ).toMatch(
     /--oc-button-bg:\s*var\(--subtle-2\)/,
   )
-  expect(bodyOf(CARD_CSS, ".task-progress__pill")).toMatch(/border:\s*var\(--oc-border-width\) solid var\(--card-border\)/)
-  expect(bodyOf(CARD_CSS, ".task-progress__pill")).toMatch(/background:\s*var\(--card-bg-0\)/)
+  expect(bodyOf(CARD_CSS, '.task-progress .oc-button[data-ui="task-progress-pill"]')).toMatch(
+    /--oc-button-border:\s*var\(--oc-border-width\) solid var\(--card-border\)/,
+  )
+  expect(bodyOf(CARD_CSS, '.task-progress .oc-button[data-ui="task-progress-pill"]')).toMatch(
+    /--oc-button-bg:\s*var\(--card-bg-0\)/,
+  )
   expect(bodyOf(COMPOSER_CSS, ".chat-empty--task")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(COMPOSER_CSS, ".chat-empty--task")).toMatch(/background:\s*transparent/)
 })

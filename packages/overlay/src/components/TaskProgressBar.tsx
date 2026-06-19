@@ -25,6 +25,7 @@ import { goalRevisionLabelFromIndexes } from "../utils/goal-label"
 import { goalState, type GoalState } from "../utils/goal-state"
 import { Icon } from "./Icon"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
+import { Button } from "./ui/Button"
 
 /** Visible pill rows before the strip collapses behind a "+N more" toggle.
  *  Operators scanning a long task want the goal list visible at a glance, not
@@ -107,7 +108,7 @@ export function TaskProgressBar() {
   const remeasure = () => {
     const el = pillsEl
     if (!el) return
-    const pills = el.querySelectorAll<HTMLElement>(".task-progress__pill")
+    const pills = el.querySelectorAll<HTMLElement>('[data-ui="task-progress-pill"]')
     if (pills.length === 0) {
       setHiddenCount(0)
       setCollapsedMaxHeight(null)
@@ -159,7 +160,7 @@ export function TaskProgressBar() {
     const observed = new WeakSet<Element>()
     const observePills = () => {
       if (!pillsEl) return
-      for (const pill of pillsEl.querySelectorAll<HTMLElement>(".task-progress__pill")) {
+      for (const pill of pillsEl.querySelectorAll<HTMLElement>('[data-ui="task-progress-pill"]')) {
         if (!observed.has(pill)) {
           ro.observe(pill)
           observed.add(pill)
@@ -212,9 +213,12 @@ export function TaskProgressBar() {
           >
             {counts().passed}/{counts().total}
           </span>
-          <button
+          <Button
             type="button"
-            class="task-progress__fold"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-ui="task-progress-fold"
             aria-expanded={folded() ? "false" : "true"}
             aria-controls="taskProgressPills"
             title={folded() ? t("progress.expand_card") : t("progress.collapse_card")}
@@ -222,7 +226,7 @@ export function TaskProgressBar() {
             onClick={() => setFolded((value) => !value)}
           >
             <Icon name={folded() ? "chevron-down" : "chevron-up"} size={12} />
-          </button>
+          </Button>
         </div>
         <div class="task-progress__bar" aria-hidden="true">
           <div
@@ -253,9 +257,12 @@ export function TaskProgressBar() {
         >
           <For each={goals()}>
             {(g) => (
-              <button
+              <Button
                 type="button"
-                class="task-progress__pill"
+                variant="outline"
+                size="mini"
+                tone="neutral"
+                data-ui="task-progress-pill"
                 data-state={g.state}
                 title={pillStateLabel(g.state, g.title)}
                 aria-label={pillStateLabel(g.state, g.title)}
@@ -263,19 +270,22 @@ export function TaskProgressBar() {
               >
                 <span class="task-progress__pill-id">{goalRevisionLabelFromIndexes(g.index, g.attempt)}</span>
                 <span class="task-progress__pill-title">{g.title}</span>
-              </button>
+              </Button>
             )}
           </For>
         </div>
         <Show when={hiddenCount() > 0}>
-          <button
+          <Button
             type="button"
-            class="task-progress__toggle"
+            variant="ghost"
+            size="mini"
+            tone="neutral"
+            data-ui="task-progress-toggle"
             aria-expanded={expanded() ? "true" : "false"}
             onClick={() => setExpanded((v) => !v)}
           >
             {expanded() ? t("progress.collapse") : t("progress.expand_more", { count: String(hiddenCount()) })}
-          </button>
+          </Button>
         </Show>
       </div>
     </Show>

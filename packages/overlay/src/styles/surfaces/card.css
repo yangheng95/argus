@@ -1548,32 +1548,27 @@ body {
   font-weight: var(--ui-font-weight-strong);
 }
 
-.task-progress__fold {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.task-progress .oc-button[data-ui="task-progress-fold"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-padding-y: 0;
+  --oc-button-color: var(--text-soft);
+  --oc-button-bg: transparent;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-shadow: none;
+
   width: calc(22px * var(--ui-scale));
-  height: calc(22px * var(--ui-scale));
-  padding: 0;
-  border: 0;
+  min-width: calc(22px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
-  background: transparent;
-  color: var(--text-soft);
-  cursor: pointer;
   transition:
-    background-color var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard);
+    --oc-button-bg var(--ui-duration-base) var(--ui-timing-standard),
+    --oc-button-color var(--ui-duration-base) var(--ui-timing-standard);
 }
 
-.task-progress__fold:hover {
-  background: var(--card-bg-hover);
-  color: var(--text-strong);
-}
-
-.task-progress__fold:focus-visible {
-  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
-  outline-offset: calc(2px * var(--ui-scale));
+.task-progress .oc-button[data-ui="task-progress-fold"]:hover,
+.task-progress .oc-button[data-ui="task-progress-fold"]:focus-visible {
+  --oc-button-bg: var(--card-bg-hover);
+  --oc-button-color: var(--text-strong);
 }
 
 .task-progress__bar {
@@ -1619,68 +1614,60 @@ body {
 }
 
 .task-progress[data-folded="true"] .task-progress__pills,
-.task-progress[data-folded="true"] .task-progress__toggle {
+.task-progress[data-folded="true"] .oc-button[data-ui="task-progress-toggle"] {
   display: none;
 }
 
-.task-progress__toggle {
+.task-progress .oc-button[data-ui="task-progress-toggle"] {
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(6px * var(--ui-scale));
+  --oc-button-padding-y: calc(2px * var(--ui-scale));
+  --oc-button-color: var(--text-soft);
+  --oc-button-bg: transparent;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-shadow: none;
+
   align-self: flex-start;
-  appearance: none;
-  background: transparent;
-  border: 0;
-  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  color: var(--text-soft);
   font-size: calc(var(--card-meta-size) - calc(1px * var(--ui-scale)));
-  font-weight: var(--ui-font-weight-strong);
   letter-spacing: var(--ui-letter-spacing-loose);
-  cursor: pointer;
   border-radius: var(--oc-radius-pill);
   transition:
-    background-color var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard);
+    --oc-button-bg var(--ui-duration-base) var(--ui-timing-standard),
+    --oc-button-color var(--ui-duration-base) var(--ui-timing-standard);
 }
-.task-progress__toggle:hover {
-  background: var(--card-bg-hover);
-  color: var(--text-strong);
-}
-.task-progress__toggle:focus-visible {
-  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
-  outline-offset: calc(2px * var(--ui-scale));
+.task-progress .oc-button[data-ui="task-progress-toggle"]:hover,
+.task-progress .oc-button[data-ui="task-progress-toggle"]:focus-visible {
+  --oc-button-bg: var(--card-bg-hover);
+  --oc-button-color: var(--text-strong);
 }
 
-.task-progress__pill {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
+.task-progress .oc-button[data-ui="task-progress-pill"] {
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(8px * var(--ui-scale));
+  --oc-button-padding-y: calc(3px * var(--ui-scale));
+  --oc-button-gap: calc(5px * var(--ui-scale));
+  --oc-button-border: var(--oc-border-width) solid var(--card-border);
+  --oc-button-bg: var(--card-bg-0);
+  --oc-button-color: var(--text-soft);
+  --oc-button-shadow: none;
+
   border-radius: var(--oc-radius-pill);
-  border: var(--oc-border-width) solid var(--card-border);
-  background: var(--card-bg-0);
-  color: var(--text-soft);
   font-size: calc(var(--card-meta-size) - calc(0.5px * var(--ui-scale)));
-  cursor: pointer;
   max-width: 18rem;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   transition:
-    background-color var(--ui-duration-base) var(--ui-timing-standard),
-    border-color var(--ui-duration-base) var(--ui-timing-standard),
-    color var(--ui-duration-base) var(--ui-timing-standard);
+    --oc-button-bg var(--ui-duration-base) var(--ui-timing-standard),
+    --oc-button-border var(--ui-duration-base) var(--ui-timing-standard),
+    --oc-button-color var(--ui-duration-base) var(--ui-timing-standard);
 }
-.task-progress__pill:hover {
-  background: var(--card-bg-hover);
-  border-color: var(--card-border-strong);
-  color: var(--text-strong);
-}
-
-.task-progress__pill:focus-visible {
-  background: var(--card-bg-hover);
-  border-color: var(--card-border-strong);
-  color: var(--text-strong);
-  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
-  outline-offset: calc(2px * var(--ui-scale));
+.task-progress .oc-button[data-ui="task-progress-pill"]:hover,
+.task-progress .oc-button[data-ui="task-progress-pill"]:focus-visible {
+  --oc-button-bg: var(--card-bg-hover);
+  --oc-button-border: var(--oc-border-width) solid var(--card-border-strong);
+  --oc-button-color: var(--text-strong);
 }
 .task-progress__pill-id {
   flex: none;
@@ -1698,27 +1685,27 @@ body {
 
 /* state colours echo the badge palette so the progress strip and
  * the per-card badges stay visually consistent. */
-.task-progress__pill[data-state="passed"] {
-  background: color-mix(in srgb, var(--good) 18%, var(--card-bg-0));
-  border-color: color-mix(in srgb, var(--good) 35%, var(--card-border));
-  color: color-mix(in srgb, var(--good) 80%, var(--text-strong));
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="passed"] {
+  --oc-button-bg: color-mix(in srgb, var(--good) 18%, var(--card-bg-0));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--good) 35%, var(--card-border));
+  --oc-button-color: color-mix(in srgb, var(--good) 80%, var(--text-strong));
 }
-.task-progress__pill[data-state="failed"] {
-  background: color-mix(in srgb, var(--bad) 16%, var(--card-bg-0));
-  border-color: color-mix(in srgb, var(--bad) 32%, var(--card-border));
-  color: color-mix(in srgb, var(--bad) 75%, var(--text-strong));
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="failed"] {
+  --oc-button-bg: color-mix(in srgb, var(--bad) 16%, var(--card-bg-0));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 32%, var(--card-border));
+  --oc-button-color: color-mix(in srgb, var(--bad) 75%, var(--text-strong));
 }
-.task-progress__pill[data-state="running"] {
-  background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
-  border-color: color-mix(in srgb, var(--warn) 36%, var(--card-border));
-  color: color-mix(in srgb, var(--warn) 70%, var(--text-strong));
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="running"] {
+  --oc-button-bg: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 36%, var(--card-border));
+  --oc-button-color: color-mix(in srgb, var(--warn) 70%, var(--text-strong));
 }
-.task-progress__pill[data-state="blocked"] {
-  background: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
-  border-color: color-mix(in srgb, var(--warn) 32%, var(--card-border));
-  color: color-mix(in srgb, var(--warn) 75%, var(--text-strong));
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="blocked"] {
+  --oc-button-bg: color-mix(in srgb, var(--warn) 18%, var(--card-bg-0));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 32%, var(--card-border));
+  --oc-button-color: color-mix(in srgb, var(--warn) 75%, var(--text-strong));
 }
-.task-progress__pill[data-state="pending"] {
+.task-progress .oc-button[data-ui="task-progress-pill"][data-state="pending"] {
   opacity: var(--ui-opacity-dim);
 }
 
