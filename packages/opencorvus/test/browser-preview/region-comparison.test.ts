@@ -8,9 +8,9 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import {
+  BrowserPreviewRegionBinding,
   compareBrowserPreviewRegions,
   resolveSourceReferencePath,
-  type BrowserPreviewRegionBinding,
 } from "../../src/browser-preview/region-comparison"
 import {
   findReadableBrowserPreviewEvidenceByID,
@@ -48,6 +48,28 @@ describe("browser preview region comparison", () => {
     expect(() =>
       resolveSourceReferencePath({ projectRoot: tmp.path, taskID, referenceArtifactID: "source.png" }),
     ).toThrow("Source reference must resolve")
+  })
+
+  test("rejects non-canonical source reference IDs at binding schema parse time", () => {
+    const parsed = BrowserPreviewRegionBinding.safeParse({
+      region_id: "bad-source-reference",
+      viewport_id: "desktop",
+      state_id: "default",
+      region_scope: "page-section",
+      source: {
+        reference_artifact_id: ".opencorvus/r/t/S9/qzBwOu/fd/webpage-evidence/reference.png",
+        bbox: { x: 0, y: 0, width: 100, height: 80 },
+        semantic_role: "bad source reference",
+      },
+      implementation: {
+        route: "/",
+        locator: { kind: "data-oc-region", value: "bad-source-reference" },
+      },
+    })
+
+    expect(parsed.success).toBe(false)
+    if (parsed.success) throw new Error("non-canonical source reference unexpectedly parsed")
+    expect(parsed.error.issues.map((issue) => issue.path.join(".")).join("\n")).toContain("source.reference_artifact_id")
   })
 
   test(
@@ -345,6 +367,98 @@ describe("browser preview region comparison", () => {
         })
         expect(evidence?.status).toBe("failed")
         expect(evidence?.artifactPaths?.side_by_side).toBe(region.artifacts?.side_by_side)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_COMPARISON_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "fails source reference viewport widths that exceed the implementation viewport before crop scoring",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+      await sharp({
+        create: {
+          width: 1440,
+          height: 600,
+          channels: 4,
+          background: "#ffffff",
+        },
+      })
+        .composite([
+          {
+            input: Buffer.from(
+              `<svg width="320" height="140" xmlns="http://www.w3.org/2000/svg">
+                <rect width="320" height="140" fill="#e7f5ee"/>
+                <text x="24" y="52" font-family="Arial" font-size="30" fill="#123326">Economy</text>
+                <text x="24" y="92" font-family="Arial" font-size="18" fill="#315a45">Inflation and growth map</text>
+              </svg>`,
+            ),
+            left: 40,
+            top: 60,
+          },
+        ])
+        .png()
+        .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
+      const server = await startPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        const binding: BrowserPreviewRegionBinding = {
+          region_id: "economy-wide-reference",
+          viewport_id: "desktop",
+          state_id: "default",
+          region_scope: "page-section",
+          source: {
+            reference_artifact_id: "reference.png",
+            bbox: { x: 40, y: 60, width: 320, height: 140 },
+            semantic_role: "economy section",
+            text_anchors: ["Economy", "Inflation"],
+            source_refs: ["wide source screenshot"],
+          },
+          implementation: {
+            route: "/economy",
+            locator: { kind: "data-oc-region", value: "economy" },
+            component_files: ["src/Economy.tsx"],
+          },
+          acceptance_refs: ["economy parity"],
+        }
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+          bindings: [binding],
+          includeDiff: true,
+        })
+
+        expect(result.status).toBe("failed")
+        const region = result.regions[0]
+        expect(region.status).toBe("failed")
+        expect(region.reason).toContain("Source reference viewport width 1440")
+        expect(region.reason).toContain("implementation viewport width 1280")
+        expect(region.visual).toBeUndefined()
+        expect(region.artifacts).toBeUndefined()
+        expect(region.source_image_size).toEqual({ width: 1440, height: 600 })
+        expect(region.implementation_viewport).toEqual({ width: 1280, height: 800 })
+        expect(region.implementation_screenshot_path).toEndWith(".png")
+        const evidence = await Instance.provide({
+          directory: tmp.path,
+          fn: () =>
+            findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: result.evidenceIDs["desktop:default:economy-wide-reference"],
+            }),
+        })
+        expect(evidence?.status).toBe("failed")
       } finally {
         await server.close()
       }

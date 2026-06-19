@@ -1,4 +1,3 @@
-import { Instance } from "@/project/instance"
 import { lazy } from "@/util/lazy"
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
@@ -30,6 +29,7 @@ import {
   BrowserPreviewRegionComparisonResult,
   compareBrowserPreviewRegions,
 } from "../../browser-preview/region-comparison"
+import { browserPreviewTaskEvidenceRoot } from "../../browser-preview/task-evidence-root"
 
 const BrowserPreviewLiveRequest = z.object({
   targetID: z.string().min(1),
@@ -106,8 +106,9 @@ export const BrowserPreviewRoutes = lazy(() =>
       async (c) => {
         const { taskID } = c.req.valid("param")
         requireTask(taskID)
+        const projectRoot = browserPreviewTaskEvidenceRoot()
         const target = await resolveBrowserPreviewTarget({
-          projectRoot: Instance.directory,
+          projectRoot,
           taskID,
         })
         return c.json(target)
@@ -134,8 +135,9 @@ export const BrowserPreviewRoutes = lazy(() =>
       async (c) => {
         const { taskID, evidenceID } = c.req.valid("param")
         requireTask(taskID)
+        const projectRoot = browserPreviewTaskEvidenceRoot()
         const evidence = await findReadableBrowserPreviewEvidenceByID({
-          projectRoot: Instance.directory,
+          projectRoot,
           taskID,
           evidenceID,
         })
@@ -164,13 +166,14 @@ export const BrowserPreviewRoutes = lazy(() =>
       async (c) => {
         const { taskID, evidenceID } = c.req.valid("param")
         requireTask(taskID)
+        const projectRoot = browserPreviewTaskEvidenceRoot()
         const capturePath = await findReadableBrowserPreviewEvidenceCapturePath({
-          projectRoot: Instance.directory,
+          projectRoot,
           taskID,
           evidenceID,
         })
         if (!capturePath) return c.json({ message: `Browser preview evidence capture not found: ${evidenceID}` }, 404)
-        const bytes = await fs.readFile(resolveRuntimeRelativePath(Instance.directory, capturePath))
+        const bytes = await fs.readFile(resolveRuntimeRelativePath(projectRoot, capturePath))
         return new Response(bytes, {
           headers: {
             "content-type": "image/png",
@@ -208,15 +211,16 @@ export const BrowserPreviewRoutes = lazy(() =>
       async (c) => {
         const { taskID, evidenceID, artifactName } = c.req.valid("param")
         requireTask(taskID)
+        const projectRoot = browserPreviewTaskEvidenceRoot()
         const artifactPath = await findReadableBrowserPreviewEvidenceArtifactPath({
-          projectRoot: Instance.directory,
+          projectRoot,
           taskID,
           evidenceID,
           artifactName,
         })
         if (!artifactPath)
           return c.json({ message: `Browser preview evidence artifact not found: ${evidenceID}/${artifactName}` }, 404)
-        const bytes = await fs.readFile(resolveRuntimeRelativePath(Instance.directory, artifactPath))
+        const bytes = await fs.readFile(resolveRuntimeRelativePath(projectRoot, artifactPath))
         return new Response(bytes, {
           headers: {
             "content-type": "image/png",
@@ -250,10 +254,11 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const targetID = body.targetID
         const persisted = await promoteBrowserPreviewTarget({ taskID, targetID })
+        const projectRoot = browserPreviewTaskEvidenceRoot()
         if (!persisted)
           return c.json(
             failedBrowserPreviewTarget({
-              projectRoot: Instance.directory,
+              projectRoot,
               taskID,
               diagnostics: [`Browser preview target not found: ${targetID}`],
             }),
@@ -263,7 +268,7 @@ export const BrowserPreviewRoutes = lazy(() =>
           taskBrowserPreviewTarget({
             id: persisted.id,
             taskID,
-            projectRoot: Instance.directory,
+            projectRoot,
             url: persisted.url,
             diagnostics: [`Selected task browser preview target ${persisted.id}.`],
           }) satisfies BrowserPreviewTarget,
@@ -296,15 +301,16 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const persisted = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
         if (!persisted) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        const projectRoot = browserPreviewTaskEvidenceRoot()
         const target = taskBrowserPreviewTarget({
           id: persisted.id,
           taskID,
-          projectRoot: Instance.directory,
+          projectRoot,
           url: persisted.url,
           diagnostics: [`Using task browser preview target ${persisted.id}.`],
         })
         const verification = await verifyBrowserPreview({
-          projectRoot: Instance.directory,
+          projectRoot,
           target,
           taskID,
           targetID: body.targetID,
@@ -340,8 +346,9 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const target = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
         if (!target) return c.json({ message: `Browser preview target not found: ${body.targetID}` }, 404)
+        const projectRoot = browserPreviewTaskEvidenceRoot()
         const result = await compareBrowserPreviewRegions({
-          projectRoot: Instance.directory,
+          projectRoot,
           taskID,
           targetID: body.targetID,
           viewportIDs: body.viewportIDs,

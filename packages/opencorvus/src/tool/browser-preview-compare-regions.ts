@@ -6,6 +6,7 @@ import {
   BrowserPreviewRegionComparisonResult,
   compareBrowserPreviewRegions,
 } from "@/browser-preview/region-comparison"
+import { browserPreviewTaskEvidenceRoot } from "@/browser-preview/task-evidence-root"
 import { BrowserPreviewViewportID } from "@/browser-preview/viewport"
 import { Instance } from "@/project/instance"
 import { buildMultimodalToolResult } from "./multimodal-result"
@@ -41,8 +42,9 @@ export const BrowserPreviewCompareRegionsTool = Tool.define(BrowserPreviewCompar
     if (!target) {
       throw new Error(`Browser preview target not found: ${params.targetID}`)
     }
+    const projectRoot = browserPreviewTaskEvidenceRoot()
     const result = await compareBrowserPreviewRegions({
-      projectRoot: Instance.directory,
+      projectRoot,
       taskID,
       targetID: params.targetID,
       viewportIDs: params.viewportIDs,
@@ -55,7 +57,7 @@ export const BrowserPreviewCompareRegionsTool = Tool.define(BrowserPreviewCompar
       .filter((region) => region.status === "completed" && region.artifacts?.side_by_side)
       .slice(0, 6)
       .map((region) => ({
-        path: resolveRuntimeRelativePath(Instance.directory, region.artifacts!.side_by_side),
+        path: resolveRuntimeRelativePath(projectRoot, region.artifacts!.side_by_side),
         mime: "image/png",
         filename: `${region.viewport_id}-${path.basename(region.artifacts!.side_by_side)}`,
       }))

@@ -14961,7 +14961,8 @@
                       "type": "string",
                       "enum": [
                         "preview-capture",
-                        "reference-comparison"
+                        "reference-comparison",
+                        "source-binding"
                       ]
                     },
                     "regionID": {
@@ -15872,6 +15873,180 @@
                             ],
                             "additionalProperties": false
                           },
+                          "source_image_size": {
+                            "type": "object",
+                            "properties": {
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              }
+                            },
+                            "required": [
+                              "width",
+                              "height"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "implementation_viewport": {
+                            "type": "object",
+                            "properties": {
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              }
+                            },
+                            "required": [
+                              "width",
+                              "height"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "implementation_fullpage_size": {
+                            "type": "object",
+                            "properties": {
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              }
+                            },
+                            "required": [
+                              "width",
+                              "height"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "implementation_screenshot_path": {
+                            "type": "string"
+                          },
+                          "route_diagnostics": {
+                            "type": "object",
+                            "properties": {
+                              "route": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "number"
+                              },
+                              "content_type": {
+                                "type": "string"
+                              },
+                              "body_length": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "dom": {
+                                "type": "object",
+                                "properties": {
+                                  "text_length": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "node_count": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "body_descendant_count": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "text_length",
+                                  "node_count",
+                                  "body_descendant_count"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "page_size": {
+                                "type": "object",
+                                "properties": {
+                                  "width": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0
+                                  },
+                                  "height": {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0
+                                  }
+                                },
+                                "required": [
+                                  "width",
+                                  "height"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "failed_requests": {
+                                "default": [],
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "url": {
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "number"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "url",
+                                    "status",
+                                    "reason"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "console_errors": {
+                                "default": [],
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "page_errors": {
+                                "default": [],
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "valid_app_page": {
+                                "type": "boolean"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "screenshot_path": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "route",
+                              "valid_app_page"
+                            ],
+                            "additionalProperties": false
+                          },
                           "visual": {
                             "type": "object",
                             "properties": {
@@ -16073,7 +16248,12 @@
                           "properties": {
                             "reference_artifact_id": {
                               "type": "string",
-                              "minLength": 1
+                              "enum": [
+                                "reference.png",
+                                "reference-mobile.png",
+                                "web-clone-source/reference.png",
+                                "web-clone-source/reference-mobile.png"
+                              ]
                             },
                             "bbox": {
                               "type": "object",

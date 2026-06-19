@@ -7,12 +7,20 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
 import { evaluateVisual } from "@/verification/visual/evaluate"
 import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
-import { BrowserPreviewViewportID } from "./viewport"
+import { browserPreviewViewportByID, BrowserPreviewViewportID } from "./viewport"
 import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
 const SOURCE_REFERENCE_FILES = new Set(["reference.png", "reference-mobile.png"])
+
+export const BrowserPreviewSourceReferenceArtifactID = z.enum([
+  "reference.png",
+  "reference-mobile.png",
+  "web-clone-source/reference.png",
+  "web-clone-source/reference-mobile.png",
+])
+export type BrowserPreviewSourceReferenceArtifactID = z.infer<typeof BrowserPreviewSourceReferenceArtifactID>
 
 export const BrowserPreviewRegionBox = z
   .object({
@@ -32,6 +40,49 @@ export const BrowserPreviewRegionLocator = z.discriminatedUnion("kind", [
 ])
 export type BrowserPreviewRegionLocator = z.infer<typeof BrowserPreviewRegionLocator>
 
+const BrowserPreviewImageSize = z
+  .object({
+    width: z.number().finite().positive(),
+    height: z.number().finite().positive(),
+  })
+  .strict()
+
+const BrowserPreviewRouteDiagnostics = z
+  .object({
+    route: z.string(),
+    url: z.string().optional(),
+    status: z.number().finite().optional(),
+    content_type: z.string().optional(),
+    body_length: z.number().finite().nonnegative().optional(),
+    title: z.string().optional(),
+    dom: z
+      .object({
+        text_length: z.number().finite().nonnegative(),
+        node_count: z.number().finite().nonnegative(),
+        body_descendant_count: z.number().finite().nonnegative(),
+      })
+      .strict()
+      .optional(),
+    page_size: BrowserPreviewImageSize.optional(),
+    failed_requests: z
+      .array(
+        z
+          .object({
+            url: z.string(),
+            status: z.number().finite(),
+            reason: z.string(),
+          })
+          .strict(),
+      )
+      .default([]),
+    console_errors: z.array(z.string()).default([]),
+    page_errors: z.array(z.string()).default([]),
+    valid_app_page: z.boolean(),
+    reason: z.string().optional(),
+    screenshot_path: z.string().optional(),
+  })
+  .strict()
+
 export const BrowserPreviewRegionBinding = z
   .object({
     region_id: z.string().min(1),
@@ -40,7 +91,7 @@ export const BrowserPreviewRegionBinding = z
     region_scope: z.enum(["page-section", "card", "content", "title", "chart", "table", "control", "navigation"]),
     source: z
       .object({
-        reference_artifact_id: z.string().min(1),
+        reference_artifact_id: BrowserPreviewSourceReferenceArtifactID,
         bbox: BrowserPreviewRegionBox,
         semantic_role: z.string().min(1),
         text_anchors: z.array(z.string().min(1)).default([]),
@@ -97,6 +148,11 @@ export const BrowserPreviewRegionComparisonResult = z.object({
       reason: z.string().optional(),
       source_bbox: BrowserPreviewRegionBox.optional(),
       implementation_bbox: BrowserPreviewRegionBox.optional(),
+      source_image_size: BrowserPreviewImageSize.optional(),
+      implementation_viewport: BrowserPreviewImageSize.optional(),
+      implementation_fullpage_size: BrowserPreviewImageSize.optional(),
+      implementation_screenshot_path: z.string().optional(),
+      route_diagnostics: BrowserPreviewRouteDiagnostics.optional(),
       visual: z
         .object({
           overall_score: z.number(),
@@ -170,16 +226,21 @@ export async function compareBrowserPreviewRegions(
     )
   }
 
-  const sourceRefs = new Map<string, { path: string; bbox: BrowserPreviewRegionBox }>()
+  const sourceRefs = new Map<
+    string,
+    { path: string; bbox: BrowserPreviewRegionBox; imageSize: z.infer<typeof BrowserPreviewImageSize> }
+  >()
   for (const binding of selectedBindings) {
     try {
+      const resolvedPath = resolveSourceReferencePath({
+        projectRoot: input.projectRoot,
+        taskID: input.taskID,
+        referenceArtifactID: binding.source.reference_artifact_id,
+      })
       sourceRefs.set(bindingKey(binding), {
-        path: resolveSourceReferencePath({
-          projectRoot: input.projectRoot,
-          taskID: input.taskID,
-          referenceArtifactID: binding.source.reference_artifact_id,
-        }),
+        path: resolvedPath,
         bbox: binding.source.bbox,
+        imageSize: await readPngSize(resolvedPath),
       })
     } catch (error) {
       initialRegions.push({
@@ -225,14 +286,20 @@ export async function compareBrowserPreviewRegions(
       const source = sourceRefs.get(bindingKey(binding))
       if (!source) continue
       if (region.status !== "completed" || !region.bbox || !region.screenshotPath) {
+        const reason = region.reason ?? "Implementation region was not found."
         regions.push({
           region_id: binding.region_id,
           viewport_id: binding.viewport_id,
           state_id: binding.state_id,
           status: "failed",
-          reason: region.reason ?? "Implementation region was not found.",
+          reason,
           source_bbox: binding.source.bbox,
-          diagnostics: [region.reason ?? "Implementation region was not found."],
+          source_image_size: source.imageSize,
+          implementation_viewport: region.viewport ?? browserPreviewViewportByID(binding.viewport_id),
+          implementation_fullpage_size: region.fullpageSize,
+          implementation_screenshot_path: region.screenshotPath,
+          route_diagnostics: region.routeDiagnostics,
+          diagnostics: [reason],
         })
         continue
       }
@@ -243,8 +310,13 @@ export async function compareBrowserPreviewRegions(
             binding,
             sourceImagePath: source.path,
             sourceBox: source.bbox,
+            sourceImageSize: source.imageSize,
             implementationImagePath: region.screenshotPath,
             implementationBox: region.bbox,
+            implementationViewport: region.viewport ?? browserPreviewViewportByID(binding.viewport_id),
+            implementationFullpageSize: region.fullpageSize,
+            implementationScreenshotPath: region.screenshotPath,
+            routeDiagnostics: region.routeDiagnostics,
             includeSideBySide: input.includeSideBySide !== false,
             includeDiff: input.includeDiff === true,
           }),
@@ -259,6 +331,11 @@ export async function compareBrowserPreviewRegions(
           reason,
           source_bbox: binding.source.bbox,
           implementation_bbox: region.bbox,
+          source_image_size: source.imageSize,
+          implementation_viewport: region.viewport ?? browserPreviewViewportByID(binding.viewport_id),
+          implementation_fullpage_size: region.fullpageSize,
+          implementation_screenshot_path: region.screenshotPath,
+          route_diagnostics: region.routeDiagnostics,
           diagnostics: [reason],
         })
       }
@@ -340,11 +417,36 @@ async function materializeRegionComparison(input: {
   binding: BrowserPreviewRegionBinding
   sourceImagePath: string
   sourceBox: BrowserPreviewRegionBox
+  sourceImageSize: z.infer<typeof BrowserPreviewImageSize>
   implementationImagePath: string
   implementationBox: BrowserPreviewRegionBox
+  implementationViewport: z.infer<typeof BrowserPreviewImageSize>
+  implementationFullpageSize?: z.infer<typeof BrowserPreviewImageSize>
+  implementationScreenshotPath: string
+  routeDiagnostics?: z.infer<typeof BrowserPreviewRouteDiagnostics>
   includeSideBySide: boolean
   includeDiff: boolean
 }): Promise<BrowserPreviewRegionComparisonResult["regions"][number]> {
+  if (Math.ceil(input.sourceImageSize.width) > Math.ceil(input.implementationViewport.width)) {
+    const reason =
+      `Source reference viewport width ${Math.ceil(input.sourceImageSize.width)} does not match implementation ` +
+      `viewport width ${Math.ceil(input.implementationViewport.width)} for ${input.binding.viewport_id}.`
+    return {
+      region_id: input.binding.region_id,
+      viewport_id: input.binding.viewport_id,
+      state_id: input.binding.state_id,
+      status: "failed",
+      reason,
+      source_bbox: input.sourceBox,
+      implementation_bbox: input.implementationBox,
+      source_image_size: input.sourceImageSize,
+      implementation_viewport: input.implementationViewport,
+      implementation_fullpage_size: input.implementationFullpageSize,
+      implementation_screenshot_path: input.implementationScreenshotPath,
+      route_diagnostics: input.routeDiagnostics,
+      diagnostics: [reason],
+    }
+  }
   const dir = path.join(input.outDir, "regions", input.binding.viewport_id, input.binding.state_id, regionDirectoryKey(input.binding))
   await fs.mkdir(dir, { recursive: true })
   const sourceCrop = path.join(dir, "source.png")
@@ -399,6 +501,11 @@ async function materializeRegionComparison(input: {
       : `Implementation crop is smaller than source region: source=${coverage.source_width}x${coverage.source_height} implementation=${coverage.implementation_width}x${coverage.implementation_height}.`,
     source_bbox: input.sourceBox,
     implementation_bbox: input.implementationBox,
+    source_image_size: input.sourceImageSize,
+    implementation_viewport: input.implementationViewport,
+    implementation_fullpage_size: input.implementationFullpageSize,
+    implementation_screenshot_path: input.implementationScreenshotPath,
+    route_diagnostics: input.routeDiagnostics,
     visual,
     coverage,
     artifacts,
@@ -408,6 +515,12 @@ async function materializeRegionComparison(input: {
         : `reference comparison failed for ${input.binding.region_id}: implementation crop ${coverage.implementation_width}x${coverage.implementation_height} is smaller than source ${coverage.source_width}x${coverage.source_height}`,
     ],
   }
+}
+
+async function readPngSize(inputPath: string): Promise<z.infer<typeof BrowserPreviewImageSize>> {
+  const metadata = await sharp(inputPath).metadata()
+  if (!metadata.width || !metadata.height) throw new Error(`Cannot read PNG dimensions: ${inputPath}`)
+  return { width: metadata.width, height: metadata.height }
 }
 
 async function cropPng(

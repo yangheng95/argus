@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { $ } from "bun"
 import { createServer, type Server } from "node:http"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { PassThrough } from "node:stream"
 import sharp from "sharp"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
-import { BrowserPreviewBindLocalModuleTool } from "../../src/tool/browser-preview-bind-local-module"
+import {
+  BrowserPreviewBindLocalModuleTool,
+  BrowserPreviewBindLocalModuleToolParameters,
+} from "../../src/tool/browser-preview-bind-local-module"
 import { BrowserPreviewCompareRegionsTool } from "../../src/tool/browser-preview-compare-regions"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
@@ -451,6 +455,22 @@ describe("tool.browser_preview", () => {
     { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
   )
 
+  test("bind local module tool parameters reject non-canonical source reference IDs", () => {
+    const parsed = BrowserPreviewBindLocalModuleToolParameters.safeParse({
+      targetID: "art_previewtarget",
+      viewportID: "desktop",
+      regionID: "tool-local-module",
+      route: "/",
+      implementationLocator: { kind: "data-oc-region", value: "tool-local-module" },
+      componentFiles: ["src/ToolLocalModule.tsx"],
+      sourceReferenceArtifactID: ".opencorvus/r/t/S9/qzBwOu/fd/webpage-evidence/reference.png",
+    })
+
+    expect(parsed.success).toBe(false)
+    if (parsed.success) throw new Error("non-canonical source reference unexpectedly parsed")
+    expect(parsed.error.issues.map((issue) => issue.path.join(".")).join("\n")).toContain("sourceReferenceArtifactID")
+  })
+
   test(
     "bind local module tool feeds compare regions tool and persists reference comparison evidence",
     async () => {
@@ -493,6 +513,12 @@ describe("tool.browser_preview", () => {
               kind: "data-oc-region",
               value: "tool-local-module",
             })
+            const bindingEvidence = await findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID: result.metadata.evidenceID,
+            })
+            expect(bindingEvidence?.operationKind).toBe("source-binding")
 
             const compareTool = await BrowserPreviewCompareRegionsTool.init()
             const comparison = await compareTool.execute(
@@ -560,6 +586,81 @@ describe("tool.browser_preview", () => {
         })
       } finally {
         await server.close()
+      }
+    },
+    { timeout: 60_000 },
+  )
+
+  test(
+    "compare regions tool writes task evidence under the primary project root when invoked from a linked worktree",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const linkedWorktree = `${tmp.path}-goal-worktree`
+      await $`git worktree add ${linkedWorktree} -b ${`opencorvus/test-browser-preview-${Date.now()}`}`.cwd(
+        tmp.path,
+      ).quiet()
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await writeBindingToolReference(paths.sourcePackageAbsolute)
+      const server = await startBindingToolPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+        await Instance.provide({
+          directory: linkedWorktree,
+          fn: async () => {
+            const compareTool = await BrowserPreviewCompareRegionsTool.init()
+            const comparison = await compareTool.execute(
+              {
+                targetID: target.id,
+                viewportIDs: ["desktop"],
+                inlineBindings: [
+                  {
+                    region_id: "linked-worktree-module",
+                    viewport_id: "desktop",
+                    state_id: "default",
+                    region_scope: "page-section",
+                    source: {
+                      reference_artifact_id: "reference.png",
+                      bbox: { x: 24, y: 30, width: 180, height: 92 },
+                      semantic_role: "linked worktree module",
+                      text_anchors: ["Tool Local Module", "Binding Anchor"],
+                      source_refs: ["source screenshot"],
+                    },
+                    implementation: {
+                      route: "/",
+                      locator: { kind: "data-oc-region", value: "tool-local-module" },
+                      component_files: ["src/ToolLocalModule.tsx"],
+                    },
+                    acceptance_refs: ["linked worktree evidence root"],
+                  },
+                ],
+                includeDiff: true,
+              },
+              { ...baseCtx, extra: { taskID } },
+            )
+            const payload = JSON.parse(comparison.output)
+            const region = payload.regions[0]
+            const evidenceID = comparison.metadata.evidenceIDs["desktop:default:linked-worktree-module"]
+            const evidence = await findReadableBrowserPreviewEvidenceByID({
+              projectRoot: tmp.path,
+              taskID,
+              evidenceID,
+            })
+
+            expect(comparison.metadata.status).toBe("passed")
+            expect(evidence?.status).toBe("passed")
+            expect(await fileExists(resolveRuntimeRelativePath(tmp.path, region.artifacts.side_by_side))).toBe(true)
+            expect(await fileExists(resolveRuntimeRelativePath(linkedWorktree, region.artifacts.side_by_side))).toBe(
+              false,
+            )
+          },
+        })
+      } finally {
+        await server.close()
+        await $`git worktree remove --force ${linkedWorktree}`.cwd(tmp.path).quiet().catch(() => {})
       }
     },
     { timeout: 60_000 },

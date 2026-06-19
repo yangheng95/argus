@@ -39,6 +39,11 @@ describe("visual-qa strict reference image fidelity", () => {
     expect(normalized).toContain("task-scoped preview repair chain as primary region evidence")
     expect(normalized).toContain("call `browser_preview_bind_local_module`")
     expect(normalized).toContain("pass that binding to `browser_preview_compare_regions`")
+    expect(normalized).toContain("Treat `browser_preview_bind_local_module` evidence as `source-binding`")
+    expect(normalized).toContain("cannot be cited as final Reference vs Implementation proof")
+    expect(normalized).toContain("fresh `browser_preview_compare_regions` `reference-comparison` evidence")
+    expect(normalized).toContain("repair the preview target or route first")
+    expect(normalized).toContain("do not hand-normalize source bounding boxes")
     expect(normalized).toContain(
       "Do not substitute `webpage_render`, `webpage_evaluate`, `webpage_vision_judge`, or standalone screenshots as the final region-parity evidence",
     )
@@ -60,6 +65,8 @@ describe("visual-qa strict reference image fidelity", () => {
     expect(prompt).toContain("Numeric similarity scores are evidence, not the verdict")
     expect(prompt).toContain("call `browser_preview_bind_local_module`")
     expect(prompt).toContain("pass the binding to `browser_preview_compare_regions`")
+    expect(prompt).toContain("Treat `browser_preview_bind_local_module` evidence as `source-binding`")
+    expect(prompt).toContain("cannot be cited as final Reference vs Implementation proof")
     expect(prompt).toContain("task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`")
     expect(prompt).toContain("screenshot-only evidence as the final region-parity proof")
     expect(prompt).toContain("no production_blockers")

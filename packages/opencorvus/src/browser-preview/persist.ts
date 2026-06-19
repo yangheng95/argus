@@ -30,7 +30,7 @@ export const PersistedBrowserPreviewEvidence = z.object({
   taskID: z.string(),
   targetID: z.string(),
   viewportID: z.string(),
-  operationKind: z.enum(["preview-capture", "reference-comparison"]).default("preview-capture"),
+  operationKind: z.enum(["preview-capture", "reference-comparison", "source-binding"]).default("preview-capture"),
   regionID: z.string().optional(),
   stateID: z.string().optional(),
   manifestPath: z.string().optional(),
@@ -283,7 +283,9 @@ function findBrowserPreviewEvidenceByID(input: {
   const targetID = typeof payload.target_id === "string" ? payload.target_id : undefined
   const viewportID = typeof payload.viewport_id === "string" ? payload.viewport_id : undefined
   const operationKind =
-    payload.operation_kind === "reference-comparison" || payload.operation_kind === "preview-capture"
+    payload.operation_kind === "reference-comparison" ||
+    payload.operation_kind === "preview-capture" ||
+    payload.operation_kind === "source-binding"
       ? payload.operation_kind
       : "preview-capture"
   const regionID = typeof payload.region_id === "string" ? payload.region_id : undefined
@@ -366,7 +368,7 @@ export function persistBrowserPreviewEvidence(input: {
   taskID: string
   targetID: string
   viewportID: string
-  operationKind?: "preview-capture" | "reference-comparison"
+  operationKind?: "preview-capture" | "reference-comparison" | "source-binding"
   regionID?: string
   stateID?: string
   manifestPath?: string
@@ -458,6 +460,12 @@ function browserPreviewCaptureArtifacts(capture: unknown): Array<{ path: string;
         sha: typeof record.sha === "string" && record.sha.trim() ? record.sha : undefined,
       })
     }
+    for (const key of ["screenshot_path", "implementation_screenshot_path"]) {
+      const directPath = record[key]
+      if (typeof directPath === "string" && directPath.trim()) {
+        artifacts.push({ path: directPath })
+      }
+    }
     for (const child of Object.values(record)) visit(child, depth + 1)
   }
   visit(capture, 0)
@@ -530,6 +538,7 @@ function isPathRefKey(key: string): boolean {
   return (
     key === "path" ||
     key === "screenshot_path" ||
+    key === "implementation_screenshot_path" ||
     key === "manifestPath" ||
     key === "manifest_path" ||
     key === "diagnosticsPath" ||
@@ -574,7 +583,7 @@ export async function latestBrowserPreviewEvidenceIDs(input: {
 function sqlEvidenceMeta(payload: unknown): { targetID: string; viewportID: string } | undefined {
   if (!payload || typeof payload !== "object") return undefined
   const record = payload as Record<string, unknown>
-  if (record.operation_kind === "reference-comparison") return undefined
+  if (record.operation_kind === "reference-comparison" || record.operation_kind === "source-binding") return undefined
   const targetID = typeof record.target_id === "string" ? record.target_id : undefined
   const viewportID = typeof record.viewport_id === "string" ? record.viewport_id : undefined
   if (!targetID || !viewportID) return undefined

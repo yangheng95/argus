@@ -5475,7 +5475,11 @@ export class BrowserPreview extends HeyApiClient {
         state_id?: string
         region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
         source: {
-          reference_artifact_id: string
+          reference_artifact_id:
+            | "reference.png"
+            | "reference-mobile.png"
+            | "web-clone-source/reference.png"
+            | "web-clone-source/reference-mobile.png"
           bbox: {
             x: number
             y: number
