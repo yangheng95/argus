@@ -25,6 +25,7 @@ import {
   type PromptProfileOption,
   type PromptProfileTarget,
 } from "../../services/config"
+import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"
 import { Button } from "../ui/Button"
 import { SettingsGroup, SettingsPanel, SettingsPill, SettingsRow } from "./primitives"
 
@@ -588,8 +589,8 @@ export default function PromptCatalog() {
 
                         <label class="prompt-profile-field">
                           <span class="field-label">{t("prompt_profile.description")}</span>
-                          <textarea
-                            class="field-input prompt-profile-description"
+                          <AutoGrowTextarea
+                            class="composer-textarea prompt-profile-description"
                             rows={3}
                             value={profileDraftState.description ?? ""}
                             disabled={saving() || !profile.editable}
@@ -637,8 +638,8 @@ export default function PromptCatalog() {
                                     </div>
                                   }
                                 >
-                                  <textarea
-                                    class="field-input prompt-profile-textarea"
+                                  <AutoGrowTextarea
+                                    class="composer-textarea prompt-profile-textarea"
                                     aria-labelledby={labelID}
                                     rows={6}
                                     value={targetValue(profileDraftState, target.id)}

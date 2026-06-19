@@ -1969,7 +1969,6 @@ button.s-row:focus-visible {
 .provider-models-textarea {
   font-family: var(--mono);
   font-size: var(--ui-font-control);
-  resize: vertical;
 }
 .provider-model-field-head {
   display: flex;

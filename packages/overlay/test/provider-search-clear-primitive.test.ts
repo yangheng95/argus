@@ -6,7 +6,7 @@ const SOURCE = readFileSync(join(import.meta.dir, "../src/components/settings/Pr
 const STYLES = readFileSync(join(import.meta.dir, "../src/styles/surfaces/settings.css"), "utf8")
 
 test("ProvidersPanel routes search clear through the Button primitive", () => {
-  expect(SOURCE).toContain('import { Button } from "../ui/Button";')
+  expect(SOURCE).toMatch(/import\s+\{\s*Button\s*\}\s+from\s+"..\/ui\/Button"/)
   expect(SOURCE).toContain('data-ui="provider-search-clear"')
   expect(SOURCE).not.toContain('class="provider-search-clear"')
   expect(STYLES).toContain('.provider-search-field .oc-button[data-ui="provider-search-clear"]')
