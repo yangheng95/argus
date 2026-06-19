@@ -788,7 +788,6 @@ describe("overlay architecture guards", () => {
       "task-cwd-caret",
       "task-dir-actions",
       "task-dir-menu-actions",
-      "task-dir-recent-trigger",
       "task-dir-path",
       "task-dir-tool",
       "task-dir-node",
@@ -804,7 +803,10 @@ describe("overlay architecture guards", () => {
     }
     expect(conversationSurface).toMatch(/\.task-cwd-dropdown:hover,\s*\.task-cwd-dropdown:focus-within\s*\{/)
     expect(conversationSurface).toMatch(/\.task-cwd-dropdown\[data-open="true"\]\s*\{/)
-    expect(conversationSurface).toMatch(/\.task-dir-recent-trigger:hover,\s*\.task-dir-recent-trigger:focus-visible,/)
+    expect(conversationSurface).toMatch(
+      /\.task-dir-menu-actions \.oc-button\[data-ui="cwd-recent-trigger"\]:hover,\s*\.task-dir-menu-actions \.oc-button\[data-ui="cwd-recent-trigger"\]:focus-visible,/,
+    )
+    expect(conversationSurface).not.toContain(".task-dir-recent-trigger")
     expect(conversationSurface).toMatch(/\.task-dir-tool\.danger:hover\s*\{/)
     expect(conversationSurface).not.toMatch(/#94a3b8/)
     expect(conversationSurface).not.toMatch(/#e5e7eb/)
@@ -2560,12 +2562,13 @@ describe("overlay architecture guards", () => {
         const selector = match[1] ?? ""
         const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         const hasHeaderControl =
-          /\.(?:task-dir-shell|task-cwd-dropdown|task-dir-recent-trigger)\b/.test(selector) ||
+          /\.(?:task-dir-shell|task-cwd-dropdown)\b/.test(selector) ||
+          /\.oc-button\[data-ui="cwd-recent-trigger"\]/.test(selector) ||
           /\[data-ui="sidebar-new-task-button"\]/.test(selector)
         if (!isThemeSelector || !hasHeaderControl) continue
 
         expect(selector).not.toMatch(
-          /\.(?:task-dir-shell|task-cwd-dropdown|task-dir-recent-trigger)\b|\[data-ui="sidebar-new-task-button"\]/,
+          /\.(?:task-dir-shell|task-cwd-dropdown)\b|\.oc-button\[data-ui="cwd-recent-trigger"\]|\[data-ui="sidebar-new-task-button"\]/,
         )
       }
     }
@@ -2584,7 +2587,9 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
       "padding-block: calc(2px * var(--ui-scale))",
     )
-    expect(soloRuleBody(conversationSurface, ".task-dir-recent-trigger")).toContain(
+    expect(
+      soloRuleBody(conversationSurface, '.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"]'),
+    ).toContain(
       "width: calc(22px * var(--ui-scale))",
     )
     const sidebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")))

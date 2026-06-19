@@ -196,16 +196,18 @@ export function TaskDirContent() {
         />
         <div class="task-dir-menu-actions">
           <DropdownMenu.Trigger
-            class="task-dir-recent-trigger"
+            as={Button}
             type="button"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
             data-ui="cwd-recent-trigger"
             data-open={open() ? "true" : "false"}
             aria-label={t("cwd.recent")}
             title={t("cwd.recent")}
           >
-            <span class="task-cwd-caret" aria-hidden="true">
-              ▾
-            </span>
+            <Icon name="caret-down" size={12} class="task-cwd-caret" />
           </DropdownMenu.Trigger>
         </div>
       </div>

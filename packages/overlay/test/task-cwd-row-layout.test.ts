@@ -186,8 +186,12 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
   test("recent directory trigger is separate from native breadcrumb path buttons", () => {
     expect(TASK_DIR_BAR).toMatch(/<div[\s\S]*ref=\{cwdShellRef\}[\s\S]*class="task-dir-shell task-cwd-dropdown"/)
     expect(TASK_DIR_BAR).toContain('class="task-dir-menu-actions"')
-    expect(TASK_DIR_BAR).toContain('class="task-dir-recent-trigger"')
+    expect(TASK_DIR_BAR).toMatch(/<DropdownMenu\.Trigger[\s\S]*as=\{Button\}[\s\S]*data-ui="cwd-recent-trigger"/)
+    expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
     expect(TASK_DIR_BAR).toContain('data-ui="cwd-recent-trigger"')
+    expect(TASK_DIR_BAR).toContain('<Icon name="caret-down" size={12} class="task-cwd-caret" />')
+    expect(TASK_DIR_BAR).not.toContain('class="task-dir-recent-trigger"')
+    expect(TASK_DIR_BAR).not.toContain(">▾<")
     expect(TASK_DIR_BAR).toContain("getAnchorRect={() => cwdShellRef?.getBoundingClientRect()}")
     expect(TASK_DIR_BAR).not.toContain('as="div"')
     expect(TASK_DIR_BAR).not.toMatch(
