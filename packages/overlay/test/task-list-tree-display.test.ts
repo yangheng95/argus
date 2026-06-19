@@ -48,6 +48,14 @@ describe("TaskList integrates the extracted helpers", () => {
   test("flattenGroup binding feeds the live expandedTasks() signal in", () => {
     expect(TASK_LIST).toContain("expandedTasks(),")
   })
+
+  test("keys rendered tree rows by task id instead of transient flattened entry objects", () => {
+    expect(TASK_LIST).toContain("function taskTreeEntryKey")
+    expect(TASK_LIST).toContain("entryKeys = createMemo")
+    expect(TASK_LIST).toContain("entriesByKey = createMemo")
+    expect(TASK_LIST).toContain("<For each={entryKeys()}>")
+    expect(TASK_LIST).not.toContain("<For each={props.entries}>")
+  })
 })
 
 describe("Per-task expand state is per-session (Set<string>, no localStorage)", () => {
@@ -86,7 +94,9 @@ describe("Drag is disabled on any nested row (depth > 0)", () => {
 describe("Parent-row badge: count + run-pulse + fail-color", () => {
   test("renders chevron+count toggle only when directChildren has items", () => {
     expect(TASK_LIST).toContain("directChildCount() > 0")
-    expect(TASK_LIST).toContain('class="task-row-children-toggle"')
+    expect(TASK_LIST).toContain("<Button")
+    expect(TASK_LIST).toContain('data-ui="task-row-children-toggle"')
+    expect(TASK_LIST).not.toContain('class="task-row-children-toggle"')
     expect(TASK_LIST).toContain('class="task-row-children-count"')
   })
 
@@ -116,12 +126,12 @@ describe("Parent-row badge: count + run-pulse + fail-color", () => {
     // button, stopPropagation on mousedown so the outer div never sees
     // the mousedown that would initiate drag, and a preventDefault
     // dragstart handler as belt-and-suspenders.
-    expect(TASK_LIST).toMatch(/class="task-row-children-toggle"[\s\S]+?draggable=\{false\}/)
+    expect(TASK_LIST).toMatch(/data-ui="task-row-children-toggle"[\s\S]+?draggable=\{false\}/)
     expect(TASK_LIST).toMatch(
-      /class="task-row-children-toggle"[\s\S]+?onMouseDown=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\)\s*;?\s*\}/,
+      /data-ui="task-row-children-toggle"[\s\S]+?onMouseDown=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\)\s*;?\s*\}/,
     )
     expect(TASK_LIST).toMatch(
-      /class="task-row-children-toggle"[\s\S]+?onDragStart=\{\(event\)\s*=>\s*\{\s*event\.preventDefault\(\)\s*;?\s*event\.stopPropagation\(\)/,
+      /data-ui="task-row-children-toggle"[\s\S]+?onDragStart=\{\(event\)\s*=>\s*\{\s*event\.preventDefault\(\)\s*;?\s*event\.stopPropagation\(\)/,
     )
   })
 })
@@ -142,7 +152,7 @@ describe("Chevron lives in .task-row-body, never inside .task-row-right (bug 202
   test("chevron renders inside .task-row-body (row-head), not inside .task-row-right", () => {
     const rightStart = TASK_LIST.indexOf('<div class="task-row-right">')
     const bodyStart = TASK_LIST.indexOf('<div class="task-row-body">')
-    const chevronStart = TASK_LIST.indexOf('class="task-row-children-toggle"')
+    const chevronStart = TASK_LIST.indexOf('data-ui="task-row-children-toggle"')
     expect(bodyStart).toBeGreaterThan(0)
     expect(rightStart).toBeGreaterThan(0)
     expect(chevronStart).toBeGreaterThan(0)
@@ -187,17 +197,19 @@ describe("Compact quota counts top-level only", () => {
 })
 
 describe("CSS: children toggle has pulse + danger variants", () => {
-  test(".task-row-children-toggle rule exists", () => {
-    expect(SIDEBAR_CSS).toContain(".task-row-children-toggle")
+  test("children toggle rule routes through the Button primitive", () => {
+    expect(SIDEBAR_CSS).toContain('.oc-button[data-ui="task-row-children-toggle"]')
+    expect(SIDEBAR_CSS).not.toContain(".task-row-children-toggle")
+    expect(SIDEBAR_CSS).not.toMatch(/\.task-row-children-toggle:(?:hover|focus-visible)/)
   })
 
   test("data-has-active triggers a pulse animation", () => {
-    expect(SIDEBAR_CSS).toContain('.task-row-children-toggle[data-has-active="true"]')
+    expect(SIDEBAR_CSS).toContain('.oc-button[data-ui="task-row-children-toggle"][data-has-active="true"]')
     expect(SIDEBAR_CSS).toContain("@keyframes task-row-children-pulse")
   })
 
   test("data-has-failed paints the badge in the danger tone (failed beats active)", () => {
-    expect(SIDEBAR_CSS).toContain('.task-row-children-toggle[data-has-failed="true"]')
+    expect(SIDEBAR_CSS).toContain('.oc-button[data-ui="task-row-children-toggle"][data-has-failed="true"]')
     expect(SIDEBAR_CSS).toContain("var(--bad)")
   })
 

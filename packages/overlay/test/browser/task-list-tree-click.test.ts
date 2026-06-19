@@ -1,11 +1,22 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
+import { fileURLToPath } from "node:url"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
+
+const OVERLAY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
+const SCRATCH_ROOT = resolve(OVERLAY_ROOT, "../../.scratch")
+
+function scratchPath(name: string): string {
+  mkdirSync(SCRATCH_ROOT, { recursive: true })
+  return resolve(SCRATCH_ROOT, name)
+}
 
 function send(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -223,6 +234,37 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     })
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
     await page.waitForSelector('.task-row-main[data-task-id="task-parent"]')
+
+    const toggleSelector = '.task-row-mini[data-task-row-id="task-parent"] [data-ui="task-row-children-toggle"]'
+    await page.waitForSelector(toggleSelector, { visible: true })
+    await page.focus(toggleSelector)
+    const toggleContract = await page.$eval(toggleSelector, (node: HTMLElement) => ({
+      classList: Array.from(node.classList),
+      variant: node.dataset.variant,
+      size: node.dataset.size,
+      tone: node.dataset.tone,
+      expanded: node.getAttribute("aria-expanded"),
+      draggable: node.getAttribute("draggable"),
+    }))
+    assert.ok(toggleContract.classList.includes("oc-button"))
+    assert.equal(toggleContract.variant, "ghost")
+    assert.equal(toggleContract.size, "mini")
+    assert.equal(toggleContract.tone, "neutral")
+    assert.equal(toggleContract.expanded, "false")
+    assert.equal(toggleContract.draggable, "false")
+    const taskListPanel = await page.$(".task-list-panel")
+    assert.ok(taskListPanel)
+    writeFileSync(scratchPath("task-row-children-toggle-focus.png"), await taskListPanel.screenshot({}))
+
+    await page.keyboard.press("Enter")
+    await page.waitForSelector('.task-row-main[data-task-id="task-child"]', { visible: true })
+    assert.equal(await page.$eval(toggleSelector, (node: HTMLElement) => node.getAttribute("aria-expanded")), "true")
+    await page.keyboard.press("Space")
+    await page.waitForFunction(
+      () => !document.querySelector('.task-row-main[data-task-id="task-child"]'),
+    )
+    assert.equal(await page.$eval(toggleSelector, (node: HTMLElement) => node.getAttribute("aria-expanded")), "false")
+
     await page.click('.task-row-main[data-task-id="task-parent"]')
     await waitForCurrentTask(page, "task-parent")
 
