@@ -331,8 +331,18 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     const afterPathKey = await page.evaluate(() => ({
       panelPresent: !!document.querySelector(".recent-dir-panel"),
       triggerExpanded: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("aria-expanded") ?? "",
+      triggerDataExpanded:
+        document.querySelector('[data-ui="cwd-recent-trigger"]')?.hasAttribute("data-expanded") ?? false,
+      triggerDataOpen: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("data-open") ?? null,
+      shellDataOpen: document.querySelector(".task-cwd-dropdown")?.getAttribute("data-open") ?? null,
     }))
-    assert.deepEqual(afterPathKey, { panelPresent: false, triggerExpanded: "false" })
+    assert.deepEqual(afterPathKey, {
+      panelPresent: false,
+      triggerExpanded: "false",
+      triggerDataExpanded: false,
+      triggerDataOpen: null,
+      shellDataOpen: null,
+    })
 
     await page.focus('[data-ui="cwd-recent-trigger"]')
     await page.keyboard.press("Enter")
@@ -348,7 +358,10 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
       panelLabel: document.querySelector(".recent-dir-panel")?.getAttribute("aria-label") ?? "",
       menuRoleCount: document.querySelectorAll('.recent-dir-panel [role="menu"], .recent-dir-panel [role="menuitem"]').length,
       triggerExpanded: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("aria-expanded") ?? "",
-      shellOpen: document.querySelector(".task-cwd-dropdown")?.getAttribute("data-open") ?? "",
+      triggerDataExpanded:
+        document.querySelector('[data-ui="cwd-recent-trigger"]')?.hasAttribute("data-expanded") ?? false,
+      triggerDataOpen: document.querySelector('[data-ui="cwd-recent-trigger"]')?.getAttribute("data-open") ?? null,
+      shellDataOpen: document.querySelector(".task-cwd-dropdown")?.getAttribute("data-open") ?? null,
       recentRows: document.querySelectorAll('.recent-dir-list[data-kind="recent"] .recent-dir-row').length,
       currentRows: Array.from(document.querySelectorAll<HTMLElement>(".recent-dir-row")).map((row) => {
         const item = row.querySelector<HTMLElement>(".recent-dir-item")
@@ -379,7 +392,9 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     assert.equal(openState.panelLabel, "Recent")
     assert.equal(openState.menuRoleCount, 0)
     assert.equal(openState.triggerExpanded, "true")
-    assert.equal(openState.shellOpen, "true")
+    assert.equal(openState.triggerDataExpanded, true)
+    assert.equal(openState.triggerDataOpen, null)
+    assert.equal(openState.shellDataOpen, null)
     assert.ok(openState.recentRows >= 3)
     assert.ok(openState.currentRows.filter((row) => row.active === "true").length >= 1)
     for (const row of openState.currentRows) {
