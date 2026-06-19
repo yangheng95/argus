@@ -97,14 +97,6 @@
   margin: 0;
 }
 
-.dialog-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-lg);
-}
-
-.dialog-form > .dialog-head,
 .dialog-form > .dialog-header {
   margin: calc(-18px * var(--ui-scale)) calc(-20px * var(--ui-scale)) 0;
   padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));

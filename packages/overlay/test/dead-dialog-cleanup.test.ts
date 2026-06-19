@@ -17,6 +17,11 @@ describe("retired dialog dead code is removed from overlay runtime", () => {
   const dialogSurface = readText("src/styles/surfaces/dialog.css")
   const inspectorSurface = readText("src/styles/surfaces/inspector.css")
   const diffPreview = readText("src/components/DiffPreviewPanel.tsx")
+  const dialogPrimitive = readText("src/components/primitives/Dialog.tsx")
+  const settingsSnapshot = readText("script/snap-settings.ts")
+  const retiredDialogHead = "dialog" + "-head"
+  const retiredDialogHeadClass = new RegExp(`(^|[^A-Za-z0-9_-])\\.${retiredDialogHead}([^A-Za-z0-9_-]|$)`)
+  const retiredDialogHeadToken = new RegExp(`(^|[^A-Za-z0-9_-])${retiredDialogHead}([^A-Za-z0-9_-]|$)`)
 
   test("dom.ts no longer caches unused app/config/goal/diff dialog refs", () => {
     for (const token of [
@@ -81,5 +86,14 @@ describe("retired dialog dead code is removed from overlay runtime", () => {
       expect(dialogSurface).not.toContain(selector)
       expect(productionSource).not.toContain(selector.slice(1))
     }
+  })
+
+  test(`retired ${retiredDialogHead} selector is not accepted beside dialog-header`, () => {
+    expect(dialogPrimitive).toContain('class={["dialog-header"')
+    expect(dialogSurface).toContain(".dialog-form > .dialog-header")
+    expect(settingsSnapshot).toContain('querySelector(".dialog-header")')
+    expect(dialogSurface).not.toMatch(retiredDialogHeadClass)
+    expect(settingsSnapshot).not.toMatch(retiredDialogHeadToken)
+    expect(components).not.toMatch(retiredDialogHeadToken)
   })
 })

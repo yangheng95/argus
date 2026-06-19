@@ -125,7 +125,7 @@ try {
       form: get(formEl),
       formChildren,
       formScrollHeight,
-      header: get(dlg?.querySelector(".dialog-header,.dialog-head") as HTMLElement | null),
+      header: get(dlg?.querySelector(".dialog-header") as HTMLElement | null),
       layout: get(q(".config-dialog-layout")),
       sidebar: get(q(".config-sidebar")),
       content: get(q(".config-content")),
