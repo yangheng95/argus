@@ -48,6 +48,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-task-row-children-toggle-button-primitive.md](2026-06-19-task-row-children-toggle-button-primitive.md) | Task Row Children Toggle Button Primitive |
 | [2026-06-19-retire-coding-assistant-activity-residue.md](2026-06-19-retire-coding-assistant-activity-residue.md) | Retire Coding Assistant Activity Residue |
 | [2026-06-19-task-progress-button-primitive.md](2026-06-19-task-progress-button-primitive.md)                 | Task Progress Button Primitive |
+| [2026-06-19-retire-card-status-badge-residue.md](2026-06-19-retire-card-status-badge-residue.md)             | Retire Card Status Badge Residue |
 
 ## 2026-06-18
 

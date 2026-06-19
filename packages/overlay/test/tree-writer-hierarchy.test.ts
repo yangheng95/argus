@@ -12,7 +12,6 @@ const { applyEvent, flushBufferedPartDeltas, resetWriter, hydrateConversationVie
 )
 const { cardTreeStore } = await import("../src/store/card-tree")
 const { collectDialogInteractions } = await import("../src/utils/interaction-dialog")
-const { statusBadge } = await import("../src/utils/status-badge")
 const { installRealOverlayI18n } = await import("./fixtures/i18n")
 const { replay } = await import("./fixtures/replay")
 const {
@@ -1274,7 +1273,6 @@ test("session.status preserves terminal reason when status arrives before the ca
   expect(card.status).toBe("completed")
   expect(card.terminalReason).toBe("aborted")
   expect(card.timeCompleted).toBe(1_776_000_010_000)
-  expect(statusBadge(card)).toEqual({ tone: "cancelled", glyph: "⊘" })
 })
 
 test("session.status without a message does not materialize a blank frontend research card", () => {
