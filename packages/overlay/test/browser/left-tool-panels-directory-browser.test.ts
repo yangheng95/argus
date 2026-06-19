@@ -30,11 +30,33 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
-  const requestLog: Array<{ path: string; directory: string }> = []
+  const requestLog: Array<{ method: string; path: string; directory: string }> = []
+  let memoryFiles = [
+    {
+      id: "mem_left_tool_panels",
+      title: "Left panel memory loaded from selected task",
+      scope: "cwd",
+      source: "memory.md",
+      timeUpdated: 1,
+    },
+  ]
+  const memoryDetails: Record<string, unknown> = {
+    mem_left_tool_panels: {
+      file: {
+        id: "mem_left_tool_panels",
+        title: "Left panel memory loaded from selected task",
+        scope: "cwd",
+        source: "memory.md",
+        timeCreated: 1,
+        timeUpdated: 2,
+      },
+      content: "Remember that the left Memory panel uses sibling controls.",
+    },
+  }
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
-    requestLog.push({ path, directory: url.searchParams.get("directory") || "" })
+    requestLog.push({ method: req.method, path, directory: url.searchParams.get("directory") || "" })
     if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
@@ -129,28 +151,16 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
       if (url.searchParams.get("directory") !== WORKSPACE_DIR || url.searchParams.get("taskID") !== TASK_ID) {
         return send({ error: "memory requires taskID and directory" }, { status: 400 })
       }
-      return send([
-        {
-          id: "mem_left_tool_panels",
-          title: "Left panel memory loaded from selected task",
-          scope: "cwd",
-          source: "memory.md",
-          timeUpdated: 1,
-        },
-      ])
+      return send(memoryFiles)
     }
-    if (path === "/panel/knowledge/memory/mem_left_tool_panels") {
-      return send({
-        file: {
-          id: "mem_left_tool_panels",
-          title: "Left panel memory loaded from selected task",
-          scope: "cwd",
-          source: "memory.md",
-          timeCreated: 1,
-          timeUpdated: 2,
-        },
-        content: "Remember that the left Memory panel uses sibling controls.",
-      })
+    if (path.startsWith("/panel/knowledge/memory/")) {
+      const id = decodeURIComponent(path.slice("/panel/knowledge/memory/".length))
+      if (req.method === "GET") return send(memoryDetails[id])
+      if (req.method === "DELETE") {
+        memoryFiles = memoryFiles.filter((item) => item.id !== id)
+        delete memoryDetails[id]
+        return send({ ok: true })
+      }
     }
     if (path === "/panel/knowledge/preference") return send([])
     if (path === "/file") return send({ entries: [] })
@@ -282,6 +292,35 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     const screenshotPath = resolve(".scratch", "memory-row-sibling-controls.png")
     mkdirSync(dirname(screenshotPath), { recursive: true })
     writeFileSync(screenshotPath, await memoryItem.screenshot({}))
+
+    await page.keyboard.press("Enter")
+    await page.waitForFunction(() => !document.querySelector("#leftPanelMemory .knowledge-item"))
+    await page.waitForSelector("#leftPanelMemory .empty-hint")
+    const deletedState = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>("#leftPanelMemory")!
+      const active = document.activeElement as HTMLElement | null
+      return {
+        itemCount: panel.querySelectorAll(".knowledge-item").length,
+        emptyText: panel.querySelector<HTMLElement>(".empty-hint")?.textContent?.trim() || "",
+        deleteStillFocused: active?.matches('#leftPanelMemory [data-action="delete-memory"]') ?? false,
+      }
+    })
+    assert.equal(deletedState.itemCount, 0)
+    assert.ok(deletedState.emptyText.length > 0)
+    assert.equal(deletedState.deleteStillFocused, false)
+    const deleteRequest = requestLog.find(
+      (item) =>
+        item.method === "DELETE" &&
+        item.path === "/panel/knowledge/memory/mem_left_tool_panels" &&
+        item.directory === WORKSPACE_DIR,
+    )
+    assert.ok(deleteRequest)
+
+    const memoryPanel = await page.$("#leftPanelMemory")
+    assert.ok(memoryPanel)
+    const deletedScreenshotPath = resolve(".scratch", "memory-panel-delete-empty-state.png")
+    mkdirSync(dirname(deletedScreenshotPath), { recursive: true })
+    writeFileSync(deletedScreenshotPath, await memoryPanel.screenshot({}))
 
     const skillRequest = requestLog.find((item) => item.path === "/skill/installed")
     const mcpRequest = requestLog.find((item) => item.path === "/mcp")

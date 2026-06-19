@@ -14,6 +14,7 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   const toolbar = read("src/components/SideActivityToolbar.tsx")
   const icons = read("src/components/Icon.tsx")
   const activityCss = read("src/styles/surfaces/activity.css")
+  const settingsCss = read("src/styles/surfaces/settings.css")
   const en = read("src/i18n/en-US.json")
   const zh = read("src/i18n/zh-CN.json")
 
@@ -89,13 +90,13 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-group")
   expect(activityCss).toContain(".left-activity-shell")
   expect(activityCss).toContain("flex-direction: row")
-  expect(activityCss).toMatch(
-    /\.sidebar-tool-panel \.extension-settings-body,\s*\.sidebar-tool-panel \.memory-panel\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s,
-  )
+  expect(activityCss).toMatch(/\.sidebar-tool-panel \.extension-settings-body\s*\{[^}]*flex:\s*1 1 0;[^}]*min-height:\s*0;/s)
   expect(activityCss).toContain(".sidebar-tool-panel .tool-panel-toolbar")
   expect(activityCss).toContain('.sidebar-tool-panel .oc-button[data-ui="tool-panel-action"]')
   expect(activityCss).toContain(".sidebar-tool-panel .config-status-box")
-  expect(activityCss).toContain('.sidebar-tool-panel .memory-panel[data-compact="true"] .knowledge-toolbar')
+  expect(activityCss).not.toContain(".sidebar-tool-panel .memory-panel")
+  expect(activityCss).not.toContain(".sidebar-tool-panel .knowledge-list")
+  expect(settingsCss).toContain('.memory-panel[data-compact="true"] .knowledge-toolbar')
   expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-row")
   expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-row .s-row-desc")
   expect(activityCss).toContain("-webkit-line-clamp: 3")
