@@ -473,11 +473,11 @@
 @keyframes task-row-children-pulse {
   0%,
   100% {
-    opacity: 0.4;
+    opacity: var(--ui-opacity-faint);
     transform: scale(1);
   }
   50% {
-    opacity: 1;
+    opacity: var(--ui-opacity-full);
     transform: scale(1.25);
   }
 }
@@ -499,7 +499,7 @@
    false); fade the row slightly so the user understands it's borrowed
    from another project rather than queued in this group. */
 .task-row-mini[data-cross-directory="true"] {
-  opacity: 0.88;
+  opacity: var(--ui-opacity-subtle);
 }
 
 .task-row-actions {
@@ -539,9 +539,9 @@
   /* Hover-only chrome: buttons stay hidden until the row is hovered or
      focused. The row switches its right grid track to an action slot only in
      those visible states, so hidden controls do not consume resting layout
-     and visible controls do not float over the title. opacity:0 +
+     and visible controls do not float over the title. Hidden opacity +
      pointer-events:none also keeps the chrome un-clickable while hidden. */
-  opacity: 0;
+  opacity: var(--ui-opacity-hidden);
   pointer-events: none;
   transition:
     opacity var(--ui-duration-base) var(--ui-timing-standard),
@@ -581,7 +581,7 @@
 
 .task-row-mini:has(.task-row-actions):hover .task-row-stamp,
 .task-row-mini[data-actions-keyboard-open="true"]:has(.task-row-actions) .task-row-stamp {
-  opacity: 0;
+  opacity: var(--ui-opacity-hidden);
   pointer-events: none;
 }
 
@@ -988,11 +988,11 @@
 
 @keyframes project-group-body-reveal {
   from {
-    opacity: 0;
+    opacity: var(--ui-opacity-hidden);
     transform: translateY(calc(-3px * var(--ui-scale)));
   }
   to {
-    opacity: 1;
+    opacity: var(--ui-opacity-full);
     transform: translateY(0);
   }
 }

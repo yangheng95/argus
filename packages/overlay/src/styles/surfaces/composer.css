@@ -201,7 +201,7 @@
   --oc-button-bg: color-mix(in srgb, var(--accent) 12%, var(--surface-inset));
   --oc-button-color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));
 
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
 }
 
 .chat-send-icon {

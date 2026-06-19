@@ -134,7 +134,7 @@
 
 .browser-preview-candidate-trigger:disabled {
   color: var(--text-soft);
-  opacity: 1;
+  opacity: var(--ui-opacity-full);
   cursor: default;
 }
 
