@@ -105,6 +105,19 @@ describe("app/session dialog single source", () => {
     expect(sessionHost).not.toContain('titleAs="div"')
   })
 
+  test("session dialog body states are written only by the service", () => {
+    expect(sessionHost).toContain("innerHTML={dialogStore.session.bodyHtml}")
+    expect(sessionHost).not.toContain("bodyHtml ||")
+    expect(sessionHost).not.toContain("Loading...")
+
+    expect(dialogService).toContain('bodyHtml: \'<p class="empty-hint">Loading…</p>\'')
+    expect(dialogService).toContain('setDialogStore("session", "bodyHtml", \'<p class="empty-hint">No messages yet.</p>\')')
+    expect(dialogService).toContain('const bodyHtml = html ? html : \'<p class="empty-hint">No displayable messages.</p>\'')
+    expect(dialogService).toContain("Failed to load session:")
+    expect(dialogService).not.toContain("bodyHtml ||")
+    expect(dialogService).not.toContain("Loading...")
+  })
+
   test("app dialog select input delegates listbox semantics to Kobalte", () => {
     expect(appHost).toContain('import { SelectControl } from "./ui/SelectControl"')
     expect(appHost).toContain("<SelectControl<AppDialogSelectOption>")

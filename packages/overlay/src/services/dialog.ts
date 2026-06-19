@@ -244,7 +244,8 @@ export async function openBuildSessionDialog(sessionID: string, title: string): 
       .filter(Boolean)
       .join("")
     if (sessionDialogSeq === openToken) {
-      setDialogStore("session", "bodyHtml", html || '<p class="empty-hint">No displayable messages.</p>')
+      const bodyHtml = html ? html : '<p class="empty-hint">No displayable messages.</p>'
+      setDialogStore("session", "bodyHtml", bodyHtml)
     }
   } catch (e) {
     if (sessionDialogSeq === openToken) {

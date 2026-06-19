@@ -28,7 +28,7 @@ export function SessionDialogHost() {
       <div
         class="session-dialog-body"
         id="sessionDialogBody"
-        innerHTML={dialogStore.session.bodyHtml || '<p class="empty-hint">Loading...</p>'}
+        innerHTML={dialogStore.session.bodyHtml}
       />
     </Dialog>
   )
