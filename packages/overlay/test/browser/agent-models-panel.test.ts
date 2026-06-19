@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -43,6 +45,15 @@ async function chooseModelOption(page: any, triggerSelector: string, value: stri
   const optionSelector = `.agent-model-select-option[data-model-value="${value}"]`
   await page.waitForSelector(optionSelector)
   await page.click(optionSelector)
+}
+
+async function saveElementScreenshot(page: any, selector: string, filename: string) {
+  const screenshotPath = resolve(".scratch", filename)
+  mkdirSync(dirname(screenshotPath), { recursive: true })
+  const element = await page.$(selector)
+  assert.ok(element, `${selector} should exist before screenshot`)
+  writeFileSync(screenshotPath, await element.screenshot({}))
+  return screenshotPath
 }
 
 test("agent model selects patch independent per-agent overrides", async () => {
@@ -137,7 +148,8 @@ test("agent model selects patch independent per-agent overrides", async () => {
     const page = await browser.newPage()
     await page.setViewport({ width: 1280, height: 900 })
     await page.evaluateOnNewDocument((serverUrl) => {
-      localStorage.setItem("oc_locale", "en-US")
+      ;(window as any).__OPENCORVUS_LOCALE__ = "zh-CN"
+      localStorage.setItem("oc_locale", "zh-CN")
       ;(window as any).__TAURI__ = {
         core: {
           invoke: async (command: string) => {
@@ -145,7 +157,7 @@ test("agent model selects patch independent per-agent overrides", async () => {
               return {
                 serverUrl,
                 autoServer: false,
-                locale: "en-US",
+                locale: "zh-CN",
                 directory: "D:/overlay/workspace/app",
               }
             }
@@ -173,14 +185,39 @@ test("agent model selects patch independent per-agent overrides", async () => {
     await page.waitForSelector('[data-menu-trigger="provider"]')
     await page.click('[data-menu-trigger="provider"]')
     await page.waitForSelector('[data-testid="titlebar-open-agent-models"]')
+    const menuLabel = await page.$eval('[data-testid="titlebar-open-agent-models"]', (node: HTMLElement) =>
+      node.textContent?.trim(),
+    )
+    assert.equal(menuLabel, "Agent 模型")
     await page.click('[data-testid="titlebar-open-agent-models"]')
     await page.waitForSelector('[data-testid="agent-model-select-build"]')
     await page.waitForSelector('[data-testid="agent-model-select-integrity"]')
+    const labels = await page.evaluate(() => ({
+      sidebar: document.querySelector('[data-config-tab="agent-models"]')?.textContent?.trim(),
+      title: document.querySelector('[data-config-panel="agent-models"] .s-group-head-title')?.textContent?.trim(),
+      tiers: Array.from(document.querySelectorAll('[data-config-panel="agent-models"] .agent-model-tier-label')).map(
+        (node) => node.textContent?.trim(),
+      ),
+      inheritTrigger: document.querySelector('[data-testid="agent-model-select-build"]')?.textContent?.trim(),
+    }))
+    assert.equal(labels.sidebar, "Agent 模型")
+    assert.equal(labels.title, "Agent 模型")
+    assert.deepEqual(labels.tiers, ["核心 — 主要编码 Agent"])
+    assert.equal(labels.inheritTrigger, "— 继承项目默认 —")
+    const screenshot = await saveElementScreenshot(page, '[data-config-panel="agent-models"]', "agent-models-zh-cn.png")
+    assert.ok(screenshot.endsWith("agent-models-zh-cn.png"))
 
     const initialOptionCount = await page.$$eval(".agent-model-select-option", (nodes: HTMLElement[]) => nodes.length)
     assert.equal(initialOptionCount, 0)
 
-    await chooseModelOption(page, '[data-testid="agent-model-select-build"]', "anthropic/claude-sonnet-4-6")
+    await page.click('[data-testid="agent-model-select-build"]')
+    await page.waitForSelector('.agent-model-select-option[data-model-value=""]')
+    const inheritOption = await page.$eval(
+      '.agent-model-select-option[data-model-value=""]',
+      (node: HTMLElement) => node.textContent?.trim(),
+    )
+    assert.equal(inheritOption, "— 继承项目默认 —")
+    await page.click('.agent-model-select-option[data-model-value="anthropic/claude-sonnet-4-6"]')
     await page.waitForFunction(() =>
       document.querySelector('[data-testid="agent-model-select-build"]')?.textContent?.includes("claude-sonnet-4-6"),
     )

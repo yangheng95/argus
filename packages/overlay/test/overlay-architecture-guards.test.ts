@@ -3263,7 +3263,17 @@ describe("overlay architecture guards", () => {
 
     const agentModelsPanel = readText(join(OVERLAY_ROOT, "src/components/settings/AgentModelsPanel.tsx"))
     expect(count(/<SettingsGroup/g, agentModelsPanel)).toBe(1)
-    expect(agentModelsPanel).toContain('title="Agent Models"')
+    expect(agentModelsPanel).toContain('title={t("cmdk.settings.agent_models")}')
+    expect(agentModelsPanel).not.toContain('title="Agent Models"')
+    for (const literal of [
+      "Core — main coding agents",
+      "Lightweight — spec/plan/explore/etc.",
+      "Internal — background tasks",
+      "— inherit project default —",
+      "saving…",
+    ]) {
+      expect(agentModelsPanel).not.toContain(literal)
+    }
     expect(agentModelsPanel).not.toContain("<SurfaceHeader")
     expect(agentModelsPanel).not.toContain("config-panel-group-head")
     expect(agentModelsPanel).not.toContain("config-panel-group-title")
