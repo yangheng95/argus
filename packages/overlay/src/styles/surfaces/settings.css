@@ -2110,6 +2110,7 @@ button.s-row:focus-visible {
   border: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 30%, transparent);
   border-top-color: var(--accent);
   border-radius: 50%;
+  animation: oc-spin var(--ui-duration-loop-agent-spin) linear infinite;
 }
 
 .agent-models-error {
