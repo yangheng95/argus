@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const CHAT_BUBBLE_TSX = readFileSync(join(import.meta.dir, "..", "src", "components", "ChatBubble.tsx"), "utf8")
+const CARD_HEADER_CHROME_TSX = readFileSync(
+  join(import.meta.dir, "..", "src", "components", "CardHeaderChrome.tsx"),
+  "utf8",
+)
 const CHAT_BUBBLE_CSS = readFileSync(
   join(import.meta.dir, "..", "src", "styles", "surfaces", "chat-bubble.css"),
   "utf8",
@@ -33,7 +37,7 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_TSX).not.toContain('class="card__copy"')
   expect(CHAT_BUBBLE_TSX).not.toContain("chat-bubble__avatar-slot")
   expect(CHAT_BUBBLE_TSX).toContain("<TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />")
-  expect(CHAT_BUBBLE_TSX).toContain('import { Button } from "./ui/Button"')
+  expect(CHAT_BUBBLE_TSX).toContain('import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"')
   expect(CHAT_BUBBLE_TSX).toContain("<AgentSessionReplyBox")
   expect(CHAT_BUBBLE_TSX).toContain("collapsedActivityPreviewText")
   expect(CHAT_BUBBLE_TSX).toContain("collectLatestActivityText")
@@ -74,10 +78,12 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_CSS).toContain(".chat-bubble__head-main:focus-visible")
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="user"] .chat-bubble__identity {\n  display: flex;')
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="user"] .chat-bubble__actions')
-  expect(CHAT_BUBBLE_TSX).toContain('class="card__meta-actions"')
-  expect(CHAT_BUBBLE_TSX).toContain('class="card__control-actions"')
-  expect(CHAT_BUBBLE_TSX.indexOf('class="card__meta-actions"')).toBeLessThan(
-    CHAT_BUBBLE_TSX.indexOf('class="card__control-actions"'),
+  expect(CHAT_BUBBLE_TSX).toContain("<CardHeaderChrome")
+  expect(CHAT_BUBBLE_TSX).toContain('actionsClass="chat-bubble__actions"')
+  expect(CHAT_BUBBLE_TSX).not.toContain('class="card__meta-actions"')
+  expect(CHAT_BUBBLE_TSX).not.toContain('class="card__control-actions"')
+  expect(CARD_HEADER_CHROME_TSX.indexOf('class="card__meta-actions"')).toBeLessThan(
+    CARD_HEADER_CHROME_TSX.indexOf('class="card__control-actions"'),
   )
   expect(CHAT_BUBBLE_CSS).toContain("max-width: min(70%, calc(520px * var(--ui-scale)));")
   expect(CHAT_BUBBLE_CSS).toContain('.chat-bubble-row[data-role="user"] .chat-bubble__head-avatar')
@@ -94,8 +100,10 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
 
 test("ChatBubble action controls use Button primitives", () => {
   for (const dataUi of ["card-error-reason", "card-trace", "card-agent-cancel", "card-rewind"]) {
-    expect(CHAT_BUBBLE_TSX).toContain(`data-ui="${dataUi}"`)
+    expect(CARD_HEADER_CHROME_TSX).toContain(`data-ui="${dataUi}"`)
+    expect(CHAT_BUBBLE_TSX).not.toContain(`data-ui="${dataUi}"`)
   }
+  expect(CARD_HEADER_CHROME_TSX).toContain('import { Button } from "./ui/Button"')
 
   for (const retired of [
     'class="card__error-reason"',

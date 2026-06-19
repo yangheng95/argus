@@ -4,7 +4,7 @@ import path from "node:path"
 
 // 2026-05-11 single-source repair: see specs/card-duration-single-source-2026-05-11.md
 // The card duration string is now exclusively rendered by
-// CardHeader's `.card__duration` chip for BOTH running and completed
+// CardHeaderChrome's `.card__duration` chip for BOTH running and completed
 // cards. tree-writer must not compose any elapsed-time strings.
 
 const OVERLAY_ROOT = path.resolve(import.meta.dir, "..")
@@ -13,8 +13,8 @@ function read(rel: string): string {
   return readFileSync(path.join(OVERLAY_ROOT, rel), "utf8")
 }
 
-test("CardHeader imports shared formatDuration + useNowTick", () => {
-  const src = read("src/components/CardHeader.tsx")
+test("CardDurationChip imports shared formatDuration + useNowTick", () => {
+  const src = read("src/components/CardHeaderChrome.tsx")
   expect(src).toContain('from "../utils/time"')
   expect(src).toContain('from "../services/clock"')
   expect(src).toContain("useNowTick")
@@ -22,8 +22,8 @@ test("CardHeader imports shared formatDuration + useNowTick", () => {
   expect(src).not.toMatch(/^function formatDuration\(ms: number\): string/m)
 })
 
-test("CardHeader duration chip handles both running and completed states", () => {
-  const src = read("src/components/CardHeader.tsx")
+test("CardDurationChip handles both running and completed states", () => {
+  const src = read("src/components/CardHeaderChrome.tsx")
   // The new memo subtracts now()-time for running cards and
   // timeCompleted-time otherwise. We assert both branches exist.
   expect(src).toContain("durationMs")
@@ -35,6 +35,15 @@ test("CardHeader duration chip handles both running and completed states", () =>
   expect(src).not.toMatch(/s elapsed`/)
   expect(src).not.toMatch(/m elapsed['"]/)
   expect(src).not.toMatch(/s elapsed['"]/)
+})
+
+test("CardHeader delegates duration rendering to the shared chrome component", () => {
+  const src = read("src/components/CardHeader.tsx")
+  expect(src).toContain('import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"')
+  expect(src).toContain("<CardDurationChip node={props.node} />")
+  expect(src).not.toContain("useNowTick")
+  expect(src).not.toContain("formatDuration")
+  expect(src).not.toContain("durationMs")
 })
 
 test("tree-writer does not compose elapsed-time strings", () => {
