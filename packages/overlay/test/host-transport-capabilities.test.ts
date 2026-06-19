@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import {
   HOST_CAPABILITIES,
@@ -12,6 +12,20 @@ const OVERLAY_ROOT = path.resolve(import.meta.dir, "..")
 
 function read(relativePath: string): string {
   return readFileSync(path.join(OVERLAY_ROOT, relativePath), "utf8")
+}
+
+function productionSourceFiles(root: string): string[] {
+  const entries = readdirSync(root, { withFileTypes: true })
+  const files: string[] = []
+  for (const entry of entries) {
+    const fullPath = path.join(root, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...productionSourceFiles(fullPath))
+      continue
+    }
+    if (/\.(css|html|ts|tsx)$/.test(entry.name)) files.push(fullPath)
+  }
+  return files
 }
 
 const NATIVE_COMMAND_KINDS: NativeCommandKind[] = [
@@ -69,7 +83,6 @@ describe("HostTransport capability contract", () => {
   })
 
   test("visible controls read HostTransport capabilities instead of host kind checks", () => {
-    const topbar = read("src/components/TopBar.tsx")
     const taskDirBar = read("src/components/TaskDirBar.tsx")
     const titlebar = read("src/components/titlebar/TitlebarMenubar.tsx")
     const channelsPanel = read("src/components/settings/ChannelsPanel.tsx")
@@ -78,10 +91,6 @@ describe("HostTransport capability contract", () => {
     const onboarding = read("src/components/WorkspaceOnboardingDialog.tsx")
     const windowControls = read("src/components/WindowControls.tsx")
     const editorLaunchers = read("src/components/WorkspaceEditorLaunchers.tsx")
-
-    expect(topbar).toContain('nativeCommands["workspace.pickDir"]')
-    expect(topbar).toContain("Hosts without workspace.pickDir do not render this")
-    expect(topbar).not.toContain("UnsupportedNativeCommandError")
 
     expect(taskDirBar).toContain("const nativeCommands = getHostTransport().capabilities.nativeCommands")
     expect(taskDirBar).toContain('browseDirectory: nativeCommands["workspace.pickDir"]')
@@ -100,7 +109,9 @@ describe("HostTransport capability contract", () => {
     expect(skillMarketPanel).toContain("canPickSkillDirectory()")
     expect(skillMarketPanel).toContain("canOpenLocalPath()")
     expect(skillMarketPanel).toContain("canOpenRemoteUrl()")
-    expect(skillMarketPanel).toContain('import { SettingsSelect, type SettingsSelectOption } from "./primitives"')
+    expect(skillMarketPanel).toMatch(
+      /import\s+\{[\s\S]*\bSettingsSelect\b[\s\S]*\btype SettingsSelectOption\b[\s\S]*\}\s+from "\.\/primitives"/,
+    )
     expect(skillMarketPanel).toContain("<SettingsSelect<FormSelectOption>")
     expect(skillMarketPanel).toContain('optionClass="settings-form-select-option"')
     expect(skillMarketPanel).toContain('optionData={(option) => ({ "data-value": option.value })}')
@@ -133,6 +144,14 @@ describe("HostTransport capability contract", () => {
     expect(editorLaunchers).toContain("capabilities.ui.projectEditors")
     expect(editorLaunchers).not.toContain("<For each={PROJECT_EDITORS}>")
     expect(HOST_CAPABILITIES.vscode.ui.projectEditors).toEqual(["vscode"])
+  })
+
+  test("retired TopBar source-test double does not remain in production source", () => {
+    const references = productionSourceFiles(path.join(OVERLAY_ROOT, "src"))
+      .filter((file) => /TopBar|top-bar/.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(OVERLAY_ROOT, file).replace(/\\/g, "/"))
+
+    expect(references).toEqual([])
   })
 
   test("native picker commands reject malformed path payloads instead of falling back", () => {
