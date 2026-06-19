@@ -29,6 +29,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-20-markdown-link-focus-visible.md](2026-06-20-markdown-link-focus-visible.md)                     | Markdown Link Focus Visible |
 | [2026-06-20-file-download-focus-visible.md](2026-06-20-file-download-focus-visible.md)                     | File Download Focus Visible |
 | [2026-06-20-about-link-focus-visible.md](2026-06-20-about-link-focus-visible.md)                           | About Link Focus Visible |
+| [2026-06-20-file-explorer-row-focus-visible.md](2026-06-20-file-explorer-row-focus-visible.md)             | File Explorer Row Focus Visible |
 
 ## 2026-06-19
 

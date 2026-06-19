@@ -566,11 +566,16 @@
   cursor: pointer;
 }
 
-.file-explorer-row:hover,
+.file-explorer-row:hover {
+  background: var(--subtle-2);
+  color: var(--text-strong);
+}
+
 .file-explorer-row:focus-visible {
   background: var(--subtle-2);
   color: var(--text-strong);
-  outline: 0;
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(-1px * var(--ui-scale));
 }
 
 .file-explorer-row[data-active="true"] {
