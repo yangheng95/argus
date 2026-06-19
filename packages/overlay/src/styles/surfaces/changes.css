@@ -157,6 +157,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"][data-pressed] .changes-status-option-count,
+.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"][data-highlighted] .changes-status-option-count,
+.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"]:hover .changes-status-option-count,
+.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"]:focus-visible .changes-status-option-count {
+  color: var(--text-soft);
+}
+
 .changes-non-text-filter {
   display: inline-flex;
   flex: 0 0 auto;
@@ -367,6 +374,15 @@
   color: var(--text-muted);
 }
 
+.change-row[data-selected] .change-scope,
+.change-row[data-selected] .change-directory,
+.change-row[data-selected] .change-subline,
+.change-row[aria-expanded="true"] .change-scope,
+.change-row[aria-expanded="true"] .change-directory,
+.change-row[aria-expanded="true"] .change-subline {
+  color: var(--text-soft);
+}
+
 .change-meta {
   display: flex;
   align-items: center;
@@ -401,7 +417,7 @@
 }
 
 .change-status[data-status="deleted"] {
-  color: var(--bad);
+  color: var(--diff-del-fg);
   background: var(--bad-dim);
   border-color: color-mix(in srgb, var(--bad) 14%, transparent);
 }
@@ -410,6 +426,11 @@
   color: var(--accent);
   background: var(--accent-dim);
   border-color: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.change-row[data-selected] .change-status[data-status="modified"],
+.change-row[aria-expanded="true"] .change-status[data-status="modified"] {
+  color: color-mix(in srgb, var(--accent) 62%, var(--text-strong));
 }
 
 .change-inline-diff {

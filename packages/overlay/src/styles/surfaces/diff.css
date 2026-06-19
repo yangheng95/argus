@@ -19,7 +19,7 @@
 }
 
 .diff-dialog-stat[data-tone="del"] {
-  color: var(--bad);
+  color: var(--diff-del-fg);
 }
 
 .diff-lines {

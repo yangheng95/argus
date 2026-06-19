@@ -220,25 +220,61 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       await (window as any).loadTasks()
       await (window as any).selectTask(taskID)
     }, TASK_ID)
-    await page.waitForFunction(
-      (expectedCount) => ((window as any).boardStore?.board?.changes?.length ?? 0) === expectedCount,
-      {},
-      fileChangesFixture.length,
-    )
-    await page.waitForFunction(
-      () =>
-        typeof (window as any).openWorkspaceDiff === "function" &&
-        document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "changes",
-    )
+    await page
+      .waitForFunction(
+        (expectedCount) => ((window as any).boardStore?.board?.changes?.length ?? 0) === expectedCount,
+        {},
+        fileChangesFixture.length,
+      )
+      .catch(async (error: unknown) => {
+        const state = await page.evaluate(() => ({
+          boardChangesLength: (window as any).boardStore?.board?.changes?.length ?? null,
+          boardTaskID: (window as any).boardStore?.board?.task?.id ?? "",
+          selectedSource: (window as any).boardStore?.selectedSource ?? null,
+          taskSwitching: (window as any).boardStore?.taskSwitching ?? null,
+          tasks: (window as any).boardStore?.tasks ?? [],
+          bodySample: document.body.textContent?.slice(0, 800) ?? "",
+        }))
+        throw new Error(
+          `File changes fixture did not hydrate: ${JSON.stringify({
+            ...state,
+            requests: requestLog.slice(-80),
+            consoleErrors,
+            pageErrors,
+          })}`,
+          { cause: error },
+        )
+      })
+    await page
+      .waitForFunction(
+        () =>
+          typeof (window as any).openWorkspaceDiff === "function" &&
+          document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "changes",
+      )
+      .catch(async (error: unknown) => {
+        const state = await page.evaluate(() => ({
+          hasOpenWorkspaceDiff: typeof (window as any).openWorkspaceDiff === "function",
+          activeView: document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView ?? "",
+          bodySample: document.body.textContent?.slice(0, 800) ?? "",
+        }))
+        throw new Error(`File changes view did not activate: ${JSON.stringify(state)}`, { cause: error })
+      })
 
     await page.evaluate(async () => {
       await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
       ;(window as any).openWorkspaceDiff({ filePath: "src/live-file.ts", goalRunID: "gr_diff_preview" })
       await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
     })
-    await page.waitForFunction(
-      () => document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "diff",
-    )
+    await page
+      .waitForFunction(() => document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "diff")
+      .catch(async (error: unknown) => {
+        const state = await page.evaluate(() => ({
+          activeView: document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView ?? "",
+          hasDiffPanel: !!document.querySelector(".diff-preview-panel"),
+          bodySample: document.body.textContent?.slice(0, 800) ?? "",
+        }))
+        throw new Error(`File changes diff view did not activate: ${JSON.stringify(state)}`, { cause: error })
+      })
     await page.waitForSelector('.diff-preview-panel .diff-row[data-kind="add"]')
     const diffTabPanelState = await page.$eval('[data-ui="file-changes-view-tab"][data-value="diff"]', (node) => {
       const tab = node as HTMLElement
@@ -311,6 +347,224 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.equal(listboxSelectedState.selectedRole, "option")
     assert.equal(listboxSelectedState.selectedAria, "true")
 
+    await page.hover('.change-row[data-change-index="1"]')
+    await page
+      .waitForFunction(() => {
+        const hovered = document.querySelector<HTMLElement>('.change-row[data-change-index="1"]')
+        if (!hovered?.matches(":hover")) return false
+        const background = getComputedStyle(hovered).backgroundColor
+        return background !== "transparent" && background !== "rgba(0, 0, 0, 0)"
+      })
+      .catch(async (error: unknown) => {
+        const state = await page.evaluate(() => {
+          const row = document.querySelector<HTMLElement>('.change-row[data-change-index="1"]')
+          const style = row ? getComputedStyle(row) : null
+          return {
+            exists: !!row,
+            hovered: row?.matches(":hover") ?? false,
+            background: style?.backgroundColor ?? "",
+            visibleRows: Array.from(document.querySelectorAll<HTMLElement>(".change-row"), (item) => ({
+              index: item.dataset.changeIndex,
+              hovered: item.matches(":hover"),
+              selected: item.hasAttribute("data-selected"),
+              expanded: item.getAttribute("aria-expanded"),
+            })),
+          }
+        })
+        throw new Error(`File changes row hover state did not render: ${JSON.stringify(state)}`, { cause: error })
+      })
+    const fileChangesContrastState = await page.evaluate(() => {
+      interface Rgba {
+        r: number
+        g: number
+        b: number
+        a: number
+      }
+      function parseAlpha(value: string | undefined): number {
+        if (!value) return 1
+        if (value.endsWith("%")) return Number.parseFloat(value) / 100
+        return Number.parseFloat(value)
+      }
+      function parseColor(value: string): Rgba {
+        const normalized = value.trim().toLowerCase()
+        if (normalized === "transparent") return { r: 0, g: 0, b: 0, a: 0 }
+        const rgb = normalized.match(/^rgba?\((.*)\)$/)
+        if (rgb) {
+          const body = rgb[1]!.trim()
+          const [channels, alpha] = body.split("/").map((part) => part.trim())
+          const parts = channels!.split(/[\s,]+/).filter(Boolean)
+          const [r, g, b] = parts.map((part) => Number.parseFloat(part))
+          const a = alpha === undefined ? (parts[3] === undefined ? 1 : parseAlpha(parts[3])) : parseAlpha(alpha)
+          if (![r, g, b, a].every(Number.isFinite)) throw new Error(`Invalid rgb color: ${value}`)
+          return { r, g, b, a }
+        }
+        const srgb = normalized.match(/^color\(\s*srgb\s+(.+)\)$/)
+        if (srgb) {
+          const [channels, alpha] = srgb[1]!.split("/").map((part) => part.trim())
+          const [r, g, b] = channels!.split(/\s+/).map((part) => Number.parseFloat(part) * 255)
+          const a = alpha === undefined ? 1 : parseAlpha(alpha)
+          if (![r, g, b, a].every(Number.isFinite)) throw new Error(`Invalid srgb color: ${value}`)
+          return { r, g, b, a }
+        }
+        const oklab = normalized.match(/^oklab\((.+)\)$/)
+        if (oklab) {
+          const [channels, alpha] = oklab[1]!.split("/").map((part) => part.trim())
+          const [l, aa, bb] = channels!.split(/\s+/).map((part) => Number.parseFloat(part))
+          const alphaValue = alpha === undefined ? 1 : parseAlpha(alpha)
+          if (![l, aa, bb, alphaValue].every(Number.isFinite)) throw new Error(`Invalid oklab color: ${value}`)
+          const ll = l + 0.3963377774 * aa + 0.2158037573 * bb
+          const mm = l - 0.1055613458 * aa - 0.0638541728 * bb
+          const ss = l - 0.0894841775 * aa - 1.291485548 * bb
+          const l3 = ll ** 3
+          const m3 = mm ** 3
+          const s3 = ss ** 3
+          const linearR = 4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3
+          const linearG = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3
+          const linearB = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.707614701 * s3
+          const encode = (channel: number) => {
+            const encoded = channel <= 0.0031308 ? 12.92 * channel : 1.055 * channel ** (1 / 2.4) - 0.055
+            return Math.min(255, Math.max(0, encoded * 255))
+          }
+          return { r: encode(linearR), g: encode(linearG), b: encode(linearB), a: alphaValue }
+        }
+        throw new Error(`Unsupported color: ${value}`)
+      }
+      function composite(foreground: Rgba, background: Rgba): Rgba {
+        const alpha = foreground.a + background.a * (1 - foreground.a)
+        if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 }
+        return {
+          r: (foreground.r * foreground.a + background.r * background.a * (1 - foreground.a)) / alpha,
+          g: (foreground.g * foreground.a + background.g * background.a * (1 - foreground.a)) / alpha,
+          b: (foreground.b * foreground.a + background.b * background.a * (1 - foreground.a)) / alpha,
+          a: alpha,
+        }
+      }
+      function channel(value: number): number {
+        const scaled = value / 255
+        return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4
+      }
+      function luminance(color: Rgba): number {
+        return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b)
+      }
+      function contrastRatio(foreground: Rgba, background: Rgba): number {
+        const lighter = Math.max(luminance(foreground), luminance(background))
+        const darker = Math.min(luminance(foreground), luminance(background))
+        return (lighter + 0.05) / (darker + 0.05)
+      }
+      function textFillColor(style: CSSStyleDeclaration): string {
+        return style.getPropertyValue("-webkit-text-fill-color") || style.color
+      }
+      function effectiveSurface(element: HTMLElement): Rgba {
+        const ancestors: HTMLElement[] = []
+        for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+          ancestors.push(node)
+          if (node === document.body) break
+        }
+        let surface: Rgba = { r: 255, g: 255, b: 255, a: 1 }
+        for (const ancestor of ancestors.reverse()) {
+          const background = parseColor(getComputedStyle(ancestor).backgroundColor)
+          if (background.a > 0) surface = composite(background, surface)
+        }
+        return surface
+      }
+      function effectiveOpacity(element: HTMLElement): number {
+        let opacity = 1
+        for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+          const parsed = Number.parseFloat(getComputedStyle(node).opacity)
+          if (Number.isFinite(parsed)) opacity *= parsed
+          if (node === document.body) break
+        }
+        return opacity
+      }
+      function sampleText(element: HTMLElement, owner: string) {
+        const style = getComputedStyle(element)
+        const rect = element.getBoundingClientRect()
+        const surface = effectiveSurface(element)
+        const color = parseColor(style.color)
+        const fill = textFillColor(style)
+        const fillColor = parseColor(fill)
+        return {
+          owner,
+          text: element.textContent?.trim().replace(/\s+/g, " ") ?? "",
+          display: style.display,
+          visibility: style.visibility,
+          opacity: effectiveOpacity(element),
+          rectWidth: rect.width,
+          rectHeight: rect.height,
+          color: style.color,
+          textFillColor: fill,
+          surfaceAlpha: surface.a,
+          contrast: contrastRatio(color, surface),
+          textFillContrast: contrastRatio(fillColor, surface),
+        }
+      }
+      function rowMetrics(selector: string, owner: string) {
+        const row = document.querySelector<HTMLElement>(selector)
+        if (!row) throw new Error(`Missing file changes row sample: ${selector}`)
+        const style = getComputedStyle(row)
+        return {
+          owner,
+          background: style.backgroundColor,
+          hovered: row.matches(":hover"),
+          selected: row.hasAttribute("data-selected"),
+          highlighted: row.hasAttribute("data-highlighted"),
+          expanded: row.getAttribute("aria-expanded") === "true",
+          texts: Array.from(
+            row.querySelectorAll<HTMLElement>(
+              ".change-file-name, .change-directory, .change-status, .diff-dialog-stat",
+            ),
+            (node) => sampleText(node, owner),
+          ).filter((entry) => entry.text),
+        }
+      }
+      const filters = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-ui="file-changes-status-filter-option"] span'),
+        (node) => sampleText(node, "status-filter"),
+      ).filter((entry) => entry.text)
+      return {
+        rows: [
+          rowMetrics('.change-row[data-change-index="0"]', "selected"),
+          rowMetrics('.change-row[data-change-index="1"]', "hovered"),
+          rowMetrics('.change-row[data-change-index="2"]', "plain"),
+        ],
+        filters,
+      }
+    })
+    assert.ok(fileChangesContrastState.filters.length > 0)
+    assert.equal(fileChangesContrastState.rows.some((row) => row.selected), true)
+    assert.equal(fileChangesContrastState.rows.some((row) => row.hovered), true)
+    assert.equal(
+      fileChangesContrastState.rows.some((row) => !row.selected && !row.hovered && !row.highlighted),
+      true,
+    )
+    for (const row of fileChangesContrastState.rows) {
+      assert.ok(row.texts.length > 0, `${row.owner} row should expose text samples`)
+      for (const text of row.texts) {
+        assert.notEqual(text.display, "none", `${text.owner} ${text.text}`)
+        assert.equal(text.visibility, "visible", `${text.owner} ${text.text}`)
+        assert.ok(text.opacity >= 0.95, `${text.owner} ${text.text} opacity ${text.opacity}`)
+        assert.ok(text.rectWidth > 0 && text.rectHeight > 0, `${text.owner} ${text.text} rect`)
+        assert.notEqual(text.color, "rgba(0, 0, 0, 0)", `${text.owner} ${text.text}`)
+        assert.notEqual(text.textFillColor, "rgba(0, 0, 0, 0)", `${text.owner} ${text.text}`)
+        assert.equal(text.surfaceAlpha, 1, `${text.owner} ${text.text}`)
+        assert.ok(text.contrast >= 4.5, `${text.owner} ${text.text} contrast ${text.contrast}`)
+        assert.ok(text.textFillContrast >= 4.5, `${text.owner} ${text.text} fill ${text.textFillContrast}`)
+      }
+    }
+    for (const text of fileChangesContrastState.filters) {
+      assert.notEqual(text.display, "none", `status filter ${text.text}`)
+      assert.equal(text.visibility, "visible", `status filter ${text.text}`)
+      assert.ok(text.opacity >= 0.95, `status filter ${text.text} opacity ${text.opacity}`)
+      assert.ok(text.rectWidth > 0 && text.rectHeight > 0, `status filter ${text.text} rect`)
+      assert.ok(text.contrast >= 4.5, `status filter ${text.text} contrast ${text.contrast}`)
+      assert.ok(text.textFillContrast >= 4.5, `status filter ${text.text} fill ${text.textFillContrast}`)
+    }
+    const contrastScreenshotPath = resolve(".scratch/file-changes-light-contrast.png")
+    mkdirSync(dirname(contrastScreenshotPath), { recursive: true })
+    const contrastChangesPanel = await page.$(".file-changes-panel")
+    assert.ok(contrastChangesPanel)
+    writeFileSync(contrastScreenshotPath, await contrastChangesPanel.screenshot({}))
+
     await page.focus(".change-row")
     const focusedRowBeforeKeyboard = await page.$eval(".change-row", (node) => ({
       active: document.activeElement === node,
@@ -319,7 +573,22 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.deepEqual(focusedRowBeforeKeyboard, { active: true, expanded: "false" })
 
     await page.keyboard.press("Enter")
-    await page.waitForFunction(() => document.querySelector(".change-row")?.getAttribute("aria-expanded") === "true")
+    await page
+      .waitForFunction(() => document.querySelector(".change-row")?.getAttribute("aria-expanded") === "true")
+      .catch(async (error: unknown) => {
+        const state = await page.evaluate(() => ({
+          activeID: document.activeElement?.id ?? "",
+          rows: Array.from(document.querySelectorAll<HTMLElement>(".change-row"), (row) => ({
+            id: row.id,
+            index: row.dataset.changeIndex,
+            active: document.activeElement === row,
+            selected: row.hasAttribute("data-selected"),
+            hovered: row.matches(":hover"),
+            expanded: row.getAttribute("aria-expanded"),
+          })),
+        }))
+        throw new Error(`Enter did not expand focused file change row: ${JSON.stringify(state)}`, { cause: error })
+      })
     await page.waitForSelector(".change-inline-diff")
     const enterActivationState = await page.$eval(".change-row", (node) => ({
       active: document.activeElement === node,
