@@ -345,6 +345,42 @@ describe("TracePanel.tsx — Panel primitive adoption", () => {
   test('no bare <div class="trace-panel-head"', () => {
     expect(tsx).not.toContain('class="trace-panel-head"')
   })
+
+  test("chrome and empty states use i18n keys instead of hard-coded English", () => {
+    for (const key of [
+      "trace.title_session",
+      "trace.title_task",
+      "trace.title_unselected",
+      "trace.empty_select_task",
+      "trace.loading",
+      "trace.fetch_failed",
+      "trace.empty_no_events",
+      "trace.disabled_server",
+      "trace.disabled_server_hint",
+      "trace.server_trace_dir",
+      "trace.trace_dir_mismatch_before",
+      "trace.trace_dir_mismatch_after",
+      "trace.auto_refresh",
+    ]) {
+      expect(tsx).toContain(`t("${key}"`)
+    }
+    for (const retired of [
+      "Session trace ·",
+      "Task trace ·",
+      "Select a task on the left to stream its agent trace here.",
+      "Loading…",
+      "Trace fetch failed.",
+      "No trace events yet for this target.",
+      "AgentTrace is DISABLED on the server",
+      "Server is reading from:",
+      "Auto-refreshes every 4s.",
+    ]) {
+      expect(tsx).not.toContain(retired)
+    }
+    expect(tsx).toContain('role="status"')
+    expect(tsx).toContain('aria-live="polite"')
+    expect(tsx).toContain('aria-busy="true"')
+  })
 })
 
 describe("CSS class rename guards — no stale .section-* selectors", () => {
