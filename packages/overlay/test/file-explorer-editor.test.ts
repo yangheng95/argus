@@ -9,6 +9,17 @@ function readText(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8")
 }
 
+function bodyOf(source: string, selector: string): string {
+  const css = source.replace(/\/\*[\s\S]*?\*\//g, "")
+  const wanted = selector.replace(/\s+/g, " ").trim()
+  for (const chunk of css.split("}")) {
+    const open = chunk.indexOf("{")
+    if (open < 0) continue
+    if (chunk.slice(0, open).replace(/\s+/g, " ").trim() === wanted) return chunk.slice(open + 1)
+  }
+  throw new Error(`CSS rule not found: ${selector}`)
+}
+
 test("file explorer, diff, and editor are wired through center workbench panels", () => {
   const explorer = readText("src/components/FileExplorerPanel.tsx")
   const editor = readText("src/components/FileEditorPane.tsx")
@@ -160,6 +171,13 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(inspectorCss).toContain(".file-explorer-upload-message")
   expect(inspectorCss).toContain('.file-explorer-row[data-upload-target="true"]')
   expect(inspectorCss).toContain('.file-explorer-list[data-virtualized="true"]')
+  expect(inspectorCss).toContain(".file-explorer-row:hover")
+  expect(inspectorCss).toContain(".file-explorer-row:focus-visible")
+  expect(inspectorCss).not.toContain(".file-explorer-row:hover,\n.file-explorer-row:focus-visible")
+  expect(bodyOf(inspectorCss, ".file-explorer-row:focus-visible")).toMatch(
+    /outline:\s*var\(--oc-border-width\)\s+solid\s+var\(--accent\)/,
+  )
+  expect(bodyOf(inspectorCss, ".file-explorer-row:focus-visible")).not.toMatch(/outline:\s*(0|none)/)
   expect(explorer).toMatch(/<Button[\s\S]*data-ui="file-explorer-retry"/)
   expect(explorer).not.toContain('class="file-explorer-retry"')
   expect(inspectorCss).toContain('.file-explorer-empty .oc-button[data-ui="file-explorer-retry"]')

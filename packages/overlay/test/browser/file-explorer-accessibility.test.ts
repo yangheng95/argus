@@ -208,8 +208,77 @@ test("file explorer current file and directory expansion are exposed on the row 
       readmeSelected: null,
     })
 
-    await page.click('.file-explorer-row[title="src"]')
+    const srcRowSelector = '.file-explorer-row[title="src"]'
+    const readmeRowSelector = '.file-explorer-row[title="README.md"]'
+    let srcFocusedByKeyboard = false
+    for (let idx = 0; idx < 120; idx += 1) {
+      await page.keyboard.press("Tab")
+      srcFocusedByKeyboard = await page.$eval(srcRowSelector, (node) => document.activeElement === node)
+      if (srcFocusedByKeyboard) break
+    }
+    assert.equal(srcFocusedByKeyboard, true)
+    const srcFocusState = await page.$eval(srcRowSelector, (node) => {
+      const element = node as HTMLElement
+      const styles = getComputedStyle(element)
+      return {
+        focusVisible: element.matches(":focus-visible"),
+        outlineStyle: styles.outlineStyle,
+        outlineWidth: styles.outlineWidth,
+      }
+    })
+    assert.equal(srcFocusState.focusVisible, true)
+    assert.notEqual(srcFocusState.outlineStyle, "none")
+    assert.notEqual(srcFocusState.outlineWidth, "0px")
+
+    await page.keyboard.press("Enter")
     await page.waitForSelector('.file-explorer-row[title="src/main.tsx"]', { visible: true })
+    await page.waitForFunction(
+      () => document.querySelector<HTMLButtonElement>('.file-explorer-row[title="src"]')?.getAttribute("aria-expanded") === "true",
+    )
+
+    let readmeFocusedByKeyboard = false
+    for (let idx = 0; idx < 120; idx += 1) {
+      await page.keyboard.press("Tab")
+      readmeFocusedByKeyboard = await page.$eval(readmeRowSelector, (node) => document.activeElement === node)
+      if (readmeFocusedByKeyboard) break
+    }
+    assert.equal(readmeFocusedByKeyboard, true)
+    const readmeFocusState = await page.$eval(readmeRowSelector, (node) => {
+      const element = node as HTMLElement
+      const styles = getComputedStyle(element)
+      return {
+        focusVisible: element.matches(":focus-visible"),
+        outlineStyle: styles.outlineStyle,
+        outlineWidth: styles.outlineWidth,
+      }
+    })
+    assert.equal(readmeFocusState.focusVisible, true)
+    assert.notEqual(readmeFocusState.outlineStyle, "none")
+    assert.notEqual(readmeFocusState.outlineWidth, "0px")
+
+    const rowFocusScreenshotPath = resolve(".scratch/file-explorer-row-focus-visible.png")
+    mkdirSync(dirname(rowFocusScreenshotPath), { recursive: true })
+    const explorerElementForRowFocus = await page.$("#centerWorkbenchExplorer")
+    assert.ok(explorerElementForRowFocus)
+    writeFileSync(rowFocusScreenshotPath, await explorerElementForRowFocus.screenshot({}))
+
+    await page.keyboard.press("Space")
+    await page.waitForFunction(
+      () =>
+        document.querySelector<HTMLElement>('.file-explorer-row[title="README.md"]')?.dataset.active === "true" &&
+        document.querySelector<HTMLElement>("#centerWorkbenchFile")?.dataset.open === "true",
+    )
+    const readmeKeyboardState = await page.evaluate(() => ({
+      active: document.querySelector<HTMLElement>('.file-explorer-row[title="README.md"]')?.dataset.active ?? "",
+      current: document.querySelector<HTMLButtonElement>('.file-explorer-row[title="README.md"]')?.getAttribute("aria-current") ?? null,
+      filePanelOpen: document.querySelector<HTMLElement>("#centerWorkbenchFile")?.dataset.open ?? "",
+    }))
+    assert.deepEqual(readmeKeyboardState, {
+      active: "true",
+      current: "true",
+      filePanelOpen: "true",
+    })
+
     await page.click('.file-explorer-row[title="src/main.tsx"]')
     await page.waitForFunction(
       () =>
