@@ -23,6 +23,11 @@ import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
 import { Button } from "./ui/Button"
 import { SelectControl } from "./ui/SelectControl"
 import {
+  clampComposerTextareaHeight,
+  composerTextareaResizeBounds,
+  nextComposerTextareaKeyboardHeight,
+} from "./composer-resizer"
+import {
   clearComposerDraft,
   composerDraftText,
   normalizeComposerDraftKey,
@@ -169,6 +174,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const [focused, setFocused] = createSignal(false)
   const [hintText, setHintText] = createSignal("")
   const [submitting, setSubmitting] = createSignal(false)
+  const [textareaResizeHeight, setTextareaResizeHeight] = createSignal<number | null>(null)
   let resizeSession: { pointerID: number; startY: number; startHeight: number } | undefined
 
   const hasText = createMemo(() => text().trim().length > 0)
@@ -470,6 +476,23 @@ export function ChatComposer(props: ChatComposerProps) {
     return Number.isFinite(value) && value > 0 ? value : 1
   }
 
+  function textareaResizeBounds() {
+    return composerTextareaResizeBounds(currentUIScale())
+  }
+
+  function currentTextareaResizeHeight(): number {
+    const bounds = textareaResizeBounds()
+    const height = textareaResizeHeight()
+    return clampComposerTextareaHeight(height ?? bounds.min, bounds)
+  }
+
+  function applyTextareaResizeHeight(height: number) {
+    if (!formRef) return
+    const nextHeight = clampComposerTextareaHeight(height, textareaResizeBounds())
+    setTextareaResizeHeight(nextHeight)
+    formRef.style.setProperty("--chat-textarea-height", `${nextHeight}px`)
+  }
+
   function handleResizePointerDown(e: PointerEvent) {
     if (e.button !== 0 || !textareaRef) return
     const handle = e.currentTarget as HTMLElement
@@ -484,14 +507,7 @@ export function ChatComposer(props: ChatComposerProps) {
 
   function handleResizePointerMove(e: PointerEvent) {
     if (!resizeSession || resizeSession.pointerID !== e.pointerId || !formRef) return
-    const scale = currentUIScale()
-    const minHeight = 62 * scale
-    const maxHeight = 260 * scale
-    const nextHeight = Math.min(
-      maxHeight,
-      Math.max(minHeight, resizeSession.startHeight + resizeSession.startY - e.clientY),
-    )
-    formRef.style.setProperty("--chat-textarea-height", `${Math.round(nextHeight)}px`)
+    applyTextareaResizeHeight(resizeSession.startHeight + resizeSession.startY - e.clientY)
   }
 
   function handleResizePointerEnd(e: PointerEvent) {
@@ -499,6 +515,13 @@ export function ChatComposer(props: ChatComposerProps) {
     const handle = e.currentTarget as HTMLElement
     if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId)
     resizeSession = undefined
+  }
+
+  function handleResizeKeyDown(e: KeyboardEvent) {
+    const nextHeight = nextComposerTextareaKeyboardHeight(currentTextareaResizeHeight(), e.key, textareaResizeBounds())
+    if (nextHeight === undefined) return
+    e.preventDefault()
+    applyTextareaResizeHeight(nextHeight)
   }
 
   // ── Send/Stop button rendering (mirrors renderChatComposer SVG logic) ──
@@ -580,12 +603,18 @@ export function ChatComposer(props: ChatComposerProps) {
         class="chat-resize-handle"
         role="separator"
         aria-orientation="horizontal"
+        aria-controls={props.textareaID ?? "chatTextarea"}
         aria-label={t("chat.resize_handle")}
+        aria-valuemin={Math.round(textareaResizeBounds().min)}
+        aria-valuemax={Math.round(textareaResizeBounds().max)}
+        aria-valuenow={currentTextareaResizeHeight()}
+        tabIndex={0}
         title={t("chat.resize_handle")}
         onPointerDown={handleResizePointerDown}
         onPointerMove={handleResizePointerMove}
         onPointerUp={handleResizePointerEnd}
         onPointerCancel={handleResizePointerEnd}
+        onKeyDown={handleResizeKeyDown}
       />
 
       {/* Compose row: textarea + send */}
