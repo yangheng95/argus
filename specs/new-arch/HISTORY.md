@@ -41,6 +41,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-file-changes-row-keyboard-single-activation.md](2026-06-19-file-changes-row-keyboard-single-activation.md) | File Changes Row Keyboard Single Activation |
 | [2026-06-19-retire-provider-page-title-residue.md](2026-06-19-retire-provider-page-title-residue.md)           | Retire Provider Page Title Residue |
 | [2026-06-19-chat-composer-resize-keyboard-separator.md](2026-06-19-chat-composer-resize-keyboard-separator.md) | Chat Composer Resize Keyboard Separator |
+| [2026-06-19-retire-log-path-residue.md](2026-06-19-retire-log-path-residue.md)                                 | Retire Log Path Residue |
 
 ## 2026-06-18
 

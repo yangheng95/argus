@@ -837,12 +837,6 @@ button.s-row:focus-visible {
   word-break: break-all;
 }
 
-.log-path {
-  margin-bottom: calc(10px * var(--ui-scale));
-  color: var(--text-muted);
-  word-break: break-word;
-}
-
 /* Log line: each row uses content-visibility: auto to skip layout
    for off-screen rows, and contain-intrinsic-size reserves a
    ~48px slot so the scrollbar stays accurate. The previous

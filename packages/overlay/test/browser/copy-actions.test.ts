@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -30,6 +32,7 @@ test(
         tasks: [{ task, updated_at: now - 1_000 }],
       },
       board: {
+        snapshotVersion: "copy-actions-log-viewer",
         task,
         run: {
           executor: "opencorvus",
@@ -51,7 +54,13 @@ test(
           "task-1": [
             {
               parts: [{ type: "text", text: "Please copy this transcript." }],
-              info: { id: "msg-user", sessionID: "session-user", role: "user", time: { created: now - 8_000 } },
+              info: {
+                id: "msg-user",
+                sessionID: "session-user",
+                role: "user",
+                channel: "main",
+                time: { created: now - 8_000 },
+              },
             },
             {
               parts: [{ type: "text", text: "Transcript ready." }],
@@ -60,6 +69,7 @@ test(
                 sessionID: "session-1",
                 role: "assistant",
                 resolvedRole: "assistant",
+                channel: "assistant",
                 time: { created: now - 7_000 },
               },
             },
@@ -142,8 +152,29 @@ test(
       }
       if (path === "/tasks") return send(data.tasks)
       if (path === "/global/tasks") return send(data.tasks)
+      if (path === "/mission") return send([])
+      if (path === "/project/current/worktrees") return send([])
       if (path === "/session") return send([])
       if (path === "/config/prompt") return send([])
+      if (path === "/config/prompt-profile") {
+        return send({
+          active: "general",
+          project_active: "general",
+          session_active: null,
+          default: "general",
+          targets: [],
+          profiles: [
+            {
+              id: "general",
+              label: "General",
+              description: "Default prompt profile",
+              built_in: true,
+              editable: false,
+              agents: {},
+            },
+          ],
+        })
+      }
       if (path.startsWith("/task/") && path.endsWith("/board")) return send(data.board)
       if (path === "/task/task-1/conversation") {
         return send({
@@ -280,6 +311,31 @@ test(
 
       await tab.evaluate(() => window.dispatchEvent(new CustomEvent("oc:open-logs")))
       await tab.waitForFunction(() => document.querySelector("#logDialog") !== null)
+      await tab.waitForSelector(".log-line")
+      const logLayout = await tab.evaluate(() => {
+        const dialog = document.querySelector<HTMLElement>("#logDialog")
+        const viewer = document.querySelector<HTMLElement>(".log-viewer")
+        const dialogBox = dialog?.getBoundingClientRect()
+        const viewerBox = viewer?.getBoundingClientRect()
+        return {
+          logPathResidueCount: document.querySelectorAll(".log-path").length,
+          lineCount: document.querySelectorAll(".log-line").length,
+          dialogWidth: Math.round(dialogBox?.width ?? 0),
+          dialogHeight: Math.round(dialogBox?.height ?? 0),
+          viewerHeight: Math.round(viewerBox?.height ?? 0),
+        }
+      })
+      assert.equal(logLayout.logPathResidueCount, 0)
+      assert.ok(logLayout.lineCount > 0)
+      assert.ok(logLayout.dialogWidth > 320)
+      assert.ok(logLayout.dialogHeight > 240)
+      assert.ok(logLayout.viewerHeight > 180)
+      const logDialog = await tab.$("#logDialog")
+      assert.ok(logDialog)
+      const screenshotPath = resolve(".scratch/log-viewer-no-log-path.png")
+      mkdirSync(dirname(screenshotPath), { recursive: true })
+      writeFileSync(screenshotPath, await logDialog.screenshot({}))
+
       await tab.waitForFunction(() => {
         const button = document.querySelector("#btnLogCopy")
         return button instanceof HTMLButtonElement && !button.disabled

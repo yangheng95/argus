@@ -1273,7 +1273,6 @@ describe("overlay architecture guards", () => {
 
     for (const className of [
       "log-viewer",
-      "log-path",
       "log-line",
       "log-line-head",
       "log-level",

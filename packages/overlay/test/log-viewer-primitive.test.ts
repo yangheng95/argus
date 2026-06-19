@@ -37,6 +37,7 @@ describe("LogViewer primitives", () => {
     expect(source).not.toContain("function scanBalancedLogValue")
     expect(source).not.toContain("<Index")
     expect(source).not.toContain("setupAutoScroll")
+    expect(source).not.toContain("log-path")
   })
 
   test("log virtual list owns a stable visible height", () => {
