@@ -19,6 +19,7 @@ import langSQL from "highlight.js/lib/languages/sql"
 import langMD from "highlight.js/lib/languages/markdown"
 import langDiff from "highlight.js/lib/languages/diff"
 import { iconHtml } from "./icon-html"
+import { imagePreviewTriggerLabel } from "./image-preview-label"
 
 export const MARKDOWN_RENDER_CHAR_LIMIT = 120_000
 export const CODE_BLOCK_RENDER_CHAR_LIMIT = 120_000
@@ -184,7 +185,8 @@ marked.use({
       if (!src) return escapeHtml(text || href || "")
       const titleAttr = title ? ` title="${escapeAttr(title)}"` : ""
       const alt = escapeAttr(text || "")
-      return `<button type="button" class="msg-image-trigger" data-image-preview-trigger="true" data-image-preview-src="${escapeAttr(src)}" data-image-preview-alt="${alt}" title="Open image preview" aria-label="Open image preview"><img class="md-img" src="${escapeAttr(src)}" alt="${alt}"${titleAttr} loading="lazy"></button>`
+      const triggerLabel = escapeAttr(imagePreviewTriggerLabel(text || ""))
+      return `<button type="button" class="msg-image-trigger" data-image-preview-trigger="true" data-image-preview-src="${escapeAttr(src)}" data-image-preview-alt="${alt}" title="${triggerLabel}" aria-label="${triggerLabel}"><img class="md-img" src="${escapeAttr(src)}" alt="${alt}"${titleAttr} loading="lazy"></button>`
     },
   },
 })

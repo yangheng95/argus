@@ -7,6 +7,7 @@ import {
   clampImagePreviewScale,
   type ImagePreviewSize,
 } from "../utils/image-preview-scale"
+import { imagePreviewTriggerLabel } from "../utils/image-preview-label"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
@@ -28,6 +29,7 @@ class ImageCopyError extends Error {}
 
 export function PreviewableImage(props: { src: string; alt?: string; triggerClass?: string; imageClass?: string }) {
   const alt = () => props.alt || ""
+  const triggerLabel = () => imagePreviewTriggerLabel(alt())
   const triggerClass = () => ["msg-image-trigger", props.triggerClass].filter(Boolean).join(" ")
   const imageClass = () => ["md-img", props.imageClass].filter(Boolean).join(" ")
 
@@ -36,8 +38,8 @@ export function PreviewableImage(props: { src: string; alt?: string; triggerClas
       type="button"
       class={triggerClass()}
       data-image-preview-trigger="true"
-      title="Open image preview"
-      aria-label="Open image preview"
+      title={triggerLabel()}
+      aria-label={triggerLabel()}
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()

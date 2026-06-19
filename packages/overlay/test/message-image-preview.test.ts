@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { calculateImagePreviewFitScale, calculateImagePreviewOpenScale } from "../src/utils/image-preview-scale"
+import { imagePreviewTriggerLabel } from "../src/utils/image-preview-label"
 import { renderMarkdown } from "../src/utils/markdown"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
@@ -22,7 +23,23 @@ describe("message image preview", () => {
     expect(html).toContain('data-image-preview-trigger="true"')
     expect(html).toContain('data-image-preview-src="https://example.com/tiny.png"')
     expect(html).toContain('data-image-preview-alt="tiny"')
+    expect(html).toContain('title="Open image preview: tiny"')
+    expect(html).toContain('aria-label="Open image preview: tiny"')
+    expect(html).not.toMatch(/aria-label="Open image preview"/)
     expect(html).toContain('class="md-img"')
+  })
+
+  test("image preview trigger labels include alt text from one helper", () => {
+    expect(imagePreviewTriggerLabel("tiny")).toBe("Open image preview: tiny")
+    expect(imagePreviewTriggerLabel("  browser evidence  ")).toBe("Open image preview: browser evidence")
+    expect(imagePreviewTriggerLabel("")).toBe("Open image preview")
+
+    const component = read("src/components/ImagePreview.tsx")
+    const markdown = read("src/utils/markdown.ts")
+    expect(component).toContain("imagePreviewTriggerLabel(alt())")
+    expect(markdown).toContain("imagePreviewTriggerLabel(text || \"\")")
+    expect(component).not.toMatch(/aria-label="Open image preview"/)
+    expect(markdown).not.toMatch(/aria-label="Open image preview"/)
   })
 
   test("file image parts use the shared previewable image component", () => {
