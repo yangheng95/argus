@@ -802,8 +802,8 @@ document.addEventListener(
       btn.title = text
       setTimeout(() => {
         delete btn.dataset.copied
-        btn.setAttribute("aria-label", prev || "Copy code")
-        btn.title = prev || "Copy code"
+        btn.setAttribute("aria-label", prev || t("markdown.copy_code"))
+        btn.title = prev || t("markdown.copy_code")
       }, 1400)
     }
     const decoded = source
@@ -815,10 +815,10 @@ document.addEventListener(
     void (async () => {
       try {
         await navigator.clipboard.writeText(decoded)
-        flash("Copied")
+        flash(t("markdown.copied"))
       } catch (err) {
         console.error("[md-copy] clipboard write failed", err)
-        flash("Copy failed")
+        flash(t("markdown.copy_failed"))
       }
     })()
   },

@@ -78,8 +78,8 @@ test("Markdown code copy uses Button focus chrome and copied state", async () =>
                   data-chrome="icon-action"
                   data-ui="markdown-code-copy"
                   data-md-copy="console.log(&quot;ok&quot;)"
-                  title="Copy code"
-                  aria-label="Copy code"
+                  title="复制代码"
+                  aria-label="复制代码"
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M8 8h10v12H8zM6 16H4V4h12v2" fill="none" stroke="currentColor" stroke-width="2" />
@@ -93,8 +93,8 @@ test("Markdown code copy uses Button focus chrome and copied state", async () =>
             document.querySelector('[data-ui="markdown-code-copy"]').addEventListener("click", (event) => {
               const button = event.currentTarget;
               button.dataset.copied = "true";
-              button.setAttribute("aria-label", "Copied");
-              button.title = "Copied";
+              button.setAttribute("aria-label", "已复制");
+              button.title = "已复制";
               document.body.dataset.copied = button.getAttribute("data-md-copy") || "";
             });
           </script>
@@ -125,7 +125,7 @@ test("Markdown code copy uses Button focus chrome and copied state", async () =>
       chrome: "icon-action",
       dataUi: "markdown-code-copy",
       copyPayload: 'console.log("ok")',
-      ariaLabel: "Copy code",
+      ariaLabel: "复制代码",
     })
 
     await page.keyboard.press("Tab")
@@ -176,8 +176,8 @@ test("Markdown code copy uses Button focus chrome and copied state", async () =>
       }
     })
     assert.equal(copied.copied, "true")
-    assert.equal(copied.ariaLabel, "Copied")
-    assert.equal(copied.title, "Copied")
+    assert.equal(copied.ariaLabel, "已复制")
+    assert.equal(copied.title, "已复制")
     assert.equal(copied.bodyCopied, 'console.log("ok")')
     assert.notEqual(copied.backgroundColor, "rgba(0, 0, 0, 0)")
     assert.notEqual(copied.boxShadow, "none")

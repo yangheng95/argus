@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | [2026-06-19-image-preview-dialog-i18n-source.md](2026-06-19-image-preview-dialog-i18n-source.md)               | Image Preview Dialog i18n Source |
+| [2026-06-19-markdown-code-copy-i18n-source.md](2026-06-19-markdown-code-copy-i18n-source.md)                   | Markdown Code Copy i18n Source |
 | [2026-06-19-about-issues-link-target.md](2026-06-19-about-issues-link-target.md)                               | About Issues Link Target |
 | [2026-06-19-vscode-media-ui-dist-vite-single-source.md](2026-06-19-vscode-media-ui-dist-vite-single-source.md) | VS Code Media UI Dist-Vite Single Source |
 | [2026-06-19-session-dialog-body-single-source.md](2026-06-19-session-dialog-body-single-source.md)             | Session Dialog Body Single Source |

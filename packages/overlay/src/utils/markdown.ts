@@ -20,6 +20,7 @@ import langMD from "highlight.js/lib/languages/markdown"
 import langDiff from "highlight.js/lib/languages/diff"
 import { iconHtml } from "./icon-html"
 import { imagePreviewTriggerLabel } from "./image-preview-label"
+import { t } from "./i18n"
 
 export const MARKDOWN_RENDER_CHAR_LIMIT = 120_000
 export const CODE_BLOCK_RENDER_CHAR_LIMIT = 120_000
@@ -110,11 +111,12 @@ function wrapCodeBlock(rawText: string, language: string, highlightedHtml: strin
   const langAttr = language ? `language-${language}` : ""
   const langLabel = language || "code"
   const dataSource = escapeAttr(rawText)
+  const copyLabel = escapeAttr(t("markdown.copy_code"))
   return [
     `<div class="md-code" data-lang="${escapeAttr(language)}">`,
     `<div class="md-code-toolbar">`,
     `<span class="md-code-lang">${escapeHtml(langLabel)}</span>`,
-    `<button type="button" class="oc-button md-code-copy" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="icon-action" data-ui="markdown-code-copy" data-md-copy="${dataSource}" title="Copy code" aria-label="Copy code">`,
+    `<button type="button" class="oc-button md-code-copy" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="icon-action" data-ui="markdown-code-copy" data-md-copy="${dataSource}" title="${copyLabel}" aria-label="${copyLabel}">`,
     iconHtml("copy", 12),
     `</button>`,
     `</div>`,

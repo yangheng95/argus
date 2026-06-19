@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { setLocale } from "../src/utils/i18n"
 import { installIconHtmlRenderer } from "../src/utils/icon-html"
 import {
   CODE_BLOCK_RENDER_LINE_LIMIT,
@@ -9,13 +10,21 @@ import {
   renderCodeBlock,
   renderMarkdown,
 } from "../src/utils/markdown"
+import { installRealOverlayI18n } from "./fixtures/i18n"
 
 const MARKDOWN_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/markdown.css"), "utf8")
+const MARKDOWN_SOURCE = readFileSync(join(import.meta.dir, "../src/utils/markdown.ts"), "utf8")
+const MAIN_SOURCE = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
+const EN_US = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")) as Record<string, unknown>
+const ZH_CN = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")) as Record<string, unknown>
 
 const disposeIconHtmlRenderer = installIconHtmlRenderer(({ name, size }) => {
   if (name !== "copy") throw new Error(`Unknown test icon "${name}"`)
   return `<svg data-test-icon="${name}" width="${size}" height="${size}" aria-hidden="true"></svg>`
 })
+
+installRealOverlayI18n()
+await setLocale("en-US")
 
 afterAll(() => {
   disposeIconHtmlRenderer()
@@ -118,7 +127,23 @@ test("renderCodeBlock copy action uses the shared Button contract", () => {
   expect(result.html).toContain('title="Copy code"')
   expect(result.html).toContain('aria-label="Copy code"')
   expect(result.html).toContain('data-test-icon="copy"')
+  expect(MARKDOWN_SOURCE).toContain('t("markdown.copy_code")')
+  expect(MAIN_SOURCE).toContain('flash(t("markdown.copied"))')
+  expect(MAIN_SOURCE).toContain('flash(t("markdown.copy_failed"))')
+  expect(MAIN_SOURCE).not.toContain('flash("Copied")')
+  expect(MAIN_SOURCE).not.toContain('flash("Copy failed")')
   expect(MARKDOWN_CSS).toContain('.oc-button[data-ui="markdown-code-copy"]')
   expect(MARKDOWN_CSS).toContain('.oc-button[data-ui="markdown-code-copy"][data-copied="true"]')
   expect(MARKDOWN_CSS).not.toMatch(/\.md-code-copy:(?:hover|focus-visible)\b/)
+})
+
+test("renderCodeBlock copy action locale keys are complete", () => {
+  for (const key of ["markdown.copy_code", "markdown.copied", "markdown.copy_failed"]) {
+    expect(EN_US[key]).toEqual(expect.any(String))
+    expect(ZH_CN[key]).toEqual(expect.any(String))
+    expect(EN_US[key]).not.toBe(key)
+    expect(ZH_CN[key]).not.toBe(key)
+  }
+  expect(EN_US["markdown.copy_code"]).toBe("Copy code")
+  expect(ZH_CN["markdown.copy_code"]).toBe("复制代码")
 })
