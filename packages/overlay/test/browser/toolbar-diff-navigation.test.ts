@@ -252,6 +252,8 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
         tabID: tab.id,
         panelRole: panel?.getAttribute("role") ?? "",
         labelledby: panel?.getAttribute("aria-labelledby") ?? "",
+        panelSelected: panel?.hasAttribute("data-selected") ?? false,
+        panelActive: panel?.getAttribute("data-active") ?? null,
         panelVisible: Boolean(box && box.width > 0 && box.height > 0),
       }
     })
@@ -260,6 +262,8 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.ok(diffTabPanelState.controls)
     assert.equal(diffTabPanelState.panelRole, "tabpanel")
     assert.equal(diffTabPanelState.labelledby, diffTabPanelState.tabID)
+    assert.equal(diffTabPanelState.panelSelected, true)
+    assert.equal(diffTabPanelState.panelActive, null)
     assert.equal(diffTabPanelState.panelVisible, true)
 
     await page.$eval('[data-ui="file-changes-view-tab"][data-value="changes"]', (node) =>
@@ -278,6 +282,8 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
         tabID: tab.id,
         panelRole: panel?.getAttribute("role") ?? "",
         labelledby: panel?.getAttribute("aria-labelledby") ?? "",
+        panelSelected: panel?.hasAttribute("data-selected") ?? false,
+        panelActive: panel?.getAttribute("data-active") ?? null,
         panelVisible: Boolean(box && box.width > 0 && box.height > 0),
       }
     })
@@ -285,6 +291,8 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.ok(changesTabPanelState.controls)
     assert.equal(changesTabPanelState.panelRole, "tabpanel")
     assert.equal(changesTabPanelState.labelledby, changesTabPanelState.tabID)
+    assert.equal(changesTabPanelState.panelSelected, true)
+    assert.equal(changesTabPanelState.panelActive, null)
     assert.equal(changesTabPanelState.panelVisible, true)
 
     const listboxSelectedState = await page.evaluate(() => {

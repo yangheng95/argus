@@ -102,6 +102,11 @@ test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA",
       expect(tag).not.toContain("onClick=")
       expect(tag).not.toContain("active=")
     }
+    const tabPanelOpenTags = source.match(/<TabPanel\b[^>]*>/g) ?? []
+    expect(tabPanelOpenTags.length).toBeGreaterThan(0)
+    for (const tag of tabPanelOpenTags) {
+      expect(tag).not.toContain("data-active=")
+    }
   }
 })
 
