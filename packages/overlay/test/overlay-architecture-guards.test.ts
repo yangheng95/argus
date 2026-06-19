@@ -731,7 +731,11 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toMatch(/(^|\n)\.section:last-child\s*\{/)
     expect(inspectorSurface).not.toMatch(/\.oc-section:last-child\s*\{/)
     expect(inspectorSurface).toMatch(/\.oc-section__head::-webkit-details-marker\s*\{/)
-    expect(inspectorSurface).toMatch(/\.oc-section__head:hover\s*\{/)
+    expect(inspectorSurface).toMatch(/\.oc-section__head:hover,\s*\.oc-section__head:focus-visible\s*\{/)
+    expect(inspectorSurface).toMatch(
+      /\.oc-section\s*>\s*\.oc-section__head:focus-visible\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 var\(--oc-border-width\) var\(--accent\);/,
+    )
+    expect(inspectorSurface).not.toMatch(/\.oc-section[^{}]*\.oc-section__head:focus-visible\s*\{[^}]*outline:\s*none/s)
     expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 

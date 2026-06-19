@@ -381,6 +381,16 @@ describe("CSS class rename guards — no stale .section-* selectors", () => {
     expect(workspaceCss).toMatch(/\.oc-section\[open\]\s*>\s*\.oc-section__head\s*\{/)
     expect(workspaceCss).not.toMatch(/\.section-head\s*[,{:]/)
   })
+
+  test("section summary hover and keyboard focus share the inspector surface owner", () => {
+    expect(inspectorCss).toMatch(
+      /\.oc-section__head:hover,\s*\.oc-section__head:focus-visible\s*\{[\s\S]*?var\(--ui-highlight-tone\)/,
+    )
+    expect(inspectorCss).toMatch(
+      /\.oc-section\s*>\s*\.oc-section__head:focus-visible\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 var\(--oc-border-width\) var\(--accent\);/,
+    )
+    expect(inspectorCss).not.toMatch(/\.oc-section[^{}]*\.oc-section__head:focus-visible\s*\{[^}]*outline:\s*none/s)
+  })
 })
 
 // ── index.html load order ─────────────────────────────────────────────
