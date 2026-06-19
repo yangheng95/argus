@@ -280,13 +280,6 @@
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, currentColor 10%, transparent);
 }
 
-.task-row-badge-icon {
-  flex: 0 0 auto;
-  width: calc(13px * var(--ui-scale));
-  height: calc(13px * var(--ui-scale));
-  opacity: var(--ui-opacity-subtle);
-}
-
 /* The badge text label is visible (not sr-only) once the chip has
    width — see status tone variants below. */
 .task-row-badge-text {
@@ -979,17 +972,8 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Extracted from styles.css 2026-05-04: collapsed sidebar
-   variants + global task-current readout.
+   Extracted from styles.css 2026-05-04: collapsed sidebar variants.
    ───────────────────────────────────────────────────────────── */
-
-.global-task-current {
-  display: inline-block;
-  font-size: var(--ui-font-meta);
-  color: var(--accent);
-  opacity: var(--ui-opacity-subtle);
-  margin-top: calc(2px * var(--ui-scale));
-}
 
 .sidebar[data-collapsed="true"] {
   width: var(--ui-collapsed-pane-width);

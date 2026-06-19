@@ -2382,22 +2382,6 @@
   font-size: var(--ui-font-small);
 }
 
-/* Inspector ("sections" container) bounds the height of the
- * narrative blocks the operator scrolls through (plan summary,
- * overview, overview-next-step, goal desc, change-path). Each card scrolls vertically
- * inside the rail without pushing the rail itself off-screen. The
- * 112px ceiling is a density choice for the rail-vs-content split
- * — same value pre-extraction, just owned by the inspector
- * surface instead of the legacy God CSS. */
-.sections .plan-summary,
-.sections .overview-summary,
-.sections .overview-next-step,
-.sections .change-path {
-  max-height: calc(112px * var(--ui-scale));
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-
 /* ─────────────────────────────────────────────────────────────
    Inspector misc (extracted 2026-05-04): embedded session list panel.
    ───────────────────────────────────────────────────────────── */
