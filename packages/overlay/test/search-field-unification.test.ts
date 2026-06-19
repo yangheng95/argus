@@ -26,6 +26,8 @@ test("task, file, and memory search inputs use the shared search-field primitive
   expect(INSPECTOR_CSS).not.toContain(".file-explorer-search {")
   expect(MEMORY_PANEL_SOURCE).not.toContain('class="knowledge-search"')
   expect(SETTINGS_CSS).not.toMatch(/\.knowledge-search\b/)
+  expect(SETTINGS_CSS).not.toMatch(/\.s-toolbar-search\b/)
+  expect(SETTINGS_CSS).toMatch(/\.s-toolbar\s*>\s*\.field-input\s*\{/)
 })
 
 test("file search clear action uses the Button primitive", () => {

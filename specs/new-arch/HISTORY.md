@@ -44,6 +44,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-retire-log-path-residue.md](2026-06-19-retire-log-path-residue.md)                                 | Retire Log Path Residue |
 | [2026-06-19-executor-model-listbox-primitive.md](2026-06-19-executor-model-listbox-primitive.md)               | Executor Model Listbox Primitive |
 | [2026-06-19-vsix-skip-build-media-ui-contrast-guard.md](2026-06-19-vsix-skip-build-media-ui-contrast-guard.md) | VSIX Skip Build Media UI Contrast Guard |
+| [2026-06-19-retire-toolbar-search-residue.md](2026-06-19-retire-toolbar-search-residue.md)                     | Retire Toolbar Search Residue |
 
 ## 2026-06-18
 
