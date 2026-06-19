@@ -101,18 +101,27 @@ test("Card header metadata copy is localized and uses supported placeholders", (
 })
 
 test("CardHeader keeps disclosure and action buttons as sibling controls", () => {
+  expect(CARD_HEADER_TSX).toContain('import { Button } from "./ui/Button"')
+  expect(CARD_HEADER_TSX).toContain("<Button")
   expect(CARD_HEADER_TSX).toContain('class="card__head-main"')
+  expect(CARD_HEADER_TSX).toContain('data-ui="card-head-main"')
+  expect(CARD_HEADER_TSX).toContain('variant="ghost"')
+  expect(CARD_HEADER_TSX).toContain('size="mini"')
+  expect(CARD_HEADER_TSX).toContain('tone="neutral"')
   expect(CARD_HEADER_TSX).toContain("aria-expanded={props.collapsible ? props.expanded : undefined}")
+  expect(CARD_HEADER_TSX).not.toContain("<button")
   expect(CARD_HEADER_TSX).not.toContain('role={props.collapsible ? "button" : undefined}')
   expect(CARD_HEADER_TSX).not.toContain("tabindex={props.collapsible ? 0 : undefined}")
   expect(CARD_HEADER_TSX).not.toContain("onKeyDown={(e) =>")
-  expect(CARD_CSS).toContain(".card__head-main")
+  expect(CARD_CSS).toContain('.oc-button[data-ui="card-head-main"].card__head-main')
   expect(CARD_CSS).toContain(".card__head-main:focus-visible")
 
-  const mainButton = CARD_HEADER_TSX.indexOf('class="card__head-main"')
+  const mainButton = CARD_HEADER_TSX.indexOf('data-ui="card-head-main"')
+  const mainButtonClose = CARD_HEADER_TSX.indexOf("</Button>")
   const actions = CARD_HEADER_TSX.indexOf("<CardHeaderChrome")
   expect(mainButton).toBeGreaterThan(0)
-  expect(actions).toBeGreaterThan(mainButton)
+  expect(mainButtonClose).toBeGreaterThan(mainButton)
+  expect(actions).toBeGreaterThan(mainButtonClose)
 })
 
 test("CardHeader action controls use Button primitives", () => {

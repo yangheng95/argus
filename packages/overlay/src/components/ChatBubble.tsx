@@ -27,6 +27,7 @@ import { IntegrityBody } from "./IntegrityCard"
 import { ReviewStreamSection } from "./ReviewStreamSection"
 import { storeCardNode } from "./StoreCardNode"
 import { TracePanel } from "./TracePanel"
+import { Button } from "./ui/Button"
 
 function UnsupportedChatBubbleChild(props: { child: CardNode; parentID: string }): null {
   throw new Error(`ChatBubble: unsupported child kind "${props.child.kind}" for ${props.parentID}`)
@@ -251,9 +252,13 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
             data-align={align()}
           >
             <div class="chat-bubble__title-row">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="mini"
+                tone="neutral"
                 class="chat-bubble__head-main"
+                data-ui="chat-bubble-head-main"
                 data-align={align()}
                 aria-expanded={expanded()}
                 onClick={toggleExpanded}
@@ -267,7 +272,17 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                     </span>
                   </span>
                 </span>
-              </button>
+                <Show when={collapsedPreview()}>
+                  <span class="card__preview-row">
+                    <span class="card__collapsed-preview" title={collapsedPreview()}>
+                      {collapsedPreview()}
+                    </span>
+                  </span>
+                </Show>
+                <Show when={todoSummary()}>
+                  {(summary) => <CardTodoSummary summary={summary()} />}
+                </Show>
+              </Button>
               <CardHeaderChrome
                 node={props.node}
                 actionsClass="chat-bubble__actions"
@@ -279,16 +294,6 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 onAgentCancel={directAgentSessionID() ? onAgentCancel : undefined}
               />
             </div>
-            <Show when={collapsedPreview()}>
-              <div class="card__preview-row">
-                <span class="card__collapsed-preview" title={collapsedPreview()}>
-                  {collapsedPreview()}
-                </span>
-              </div>
-            </Show>
-            <Show when={todoSummary()}>
-              {(summary) => <CardTodoSummary summary={summary()} />}
-            </Show>
           </div>
           <Show when={expanded()}>
             <div class="chat-bubble__body">

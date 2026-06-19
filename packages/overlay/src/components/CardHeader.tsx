@@ -10,6 +10,7 @@ import { t } from "../utils/i18n"
 import { goalRevisionLabel } from "../utils/goal-label"
 import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"
 import { CardTodoSummary } from "./CardTodoSummary"
+import { Button } from "./ui/Button"
 
 function leadingGlyph(node: CardNode): string {
   if (node.kind === "tool") return displayToolIcon(node.stage || node.title)
@@ -67,9 +68,13 @@ export function CardHeader(props: {
       class="card__head"
       classList={{ "card__head--with-meta": hasSecondaryText() }}
     >
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="mini"
+        tone="neutral"
         class="card__head-main"
+        data-ui="card-head-main"
         aria-expanded={props.collapsible ? props.expanded : undefined}
         onClick={() => {
           if (!props.collapsible) return
@@ -111,7 +116,7 @@ export function CardHeader(props: {
             {(summary) => <CardTodoSummary summary={summary()} />}
           </Show>
         </span>
-      </button>
+      </Button>
       <CardHeaderChrome
         node={props.node}
         actionsClass="card__actions"
