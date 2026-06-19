@@ -229,8 +229,9 @@ test("app dialog task decision uses the real host and segmented control", async 
       const form = document.querySelector<HTMLElement>(".app-dialog-form--decision")
       const startStyle = start ? getComputedStyle(start) : null
       const queueStyle = queue ? getComputedStyle(queue) : null
-      const badgeStyle = document.querySelector<HTMLElement>(".app-dialog-decision__badge")
-        ? getComputedStyle(document.querySelector<HTMLElement>(".app-dialog-decision__badge")!)
+      const badge = document.querySelector<HTMLElement>('[data-ui="app-dialog-recommended-badge"]')
+      const badgeStyle = badge
+        ? getComputedStyle(badge)
         : null
       const bodyStyle = document.querySelector<HTMLElement>(".app-dialog-decision__choice-body")
         ? getComputedStyle(document.querySelector<HTMLElement>(".app-dialog-decision__choice-body")!)
@@ -251,6 +252,11 @@ test("app dialog task decision uses the real host and segmented control", async 
         queuePressed: queue?.getAttribute("aria-pressed") ?? "",
         queueDataPressed: queue?.hasAttribute("data-pressed") ?? false,
         recommended: start?.dataset.recommended ?? "",
+        retiredBadgePresent: document.querySelector(".app-dialog-decision__badge") !== null,
+        badgeText: badge?.textContent?.trim() ?? "",
+        badgeClass: badge?.className ?? "",
+        badgeTone: badge?.dataset.tone ?? "",
+        badgeSize: badge?.dataset.size ?? "",
         focusedValue: (document.activeElement as HTMLElement | null)?.dataset?.value ?? "",
         startBorder: startStyle?.borderColor ?? "",
         queueBorder: queueStyle?.borderColor ?? "",
@@ -281,6 +287,10 @@ test("app dialog task decision uses the real host and segmented control", async 
         queuePressed: initial.queuePressed,
         queueDataPressed: initial.queueDataPressed,
         recommended: initial.recommended,
+        retiredBadgePresent: initial.retiredBadgePresent,
+        badgeText: initial.badgeText,
+        badgeTone: initial.badgeTone,
+        badgeSize: initial.badgeSize,
         focusedValue: initial.focusedValue,
         activeAppearance: initial.activeAppearance,
       },
@@ -297,11 +307,16 @@ test("app dialog task decision uses the real host and segmented control", async 
         queuePressed: "false",
         queueDataPressed: false,
         recommended: "true",
+        retiredBadgePresent: false,
+        badgeText: "Recommended",
+        badgeTone: "accent",
+        badgeSize: "sm",
         focusedValue: "start",
         activeAppearance: "none",
       },
       JSON.stringify({ initial, requestLog }, null, 2),
     )
+    assert.match(initial.badgeClass, /\boc-badge\b/)
     assert.notEqual(initial.startBorder, initial.queueBorder)
     assert.notEqual(initial.startBackground, initial.queueBackground)
     assert.notEqual(initial.badgeColor, "transparent")

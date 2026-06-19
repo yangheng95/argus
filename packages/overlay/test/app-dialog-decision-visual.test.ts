@@ -45,4 +45,26 @@ describe("app dialog decision visual treatment", () => {
     expect(css).not.toContain('.app-dialog-decision__choice[data-active="true"]')
     expect(css).not.toContain("data-selected")
   })
+
+  test("recommended label uses the shared Badge primitive, not private dialog chrome", () => {
+    const host = readText("src/components/AppDialogHost.tsx")
+    const dialogCss = readText("src/styles/surfaces/dialog.css")
+    const badge = readText("src/components/ui/Badge.tsx")
+    const badgeCss = readText("src/styles/primitives/badge.css")
+    const indexHtml = readText("src/index.html")
+
+    expect(host).toContain('import { Badge } from "./ui/Badge"')
+    expect(host).toContain('<Badge tone="accent" size="sm" data-ui="app-dialog-recommended-badge">')
+    expect(host).not.toContain("app-dialog-decision__badge")
+    expect(dialogCss).not.toContain(".app-dialog-decision__badge")
+    expect(badge).toContain("export function Badge")
+    expect(badge).toContain("className()")
+    expect(badgeCss).toContain(".oc-badge")
+    expect(badgeCss).toContain('.oc-badge[data-tone="accent"]')
+    expect(badgeCss).toContain('.oc-badge[data-size="sm"]')
+    expect(indexHtml.indexOf('styles/primitives/button.css')).toBeLessThan(
+      indexHtml.indexOf('styles/primitives/badge.css'),
+    )
+    expect(indexHtml.indexOf('styles/primitives/badge.css')).toBeLessThan(indexHtml.indexOf('styles/primitives/tabs.css'))
+  })
 })

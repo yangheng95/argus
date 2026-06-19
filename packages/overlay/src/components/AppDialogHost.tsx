@@ -3,6 +3,7 @@ import { dialogStore, setDialogStore } from "../store/dialog"
 import { dismissAppDialog, settleAppDialog } from "../services/app-dialog"
 import { t } from "../utils/i18n"
 import { Dialog } from "./primitives/Dialog"
+import { Badge } from "./ui/Badge"
 import { Button } from "./ui/Button"
 import { SegmentedControl, type SegmentedControlOption } from "./ui/SegmentedControl"
 import { SelectControl } from "./ui/SelectControl"
@@ -146,7 +147,9 @@ export function AppDialogHost() {
                 <span class="app-dialog-decision__choice-top">
                   <span>{option.label}</span>
                   <Show when={dialogStore.app.recommendedValue === option.value}>
-                    <span class="app-dialog-decision__badge">{t("task.queue_decision.recommended")}</span>
+                    <Badge tone="accent" size="sm" data-ui="app-dialog-recommended-badge">
+                      {t("task.queue_decision.recommended")}
+                    </Badge>
                   </Show>
                 </span>
                 <span class="app-dialog-decision__choice-body">{decisionDescription(option.value)}</span>
