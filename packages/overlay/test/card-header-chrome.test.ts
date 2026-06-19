@@ -9,6 +9,8 @@ const CARD_HEADER_CHROME_TSX = readFileSync(
 )
 const CHAT_BUBBLE_TSX = readFileSync(join(import.meta.dir, "..", "src", "components", "ChatBubble.tsx"), "utf8")
 const CARD_CSS = readFileSync(join(import.meta.dir, "..", "src", "styles", "surfaces", "card.css"), "utf8")
+const EN_MESSAGES = JSON.parse(readFileSync(join(import.meta.dir, "..", "src", "i18n", "en-US.json"), "utf8"))
+const ZH_MESSAGES = JSON.parse(readFileSync(join(import.meta.dir, "..", "src", "i18n", "zh-CN.json"), "utf8"))
 
 test("CardHeader does not render status or copy chrome in the message header", () => {
   expect(CARD_HEADER_TSX).not.toContain("statusBadge")
@@ -60,6 +62,42 @@ test("Card header action rail has one TSX owner", () => {
     expect(delegated).not.toContain('formatCostUSD')
     expect(delegated).not.toContain('formatTokenCount')
   }
+})
+
+test("Card header metadata hints use one focusable Tooltip owner", () => {
+  expect(CARD_HEADER_CHROME_TSX).toContain('import * as Tooltip from "@kobalte/core/tooltip"')
+  expect(CARD_HEADER_CHROME_TSX).toContain("function CardMetaHint")
+  expect(CARD_HEADER_CHROME_TSX).toContain("<Tooltip.Root")
+  expect(CARD_HEADER_CHROME_TSX).toContain("<Tooltip.Trigger")
+  expect(CARD_HEADER_CHROME_TSX).toContain('as="span"')
+  expect(CARD_HEADER_CHROME_TSX).toContain("tabIndex={0}")
+  expect(CARD_HEADER_CHROME_TSX).toContain("<Tooltip.Content")
+
+  for (const dataUi of ["card-model-hint", "card-token-hint", "card-usage-hint"]) {
+    expect(CARD_HEADER_CHROME_TSX).toContain(`dataUi="${dataUi}"`)
+  }
+  expect(CARD_HEADER_CHROME_TSX).not.toContain('class="card__usage-hint" title={usageTip()}')
+  expect(CARD_HEADER_CHROME_TSX).toContain("aria-label={props.detail}")
+  expect(CARD_CSS).toContain(".card-meta-tooltip")
+  expect(CARD_CSS).toContain(".card__meta-chip:focus-visible")
+})
+
+test("Card header metadata copy is localized and uses supported placeholders", () => {
+  for (const messages of [EN_MESSAGES, ZH_MESSAGES]) {
+    expect(messages["card.context_tokens_tooltip"]).toContain("{{value}}")
+    expect(messages["card.context_tokens_tooltip"]).not.toMatch(/(^|[^{])\{value\}([^}]|$)/)
+    expect(messages["card.context_tokens_tooltip_estimated"]).toContain("{{value}}")
+    expect(messages["card.context_tokens_tooltip_estimated"]).not.toMatch(/(^|[^{])\{value\}([^}]|$)/)
+    expect(messages["card.session_model_settings"]).toBeTruthy()
+    expect(messages["card.usage_tooltip"]).toContain("{{detail}}")
+    expect(messages["card.usage_input_tokens"]).toContain("{{value}}")
+    expect(messages["card.usage_output_tokens"]).toContain("{{value}}")
+    expect(messages["card.usage_total_tokens"]).toContain("{{value}}")
+    expect(messages["card.usage_cost"]).toContain("{{value}}")
+  }
+  expect(CARD_HEADER_CHROME_TSX).toContain('t("card.session_model_settings")')
+  expect(CARD_HEADER_CHROME_TSX).not.toContain('"Session model settings"')
+  expect(CARD_HEADER_CHROME_TSX).toContain('t("card.usage_tooltip"')
 })
 
 test("CardHeader keeps disclosure and action buttons as sibling controls", () => {
