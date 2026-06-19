@@ -53,6 +53,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-project-ledger-group-toggle-button-primitive.md](2026-06-19-project-ledger-group-toggle-button-primitive.md) | Project Ledger Group Toggle Button Primitive |
 | [2026-06-19-retire-file-editor-nav-residue.md](2026-06-19-retire-file-editor-nav-residue.md)                       | Retire File Editor Nav Residue |
 | [2026-06-19-mission-task-projection-button-primitive.md](2026-06-19-mission-task-projection-button-primitive.md)     | Mission Task Projection Button Primitive |
+| [2026-06-19-retire-changes-group-foldable-residue.md](2026-06-19-retire-changes-group-foldable-residue.md)           | Retire Changes Group Foldable Residue |
 
 ## 2026-06-18
 

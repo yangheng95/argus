@@ -430,6 +430,7 @@ test("agent file changes render only through the right-panel Files workbench", (
   expect(changesCss).toContain(".changes-list-virtual-item")
   expect(changesCss).toContain(".changes-list-group")
   expect(changesCss).toContain(".changes-group-header")
+  expect(changesCss).not.toContain(".changes-group--foldable")
   expect(changesCss).toContain(".change-scope")
   expect(changesCss).not.toContain(".changes-goal-picker")
   expect(changesCss).not.toContain(".changes-tab")
