@@ -165,6 +165,8 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
       return {
         triggerTag: trigger?.tagName ?? "",
         triggerType: trigger?.getAttribute("type") ?? "",
+        triggerClass: trigger?.className ?? "",
+        triggerChrome: trigger?.dataset.chrome ?? "",
         pathButtonTag: pathButton?.tagName ?? "",
         triggerContainsPathButton: !!trigger && !!pathButton && trigger.contains(pathButton),
         pathButtonTriggerAncestor: !!pathButton?.closest('[data-ui="cwd-recent-trigger"]'),
@@ -191,6 +193,8 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
         pathButtonTriggerAncestor: false,
       },
     )
+    assert.match(semantics.triggerClass, /\boc-button\b/)
+    assert.equal(semantics.triggerChrome, "icon-action")
     assert.ok(["BUTTON", "SPAN"].includes(semantics.currentNodeTag), JSON.stringify(semantics))
     assert.deepEqual({
       currentNodeCurrent: semantics.currentNodeCurrent,
