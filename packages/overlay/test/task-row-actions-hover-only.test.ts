@@ -12,9 +12,11 @@
 //   * The action rail is absolutely positioned so hidden actions do not
 //     participate in the row's resting grid/flex sizing.
 //   * Rows with actions switch their right grid track to the action slot only
-//     while hovered/focused, so visible buttons do not cover the title.
-//   * The reveal selector group -- `:hover` and `:focus-within` -- promotes
-//     opacity to full and re-enables pointer events for every icon kind.
+//     while hovered or explicitly keyboard-open, so visible buttons do not
+//     cover the title.
+//   * The reveal selector group -- `:hover` and
+//     `[data-actions-keyboard-open="true"]` -- promotes opacity to full and
+//     re-enables pointer events for every icon kind.
 //   * The task-row rail overrides generic icon-action chrome so all icons
 //     share the same button shell and SVG size.
 //
@@ -89,49 +91,54 @@ describe("task-row action buttons hover-only contract", () => {
     expect(body!).toContain("pointer-events: none")
   })
 
-  test("hover/focus reveal restores opacity and pointer events", () => {
+  test("hover/keyboard-open reveal restores opacity and pointer events", () => {
     const body = extractRule(css, '.task-row-mini:hover .oc-button[data-ui="task-row-delete"]')
     expect(body).not.toBeNull()
     expect(body!).toContain("opacity: var(--ui-opacity-full)")
     expect(body!).toContain("pointer-events: auto")
   })
 
-  test("hover/focus reveal lets the action rail receive pointer events", () => {
+  test("hover/keyboard-open reveal lets the action rail receive pointer events", () => {
     const body = extractRule(css, ".task-row-mini:hover .task-row-actions")
     expect(body).not.toBeNull()
     expect(body!).toContain("pointer-events: auto")
   })
 
-  test("hover/focus action slot expands the right grid track", () => {
+  test("hover/keyboard-open action slot expands the right grid track", () => {
     const body = extractRule(css, ".task-row-mini:has(.task-row-actions):hover")
     expect(body).not.toBeNull()
     expect(body!).toContain("var(--task-row-actions-width)")
   })
 
-  test("hover/focus hides the timestamp while actions are visible", () => {
+  test("hover/keyboard-open hides the timestamp while actions are visible", () => {
     const body = extractRule(css, ".task-row-mini:has(.task-row-actions):hover .task-row-stamp")
     expect(body).not.toBeNull()
     expect(body!).toContain("opacity: 0")
     expect(body!).toContain("pointer-events: none")
   })
 
-  test("reveal selector group covers all five button kinds across hover/focus states", () => {
+  test("reveal selector group covers all five button kinds across hover/keyboard-open states", () => {
     const stripped = stripCssComments(css)
     const expected = [
       '.task-row-mini:hover .oc-button[data-ui="task-row-delete"]',
-      '.task-row-mini:focus-within .oc-button[data-ui="task-row-delete"]',
+      '.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-delete"]',
       '.task-row-mini:hover .oc-button[data-ui="task-row-cancel"]',
-      '.task-row-mini:focus-within .oc-button[data-ui="task-row-cancel"]',
+      '.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-cancel"]',
       '.task-row-mini:hover .oc-button[data-ui="task-row-rename"]',
-      '.task-row-mini:focus-within .oc-button[data-ui="task-row-rename"]',
+      '.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-rename"]',
       '.task-row-mini:hover .oc-button[data-ui="task-row-download"]',
-      '.task-row-mini:focus-within .oc-button[data-ui="task-row-download"]',
+      '.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-download"]',
       '.task-row-mini:hover .oc-button[data-ui="task-row-start-now"]',
-      '.task-row-mini:focus-within .oc-button[data-ui="task-row-start-now"]',
+      '.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-start-now"]',
     ]
     for (const selector of expected) {
       expect(stripped).toContain(selector)
     }
+    expect(stripped).not.toContain('.task-row-mini:focus-within .oc-button[data-ui="task-row-delete"]')
+    expect(stripped).not.toContain('.task-row-mini:focus-within .oc-button[data-ui="task-row-cancel"]')
+    expect(stripped).not.toContain('.task-row-mini:focus-within .oc-button[data-ui="task-row-rename"]')
+    expect(stripped).not.toContain('.task-row-mini:focus-within .oc-button[data-ui="task-row-download"]')
+    expect(stripped).not.toContain('.task-row-mini:focus-within .oc-button[data-ui="task-row-start-now"]')
     expect(stripped).not.toContain('.task-row-mini[data-active="true"] .oc-button[data-ui="task-row-delete"]')
     expect(stripped).not.toContain('.task-row-mini[data-active="true"] .oc-button[data-ui="task-row-cancel"]')
     expect(stripped).not.toContain('.task-row-mini[data-active="true"] .oc-button[data-ui="task-row-rename"]')

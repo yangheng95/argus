@@ -146,12 +146,12 @@
 }
 
 .task-row-mini:has(.task-row-actions):hover,
-.task-row-mini:has(.task-row-actions):focus-within {
+.task-row-mini[data-actions-keyboard-open="true"]:has(.task-row-actions) {
   grid-template-columns: calc(20px * var(--ui-scale)) 0 minmax(0, 1fr) var(--task-row-actions-width);
 }
 
 .task-row-mini[data-draggable="true"]:has(.task-row-actions):hover,
-.task-row-mini[data-draggable="true"]:has(.task-row-actions):focus-within {
+.task-row-mini[data-draggable="true"][data-actions-keyboard-open="true"]:has(.task-row-actions) {
   grid-template-columns: calc(20px * var(--ui-scale)) calc(14px * var(--ui-scale)) minmax(0, 1fr) var(
       --task-row-actions-width
     );
@@ -567,26 +567,26 @@
 }
 
 .task-row-mini:hover .task-row-actions,
-.task-row-mini:focus-within .task-row-actions {
+.task-row-mini[data-actions-keyboard-open="true"] .task-row-actions {
   pointer-events: auto;
 }
 
 .task-row-mini:hover .oc-button[data-ui="task-row-delete"],
-.task-row-mini:focus-within .oc-button[data-ui="task-row-delete"],
+.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-delete"],
 .task-row-mini:hover .oc-button[data-ui="task-row-cancel"],
-.task-row-mini:focus-within .oc-button[data-ui="task-row-cancel"],
+.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-cancel"],
 .task-row-mini:hover .oc-button[data-ui="task-row-rename"],
-.task-row-mini:focus-within .oc-button[data-ui="task-row-rename"],
+.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-rename"],
 .task-row-mini:hover .oc-button[data-ui="task-row-download"],
-.task-row-mini:focus-within .oc-button[data-ui="task-row-download"],
+.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-download"],
 .task-row-mini:hover .oc-button[data-ui="task-row-start-now"],
-.task-row-mini:focus-within .oc-button[data-ui="task-row-start-now"] {
+.task-row-mini[data-actions-keyboard-open="true"] .oc-button[data-ui="task-row-start-now"] {
   opacity: var(--ui-opacity-full);
   pointer-events: auto;
 }
 
 .task-row-mini:has(.task-row-actions):hover .task-row-stamp,
-.task-row-mini:has(.task-row-actions):focus-within .task-row-stamp {
+.task-row-mini[data-actions-keyboard-open="true"]:has(.task-row-actions) .task-row-stamp {
   opacity: 0;
   pointer-events: none;
 }

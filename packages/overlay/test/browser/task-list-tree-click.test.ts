@@ -268,6 +268,111 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     await page.click('.task-row-main[data-task-id="task-parent"]')
     await waitForCurrentTask(page, "task-parent")
 
+    const siblingRowSelector = '.task-row-mini[data-task-row-id="task-sibling"]'
+    const siblingMainSelector = `${siblingRowSelector} .task-row-main[data-task-id="task-sibling"]`
+    const siblingActionsSelector = `${siblingRowSelector} .task-row-actions`
+    await page.focus(siblingMainSelector)
+    const hiddenActions = await page.$eval(siblingRowSelector, (row: HTMLElement) => {
+      const actions = Array.from(row.querySelectorAll<HTMLElement>(".task-row-actions .oc-button"))
+      return {
+        open: row.getAttribute("data-actions-keyboard-open"),
+        actionCount: actions.length,
+        tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+        opacities: actions.map((action) => getComputedStyle(action).opacity),
+        activeInActions: row.querySelector(".task-row-actions")?.contains(document.activeElement) ?? false,
+      }
+    })
+    assert.equal(hiddenActions.open, null)
+    assert.ok(hiddenActions.actionCount > 0)
+    assert.deepEqual(hiddenActions.tabIndexes, Array(hiddenActions.actionCount).fill("-1"))
+    assert.equal(hiddenActions.opacities.every((value) => value === "0"), true)
+    assert.equal(hiddenActions.activeInActions, false)
+
+    await page.keyboard.press("Tab")
+    const skippedHiddenAction = await page.evaluate((selector) => {
+      const row = document.querySelector(selector)
+      const active = document.activeElement as HTMLElement | null
+      return {
+        activeDataUi: active?.dataset.ui ?? "",
+        activeTaskID: active?.dataset.taskId ?? "",
+        activeInSiblingActions: !!row?.querySelector(".task-row-actions")?.contains(active),
+      }
+    }, siblingRowSelector)
+    assert.equal(skippedHiddenAction.activeInSiblingActions, false, JSON.stringify(skippedHiddenAction, null, 2))
+
+    await page.focus(siblingMainSelector)
+    await page.keyboard.press("ArrowRight")
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const arrowState = await page.evaluate((selector) => {
+      const row = document.querySelector(selector)
+      const active = document.activeElement as HTMLElement | null
+      const main = row?.querySelector<HTMLElement>(".task-row-main")
+      const actions = Array.from(row?.querySelectorAll<HTMLElement>(".task-row-actions .oc-button") ?? [])
+      return {
+        open: row?.getAttribute("data-actions-keyboard-open"),
+        activeTag: active?.tagName ?? "",
+        activeClass: active?.className ?? "",
+        activeDataUi: active?.dataset.ui ?? "",
+        activeTaskID: active?.dataset.taskId ?? "",
+        mainFocused: active === main,
+        actionCount: actions.length,
+        tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+      }
+    }, siblingRowSelector)
+    assert.equal(arrowState.open, "true", JSON.stringify(arrowState, null, 2))
+    let keyboardAction = {
+      open: "",
+      activeDataUi: "",
+      activeInSiblingActions: false,
+      tabIndexes: [] as Array<string | null>,
+      opacities: [] as string[],
+    }
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      keyboardAction = await page.evaluate((selector) => {
+        const row = document.querySelector(selector)
+        const active = document.activeElement as HTMLElement | null
+        const actions = Array.from(row?.querySelectorAll<HTMLElement>(".task-row-actions .oc-button") ?? [])
+        return {
+          open: row?.getAttribute("data-actions-keyboard-open") ?? "",
+          activeDataUi: active?.dataset.ui ?? "",
+          activeInSiblingActions: !!row?.querySelector(".task-row-actions")?.contains(active),
+          tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+          opacities: actions.map((action) => getComputedStyle(action).opacity),
+        }
+      }, siblingRowSelector)
+      if (
+        keyboardAction.opacities.length > 0 &&
+        keyboardAction.opacities.every((value) => Number.parseFloat(value) > 0.95)
+      ) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    assert.equal(keyboardAction.open, "true")
+    assert.equal(keyboardAction.activeDataUi, "task-row-start-now")
+    assert.equal(keyboardAction.activeInSiblingActions, true)
+    assert.equal(keyboardAction.tabIndexes.every((value) => value === null), true)
+    assert.equal(keyboardAction.opacities.every((value) => Number.parseFloat(value) > 0.95), true)
+    assert.ok(taskListPanel)
+    writeFileSync(scratchPath("task-row-actions-keyboard-open.png"), await taskListPanel.screenshot({}))
+
+    await page.keyboard.press("Escape")
+    const closedActionRail = await page.evaluate((selector) => {
+      const row = document.querySelector(selector)
+      const active = document.activeElement as HTMLElement | null
+      const actions = Array.from(row?.querySelectorAll<HTMLElement>(".task-row-actions .oc-button") ?? [])
+      return {
+        open: row?.getAttribute("data-actions-keyboard-open"),
+        activeTaskID: active?.dataset.taskId ?? "",
+        activeInSiblingActions: !!row?.querySelector(".task-row-actions")?.contains(active),
+        tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+      }
+    }, siblingRowSelector)
+    assert.equal(closedActionRail.open, null)
+    assert.equal(closedActionRail.activeTaskID, "task-sibling")
+    assert.equal(closedActionRail.activeInSiblingActions, false)
+    assert.deepEqual(closedActionRail.tabIndexes, Array(closedActionRail.tabIndexes.length).fill("-1"))
+
     await page.hover('.task-row-mini[data-task-row-id="task-sibling"]')
     const siblingHitPoint = await page.$eval('.task-row-main[data-task-id="task-sibling"]', (row) => {
       const rect = (row as HTMLElement).getBoundingClientRect()
