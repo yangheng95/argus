@@ -52,7 +52,6 @@
 
     <article class="card card--expanded" data-kind="agent" data-stage="spec" data-status="completed" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--done">✓</span>
         <span class="card__title">Spec</span>
         <span class="card__round">#1</span>
         <span class="card__subtitle">drafted 2 requirements</span>
@@ -68,7 +67,6 @@
 
     <article class="card card--expanded" data-kind="agent" data-stage="architect" data-status="running" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
         <span class="card__title">Architect</span>
         <span class="card__subtitle">defining contracts</span>
         <span class="card__chevron">▼</span>
@@ -81,7 +79,6 @@
 
     <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="completed" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--done">✓</span>
         <span class="card__title">Planner</span>
         <span class="card__subtitle">4 steps</span>
         <span class="card__chevron">▼</span>
@@ -99,7 +96,6 @@
       data-depth="0"
     >
       <div class="card__head" role="button" tabindex="0" aria-expanded="false">
-        <span class="card__badge card__badge--done">✓</span>
         <span class="card__title">Evaluator</span>
         <span class="card__subtitle">all goals passed</span>
         <span class="card__chevron">▼</span>
@@ -114,7 +110,6 @@
       data-depth="0"
     >
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--done">✓</span>
         <span class="card__title">Acceptance</span>
         <span class="card__subtitle">5 files</span>
         <span class="card__chevron">▼</span>
@@ -132,7 +127,6 @@
 
     <article class="card card--expanded" data-kind="goal" data-stage="goal" data-status="running" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
         <span class="card__title">Implement JWT authentication module</span>
         <span class="card__round">#1</span>
         <span class="card__subtitle">goal-001</span>
@@ -154,7 +148,6 @@
             data-depth="1"
           >
             <div class="card__head" role="button" tabindex="0" aria-expanded="false">
-              <span class="card__badge card__badge--done">✓</span>
               <span class="card__title">Plan</span>
               <span class="card__subtitle">4 steps drafted</span>
               <span class="card__chevron">▼</span>
@@ -169,7 +162,6 @@
             data-depth="1"
           >
             <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-              <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
               <span class="card__title">Execute</span>
               <span class="card__subtitle">writing routes/auth.ts</span>
               <span class="card__chevron">▼</span>
@@ -197,7 +189,6 @@
                   data-depth="2"
                 >
                   <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-                    <span class="card__badge card__badge--done">✓</span>
                     <span class="card__icon">📝</span>
                     <span class="card__title">write_file</span>
                     <span class="card__subtitle">src/routes/auth.ts</span>
@@ -224,7 +215,6 @@ authRouter.post("/logout", handleLogout);</code></pre>
             data-depth="1"
           >
             <div class="card__head" role="button" tabindex="0" aria-expanded="false">
-              <span class="card__badge card__badge--pending">·</span>
               <span class="card__title">Eval</span>
               <span class="card__subtitle">waiting for executor</span>
               <span class="card__chevron">▼</span>
@@ -239,7 +229,6 @@ authRouter.post("/logout", handleLogout);</code></pre>
 
     <article class="card card--expanded" data-kind="agent" data-stage="executor" data-status="running" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
         <span class="card__title">Executor</span>
         <span class="card__subtitle">orchestrating subagents</span>
         <span class="card__chevron">▼</span>
@@ -249,7 +238,6 @@ authRouter.post("/logout", handleLogout);</code></pre>
         <div class="card__children">
           <article class="card card--expanded" data-kind="tool" data-stage="task" data-status="running" data-depth="1">
             <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-              <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
               <span class="card__icon">🤖</span>
               <span class="card__title">task</span>
               <span class="card__subtitle">Explore: map auth surface</span>
@@ -266,7 +254,6 @@ authRouter.post("/logout", handleLogout);</code></pre>
                   data-depth="2"
                 >
                   <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-                    <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
                     <span class="card__title">Explore Subagent</span>
                     <span class="card__chevron">▼</span>
                   </div>
@@ -281,7 +268,6 @@ authRouter.post("/logout", handleLogout);</code></pre>
                         data-depth="3"
                       >
                         <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-                          <span class="card__badge card__badge--done">✓</span>
                           <span class="card__icon">📄</span>
                           <span class="card__title">read_file</span>
                           <span class="card__subtitle">src/middleware/auth.ts (145 lines)</span>
@@ -306,11 +292,10 @@ authRouter.post("/logout", handleLogout);</code></pre>
     </article>
 
     <h2>4. Status matrix</h2>
-    <p class="hint">Every badge type and state.</p>
+    <p class="hint">Every card status data-state sample.</p>
 
     <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="pending" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--pending">·</span>
         <span class="card__title">Pending</span>
         <span class="card__subtitle">queued</span>
         <span class="card__chevron">▼</span>
@@ -318,21 +303,18 @@ authRouter.post("/logout", handleLogout);</code></pre>
     </article>
     <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="running" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
         <span class="card__title">Running</span>
         <span class="card__chevron">▼</span>
       </div>
     </article>
     <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="completed" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--done">✓</span>
         <span class="card__title">Completed</span>
         <span class="card__chevron">▼</span>
       </div>
     </article>
     <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="error" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--error">✗</span>
         <span class="card__title">Error</span>
         <span class="card__subtitle">compilation failed</span>
         <span class="card__chevron">▼</span>
@@ -340,7 +322,6 @@ authRouter.post("/logout", handleLogout);</code></pre>
     </article>
     <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="skipped" data-depth="0">
       <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-        <span class="card__badge card__badge--skipped">—</span>
         <span class="card__title">Skipped</span>
         <span class="card__chevron">▼</span>
       </div>

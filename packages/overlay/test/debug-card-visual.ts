@@ -50,7 +50,7 @@ const report = await page.evaluate(() => {
       card: pick(c, ["background-color", "border", "border-left", "display"]),
       head: pick(c.querySelector(".card__head"), ["background-color", "color", "display", "padding", "font-size"]),
       title: pick(c.querySelector(".card__title"), ["color", "font-size", "display", "visibility", "opacity", "width"]),
-      badge: pick(c.querySelector(".card__badge"), ["background-color", "width", "height", "color"]),
+      status: (c as HTMLElement).dataset.status,
       body: pick(c.querySelector(".card__body"), ["display", "padding", "overflow", "max-height", "height"]),
     })),
   }

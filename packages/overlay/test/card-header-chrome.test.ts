@@ -15,6 +15,7 @@ test("CardHeader does not render status or copy chrome in the message header", (
   expect(CARD_HEADER_TSX).not.toContain('class="card__badge')
   expect(CARD_HEADER_TSX).not.toContain('class="card__copy"')
   expect(CARD_HEADER_TSX).not.toContain('name="copy"')
+  expect(CARD_CSS).not.toContain(".card__badge")
   expect(CARD_CSS).not.toContain(".card__copy")
 })
 
