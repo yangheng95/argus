@@ -84,6 +84,24 @@ describe("goal / mission / chat / agent reply reuse the AutoGrowTextarea primiti
     expect(interaction).not.toMatch(/<textarea\b/)
     expect(cardCss).not.toMatch(/\.interaction-card__custom-input\s*\{/)
   })
+
+  test("settings long-text editors reuse the shared primitive and form textarea chrome", () => {
+    const promptCatalog = read("components/settings/PromptCatalog.tsx")
+    const providers = read("components/settings/ProvidersPanel.tsx")
+    const settingsCss = read("styles/surfaces/settings.css")
+
+    expect(promptCatalog).toContain('import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"')
+    expect(promptCatalog).toContain("<AutoGrowTextarea")
+    expect(promptCatalog).toContain('class="composer-textarea prompt-profile-description"')
+    expect(promptCatalog).toContain('class="composer-textarea prompt-profile-textarea"')
+    expect(promptCatalog).not.toMatch(/<textarea\b/)
+
+    expect(providers).toContain('import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"')
+    expect(providers).toContain("<AutoGrowTextarea")
+    expect(providers).toContain('class="composer-textarea provider-models-textarea"')
+    expect(providers).not.toMatch(/<textarea\b/)
+    expect(settingsCss).not.toMatch(/\.provider-models-textarea\s*\{[^}]*resize:/s)
+  })
 })
 
 describe(".composer-textarea re-enables a visible scrollbar (goal-dialog clip fix)", () => {

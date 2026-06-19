@@ -339,6 +339,10 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
           labelledBy,
           accessibleNameSource: labelledElement?.textContent?.trim() || "",
           hiddenLabel: textarea.getAttribute("aria-label") || "",
+          usesComposerTextarea: textarea.classList.contains("composer-textarea"),
+          usesFieldInput: textarea.classList.contains("field-input"),
+          overflowY: getComputedStyle(textarea).overflowY,
+          scrollbarWidth: getComputedStyle(textarea).scrollbarWidth,
         }
       }),
     )
@@ -349,6 +353,10 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         labelledBy: "promptProfileTargetLabel-requirements",
         accessibleNameSource: "Requirements",
         hiddenLabel: "",
+        usesComposerTextarea: true,
+        usesFieldInput: false,
+        overflowY: "auto",
+        scrollbarWidth: "thin",
       },
       {
         labelID: "promptProfileTargetLabel-build",
@@ -356,8 +364,43 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         labelledBy: "promptProfileTargetLabel-build",
         accessibleNameSource: "Build",
         hiddenLabel: "",
+        usesComposerTextarea: true,
+        usesFieldInput: false,
+        overflowY: "auto",
+        scrollbarWidth: "thin",
       },
     ])
+    const textareaInitial = await page.$eval(".prompt-profile-textarea", (textarea: HTMLTextAreaElement) => {
+      textarea.focus()
+      return {
+        active: document.activeElement === textarea,
+        original: textarea.value,
+        height: textarea.getBoundingClientRect().height,
+        boxShadow: getComputedStyle(textarea).boxShadow,
+      }
+    })
+    assert.equal(textareaInitial.active, true)
+    assert.notEqual(textareaInitial.boxShadow, "none")
+    await page.$eval(".prompt-profile-textarea", (textarea: HTMLTextAreaElement) => {
+      textarea.value = Array.from({ length: 14 }, (_, index) => `requirements line ${index + 1}`).join("\n")
+      textarea.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await page.waitForFunction(
+      (height) => {
+        const textarea = document.querySelector<HTMLTextAreaElement>(".prompt-profile-textarea")
+        return !!textarea && textarea.getBoundingClientRect().height > height
+      },
+      {},
+      textareaInitial.height,
+    )
+    await page.$eval(
+      ".prompt-profile-textarea",
+      (textarea: HTMLTextAreaElement, value) => {
+        textarea.value = value
+        textarea.dispatchEvent(new Event("input", { bubbles: true }))
+      },
+      textareaInitial.original,
+    )
     mkdirSync(resolve(".scratch"), { recursive: true })
     const screenshot = await page.screenshot({ fullPage: false })
     assert.ok(screenshot.length > 0)

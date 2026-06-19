@@ -464,6 +464,49 @@ test(
         const screenshotPath = await saveElementScreenshot(dialog, "provider-settings-primitive-owner.png")
         assert.ok(screenshotPath.endsWith("provider-settings-primitive-owner.png"))
 
+        await tab.click('.provider-head-actions .oc-button[data-variant="solid"]')
+        await tab.waitForSelector(".provider-models-textarea")
+        const modelsTextareaInitial = await tab.$eval(
+          ".provider-models-textarea",
+          (textarea: HTMLTextAreaElement) => {
+            textarea.focus()
+            const style = getComputedStyle(textarea)
+            return {
+              active: document.activeElement === textarea,
+              height: textarea.getBoundingClientRect().height,
+              usesComposerTextarea: textarea.classList.contains("composer-textarea"),
+              usesFieldInput: textarea.classList.contains("field-input"),
+              overflowY: style.overflowY,
+              scrollbarWidth: style.scrollbarWidth,
+              resize: style.resize,
+              boxShadow: style.boxShadow,
+            }
+          },
+        )
+        assert.equal(modelsTextareaInitial.active, true)
+        assert.equal(modelsTextareaInitial.usesComposerTextarea, true)
+        assert.equal(modelsTextareaInitial.usesFieldInput, false)
+        assert.equal(modelsTextareaInitial.overflowY, "auto")
+        assert.equal(modelsTextareaInitial.scrollbarWidth, "thin")
+        assert.equal(modelsTextareaInitial.resize, "none")
+        assert.notEqual(modelsTextareaInitial.boxShadow, "none")
+        await tab.$eval(".provider-models-textarea", (textarea: HTMLTextAreaElement) => {
+          textarea.value = Array.from({ length: 16 }, (_, index) => `model-${index}:Model ${index}`).join("\n")
+          textarea.dispatchEvent(new Event("input", { bubbles: true }))
+        })
+        await tab.waitForFunction(
+          (height) => {
+            const textarea = document.querySelector<HTMLTextAreaElement>(".provider-models-textarea")
+            return !!textarea && textarea.getBoundingClientRect().height > height
+          },
+          {},
+          modelsTextareaInitial.height,
+        )
+        const addForm = await tab.$(".provider-add-card")
+        assert.ok(addForm)
+        const addFormScreenshotPath = await saveElementScreenshot(addForm, "provider-models-textarea-primitive.png")
+        assert.ok(addFormScreenshotPath.endsWith("provider-models-textarea-primitive.png"))
+
         await tab.type('[data-testid="provider-search-input"]', "claude")
         await tab.waitForFunction(
           () =>

@@ -21,6 +21,7 @@ import {
 import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../utils/native"
 import { nativeMessage } from "../../services/app-dialog"
 import { Icon } from "../Icon"
+import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"
 import { Button } from "../ui/Button"
 import { SurfaceHeader } from "../ui/SurfaceHeader"
 import { SettingsGroup, SettingsPanel, SettingsPill, SettingsRow, type SettingsPillTone } from "./primitives"
@@ -1026,8 +1027,8 @@ export default function ProvidersPanel() {
                   {discoveringModels() ? t("provider.form.discover.running") : t("provider.form.discover.button")}
                 </Button>
               </div>
-              <textarea
-                class="field-input provider-models-textarea"
+              <AutoGrowTextarea
+                class="composer-textarea provider-models-textarea"
                 rows={4}
                 placeholder={"gpt-5.4-mini:GPT-5.4 Mini\ngpt-5.4:GPT-5.4"}
                 value={formModels()}
