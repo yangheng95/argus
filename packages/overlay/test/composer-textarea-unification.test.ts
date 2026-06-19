@@ -72,6 +72,18 @@ describe("goal / mission / chat / agent reply reuse the AutoGrowTextarea primiti
     expect(reply).toContain("maxLines={2}")
     expect(reply).not.toMatch(/<textarea\b/)
   })
+
+  test("interaction question custom replies reuse the shared primitive and form textarea chrome", () => {
+    const interaction = read("components/InteractionCard.tsx")
+    const cardCss = read("styles/surfaces/card.css")
+    expect(interaction).toContain('import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"')
+    expect(interaction).toContain("<AutoGrowTextarea")
+    expect(interaction).toContain('class="composer-textarea interaction-card__custom-input"')
+    expect(interaction).toContain("rows={opts.length > 0 ? 1 : 3}")
+    expect(interaction).toContain("maxLines={6}")
+    expect(interaction).not.toMatch(/<textarea\b/)
+    expect(cardCss).not.toMatch(/\.interaction-card__custom-input\s*\{/)
+  })
 })
 
 describe(".composer-textarea re-enables a visible scrollbar (goal-dialog clip fix)", () => {

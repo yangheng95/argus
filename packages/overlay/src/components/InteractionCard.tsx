@@ -17,6 +17,7 @@ import { t } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
 import { loadBoard } from "../store/board"
 import { type InteractionReplyEndpoint, replyInteraction, rejectInteraction } from "../services/interaction-reply"
+import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
 import { Button } from "./ui/Button"
 
 export interface InteractionQuestion {
@@ -168,13 +169,14 @@ export function InteractionCard(props: { interaction: InteractionData }) {
                     </div>
                   </Show>
                   <Show when={allowCustom}>
-                    <textarea
-                      class="interaction-card__custom-input"
+                    <AutoGrowTextarea
+                      class="composer-textarea interaction-card__custom-input"
                       placeholder={t("interaction.custom_placeholder")}
                       rows={opts.length > 0 ? 1 : 3}
+                      maxLines={6}
                       disabled={busy()}
                       value={customText()[qIdx()] ?? ""}
-                      onInput={(e) => setCustomAt(qIdx(), (e.currentTarget as HTMLTextAreaElement).value)}
+                      onInput={(event) => setCustomAt(qIdx(), event.currentTarget.value)}
                     />
                   </Show>
                 </div>

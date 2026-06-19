@@ -1143,19 +1143,6 @@ body {
   color: var(--text-muted);
   font-size: var(--card-meta-size);
 }
-.interaction-card__custom-input {
-  width: 100%;
-  font-family: inherit;
-  font-size: var(--card-sub-size);
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--card-border);
-  background: var(--surface-inset);
-  color: var(--text);
-  resize: vertical;
-  box-sizing: border-box;
-}
-
 .interaction-card__actions {
   display: flex;
   flex-wrap: wrap;
