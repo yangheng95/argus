@@ -138,9 +138,11 @@ function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelect
       data-task-id={props.task.id}
       data-status={props.task.status}
     >
-      <button
+      <Button
         type="button"
-        class="task-row-main mission-task-projection-select"
+        variant="ghost"
+        size="md"
+        tone="neutral"
         data-ui="mission-task-projection-select"
         title={missionTaskProjectionTip(props.task)}
         onClick={(event) => {
@@ -154,7 +156,7 @@ function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelect
         <span class="mission-task-projection-status" data-status={props.task.status}>
           {missionTaskStatusLabel(props.task.status)}
         </span>
-      </button>
+      </Button>
     </li>
   )
 }

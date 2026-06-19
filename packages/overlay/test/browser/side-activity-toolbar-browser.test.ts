@@ -954,12 +954,18 @@ test(
         const styles = getComputedStyle(button)
         return {
           className: button.className,
+          variant: button.dataset.variant,
+          size: button.dataset.size,
+          tone: button.dataset.tone,
           focusVisible: button.matches(":focus-visible"),
           outlineStyle: styles.outlineStyle,
           outlineWidth: styles.outlineWidth,
         }
       })
-      assert.match(projectionFocus.className, /\btask-row-main\b/)
+      assert.equal(projectionFocus.className, "oc-button")
+      assert.equal(projectionFocus.variant, "ghost")
+      assert.equal(projectionFocus.size, "md")
+      assert.equal(projectionFocus.tone, "neutral")
       assert.equal(projectionFocus.focusVisible, true)
       assert.notEqual(projectionFocus.outlineStyle, "none")
       assert.notEqual(projectionFocus.outlineWidth, "0px")
