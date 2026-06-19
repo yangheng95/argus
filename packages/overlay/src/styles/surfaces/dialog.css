@@ -326,16 +326,6 @@
   text-overflow: ellipsis;
 }
 
-.app-dialog-decision__badge {
-  flex: 0 0 auto;
-  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border-radius: var(--oc-radius-soft);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-strong);
-}
-
 .app-dialog-decision__choice-body {
   min-width: 0;
   color: var(--text-muted);
