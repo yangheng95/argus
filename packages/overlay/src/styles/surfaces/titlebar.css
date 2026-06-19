@@ -89,21 +89,28 @@
 
 /* Connection badge: a small dot-indicator that lives in the titlebar
    utility area. Kept within this surface because no other column owns it. */
-.conn-badge {
+.oc-button[data-ui="connection-badge"].conn-badge {
   --conn-badge-dot: var(--text-muted);
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(10px * var(--ui-scale));
+  --oc-button-padding-y: calc(6px * var(--ui-scale));
+  --oc-button-gap: calc(6px * var(--ui-scale));
+  --oc-button-bg: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--text);
+  --oc-button-shadow: none;
+
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: calc(6px * var(--ui-scale));
   font-size: var(--ui-font-meta);
   font-weight: var(--ui-font-weight-medium);
-  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
   letter-spacing: var(--ui-letter-spacing-loose);
-  color: var(--text);
   cursor: pointer;
   user-select: none;
-  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  background: var(--oc-button-bg);
+  color: var(--oc-button-color);
   transition:
     background var(--ui-duration-base),
     color var(--ui-duration-base);
@@ -121,8 +128,7 @@
 
 .conn-badge:hover,
 .conn-badge:focus-visible {
-  background: var(--surface-hover);
-  outline: none;
+  --oc-button-bg: var(--surface-hover);
 }
 
 .conn-badge[data-status="online"] {

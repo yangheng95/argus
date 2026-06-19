@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| [2026-06-19-connection-badge-button-diagnostics.md](2026-06-19-connection-badge-button-diagnostics.md)         | Connection Badge Button Diagnostics |
 | [2026-06-19-chat-bubble-disclosure-button-scope.md](2026-06-19-chat-bubble-disclosure-button-scope.md)         | Chat Bubble Disclosure Button Scope |
 | [2026-06-19-image-preview-dialog-i18n-source.md](2026-06-19-image-preview-dialog-i18n-source.md)               | Image Preview Dialog i18n Source |
 | [2026-06-19-markdown-code-copy-i18n-source.md](2026-06-19-markdown-code-copy-i18n-source.md)                   | Markdown Code Copy i18n Source |

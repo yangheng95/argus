@@ -1,14 +1,14 @@
 // ── ConnectionBadge Component ──
 // Displays the current connection status (online / connecting / offline) as a
-// clickable badge. Double-clicking triggers a server restart then reloads the
-// page, exactly mirroring lines 9394–9408 and setConnStatus (3817–3826).
+// titlebar diagnostics button.
 
 import { createMemo } from "solid-js"
 import { messageStore } from "../store/messages"
-import { appStore, setConnectionStatus } from "../store/app"
+import { appStore } from "../store/app"
 import { settingsStore } from "../store/settings"
 import { t } from "../utils/i18n"
-import { apiJson } from "../services/api"
+import { openConfigDialog } from "../services/dialog"
+import { Button } from "./ui/Button"
 
 // ── Types ──
 
@@ -21,26 +21,6 @@ function statusLabel(status: ConnectionStatus): string {
   if (status === "online") return t("titlebar.connection.online")
   if (status === "connecting") return t("titlebar.connection.connecting")
   return t("titlebar.connection.offline")
-}
-
-/** Attempt to restart the backend via the REST API and reload the page.
- */
-async function handleRestart(): Promise<void> {
-  setConnectionStatus("connecting")
-
-  try {
-    await apiJson("restart", {
-      method: "POST",
-      signal: AbortSignal.timeout(3000),
-    })
-  } catch {
-    // Restart request may fail if the server is down; that is expected.
-  }
-
-  // Give the server a moment to come back up, then reload the overlay UI.
-  setTimeout(() => {
-    if (typeof location !== "undefined") location.reload()
-  }, 2000)
 }
 
 // ── Component ──
@@ -91,20 +71,24 @@ export function ConnectionBadge(props: ConnectionBadgeProps) {
     if (pidValue) parts.push(`${t("titlebar.connection.pid")} ${pidValue}`)
     return parts.join(" · ")
   })
+  const diagnosticsLabel = createMemo(() => `${t("titlebar.connection_diagnostics")} · ${title()}`)
 
   return (
-    <span
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      tone="neutral"
       id="connBadge"
       class="conn-badge"
+      data-ui="connection-badge"
       data-status={status()}
-      title={title()}
-      aria-label={title()}
+      title={diagnosticsLabel()}
+      aria-label={diagnosticsLabel()}
       aria-live="polite"
-      onDblClick={() => {
-        void handleRestart()
-      }}
+      onClick={() => openConfigDialog("general")}
     >
       <span class="conn-badge__label">{label()}</span>
-    </span>
+    </Button>
   )
 }
