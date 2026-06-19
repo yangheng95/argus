@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                       | Title                          |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| [2026-06-20-file-changes-search-field-single-source.md](2026-06-20-file-changes-search-field-single-source.md) | File Changes Search Field Single Source |
 | [2026-06-20-workspace-onboarding-path-input-single-source.md](2026-06-20-workspace-onboarding-path-input-single-source.md) | Workspace Onboarding Path Input Single Source |
 | [2026-06-20-task-dirbar-recent-path-input-single-source.md](2026-06-20-task-dirbar-recent-path-input-single-source.md) | TaskDirBar Recent Path Input Single Source |
 | [2026-06-20-conversation-render-error-i18n.md](2026-06-20-conversation-render-error-i18n.md)               | Conversation Render Error i18n |
