@@ -538,6 +538,7 @@
 }
 
 .titlebar-menubar-item:hover:not(:disabled):not([data-disabled]),
+.titlebar-menubar-item[data-highlighted]:not(:disabled):not([data-disabled]),
 .titlebar-menubar-item:focus-visible,
 .titlebar-menubar-toggle:hover,
 .titlebar-menubar-range:hover {

@@ -288,7 +288,11 @@
   background: color-mix(in srgb, var(--surface-hover) 60%, transparent);
 }
 
-.change-row[data-selected="true"] {
+.change-row[data-highlighted] {
+  background: color-mix(in srgb, var(--surface-hover) 70%, transparent);
+}
+
+.change-row[data-selected] {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 

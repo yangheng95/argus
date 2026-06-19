@@ -569,6 +569,25 @@ test(
       await page.waitForFunction(
         () => (document.activeElement as HTMLElement | null)?.dataset.modelValue === "openai/gpt-5.5-pro",
       )
+      const highlightedModelState = await page.$eval(
+        modelOptionSelector("mirror", "openai/gpt-5.5-pro"),
+        (node: HTMLElement) => {
+          const styles = getComputedStyle(node)
+          return {
+            highlighted: node.hasAttribute("data-highlighted"),
+            selected: node.hasAttribute("data-selected"),
+            ariaSelected: node.getAttribute("aria-selected") ?? "",
+            backgroundColor: styles.backgroundColor,
+            color: styles.color,
+          }
+        },
+      )
+      assert.equal(highlightedModelState.highlighted, true)
+      assert.equal(highlightedModelState.selected, false)
+      assert.equal(highlightedModelState.ariaSelected, "false")
+      assert.notEqual(highlightedModelState.backgroundColor, "rgba(0, 0, 0, 0)")
+      assert.notEqual(highlightedModelState.color, "rgba(0, 0, 0, 0)")
+      await saveScreenshot(page, "executor-selector-keyboard-highlighted-model.png")
       await page.keyboard.press("Enter")
       await page.waitForFunction(() =>
         (document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null)?.innerText.includes(

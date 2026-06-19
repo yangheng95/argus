@@ -62,6 +62,19 @@ function soloRuleBody(selector: string): string {
   throw new Error(`solo ${selector} not found`)
 }
 
+function selectorRuleBody(selector: string): string {
+  for (const chunk of STYLES.split("}")) {
+    const openIdx = chunk.indexOf("{")
+    if (openIdx < 0) continue
+    const selectors = chunk
+      .slice(0, openIdx)
+      .split(",")
+      .map((item) => item.trim())
+    if (selectors.includes(selector)) return chunk.slice(openIdx + 1)
+  }
+  throw new Error(`selector ${selector} not found`)
+}
+
 describe("task-cwd cluster lays out left/right (dropdown left, workspace info right)", () => {
   test(".task-cwd is flex row with space-between justification", () => {
     const body = soloRuleBody(".task-cwd")
@@ -142,6 +155,13 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const row = soloRuleBody(".project-worktree-item")
     expect(row).toMatch(/grid-template-columns:/)
     expect(row).toMatch(/min-height:\s*calc\(28px \* var\(--ui-scale\)\)/)
+    const highlightedRow = selectorRuleBody(".project-worktree-item[data-highlighted]")
+    expect(highlightedRow).toMatch(/background:\s*var\(--subtle-3\)/)
+    expect(highlightedRow).toMatch(/color:\s*var\(--text-strong\)/)
+    const highlightedBranch = selectorRuleBody(".project-worktree-item[data-highlighted] .project-worktree-branch")
+    expect(highlightedBranch).toMatch(/color:\s*var\(--text-strong\)/)
+    const highlightedState = selectorRuleBody(".project-worktree-row .project-worktree-item[data-highlighted] .project-worktree-state")
+    expect(highlightedState).toMatch(/color:\s*var\(--text-strong\)/)
     const remove = soloRuleBody('.project-worktree-row .oc-button[data-ui="project-worktree-remove"]')
     expect(remove).toMatch(/--oc-button-height:\s*calc\(26px \* var\(--ui-scale\)\)/)
     expect(STYLES).toContain(
@@ -229,6 +249,19 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const itemFocus = soloRuleBody(".recent-dir-item:focus-visible")
     expect(itemFocus).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
     expect(itemFocus).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
+    const highlightedRow = selectorRuleBody(".recent-dir-row:has(.recent-dir-item[data-highlighted])")
+    expect(highlightedRow).toMatch(/border-color:\s*color-mix\(in srgb,\s*var\(--accent\) 22%,\s*var\(--border\)\)/)
+    const highlightedSlot = selectorRuleBody(
+      '.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):has(.recent-dir-item[data-highlighted])',
+    )
+    expect(highlightedSlot).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--recent-dir-remove-slot-width\)/)
+    const highlightedItem = selectorRuleBody(".recent-dir-row:has(.recent-dir-item[data-highlighted]) .recent-dir-item")
+    expect(highlightedItem).toMatch(/color:\s*var\(--text-strong\)/)
+    const highlightedRemove = selectorRuleBody(
+      '.recent-dir-row:has(.recent-dir-item[data-highlighted]) .oc-button[data-ui="recent-dir-remove"]',
+    )
+    expect(highlightedRemove).toMatch(/opacity:\s*var\(--ui-opacity-full\)/)
+    expect(highlightedRemove).toMatch(/pointer-events:\s*auto/)
     expect(STYLES).not.toContain(".recent-dir-edit-submit")
     expect(STYLES).not.toContain(".recent-dir-remove {")
   })

@@ -3,6 +3,20 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const LAUNCHER_SOURCE = readFileSync(join(import.meta.dir, "../src/components/WorkspaceSplitLauncher.tsx"), "utf8")
+const CONVERSATION_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
+
+function selectorRuleBody(selector: string): string {
+  for (const chunk of CONVERSATION_CSS.replace(/\/\*[\s\S]*?\*\//g, "").split("}")) {
+    const openIdx = chunk.indexOf("{")
+    if (openIdx < 0) continue
+    const selectors = chunk
+      .slice(0, openIdx)
+      .split(",")
+      .map((item) => item.trim())
+    if (selectors.includes(selector)) return chunk.slice(openIdx + 1)
+  }
+  throw new Error(`selector not found: ${selector}`)
+}
 
 describe("WorkspaceSplitLauncher primitive", () => {
   test("delegates menu behavior to Kobalte dropdown menu", () => {
@@ -23,5 +37,17 @@ describe("WorkspaceSplitLauncher primitive", () => {
     expect(LAUNCHER_SOURCE).not.toContain("document.addEventListener")
     expect(LAUNCHER_SOURCE).not.toContain("getBoundingClientRect")
     expect(LAUNCHER_SOURCE).not.toContain('from "solid-js/web"')
+  })
+
+  test("styles Kobalte highlighted workspace menu options", () => {
+    for (const selector of [
+      ".workspace-terminal-option[data-highlighted]",
+      ".workspace-editor-option[data-highlighted]",
+      ".workspace-coding-cli-option[data-highlighted]",
+    ]) {
+      const body = selectorRuleBody(selector)
+      expect(body).toMatch(/background:\s*var\(--subtle-3\)/)
+      expect(body).toMatch(/color:\s*var\(--text-strong\)/)
+    }
   })
 })

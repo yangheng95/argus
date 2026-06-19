@@ -118,6 +118,25 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                   >
                     <span class="executor-model-option-label">gpt-5.5-pro</span>
                   </li>
+                  <li
+                    class="executor-model-option"
+                    role="option"
+                    aria-selected="false"
+                    data-highlighted
+                    data-model-value="openai/gpt-5.4-mini"
+                    data-popup-text
+                  >
+                    <span class="executor-model-option-label">gpt-5.4-mini</span>
+                  </li>
+                  <li
+                    class="executor-model-option"
+                    role="option"
+                    aria-selected="false"
+                    data-model-value="openai/gpt-5.3"
+                    data-popup-text
+                  >
+                    <span class="executor-model-option-label">gpt-5.3</span>
+                  </li>
                 </ul>
                 <div class="executor-popover-group">
                   <div class="executor-popover-group-header">
@@ -138,7 +157,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                     <span class="project-worktree-cleanup-hint" data-popup-text>Expired cleanup available</span>
                   </div>
                   <div class="project-worktree-row" data-status="expired">
-                    <button class="project-worktree-item" type="button">
+                    <button class="project-worktree-item" type="button" data-highlighted>
                       <span class="project-worktree-name" data-popup-text>feature/ui</span>
                       <span class="project-worktree-path" data-popup-text>C:/repo/worktrees/ui</span>
                       <span class="project-worktree-branch" data-popup-text>coding-assistant</span>
@@ -186,6 +205,16 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                           <span class="recent-dir-path" data-popup-text>C:/Workspaces/opencorvus</span>
                         </span>
                       </button>
+                      <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="icon-action" data-ui="recent-dir-remove" type="button">×</button>
+                    </div>
+                    <div class="recent-dir-row">
+                      <button class="recent-dir-item" type="button" data-highlighted>
+                        <span class="recent-dir-copy">
+                          <span class="recent-dir-label" data-popup-text>Economy Clone</span>
+                          <span class="recent-dir-path" data-popup-text>C:/Workspaces/economy</span>
+                        </span>
+                      </button>
+                      <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="icon-action" data-ui="recent-dir-remove" type="button">×</button>
                     </div>
                     <form class="recent-dir-edit-form">
                       <label class="recent-dir-edit-label">
@@ -213,19 +242,19 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
             <section class="popup-sample" data-popup-sample="workspace-launcher-menu">
               <strong>Workspace Launcher Menus</strong>
               <div class="workspace-terminal-menu">
-                <button class="workspace-terminal-option" type="button">
+                <button class="workspace-terminal-option" type="button" data-highlighted>
                   <span aria-hidden="true">T</span>
                   <span class="workspace-terminal-option-label" data-popup-text>Open terminal</span>
                 </button>
               </div>
               <div class="workspace-editor-menu">
-                <button class="workspace-editor-option" type="button">
+                <button class="workspace-editor-option" type="button" data-highlighted>
                   <span aria-hidden="true">E</span>
                   <span class="workspace-editor-option-label" data-popup-text>Open editor</span>
                 </button>
               </div>
               <div class="workspace-coding-cli-menu">
-                <button class="workspace-coding-cli-option" type="button">
+                <button class="workspace-coding-cli-option" type="button" data-highlighted>
                   <span aria-hidden="true">C</span>
                   <span class="workspace-coding-cli-option-label" data-popup-text>Open coding CLI</span>
                 </button>
@@ -241,7 +270,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                     <span class="titlebar-menubar-recent-name" data-popup-text>OpenCorvus</span>
                     <span class="titlebar-menubar-recent-path" data-popup-text>C:/Workspaces/opencorvus</span>
                   </button>
-                  <button class="titlebar-menubar-item" type="button">
+                  <button class="titlebar-menubar-item" type="button" data-highlighted>
                     <span class="titlebar-menubar-item-title" data-popup-text>Open folder</span>
                     <span class="titlebar-menubar-item-meta" data-popup-text>Ctrl+O</span>
                   </button>
@@ -373,6 +402,76 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
     assert.equal(recentSubmit.chrome, "icon-action")
     assert.equal(recentSubmit.size, "icon")
     assert.equal(recentSubmit.opacity, "1")
+
+    const highlightedMetrics = await page.evaluate(() => {
+      function metrics(selector: string) {
+        const node = document.querySelector<HTMLElement>(selector)
+        if (!node) throw new Error(`Missing highlighted sample: ${selector}`)
+        const styles = getComputedStyle(node)
+        return {
+          backgroundColor: styles.backgroundColor,
+          borderTopColor: styles.borderTopColor,
+          color: styles.color,
+          opacity: styles.opacity,
+          pointerEvents: styles.pointerEvents,
+        }
+      }
+
+      return {
+        worktreeHighlighted: metrics('[data-popup-sample="worktree-panel"] .project-worktree-item[data-highlighted]'),
+        worktreePlain: metrics('[data-popup-sample="worktree-panel"] .project-worktree-item:not([data-highlighted])'),
+        executorHighlighted: metrics('[data-popup-sample="executor-popover"] .executor-model-option[data-highlighted]'),
+        executorPlain: metrics(
+          '[data-popup-sample="executor-popover"] .executor-model-option:not([data-highlighted]):not([data-selected])',
+        ),
+        recentHighlightedRow: metrics(
+          '[data-popup-sample="recent-directory"] .recent-dir-row:has(.recent-dir-item[data-highlighted])',
+        ),
+        recentPlainRow: metrics(
+          '[data-popup-sample="recent-directory"] .recent-dir-row:not(:has(.recent-dir-item[data-highlighted]))',
+        ),
+        recentHighlightedRemove: metrics(
+          '[data-popup-sample="recent-directory"] .recent-dir-row:has(.recent-dir-item[data-highlighted]) [data-ui="recent-dir-remove"]',
+        ),
+        workspaceOptions: Array.from(
+          document.querySelectorAll<HTMLElement>('[data-popup-sample="workspace-launcher-menu"] [data-highlighted]'),
+          (node) => {
+            const styles = getComputedStyle(node)
+            return {
+              className: node.className,
+              backgroundColor: styles.backgroundColor,
+              color: styles.color,
+            }
+          },
+        ),
+        titlebarHighlighted: metrics('[data-popup-sample="titlebar-menu"] .titlebar-menubar-item[data-highlighted]'),
+        titlebarPlain: metrics(
+          '[data-popup-sample="titlebar-menu"] .titlebar-menubar-item:not([data-highlighted]):not(:disabled)',
+        ),
+      }
+    })
+    assert.notEqual(highlightedMetrics.worktreeHighlighted.backgroundColor, "rgba(0, 0, 0, 0)")
+    assert.notEqual(
+      highlightedMetrics.worktreeHighlighted.backgroundColor,
+      highlightedMetrics.worktreePlain.backgroundColor,
+    )
+    assert.notEqual(highlightedMetrics.executorHighlighted.backgroundColor, "rgba(0, 0, 0, 0)")
+    assert.notEqual(
+      highlightedMetrics.executorHighlighted.backgroundColor,
+      highlightedMetrics.executorPlain.backgroundColor,
+    )
+    assert.notEqual(highlightedMetrics.recentHighlightedRow.borderTopColor, highlightedMetrics.recentPlainRow.borderTopColor)
+    assert.equal(highlightedMetrics.recentHighlightedRemove.opacity, "1")
+    assert.equal(highlightedMetrics.recentHighlightedRemove.pointerEvents, "auto")
+    assert.deepEqual(
+      highlightedMetrics.workspaceOptions.map((option) => option.backgroundColor !== "rgba(0, 0, 0, 0)"),
+      [true, true, true],
+    )
+    assert.notEqual(highlightedMetrics.titlebarHighlighted.backgroundColor, "rgba(0, 0, 0, 0)")
+    assert.notEqual(
+      highlightedMetrics.titlebarHighlighted.backgroundColor,
+      highlightedMetrics.titlebarPlain.backgroundColor,
+    )
 
     const result = await page.evaluate(() => {
       interface Rgba {

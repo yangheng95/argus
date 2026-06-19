@@ -682,10 +682,13 @@
 }
 
 .workspace-terminal-option:hover,
+.workspace-terminal-option[data-highlighted],
 .workspace-terminal-option:focus-visible,
 .workspace-editor-option:hover,
+.workspace-editor-option[data-highlighted],
 .workspace-editor-option:focus-visible,
 .workspace-coding-cli-option:hover,
+.workspace-coding-cli-option[data-highlighted],
 .workspace-coding-cli-option:focus-visible {
   background: var(--subtle-3);
   color: var(--text-strong);
@@ -1034,10 +1037,17 @@
 }
 
 .project-worktree-item:hover,
+.project-worktree-item[data-highlighted],
 .project-worktree-item:focus-visible {
   background: var(--subtle-3);
   color: var(--text-strong);
   outline: none;
+}
+
+.project-worktree-item:hover .project-worktree-branch,
+.project-worktree-item[data-highlighted] .project-worktree-branch,
+.project-worktree-item:focus-visible .project-worktree-branch {
+  color: var(--text-strong);
 }
 
 .project-worktree-name,
@@ -1081,6 +1091,12 @@
   color: var(--warn);
   border-color: color-mix(in srgb, var(--warn) 34%, var(--border));
   background: var(--warn-dim);
+}
+
+.project-worktree-row .project-worktree-item:hover .project-worktree-state,
+.project-worktree-row .project-worktree-item[data-highlighted] .project-worktree-state,
+.project-worktree-row .project-worktree-item:focus-visible .project-worktree-state {
+  color: var(--text-strong);
 }
 
 .project-worktree-row .oc-button[data-ui="project-worktree-remove"] {
@@ -1547,7 +1563,8 @@
   position: relative;
 }
 
-.recent-dir-row:hover {
+.recent-dir-row:hover,
+.recent-dir-row:has(.recent-dir-item[data-highlighted]) {
   border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
   background:
     linear-gradient(
@@ -1576,6 +1593,7 @@
 }
 
 .recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):hover,
+.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):has(.recent-dir-item[data-highlighted]),
 .recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):focus-within,
 .recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"])[data-active="true"] {
   grid-template-columns: minmax(0, 1fr) var(--recent-dir-remove-slot-width);
@@ -1640,7 +1658,8 @@
   line-height: 1;
 }
 
-.recent-dir-row:hover .recent-dir-item {
+.recent-dir-row:hover .recent-dir-item,
+.recent-dir-row:has(.recent-dir-item[data-highlighted]) .recent-dir-item {
   color: var(--text-strong);
 }
 
@@ -1672,6 +1691,7 @@
 }
 
 .recent-dir-row:hover .oc-button[data-ui="recent-dir-remove"],
+.recent-dir-row:has(.recent-dir-item[data-highlighted]) .oc-button[data-ui="recent-dir-remove"],
 .recent-dir-row:focus-within .oc-button[data-ui="recent-dir-remove"],
 .recent-dir-row[data-active="true"] .oc-button[data-ui="recent-dir-remove"] {
   opacity: var(--ui-opacity-full);
