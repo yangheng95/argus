@@ -22,6 +22,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-20-mission-rename-input-single-source.md](2026-06-20-mission-rename-input-single-source.md)       | Mission Rename Input Single Source |
 | [2026-06-20-titlebar-run-checkbox-menubar-primitive.md](2026-06-20-titlebar-run-checkbox-menubar-primitive.md) | Titlebar Run Checkbox Menubar Primitive |
 | [2026-06-20-task-dirbar-breadcrumb-focus-visible.md](2026-06-20-task-dirbar-breadcrumb-focus-visible.md)   | TaskDirBar Breadcrumb Focus Visible |
+| [2026-06-20-executor-chip-focus-visible.md](2026-06-20-executor-chip-focus-visible.md)                     | Executor Chip Focus Visible |
 
 ## 2026-06-19
 

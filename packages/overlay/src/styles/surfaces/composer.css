@@ -531,7 +531,8 @@
     0 0 0 calc(2px * var(--ui-scale)) var(--accent-ring);
 }
 
-.executor-chip-slot .oc-button[data-ui^="executor-chip-"]:hover {
+.executor-chip-slot .oc-button[data-ui^="executor-chip-"]:hover,
+.executor-chip-slot .oc-button[data-ui^="executor-chip-"]:focus-visible {
   --oc-button-bg: color-mix(in srgb, var(--surface-inset) 86%, var(--accent) 14%);
   --oc-button-color: var(--text-strong);
   box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--accent) 22%, var(--border));

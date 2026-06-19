@@ -927,7 +927,9 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).not.toMatch(/border-radius:\s*999px/)
 
     expect(composerSurface).toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/)
-    expect(composerSurface).toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover\s*\{/)
+    expect(composerSurface).toMatch(
+      /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover,\s*\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:focus-visible\s*\{/,
+    )
     expect(composerSurface).toMatch(
       /\.executor-chip-slot\[data-open="true"\] \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/,
     )
