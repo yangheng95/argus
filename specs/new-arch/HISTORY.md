@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File                                                                                                       | Title                          |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | [2026-06-20-conversation-render-error-i18n.md](2026-06-20-conversation-render-error-i18n.md)               | Conversation Render Error i18n |
+| [2026-06-20-provider-search-field-single-source.md](2026-06-20-provider-search-field-single-source.md)     | Provider Search Field Single Source |
 | [2026-06-20-log-viewer-refresh-entry-single-source.md](2026-06-20-log-viewer-refresh-entry-single-source.md) | Log Viewer Refresh Entry Single Source |
 | [2026-06-20-settings-textarea-primitive.md](2026-06-20-settings-textarea-primitive.md)                     | Settings Textarea Primitive    |
 | [2026-06-20-image-preview-trigger-i18n-button.md](2026-06-20-image-preview-trigger-i18n-button.md)         | Image Preview Trigger i18n Button |
