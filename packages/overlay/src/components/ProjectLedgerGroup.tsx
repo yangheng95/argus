@@ -41,11 +41,18 @@ export function projectLedgerGroupTip(directory: string, count: number): string 
     .join(" / ")
 }
 
+function projectLedgerGroupBodyElementID(directory: string, dataUi: string | undefined): string {
+  const namespace = dataUi || "task-project-group"
+  const raw = `${namespace}-${projectDirectoryKey(directory)}-body`
+  return raw.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "project-group-body"
+}
+
 export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
   const label = () => projectDirectoryLabel(props.directory, t("task.project.unknown"))
   const className = () => ["project-group", props.class].filter(Boolean).join(" ")
   const countText = () => String(props.count)
   const title = () => props.title || projectLedgerGroupTip(props.directory, props.count)
+  const bodyElementID = () => projectLedgerGroupBodyElementID(props.directory, props.dataUi)
 
   return (
     <section
@@ -61,6 +68,7 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
         data-ui="project-group-toggle"
         title={title()}
         aria-expanded={props.collapsed ? "false" : "true"}
+        aria-controls={props.collapsed ? undefined : bodyElementID()}
         aria-label={
           props.collapsed
             ? t("task.project.expand", { name: label().name })
@@ -85,7 +93,7 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
         </span>
       </Button>
       <Show when={!props.collapsed}>
-        <div class="project-group-body">{props.children}</div>
+        <div id={bodyElementID()} class="project-group-body">{props.children}</div>
       </Show>
     </section>
   )
