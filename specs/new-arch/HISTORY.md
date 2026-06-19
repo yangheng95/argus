@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| [2026-06-19-loading-spinner-motion-token-source.md](2026-06-19-loading-spinner-motion-token-source.md)         | Loading Spinner Motion Token Source |
 | [2026-06-19-browser-evidence-title-font-weight-token.md](2026-06-19-browser-evidence-title-font-weight-token.md) | Browser Evidence Title Font Weight Token |
 | [2026-06-19-section-summary-focus-visible.md](2026-06-19-section-summary-focus-visible.md)                     | Section Summary Focus Visible |
 | [2026-06-19-connection-badge-button-diagnostics.md](2026-06-19-connection-badge-button-diagnostics.md)         | Connection Badge Button Diagnostics |

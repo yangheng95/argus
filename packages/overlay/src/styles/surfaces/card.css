@@ -644,11 +644,7 @@ body {
   border-radius: 50%;
   border: calc(1.6px * var(--ui-scale)) solid var(--warn-dim);
   border-top-color: var(--warn);
-}
-@keyframes card-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: oc-spin var(--ui-duration-loop-agent-spin) linear infinite;
 }
 
 /* ── Stage accent (left border) ──────────────────────────── */

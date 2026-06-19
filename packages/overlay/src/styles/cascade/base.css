@@ -176,7 +176,17 @@ a {
   display: none !important;
 }
 
+@keyframes oc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .card__spinner,
+  .app-notification__spinner {
+    animation: none !important;
+  }
   .task-list-skeleton-row {
     animation: none !important;
   }

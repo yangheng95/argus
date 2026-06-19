@@ -466,7 +466,7 @@
   height: calc(6px * var(--ui-scale));
   border-radius: var(--oc-radius-pill);
   background: var(--accent);
-  animation: task-row-children-pulse 1.4s ease-in-out infinite;
+  animation: task-row-children-pulse var(--ui-duration-loop-connection-pulse) var(--ui-timing-standard) infinite;
 }
 
 @keyframes task-row-children-pulse {
