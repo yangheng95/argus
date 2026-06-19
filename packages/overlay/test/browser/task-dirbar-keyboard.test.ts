@@ -151,6 +151,38 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
         "oc_recent_directories",
         JSON.stringify([input.directory, "D:/overlay/workspace/tools", "D:/overlay/workspace/docs"]),
       )
+      window.__TAURI__ = {
+        core: {
+          invoke: async (command: string) => {
+            if (command === "overlay_settings_load") {
+              return {
+                serverUrl: input.serverUrl,
+                autoServer: false,
+                locale: "en-US",
+                directory: input.directory,
+              }
+            }
+            if (command === "overlay_settings_save") return true
+            if (command === "overlay_server_info") return { url: input.serverUrl, pid: 12345 }
+            if (command === "overlay_pick_dir") return input.directory
+            if (command === "overlay_open_path") return true
+            if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              hide: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+            }
+          },
+        },
+      }
     }, { directory: PROJECT_DIRECTORY, serverUrl: server.origin })
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
@@ -205,6 +237,69 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
       currentNodeSelected: "",
       currentNodePressed: "",
     })
+
+    const breadcrumbFocusStates: Record<
+      string,
+      {
+        kind: string
+        className: string
+        background: string
+        color: string
+        outlineStyle: string
+        outlineWidth: string
+        outlineColor: string
+      }
+    > = {}
+    let breadcrumbFocusScreenshot = ""
+    await page.evaluate(() => {
+      document.body.setAttribute("tabindex", "-1")
+      document.body.focus()
+      document.body.removeAttribute("tabindex")
+    })
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      await page.keyboard.press("Tab")
+      const state = await page.evaluate(() => {
+        const active = document.activeElement as HTMLElement | null
+        if (!active) return null
+        const kind = active.matches(".task-dir-step")
+          ? "step"
+          : active.matches(".task-dir-node")
+            ? "node"
+            : active.matches(".task-dir-tool")
+              ? "tool"
+              : ""
+        if (!kind) return null
+        const style = getComputedStyle(active)
+        return {
+          kind,
+          className: active.className,
+          background: style.backgroundColor,
+          color: style.color,
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+          outlineColor: style.outlineColor,
+        }
+      })
+      if (!state || breadcrumbFocusStates[state.kind]) continue
+      breadcrumbFocusStates[state.kind] = state
+      if (!breadcrumbFocusScreenshot) {
+        breadcrumbFocusScreenshot = await saveElementScreenshot(
+          page,
+          ".task-cwd-dropdown",
+          "task-dirbar-breadcrumb-focus-visible.png",
+        )
+      }
+      if (breadcrumbFocusStates.step && breadcrumbFocusStates.node && breadcrumbFocusStates.tool) break
+    }
+    assert.deepEqual(Object.keys(breadcrumbFocusStates).sort(), ["node", "step", "tool"])
+    for (const state of Object.values(breadcrumbFocusStates)) {
+      assert.notEqual(state.background, "rgba(0, 0, 0, 0)", JSON.stringify(breadcrumbFocusStates))
+      assert.notEqual(state.color, "", JSON.stringify(breadcrumbFocusStates))
+      assert.equal(state.outlineStyle, "solid", JSON.stringify(breadcrumbFocusStates))
+      assert.notEqual(state.outlineWidth, "0px", JSON.stringify(breadcrumbFocusStates))
+      assert.notEqual(state.outlineColor, "rgba(0, 0, 0, 0)", JSON.stringify(breadcrumbFocusStates))
+    }
+    assert.ok(breadcrumbFocusScreenshot.endsWith("task-dirbar-breadcrumb-focus-visible.png"))
 
     await page.focus(".task-dir-step")
     await page.keyboard.press("Enter")

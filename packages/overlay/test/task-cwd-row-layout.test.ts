@@ -226,6 +226,33 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).not.toMatch(/<Button[\s\S]*innerHTML=\{breadcrumbHtml\(\)\}[\s\S]*<\/Button>/)
   })
 
+  test("breadcrumb path action buttons expose tokenized focus-visible chrome", () => {
+    const toolFocusChrome = selectorRuleBody(".task-dir-tool:focus-visible")
+    expect(toolFocusChrome).toMatch(/background:\s*var\(--subtle-3\)/)
+    expect(toolFocusChrome).toMatch(/color:\s*var\(--text-strong\)/)
+    const toolFocusOutline = soloRuleBody(".task-dir-tool:focus-visible")
+    expect(toolFocusOutline).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
+    expect(toolFocusOutline).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
+
+    const dangerToolFocusChrome = selectorRuleBody(".task-dir-tool.danger:focus-visible")
+    expect(dangerToolFocusChrome).toMatch(/background:\s*color-mix\(in srgb,\s*var\(--bad\) 12%,\s*transparent\)/)
+    expect(dangerToolFocusChrome).toMatch(/color:\s*var\(--bad\)/)
+    expect(soloRuleBody(".task-dir-tool.danger:focus-visible")).toMatch(/outline-color:\s*var\(--bad\)/)
+
+    const nodeFocusChrome = selectorRuleBody(".task-dir-node:focus-visible")
+    expect(nodeFocusChrome).toMatch(/background:\s*var\(--subtle-3\)/)
+    const nodeFocusOutline = soloRuleBody(".task-dir-node:focus-visible")
+    expect(nodeFocusOutline).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
+    expect(nodeFocusOutline).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
+
+    const stepFocusChrome = selectorRuleBody(".task-dir-step:focus-visible")
+    expect(stepFocusChrome).toMatch(/background:\s*var\(--accent-dim\)/)
+    expect(stepFocusChrome).toMatch(/color:\s*var\(--accent\)/)
+    const stepFocusOutline = soloRuleBody(".task-dir-step:focus-visible")
+    expect(stepFocusOutline).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
+    expect(stepFocusOutline).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
+  })
+
   test("cwd popup owns editable path entry and discovered OpenCorvus projects", () => {
     expect(TASK_DIR_BAR).toContain("loadWorkspaceOnboardingDiscovery")
     expect(TASK_DIR_BAR).toContain('class="recent-dir-edit-form"')
