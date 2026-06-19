@@ -189,6 +189,10 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(chipButtonBlock).toContain("--oc-button-padding-x: var(--ui-btn-mini-padding-x);")
     expect(chipButtonBlock).toContain("--oc-button-gap: var(--ui-btn-mini-padding-x);")
     expect(chipButtonBlock).not.toContain("calc(10px * var(--ui-scale))")
+    expect(CSS).toMatch(
+      /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover,\s*\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:focus-visible\s*\{[\s\S]*?--oc-button-bg:[\s\S]*?--oc-button-color:[\s\S]*?box-shadow:/,
+    )
+    expect(CSS).not.toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:focus\s*\{/)
   })
 
   test("Hexin budget CSS belongs to the composer selector surface", () => {

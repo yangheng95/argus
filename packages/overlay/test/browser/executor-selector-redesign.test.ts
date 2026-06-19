@@ -77,6 +77,43 @@ async function saveElementScreenshot(
   return { target, screenshot }
 }
 
+async function readChipVisual(page: any, selector: string) {
+  return page.$eval(selector, (node: HTMLElement) => {
+    const styles = getComputedStyle(node)
+    return {
+      backgroundColor: styles.backgroundColor,
+      boxShadow: styles.boxShadow,
+      color: styles.color,
+      focusVisible: node.matches(":focus-visible"),
+      hover: node.matches(":hover"),
+      outlineStyle: styles.outlineStyle,
+      outlineWidth: styles.outlineWidth,
+    }
+  })
+}
+
+async function tabToSelector(page: any, selector: string) {
+  await page.evaluate(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement) active.blur()
+  })
+  for (let index = 0; index < 120; index += 1) {
+    await page.keyboard.press("Tab")
+    const state = await page.evaluate((targetSelector) => {
+      const target = document.querySelector(targetSelector)
+      const active = document.activeElement
+      return {
+        dataUi: active instanceof HTMLElement ? active.dataset.ui ?? "" : "",
+        focused: active === target,
+        focusVisible: active instanceof HTMLElement ? active.matches(":focus-visible") : false,
+        tagName: active?.tagName ?? "",
+      }
+    }, selector)
+    if (state.focused) return state
+  }
+  throw new Error(`Unable to reach ${selector} with keyboard Tab`)
+}
+
 async function analyzeBudgetScreenshot(buffer: Buffer) {
   const image = sharp(buffer)
   const metadata = await image.metadata()
@@ -426,6 +463,33 @@ test(
       assert.ok(budgetScreenshotStats.nonWhite > 0, JSON.stringify(budgetScreenshotStats))
       assert.ok(budgetScreenshotStats.uniqueColorBuckets >= 4, JSON.stringify(budgetScreenshotStats))
       assert.ok(budgetScreenshotStats.redDominant > 0, JSON.stringify(budgetScreenshotStats))
+
+      const mirrorChipSelector = '[data-ui="executor-chip-mirror"]'
+      const baseChipVisual = await readChipVisual(page, mirrorChipSelector)
+      await page.hover(mirrorChipSelector)
+      const hoverChipVisual = await readChipVisual(page, mirrorChipSelector)
+      assert.equal(hoverChipVisual.hover, true)
+      assert.notEqual(hoverChipVisual.backgroundColor, baseChipVisual.backgroundColor)
+      assert.notEqual(hoverChipVisual.boxShadow, "none")
+      await page.mouse.move(0, 0)
+      const chipFocusState = await tabToSelector(page, mirrorChipSelector)
+      assert.deepEqual(chipFocusState, {
+        dataUi: "executor-chip-mirror",
+        focused: true,
+        focusVisible: true,
+        tagName: "BUTTON",
+      })
+      const focusChipVisual = await readChipVisual(page, mirrorChipSelector)
+      assert.equal(focusChipVisual.focusVisible, true)
+      assert.equal(focusChipVisual.backgroundColor, hoverChipVisual.backgroundColor)
+      assert.equal(focusChipVisual.color, hoverChipVisual.color)
+      assert.equal(focusChipVisual.boxShadow, hoverChipVisual.boxShadow)
+      assert.notEqual(focusChipVisual.outlineStyle, "none")
+      assert.notEqual(focusChipVisual.outlineWidth, "0px")
+      const focusedMirrorChip = await page.$(mirrorChipSelector)
+      assert.ok(focusedMirrorChip, "focused mirror executor chip should exist before screenshot")
+      const focusScreenshot = await saveElementScreenshot(focusedMirrorChip, "executor-chip-focus-visible.png")
+      assert.ok(focusScreenshot.target.endsWith("executor-chip-focus-visible.png"))
 
       await page.evaluate(async () => {
         await (window as any).applyDirectory("D:/overlay/workspace/next", { persist: false, save: false })
