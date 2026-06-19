@@ -8,24 +8,37 @@ import {
   type ImagePreviewSize,
 } from "../utils/image-preview-scale"
 import { imagePreviewTriggerLabel } from "../utils/image-preview-label"
+import { t } from "../utils/i18n"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
 
 const SCALE_STEP = 0.25
-const IMAGE_COPY_SUCCESS_MESSAGE = "Copied"
-const IMAGE_COPY_LOADING_MESSAGE = "Copy failed: image loading"
-const IMAGE_COPY_CLIPBOARD_UNAVAILABLE_MESSAGE = "Copy failed: clipboard unavailable"
-const IMAGE_COPY_SOURCE_MESSAGE = "Copy failed: source bytes unavailable"
-const IMAGE_COPY_FORMAT_MESSAGE = "Copy failed: PNG source required"
-const IMAGE_COPY_BLOCKED_MESSAGE = "Copy failed: clipboard blocked"
+const IMAGE_COPY_SUCCESS_KEY = "image_preview.copy_status.copied"
+const IMAGE_COPY_LOADING_KEY = "image_preview.copy_status.loading"
+const IMAGE_COPY_CLIPBOARD_UNAVAILABLE_KEY = "image_preview.copy_status.clipboard_unavailable"
+const IMAGE_COPY_SOURCE_KEY = "image_preview.copy_status.source_unavailable"
+const IMAGE_COPY_FORMAT_KEY = "image_preview.copy_status.png_required"
+const IMAGE_COPY_BLOCKED_KEY = "image_preview.copy_status.clipboard_blocked"
+type ImageCopyFeedbackKey =
+  | typeof IMAGE_COPY_SUCCESS_KEY
+  | typeof IMAGE_COPY_LOADING_KEY
+  | typeof IMAGE_COPY_CLIPBOARD_UNAVAILABLE_KEY
+  | typeof IMAGE_COPY_SOURCE_KEY
+  | typeof IMAGE_COPY_FORMAT_KEY
+  | typeof IMAGE_COPY_BLOCKED_KEY
 
 type CopyFeedback = {
   tone: "success" | "error"
-  message: string
+  key: ImageCopyFeedbackKey
 }
 
-class ImageCopyError extends Error {}
+class ImageCopyError extends Error {
+  constructor(readonly key: ImageCopyFeedbackKey) {
+    super(key)
+    this.name = "ImageCopyError"
+  }
+}
 
 export function PreviewableImage(props: { src: string; alt?: string; triggerClass?: string; imageClass?: string }) {
   const alt = () => props.alt || ""
@@ -196,23 +209,35 @@ export function ImagePreviewHost() {
 
   async function fetchPreviewImageBlob(): Promise<Blob> {
     const src = imagePreviewState().src
-    if (!src) throw new ImageCopyError(IMAGE_COPY_SOURCE_MESSAGE)
+    if (!src) throw new ImageCopyError(IMAGE_COPY_SOURCE_KEY)
     let response: Response
     try {
       response = await fetch(src)
     } catch {
-      throw new ImageCopyError(IMAGE_COPY_SOURCE_MESSAGE)
+      throw new ImageCopyError(IMAGE_COPY_SOURCE_KEY)
     }
-    if (!response.ok) throw new ImageCopyError(IMAGE_COPY_SOURCE_MESSAGE)
+    if (!response.ok) throw new ImageCopyError(IMAGE_COPY_SOURCE_KEY)
     const blob = await response.blob().catch(() => {
-      throw new ImageCopyError(IMAGE_COPY_SOURCE_MESSAGE)
+      throw new ImageCopyError(IMAGE_COPY_SOURCE_KEY)
     })
-    if (blob.type.toLowerCase() !== "image/png") throw new ImageCopyError(IMAGE_COPY_FORMAT_MESSAGE)
+    if (blob.type.toLowerCase() !== "image/png") throw new ImageCopyError(IMAGE_COPY_FORMAT_KEY)
     return blob
   }
 
-  function copyErrorMessage(error: unknown): string {
-    return error instanceof ImageCopyError ? error.message : IMAGE_COPY_BLOCKED_MESSAGE
+  function copyErrorKey(error: unknown): ImageCopyFeedbackKey {
+    return error instanceof ImageCopyError ? error.key : IMAGE_COPY_BLOCKED_KEY
+  }
+
+  function imageCopyStatusText(key: ImageCopyFeedbackKey): string {
+    const labels: Record<ImageCopyFeedbackKey, string> = {
+      [IMAGE_COPY_SUCCESS_KEY]: t("image_preview.copy_status.copied"),
+      [IMAGE_COPY_LOADING_KEY]: t("image_preview.copy_status.loading"),
+      [IMAGE_COPY_CLIPBOARD_UNAVAILABLE_KEY]: t("image_preview.copy_status.clipboard_unavailable"),
+      [IMAGE_COPY_SOURCE_KEY]: t("image_preview.copy_status.source_unavailable"),
+      [IMAGE_COPY_FORMAT_KEY]: t("image_preview.copy_status.png_required"),
+      [IMAGE_COPY_BLOCKED_KEY]: t("image_preview.copy_status.clipboard_blocked"),
+    }
+    return labels[key]
   }
 
   async function copyPreviewImage(): Promise<void> {
@@ -220,11 +245,11 @@ export function ImagePreviewHost() {
     const clipboardWrite = navigator.clipboard?.write
     setCopyFeedback(null)
     if (!image || !image.complete || imageSize().width <= 0 || imageSize().height <= 0) {
-      setCopyFeedback({ tone: "error", message: IMAGE_COPY_LOADING_MESSAGE })
+      setCopyFeedback({ tone: "error", key: IMAGE_COPY_LOADING_KEY })
       return
     }
     if (!clipboardWrite || typeof ClipboardItem === "undefined") {
-      setCopyFeedback({ tone: "error", message: IMAGE_COPY_CLIPBOARD_UNAVAILABLE_MESSAGE })
+      setCopyFeedback({ tone: "error", key: IMAGE_COPY_CLIPBOARD_UNAVAILABLE_KEY })
       return
     }
 
@@ -232,9 +257,9 @@ export function ImagePreviewHost() {
     try {
       const blob = await fetchPreviewImageBlob()
       await clipboardWrite.call(navigator.clipboard, [new ClipboardItem({ "image/png": blob })])
-      setCopyFeedback({ tone: "success", message: IMAGE_COPY_SUCCESS_MESSAGE })
+      setCopyFeedback({ tone: "success", key: IMAGE_COPY_SUCCESS_KEY })
     } catch (error) {
-      setCopyFeedback({ tone: "error", message: copyErrorMessage(error) })
+      setCopyFeedback({ tone: "error", key: copyErrorKey(error) })
     } finally {
       setCopyInFlight(false)
     }
@@ -289,23 +314,23 @@ export function ImagePreviewHost() {
       class="image-preview-dialog"
       formClass="image-preview-dialog__form"
       open={imagePreviewState().open}
-      title={imagePreviewState().alt || "Image preview"}
+      title={imagePreviewState().alt || t("image_preview.title")}
       onClose={closeImagePreview}
       headerActions={
-        <div class="image-preview-dialog__toolbar" role="toolbar" aria-label="Image preview controls">
+        <div class="image-preview-dialog__toolbar" role="toolbar" aria-label={t("image_preview.controls")}>
           <Button
             type="button"
             variant="ghost"
             size="icon"
             tone="neutral"
             data-chrome="icon-action"
-            title="Zoom out"
-            aria-label="Zoom out"
+            title={t("image_preview.zoom_out")}
+            aria-label={t("image_preview.zoom_out")}
             onClick={() => updateScale(-SCALE_STEP)}
           >
             <Icon name="minimize" size={13} />
           </Button>
-          <span class="image-preview-dialog__scale" role="status" aria-label="Current zoom">
+          <span class="image-preview-dialog__scale" role="status" aria-label={t("image_preview.current_zoom")}>
             {scaleLabel()}
           </span>
           <Button
@@ -314,8 +339,8 @@ export function ImagePreviewHost() {
             size="icon"
             tone="neutral"
             data-chrome="icon-action"
-            title="Zoom in"
-            aria-label="Zoom in"
+            title={t("image_preview.zoom_in")}
+            aria-label={t("image_preview.zoom_in")}
             onClick={() => updateScale(SCALE_STEP)}
           >
             <Icon name="maximize" size={13} />
@@ -326,30 +351,30 @@ export function ImagePreviewHost() {
             variant="outline"
             size="sm"
             tone="neutral"
-            title="Fit width"
-            aria-label="Fit width"
+            title={t("image_preview.fit_width")}
+            aria-label={t("image_preview.fit_width")}
             onClick={setWidthScale}
           >
-            Width
+            {t("image_preview.fit_width_short")}
           </Button>
           <Button
             type="button"
             variant="outline"
             size="sm"
             tone="neutral"
-            title="Fit whole image"
-            aria-label="Fit image"
+            title={t("image_preview.fit_image_title")}
+            aria-label={t("image_preview.fit_image")}
             onClick={setFitScale}
           >
-            Fit
+            {t("image_preview.fit_image_short")}
           </Button>
           <Button
             type="button"
             variant="outline"
             size="sm"
             tone="neutral"
-            title="Original size"
-            aria-label="Original size"
+            title={t("image_preview.original_size")}
+            aria-label={t("image_preview.original_size")}
             onClick={setOriginalScale}
           >
             1:1
@@ -361,8 +386,8 @@ export function ImagePreviewHost() {
             size="icon"
             tone="neutral"
             data-chrome="icon-action"
-            title="Copy image"
-            aria-label="Copy image"
+            title={t("image_preview.copy_image")}
+            aria-label={t("image_preview.copy_image")}
             disabled={copyInFlight()}
             onClick={() => void copyPreviewImage()}
           >
@@ -376,7 +401,7 @@ export function ImagePreviewHost() {
                 role={feedback().tone === "error" ? "alert" : "status"}
                 aria-live={feedback().tone === "error" ? "assertive" : "polite"}
               >
-                {feedback().message}
+                {imageCopyStatusText(feedback().key)}
               </span>
             )}
           </Show>
@@ -386,8 +411,8 @@ export function ImagePreviewHost() {
             size="icon"
             tone="neutral"
             data-chrome="icon-action"
-            title="Close"
-            aria-label="Close"
+            title={t("common.close")}
+            aria-label={t("common.close")}
             onClick={closeImagePreview}
           >
             <Icon name="close" size={13} />

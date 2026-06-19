@@ -6,9 +6,50 @@ import { imagePreviewTriggerLabel } from "../src/utils/image-preview-label"
 import { renderMarkdown } from "../src/utils/markdown"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
+const IMAGE_PREVIEW_I18N_KEYS = [
+  "image_preview.title",
+  "image_preview.controls",
+  "image_preview.zoom_out",
+  "image_preview.current_zoom",
+  "image_preview.zoom_in",
+  "image_preview.fit_width",
+  "image_preview.fit_width_short",
+  "image_preview.fit_image_title",
+  "image_preview.fit_image",
+  "image_preview.fit_image_short",
+  "image_preview.original_size",
+  "image_preview.copy_image",
+  "image_preview.copy_status.copied",
+  "image_preview.copy_status.loading",
+  "image_preview.copy_status.clipboard_unavailable",
+  "image_preview.copy_status.source_unavailable",
+  "image_preview.copy_status.png_required",
+  "image_preview.copy_status.clipboard_blocked",
+] as const
+const RETIRED_IMAGE_PREVIEW_LITERALS = [
+  "Image preview",
+  "Image preview controls",
+  "Zoom out",
+  "Current zoom",
+  "Zoom in",
+  "Fit width",
+  "Fit whole image",
+  "Fit image",
+  "Original size",
+  "Copy image",
+  "Copy failed: image loading",
+  "Copy failed: clipboard unavailable",
+  "Copy failed: source bytes unavailable",
+  "Copy failed: PNG source required",
+  "Copy failed: clipboard blocked",
+] as const
 
 function read(path: string): string {
   return readFileSync(join(OVERLAY_ROOT, path), "utf8")
+}
+
+function readJson(path: string): Record<string, unknown> {
+  return JSON.parse(read(path)) as Record<string, unknown>
 }
 
 function block(css: string, selector: string): string {
@@ -110,12 +151,18 @@ describe("message image preview", () => {
     const scaleHelper = read("src/utils/image-preview-scale.ts")
     expect(scaleHelper).toContain("IMAGE_PREVIEW_MIN_SCALE = 0.02")
     expect(scaleHelper).toContain("IMAGE_PREVIEW_MAX_SCALE = 8")
-    expect(component).toContain('aria-label="Zoom in"')
-    expect(component).toContain('aria-label="Zoom out"')
-    expect(component).toContain('aria-label="Fit width"')
-    expect(component).toContain('aria-label="Fit image"')
-    expect(component).toContain('aria-label="Original size"')
-    expect(component).toContain('aria-label="Copy image"')
+    for (const key of IMAGE_PREVIEW_I18N_KEYS) {
+      expect(component).toContain(`"${key}"`)
+    }
+    for (const literal of RETIRED_IMAGE_PREVIEW_LITERALS) {
+      expect(component).not.toContain(`"${literal}"`)
+    }
+    expect(component).toContain('aria-label={t("image_preview.zoom_in")}')
+    expect(component).toContain('aria-label={t("image_preview.zoom_out")}')
+    expect(component).toContain('aria-label={t("image_preview.fit_width")}')
+    expect(component).toContain('aria-label={t("image_preview.fit_image")}')
+    expect(component).toContain('aria-label={t("image_preview.original_size")}')
+    expect(component).toContain('aria-label={t("image_preview.copy_image")}')
     expect(component).toContain("calculateImagePreviewOpenScale")
     expect(component).toContain("calculateImagePreviewFitScale")
     expect(component).toContain("onPointerDown={startPan}")
@@ -137,6 +184,22 @@ describe("message image preview", () => {
     expect(copyStatus).toContain("max-width: min(calc(240px * var(--ui-scale)), 52vw);")
   })
 
+  test("modal preview dialog labels are localized from complete locale bundles", () => {
+    const enUS = readJson("src/i18n/en-US.json")
+    const zhCN = readJson("src/i18n/zh-CN.json")
+
+    for (const key of IMAGE_PREVIEW_I18N_KEYS) {
+      expect(enUS[key]).toEqual(expect.any(String))
+      expect(zhCN[key]).toEqual(expect.any(String))
+      expect(enUS[key]).not.toBe(key)
+      expect(zhCN[key]).not.toBe(key)
+    }
+    expect(enUS["image_preview.copy_image"]).toBe("Copy image")
+    expect(zhCN["image_preview.copy_image"]).toBe("复制图片")
+    expect(enUS["image_preview.copy_status.clipboard_unavailable"]).toBe("Copy failed: clipboard unavailable")
+    expect(zhCN["image_preview.copy_status.clipboard_unavailable"]).toBe("复制失败：剪贴板不可用")
+  })
+
   test("modal preview copies fetched PNG bytes without canvas fallback", () => {
     const component = read("src/components/ImagePreview.tsx")
 
@@ -149,6 +212,9 @@ describe("message image preview", () => {
     expect(component).not.toContain("catch(() => undefined)")
     expect(component).toContain('"image/png"')
     expect(component).toContain("new ClipboardItem")
+    expect(component).toContain("readonly key: ImageCopyFeedbackKey")
+    expect(component).toContain("setCopyFeedback({ tone: \"success\", key: IMAGE_COPY_SUCCESS_KEY })")
+    expect(component).toContain("imageCopyStatusText(feedback().key)")
     expect(component).toContain('role={feedback().tone === "error" ? "alert" : "status"}')
     expect(component).toContain("onClick={() => void copyPreviewImage()}")
   })
