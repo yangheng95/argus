@@ -683,16 +683,22 @@
 
 .workspace-terminal-option:hover,
 .workspace-terminal-option[data-highlighted],
-.workspace-terminal-option:focus-visible,
 .workspace-editor-option:hover,
 .workspace-editor-option[data-highlighted],
-.workspace-editor-option:focus-visible,
 .workspace-coding-cli-option:hover,
-.workspace-coding-cli-option[data-highlighted],
+.workspace-coding-cli-option[data-highlighted] {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+  outline: none;
+}
+
+.workspace-terminal-option:focus-visible,
+.workspace-editor-option:focus-visible,
 .workspace-coding-cli-option:focus-visible {
   background: var(--subtle-3);
   color: var(--text-strong);
   outline: none;
+  box-shadow: inset 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 58%, transparent);
 }
 
 .workspace-terminal-option-label,

@@ -312,6 +312,39 @@ test(
       assert.equal(editorMenuState.portaled, true)
       assert.equal(editorMenuState.topBelowButton, true)
       assert.equal(editorMenuState.rightAligned, true)
+      await page.keyboard.press("ArrowDown")
+      await page.waitForFunction(() =>
+        document.activeElement?.classList.contains("workspace-editor-option"),
+      )
+      const editorMenuFocus = await page.evaluate(() => {
+        const active = document.activeElement as HTMLElement | null
+        if (!active) throw new Error("Missing focused workspace editor option")
+        const style = getComputedStyle(active)
+        return {
+          className: active.className,
+          focusVisible: active.matches(":focus-visible"),
+          boxShadow: style.boxShadow,
+          outlineStyle: style.outlineStyle,
+          background: style.backgroundColor,
+        }
+      })
+      assert.match(editorMenuFocus.className, /\bworkspace-editor-option\b/)
+      assert.equal(editorMenuFocus.focusVisible, true)
+      assert.notEqual(editorMenuFocus.boxShadow, "none")
+      assert.notEqual(editorMenuFocus.background, "rgba(0, 0, 0, 0)")
+      const editorFocusClip = await page.$eval(".workspace-editor-menu", (node) => {
+        const rect = (node as HTMLElement).getBoundingClientRect()
+        return {
+          x: Math.max(0, rect.x - 8),
+          y: Math.max(0, rect.y - 8),
+          width: rect.width + 16,
+          height: rect.height + 16,
+        }
+      })
+      writeFileSync(
+        resolve(".scratch/workspace-split-launcher-menu-item-focus.png"),
+        await page.screenshot({ clip: editorFocusClip }),
+      )
       const editorIconSizes = await page.evaluate(() => {
         const entries = Array.from(document.querySelectorAll<HTMLElement>(".workspace-editor-option")).map((option) => {
           const editor = option.dataset.editor || ""
