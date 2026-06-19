@@ -40,6 +40,21 @@ test("workspace onboarding directory rows use the shared Button primitive", () =
   expect(source).not.toMatch(/workspace-onboarding-directory-row[^{}]*:focus-visible[\s\S]*outline:\s*none/)
 })
 
+test("workspace onboarding browser path input uses the shared field primitive", () => {
+  expect(component).toMatch(/<input[\s\S]*class="field-input"[\s\S]*data-testid="workspace-onboarding-browser-path-input"/)
+  expect(source).toMatch(/\.workspace-onboarding-browser-path-label\s+\.field-input\s*\{/)
+  expect(source).not.toMatch(/\.workspace-onboarding-browser-path-label\s+input\b/)
+  expect(source).not.toMatch(/\.workspace-onboarding-browser-path-label\s+input:focus\b/)
+  const pathInputRule = source.match(/\.workspace-onboarding-browser-path-label\s+\.field-input\s*\{(?<body>[\s\S]*?)\}/)
+  expect(pathInputRule?.groups?.body ?? "").toMatch(/height:\s*calc\(34px \* var\(--ui-scale\)\)/)
+  expect(pathInputRule?.groups?.body ?? "").toMatch(/padding:\s*0 calc\(10px \* var\(--ui-scale\)\)/)
+  expect(pathInputRule?.groups?.body ?? "").not.toMatch(/\bborder(?:-color)?:/)
+  expect(pathInputRule?.groups?.body ?? "").not.toMatch(/\bbackground:/)
+  expect(pathInputRule?.groups?.body ?? "").not.toMatch(/\bcolor:/)
+  expect(pathInputRule?.groups?.body ?? "").not.toMatch(/\bfont(?:-weight)?:/)
+  expect(pathInputRule?.groups?.body ?? "").not.toMatch(/\boutline:/)
+})
+
 test("workspace onboarding surfaces discovery failures instead of clearing to an empty discovered list", async () => {
   const state = await loadWorkspaceOnboardingDiscovery(async () => {
     throw new Error("discovery unavailable")

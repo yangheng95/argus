@@ -136,6 +136,34 @@ test("browser overlay opens a project by submitting an explicit server path", as
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForSelector('[data-testid="workspace-onboarding-browser-path-form"]', { visible: true })
+    await page.focus('[data-testid="workspace-onboarding-browser-path-input"]')
+    const pathInputState = await page.$eval('[data-testid="workspace-onboarding-browser-path-input"]', (node) => {
+      const input = node as HTMLInputElement
+      const styles = getComputedStyle(input)
+      return {
+        active: document.activeElement === input,
+        className: input.className,
+        appearance: styles.appearance,
+        borderTopColor: styles.borderTopColor,
+        backgroundColor: styles.backgroundColor,
+        color: styles.color,
+        boxShadow: styles.boxShadow,
+      }
+    })
+    assert.equal(pathInputState.active, true)
+    assert.match(pathInputState.className, /\bfield-input\b/)
+    assert.equal(pathInputState.appearance, "none")
+    assert.notEqual(pathInputState.borderTopColor, "rgba(0, 0, 0, 0)")
+    assert.notEqual(pathInputState.backgroundColor, "rgba(0, 0, 0, 0)")
+    assert.notEqual(pathInputState.color, "rgba(0, 0, 0, 0)")
+    assert.notEqual(pathInputState.boxShadow, "none")
+    assert.ok(
+      (await saveElementScreenshot(
+        page,
+        ".workspace-onboarding-form",
+        "workspace-onboarding-path-input-field-input.png",
+      )).endsWith("workspace-onboarding-path-input-field-input.png"),
+    )
     await page.type('[data-testid="workspace-onboarding-browser-path-input"]', projectPath)
     await page.click('[data-testid="workspace-onboarding-browser-path-submit"]')
     await page.waitForFunction((expected) => (window as any).settingsStore.directory === expected, {}, projectPath)

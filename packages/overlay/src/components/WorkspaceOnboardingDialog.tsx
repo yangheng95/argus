@@ -133,6 +133,7 @@ export function WorkspaceOnboardingDialog() {
                 <label class="workspace-onboarding-browser-path-label">
                   <span>{t("workspace_onboarding.browser_path_label")}</span>
                   <input
+                    class="field-input"
                     value={browserPathDraft()}
                     onInput={(event) => setBrowserPathDraft(event.currentTarget.value)}
                     placeholder={t("workspace_onboarding.browser_path_placeholder")}

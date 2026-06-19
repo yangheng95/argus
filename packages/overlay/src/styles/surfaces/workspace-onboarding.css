@@ -167,22 +167,11 @@
   font-weight: var(--ui-font-weight-strong);
 }
 
-.workspace-onboarding-browser-path-label input {
+.workspace-onboarding-browser-path-label .field-input {
   width: 100%;
   min-width: 0;
   height: calc(34px * var(--ui-scale));
   padding: 0 calc(10px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
-  color: var(--text-strong);
-  font: inherit;
-  font-weight: var(--ui-font-weight-body);
-}
-
-.workspace-onboarding-browser-path-label input:focus {
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
-  outline: none;
 }
 
 .workspace-onboarding-browser-path-hint {
