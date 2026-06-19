@@ -662,6 +662,34 @@ test(
       })
 
       await page.keyboard.down("Alt")
+      await page.keyboard.press("r")
+      await page.keyboard.up("Alt")
+      await page.waitForSelector('[data-testid="titlebar-menu-run"]', { visible: true })
+      await page.focus('[data-testid="titlebar-confirm-proposed-tasks"]')
+      const toggleFocusState = await page.$eval(
+        '[data-testid="titlebar-confirm-proposed-tasks"]',
+        (node: HTMLInputElement) => {
+          const row = node.closest<HTMLElement>(".titlebar-menubar-toggle")
+          if (!row) throw new Error("missing titlebar toggle row")
+          return {
+            activeTestid: (document.activeElement as HTMLElement | null)?.dataset.testid || "",
+            focusWithin: row.matches(":focus-within"),
+            background: getComputedStyle(row).backgroundColor,
+            color: getComputedStyle(row).color,
+          }
+        },
+      )
+      assert.equal(toggleFocusState.activeTestid, "titlebar-confirm-proposed-tasks")
+      assert.equal(toggleFocusState.focusWithin, true)
+      assert.notEqual(toggleFocusState.background, "rgba(0, 0, 0, 0)")
+      assert.notEqual(toggleFocusState.color, "")
+      const runMenuElement = await page.$('[data-testid="titlebar-menu-run"]')
+      assert.ok(runMenuElement)
+      const toggleScreenshotPath = resolve(".scratch/titlebar-run-toggle-focus.png")
+      mkdirSync(dirname(toggleScreenshotPath), { recursive: true })
+      writeFileSync(toggleScreenshotPath, await runMenuElement.screenshot({}))
+
+      await page.keyboard.down("Alt")
       await page.keyboard.press("v")
       await page.keyboard.up("Alt")
       await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
@@ -709,6 +737,25 @@ test(
         ariaChecked: "true",
         checked: true,
       })
+      await page.focus('[data-testid="titlebar-opacity-range"]')
+      const rangeFocusState = await page.$eval('[data-testid="titlebar-opacity-range"]', (node: HTMLInputElement) => {
+        const row = node.closest<HTMLElement>(".titlebar-menubar-range")
+        if (!row) throw new Error("missing titlebar range row")
+        return {
+          activeTestid: (document.activeElement as HTMLElement | null)?.dataset.testid || "",
+          focusWithin: row.matches(":focus-within"),
+          background: getComputedStyle(row).backgroundColor,
+          color: getComputedStyle(row).color,
+        }
+      })
+      assert.equal(rangeFocusState.activeTestid, "titlebar-opacity-range")
+      assert.equal(rangeFocusState.focusWithin, true)
+      assert.notEqual(rangeFocusState.background, "rgba(0, 0, 0, 0)")
+      assert.notEqual(rangeFocusState.color, "")
+      const rangeScreenshotPath = resolve(".scratch/titlebar-view-range-focus.png")
+      mkdirSync(dirname(rangeScreenshotPath), { recursive: true })
+      writeFileSync(rangeScreenshotPath, await viewMenuElement.screenshot({}))
+
       await page.click('[data-testid="titlebar-theme-light"]')
       await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
       await page.waitForSelector('[data-testid="titlebar-theme-light"][aria-checked="true"]', { visible: true })
