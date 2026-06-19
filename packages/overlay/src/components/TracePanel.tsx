@@ -66,11 +66,13 @@ function summariseCollector(collector: unknown): string {
   if (!collector || typeof collector !== "object") return ""
   const c = collector as Record<string, unknown>
   const parts: string[] = []
-  if (Array.isArray(c.specs)) parts.push(`${c.specs.length} specs`)
-  if (Array.isArray(c.requirements)) parts.push(`${c.requirements.length} reqs`)
-  if (Array.isArray(c.goals)) parts.push(`${c.goals.length} goals`)
-  if (Array.isArray(c.collector)) parts.push(`${c.collector.length} items`)
-  if (Array.isArray((c as any).slots)) parts.push(`${((c as any).slots as unknown[]).length} slots`)
+  if (Array.isArray(c.specs)) parts.push(t("trace.collector.specs", { count: c.specs.length }))
+  if (Array.isArray(c.requirements)) parts.push(t("trace.collector.requirements", { count: c.requirements.length }))
+  if (Array.isArray(c.goals)) parts.push(t("trace.collector.goals", { count: c.goals.length }))
+  if (Array.isArray(c.collector)) parts.push(t("trace.collector.items", { count: c.collector.length }))
+  if (Array.isArray((c as any).slots)) {
+    parts.push(t("trace.collector.slots", { count: ((c as any).slots as unknown[]).length }))
+  }
   return parts.join(" / ")
 }
 
@@ -99,28 +101,36 @@ function eventHeadline(event: TraceEvent): string {
   switch (kind) {
     case "session_open": {
       const first = typeof payload.firstEvent === "string" ? ` · ${payload.firstEvent}` : ""
-      return `open · ${agent || "session"}${first}`
+      return `${t("trace.event.open")} · ${agent || t("trace.event.session")}${first}`
     }
     case "llm_request": {
       const msgs = Array.isArray(payload.messages) ? (payload.messages as unknown[]) : []
       const calls = lastAssistantToolCalls(msgs)
       const tail =
-        calls.length > 0 ? ` → ${calls.slice(0, 4).join(", ")}${calls.length > 4 ? ` +${calls.length - 4}` : ""}` : ""
-      return `llm_request · ${agent || "?"} · ${msgs.length} msgs${tail}`
+        calls.length > 0
+          ? ` → ${calls.slice(0, 4).join(", ")}${
+              calls.length > 4 ? ` ${t("trace.event.more_tools", { count: calls.length - 4 })}` : ""
+            }`
+          : ""
+      return `llm_request · ${agent || "?"} · ${t("trace.event.messages", { count: msgs.length })}${tail}`
     }
     case "agent_report":
     case "agent_report_retry_final": {
       const structuredOK = payload.structured !== undefined && payload.structured !== null
       const collector = summariseCollector(payload.collector)
       const errs = Array.isArray(payload.streamErrors) ? (payload.streamErrors as unknown[]).length : 0
-      const tail = [structuredOK ? "structured ok" : "structured missing", collector, errs ? `${errs} stream-err` : ""]
+      const tail = [
+        structuredOK ? t("trace.event.structured_ok") : t("trace.event.structured_missing"),
+        collector,
+        errs ? t("trace.event.stream_errors", { count: errs }) : "",
+      ]
         .filter(Boolean)
         .join(" · ")
       return `agent_report · ${agent || "?"} · ${tail}`
     }
     case "agent_report_failure":
     case "orchestrator_wake_failure": {
-      const err = (payload.error ?? (payload as any).reason ?? "(no message)") as unknown
+      const err = (payload.error ?? (payload as any).reason ?? t("trace.event.no_message")) as unknown
       return `${kind} · ${agent || "?"} · ${String(err).slice(0, 120)}`
     }
     case "orchestrator_wake": {
@@ -267,12 +277,12 @@ export function TracePanel(props: TracePanelProps) {
 
   const titleText = createMemo(() => {
     if ("sessionID" in props && props.sessionID) {
-      return `Session trace · ${String(props.sessionID).slice(-12)}`
+      return t("trace.title_session", { id: String(props.sessionID).slice(-12) })
     }
     if ("taskID" in props && props.taskID) {
-      return `Task trace · ${String(props.taskID).slice(-12)}`
+      return t("trace.title_task", { id: String(props.taskID).slice(-12) })
     }
-    return "Task trace · (no task selected)"
+    return t("trace.title_unselected")
   })
 
   return (
@@ -333,37 +343,38 @@ export function TracePanel(props: TracePanelProps) {
       }
     >
       <Show when={!hasTarget()}>
-        <div class="trace-panel-empty">Select a task on the left to stream its agent trace here.</div>
+        <div class="trace-panel-empty">{t("trace.empty_select_task")}</div>
       </Show>
       <Show when={hasTarget() && data.loading}>
-        <div class="trace-panel-empty">Loading…</div>
+        <div class="trace-panel-empty" role="status" aria-live="polite" aria-busy="true">
+          {t("trace.loading")}
+        </div>
       </Show>
       <Show when={hasTarget() && !data.loading && traceError()}>
         <div class="trace-panel-empty trace-panel-empty--error">
-          <p>Trace fetch failed.</p>
+          <p>{t("trace.fetch_failed")}</p>
           <p>{traceError()}</p>
         </div>
       </Show>
       <Show when={hasTarget() && !data.loading && data()?.ok !== false && events().length === 0}>
         <div class="trace-panel-empty">
-          <p>No trace events yet for this target.</p>
+          <p>{t("trace.empty_no_events")}</p>
           <Show when={data()?.enabled === false}>
             <p>
-              <strong>AgentTrace is DISABLED on the server</strong> —<code>OPENCORVUS_AGENT_TRACE=0</code> is set in the
-              server process. Unset it and restart the server to capture traces.
+              <strong>{t("trace.disabled_server")}</strong> — <code>OPENCORVUS_AGENT_TRACE=0</code>{" "}
+              {t("trace.disabled_server_hint")}
             </p>
           </Show>
           <Show when={data()?.enabled !== false && data()?.traceDir}>
             <p>
-              Server is reading from: <code>{data()!.traceDir}</code>
+              {t("trace.server_trace_dir")} <code>{data()!.traceDir}</code>
             </p>
             <p>
-              If your agents wrote traces to a different directory (e.g. a benchmark temp dir set via{" "}
-              <code>OPENCORVUS_AGENT_TRACE_DIR</code>), the server here will not see them — point both processes at the
-              same dir, or run agents through the same server instance the overlay is bound to.
+              {t("trace.trace_dir_mismatch_before")} <code>OPENCORVUS_AGENT_TRACE_DIR</code>
+              {t("trace.trace_dir_mismatch_after")}
             </p>
           </Show>
-          <p class="trace-panel-empty-foot">Auto-refreshes every 4s.</p>
+          <p class="trace-panel-empty-foot">{t("trace.auto_refresh")}</p>
         </div>
       </Show>
       <Show when={hasTarget() && events().length > 0}>
