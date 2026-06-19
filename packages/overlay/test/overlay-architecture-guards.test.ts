@@ -1165,6 +1165,18 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toMatch(/\.about-shortcut-grid span\s*\{/)
   })
 
+  test("about panel links target distinct project destinations", () => {
+    const configDialog = readText(join(OVERLAY_ROOT, "src/components/ConfigDialogHost.tsx"))
+
+    expect(configDialog).toContain("const ABOUT_LINKS")
+    expect(configDialog).toContain('href: "https://github.com/yangheng95"')
+    expect(configDialog).toContain('href: "https://github.com/yangheng95/opencorvus/issues"')
+    expect(configDialog).toContain('{t("about.links")}')
+    expect(configDialog).toContain('label: () => t("about.issues")')
+    expect(configDialog).toContain('<For each={ABOUT_LINKS}>')
+    expect(configDialog).not.toContain('href="https://github.com/yangheng95"')
+  })
+
   test("retired settings section + subsection shells stay removed from settings.css", () => {
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 

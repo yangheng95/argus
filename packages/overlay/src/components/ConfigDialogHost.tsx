@@ -68,6 +68,11 @@ const CONFIG_TABS: ConfigTabDef[] = CONFIG_SECTIONS.map((section) => ({
 const MAIN_CONFIG_TABS = CONFIG_TABS.filter((tab) => tab.id !== "about")
 const ABOUT_CONFIG_TAB = CONFIG_TABS.find((tab) => tab.id === "about") as ConfigTabDef
 
+const ABOUT_LINKS: Array<{ href: string; icon: IconName; label: () => string }> = [
+  { href: "https://github.com/yangheng95", icon: "github", label: () => "GitHub" },
+  { href: "https://github.com/yangheng95/opencorvus/issues", icon: "info-circle", label: () => t("about.issues") },
+]
+
 function activePanelBodyID(tab: ConfigDialogTab): string {
   switch (tab) {
     case "general":
@@ -244,14 +249,14 @@ export function ConfigDialogHost() {
             <div class="about-section">
               <h4 class="about-section-title">{t("about.links")}</h4>
               <div class="about-links">
-                <a class="about-link" href="https://github.com/yangheng95" target="_blank" rel="noopener">
-                  <Icon name="github" />
-                  <span>GitHub</span>
-                </a>
-                <a class="about-link" href="https://github.com/yangheng95" target="_blank" rel="noopener">
-                  <Icon name="info-circle" />
-                  <span>{t("about.issues")}</span>
-                </a>
+                <For each={ABOUT_LINKS}>
+                  {(link) => (
+                    <a class="about-link" href={link.href} target="_blank" rel="noopener">
+                      <Icon name={link.icon} />
+                      <span>{link.label()}</span>
+                    </a>
+                  )}
+                </For>
               </div>
             </div>
             <div class="about-section">
