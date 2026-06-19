@@ -55,3 +55,10 @@ by `.task-row-main`.
   selects.
 - Browser evidence proves a keyboard-focused projection select exposes a
   visible outline.
+
+## Follow-Up
+
+`2026-06-19-mission-task-projection-button-primitive.md` supersedes the
+`.task-row-main` implementation detail. The live projection selector now
+renders through `Button` as `.oc-button[data-ui="mission-task-projection-select"]`
+while preserving the browser focus evidence from this pass.

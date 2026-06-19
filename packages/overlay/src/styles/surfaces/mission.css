@@ -143,7 +143,13 @@
   min-width: 0;
 }
 
-.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"] {
+.mission-task-projection-row .oc-button[data-ui="mission-task-projection-select"] {
+  --oc-button-height: calc(30px * var(--ui-scale));
+  --oc-button-padding-x: calc(4px * var(--ui-scale));
+  --oc-button-padding-y: calc(2px * var(--ui-scale));
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--text);
+
   display: grid;
   width: 100%;
   min-width: 0;
@@ -152,21 +158,14 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
-  border: 0;
   border-radius: 0;
-  background: transparent;
-  color: var(--text);
   min-height: calc(30px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale));
-  font: inherit;
   text-align: left;
-  cursor: pointer;
 }
 
-.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"]:hover,
-.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"]:focus-visible {
-  background: var(--surface-hover);
-  color: var(--text-strong);
+.mission-task-projection-row .oc-button[data-ui="mission-task-projection-select"]:hover,
+.mission-task-projection-row .oc-button[data-ui="mission-task-projection-select"]:focus-visible {
+  --oc-button-color: var(--text-strong);
 }
 
 .mission-task-projection-main {
