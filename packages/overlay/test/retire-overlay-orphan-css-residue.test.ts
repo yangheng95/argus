@@ -12,6 +12,7 @@ const RETIRED_SELECTORS = [
   "overview-summary",
   "overview-next-step",
   "change-path",
+  "mission-conversation-body",
 ]
 
 function walk(dir: string, accept: (path: string) => boolean): string[] {
