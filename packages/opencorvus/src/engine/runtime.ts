@@ -63,6 +63,7 @@ export namespace EngineRuntime {
   async function syncNoLiveGoalRuns(runID: string, _hooks: RuntimeHooks): Promise<boolean> {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
+    if (run.status === "blocked" && run.blocking_reason === "orchestrator_stream_error") return false
     const goalRuns = listGoalRunsForRun(runID)
     if (goalRuns.some((goalRun) => isLiveGoalRunStatus(goalRun.status))) return false
 

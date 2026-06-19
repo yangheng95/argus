@@ -3,9 +3,13 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import type { Session } from "../../src/session"
+import { Database } from "../../src/storage/db"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Identifier } from "../../src/id/id"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { Worktree } from "../../src/worktree"
+import { tmpdir } from "../fixture/fixture"
 
 const previousTraceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
 const previousRedactAttachments = process.env.OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS
@@ -17,6 +21,27 @@ let tempDir = ""
 function restoreEnv(name: string, value: string | undefined) {
   if (value === undefined) delete process.env[name]
   else process.env[name] = value
+}
+
+function seedTraceTask(input: { projectID: string; taskID: string }) {
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: input.projectID,
+        source: "test",
+        title: "trace task",
+        request: "trace task",
+        priority: "normal",
+        budget: { max_executor_groups: 1 },
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run(),
+  )
 }
 
 afterEach(() => {
@@ -70,6 +95,56 @@ test("task trace rollup includes llm_request task and parent metadata", async ()
     },
   })
 })
+
+test(
+  "task trace writes to the primary project runtime when ambient directory is a build worktree",
+  async () => {
+    delete process.env.OPENCORVUS_AGENT_TRACE_DIR
+    await using tmp = await tmpdir({ git: true })
+    const { AgentTrace } = await import("../../src/trace")
+    const sessionID = Identifier.create("session", false)
+    const taskID = Identifier.create("task", false)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedTraceTask({ projectID: Instance.project.id, taskID })
+        const worktree = await Worktree.create({
+          name: "trace-primary-runtime",
+          taskID,
+          sessionID,
+        })
+
+        await Instance.provide({
+          directory: worktree.directory,
+          fn: async () => {
+            AgentTrace.recordLLMRequest({
+              sessionID,
+              taskID,
+              agentName: "build",
+              model: { providerID: "test", modelID: "model" },
+              system: ["system"],
+              messages: [{ role: "user", content: "hi" }],
+              tools: [],
+            })
+          },
+        })
+
+        const primaryTrace = ProjectRuntimePaths.tracePath(tmp.path, taskID, sessionID)
+        const worktreeTrace = ProjectRuntimePaths.tracePath(worktree.directory, taskID, sessionID)
+        expect(fs.existsSync(primaryTrace)).toBe(true)
+        expect(fs.existsSync(worktreeTrace)).toBe(false)
+        expect(AgentTrace.readSessionEvents(sessionID)[0]).toMatchObject({
+          domain: "session",
+          sessionID,
+          taskID,
+          kind: "llm_request",
+        })
+      },
+    })
+  },
+  30_000,
+)
 
 test("helper trace writes explicit non-session domain instead of fake session bucket", async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-domain-"))

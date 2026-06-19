@@ -86,7 +86,7 @@ test("Mission activity opens session conversations through the shared center cha
 
 test("Mission-created task rows select the task panel instead of rendering task chat inside Mission", () => {
   expect(MISSION_LIST).toContain('data-ui="mission-task-projection-select"')
-  expect(MISSION_LIST).toContain("props.onSelectTask(props.task.id)")
+  expect(MISSION_LIST).toContain("props.onSelectTask(props.task)")
   expect(MISSION_LIST).not.toContain('class="mission-ledger-header')
   expect(MISSION_LIST).not.toContain('class="mission-ledger-title')
   expect(MISSION_LIST).not.toContain('class="mission-ledger-header-actions')

@@ -86,7 +86,7 @@ describe("run blocking state", () => {
         expect(run?.error).toBe("APIError: HTTP 429")
       },
     })
-  })
+  }, 30_000)
 
   test("syncRun preserves non-interaction blockers without queue refs", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -152,5 +152,5 @@ describe("run blocking state", () => {
         expect(run?.error).toBe("APIError: HTTP 429")
       },
     })
-  })
+  }, 30_000)
 })

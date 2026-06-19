@@ -87,7 +87,9 @@ export interface CreateTaskOptions {
   }
 }
 
-export interface SelectTaskOptions {}
+export interface SelectTaskOptions {
+  directory?: string
+}
 
 // ── Helpers ──
 
@@ -199,6 +201,7 @@ function isAbortError(error: unknown): boolean {
 
 export async function selectTask(taskID: string, options: SelectTaskOptions = {}): Promise<void> {
   const nextTaskID = taskID || ""
+  const explicitDirectory = options.directory?.trim() ?? ""
 
   if (nextTaskID && !TASK_ID_PATTERN.test(nextTaskID)) {
     throw new Error(`selectTask: invalid taskID ${JSON.stringify(nextTaskID)} — expected [A-Za-z0-9_-]{1,128}`)
@@ -273,7 +276,8 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     // API (config, permissions, meta, executors) targets the correct
     // backend Instance before we load the new task's board.
     const taskItem = taskByID(nextTaskID)
-    const taskDirectory = typeof taskItem?.task?.directory === "string" ? taskItem.task.directory : ""
+    const taskDirectory =
+      explicitDirectory || (typeof taskItem?.task?.directory === "string" ? taskItem.task.directory : "")
     if (taskDirectory && taskDirectory !== settingsStore.directory) {
       await applyDirectory(taskDirectory, { save: true })
       if (stale()) return

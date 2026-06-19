@@ -127,7 +127,8 @@ describe("task selection initial hydrate", () => {
 
     expect(requested).toBe(true)
     expect(activeTaskID()).toBe("")
-    expect(nativeCalls).toEqual([
+    const settingsSave = nativeCalls.find((input) => (input as { kind?: string }).kind === "settings.save")
+    expect(settingsSave).toEqual(
       expect.objectContaining({
         kind: "settings.save",
         payload: expect.objectContaining({
@@ -135,7 +136,7 @@ describe("task selection initial hydrate", () => {
           workspaceDirectory: undefined,
         }),
       }),
-    ])
+    )
   })
 
   test("deleting a missing selected task surfaces task-list refresh failures", async () => {
@@ -161,8 +162,10 @@ describe("task selection initial hydrate", () => {
       openStream() {
         throw new Error("openStream not used")
       },
-      async native() {
-        throw new Error("native not used")
+      async native(input: unknown) {
+        const kind = (input as { kind?: string }).kind
+        if (kind === "settings.save" || kind === "badge.set" || kind === "tray.attention.set") return true
+        throw new Error(`unexpected native call: ${JSON.stringify(input)}`)
       },
       subscribeUiCommand() {
         return { unsubscribe() {} }

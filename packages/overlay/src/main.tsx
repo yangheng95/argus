@@ -469,13 +469,13 @@ function isMissionSessionSource(): boolean {
   return boardStore.selectedSource?.kind === "session" && !isCodingAssistantSource()
 }
 
-function selectMissionTask(taskID: string): void {
+function selectMissionTask(taskID: string, directory?: string): void {
   setMissionLauncherActive(false)
   setAssistantLauncherActive(false)
   resetCenterWorkbenchToFocusedPanel("tasks")
   setSelectedLeftActivity("tasks")
   setSelectedLeftPanelActivity("tasks")
-  void selectTask(taskID)
+  void selectTask(taskID, { directory })
 }
 
 function openMissionLauncher(): void {

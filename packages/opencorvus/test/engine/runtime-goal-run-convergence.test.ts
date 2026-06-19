@@ -331,6 +331,35 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
+  test("blocked orchestrator stream-error run does not liveness-dispatch without a notification fact", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_stream_error_blocked_${Date.now()}`
+        const runID = `run_goal_stream_error_blocked_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "blocked",
+          blocking_reason: "orchestrator_stream_error",
+          error: "OrchestratorAborted: task loop dispatch interrupt",
+        })
+        seedGoalRun(taskID, runID, "grun_aborted_blocked_one", "aborted", now + 1)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const run = findRun(runID)
+        expect(run?.status).toBe("blocked")
+        expect(run?.blocking_reason).toBe("orchestrator_stream_error")
+        expect(run?.error).toBe("OrchestratorAborted: task loop dispatch interrupt")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
   test("terminal batch liveness dispatch records a fact after starting a wake", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
