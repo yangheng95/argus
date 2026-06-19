@@ -1,8 +1,7 @@
 import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js"
 
 import type { CardNode } from "../store/card-tree"
-import { cardTreeStore } from "../store/card-tree"
-import { boardStore, rootTaskSessionID, activeTaskID } from "../store/board"
+import { rootTaskSessionID, activeTaskID } from "../store/board"
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import {
   collapsedActivityPreviewText,
@@ -15,31 +14,18 @@ import {
 import { bubbleAlign } from "../utils/chat-bubble"
 import { normalizeAgentRole, roleLabel } from "../utils/message"
 import { stageAccent } from "../utils/card-color"
-import { formatDuration, fullStampWithRelative, stamp } from "../utils/time"
-import { useNowTick } from "../services/clock"
+import { fullStampWithRelative, stamp } from "../utils/time"
 import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
 import { submitTaskRewind } from "../services/rewind"
 import { t } from "../utils/i18n"
-import { formatCostUSD, formatTokenCount } from "../utils/format-usage"
-import { useCardHeadActions } from "../hooks/use-card-head-actions"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
 import { Avatar } from "./Avatar"
+import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"
 import { CardParts } from "./CardParts"
 import { IntegrityBody } from "./IntegrityCard"
-import { Icon } from "./Icon"
 import { ReviewStreamSection } from "./ReviewStreamSection"
 import { storeCardNode } from "./StoreCardNode"
 import { TracePanel } from "./TracePanel"
-import { Button } from "./ui/Button"
-
-async function writeClipboard(text: string): Promise<boolean> {
-  if (!text) return false
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return true
-  }
-  return false
-}
 
 function UnsupportedChatBubbleChild(props: { child: CardNode; parentID: string }): null {
   throw new Error(`ChatBubble: unsupported child kind "${props.child.kind}" for ${props.parentID}`)
@@ -100,7 +86,6 @@ function ChatBubbleChild(props: { childID: string; depth: number; parentID: stri
 export function ChatBubble(props: { node: CardNode; depth: number }) {
   let articleRef: HTMLElement | undefined
   const [traceOpen, setTraceOpen] = createSignal(false)
-  const [reasonCopied, setReasonCopied] = createSignal(false)
 
   const defaultExpanded = () => defaultExpandedForNode(props.node)
   const expanded = () => cardExpanded(props.node.id, props.node.status, defaultExpanded())
@@ -144,21 +129,6 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     )
     return interactive == null
   }
-
-  const now = useNowTick()
-  const durationText = createMemo(() => {
-    const start = props.node.time
-    if (!Number.isFinite(start) || (start as number) <= 0) return ""
-    const end = props.node.timeCompleted
-    if (Number.isFinite(end) && (end as number) > (start as number)) {
-      return formatDuration((end as number) - (start as number))
-    }
-    if (props.node.status === "running") {
-      const delta = now() - (start as number)
-      return delta > 0 ? formatDuration(delta) : ""
-    }
-    return ""
-  })
 
   const footActivity = createMemo(() => {
     if (expanded()) return null
@@ -246,48 +216,6 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     await cancelAgentSession(taskID, sessionID)
   }
 
-  const headActions = useCardHeadActions({
-    node: () => props.node,
-    onRewind,
-    onAgentCancel,
-    agentSessionID: directAgentSessionID,
-  })
-  const usageVisible = () => {
-    const usage = props.node.usage
-    if (!usage) return false
-    return (usage.totalTokens ?? 0) > 0 || (usage.costUSD ?? 0) > 0
-  }
-  const usageTotalLabel = () => {
-    const usage = props.node.usage
-    if (!usage) return ""
-    const total = usage.totalTokens ?? 0
-    const input = usage.inputTokens ?? 0
-    const output = usage.outputTokens ?? 0
-    if (total > 0) return formatTokenCount(total)
-    if (input > 0 || output > 0) return formatTokenCount(input + output)
-    return ""
-  }
-  const usageCostLabel = () => {
-    const usage = props.node.usage
-    if (!usage) return ""
-    const cost = usage.costUSD ?? 0
-    return cost > 0 ? formatCostUSD(cost) : ""
-  }
-  const usageTip = () => {
-    const usage = props.node.usage
-    if (!usage) return ""
-    const parts: string[] = []
-    if ((usage.inputTokens ?? 0) > 0) parts.push(`↑ ${usage.inputTokens} in`)
-    if ((usage.outputTokens ?? 0) > 0) parts.push(`↓ ${usage.outputTokens} out`)
-    if ((usage.totalTokens ?? 0) > 0) parts.push(`Σ ${usage.totalTokens} total`)
-    if ((usage.costUSD ?? 0) > 0) parts.push(formatCostUSD(usage.costUSD!))
-    return parts.join(" · ")
-  }
-  const modelLabel = () => props.node.model?.display || ""
-  const hasContextTokens = () =>
-    typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0
-  const hasMetaActions = () => !!modelLabel() || hasContextTokens() || usageVisible()
-  const hasControlActions = () => !!traceSessionID() || headActions.caps.canCancel() || headActions.caps.canRewind()
   const articleStyle = createMemo<Record<string, string> | undefined>(() => {
     const style: Record<string, string> = {}
     const accent = stageAccent(normalizedRole())
@@ -339,143 +267,21 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                   <span class="chat-bubble__identity-copy">
                     <span class="chat-bubble__title-line" data-align={align()}>
                       <span class="chat-bubble__title">{roleTitle()}</span>
-                      <Show when={durationText()}>
-                        <span class="card__duration" title={t("card.duration_tooltip", { value: durationText() })}>
-                          {durationText()}
-                        </span>
-                      </Show>
+                      <CardDurationChip node={props.node} />
                     </span>
                   </span>
                 </span>
               </button>
-              <Show when={props.node.status === "error" && !!props.node.errorReason}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="mini"
-                  tone={reasonCopied() ? "accent" : "danger"}
-                  data-ui="card-error-reason"
-                  data-state={reasonCopied() ? "copied" : "idle"}
-                  title={t("card.error_reason_title", { reason: props.node.errorReason || "" })}
-                  aria-label={t("card.error_reason", { reason: props.node.errorReason || "" })}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    void (async () => {
-                      const reason = props.node.errorReason || ""
-                      if (!reason) return
-                      const ok = await writeClipboard(reason)
-                      if (!ok) return
-                      setReasonCopied(true)
-                      setTimeout(() => setReasonCopied(false), 1200)
-                    })()
-                  }}
-                >
-                  <span data-ui="card-error-reason-text">{props.node.errorReason}</span>
-                </Button>
-              </Show>
-              <div class="chat-bubble__actions">
-                <Show when={hasMetaActions()}>
-                  <div class="card__meta-actions">
-                    <Show when={modelLabel()}>
-                      <span
-                        class="card__model-hint"
-                        title={t("card.model_tooltip", { model: modelLabel() })}
-                        aria-label={t("card.model_tooltip", { model: modelLabel() })}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {modelLabel()}
-                      </span>
-                    </Show>
-                    <Show when={hasContextTokens()}>
-                      <span
-                        class="card__token-hint"
-                        data-estimated={props.node.contextTokensEstimated ? "true" : "false"}
-                        title={t(
-                          props.node.contextTokensEstimated
-                            ? "card.context_tokens_tooltip_estimated"
-                            : "card.context_tokens_tooltip",
-                          { value: String(props.node.contextTokens) },
-                        )}
-                        aria-label={t(
-                          props.node.contextTokensEstimated
-                            ? "card.context_tokens_tooltip_estimated"
-                            : "card.context_tokens_tooltip",
-                          { value: String(props.node.contextTokens) },
-                        )}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        ~{formatTokenCount(props.node.contextTokens as number)} tok
-                        {props.node.contextTokensEstimated ? " · est." : ""}
-                      </span>
-                    </Show>
-                    <Show when={usageVisible()}>
-                      <span class="card__usage-hint" title={usageTip()} onClick={(event) => event.stopPropagation()}>
-                        <Show when={usageTotalLabel()}>
-                          <span class="card__usage-tokens">{usageTotalLabel()} tok</span>
-                        </Show>
-                        <Show when={usageCostLabel()}>
-                          <span class="card__usage-cost">{usageCostLabel()}</span>
-                        </Show>
-                      </span>
-                    </Show>
-                  </div>
-                </Show>
-                <Show when={hasControlActions()}>
-                  <div class="card__control-actions">
-                    <Show when={!!traceSessionID()}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        tone="neutral"
-                        data-ui="card-trace"
-                        data-state={traceOpen() ? "open" : "closed"}
-                        title={t("card.inspect_agent_trace")}
-                        aria-label={t("card.inspect_agent_trace")}
-                        aria-pressed={traceOpen()}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onTraceToggle()
-                        }}
-                      >
-                        <Icon name="inspect" size={13} />
-                      </Button>
-                    </Show>
-                    <Show when={headActions.caps.canCancel()}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        tone="neutral"
-                        data-ui="card-agent-cancel"
-                        data-state={headActions.state.cancelling() ? "pending" : "idle"}
-                        title={headActions.labels.cancel()}
-                        aria-label={headActions.labels.cancel()}
-                        disabled={headActions.state.cancelling()}
-                        onClick={headActions.onAgentCancel}
-                      >
-                        <Icon name="cancel" size={13} />
-                      </Button>
-                    </Show>
-                    <Show when={headActions.caps.canRewind()}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        tone="neutral"
-                        data-ui="card-rewind"
-                        data-state={headActions.state.rewinding() ? "pending" : "idle"}
-                        title={headActions.labels.rewind()}
-                        aria-label={headActions.labels.rewindStep()}
-                        disabled={headActions.state.rewinding()}
-                        onClick={headActions.onRewind}
-                      >
-                        <Icon name="rewind" size={13} />
-                      </Button>
-                    </Show>
-                  </div>
-                </Show>
-              </div>
+              <CardHeaderChrome
+                node={props.node}
+                actionsClass="chat-bubble__actions"
+                onRewind={onRewind}
+                traceSessionID={traceSessionID()}
+                traceOpen={traceOpen()}
+                onTrace={traceSessionID() ? onTraceToggle : undefined}
+                agentSessionID={directAgentSessionID()}
+                onAgentCancel={directAgentSessionID() ? onAgentCancel : undefined}
+              />
             </div>
             <Show when={collapsedPreview()}>
               <div class="card__preview-row">
