@@ -16,6 +16,8 @@
 body[data-theme="light"] {
   color-scheme: light;
   --text-on-accent: #ffffff;
+  --text-on-strong: #ffffff;
+  --text-on-danger: #101527;
   --bg: rgba(238, 243, 255, 0.72);
   --surface: rgba(255, 255, 255, 0.82);
   --surface-hover: rgba(243, 247, 255, 0.96);

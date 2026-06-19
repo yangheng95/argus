@@ -4,6 +4,12 @@ import { join } from "node:path"
 
 const BUTTON_SOURCE = join(import.meta.dir, "../src/components/ui/Button.tsx")
 const BUTTON_CSS = join(import.meta.dir, "../src/styles/primitives/button.css")
+const SIDEBAR_CSS = join(import.meta.dir, "../src/styles/surfaces/sidebar.css")
+const THEME_CSS = [
+  join(import.meta.dir, "../src/styles/cascade/light.css"),
+  join(import.meta.dir, "../src/styles/cascade/dark.css"),
+  join(import.meta.dir, "../src/styles/cascade/vscode-dark.css"),
+]
 
 function sourceArray(source: string, name: string): string[] {
   const match = source.match(new RegExp(`export const ${name} = \\[([^\\]]+)\\] as const`))
@@ -56,15 +62,37 @@ test("Button primitive TypeScript API and CSS data variants stay in lockstep", (
 
 test("Button solid tones keep readable foreground and dedicated hover chrome", () => {
   const css = readFileSync(BUTTON_CSS, "utf8")
+  const sidebarCss = readFileSync(SIDEBAR_CSS, "utf8")
+  const themes = THEME_CSS.map((file) => [file, readFileSync(file, "utf8")] as const)
 
   for (const tone of ["neutral", "accent", "danger"]) {
     expect(css).toContain(`.oc-button[data-variant="solid"][data-tone="${tone}"]`)
   }
+  for (const [file, themeCss] of themes) {
+    expect(themeCss, file).toMatch(/--text-on-strong:\s*#[0-9a-fA-F]{6};/)
+    expect(themeCss, file).toMatch(/--text-on-accent:\s*#[0-9a-fA-F]{6};/)
+    expect(themeCss, file).toMatch(/--text-on-danger:\s*#[0-9a-fA-F]{6};/)
+  }
   expect(css).toMatch(
-    /\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]\s*\{[^}]*--oc-button-color:\s*var\(--surface\);/s,
+    /\.oc-button\[data-variant="solid"\]\[data-tone="neutral"\]\s*\{[^}]*--oc-button-color:\s*var\(--text-on-strong\);/s,
+  )
+  expect(css).toMatch(
+    /\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]\s*\{[^}]*--oc-button-color:\s*var\(--text-on-accent\);/s,
+  )
+  expect(css).toMatch(
+    /\.oc-button\[data-variant="solid"\]\[data-tone="danger"\]\s*\{[^}]*--oc-button-color:\s*var\(--text-on-danger\);/s,
   )
   expect(css).toMatch(
     /\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]:hover,[^}]*--oc-button-bg:\s*var\(--accent-hover\);/s,
+  )
+  expect(css).not.toMatch(
+    /\.oc-button\[data-variant="solid"\]\[data-tone="(?:accent|danger)"\][^{]*\{[^}]*--oc-button-color:\s*var\(--surface\);/s,
+  )
+  expect(sidebarCss).toMatch(
+    /\.oc-button\[data-ui="sidebar-new-task-button"\]\[data-variant="solid"\],[\s\S]*?--oc-button-color:\s*var\(--text-on-accent\);/,
+  )
+  expect(sidebarCss).not.toMatch(
+    /\.oc-button\[data-ui="(?:sidebar-new-task-button|mission-new|coding-assistant-new)"\][^{]*\{[^}]*--oc-button-color:\s*var\(--surface\);/s,
   )
   expect(css).toContain('.oc-button:not([data-tone="danger"]):not([data-variant="solid"]):hover')
 })

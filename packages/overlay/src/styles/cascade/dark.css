@@ -24,7 +24,9 @@
 :root[data-theme="dark"],
 body[data-theme="dark"] {
   color-scheme: dark;
-  --text-on-accent: #ffffff;
+  --text-on-accent: #000000;
+  --text-on-strong: #000000;
+  --text-on-danger: #000000;
   --bg: rgba(26, 27, 30, 0.78);
   --surface: rgba(38, 40, 44, 0.74);
   --surface-hover: rgba(48, 50, 55, 0.78);

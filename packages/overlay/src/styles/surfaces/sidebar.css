@@ -805,7 +805,7 @@
   --oc-button-gap: calc(2px * var(--ui-scale));
   --oc-button-bg: var(--accent);
   --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--surface);
+  --oc-button-color: var(--text-on-accent);
   letter-spacing: var(--ui-letter-spacing-normal);
   box-shadow: none;
   flex: 0 0 auto;
@@ -830,7 +830,7 @@
 .oc-button[data-ui="coding-assistant-new"]:focus-visible {
   --oc-button-bg: var(--accent-hover);
   --oc-button-border: 0 solid transparent;
-  --oc-button-color: var(--surface);
+  --oc-button-color: var(--text-on-accent);
 }
 
 .oc-button[data-ui="sidebar-new-task-button"]:focus-visible,
