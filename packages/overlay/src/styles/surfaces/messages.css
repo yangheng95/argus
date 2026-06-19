@@ -249,18 +249,21 @@
   flex-shrink: 0;
 }
 
-.msg-tool-diff-link {
-  color: var(--accent);
+.oc-button[data-ui="tool-diff-open-file"] {
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  padding: 0;
   text-decoration: underline;
   text-underline-offset: calc(2px * var(--ui-scale));
   font-family: var(--mono);
   font-size: var(--ui-font-control);
-  min-width: 0;
+  line-height: var(--ui-line-height-tight);
+  white-space: normal;
+  text-align: left;
+  max-width: 100%;
   overflow-wrap: anywhere;
-}
-
-.msg-tool-diff-link:hover {
-  color: var(--accent-hover);
 }
 
 .msg-tool-diff-card__body {

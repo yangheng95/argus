@@ -71,11 +71,50 @@ function transcript(): any[] {
         },
       ],
     },
+    {
+      info: {
+        id: "message-tool-diff",
+        sessionID: "session-file-link-root",
+        role: "assistant",
+        resolvedRole: "assistant",
+        channel: "assistant",
+        time: { created: 1_776_200_001_200 },
+      },
+      parts: [
+        {
+          id: "part-tool-diff",
+          messageID: "message-tool-diff",
+          sessionID: "session-file-link-root",
+          type: "tool",
+          tool: "apply_patch",
+          state: {
+            status: "completed",
+            input: { command: "apply patch" },
+            output: "",
+            metadata: {
+              files: [
+                {
+                  path: "src/changed.tsx",
+                  relativePath: "src/changed.tsx",
+                  type: "modified",
+                  before: "const value = 1\n",
+                  after: "const value = 2\nconst done = true\n",
+                  additions: 2,
+                  deletions: 1,
+                },
+              ],
+            },
+            time: { start: 1_776_200_001_210, end: 1_776_200_001_220 },
+          },
+        },
+      ],
+    },
   ]
 }
 
 async function installOverlaySettings(page: any, serverUrl: string): Promise<void> {
   await page.evaluateOnNewDocument((origin) => {
+    ;(window as any).__OPEN_PATH_CALLS__ = []
     localStorage.setItem("oc_locale", "en-US")
     localStorage.setItem("oc_theme", "light")
     localStorage.setItem("oc_server_url", origin)
@@ -83,7 +122,7 @@ async function installOverlaySettings(page: any, serverUrl: string): Promise<voi
     localStorage.setItem("oc_directory", "D:/file-link/workspace")
     window.__TAURI__ = {
       core: {
-        invoke: async (command: string) => {
+        invoke: async (command: string, args?: unknown) => {
           if (command === "overlay_settings_load") {
             return {
               serverUrl: origin,
@@ -95,7 +134,10 @@ async function installOverlaySettings(page: any, serverUrl: string): Promise<voi
           }
           if (command === "overlay_settings_save") return true
           if (command === "overlay_open_url") return true
-          if (command === "overlay_open_path") return true
+          if (command === "overlay_open_path" || command === "overlay_open_project_editor") {
+            ;(window as any).__OPEN_PATH_CALLS__.push({ command, args })
+            return true
+          }
           return null
         },
       },
@@ -272,6 +314,74 @@ test(
       const screenshotPath = resolve(".scratch", "message-file-link-hover.png")
       mkdirSync(dirname(screenshotPath), { recursive: true })
       writeFileSync(screenshotPath, await bubble.screenshot({}))
+
+      await page.mouse.move(0, 0)
+      await page.waitForSelector('.card[data-kind="tool"] > .card__head [data-ui="card-head-main"]', { visible: true })
+      await page.click('.card[data-kind="tool"] > .card__head [data-ui="card-head-main"]')
+      await page.waitForSelector('[data-ui="tool-diff-open-file"]', { visible: true })
+
+      const toolDiffButtonState = await page.$eval('[data-ui="tool-diff-open-file"]', (node: HTMLButtonElement) => {
+        const style = getComputedStyle(node)
+        return {
+          tagName: node.tagName,
+          className: node.className,
+          variant: node.dataset.variant,
+          size: node.dataset.size,
+          tone: node.dataset.tone,
+          path: node.getAttribute("data-file-path"),
+          text: node.textContent?.trim() ?? "",
+          textDecorationLine: style.textDecorationLine,
+        }
+      })
+      assert.deepEqual(toolDiffButtonState, {
+        tagName: "BUTTON",
+        className: "oc-button",
+        variant: "ghost",
+        size: "sm",
+        tone: "accent",
+        path: "src/changed.tsx",
+        text: "src/changed.tsx",
+        textDecorationLine: "underline",
+      })
+
+      await page.evaluate(() => {
+        const active = document.activeElement
+        if (active instanceof HTMLElement) active.blur()
+      })
+      let toolDiffFocused = false
+      for (let attempt = 0; attempt < 160; attempt += 1) {
+        await page.keyboard.press("Tab")
+        toolDiffFocused = await page.$eval(
+          '[data-ui="tool-diff-open-file"]',
+          (node: HTMLElement) => document.activeElement === node,
+        )
+        if (toolDiffFocused) break
+      }
+      assert.equal(toolDiffFocused, true)
+      const toolDiffFocusState = await page.$eval('[data-ui="tool-diff-open-file"]', (node: HTMLButtonElement) => {
+        const style = getComputedStyle(node)
+        return {
+          focusVisible: node.matches(":focus-visible"),
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+          backgroundColor: style.backgroundColor,
+        }
+      })
+      assert.equal(toolDiffFocusState.focusVisible, true)
+      assert.notEqual(toolDiffFocusState.outlineStyle, "none")
+      assert.notEqual(toolDiffFocusState.outlineWidth, "0px")
+      assert.notEqual(toolDiffFocusState.backgroundColor, "rgba(0, 0, 0, 0)")
+      const toolDiffCard = await page.$(".msg-tool-diff-card")
+      assert.ok(toolDiffCard)
+      const toolDiffScreenshotPath = resolve(".scratch", "tool-diff-open-file-focus-visible.png")
+      writeFileSync(toolDiffScreenshotPath, await toolDiffCard.screenshot({}))
+
+      await page.keyboard.press("Enter")
+      await page.waitForFunction(() => ((window as any).__OPEN_PATH_CALLS__ || []).length > 0)
+      const openPathCalls = await page.evaluate(() => (window as any).__OPEN_PATH_CALLS__)
+      assert.equal(openPathCalls.length, 1)
+      assert.equal(openPathCalls[0].command, "overlay_open_project_editor")
+      assert.equal(openPathCalls[0].args.path, "D:/file-link/workspace/src/changed.tsx")
       await page.close()
 
       assert.deepEqual(badResponses, [])
