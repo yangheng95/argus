@@ -21,6 +21,7 @@ describe("app/session dialog single source", () => {
   const dialogStore = readText("src/store/dialog.ts")
   const networkPanel = readText("src/components/settings/NetworkPanel.tsx")
   const llmService = readText("src/services/llm.ts")
+  const appDialogBrowser = readText("test/browser/app-dialog-segmented-control.test.ts")
 
   test("app dialog service is store-backed, not bridge-backed DOM mutation", () => {
     expect(appDialogService).not.toContain("installAppDialogBridge")
@@ -183,6 +184,8 @@ describe("app/session dialog single source", () => {
     expect(appHost).toContain("<SegmentedControl")
     expect(appHost).toContain('itemClass="app-dialog-decision__choice"')
     expect(appHost).toContain("onActivate={chooseTaskDecision}")
+    expect(appHost).toContain("choice.dataset.value === dialogStore.app.selectValue")
+    expect(appHost).toContain("focusTarget?.focus()")
     expect(appHost).toContain("isTaskCardDecision()")
     expect(appHost).toContain("chooseTaskDecision")
     expect(appHost).toContain("settleAppDialog(true, dialogStore.app.epoch, value)")
@@ -194,5 +197,10 @@ describe("app/session dialog single source", () => {
     expect(appHost).not.toContain("<button")
     expect(appHost).not.toContain("data-selected")
     expect(appHost).not.toContain("!isTaskRouteDecision()) return")
+    expect(appDialogBrowser).toContain('await page.goto(`${server.origin}/ui/index.html`')
+    expect(appDialogBrowser).toContain('await page.click("#chatSend")')
+    expect(appDialogBrowser).toContain('await page.keyboard.press("Enter")')
+    expect(appDialogBrowser).toContain('await page.keyboard.press("Space")')
+    expect(appDialogBrowser).not.toContain("page.setContent")
   })
 })

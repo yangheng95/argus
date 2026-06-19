@@ -1,164 +1,369 @@
 import assert from "node:assert/strict"
-import { mkdirSync, readFileSync } from "node:fs"
-import { writeFile } from "node:fs/promises"
-import { dirname, join, resolve } from "node:path"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
-import { fileURLToPath } from "node:url"
 
 import { launchBrowser } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
-const OVERLAY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
-const SCRATCH_ROOT = resolve(OVERLAY_ROOT, "../../.scratch")
+await ensureOverlayDist()
 
-function readCss(rel: string): string {
-  return readFileSync(join(OVERLAY_ROOT, "src/styles", rel), "utf8")
+function route(url: URL) {
+  return url.pathname.replace(/\/+$/, "") || "/"
 }
 
-async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
-  const target = join(SCRATCH_ROOT, name)
-  mkdirSync(dirname(target), { recursive: true })
-  await writeFile(target, await element.screenshot({}))
-  return target
+function send(value: unknown, init?: ResponseInit) {
+  return new Response(JSON.stringify(value), {
+    ...init,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...(init?.headers || {}),
+    },
+  })
 }
 
-test("app dialog task decision segmented control stays readable in light theme", async () => {
-  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
-  assert.equal(typeof globalThis.Bun, "undefined")
+function eventStream() {
+  return new Response(":\n\n", {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
+    },
+  })
+}
 
-  const css = [
-    readCss("tokens/design-language.css"),
-    readCss("cascade/base.css"),
-    readCss("cascade/light.css"),
-    readCss("surfaces/dialog.css"),
-  ].join("\n")
+const promptProfileCatalog = {
+  active: "general",
+  project_active: "general",
+  session_active: null,
+  default: "general",
+  targets: [],
+  profiles: [
+    {
+      id: "general",
+      label: "General",
+      description: "Default prompt profile",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
+  ],
+}
+
+type DecisionMode = "enter-start" | "space-queue" | "click-queue"
+
+async function withTaskDecisionFixture(
+  mode: DecisionMode,
+  run: (input: {
+    page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>
+    taskBodies: unknown[]
+    requestLog: string[]
+  }) => Promise<void>,
+) {
+  const taskBodies: unknown[] = []
+  const requestLog: string[] = []
+  const taskID = `task-${mode}`
+  const projectRoot = "D:/overlay/workspace/app"
+  const server = await startBrowserFixture(async (req) => {
+    const url = new URL(req.url)
+    const path = route(url)
+    requestLog.push(`${req.method} ${path}${url.search}`)
+    if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+    const staticResponse = await overlayStaticResponse(path)
+    if (staticResponse) return staticResponse
+    if (path === "/global/health") return send({ version: "app-dialog-task-decision" })
+    if (path === "/global/projects/discover") return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
+    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+    if (path === "/mission" || path === "/session") return send([])
+    if (path === "/path") return send({ directory: projectRoot, exists: true, git: true })
+    if (path === "/vcs")
+      return send({
+        branch: "main",
+        clean: true,
+        dirty: false,
+        staged: 0,
+        modified: 0,
+        untracked: 0,
+        conflicts: 0,
+        ahead: 0,
+        behind: 0,
+      })
+    if (path === "/provider") return send({ all: [], connected: [], default: {} })
+    if (path === "/provider/auth") return send({})
+    if (path === "/config/providers") return send({ providers: [], default: {} })
+    if (path === "/config") return send({ model: "opencorvus/gpt-5-nano", prompt_profile: { active: "general" } })
+    if (path === "/config/prompt") return send([])
+    if (path === "/config/prompt-profile") return send(promptProfileCatalog)
+    if (path === "/terminal/profiles") return send({ defaultProfileID: "powershell", profiles: [] })
+    if (path === "/coding/cli/profiles") return send({ profiles: [] })
+    if (path === "/agent" || path === "/channel") return send([])
+    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
+    if (path === "/mcp") return send({})
+    if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
+    if (path === "/task/events") return eventStream()
+    if (path === "/task" && req.method === "POST") {
+      taskBodies.push(await req.json())
+      return send({ task_id: taskID })
+    }
+    if (path === `/task/${taskID}/board`) return send({ cards: [], status: "queued" }, { headers: { etag: `"${taskID}"` } })
+    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+    if (path === `/task/${taskID}/transcript`) return send([])
+    if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
+    if (path === `/task/${taskID}/followup`) return send({ followup: null })
+    if (path === `/task/${taskID}/browser-preview`) return send({ target: null, verification: null })
+    if (path === "/log" && req.method === "POST") return send({ ok: true })
+    return send({})
+  })
 
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    await page.setViewport({ width: 720, height: 520 })
-    await page.setContent(`
-      <!doctype html>
-      <html data-theme="light">
-        <head>
-          <style>
-            ${css}
-            :root {
-              --ui-scale: 1;
-              --dialog-drag-x: 0px;
-              --dialog-drag-y: 0px;
+    const consoleErrors: string[] = []
+    const pageErrors: string[] = []
+    page.on("console", (item) => {
+      if (item.type() === "error") consoleErrors.push(item.text())
+    })
+    page.on("pageerror", (error) => {
+      pageErrors.push(`${error.message}\n${error.stack ?? ""}`)
+    })
+    await page.setViewport({ width: 720, height: 560 })
+    await page.evaluateOnNewDocument(({ serverUrl, directory }) => {
+      ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+      localStorage.setItem("oc_locale", "en-US")
+      localStorage.setItem("oc_theme", "light")
+      localStorage.setItem("oc_directory", directory)
+      localStorage.setItem("oc_server_url", serverUrl)
+      localStorage.setItem("oc_auto_server", "false")
+      ;(window as any).__TAURI__ = {
+        core: {
+          invoke: async (command: string) => {
+            if (command === "overlay_settings_load") {
+              return {
+                serverUrl,
+                autoServer: false,
+                locale: "en-US",
+                theme: "light",
+                directory,
+              }
             }
-            body {
-              min-height: 100vh;
-              display: grid;
-              place-items: center;
-              margin: 0;
-              background: var(--bg);
-              color: var(--text);
-              font-family: var(--font);
+            if (command === "overlay_settings_save") return true
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              hide: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+              onMoved: async () => ({ unlisten: async () => undefined }),
+              listen: async () => ({ unlisten: async () => undefined }),
             }
-          </style>
-        </head>
-        <body data-theme="light">
-          <div id="appDialog" class="dialog" role="dialog" aria-modal="true">
-            <form class="dialog-form app-dialog-form--decision">
-              <header class="dialog-header">
-                <h2 class="dialog-title">New Task Queue</h2>
-              </header>
-              <div class="app-dialog-decision" id="appDialogBody" data-kind="task-queue-decision">
-                <div class="app-dialog-decision__copy">
-                  <span class="app-dialog-decision__eyebrow">Task Queue</span>
-                  <p>Should this new task wait in the queue or start when the directory is idle?</p>
-                </div>
-                <div class="app-dialog-decision__choices" aria-label="Start mode">
-                  <button class="app-dialog-decision__choice" aria-pressed="true" data-pressed="" data-tone="neutral" data-value="start" data-recommended="true" type="button">
-                    <span class="app-dialog-decision__choice-top">
-                      <span>Start when idle</span>
-                      <span class="app-dialog-decision__badge">Recommended</span>
-                    </span>
-                    <span class="app-dialog-decision__choice-body">Start as soon as this directory is idle; if a task is already active in the same directory, enter the directory queue.</span>
-                  </button>
-                  <button class="app-dialog-decision__choice" aria-pressed="false" data-tone="neutral" data-value="queue" data-recommended="false" type="button">
-                    <span class="app-dialog-decision__choice-top">
-                      <span>Wait in queue</span>
-                    </span>
-                    <span class="app-dialog-decision__choice-body">Enter the directory queue and start after the current same-directory task finishes.</span>
-                  </button>
-                </div>
-                <div class="app-dialog-decision__timer" aria-live="polite">
-                  <span>Recommended start mode applies in 8s</span>
-                  <span class="app-dialog-decision__timer-track" aria-hidden="true">
-                    <span class="app-dialog-decision__timer-fill" style="width: 72%"></span>
-                  </span>
-                </div>
-              </div>
-            </form>
-          </div>
-        </body>
-      </html>
-    `)
-
-    const form = await page.$(".app-dialog-form--decision")
-    assert.ok(form)
-    await saveScreenshot(form, "app-dialog-segmented-control.png")
-
-    const metrics = await page.evaluate(() => {
-      const choices = document.querySelector(".app-dialog-decision__choices") as HTMLElement
-      const active = document.querySelector('.app-dialog-decision__choice[data-value="start"]') as HTMLElement
-      const inactive = document.querySelector('.app-dialog-decision__choice[data-value="queue"]') as HTMLElement
-      const form = document.querySelector(".app-dialog-form--decision") as HTMLElement
-      const formRect = form.getBoundingClientRect()
-      const activeStyle = getComputedStyle(active)
-      const inactiveStyle = getComputedStyle(inactive)
-      const badgeStyle = getComputedStyle(active.querySelector(".app-dialog-decision__badge") as HTMLElement)
-      const bodyStyle = getComputedStyle(active.querySelector(".app-dialog-decision__choice-body") as HTMLElement)
-      const choicesRect = choices.getBoundingClientRect()
-      const inactiveRect = inactive.getBoundingClientRect()
-      return {
-        choiceDisplay: getComputedStyle(choices).display,
-        columns: getComputedStyle(choices).gridTemplateColumns.split(" ").length,
-        formLeft: Math.round(formRect.left),
-        formRight: Math.round(formRect.right),
-        choicesClientWidth: Math.round(choices.clientWidth),
-        choicesScrollWidth: Math.round(choices.scrollWidth),
-        choicesLeft: Math.round(choicesRect.left),
-        inactiveRight: Math.round(inactiveRect.right),
-        choicesRight: Math.round(choicesRect.right),
-        activeAttr: active.getAttribute("data-pressed"),
-        pressedAttr: active.getAttribute("aria-pressed"),
-        selectedAttr: active.getAttribute("data-selected"),
-        activeBorder: activeStyle.borderColor,
-        inactiveBorder: inactiveStyle.borderColor,
-        activeBg: activeStyle.backgroundColor,
-        inactiveBg: inactiveStyle.backgroundColor,
-        badgeColor: badgeStyle.color,
-        bodyColor: bodyStyle.color,
-        activeText: active.textContent || "",
-        activeAppearance: activeStyle.appearance,
-        activeFont: activeStyle.fontFamily,
-        formWidth: Math.round(formRect.width),
-        formHeight: Math.round(formRect.height),
+          },
+        },
       }
+    }, { serverUrl: server.origin, directory: projectRoot })
+
+    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
+      visible: true,
+    })
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
+    await page.waitForSelector("#btnCreateTask", { visible: true })
+    await page.click("#btnCreateTask")
+    try {
+      await page.waitForSelector("#chatTextarea:not([disabled])", { visible: true, timeout: 15_000 })
+    } catch (error) {
+      const snapshot = await page.evaluate(() => {
+        const textarea = document.querySelector<HTMLTextAreaElement>("#chatTextarea")
+        const send = document.querySelector<HTMLButtonElement>("#chatSend")
+        return {
+          connection: document.body.dataset.connection ?? "",
+          workspace: document.body.dataset.workspace ?? "",
+          textareaExists: !!textarea,
+          textareaDisabled: textarea?.disabled ?? null,
+          sendExists: !!send,
+          sendDisabled: send?.disabled ?? null,
+          bodyText: document.body.textContent?.slice(0, 1600) ?? "",
+        }
+      })
+      assert.fail(
+        `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(
+          { snapshot, requestLog, consoleErrors, pageErrors },
+          null,
+          2,
+        )}`,
+      )
+    }
+    await page.type("#chatTextarea", `Task decision ${mode}`)
+    await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>("#chatSend")?.disabled)
+    await page.click("#chatSend")
+    await page.waitForSelector('#appDialogBody[data-kind="task-queue-decision"] .app-dialog-decision__choice', {
+      visible: true,
     })
 
-    assert.equal(metrics.choiceDisplay, "grid")
-    assert.equal(metrics.columns, 2)
-    assert.ok(metrics.choicesScrollWidth <= metrics.choicesClientWidth)
-    assert.ok(metrics.inactiveRight <= metrics.choicesRight)
-    assert.ok(metrics.choicesLeft >= metrics.formLeft)
-    assert.ok(metrics.inactiveRight <= metrics.formRight)
-    assert.equal(metrics.activeAttr, "")
-    assert.equal(metrics.pressedAttr, "true")
-    assert.equal(metrics.selectedAttr, null)
-    assert.notEqual(metrics.activeBorder, metrics.inactiveBorder)
-    assert.notEqual(metrics.activeBg, metrics.inactiveBg)
-    assert.notEqual(metrics.badgeColor, "rgba(0, 0, 0, 0)")
-    assert.notEqual(metrics.bodyColor, "rgba(0, 0, 0, 0)")
-    assert.match(metrics.activeText, /Recommended/)
-    assert.equal(metrics.activeAppearance, "none")
-    assert.match(metrics.activeFont, /Inter|Segoe UI|Arial/)
-    assert.ok(metrics.formWidth > 400)
-    assert.ok(metrics.formHeight > 260)
+    await run({ page, taskBodies, requestLog })
+
+    assert.deepEqual(consoleErrors, [], JSON.stringify({ consoleErrors, pageErrors, requestLog }, null, 2))
+    assert.deepEqual(pageErrors, [], JSON.stringify({ consoleErrors, pageErrors, requestLog }, null, 2))
   } finally {
     await browser.close()
+    await server.close()
   }
+}
+
+test("app dialog task decision uses the real host and segmented control", async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
+  await withTaskDecisionFixture("enter-start", async ({ page, taskBodies, requestLog }) => {
+    const initial = await page.evaluate(() => {
+      const dialog = document.querySelector<HTMLElement>("#appDialog")
+      const choices = document.querySelector<HTMLElement>(".app-dialog-decision__choices")
+      const start = document.querySelector<HTMLElement>('.app-dialog-decision__choice[data-value="start"]')
+      const queue = document.querySelector<HTMLElement>('.app-dialog-decision__choice[data-value="queue"]')
+      const form = document.querySelector<HTMLElement>(".app-dialog-form--decision")
+      const startStyle = start ? getComputedStyle(start) : null
+      const queueStyle = queue ? getComputedStyle(queue) : null
+      const badgeStyle = document.querySelector<HTMLElement>(".app-dialog-decision__badge")
+        ? getComputedStyle(document.querySelector<HTMLElement>(".app-dialog-decision__badge")!)
+        : null
+      const bodyStyle = document.querySelector<HTMLElement>(".app-dialog-decision__choice-body")
+        ? getComputedStyle(document.querySelector<HTMLElement>(".app-dialog-decision__choice-body")!)
+        : null
+      const formRect = form?.getBoundingClientRect()
+      const choicesRect = choices?.getBoundingClientRect()
+      const queueRect = queue?.getBoundingClientRect()
+      return {
+        dialogRole: dialog?.getAttribute("role") ?? "",
+        modal: dialog?.getAttribute("aria-modal") ?? "",
+        choiceGroupLabel: choices?.getAttribute("aria-label") ?? "",
+        choiceGroupDisplay: choices ? getComputedStyle(choices).display : "",
+        activeTag: start?.tagName ?? "",
+        activeValue: start?.dataset.value ?? "",
+        activePressed: start?.getAttribute("aria-pressed") ?? "",
+        activeDataPressed: start?.hasAttribute("data-pressed") ?? false,
+        activeDataSelected: start?.getAttribute("data-selected") ?? null,
+        queuePressed: queue?.getAttribute("aria-pressed") ?? "",
+        queueDataPressed: queue?.hasAttribute("data-pressed") ?? false,
+        recommended: start?.dataset.recommended ?? "",
+        focusedValue: (document.activeElement as HTMLElement | null)?.dataset?.value ?? "",
+        startBorder: startStyle?.borderColor ?? "",
+        queueBorder: queueStyle?.borderColor ?? "",
+        startBackground: startStyle?.backgroundColor ?? "",
+        queueBackground: queueStyle?.backgroundColor ?? "",
+        badgeColor: badgeStyle?.color ?? "",
+        bodyColor: bodyStyle?.color ?? "",
+        activeAppearance: startStyle?.appearance ?? "",
+        formWidth: Math.round(formRect?.width ?? 0),
+        formHeight: Math.round(formRect?.height ?? 0),
+        choicesClientWidth: Math.round(choices?.clientWidth ?? 0),
+        choicesScrollWidth: Math.round(choices?.scrollWidth ?? 0),
+        queueRight: Math.round(queueRect?.right ?? 0),
+        choicesRight: Math.round(choicesRect?.right ?? 0),
+      }
+    })
+    assert.deepEqual(
+      {
+        dialogRole: initial.dialogRole,
+        modal: initial.modal,
+        choiceGroupLabel: initial.choiceGroupLabel,
+        choiceGroupDisplay: initial.choiceGroupDisplay,
+        activeTag: initial.activeTag,
+        activeValue: initial.activeValue,
+        activePressed: initial.activePressed,
+        activeDataPressed: initial.activeDataPressed,
+        activeDataSelected: initial.activeDataSelected,
+        queuePressed: initial.queuePressed,
+        queueDataPressed: initial.queueDataPressed,
+        recommended: initial.recommended,
+        focusedValue: initial.focusedValue,
+        activeAppearance: initial.activeAppearance,
+      },
+      {
+        dialogRole: "dialog",
+        modal: "true",
+        choiceGroupLabel: "Start mode",
+        choiceGroupDisplay: "grid",
+        activeTag: "BUTTON",
+        activeValue: "start",
+        activePressed: "true",
+        activeDataPressed: true,
+        activeDataSelected: null,
+        queuePressed: "false",
+        queueDataPressed: false,
+        recommended: "true",
+        focusedValue: "start",
+        activeAppearance: "none",
+      },
+      JSON.stringify({ initial, requestLog }, null, 2),
+    )
+    assert.notEqual(initial.startBorder, initial.queueBorder)
+    assert.notEqual(initial.startBackground, initial.queueBackground)
+    assert.notEqual(initial.badgeColor, "transparent")
+    assert.notEqual(initial.bodyColor, "transparent")
+    assert.ok(initial.formWidth > 400)
+    assert.ok(initial.formHeight >= 220, JSON.stringify(initial, null, 2))
+    assert.ok(initial.choicesScrollWidth <= initial.choicesClientWidth)
+    assert.ok(initial.queueRight <= initial.choicesRight)
+
+    const screenshotPath = resolve(".scratch/app-dialog-real-task-decision-focus.png")
+    mkdirSync(dirname(screenshotPath), { recursive: true })
+    const form = await page.$(".app-dialog-form--decision")
+    assert.ok(form)
+    writeFileSync(screenshotPath, await form.screenshot({}))
+
+    await page.hover('.app-dialog-decision__choice[data-value="queue"]')
+    const hoverScreenshotPath = resolve(".scratch/app-dialog-real-task-decision-hover.png")
+    writeFileSync(hoverScreenshotPath, await form.screenshot({}))
+
+    await page.keyboard.press("Enter")
+    await page.waitForFunction(() => document.querySelector("#appDialog") === null)
+    assert.equal(taskBodies.length, 1)
+    assert.equal((taskBodies[0] as { queue?: unknown }).queue, false)
+  })
+})
+
+test("app dialog task decision settles queue with keyboard and pointer activation", async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
+  await withTaskDecisionFixture("space-queue", async ({ page, taskBodies }) => {
+    await page.keyboard.press("ArrowRight")
+    await page.waitForFunction(
+      () => (document.activeElement as HTMLElement | null)?.dataset?.value === "queue",
+    )
+    const queueFocus = await page.$eval('.app-dialog-decision__choice[data-value="queue"]', (node) => {
+      const element = node as HTMLElement
+      const styles = getComputedStyle(element)
+      return {
+        focusVisible: element.matches(":focus-visible"),
+        outlineStyle: styles.outlineStyle,
+        outlineWidth: styles.outlineWidth,
+      }
+    })
+    assert.equal(queueFocus.focusVisible, true)
+    assert.notEqual(queueFocus.outlineStyle, "none")
+    assert.notEqual(queueFocus.outlineWidth, "0px")
+    const queueFocusScreenshotPath = resolve(".scratch/app-dialog-real-task-decision-queue-focus.png")
+    mkdirSync(dirname(queueFocusScreenshotPath), { recursive: true })
+    const form = await page.$(".app-dialog-form--decision")
+    assert.ok(form)
+    writeFileSync(queueFocusScreenshotPath, await form.screenshot({}))
+    await page.keyboard.press("Space")
+    await page.waitForFunction(() => document.querySelector("#appDialog") === null)
+    assert.equal(taskBodies.length, 1)
+    assert.equal((taskBodies[0] as { queue?: unknown }).queue, true)
+  })
+
+  await withTaskDecisionFixture("click-queue", async ({ page, taskBodies }) => {
+    await page.click('.app-dialog-decision__choice[data-value="queue"]')
+    await page.waitForFunction(() => document.querySelector("#appDialog") === null)
+    assert.equal(taskBodies.length, 1)
+    assert.equal((taskBodies[0] as { queue?: unknown }).queue, true)
+  })
 })
