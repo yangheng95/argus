@@ -216,6 +216,53 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
   ])
 })
 
+test("message regroup only reuses the current semantic run within a shared session", async () => {
+  setBoardStore("board", {
+    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    goals: [],
+    interactions: [],
+    goalWorkflows: [],
+  } as any)
+  setBoardStore("selectedSource", { kind: "session", id: SID })
+  resetWriter()
+
+  for (const item of [
+    { id: "msg_group_assistant_1", role: "assistant", time: T0 + 100, text: "first assistant" },
+    { id: "msg_group_assistant_2", role: "assistant", time: T0 + 200, text: "second assistant" },
+    { id: "msg_group_user_1", role: "user", time: T0 + 300, text: "user interruption" },
+    { id: "msg_group_assistant_3", role: "assistant", time: T0 + 400, text: "resumed assistant" },
+  ]) {
+    applyEvent(
+      messageUpdated({
+        id: item.id,
+        sessionID: SID,
+        role: item.role,
+        time: { created: item.time },
+      }),
+    )
+    applyEvent(
+      partUpdated({
+        messageID: item.id,
+        sessionID: SID,
+        partID: `part_${item.id}`,
+        text: item.text,
+        role: item.role,
+      }),
+    )
+  }
+
+  expect(cardTreeStore.order.filter((id) => id.includes(`:session:${SID}:message:`))).toEqual([
+    `assistant:session:${SID}:message:msg_group_assistant_1`,
+    `user:session:${SID}:message:msg_group_user_1`,
+    `assistant:session:${SID}:message:msg_group_assistant_3`,
+  ])
+  expect(
+    cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_assistant_1`]?.parts.map(
+      (part: any) => part.messageID,
+    ),
+  ).toEqual(["msg_group_assistant_1", "msg_group_assistant_2", "msg_group_assistant_2"])
+})
+
 test("handleMessageUpdated projects the actual assistant model from message info", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },

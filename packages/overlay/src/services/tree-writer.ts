@@ -186,9 +186,9 @@ interface SessionInfo {
    *  mutate THIS card only — older turn cards are frozen history. */
   activeCardID?: string
   /** Per-message cumulative usage observed for assistant messages in
-   *  this session. `regroupTimelineSegments` collapses every assistant
-   *  message in a non-phase session into ONE display card (each
-   *  message becomes a boundary + parts inside the same card), so a
+   *  this session. `regroupTimelineSegments` can collapse multiple
+   *  messages from the same semantic run into one display card (each
+   *  later message becomes a boundary + parts inside that card), so a
    *  raw setCardTreeStore("cards", cardID, "usage", ...) would
    *  overwrite earlier messages' tokens. Instead we record per-message
    *  totals here and write the SUM onto the owning card whenever a
@@ -603,12 +603,12 @@ function sessionCardID(stage: string, sid: string): string {
   return `${stage}:session:${sid}`
 }
 
-/** Stable session card id seeded by the first visible message. A long-lived
- *  session can produce many real `message.updated` rows; they must stay in
- *  one complete card so parallel child agents do not visually split the
- *  parent session. The first message id stays in the id for deterministic
- *  hydration and diagnostics; sorting is still by `CardNode.time`, never by
- *  id. */
+/** Stable semantic-run card id seeded by the first visible message. A
+ *  runtime session can produce many real `message.updated` rows; messages
+ *  from the same current semantic run share one complete card so parallel
+ *  child sessions do not visually split their parent. The first message id
+ *  stays in the id for deterministic hydration and diagnostics; sorting is
+ *  still by `CardNode.time`, never by id. */
 function messageTurnCardID(stage: string, sid: string, messageID: string): string {
   return `${stage}:session:${sid}:message:${messageID}`
 }
@@ -815,10 +815,10 @@ function handleMessageUpdated(event: any): void {
   // `build/agent.ts:case "usage"`. message.updated is the single source —
   // there is no parallel usage.updated event.
   //
-  // Non-phase sessions collapse every assistant message into ONE display
-  // card via `regroupTimelineSegments`, so we store per-message usage in
-  // `session.messageUsage` and write the SUM onto the (possibly newly
-  // resolved) card. A later message.updated for the same message
+  // Non-phase semantic runs can collapse multiple assistant messages into
+  // one display card via `regroupTimelineSegments`, so we store per-message
+  // usage in `session.messageUsage` and write the SUM onto the (possibly
+  // newly resolved) card. A later message.updated for the same message
   // overwrites that message's slot rather than double-counting.
   const usageProjection = usageProjectionFromInfo(info)
   if (usageProjection) projectUsageOntoCard(session, id, cardID, usageProjection)
@@ -2345,16 +2345,18 @@ function reorderPhaseCardParts(cardID: string): void {
 
 /** Rebuild non-phase message-turn card ownership from the authoritative
  *  message timeline. Live `message.*` events are ephemeral and can arrive
- *  out of chronological order, so "same session as the latest event" is not
- *  a valid definition of an uninterrupted visible run. */
+ *  out of chronological order. Runtime sessions keep their own current
+ *  semantic run: a user/assistant stage switch inside the same shared
+ *  session opens a new card, while a different child session streaming in
+ *  between does not split the parent session's complete card. */
 function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void {
   const ordered = [...messages.values()].filter((message) => sessions.has(message.sessionID)).sort(messageTimeOrder)
   if (ordered.length === 0) return
 
   const segments: TimelineSegment[] = []
-  const segmentBySessionKey = new Map<string, TimelineSegment>()
   const desiredCardByMessage = new Map<string, string>()
   const targetMessageIDs = new Set<string>()
+  const currentSegmentBySession = new Map<string, TimelineSegment>()
 
   for (const message of ordered) {
     const session = sessions.get(message.sessionID)
@@ -2365,14 +2367,14 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
       continue
     }
 
-    const segmentKey = `${message.sessionID}\u0000${stage}\u0000${goalID}`
-    let segment = segmentBySessionKey.get(segmentKey)
+    const currentSegment = currentSegmentBySession.get(message.sessionID)
+    let segment = currentSegment?.stage === stage && currentSegment.goalID === goalID ? currentSegment : undefined
     if (!segment) {
       const cardID = timelineCardID(stage, message.sessionID, message.id)
       segment = { cardID, session, stage, goalID, messages: [] }
-      segmentBySessionKey.set(segmentKey, segment)
       segments.push(segment)
     }
+    currentSegmentBySession.set(message.sessionID, segment)
     segment.messages.push(message)
     desiredCardByMessage.set(message.id, segment.cardID)
     targetMessageIDs.add(message.id)
@@ -2487,9 +2489,10 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
 }
 
 /** Replay a persisted task into the exact same visible card identity the
- *  live SSE stream would have built. Single render identity = session:
- *  each session's first visible message seeds the durable card id, then later
- *  messages are folded into that same card in chronological order.
+ *  live SSE stream would have built. Single render identity = semantic run:
+ *  the first visible message in a runtime session's current stage/goal run
+ *  seeds the durable card id, then later messages from that run fold into the
+ *  same card in chronological order.
  *  `view.sessions` is metadata only (parentSessionID / goalID
  *  fallback) and MUST NOT regroup multiple messages into one session card
  *  (spec §6 — the highest replay-collapse risk). */

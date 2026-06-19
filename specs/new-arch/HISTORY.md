@@ -61,6 +61,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-task-row-action-keyboard-rail.md](2026-06-19-task-row-action-keyboard-rail.md)                           | Task Row Action Keyboard Rail |
 | [2026-06-19-card-todo-summary-progressbar-a11y.md](2026-06-19-card-todo-summary-progressbar-a11y.md)                 | Card Todo Summary Progressbar Accessibility |
 | [2026-06-19-card-header-metadata-tooltip-a11y.md](2026-06-19-card-header-metadata-tooltip-a11y.md)                   | Card Header Metadata Tooltip Accessibility |
+| [2026-06-19-tree-writer-contiguous-segment-regroup.md](2026-06-19-tree-writer-contiguous-segment-regroup.md)         | Tree Writer Contiguous Segment Regroup |
 
 ## 2026-06-18
 
