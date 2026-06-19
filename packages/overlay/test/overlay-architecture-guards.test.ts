@@ -500,7 +500,7 @@ describe("overlay architecture guards", () => {
     const sharedRule = styles.match(/\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]\s*\{([^}]*)\}/)
     expect(sharedRule).not.toBeNull()
     expect(sharedRule![1]).toContain("--oc-button-bg: var(--accent)")
-    expect(sharedRule![1]).toContain("--oc-button-color: var(--surface)")
+    expect(sharedRule![1]).toContain("--oc-button-color: var(--text-on-accent)")
     expect(sharedRule![1]).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba\(|hsla\(/)
     expect(styles).not.toContain(".board-intro__cta-action")
   })

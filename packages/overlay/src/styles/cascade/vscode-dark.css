@@ -27,7 +27,9 @@
 body[data-theme="vscode-dark"] {
   color-scheme: dark;
 
-  --text-on-accent: #ffffff;
+  --text-on-accent: #000000;
+  --text-on-strong: #000000;
+  --text-on-danger: #000000;
   --bg: rgba(30, 30, 30, 0.78);
   --surface: rgba(37, 37, 38, 0.74);
   --surface-hover: rgba(42, 45, 46, 0.78);
