@@ -47,9 +47,13 @@ export function PreviewableImage(props: { src: string; alt?: string; triggerClas
   const imageClass = () => ["md-img", props.imageClass].filter(Boolean).join(" ")
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="md"
+      tone="neutral"
       class={triggerClass()}
+      data-ui="image-preview-trigger"
       data-image-preview-trigger="true"
       title={triggerLabel()}
       aria-label={triggerLabel()}
@@ -60,7 +64,7 @@ export function PreviewableImage(props: { src: string; alt?: string; triggerClas
       }}
     >
       <img class={imageClass()} src={props.src} alt={alt()} loading="lazy" />
-    </button>
+    </Button>
   )
 }
 

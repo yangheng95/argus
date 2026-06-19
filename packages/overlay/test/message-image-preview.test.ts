@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { calculateImagePreviewFitScale, calculateImagePreviewOpenScale } from "../src/utils/image-preview-scale"
 import { imagePreviewTriggerLabel } from "../src/utils/image-preview-label"
+import { setLocale, setLocaleData } from "../src/utils/i18n"
 import { renderMarkdown } from "../src/utils/markdown"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const IMAGE_PREVIEW_I18N_KEYS = [
   "image_preview.title",
+  "image_preview.open_trigger",
+  "image_preview.open_trigger_with_alt",
   "image_preview.controls",
   "image_preview.zoom_out",
   "image_preview.current_zoom",
@@ -52,16 +55,26 @@ function readJson(path: string): Record<string, unknown> {
   return JSON.parse(read(path)) as Record<string, unknown>
 }
 
+setLocaleData("en-US", readJson("src/i18n/en-US.json"))
+setLocaleData("zh-CN", readJson("src/i18n/zh-CN.json"))
+await setLocale("en-US")
+
 function block(css: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   return css.match(new RegExp(`${escaped}\\s*\\{[^}]*\\}`, "s"))?.[0] ?? ""
 }
 
 describe("message image preview", () => {
-  test("markdown images emit preview trigger metadata", () => {
+  test("markdown images emit preview trigger metadata", async () => {
+    await setLocale("en-US")
     const html = renderMarkdown("![tiny](https://example.com/tiny.png)")
 
     expect(html).toContain('data-image-preview-trigger="true"')
+    expect(html).toContain('class="oc-button msg-image-trigger"')
+    expect(html).toContain('data-ui="image-preview-trigger"')
+    expect(html).toContain('data-variant="ghost"')
+    expect(html).toContain('data-size="md"')
+    expect(html).toContain('data-tone="neutral"')
     expect(html).toContain('data-image-preview-src="https://example.com/tiny.png"')
     expect(html).toContain('data-image-preview-alt="tiny"')
     expect(html).toContain('title="Open image preview: tiny"')
@@ -70,15 +83,36 @@ describe("message image preview", () => {
     expect(html).toContain('class="md-img"')
   })
 
-  test("image preview trigger labels include alt text from one helper", () => {
+  test("markdown image preview labels follow the active locale", async () => {
+    await setLocale("zh-CN")
+    const html = renderMarkdown("![tiny](https://example.com/tiny.png)")
+
+    expect(imagePreviewTriggerLabel("tiny")).toBe("打开图片预览：tiny")
+    expect(imagePreviewTriggerLabel("")).toBe("打开图片预览")
+    expect(html).toContain('title="打开图片预览：tiny"')
+    expect(html).toContain('aria-label="打开图片预览：tiny"')
+    expect(html).not.toContain("Open image preview")
+    await setLocale("en-US")
+  })
+
+  test("image preview trigger labels include alt text from one i18n helper", async () => {
+    await setLocale("en-US")
     expect(imagePreviewTriggerLabel("tiny")).toBe("Open image preview: tiny")
     expect(imagePreviewTriggerLabel("  browser evidence  ")).toBe("Open image preview: browser evidence")
     expect(imagePreviewTriggerLabel("")).toBe("Open image preview")
 
     const component = read("src/components/ImagePreview.tsx")
+    const labelHelper = read("src/utils/image-preview-label.ts")
     const markdown = read("src/utils/markdown.ts")
     expect(component).toContain("imagePreviewTriggerLabel(alt())")
+    expect(component).toContain("<Button")
+    expect(component).toContain('data-ui="image-preview-trigger"')
     expect(markdown).toContain("imagePreviewTriggerLabel(text || \"\")")
+    expect(markdown).toContain('class="oc-button msg-image-trigger"')
+    expect(markdown).toContain('data-ui="image-preview-trigger"')
+    expect(labelHelper).toContain('t("image_preview.open_trigger_with_alt"')
+    expect(labelHelper).toContain('t("image_preview.open_trigger")')
+    expect(labelHelper).not.toContain('"Open image preview"')
     expect(component).not.toMatch(/aria-label="Open image preview"/)
     expect(markdown).not.toMatch(/aria-label="Open image preview"/)
   })
@@ -116,14 +150,16 @@ describe("message image preview", () => {
     const markdownCss = read("src/styles/surfaces/markdown.css")
     const messagesCss = read("src/styles/surfaces/messages.css")
     const mdImg = block(markdownCss, ".md-img")
-    const trigger = block(messagesCss, ".msg-image-trigger")
+    const trigger = block(messagesCss, '.oc-button[data-ui="image-preview-trigger"].msg-image-trigger')
 
     expect(mdImg).toContain("width: auto;")
     expect(mdImg).toContain("height: auto;")
     expect(mdImg).toContain("max-width: min(100%, calc(720px * var(--ui-scale)));")
     expect(mdImg).toContain("max-height: calc(420px * var(--ui-scale));")
-    expect(trigger).toContain("display: inline-flex;")
+    expect(trigger).toContain("--oc-button-height: auto;")
+    expect(trigger).toContain("--oc-button-padding-x: 0;")
     expect(trigger).toContain("cursor: zoom-in;")
+    expect(messagesCss).not.toMatch(/(^|\n)\.msg-image-trigger:focus-visible\s*\{/)
   })
 
   test("browser evidence thumbnails keep intrinsic size while capped by the evidence column", () => {
@@ -148,6 +184,7 @@ describe("message image preview", () => {
 
   test("modal preview owns zoom controls and does not cap the image to thumbnail size", () => {
     const component = read("src/components/ImagePreview.tsx")
+    const labelHelper = read("src/utils/image-preview-label.ts")
     const css = read("src/styles/surfaces/messages.css")
     const form = block(css, ".dialog .image-preview-dialog__form")
     const body = block(css, ".image-preview-dialog__body")
@@ -160,7 +197,8 @@ describe("message image preview", () => {
     expect(scaleHelper).toContain("IMAGE_PREVIEW_MIN_SCALE = 0.02")
     expect(scaleHelper).toContain("IMAGE_PREVIEW_MAX_SCALE = 8")
     for (const key of IMAGE_PREVIEW_I18N_KEYS) {
-      expect(component).toContain(`"${key}"`)
+      const owner = key.startsWith("image_preview.open_trigger") ? labelHelper : component
+      expect(owner).toContain(`"${key}"`)
     }
     for (const literal of RETIRED_IMAGE_PREVIEW_LITERALS) {
       expect(component).not.toContain(`"${literal}"`)
@@ -204,6 +242,8 @@ describe("message image preview", () => {
     }
     expect(enUS["image_preview.copy_image"]).toBe("Copy image")
     expect(zhCN["image_preview.copy_image"]).toBe("复制图片")
+    expect(enUS["image_preview.open_trigger_with_alt"]).toBe("Open image preview: {{alt}}")
+    expect(zhCN["image_preview.open_trigger_with_alt"]).toBe("打开图片预览：{{alt}}")
     expect(enUS["image_preview.copy_status.clipboard_unavailable"]).toBe("Copy failed: clipboard unavailable")
     expect(zhCN["image_preview.copy_status.clipboard_unavailable"]).toBe("复制失败：剪贴板不可用")
   })

@@ -1,6 +1,6 @@
-const IMAGE_PREVIEW_TRIGGER_BASE_LABEL = "Open image preview"
+import { t } from "./i18n"
 
 export function imagePreviewTriggerLabel(alt?: string): string {
   const label = alt?.trim() ?? ""
-  return label ? `${IMAGE_PREVIEW_TRIGGER_BASE_LABEL}: ${label}` : IMAGE_PREVIEW_TRIGGER_BASE_LABEL
+  return label ? t("image_preview.open_trigger_with_alt", { alt: label }) : t("image_preview.open_trigger")
 }

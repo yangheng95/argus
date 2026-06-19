@@ -759,6 +759,8 @@
   "browser_preview.viewport.mobile": "Mobile",
   "browser_preview.viewport.tablet": "Tablet",
   "image_preview.title": "Image preview",
+  "image_preview.open_trigger": "Open image preview",
+  "image_preview.open_trigger_with_alt": "Open image preview: {{alt}}",
   "image_preview.controls": "Image preview controls",
   "image_preview.zoom_out": "Zoom out",
   "image_preview.current_zoom": "Current zoom",
