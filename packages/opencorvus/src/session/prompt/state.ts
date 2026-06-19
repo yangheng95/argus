@@ -67,15 +67,16 @@ export namespace SessionPromptState {
     return s[sessionID].abort.signal
   }
 
-  export function cancel(sessionID: string, directory?: string) {
+  export function cancel(sessionID: string, directory?: string): boolean {
     log.info("cancel", { sessionID })
     SessionStatus.abortActivityGate(sessionID, new DOMException("session cancelled", "AbortError"))
     const s = state(directory)
     const match = s[sessionID]
     const statusOptions = directory ? { publish: false } : undefined
     if (!match) {
+      if (directory) return false
       SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" }, statusOptions)
-      return
+      return false
     }
     match.abort.abort()
     // Reject all pending callbacks before deleting state so that
@@ -90,7 +91,7 @@ export namespace SessionPromptState {
     // start in the same session while the old provider/tool stack is still
     // unwinding, which races runtime contracts and terminal collectors.
     SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" }, statusOptions)
-    return
+    return true
   }
 
   export function finish(sessionID: string, abort?: AbortSignal, directory?: string) {

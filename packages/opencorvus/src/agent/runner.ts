@@ -89,6 +89,7 @@ import { TaskContext } from "@/task-context"
 import type { AgentReport, AgentReportContext } from "@/agent/report"
 import { SessionContext } from "@/session/context"
 import { recordToolExecuteError } from "@/engine/persist"
+import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -773,11 +774,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   })
 
   const abortPrompt = () => {
-    try {
-      SessionPrompt.cancel(session.id)
-    } catch {
-      /* session may already be stopped — best-effort cancel */
-    }
+    cancelSessionPromptInScope({ session, taskID: input.taskID, handle: `${kind}.agent.signal` })
   }
   input.signal?.addEventListener("abort", abortPrompt, { once: true })
 

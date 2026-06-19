@@ -6,6 +6,7 @@ import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SessionStatus } from "../../src/session/status"
 import { tmpdir } from "../fixture/fixture"
 
 const TEST_MODEL = { providerID: "test", modelID: "test-model" }
@@ -406,6 +407,36 @@ describe("session prompt_async route", () => {
         expect(row?.error_message).toBe("session aborted")
         releaseLoop?.()
         await TaskQueueService.runNow()
+      },
+    })
+  })
+
+  test("session abort reports incomplete cancellation when live prompt state is missing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
+        try {
+          const app = Server.App()
+          const aborted = await app.request(`/session/${session.id}/abort`, {
+            method: "POST",
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          })
+          expect(aborted.status).toBe(409)
+          expect(await aborted.json()).toMatchObject({
+            name: "TaskCancellationIncompleteError",
+            data: {
+              handle: "SessionPrompt.cancel",
+            },
+          })
+          expect(SessionStatus.get(session.id)).toEqual({ type: "streaming" })
+        } finally {
+          SessionStatus.set(session.id, { type: "idle" }, { publish: false })
+        }
       },
     })
   })

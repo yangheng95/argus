@@ -10,6 +10,7 @@ import { NotFoundError } from "../../src/storage/db"
 import { Filesystem } from "../../src/util/filesystem"
 import { Log } from "../../src/util/log"
 import { Session } from "../../src/session"
+import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-error"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 
 Log.init({ print: false })
@@ -61,6 +62,7 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
       else if (err.name === "TaskEmptyMessageError") status = 400
       else if (err.name === "TaskGlobalProjectBindingError") status = 409
       else if (err.name === "TaskChannelBindingProjectConflictError") status = 409
+      else if (err.name === "TaskCancellationIncompleteError") status = 409
       else if (err.name === "PtyCreateFailedError") status = 400
       else if (err.name === "FileUploadConflictError") status = 409
       else if (err.name.startsWith("FileUpload")) status = 400
@@ -252,6 +254,21 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       409,
       "TaskChannelBindingProjectConflictError",
+    )
+  })
+
+  test("TaskCancellationIncompleteError maps to 409", async () => {
+    await expectMapping(
+      () => {
+        throw new TaskCancellationIncompleteError({
+          message: "cancellation incomplete",
+          taskID: "task_cancel",
+          handle: "executor.abort run",
+          cause: "timeout",
+        })
+      },
+      409,
+      "TaskCancellationIncompleteError",
     )
   })
 

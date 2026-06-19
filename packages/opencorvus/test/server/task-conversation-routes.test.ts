@@ -1552,7 +1552,7 @@ describe("task conversation routes", () => {
     })
   })
 
-  test("POST /task/:taskID/session/:sessionID/cancel aborts only the target agent session", async () => {
+  test("POST /task/:taskID/session/:sessionID/cancel reports incomplete cancellation when prompt state is missing", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -1588,7 +1588,7 @@ describe("task conversation routes", () => {
             })
             .run(),
         )
-        SessionStatus.set(build.id, { type: "busy" })
+        SessionStatus.set(build.id, { type: "streaming" })
 
         const response = await app.request(`/task/${taskID}/session/${build.id}/cancel`, {
           method: "POST",
@@ -1597,28 +1597,20 @@ describe("task conversation routes", () => {
           },
         })
 
-        expect(response.status).toBe(200)
-        const body = (await response.json()) as { cancelled?: boolean; session_id?: string; task_id?: string }
-        expect(body).toEqual({
-          task_id: taskID,
-          session_id: build.id,
-          cancelled: true,
+        expect(response.status).toBe(409)
+        expect(await response.json()).toMatchObject({
+          name: "TaskCancellationIncompleteError",
+          data: {
+            taskID,
+            handle: "SessionPrompt.cancel",
+          },
         })
-        // audit-2026-04-29 W2-V35 — production session lifecycle now
-        // sets `type: "terminal"` after an abort (see actor.ts:107
-        // `{ type: "terminal", reason: "aborted" }` and
-        // session/prompt/state.ts:56,68). Pre-fix the test expected
-        // "idle" — that was the old post-abort state. The semantic
-        // shift was deliberate: aborted sessions are TERMINAL (no
-        // resume); only naturally-completing sessions move to idle
-        // (loop.ts:587). Update the assertion to match the abort
-        // path's actual state.
-        expect(SessionStatus.get(build.id).type).toBe("terminal")
+        expect(SessionStatus.get(build.id)).toEqual({ type: "streaming" })
       },
     })
   })
 
-  test("POST /task/:taskID/cancel aborts the task session tree", async () => {
+  test("POST /task/:taskID/cancel reports incomplete cancellation when session tree prompt state is missing", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -1669,11 +1661,17 @@ describe("task conversation routes", () => {
           },
         })
 
-        expect(response.status).toBe(200)
-        expect(await response.json()).toBe(true)
-        expect(SessionStatus.get(root.id)).toEqual({ type: "terminal", reason: "aborted" })
-        expect(SessionStatus.get(requirements.id)).toEqual({ type: "terminal", reason: "aborted" })
-        expect(SessionStatus.get(build.id)).toEqual({ type: "terminal", reason: "aborted" })
+        expect(response.status).toBe(409)
+        expect(await response.json()).toMatchObject({
+          name: "TaskCancellationIncompleteError",
+          data: {
+            taskID,
+            handle: "SessionPrompt.cancel",
+          },
+        })
+        expect(SessionStatus.get(root.id)).toEqual({ type: "streaming" })
+        expect(SessionStatus.get(requirements.id)).toEqual({ type: "streaming" })
+        expect(SessionStatus.get(build.id)).toEqual({ type: "streaming" })
       },
     })
   })

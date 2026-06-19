@@ -8,6 +8,7 @@ import { Log } from "../../src/util/log"
 import type { ExecutorAdapter } from "../../src/executor/contract"
 import { DecisionLogTable } from "../../src/decision-log/schema"
 import { eq } from "drizzle-orm"
+import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-error"
 
 Log.init({ print: false })
 
@@ -19,10 +20,9 @@ afterEach(async () => {
 /**
  * Fake adapter that satisfies ExecutorAdapter just enough for cancelTask.
  * The critical bit is `abort()` which returns a promise that never settles
- * — pre-Phase-1, this is exactly what opencorvus looks like when its child
- * is unresponsive, and pre-Phase-1 cancelTask awaited it directly so the
- * whole call hung. Phase-1 wraps each abort in `withTimeout`, so cancel
- * must now reach updateTask({status:"cancelled"}) within the deadline.
+ * — this is exactly what opencorvus looks like when its child is
+ * unresponsive. cancelTask must not mark a task cancelled when the executor
+ * handle cannot be proven stopped.
  */
 function fakeStuckAdapter(): ExecutorAdapter {
   return {
@@ -117,7 +117,7 @@ function seedRunningTaskRun() {
 }
 
 describe("cancelTask under unresponsive executor.abort", () => {
-  test("completes within deadline + writes time_completed + records abort_timeout in decision_log", async () => {
+  test("fails fast without marking task cancelled + records abort_timeout in decision_log", async () => {
     ExecutorRegistry.reset()
     ExecutorRegistry.register("opencorvus", fakeStuckAdapter())
 
@@ -129,23 +129,26 @@ describe("cancelTask under unresponsive executor.abort", () => {
     const { EngineService } = await import("../../src/task-api")
 
     const started = Date.now()
-    await EngineService.cancelTask(taskID, {
-      abortTimeoutMs: 50,
-      cleanupTimeoutMs: 100,
-    })
+    await expect(
+      EngineService.cancelTask(taskID, {
+        abortTimeoutMs: 50,
+        cleanupTimeoutMs: 100,
+      }),
+    ).rejects.toBeInstanceOf(TaskCancellationIncompleteError)
     const elapsed = Date.now() - started
 
     // Pre-Phase-1 this would be > 5 minutes (or forever) on a hung
-    // executor; now it must close in well under a second.
+    // executor; now it must fail in well under a second.
     expect(elapsed).toBeLessThan(2_000)
 
-    // Task row reached terminal state — the API can now return to the UI.
+    // The task row must not claim successful cancellation while the executor
+    // child may still be alive.
     const taskRow = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-    expect(taskRow?.time_completed).not.toBeNull()
-    expect(taskRow?.error).toBe("task cancelled")
+    expect(taskRow?.time_completed).toBeNull()
+    expect(taskRow?.error).toBeNull()
 
-    // The zombie-observation breadcrumb must exist so an operator can find
-    // a stuck opencorvus child after the API has unblocked.
+    // The cancellation-incomplete breadcrumb must exist so an operator can
+    // find the stuck executor handle.
     const decisions = Database.use((db) =>
       db.select().from(DecisionLogTable).where(eq(DecisionLogTable.task_id, taskID)).all(),
     )

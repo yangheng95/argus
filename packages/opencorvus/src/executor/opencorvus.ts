@@ -6,11 +6,11 @@ import { GlobalBus } from "@/bus/global"
 import { Session } from "@/session"
 import { Message } from "@/session"
 import { SessionSummary } from "@/session/summary"
-import { SessionPrompt } from "@/session/prompt"
 import { Database, eq, and, inArray } from "@/storage/db"
 import { createEventQueue } from "@/util/event-queue"
 import { EngineConfig } from "@/engine/config"
 import { mapSessionBusEvent } from "@/protocol/session-mirror"
+import { cancelSessionPromptByID } from "@/engine/cancellation-scope"
 
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -91,7 +91,7 @@ export namespace OpencorvusExecutor {
   export async function abort(input: { sessionID?: string; queueTaskID?: string }) {
     const queueTaskID = input.queueTaskID
     if (input.sessionID) {
-      SessionPrompt.cancel(input.sessionID)
+      await cancelSessionPromptByID({ sessionID: input.sessionID })
     }
     if (queueTaskID) {
       Database.use((db) =>

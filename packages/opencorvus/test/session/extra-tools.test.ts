@@ -17,6 +17,8 @@ import { AttachmentStore } from "../../src/storage/attachment-store"
 import { tmpdir } from "../fixture/fixture"
 import { Agent } from "../../src/agent/agent"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
+import { cancelSessionPromptInScope } from "../../src/engine/cancellation-scope"
+import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-error"
 
 const dummyTool = () =>
   tool({
@@ -137,6 +139,30 @@ describe("SessionLoop session runtime contract", () => {
         } finally {
           unregister()
           gate.dispose()
+        }
+      },
+    })
+  })
+
+  test("cancellation scope reports live sessions with no directory-matched prompt state", async () => {
+    const sessionID = `ses_runtime_${Date.now()}_strict_cancel`
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        SessionStatus.set(sessionID, { type: "streaming" }, { publish: false })
+        try {
+          expect(() =>
+            cancelSessionPromptInScope({
+              session: {
+                id: sessionID,
+                directory: tmp.path,
+              },
+            }),
+          ).toThrow(TaskCancellationIncompleteError)
+          expect(SessionStatus.get(sessionID)).toEqual({ type: "streaming" })
+        } finally {
+          SessionStatus.set(sessionID, { type: "idle" }, { publish: false })
         }
       },
     })
