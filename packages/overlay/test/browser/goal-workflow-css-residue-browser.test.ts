@@ -214,7 +214,7 @@ test("GoalWorkflowGroup renders through GWG selectors after goal-item residue re
     const state = await page.$eval(".gwg-list", (list: HTMLElement) => {
       const oldSelectors = [".goals-list", ".goal-item", ".goal-status-icon", ".goal-priority", ".goal-actions"]
       const first = list.querySelector<HTMLElement>(".gwg")
-      const header = list.querySelector<HTMLButtonElement>(".gwg-header")
+      const header = list.querySelector<HTMLButtonElement>('[data-ui="gwg-header"]')
       const statusIcon = list.querySelector<HTMLElement>(".gwg-status-icon")
       return {
         oldSelectorCount: oldSelectors.reduce((sum, selector) => sum + document.querySelectorAll(selector).length, 0),
@@ -222,6 +222,10 @@ test("GoalWorkflowGroup renders through GWG selectors after goal-item residue re
         firstDisplay: first ? getComputedStyle(first).display : "",
         headerTagName: header?.tagName ?? "",
         headerType: header?.getAttribute("type") ?? "",
+        headerClass: header?.className ?? "",
+        headerVariant: header?.getAttribute("data-variant") ?? "",
+        headerSize: header?.getAttribute("data-size") ?? "",
+        headerTone: header?.getAttribute("data-tone") ?? "",
         headerRole: header?.getAttribute("role") ?? null,
         headerTabindex: header?.getAttribute("tabindex") ?? null,
         headerExpanded: header?.getAttribute("aria-expanded") ?? "",
@@ -234,42 +238,52 @@ test("GoalWorkflowGroup renders through GWG selectors after goal-item residue re
       firstDisplay: "block",
       headerTagName: "BUTTON",
       headerType: "button",
+      headerClass: "oc-button",
+      headerVariant: "ghost",
+      headerSize: "mini",
+      headerTone: "neutral",
       headerRole: null,
       headerTabindex: null,
       headerExpanded: "true",
       statusIconDisplay: "flex",
     })
 
-    await page.focus(".gwg-header")
-    const focusState = await page.$eval(".gwg-header", (header: HTMLButtonElement) => ({
+    await page.focus('[data-ui="gwg-header"]')
+    const focusState = await page.$eval('[data-ui="gwg-header"]', (header: HTMLButtonElement) => ({
       active: document.activeElement === header,
       tagName: header.tagName,
       type: header.type,
+      className: header.className,
       ariaExpanded: header.getAttribute("aria-expanded"),
     }))
     assert.deepEqual(focusState, {
       active: true,
       tagName: "BUTTON",
       type: "button",
+      className: "oc-button",
       ariaExpanded: "true",
     })
 
     await page.keyboard.press("Enter")
-    await page.waitForFunction(() => document.querySelector(".gwg-header")?.getAttribute("aria-expanded") === "false")
+    await page.waitForFunction(
+      () => document.querySelector('[data-ui="gwg-header"]')?.getAttribute("aria-expanded") === "false",
+    )
     assert.equal(
-      await page.$eval(".gwg-header", (header: HTMLButtonElement) => header.getAttribute("aria-expanded")),
+      await page.$eval('[data-ui="gwg-header"]', (header: HTMLButtonElement) => header.getAttribute("aria-expanded")),
       "false",
     )
 
     await page.keyboard.press("Space")
-    await page.waitForFunction(() => document.querySelector(".gwg-header")?.getAttribute("aria-expanded") === "true")
+    await page.waitForFunction(
+      () => document.querySelector('[data-ui="gwg-header"]')?.getAttribute("aria-expanded") === "true",
+    )
     assert.equal(
-      await page.$eval(".gwg-header", (header: HTMLButtonElement) => header.getAttribute("aria-expanded")),
+      await page.$eval('[data-ui="gwg-header"]', (header: HTMLButtonElement) => header.getAttribute("aria-expanded")),
       "true",
     )
 
-    const screenshot = await saveElementScreenshot(page, ".gwg-list", "goal-workflow-header-native-button.png")
-    assert.ok(screenshot.endsWith("goal-workflow-header-native-button.png"))
+    const screenshot = await saveElementScreenshot(page, ".gwg-list", "goal-workflow-header-button-primitive.png")
+    assert.ok(screenshot.endsWith("goal-workflow-header-button-primitive.png"))
   } finally {
     await browser.close().catch(() => undefined)
     await server.close()
