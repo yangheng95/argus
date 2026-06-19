@@ -343,15 +343,13 @@ textarea.field-input {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Field-input + status-box + dir-panel + engine-model-panel chrome
-   reset (extracted 2026-05-04). These share
-   the same surface-inset background + border-color + shadow:none
-   contract.
+   Field-input + status-box chrome reset (extracted 2026-05-04).
+   These share the same surface-inset background + border-color +
+   shadow:none contract.
    ───────────────────────────────────────────────────────────── */
 
 .field-input,
-.config-status-box,
-.engine-model-panel {
+.config-status-box {
   background: var(--surface-inset);
   border-color: var(--border);
   box-shadow: none;

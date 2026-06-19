@@ -2453,7 +2453,7 @@ describe("overlay architecture guards", () => {
     const cssClassSelector = (className: string) => new RegExp(`(^|[^A-Za-z0-9_-])\\.${className}(?![A-Za-z0-9_-])`)
     const sourceClassToken = (className: string) => new RegExp(`(^|[^A-Za-z0-9_-])${className}(?![A-Za-z0-9_-])`)
 
-    for (const className of ["field-input-actions", "field-input-icon", "field-row"]) {
+    for (const className of ["field-input-actions", "field-input-icon", "field-row", "engine-model-panel"]) {
       expect(fieldSurface).not.toMatch(cssClassSelector(className))
       expect(productionSource).not.toMatch(sourceClassToken(className))
     }
