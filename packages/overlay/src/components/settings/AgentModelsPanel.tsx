@@ -45,10 +45,10 @@ function tierOf(name: string): "core" | "internal" | "lightweight" {
 
 const TIER_ORDER: Array<"core" | "lightweight" | "internal"> = ["core", "lightweight", "internal"]
 
-const TIER_LABEL: Record<string, string> = {
-  core: "Core — main coding agents",
-  lightweight: "Lightweight — spec/plan/explore/etc.",
-  internal: "Internal — background tasks",
+const tierLabel: Record<(typeof TIER_ORDER)[number], () => string> = {
+  core: () => t("agent_models.tier.core"),
+  lightweight: () => t("agent_models.tier.lightweight"),
+  internal: () => t("agent_models.tier.internal"),
 }
 
 export default function AgentModelsPanel(props: { scope?: "project" | "session"; sessionID?: string }) {
@@ -282,7 +282,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
 
   return (
     <SettingsPanel class="general-panel">
-      <SettingsGroup title="Agent Models">
+      <SettingsGroup title={t("cmdk.settings.agent_models")}>
         <p class="agent-models-info">{t("agent_models.intro")}</p>
 
         <Show when={data.loading || (scope() === "session" && sessionConfig.loading)}>
@@ -384,7 +384,7 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
                   <For each={TIER_ORDER}>
                     {(tier) => (
                       <Show when={grouped[tier].length > 0}>
-                        <div class="agent-model-tier-label">{TIER_LABEL[tier]}</div>
+                        <div class="agent-model-tier-label">{tierLabel[tier]()}</div>
                         <For each={grouped[tier]}>
                           {(agent) => {
                             const current = () => configAgentModel(agent.name)
@@ -409,12 +409,12 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
                                       disabled={savingAgents().has(agent.name)}
                                       groups={groups}
                                       unavailable={missing()}
-                                      emptyLabel="— inherit project default —"
-                                      unavailableLabel={`${current()} (unavailable)`}
+                                      emptyLabel={t("agent_models.option_inherit_project_default")}
+                                      unavailableLabel={t("agent_models.option_unavailable", { model: current() })}
                                       onSelect={(value) => onSelect(agent.name, value)}
                                     />
                                     <span class="agent-model-status">
-                                      <Show when={savingAgents().has(agent.name)}>saving…</Show>
+                                      <Show when={savingAgents().has(agent.name)}>{t("agent_models.saving")}</Show>
                                     </span>
                                   </>
                                 }

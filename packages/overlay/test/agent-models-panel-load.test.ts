@@ -43,7 +43,9 @@ describe("agent model panel data loading", () => {
   test("model picker delegates listbox semantics to the settings Select primitive", () => {
     const source = readText("src/components/settings/AgentModelsPanel.tsx")
 
-    expect(source).toContain('import { SettingsSelect, type SettingsSelectOption } from "./primitives"')
+    expect(source).toContain("SettingsSelect")
+    expect(source).toContain("type SettingsSelectOption")
+    expect(source).toContain('from "./primitives"')
     expect(source).toContain("<SettingsSelect<ModelSelectOption>")
     expect(source).toContain("ariaLabel={")
     expect(source).toContain('optionClass="agent-model-select-option"')

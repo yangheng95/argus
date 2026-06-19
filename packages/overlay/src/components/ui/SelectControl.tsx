@@ -99,7 +99,7 @@ export function SelectControl<T extends object>(props: SelectControlProps<T>): J
         aria-labelledby={props.ariaLabelledBy}
         ref={props.triggerRef}
       >
-        <Select.Value<T>>{(state) => props.renderValue(state.selectedOption())}</Select.Value>
+        <span class="oc-select-value">{props.renderValue(props.value)}</span>
         <Select.Icon class={props.iconClass}>
           {props.icon ?? <Icon name="caret-down" size={12} />}
         </Select.Icon>
