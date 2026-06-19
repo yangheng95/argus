@@ -76,6 +76,14 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(icons).toContain("ListTodo")
   expect(icons).toContain("tasks: { component: ListTodo }")
   expect(toolbar).toContain("tooltipKey?: string")
+  expect(toolbar).toContain('activeSemantics: SideActivityActiveSemantics')
+  expect(toolbar).toContain(
+    'aria-current={props.activeSemantics === "current-page" && active() ? "page" : undefined}',
+  )
+  expect(toolbar).toContain('aria-pressed={props.activeSemantics === "pressed-toggle" ? active() : undefined}')
+  expect(toolbar).not.toContain("aria-pressed={active()}")
+  expect(main).toContain('activeSemantics="current-page"')
+  expect(main).toContain('activeSemantics="pressed-toggle"')
   expect(toolbar).toContain("title={tooltip()}")
   expect(toolbar).toContain("aria-label={tooltip()}")
   expect(activityCss).toContain(".sidebar-tool-panel .extension-settings-group")

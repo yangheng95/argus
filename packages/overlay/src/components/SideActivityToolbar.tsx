@@ -10,11 +10,14 @@ export interface SideActivity<T extends string> {
   tooltipKey?: string
 }
 
+export type SideActivityActiveSemantics = "current-page" | "pressed-toggle"
+
 export interface SideActivityToolbarProps<T extends string> {
   side: "left" | "right"
   activities: readonly SideActivity<T>[]
   active: Accessor<T | null | undefined>
   isActive?: (activity: T) => boolean
+  activeSemantics: SideActivityActiveSemantics
   ariaLabelKey: string
   onSelect: (activity: T) => void
   trailing?: JSX.Element
@@ -39,7 +42,8 @@ export function SideActivityToolbar<T extends string>(props: SideActivityToolbar
                 data-side={props.side}
                 data-activity={activity.id}
                 data-active={active() ? "true" : "false"}
-                aria-pressed={active()}
+                aria-current={props.activeSemantics === "current-page" && active() ? "page" : undefined}
+                aria-pressed={props.activeSemantics === "pressed-toggle" ? active() : undefined}
                 title={tooltip()}
                 aria-label={tooltip()}
                 onClick={() => props.onSelect(activity.id)}
