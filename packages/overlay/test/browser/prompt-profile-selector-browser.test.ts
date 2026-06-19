@@ -245,11 +245,18 @@ test("prompt profile selector options remain readable on the light popup surface
     await page.click('[data-ui="prompt-profile-selector"]')
     await page.waitForSelector(".prompt-profile-select-content")
     await page.waitForSelector(".prompt-profile-select-option")
+    await page.hover('.prompt-profile-select-option[data-profile-id="backend"]')
+    await page.waitForFunction(
+      () =>
+        !!document.querySelector(
+          '.prompt-profile-select-option[data-profile-id="backend"][data-highlighted][aria-selected="false"]',
+        ),
+    )
 
     const contentElement = await page.$(".prompt-profile-select-content")
     assert.ok(contentElement)
-    const screenshot = await saveScreenshot(contentElement, "prompt-profile-selector-current.png")
-    assert.ok(screenshot.endsWith("prompt-profile-selector-current.png"))
+    const screenshot = await saveScreenshot(contentElement, "prompt-profile-selector-runtime-highlighted.png")
+    assert.ok(screenshot.endsWith("prompt-profile-selector-runtime-highlighted.png"))
 
     const result = await page.evaluate(() => {
       interface Rgba {
@@ -260,10 +267,19 @@ test("prompt profile selector options remain readable on the light popup surface
       }
       function parseColor(value: string): Rgba {
         const match = value.match(/rgba?\(([^)]+)\)/)
-        if (!match) throw new Error(`Unsupported color: ${value}`)
-        const parts = match[1].split(",").map((part) => Number.parseFloat(part.trim()))
-        const [r, g, b] = parts
-        const a = parts.length >= 4 ? parts[3] : 1
+        if (match) {
+          const parts = match[1].split(",").map((part) => Number.parseFloat(part.trim()))
+          const [r, g, b] = parts
+          const a = parts.length >= 4 ? parts[3] : 1
+          if (![r, g, b, a].every(Number.isFinite)) throw new Error(`Invalid color: ${value}`)
+          return { r, g, b, a }
+        }
+        const srgb = value.match(/color\(srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*([0-9.]+))?\)/)
+        if (!srgb) throw new Error(`Unsupported color: ${value}`)
+        const r = Number.parseFloat(srgb[1]) * 255
+        const g = Number.parseFloat(srgb[2]) * 255
+        const b = Number.parseFloat(srgb[3]) * 255
+        const a = srgb[4] === undefined ? 1 : Number.parseFloat(srgb[4])
         if (![r, g, b, a].every(Number.isFinite)) throw new Error(`Invalid color: ${value}`)
         return { r, g, b, a }
       }
@@ -332,8 +348,12 @@ test("prompt profile selector options remain readable on the light popup surface
           .join(" ")
         return {
           label,
+          profileID: option.dataset.profileId ?? "",
+          role: option.getAttribute("role"),
           selectedAttribute: option.getAttribute("aria-selected"),
+          selectedData: option.hasAttribute("data-selected"),
           selected: option.hasAttribute("data-selected") || option.getAttribute("aria-selected") === "true",
+          highlighted: option.hasAttribute("data-highlighted"),
           color: style.color,
           background: style.backgroundColor,
           surfaceAlpha: surface.a,
@@ -373,7 +393,17 @@ test("prompt profile selector options remain readable on the light popup surface
       result.options.map((option) => option.selectedAttribute),
       ["false", "true", "false", "false"],
     )
+    assert.equal(result.options.every((option) => option.role === "option"), true)
+    assert.equal(result.options.filter((option) => option.selectedData).length, 1)
+    assert.equal(result.options.some((option) => option.selectedData && option.selectedAttribute === "true"), true)
     const unselectedOptions = result.options.filter((option) => option.selectedAttribute === "false")
+    const highlightedUnselected = result.options.find(
+      (option) => option.profileID === "backend" && option.highlighted && option.selectedAttribute === "false",
+    )
+    assert.ok(
+      highlightedUnselected,
+      `Kobalte runtime highlight must reach a real unselected option: ${JSON.stringify(result.options)}`,
+    )
     assert.deepEqual(
       unselectedOptions.map((option) => option.label),
       [
@@ -387,10 +417,20 @@ test("prompt profile selector options remain readable on the light popup surface
     assert.equal(result.options.every((option) => option.contrast >= 4.5), true)
     assert.equal(result.options.every((option) => option.textParts.length >= 2), true)
     assert.equal(unselectedOptions.every((option) => option.contrast >= 4.5), true)
+    assert.ok(highlightedUnselected.contrast >= 4.5)
+    assert.notEqual(
+      highlightedUnselected.background,
+      unselectedOptions.find((option) => !option.highlighted)?.background,
+      "highlighted unselected option must have a visible runtime state",
+    )
     assert.equal(
       result.options.every((option) =>
         option.textParts.every((part) => part.color !== "rgba(0, 0, 0, 0)" && part.contrast >= 4.5),
       ),
+      true,
+    )
+    assert.equal(
+      highlightedUnselected.textParts.every((part) => part.color !== "rgba(0, 0, 0, 0)" && part.contrast >= 4.5),
       true,
     )
     assert.equal(
