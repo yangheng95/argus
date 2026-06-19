@@ -208,7 +208,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                       <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="icon-action" data-ui="recent-dir-remove" type="button">×</button>
                     </div>
                     <div class="recent-dir-row">
-                      <button class="recent-dir-item" type="button" data-highlighted>
+                      <button class="recent-dir-item" type="button" data-popup-recent-focus>
                         <span class="recent-dir-copy">
                           <span class="recent-dir-label" data-popup-text>Economy Clone</span>
                           <span class="recent-dir-path" data-popup-text>C:/Workspaces/economy</span>
@@ -403,6 +403,16 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
     assert.equal(recentSubmit.size, "icon")
     assert.equal(recentSubmit.opacity, "1")
 
+    await page.focus('[data-popup-sample="recent-directory"] [data-popup-recent-focus]')
+    await page.waitForFunction(
+      () => document.querySelector('[data-popup-sample="recent-directory"] .recent-dir-row:focus-within') !== null,
+    )
+    await page.waitForFunction(() => {
+      const remove = document.querySelector<HTMLElement>(
+        '[data-popup-sample="recent-directory"] .recent-dir-row:focus-within [data-ui="recent-dir-remove"]',
+      )
+      return remove ? getComputedStyle(remove).opacity === "1" : false
+    })
     const highlightedMetrics = await page.evaluate(() => {
       function metrics(selector: string) {
         const node = document.querySelector<HTMLElement>(selector)
@@ -424,14 +434,10 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
         executorPlain: metrics(
           '[data-popup-sample="executor-popover"] .executor-model-option:not([data-highlighted]):not([data-selected])',
         ),
-        recentHighlightedRow: metrics(
-          '[data-popup-sample="recent-directory"] .recent-dir-row:has(.recent-dir-item[data-highlighted])',
-        ),
-        recentPlainRow: metrics(
-          '[data-popup-sample="recent-directory"] .recent-dir-row:not(:has(.recent-dir-item[data-highlighted]))',
-        ),
-        recentHighlightedRemove: metrics(
-          '[data-popup-sample="recent-directory"] .recent-dir-row:has(.recent-dir-item[data-highlighted]) [data-ui="recent-dir-remove"]',
+        recentFocusedRow: metrics('[data-popup-sample="recent-directory"] .recent-dir-row:focus-within'),
+        recentPlainRow: metrics('[data-popup-sample="recent-directory"] .recent-dir-row:not(:focus-within)'),
+        recentFocusedRemove: metrics(
+          '[data-popup-sample="recent-directory"] .recent-dir-row:focus-within [data-ui="recent-dir-remove"]',
         ),
         workspaceOptions: Array.from(
           document.querySelectorAll<HTMLElement>('[data-popup-sample="workspace-launcher-menu"] [data-highlighted]'),
@@ -460,9 +466,9 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
       highlightedMetrics.executorHighlighted.backgroundColor,
       highlightedMetrics.executorPlain.backgroundColor,
     )
-    assert.notEqual(highlightedMetrics.recentHighlightedRow.borderTopColor, highlightedMetrics.recentPlainRow.borderTopColor)
-    assert.equal(highlightedMetrics.recentHighlightedRemove.opacity, "1")
-    assert.equal(highlightedMetrics.recentHighlightedRemove.pointerEvents, "auto")
+    assert.notEqual(highlightedMetrics.recentFocusedRow.borderTopColor, highlightedMetrics.recentPlainRow.borderTopColor)
+    assert.equal(highlightedMetrics.recentFocusedRemove.opacity, "1")
+    assert.equal(highlightedMetrics.recentFocusedRemove.pointerEvents, "auto")
     assert.deepEqual(
       highlightedMetrics.workspaceOptions.map((option) => option.backgroundColor !== "rgba(0, 0, 0, 0)"),
       [true, true, true],

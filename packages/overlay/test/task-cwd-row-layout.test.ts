@@ -191,32 +191,39 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(label).toMatch(/white-space:\s*nowrap/)
   })
 
-  test("recent directory popup delegates menu semantics and positioning to Kobalte", () => {
+  test("recent directory popup uses Popover dialog semantics for editable content", () => {
     expect(TASK_DIR_BAR).toContain('import * as DropdownMenu from "@kobalte/core/dropdown-menu"')
-    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Root")
-    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Trigger")
-    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Content")
-    expect(TASK_DIR_BAR).toContain("<DropdownMenu.Item")
-    expect(TASK_DIR_BAR).toContain("sameWidth")
-    expect(TASK_DIR_BAR).toContain("fitViewport")
-    expect(TASK_DIR_BAR).toContain('class="recent-dir-panel"')
-    expect(TASK_DIR_BAR).not.toContain('class="recent-dir-panel" style={panelStyle()} role="listbox"')
+    expect(TASK_DIR_BAR).toContain('import * as Popover from "@kobalte/core/popover"')
+    expect(TASK_DIR_BAR).toContain("<Popover.Root")
+    expect(TASK_DIR_BAR).toContain("<Popover.Portal")
+    expect(TASK_DIR_BAR).toContain("<Popover.Content")
+    expect(TASK_DIR_BAR).toContain("anchorRef={() => cwdShellRef}")
+    expect(TASK_DIR_BAR).toContain("syncRecentPanelGeometry()")
+    expect(TASK_DIR_BAR).toContain('style={{ width: recentPanelInlineSize(), "max-width": recentPanelInlineSize() }}')
+    expect(TASK_DIR_BAR).not.toContain("<Popover.Trigger")
+    expect(TASK_DIR_BAR).not.toContain('<DropdownMenu.Content class="recent-dir-panel">')
+    expect(TASK_DIR_BAR).not.toMatch(/<DropdownMenu\.Item[\s\S]*class="recent-dir-item"/)
+    expect(TASK_DIR_BAR).not.toContain("onSelect={() => void chooseRecentDirectory")
   })
 
   test("recent directory trigger is separate from native breadcrumb path buttons", () => {
-    expect(TASK_DIR_BAR).toMatch(/<div[\s\S]*ref=\{cwdShellRef\}[\s\S]*class="task-dir-shell task-cwd-dropdown"/)
+    expect(TASK_DIR_BAR).toMatch(/<div[\s\S]*ref=\{\(element\) => \{[\s\S]*cwdShellRef = element[\s\S]*class="task-dir-shell task-cwd-dropdown"/)
     expect(TASK_DIR_BAR).toContain('class="task-dir-menu-actions"')
-    expect(TASK_DIR_BAR).toMatch(/<DropdownMenu\.Trigger[\s\S]*as=\{Button\}[\s\S]*data-ui="cwd-recent-trigger"/)
+    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="cwd-recent-trigger"/)
     expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
     expect(TASK_DIR_BAR).toContain('data-ui="cwd-recent-trigger"')
+    expect(TASK_DIR_BAR).toContain('aria-haspopup="dialog"')
+    expect(TASK_DIR_BAR).toContain("aria-expanded={open()}")
+    expect(TASK_DIR_BAR).toContain('aria-controls={open() ? "cwd-recent-panel" : undefined}')
+    expect(TASK_DIR_BAR).toContain("onClick={() => setRecentPanelOpen(!open())}")
     expect(TASK_DIR_BAR).toContain('<Icon name="caret-down" size={12} class="task-cwd-caret" />')
     expect(TASK_DIR_BAR).not.toContain('class="task-dir-recent-trigger"')
     expect(TASK_DIR_BAR).not.toContain(">▾<")
-    expect(TASK_DIR_BAR).toContain("getAnchorRect={() => cwdShellRef?.getBoundingClientRect()}")
+    expect(TASK_DIR_BAR).toContain("let cwdShellRef: HTMLElement | undefined")
+    expect(TASK_DIR_BAR).toContain("anchorRef={() => cwdShellRef}")
+    expect(TASK_DIR_BAR).not.toContain("setCwdShellRef")
     expect(TASK_DIR_BAR).not.toContain('as="div"')
-    expect(TASK_DIR_BAR).not.toMatch(
-      /<DropdownMenu\.Trigger[\s\S]*innerHTML=\{breadcrumbHtml\(\)\}[\s\S]*<\/DropdownMenu\.Trigger>/,
-    )
+    expect(TASK_DIR_BAR).not.toMatch(/<Button[\s\S]*innerHTML=\{breadcrumbHtml\(\)\}[\s\S]*<\/Button>/)
   })
 
   test("cwd popup owns editable path entry and discovered OpenCorvus projects", () => {
@@ -249,19 +256,16 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const itemFocus = soloRuleBody(".recent-dir-item:focus-visible")
     expect(itemFocus).toMatch(/outline:\s*var\(--oc-border-width\) solid var\(--accent\)/)
     expect(itemFocus).toMatch(/outline-offset:\s*calc\(1px \* var\(--ui-scale\)\)/)
-    const highlightedRow = selectorRuleBody(".recent-dir-row:has(.recent-dir-item[data-highlighted])")
-    expect(highlightedRow).toMatch(/border-color:\s*color-mix\(in srgb,\s*var\(--accent\) 22%,\s*var\(--border\)\)/)
-    const highlightedSlot = selectorRuleBody(
-      '.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):has(.recent-dir-item[data-highlighted])',
-    )
-    expect(highlightedSlot).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--recent-dir-remove-slot-width\)/)
-    const highlightedItem = selectorRuleBody(".recent-dir-row:has(.recent-dir-item[data-highlighted]) .recent-dir-item")
-    expect(highlightedItem).toMatch(/color:\s*var\(--text-strong\)/)
-    const highlightedRemove = selectorRuleBody(
-      '.recent-dir-row:has(.recent-dir-item[data-highlighted]) .oc-button[data-ui="recent-dir-remove"]',
-    )
-    expect(highlightedRemove).toMatch(/opacity:\s*var\(--ui-opacity-full\)/)
-    expect(highlightedRemove).toMatch(/pointer-events:\s*auto/)
+    const focusRow = selectorRuleBody(".recent-dir-row:focus-within")
+    expect(focusRow).toMatch(/border-color:\s*color-mix\(in srgb,\s*var\(--accent\) 22%,\s*var\(--border\)\)/)
+    const focusSlot = selectorRuleBody('.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):focus-within')
+    expect(focusSlot).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--recent-dir-remove-slot-width\)/)
+    const focusItem = selectorRuleBody(".recent-dir-row:focus-within .recent-dir-item")
+    expect(focusItem).toMatch(/color:\s*var\(--text-strong\)/)
+    const focusRemove = selectorRuleBody('.recent-dir-row:focus-within .oc-button[data-ui="recent-dir-remove"]')
+    expect(focusRemove).toMatch(/opacity:\s*var\(--ui-opacity-full\)/)
+    expect(focusRemove).toMatch(/pointer-events:\s*auto/)
+    expect(STYLES).not.toContain("recent-dir-item[data-highlighted]")
     expect(STYLES).not.toContain(".recent-dir-edit-submit")
     expect(STYLES).not.toContain(".recent-dir-remove {")
   })
@@ -284,9 +288,9 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(soloRuleBody(".recent-dir-discovery-error span")).toMatch(/overflow-wrap:\s*anywhere/)
   })
 
-  test("cwd popup mirrors current location state onto focusable menu items", () => {
+  test("cwd popup mirrors current location state onto focusable row buttons", () => {
     expect(TASK_DIR_BAR.match(/aria-current=\{isActive\(\) \? "location" : undefined\}/g)?.length).toBe(2)
-    expect(TASK_DIR_BAR).toContain('<div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>')
+    expect(TASK_DIR_BAR).toContain('<div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">')
     expect(TASK_DIR_BAR).not.toContain('aria-selected={isActive()')
     expect(TASK_DIR_BAR).not.toContain('aria-pressed={isActive()')
   })
