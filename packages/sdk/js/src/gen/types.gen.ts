@@ -5446,6 +5446,19 @@ export type SessionConversationResponses = {
           phaseID: string
         }
       }>
+      messages: Array<{
+        messageID: string
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        time: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
     }
     view: {
       topLevelSessionIDs: Array<string>
@@ -5458,6 +5471,19 @@ export type SessionConversationResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+      messages: Array<{
+        messageID: string
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        time: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
@@ -11921,6 +11947,19 @@ export type TaskConversationResponses = {
           phaseID: string
         }
       }>
+      messages: Array<{
+        messageID: string
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        time: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
     }
     view: {
       topLevelSessionIDs: Array<string>
@@ -11933,6 +11972,19 @@ export type TaskConversationResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+      messages: Array<{
+        messageID: string
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        time: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
@@ -12013,6 +12065,19 @@ export type TaskConversationSessionResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+      messages: Array<{
+        messageID: string
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        time: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
@@ -12102,6 +12167,19 @@ export type TaskConversationHistoryResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+      messages: Array<{
+        messageID: string
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        time: number
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string

@@ -4483,11 +4483,69 @@
                               "placement"
                             ]
                           }
+                        },
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "messageID": {
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "time": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "messageID",
+                              "sessionID",
+                              "stage",
+                              "time",
+                              "placement"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "topLevelSessionIDs",
-                        "sessions"
+                        "sessions",
+                        "messages"
                       ]
                     },
                     "view": {
@@ -4565,11 +4623,69 @@
                               "placement"
                             ]
                           }
+                        },
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "messageID": {
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "time": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "messageID",
+                              "sessionID",
+                              "stage",
+                              "time",
+                              "placement"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "topLevelSessionIDs",
-                        "sessions"
+                        "sessions",
+                        "messages"
                       ]
                     }
                   },
@@ -25028,11 +25144,69 @@
                               "placement"
                             ]
                           }
+                        },
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "messageID": {
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "time": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "messageID",
+                              "sessionID",
+                              "stage",
+                              "time",
+                              "placement"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "topLevelSessionIDs",
-                        "sessions"
+                        "sessions",
+                        "messages"
                       ]
                     },
                     "view": {
@@ -25110,11 +25284,69 @@
                               "placement"
                             ]
                           }
+                        },
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "messageID": {
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "time": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "messageID",
+                              "sessionID",
+                              "stage",
+                              "time",
+                              "placement"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "topLevelSessionIDs",
-                        "sessions"
+                        "sessions",
+                        "messages"
                       ]
                     }
                   },
@@ -25399,11 +25631,69 @@
                               "placement"
                             ]
                           }
+                        },
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "messageID": {
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "time": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "messageID",
+                              "sessionID",
+                              "stage",
+                              "time",
+                              "placement"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "topLevelSessionIDs",
-                        "sessions"
+                        "sessions",
+                        "messages"
                       ]
                     },
                     "history": {
@@ -25723,11 +26013,69 @@
                               "placement"
                             ]
                           }
+                        },
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "messageID": {
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "time": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "messageID",
+                              "sessionID",
+                              "stage",
+                              "time",
+                              "placement"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "topLevelSessionIDs",
-                        "sessions"
+                        "sessions",
+                        "messages"
                       ]
                     },
                     "history": {
