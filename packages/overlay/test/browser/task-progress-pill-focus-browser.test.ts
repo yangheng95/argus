@@ -27,6 +27,7 @@ test("Task progress goal pills expose visible keyboard focus", async () => {
     readCss("tokens/design-language.css"),
     readCss("cascade/base.css"),
     readCss("cascade/light.css"),
+    readCss("primitives/button.css"),
     readCss("surfaces/card.css"),
   ].join("\n")
 
@@ -68,7 +69,7 @@ test("Task progress goal pills expose visible keyboard focus", async () => {
               <div class="task-progress__header">
                 <span class="task-progress__heading">Goal Progress</span>
                 <span class="task-progress__summary">1/4</span>
-                <button type="button" class="task-progress__fold" aria-expanded="true" aria-controls="taskProgressPills">
+                <button type="button" class="oc-button" data-variant="ghost" data-size="icon" data-tone="neutral" data-ui="task-progress-fold" aria-expanded="true" aria-controls="taskProgressPills">
                   <span aria-hidden="true">^</span>
                 </button>
               </div>
@@ -77,15 +78,15 @@ test("Task progress goal pills expose visible keyboard focus", async () => {
                 <div class="task-progress__bar-fail" style="--progress-failed: 25%"></div>
               </div>
               <div id="taskProgressPills" class="task-progress__pills" data-collapsed="false">
-                <button type="button" class="task-progress__pill" data-state="passed" data-goal-id="goal-1">
+                <button type="button" class="oc-button" data-variant="outline" data-size="mini" data-tone="neutral" data-ui="task-progress-pill" data-state="passed" data-goal-id="goal-1">
                   <span class="task-progress__pill-id">G1</span>
                   <span class="task-progress__pill-title">Reference evidence captured</span>
                 </button>
-                <button type="button" class="task-progress__pill" data-state="running" data-goal-id="goal-2">
+                <button type="button" class="oc-button" data-variant="outline" data-size="mini" data-tone="neutral" data-ui="task-progress-pill" data-state="running" data-goal-id="goal-2">
                   <span class="task-progress__pill-id">G2</span>
                   <span class="task-progress__pill-title">Implement visual comparison</span>
                 </button>
-                <button type="button" class="task-progress__pill" data-state="failed" data-goal-id="goal-3">
+                <button type="button" class="oc-button" data-variant="outline" data-size="mini" data-tone="neutral" data-ui="task-progress-pill" data-state="failed" data-goal-id="goal-3">
                   <span class="task-progress__pill-id">G3</span>
                   <span class="task-progress__pill-title">Repair keyboard focus states</span>
                 </button>
@@ -93,7 +94,7 @@ test("Task progress goal pills expose visible keyboard focus", async () => {
             </section>
           </main>
           <script>
-            for (const pill of document.querySelectorAll(".task-progress__pill")) {
+            for (const pill of document.querySelectorAll('[data-ui="task-progress-pill"]')) {
               pill.addEventListener("click", () => {
                 document.body.dataset.selectedGoal = pill.dataset.goalId || "";
               });
@@ -103,7 +104,7 @@ test("Task progress goal pills expose visible keyboard focus", async () => {
       </html>
     `)
 
-    const pillSelector = '.task-progress__pill[data-goal-id="goal-1"]'
+    const pillSelector = '.oc-button[data-ui="task-progress-pill"][data-goal-id="goal-1"]'
     let pillFocused = false
     for (let attempt = 0; attempt < 8; attempt += 1) {
       await page.keyboard.press("Tab")
@@ -116,6 +117,10 @@ test("Task progress goal pills expose visible keyboard focus", async () => {
       const button = node as HTMLElement
       const style = getComputedStyle(button)
       return {
+        className: button.className,
+        variant: button.dataset.variant,
+        size: button.dataset.size,
+        tone: button.dataset.tone,
         focusVisible: button.matches(":focus-visible"),
         backgroundColor: style.backgroundColor,
         borderColor: style.borderTopColor,
@@ -124,6 +129,10 @@ test("Task progress goal pills expose visible keyboard focus", async () => {
         outlineWidth: style.outlineWidth,
       }
     })
+    assert.match(focused.className, /\boc-button\b/)
+    assert.equal(focused.variant, "outline")
+    assert.equal(focused.size, "mini")
+    assert.equal(focused.tone, "neutral")
     assert.equal(focused.focusVisible, true)
     assert.notEqual(focused.backgroundColor, "rgba(0, 0, 0, 0)")
     assert.notEqual(focused.borderColor, "rgba(0, 0, 0, 0)")
