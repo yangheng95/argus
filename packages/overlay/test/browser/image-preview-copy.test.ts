@@ -245,7 +245,7 @@ test(
         if (msg.type() === "error") errors.push(`console: ${msg.text()}`)
       })
       await page.evaluateOnNewDocument((serverUrl) => {
-        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        ;(window as any).__OPENCORVUS_LOCALE__ = "zh-CN"
         const state = {
           writes: [] as string[][],
           fetches: [] as string[],
@@ -295,7 +295,7 @@ test(
                   serverUrl,
                   autoServer: false,
                   directory: "D:/overlay/workspace/app",
-                  locale: "en-US",
+                  locale: "zh-CN",
                 }
               }
               if (command === "overlay_settings_save") return true
@@ -316,7 +316,7 @@ test(
             },
           },
         }
-        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_locale", "zh-CN")
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_auto_server", "false")
       }, server.origin)
@@ -387,6 +387,34 @@ test(
       await page.waitForFunction(() => {
         const image = document.querySelector<HTMLImageElement>(".image-preview-dialog__image")
         return Boolean(image?.complete && image.naturalWidth > 0)
+      })
+      const localizedToolbar = await page.evaluate(() => {
+        const toolbar = document.querySelector<HTMLElement>(".image-preview-dialog__toolbar")
+        if (!toolbar) throw new Error("image preview toolbar missing")
+        const buttons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>("button")).map((button) => ({
+          label: button.getAttribute("aria-label") || "",
+          title: button.getAttribute("title") || "",
+          text: button.textContent?.trim() || "",
+        }))
+        const scale = toolbar.querySelector<HTMLElement>(".image-preview-dialog__scale")
+        return {
+          toolbarLabel: toolbar.getAttribute("aria-label") || "",
+          scaleLabel: scale?.getAttribute("aria-label") || "",
+          buttons,
+        }
+      })
+      assert.deepEqual(localizedToolbar, {
+        toolbarLabel: "图片预览控制",
+        scaleLabel: "当前缩放",
+        buttons: [
+          { label: "缩小", title: "缩小", text: "" },
+          { label: "放大", title: "放大", text: "" },
+          { label: "适应宽度", title: "适应宽度", text: "宽度" },
+          { label: "适应图片", title: "适应整张图片", text: "适应" },
+          { label: "原始尺寸", title: "原始尺寸", text: "1:1" },
+          { label: "复制图片", title: "复制图片", text: "" },
+          { label: "关闭", title: "关闭", text: "" },
+        ],
       })
       const dialogMetrics = await page.evaluate(() => {
         const form = document.querySelector<HTMLElement>(".image-preview-dialog__form")
@@ -521,9 +549,9 @@ test(
       }
 
       await configureCopy("ok")
-      await page.click('button[aria-label="Copy image"]')
-      assert.deepEqual(await waitForCopyStatus("Copied", "success"), {
-        text: "Copied",
+      await page.click('button[aria-label="复制图片"]')
+      assert.deepEqual(await waitForCopyStatus("已复制", "success"), {
+        text: "已复制",
         status: "success",
         role: "status",
         live: "polite",
@@ -535,9 +563,9 @@ test(
       })
 
       await configureCopy("fail")
-      await page.click('button[aria-label="Copy image"]')
-      assert.deepEqual(await waitForCopyStatus("Copy failed: source bytes unavailable", "error"), {
-        text: "Copy failed: source bytes unavailable",
+      await page.click('button[aria-label="复制图片"]')
+      assert.deepEqual(await waitForCopyStatus("复制失败：源图片字节不可用", "error"), {
+        text: "复制失败：源图片字节不可用",
         status: "error",
         role: "alert",
         live: "assertive",
@@ -549,9 +577,9 @@ test(
       })
 
       await configureCopy("non-png")
-      await page.click('button[aria-label="Copy image"]')
-      assert.deepEqual(await waitForCopyStatus("Copy failed: PNG source required", "error"), {
-        text: "Copy failed: PNG source required",
+      await page.click('button[aria-label="复制图片"]')
+      assert.deepEqual(await waitForCopyStatus("复制失败：需要 PNG 源图片", "error"), {
+        text: "复制失败：需要 PNG 源图片",
         status: "error",
         role: "alert",
         live: "assertive",
@@ -563,9 +591,9 @@ test(
       })
 
       await configureCopy("ok", "reject")
-      await page.click('button[aria-label="Copy image"]')
-      assert.deepEqual(await waitForCopyStatus("Copy failed: clipboard blocked", "error"), {
-        text: "Copy failed: clipboard blocked",
+      await page.click('button[aria-label="复制图片"]')
+      assert.deepEqual(await waitForCopyStatus("复制失败：剪贴板被阻止", "error"), {
+        text: "复制失败：剪贴板被阻止",
         status: "error",
         role: "alert",
         live: "assertive",
@@ -577,14 +605,37 @@ test(
       })
 
       await configureCopy("ok", "ok", false)
-      await page.click('button[aria-label="Copy image"]')
-      assert.deepEqual(await waitForCopyStatus("Copy failed: clipboard unavailable", "error"), {
-        text: "Copy failed: clipboard unavailable",
+      await page.click('button[aria-label="复制图片"]')
+      assert.deepEqual(await waitForCopyStatus("复制失败：剪贴板不可用", "error"), {
+        text: "复制失败：剪贴板不可用",
         status: "error",
         role: "alert",
         live: "assertive",
       })
-      const screenshotPath = resolve(".scratch/image-preview-copy-status.png")
+      const localizedStatusMetrics = await page.evaluate(() => {
+        const form = document.querySelector<HTMLElement>(".image-preview-dialog__form")
+        const toolbar = document.querySelector<HTMLElement>(".image-preview-dialog__toolbar")
+        const status = document.querySelector<HTMLElement>(".image-preview-dialog__copy-status")
+        if (!form || !toolbar || !status) throw new Error("localized image preview status missing")
+        return {
+          toolbarOverflowX: toolbar.scrollWidth - toolbar.clientWidth,
+          statusOverflowX: status.scrollWidth - status.clientWidth,
+          formOverflowX: form.scrollWidth - form.clientWidth,
+        }
+      })
+      assert.ok(
+        localizedStatusMetrics.toolbarOverflowX <= 1,
+        `expected localized toolbar not to overflow horizontally, got ${JSON.stringify(localizedStatusMetrics)}`,
+      )
+      assert.ok(
+        localizedStatusMetrics.statusOverflowX <= 1,
+        `expected localized copy status not to overflow horizontally, got ${JSON.stringify(localizedStatusMetrics)}`,
+      )
+      assert.ok(
+        localizedStatusMetrics.formOverflowX <= 1,
+        `expected localized dialog not to overflow horizontally, got ${JSON.stringify(localizedStatusMetrics)}`,
+      )
+      const screenshotPath = resolve(".scratch/image-preview-copy-status-zh-cn.png")
       mkdirSync(resolve(".scratch"), { recursive: true })
       const screenshot = await page.screenshot({ fullPage: false })
       assert.ok(screenshot.length > 0)
