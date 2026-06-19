@@ -199,7 +199,6 @@ export function TaskDirContent() {
           cwdShellRef = element
         }}
         class="task-dir-shell task-cwd-dropdown"
-        data-open={open() ? "true" : "false"}
         title={dirTitle()}
       >
         <span
@@ -210,23 +209,20 @@ export function TaskDirContent() {
           onClick={(event) => void handlePathAction(event)}
         />
         <div class="task-dir-menu-actions">
-          <Button
+          <Popover.Trigger
+            as={Button}
             type="button"
             variant="ghost"
             size="icon"
             tone="neutral"
             data-chrome="icon-action"
             data-ui="cwd-recent-trigger"
-            data-open={open() ? "true" : "false"}
             aria-haspopup="dialog"
-            aria-expanded={open()}
-            aria-controls={open() ? "cwd-recent-panel" : undefined}
             aria-label={t("cwd.recent")}
             title={t("cwd.recent")}
-            onClick={() => setRecentPanelOpen(!open())}
           >
             <Icon name="caret-down" size={12} class="task-cwd-caret" />
-          </Button>
+          </Popover.Trigger>
         </div>
       </div>
       <Popover.Portal>
