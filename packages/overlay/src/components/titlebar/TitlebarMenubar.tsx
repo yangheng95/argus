@@ -455,7 +455,6 @@ export function TitlebarMenubar() {
                 data-menu-trigger={menu.id}
                 data-compact={menu.compact}
                 data-access-key={menu.accessKey}
-                data-active={openMenu() === menu.id ? "true" : "false"}
                 title={menu.label}
                 aria-label={menu.label}
                 aria-keyshortcuts={`Alt+${menu.accessKey.toUpperCase()}`}

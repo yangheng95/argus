@@ -301,6 +301,8 @@ test(
         const menuRect = menu.getBoundingClientRect()
         return {
           expanded: button.getAttribute("aria-expanded"),
+          dataExpanded: button.hasAttribute("data-expanded"),
+          dataOpen: button.getAttribute("data-open"),
           hidden: menu.hidden,
           portaled: !menu.closest(".workspace-command-dock"),
           topBelowButton: Math.round(menuRect.top) >= Math.round(buttonRect.bottom),
@@ -308,10 +310,17 @@ test(
         }
       })
       assert.equal(editorMenuState.expanded, "true")
+      assert.equal(editorMenuState.dataExpanded, true)
+      assert.equal(editorMenuState.dataOpen, null)
       assert.equal(editorMenuState.hidden, false)
       assert.equal(editorMenuState.portaled, true)
       assert.equal(editorMenuState.topBelowButton, true)
       assert.equal(editorMenuState.rightAligned, true)
+      const editorOpenElement = await page.$(".workspace-editor-menu")
+      assert.ok(editorOpenElement)
+      const editorOpenScreenshot = await editorOpenElement.screenshot({})
+      assert.ok(editorOpenScreenshot.length > 0)
+      writeFileSync(resolve(".scratch/workspace-split-launcher-expanded-state.png"), editorOpenScreenshot)
       await page.keyboard.press("ArrowDown")
       await page.waitForFunction(() =>
         document.activeElement?.classList.contains("workspace-editor-option"),
@@ -400,6 +409,8 @@ test(
         const menuRect = menu.getBoundingClientRect()
         return {
           expanded: button.getAttribute("aria-expanded"),
+          dataExpanded: button.hasAttribute("data-expanded"),
+          dataOpen: button.getAttribute("data-open"),
           hidden: menu.hidden,
           portaled: !menu.closest(".workspace-command-dock"),
           topBelowButton: Math.round(menuRect.top) >= Math.round(buttonRect.bottom),
@@ -407,6 +418,8 @@ test(
         }
       })
       assert.equal(cliMenuState.expanded, "true")
+      assert.equal(cliMenuState.dataExpanded, true)
+      assert.equal(cliMenuState.dataOpen, null)
       assert.equal(cliMenuState.hidden, false)
       assert.equal(cliMenuState.portaled, true)
       assert.equal(cliMenuState.topBelowButton, true)

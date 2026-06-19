@@ -130,10 +130,11 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
     expect(titlebar).not.toMatch(/\.titlebar-task-status:hover/)
   })
 
-  test("titlebar menubar trigger active state doesn't flip border-color", () => {
-    const body = ruleBody(titlebar, '.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"]')
+  test("titlebar menubar trigger open state doesn't flip border-color", () => {
+    const body = ruleBody(titlebar, '.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-expanded]')
     expect(body).not.toMatch(/border-color\s*:/)
     expect(body).toMatch(/--oc-button-bg\s*:/)
+    expect(titlebar).not.toContain('.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"]')
   })
 
   test('.oc-section[data-phase-state="active"] uses bg-tint only, not border-color or rails', () => {
@@ -146,9 +147,10 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
   })
 
   test("open executor chip uses bg-tint, not border-color", () => {
-    const body = ruleBody(composer, '.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"]')
+    const body = ruleBody(composer, '.executor-chip-slot .oc-button[data-ui^="executor-chip-"][data-expanded]')
     expect(body).not.toMatch(/border-color\s*:/)
     expect(body).toMatch(/--oc-button-bg\s*:/)
+    expect(composer).not.toContain('.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"]')
   })
 
   test("file changes diff close hover uses bg-tint, not border-color", () => {

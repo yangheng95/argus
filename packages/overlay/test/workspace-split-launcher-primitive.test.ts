@@ -34,6 +34,7 @@ describe("WorkspaceSplitLauncher primitive", () => {
     expect(LAUNCHER_SOURCE).not.toContain("workspace-split-launcher-menu-button")
     expect(LAUNCHER_SOURCE).not.toContain("primaryClass")
     expect(LAUNCHER_SOURCE).not.toContain("menuButtonClass")
+    expect(LAUNCHER_SOURCE).not.toContain('data-open={props.open ? "true" : "false"}')
     expect(LAUNCHER_SOURCE).not.toContain("document.addEventListener")
     expect(LAUNCHER_SOURCE).not.toContain("getBoundingClientRect")
     expect(LAUNCHER_SOURCE).not.toContain('from "solid-js/web"')
@@ -49,5 +50,8 @@ describe("WorkspaceSplitLauncher primitive", () => {
       expect(body).toMatch(/background:\s*var\(--subtle-3\)/)
       expect(body).toMatch(/color:\s*var\(--text-strong\)/)
     }
+    const openButton = selectorRuleBody('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded]')
+    expect(openButton).toMatch(/--oc-button-bg:\s*var\(--oc-control-bg-hover\)/)
+    expect(CONVERSATION_CSS).not.toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"]')
   })
 })

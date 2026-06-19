@@ -43,8 +43,11 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).not.toContain('data-variant="ghost"')
     expect(SOURCE).not.toContain('data-size="sm"')
     expect(SOURCE).not.toContain('data-tone="neutral"')
+    expect(SOURCE).not.toContain('data-active={openMenu() === menu.id ? "true" : "false"}')
     expect(CSS).not.toContain(".titlebar-menubar-trigger")
     expect(CSS).toContain('.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"]')
+    expect(CSS).toContain('.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-expanded]')
+    expect(CSS).not.toContain('.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"]')
   })
 
   test("keeps product Alt access keys outside handwritten menu roles", () => {

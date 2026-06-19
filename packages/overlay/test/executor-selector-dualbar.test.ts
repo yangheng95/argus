@@ -53,6 +53,11 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/const external = useDisclosure\(\)/)
     expect(SRC).toMatch(/function openMirror\(\)[\s\S]*?external\.close\(\)/)
     expect(SRC).toMatch(/function openExternal\(\)[\s\S]*?mirror\.close\(\)/)
+    expect(SRC).not.toContain('data-open={props.disclosure.open() ? "true" : "false"}')
+    expect(SRC).toContain("function ChevronCaret()")
+    expect(SRC).not.toContain("<ChevronCaret open=")
+    expect(SRC).not.toContain("function ChevronCaret(props")
+    expect(SRC).not.toContain('Icon name={props.open ? "caret-down" : "caret-up"}')
   })
 
   test("chip popover behavior is delegated to Kobalte", () => {
@@ -192,6 +197,11 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(CSS).toMatch(
       /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover,\s*\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:focus-visible\s*\{[\s\S]*?--oc-button-bg:[\s\S]*?--oc-button-color:[\s\S]*?box-shadow:/,
     )
+    expect(CSS).toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\[data-expanded\]\s*\{/)
+    expect(CSS).toMatch(
+      /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\[data-expanded\] \.executor-chip-caret\s*\{[\s\S]*?transform:\s*rotate\(180deg\)/,
+    )
+    expect(CSS).not.toContain('.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"]')
     expect(CSS).not.toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:focus\s*\{/)
   })
 

@@ -83,7 +83,6 @@ export function WorkspaceSplitLauncher(props: WorkspaceSplitLauncherProps): JSX.
           tone="neutral"
           data-chrome="workspace-split-menu"
           data-ui={props.menuDataUI}
-          data-open={props.open ? "true" : "false"}
           disabled={props.disabled}
           title={props.title}
           aria-label={props.menuAriaLabel}
