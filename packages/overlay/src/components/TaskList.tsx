@@ -20,6 +20,7 @@ import { t } from "../utils/i18n"
 import { stamp, fullStampWithRelative } from "../utils/time"
 import { projectDirectoryKey } from "../utils/project-directory"
 import { Icon } from "./Icon"
+import { LedgerLoadingStatus } from "./LedgerList"
 import { LedgerRowMainButton } from "./LedgerRowMainButton"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { Button } from "./ui/Button"
@@ -987,11 +988,7 @@ export function TaskList(props: TaskListProps) {
             <Show
               when={boardStore.tasksLoaded}
               fallback={
-                <div class="task-list-skeleton" aria-hidden="true">
-                  <div class="task-list-skeleton-row" />
-                  <div class="task-list-skeleton-row" />
-                  <div class="task-list-skeleton-row" />
-                </div>
+                <LedgerLoadingStatus label={t("common.loading")} class="task-list-skeleton" dataUi="task-list-loading" />
               }
             >
               <div class="empty-hint">

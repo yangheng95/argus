@@ -395,6 +395,7 @@ export function MissionList(props: MissionListProps) {
         <LedgerList
           items={groupedMissions()}
           loading={props.loading}
+          loadingLabel={t("common.loading")}
           error={props.error}
           emptyLabel={props.searchQuery ? t("mission.ledger.empty_filtered") : t("mission.ledger.empty")}
           retryLabel={t("mission.ledger.error_retry")}

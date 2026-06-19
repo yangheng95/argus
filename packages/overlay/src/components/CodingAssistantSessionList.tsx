@@ -359,6 +359,7 @@ export function CodingAssistantSessionList(props: CodingAssistantSessionListProp
         <LedgerList
           items={groupedSessions()}
           loading={props.loading}
+          loadingLabel={t("common.loading")}
           error={props.error}
           emptyLabel={
             props.searchQuery ? t("coding_assistant.ledger.empty_filtered") : t("coding_assistant.ledger.empty")
