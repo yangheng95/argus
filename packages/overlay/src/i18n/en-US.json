@@ -107,6 +107,8 @@
   "chat.usage_tooltip": "Whole-session usage estimate — sum of every session's running totals (tokens + USD cost).",
   "chat.usage_aria": "Session usage estimate",
   "chat.empty": "Conversation updates will appear here",
+  "chat.render_error_title": "Card render failed",
+  "chat.render_error_unknown": "Unknown render error",
   "chat.git.baseline_created": "Created an initial git checkpoint",
   "chat.git.baseline_recorded": "Recorded current HEAD as the initial checkpoint",
   "chat.git.branch": "Branch",

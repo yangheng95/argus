@@ -73,10 +73,11 @@ function waitForAnimationFrame(): Promise<void> {
 
 function renderErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message || error.name
-  return String(error || "Unknown render error")
+  return String(error || t("chat.render_error_unknown"))
 }
 
 function ConversationCardRenderFailure(props: { id: string; error: unknown }) {
+  const title = () => t("chat.render_error_title")
   const message = () => clipText(renderErrorMessage(props.error), 180)
   return (
     <article
@@ -84,10 +85,10 @@ function ConversationCardRenderFailure(props: { id: string; error: unknown }) {
       data-card-id={props.id}
       data-kind="render-error"
       role="group"
-      aria-label="Card render failed"
+      aria-label={title()}
     >
       <div class="card__head">
-        <div class="card__title">Card render failed</div>
+        <div class="card__title">{title()}</div>
         <div class="card__meta">{clipText(props.id, 64)}</div>
       </div>
       <div class="card__body">
