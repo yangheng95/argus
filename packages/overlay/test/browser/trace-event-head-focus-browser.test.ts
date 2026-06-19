@@ -72,7 +72,15 @@ test("Trace event heads expose visible keyboard focus and toggle from keyboard",
               </header>
               <div class="oc-panel__body trace-panel-body">
                 <div class="trace-event" data-kind="llm_request" data-open="false">
-                  <button type="button" class="trace-event-head" aria-expanded="false">
+                  <button
+                    type="button"
+                    class="oc-button trace-event-head"
+                    data-variant="ghost"
+                    data-size="sm"
+                    data-tone="neutral"
+                    data-ui="trace-event-head"
+                    aria-expanded="false"
+                  >
                     <span class="trace-event-ts">10:24:32.018</span>
                     <span class="trace-event-kind">llm_request - build-agent - 12 msgs</span>
                     <span class="trace-event-sid">a7f3c102</span>
@@ -109,16 +117,24 @@ test("Trace event heads expose visible keyboard focus and toggle from keyboard",
       return {
         active: document.activeElement === button,
         focusVisible: button.matches(":focus-visible"),
+        className: button.className,
+        dataUi: button.dataset.ui,
+        variant: button.dataset.variant,
         backgroundColor: style.backgroundColor,
         boxShadow: style.boxShadow,
         outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
       }
     })
     assert.equal(focused.active, true)
     assert.equal(focused.focusVisible, true)
+    assert.match(focused.className, /\boc-button\b/)
+    assert.equal(focused.dataUi, "trace-event-head")
+    assert.equal(focused.variant, "ghost")
     assert.notEqual(focused.backgroundColor, "rgba(0, 0, 0, 0)")
-    assert.notEqual(focused.boxShadow, "none")
-    assert.equal(focused.outlineStyle, "none")
+    assert.equal(focused.boxShadow, "none")
+    assert.equal(focused.outlineStyle, "solid")
+    assert.notEqual(focused.outlineWidth, "0px")
 
     await page.keyboard.press("Enter")
     const expanded = await page.$eval(headSelector, (node) => {
