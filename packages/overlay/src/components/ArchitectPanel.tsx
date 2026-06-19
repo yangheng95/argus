@@ -6,6 +6,7 @@
  * 2. Complete — shows contract count, categories, and blueprint summary
  */
 import { For, Show } from "solid-js"
+import { Badge } from "./ui/Badge"
 import { t } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
 
@@ -58,9 +59,9 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
             <div class="arch-categories">
               <For each={props.architect!.categories.slice(0, 4)}>
                 {(cat) => (
-                  <span class="arch-cat-badge" title={cat}>
+                  <Badge tone="muted" size="sm" title={cat} data-ui="architect-category-badge">
                     {readableKey(cat)}
-                  </span>
+                  </Badge>
                 )}
               </For>
             </div>

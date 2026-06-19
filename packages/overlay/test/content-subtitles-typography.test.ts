@@ -22,7 +22,7 @@
 // chip → drop the all-caps + wide tracking. The remaining
 // uppercase tier-3 pills (verdict-pill, req-status, reasoning toggle,
 // criteria-result, eval-error-meta, session-msg-role, md-code-lang,
-// gwg-priority-badge, gwg-verdict, integrity__tag,
+// gwg-priority-badge, gwg-verdict,
 // req-priority, req-type, status-label, brand-guide-kicker)
 // keep their styling — they ARE color-coded short-word chips and
 // the all-caps pill convention reads as a status tag there.
