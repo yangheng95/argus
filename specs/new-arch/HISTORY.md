@@ -27,6 +27,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-20-tool-diff-open-file-button.md](2026-06-20-tool-diff-open-file-button.md)                       | Tool Diff Open File Button |
 | [2026-06-20-window-control-danger-foreground.md](2026-06-20-window-control-danger-foreground.md)           | Window Control Danger Foreground |
 | [2026-06-20-markdown-link-focus-visible.md](2026-06-20-markdown-link-focus-visible.md)                     | Markdown Link Focus Visible |
+| [2026-06-20-file-download-focus-visible.md](2026-06-20-file-download-focus-visible.md)                     | File Download Focus Visible |
 
 ## 2026-06-19
 

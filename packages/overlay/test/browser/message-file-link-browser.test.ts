@@ -95,6 +95,15 @@ function transcript(): any[] {
           type: "text",
           text: "Open `src/main.tsx` before editing. See [docs](https://example.com/docs).",
         },
+        {
+          id: "part-file-download-user",
+          messageID: "message-file-link-user",
+          sessionID: "session-file-link-root",
+          type: "file",
+          url: "data:text/plain;base64,SGVsbG8=",
+          mime: "text/plain",
+          filename: "notes.txt",
+        },
       ],
     },
     {
@@ -184,7 +193,7 @@ async function installOverlaySettings(page: any, serverUrl: string): Promise<voi
 }
 
 test(
-  "message file codespan renders through workspace file-link owner",
+  "message links and file downloads expose visible focus states",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -305,6 +314,7 @@ test(
       }, item.task.id)
       await page.waitForSelector(".chat-bubble code .file-link", { visible: true })
       await page.waitForSelector('.chat-bubble .msg-text a[href="https://example.com/docs"]', { visible: true })
+      await page.waitForSelector(".chat-bubble .msg-file-download", { visible: true })
 
       const baseState = await page.$eval(".chat-bubble code .file-link", (node: HTMLAnchorElement) => {
         const style = getComputedStyle(node)
@@ -372,6 +382,22 @@ test(
       assert.notEqual(markdownLinkFocusState.outlineWidth, "0px")
       assert.match(markdownLinkFocusState.textDecorationLine, /underline/)
       writeFileSync(resolve(".scratch", "message-markdown-link-focus-visible.png"), await bubble.screenshot({}))
+
+      await page.mouse.move(0, 0)
+      const fileDownloadFocused = await focusSelector(page, ".chat-bubble .msg-file-download")
+      assert.equal(fileDownloadFocused, true)
+      const fileDownloadFocusState = await linkFocusState(page, ".chat-bubble .msg-file-download")
+      assert.equal(fileDownloadFocusState.focusVisible, true)
+      assert.notEqual(fileDownloadFocusState.outlineStyle, "none")
+      assert.notEqual(fileDownloadFocusState.outlineWidth, "0px")
+      const fileDownloadState = await page.$eval(".chat-bubble .msg-file-download", (node: HTMLAnchorElement) => ({
+        text: node.textContent?.trim() ?? "",
+        download: node.getAttribute("download"),
+      }))
+      assert.deepEqual(fileDownloadState, { text: "Download", download: "notes.txt" })
+      const fileDownloadChip = await page.$(".chat-bubble .msg-file-chip")
+      assert.ok(fileDownloadChip)
+      writeFileSync(resolve(".scratch", "message-file-download-focus-visible.png"), await fileDownloadChip.screenshot({}))
 
       await page.mouse.move(0, 0)
       await page.waitForSelector('.card[data-kind="tool"] > .card__head [data-ui="card-head-main"]', { visible: true })

@@ -129,6 +129,10 @@ test("message content carriers keep a neutral surface base", () => {
   expect(bodyOf(MESSAGES_CSS, ".msg-read-meta")).toMatch(/background:\s*transparent/)
   expect(bodyOf(MESSAGES_CSS, ".msg-read-reminder")).toMatch(/background:\s*transparent/)
   expect(bodyOf(MESSAGES_CSS, ".msg-file-chip")).toMatch(/background:\s*var\(--surface-inset\)/)
+  expect(bodyOf(MESSAGES_CSS, ".msg-file-download:focus-visible")).toMatch(
+    /outline:\s*var\(--oc-border-width\) solid var\(--accent\)/,
+  )
+  expect(bodyOf(MESSAGES_CSS, ".msg-file-download:focus-visible")).not.toContain("outline: none")
 })
 
 test("structured card body content does not create nested card chrome", () => {
