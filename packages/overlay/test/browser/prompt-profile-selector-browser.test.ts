@@ -305,6 +305,20 @@ test("prompt profile selector options remain readable on the light popup surface
         const darker = Math.min(luminance(foreground), luminance(background))
         return (lighter + 0.05) / (darker + 0.05)
       }
+      function textFillColor(style: CSSStyleDeclaration): string {
+        return style.getPropertyValue("-webkit-text-fill-color") || style.color
+      }
+      function renderedState(element: HTMLElement) {
+        const style = getComputedStyle(element)
+        const rect = element.getBoundingClientRect()
+        return {
+          display: style.display,
+          visibility: style.visibility,
+          opacity: Number.parseFloat(style.opacity),
+          rectWidth: rect.width,
+          rectHeight: rect.height,
+        }
+      }
 
       const rootTheme = document.documentElement.dataset.theme
       const bodyTheme = document.body.dataset.theme
@@ -313,6 +327,7 @@ test("prompt profile selector options remain readable on the light popup surface
       const content = document.querySelector(".prompt-profile-select-content") as HTMLElement | null
       if (!content) throw new Error("Missing prompt profile select content")
       const triggerStyle = getComputedStyle(trigger)
+      const contentState = renderedState(content)
       const scaleText = getComputedStyle(document.body).getPropertyValue("--ui-scale").trim()
       const uiScale = Number.parseFloat(scaleText)
       if (!Number.isFinite(uiScale)) throw new Error(`Invalid --ui-scale: ${scaleText}`)
@@ -324,21 +339,30 @@ test("prompt profile selector options remain readable on the light popup surface
       const options = Array.from(document.querySelectorAll(".prompt-profile-select-option")).map((node) => {
         const option = node as HTMLElement
         const style = getComputedStyle(option)
+        const optionState = renderedState(option)
         const optionBackgroundColor = parseColor(style.backgroundColor)
         const surface =
           optionBackgroundColor.a > 0 ? composite(optionBackgroundColor, contentBackgroundColor) : contentBackgroundColor
         const optionColor = parseColor(style.color)
+        const optionTextFillColor = textFillColor(style)
+        const optionTextFillColorValue = parseColor(optionTextFillColor)
         const copy = option.querySelector(".prompt-profile-select-option-copy") as HTMLElement | null
         const textParts = Array.from(copy?.children ?? [])
           .map((child) => {
             const element = child as HTMLElement
-            const color = getComputedStyle(element).color
+            const childStyle = getComputedStyle(element)
+            const color = childStyle.color
+            const fillColor = textFillColor(childStyle)
             const colorValue = parseColor(color)
+            const fillColorValue = parseColor(fillColor)
             return {
+              ...renderedState(element),
               tag: element.tagName.toLowerCase(),
               text: element.textContent?.trim() ?? "",
               color,
+              textFillColor: fillColor,
               contrast: contrastRatio(colorValue, surface),
+              textFillContrast: contrastRatio(fillColorValue, surface),
             }
           })
           .filter((part) => part.text)
@@ -354,10 +378,13 @@ test("prompt profile selector options remain readable on the light popup surface
           selectedData: option.hasAttribute("data-selected"),
           selected: option.hasAttribute("data-selected") || option.getAttribute("aria-selected") === "true",
           highlighted: option.hasAttribute("data-highlighted"),
+          ...optionState,
           color: style.color,
+          textFillColor: optionTextFillColor,
           background: style.backgroundColor,
           surfaceAlpha: surface.a,
           contrast: contrastRatio(optionColor, surface),
+          textFillContrast: contrastRatio(optionTextFillColorValue, surface),
           textParts,
         }
       })
@@ -367,6 +394,7 @@ test("prompt profile selector options remain readable on the light popup surface
         triggerClassList: Array.from(trigger.classList),
         triggerGapPixels: Number.parseFloat(triggerStyle.columnGap),
         expectedTriggerGapPixels: 10 * uiScale,
+        contentState,
         contentBackground,
         contentBackgroundAlpha,
         options,
@@ -378,6 +406,11 @@ test("prompt profile selector options remain readable on the light popup surface
     assert.ok(result.triggerClassList.includes("oc-select-trigger"))
     assert.ok(result.triggerClassList.includes("prompt-profile-select-trigger"))
     assert.equal(Math.abs(result.triggerGapPixels - result.expectedTriggerGapPixels) < 0.01, true)
+    assert.notEqual(result.contentState.display, "none")
+    assert.equal(result.contentState.visibility, "visible")
+    assert.ok(result.contentState.opacity >= 0.95)
+    assert.ok(result.contentState.rectWidth > 0)
+    assert.ok(result.contentState.rectHeight > 0)
     assert.match(result.contentBackground, /^rgb\(/)
     assert.equal(result.contentBackgroundAlpha, 1)
     assert.deepEqual(
@@ -413,11 +446,19 @@ test("prompt profile selector options remain readable on the light popup surface
       ],
     )
     assert.equal(result.options.every((option) => option.color !== "rgba(0, 0, 0, 0)"), true)
+    assert.equal(result.options.every((option) => option.textFillColor !== "rgba(0, 0, 0, 0)"), true)
+    assert.equal(result.options.every((option) => option.display !== "none"), true)
+    assert.equal(result.options.every((option) => option.visibility === "visible"), true)
+    assert.equal(result.options.every((option) => option.opacity >= 0.95), true)
+    assert.equal(result.options.every((option) => option.rectWidth > 0 && option.rectHeight > 0), true)
     assert.equal(result.options.every((option) => option.surfaceAlpha === 1), true)
     assert.equal(result.options.every((option) => option.contrast >= 4.5), true)
+    assert.equal(result.options.every((option) => option.textFillContrast >= 4.5), true)
     assert.equal(result.options.every((option) => option.textParts.length >= 2), true)
     assert.equal(unselectedOptions.every((option) => option.contrast >= 4.5), true)
+    assert.equal(unselectedOptions.every((option) => option.textFillContrast >= 4.5), true)
     assert.ok(highlightedUnselected.contrast >= 4.5)
+    assert.ok(highlightedUnselected.textFillContrast >= 4.5)
     assert.notEqual(
       highlightedUnselected.background,
       unselectedOptions.find((option) => !option.highlighted)?.background,
@@ -425,7 +466,18 @@ test("prompt profile selector options remain readable on the light popup surface
     )
     assert.equal(
       result.options.every((option) =>
-        option.textParts.every((part) => part.color !== "rgba(0, 0, 0, 0)" && part.contrast >= 4.5),
+        option.textParts.every(
+          (part) =>
+            part.display !== "none" &&
+            part.visibility === "visible" &&
+            part.opacity >= 0.95 &&
+            part.rectWidth > 0 &&
+            part.rectHeight > 0 &&
+            part.color !== "rgba(0, 0, 0, 0)" &&
+            part.textFillColor !== "rgba(0, 0, 0, 0)" &&
+            part.contrast >= 4.5 &&
+            part.textFillContrast >= 4.5,
+        ),
       ),
       true,
     )
@@ -435,7 +487,13 @@ test("prompt profile selector options remain readable on the light popup surface
     )
     assert.equal(
       unselectedOptions.every((option) =>
-        option.textParts.every((part) => part.color !== "rgba(0, 0, 0, 0)" && part.contrast >= 4.5),
+        option.textParts.every(
+          (part) =>
+            part.color !== "rgba(0, 0, 0, 0)" &&
+            part.textFillColor !== "rgba(0, 0, 0, 0)" &&
+            part.contrast >= 4.5 &&
+            part.textFillContrast >= 4.5,
+        ),
       ),
       true,
     )
