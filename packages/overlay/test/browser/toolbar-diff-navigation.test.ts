@@ -280,6 +280,22 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.equal(changesTabPanelState.labelledby, changesTabPanelState.tabID)
     assert.equal(changesTabPanelState.panelVisible, true)
 
+    const listboxSelectedState = await page.evaluate(() => {
+      const selected = document.querySelector<HTMLElement>(".change-row[data-selected]")
+      return {
+        selectedCount: document.querySelectorAll(".change-row[data-selected]").length,
+        falseSelectedCount: document.querySelectorAll('.change-row[data-selected="false"]').length,
+        selectedAttrValue: selected?.getAttribute("data-selected") ?? "",
+        selectedRole: selected?.getAttribute("role") ?? "",
+        selectedAria: selected?.getAttribute("aria-selected") ?? "",
+      }
+    })
+    assert.equal(listboxSelectedState.selectedCount, 1)
+    assert.equal(listboxSelectedState.falseSelectedCount, 0)
+    assert.equal(listboxSelectedState.selectedAttrValue, "")
+    assert.equal(listboxSelectedState.selectedRole, "option")
+    assert.equal(listboxSelectedState.selectedAria, "true")
+
     await page.focus(".change-row")
     const focusedRowBeforeKeyboard = await page.$eval(".change-row", (node) => ({
       active: document.activeElement === node,

@@ -117,7 +117,6 @@ function ChangeRowContent(props: { row: ChangeRowModel; showScope: boolean }) {
 function ChangeRow(props: {
   node: ChangeRowCollectionNode
   row: ChangeRowModel
-  selected: boolean
   expanded: boolean
   showScope: boolean
   onToggleDiff: (row: ChangeRowModel) => void
@@ -136,8 +135,6 @@ function ChangeRow(props: {
       class="change-row"
       data-clickable="true"
       data-change-index={props.row.index}
-      data-selected={props.selected ? "true" : "false"}
-      aria-current={props.selected ? "true" : undefined}
       title={props.row.item.file}
       id={`change-row-${props.row.index}`}
       aria-expanded={props.expanded}
@@ -184,7 +181,6 @@ function InlineDiffPanel(props: { row: ChangeRowModel }) {
 function ChangeRowWithInlineDiff(props: {
   node: ChangeRowCollectionNode
   row: ChangeRowModel
-  selected: boolean
   expanded: boolean
   showScope: boolean
   onToggleDiff: (row: ChangeRowModel) => void
@@ -195,7 +191,6 @@ function ChangeRowWithInlineDiff(props: {
       <ChangeRow
         node={props.node}
         row={props.row}
-        selected={props.selected}
         expanded={props.expanded}
         showScope={props.showScope}
         onToggleDiff={props.onToggleDiff}
@@ -542,7 +537,6 @@ export function FileChangesView(props: FileChangesViewProps) {
                                 <ChangeRowWithInlineDiff
                                   node={nodeForRow(row)}
                                   row={row}
-                                  selected={selectedRowKey() === row.key}
                                   expanded={expandedRowKey() === row.key}
                                   showScope={false}
                                   onToggleDiff={toggleInlineDiff}
@@ -570,7 +564,6 @@ export function FileChangesView(props: FileChangesViewProps) {
                       <ChangeRowWithInlineDiff
                         node={nodeForRow(row)}
                         row={row}
-                        selected={selectedRowKey() === row.key}
                         expanded={expandedRowKey() === row.key}
                         showScope={hasGroupLabels()}
                         onToggleDiff={toggleInlineDiff}

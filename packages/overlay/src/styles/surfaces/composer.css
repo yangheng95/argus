@@ -778,7 +778,7 @@
 }
 
 .executor-model-option:hover,
-.executor-model-option[data-focused] {
+.executor-model-option[data-highlighted] {
   background: var(--executor-menu-row-hover-bg);
   color: var(--text-strong);
 }

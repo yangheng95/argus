@@ -265,6 +265,35 @@ test("cwd breadcrumb buttons are outside the recent-directory menu trigger", asy
     assert.ok(openState.geometry.panelWidth > 240)
     assert.ok(openState.geometry.panelWidth <= openState.geometry.shellWidth)
 
+    await page.focus('.recent-dir-list[data-kind="recent"] .recent-dir-item')
+    await page.waitForSelector('.recent-dir-list[data-kind="recent"] .recent-dir-item[data-highlighted]')
+    const highlightedRecentState = await page.$eval(
+      '.recent-dir-list[data-kind="recent"] .recent-dir-row:has(.recent-dir-item[data-highlighted])',
+      (node) => {
+        const row = node as HTMLElement
+        const item = row.querySelector<HTMLElement>(".recent-dir-item")
+        const remove = row.querySelector<HTMLElement>('[data-ui="recent-dir-remove"]')
+        const rowStyles = getComputedStyle(row)
+        const removeStyles = remove ? getComputedStyle(remove) : null
+        return {
+          highlighted: item?.hasAttribute("data-highlighted") ?? false,
+          borderTopColor: rowStyles.borderTopColor,
+          removeOpacity: removeStyles?.opacity ?? "",
+          removePointerEvents: removeStyles?.pointerEvents ?? "",
+        }
+      },
+    )
+    assert.equal(highlightedRecentState.highlighted, true)
+    assert.notEqual(highlightedRecentState.borderTopColor, "rgba(0, 0, 0, 0)")
+    assert.equal(highlightedRecentState.removeOpacity, "1")
+    assert.equal(highlightedRecentState.removePointerEvents, "auto")
+    const highlightedRecentScreenshot = await saveElementScreenshot(
+      page,
+      ".recent-dir-panel",
+      "task-dirbar-recent-highlighted-row.png",
+    )
+    assert.ok(highlightedRecentScreenshot.endsWith("task-dirbar-recent-highlighted-row.png"))
+
     const actionSemantics = await page.evaluate(() => {
       const submit = document.querySelector<HTMLButtonElement>('[data-ui="recent-dir-edit-submit"]')
       const remove = document.querySelector<HTMLButtonElement>(

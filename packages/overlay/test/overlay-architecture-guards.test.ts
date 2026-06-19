@@ -1083,6 +1083,8 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\s*\{/)
     expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\[data-active="true"\]\s*\{/)
     expect(composerSurface).toMatch(/\.executor-model-option\[data-selected\]\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-model-option\[data-highlighted\]\s*\{/)
+    expect(composerSurface).not.toContain(".executor-model-option[data-focused]")
     expect(composerSurface).not.toMatch(/rgba\(146,\s*184,\s*252/)
     expect(composerSurface).not.toMatch(/rgba\(86,\s*126,\s*196/)
     expect(composerSurface).not.toMatch(/rgba\(196,\s*215,\s*252/)
