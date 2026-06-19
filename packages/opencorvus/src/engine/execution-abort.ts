@@ -1,12 +1,13 @@
 import { ExecutorRegistry } from "@/executor/registry"
 import type { ExecutorNameInfo } from "@/executor/contract"
-import { SessionPrompt } from "@/session/prompt"
-import { SessionStatus } from "@/session/status"
+import { Session } from "@/session"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/await-with-timeout"
+import { cancelSessionPromptInScope } from "./cancellation-scope"
+import { createTaskCancellationIncomplete } from "./cancellation-error"
 import { isLiveGoalRunStatus } from "./catalog"
 import { updateGoalRun } from "./persist"
-import { findActiveRunForTask, findGoalRun, listGoalRunsForTask } from "./store"
+import { findActiveRunForTask, findGoalRun, findRun, listGoalRunsForTask } from "./store"
 
 const log = Log.create({ service: "engine.execution-abort" })
 
@@ -26,8 +27,11 @@ export async function abortChildExecutionForSession(input: {
   abortTimeoutMs?: number
 }): Promise<AbortChildExecutionResult> {
   const result = emptyResult()
-  SessionPrompt.cancel(input.sessionID)
-  result.promptCancelled = true
+  const session = await Session.get(input.sessionID)
+  result.promptCancelled = cancelSessionPromptInScope({
+    session,
+    taskID: input.taskID,
+  })
   result.activityGateAborted = true
 
   const goalRun = listGoalRunsForTask(input.taskID).find(
@@ -58,6 +62,13 @@ export async function abortChildExecutionForSession(input: {
     })
     result.executorAbortAttempted = aborted.attempted
     result.executorAbortSucceeded = aborted.succeeded
+    if (aborted.attempted && !aborted.succeeded) {
+      throw createTaskCancellationIncomplete({
+        taskID: input.taskID,
+        handle: `executor.abort run ${run.id}`,
+        cause: new Error("executor.abort returned false"),
+      })
+    }
   }
 
   result.cancelled = true
@@ -75,13 +86,46 @@ export async function abortGoalRunExecution(input: {
   if (!goalRun || goalRun.task_id !== input.taskID) return result
 
   if (goalRun.session_id) {
-    SessionPrompt.cancel(goalRun.session_id)
-    SessionStatus.abortActivityGate(goalRun.session_id, new DOMException(input.reason, "AbortError"))
-    result.promptCancelled = true
+    const session = await Session.get(goalRun.session_id)
+    result.promptCancelled = cancelSessionPromptInScope({
+      session,
+      taskID: input.taskID,
+    })
     result.activityGateAborted = true
   }
 
   if (isLiveGoalRunStatus(goalRun.status)) {
+    const run = findRun(goalRun.coordinator_run_id)
+    if (!run) {
+      throw createTaskCancellationIncomplete({
+        taskID: input.taskID,
+        runID: goalRun.coordinator_run_id,
+        handle: `goal_run ${goalRun.id} coordinator run`,
+        cause: new Error("coordinator run not found"),
+      })
+    }
+    const refs = goalRun.metadata as Record<string, unknown> | null
+    const aborted = await abortExecutor({
+      provider: run.executor,
+      sessionID:
+        typeof refs?.provider_session_id === "string"
+          ? refs.provider_session_id
+          : (run.executor_ref?.session_id ?? goalRun.session_id ?? run.session_id ?? undefined),
+      queueTaskID:
+        typeof refs?.queue_task_id === "string" ? refs.queue_task_id : (run.executor_ref?.queue_task_id ?? undefined),
+      label: `goal_run ${goalRun.id} run ${run.id}`,
+      timeoutMs: input.abortTimeoutMs,
+    })
+    result.executorAbortAttempted = aborted.attempted
+    result.executorAbortSucceeded = aborted.succeeded
+    if (!aborted.attempted || !aborted.succeeded) {
+      throw createTaskCancellationIncomplete({
+        taskID: input.taskID,
+        runID: run.id,
+        handle: `executor.abort goal_run ${goalRun.id}`,
+        cause: new Error(aborted.attempted ? "executor.abort returned false" : "coordinator run has no abort handle"),
+      })
+    }
     updateGoalRun(goalRun.id, {
       status: "aborted",
       error: input.reason,
@@ -123,7 +167,11 @@ async function abortExecutor(input: {
       label: input.label,
       error: error instanceof Error ? error.message : String(error),
     })
-    return { attempted: true, succeeded: false }
+    throw createTaskCancellationIncomplete({
+      taskID: undefined,
+      handle: `executor.abort ${input.label}`,
+      cause: error,
+    })
   }
 }
 

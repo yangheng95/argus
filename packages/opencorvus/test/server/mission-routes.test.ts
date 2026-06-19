@@ -339,7 +339,7 @@ describe("mission routes", () => {
     })
   })
 
-  test("POST /mission/:missionID/abort cancels the Mission session prompt", async () => {
+  test("POST /mission/:missionID/abort cancels the Mission session prompt and active child tasks", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -348,8 +348,44 @@ describe("mission routes", () => {
         const app = Server.App()
         const session = await ensureMissionSession({ missionID: "m-abort", defaultCwd: tmp.path })
         SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
+        const now = Date.now()
+        const activeTaskID = Identifier.ascending("task")
+        const completedTaskID = Identifier.ascending("task")
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values([
+              {
+                id: activeTaskID,
+                project_id: Instance.project.id,
+                source: "mission",
+                title: "Mission active child",
+                request: "active child",
+                metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
+                time_started: now,
+                time_completed: null,
+                error: null,
+                time_created: now,
+                time_updated: now,
+              },
+              {
+                id: completedTaskID,
+                project_id: Instance.project.id,
+                source: "mission",
+                title: "Mission completed child",
+                request: "completed child",
+                metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
+                time_started: now,
+                time_completed: now + 1,
+                error: null,
+                time_created: now + 1,
+                time_updated: now + 1,
+              },
+            ])
+            .run()
+        })
         const cancel = spyOn(SessionPrompt, "cancel").mockImplementation((sessionID) => {
           SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" }, { publish: false })
+          return true
         })
 
         const response = await app.request("/mission/m-abort/abort", {
@@ -362,6 +398,17 @@ describe("mission routes", () => {
         expect(response.status).toBe(200)
         expect(await response.json()).toBe(true)
         expect(cancel).toHaveBeenCalledWith(session.id, tmp.path)
+        const activeTask = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, activeTaskID)).get(),
+        )
+        expect(activeTask?.time_completed).not.toBeNull()
+        expect(activeTask?.error).toBe("task cancelled")
+        expect((activeTask?.metadata as Record<string, unknown> | null)?.cancelled).toBe(true)
+        const completedTask = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, completedTaskID)).get(),
+        )
+        expect(completedTask?.error).toBeNull()
+        expect((completedTask?.metadata as Record<string, unknown> | null)?.cancelled).not.toBe(true)
         const list = await app.request("/mission", {
           headers: {
             "x-opencorvus-directory": tmp.path,

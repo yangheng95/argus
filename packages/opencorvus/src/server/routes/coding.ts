@@ -2,19 +2,20 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
 import { CodingCli } from "@/coding-cli"
 import { SystemTerminal } from "@/system-terminal"
 import { HTTPException } from "hono/http-exception"
 import { Instance } from "@/project/instance"
 import { EngineService } from "@/task-api"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
+import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import {
   RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
   isRightSidebarCodingAssistantSession,
   listRightSidebarCodingAssistantSessions,
   setRightSidebarCodingAssistantSelectedTask,
 } from "@/coding-assistant/session"
+import { errors } from "../error"
 
 const CodingSessionQuery = z.object({
   directory: z.string().optional(),
@@ -258,13 +259,14 @@ export function CodingRoutes() {
               },
             },
           },
+          ...errors(404, 409),
         },
       }),
       validator("param", z.object({ sessionID: z.string() })),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await assertRightSidebarCodingSession(sessionID)
-        SessionPrompt.cancel(sessionID)
+        const session = await assertRightSidebarCodingSession(sessionID)
+        cancelSessionPromptInScope({ session })
         TaskQueueService.cancelSessionPrompts({
           sessionIDs: [sessionID],
           reason: "coding assistant stopped",

@@ -16,15 +16,31 @@ async function removeWithRetry(target: string) {
   }
 }
 
-async function renameWithRetry(source: string, target: string) {
+async function copyDirectoryWithRetry(source: string, target: string) {
   for (let attempt = 1; attempt <= 20; attempt++) {
     try {
-      await fs.rename(source, target)
+      await fs.cp(source, target, { recursive: true, force: true })
       return
     } catch (error) {
       const code =
         error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
       if (!["EBUSY", "ENOTEMPTY", "EPERM"].includes(code) || attempt === 20) throw error
+      Bun.gc(true)
+      await Bun.sleep(100 * attempt)
+    }
+  }
+}
+
+async function copyFileWithRetry(source: string, target: string) {
+  await fs.mkdir(path.dirname(target), { recursive: true })
+  for (let attempt = 1; attempt <= 20; attempt++) {
+    try {
+      await fs.copyFile(source, target)
+      return
+    } catch (error) {
+      const code =
+        error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
+      if (!["EBUSY", "EUNKNOWN", "EPERM"].includes(code) || attempt === 20) throw error
       Bun.gc(true)
       await Bun.sleep(100 * attempt)
     }
@@ -55,6 +71,36 @@ function resolveWithinPackage(packageRoot: string, relativePath: string) {
   return resolved
 }
 
+async function mirrorDirectory(source: string, target: string) {
+  await fs.mkdir(target, { recursive: true })
+
+  const sourceEntries = new Map((await fs.readdir(source, { withFileTypes: true })).map((entry) => [entry.name, entry]))
+  const targetEntries = await fs.readdir(target, { withFileTypes: true }).catch((error) => {
+    const code =
+      error && typeof error === "object" && "code" in error ? String((error as NodeJS.ErrnoException).code) : ""
+    if (code === "ENOENT") return []
+    throw error
+  })
+  for (const entry of targetEntries) {
+    if (sourceEntries.has(entry.name)) continue
+    await removeWithRetry(path.join(target, entry.name))
+  }
+
+  for (const [name, entry] of sourceEntries) {
+    const sourcePath = path.join(source, name)
+    const targetPath = path.join(target, name)
+    if (entry.isDirectory()) {
+      await mirrorDirectory(sourcePath, targetPath)
+      continue
+    }
+    if (entry.isFile()) {
+      await copyFileWithRetry(sourcePath, targetPath)
+      continue
+    }
+    throw new Error(`unsupported generated SDK entry: ${sourcePath}`)
+  }
+}
+
 export async function replaceDirectoryAfterSuccessfulBuild(input: {
   packageRoot: string
   stagingRelative: string
@@ -75,14 +121,14 @@ export async function replaceDirectoryAfterSuccessfulBuild(input: {
   }
 
   const hadTarget = await pathExists(targetDir)
-  if (hadTarget) await renameWithRetry(targetDir, backupDir)
+  if (hadTarget) await copyDirectoryWithRetry(targetDir, backupDir)
   try {
-    await fs.mkdir(path.dirname(targetDir), { recursive: true })
-    await renameWithRetry(stagingDir, targetDir)
+    await mirrorDirectory(stagingDir, targetDir)
   } catch (error) {
     await removeWithRetry(targetDir).catch(() => undefined)
-    if (hadTarget) await renameWithRetry(backupDir, targetDir)
+    if (hadTarget) await copyDirectoryWithRetry(backupDir, targetDir)
     throw error
   }
+  await removeWithRetry(stagingDir)
   await removeWithRetry(backupDir)
 }

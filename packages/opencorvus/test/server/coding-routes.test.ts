@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { SessionStatus } from "../../src/session/status"
 import { Instance } from "../../src/project/instance"
 import { Database, eq } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
@@ -382,6 +383,44 @@ describe("coding assistant routes", () => {
           },
         })
         expect(claimDeleted.status).toBe(404)
+      },
+    })
+  })
+
+  test("coding session abort reports incomplete cancellation when live prompt state is missing", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/coding/session", {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(created.status).toBe(201)
+        const { session } = (await created.json()) as { session: Session.Info }
+        SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
+        try {
+          const stopped = await app.request(`/coding/session/${session.id}/abort`, {
+            method: "POST",
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          })
+          expect(stopped.status).toBe(409)
+          expect(await stopped.json()).toMatchObject({
+            name: "TaskCancellationIncompleteError",
+            data: {
+              handle: "SessionPrompt.cancel",
+            },
+          })
+          expect(SessionStatus.get(session.id)).toEqual({ type: "streaming" })
+        } finally {
+          SessionStatus.set(session.id, { type: "idle" }, { publish: false })
+        }
       },
     })
   })

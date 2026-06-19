@@ -22,11 +22,14 @@ import {
 } from "@/status/task-status-snapshot"
 import { compileBoard } from "@/workbench/board"
 import { Session, SessionStatus } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
 import { SessionWake } from "@/session/wake"
 import { Provider } from "@/provider/provider"
 import { isModelReference } from "@/provider/model-ref"
 import { Config } from "@/config/config"
+import { EngineService } from "@/task-api"
+import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
+import { errors } from "../error"
 
 function newMissionID(): string {
   return randomBytes(8).toString("hex")
@@ -270,12 +273,42 @@ export function MissionRoutes() {
             description: "Mission abort accepted",
             content: { "application/json": { schema: resolver(z.boolean()) } },
           },
+          ...errors(409),
         },
       }),
       validator("param", MissionParam),
       async (c) => {
         const session = await missionRouteSession(c.req.valid("param").missionID)
-        SessionPrompt.cancel(session.id, session.directory)
+        const childTasks = listMissionTasks({
+          projectID: session.projectID,
+          missionID: session.missionID,
+          sessionID: session.id,
+        }).filter((task) => {
+          const status = deriveTaskStatus(task)
+          return status === "queued" || status === "active"
+        })
+        const failures: string[] = []
+        for (const task of childTasks) {
+          try {
+            await EngineService.cancelTask(task.id)
+          } catch (error) {
+            failures.push(`task ${task.id}: ${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
+        try {
+          cancelSessionPromptInScope({
+            session,
+            handle: "mission.abort",
+          })
+        } catch (error) {
+          failures.push(`mission ${session.missionID}: ${error instanceof Error ? error.message : String(error)}`)
+        }
+        if (failures.length > 0) {
+          throw createTaskCancellationIncomplete({
+            handle: "mission.abort",
+            cause: new Error(failures.join("; ")),
+          })
+        }
         return c.json(true)
       },
     )

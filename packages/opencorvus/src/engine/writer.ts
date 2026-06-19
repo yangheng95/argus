@@ -24,7 +24,6 @@ import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { Message } from "@/session/message"
 import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { PartTable } from "@/session/session.sql"
@@ -58,6 +57,7 @@ import { isGoalRunOrphaned } from "./orphan"
 import { taskIDForSession } from "@/orchestrator/task-event"
 import { Project } from "@/project/project"
 import { Instance } from "@/project/instance"
+import { cancelSessionPromptByID, cancelSessionPromptInScope } from "./cancellation-scope"
 
 const log = Log.create({ service: "engine-writer" })
 
@@ -408,18 +408,11 @@ async function terminateTaskOwnedSessionsAndFail(input: {
     const ids = await Session.treeInProject({ sessionID: task.session_id, projectID: task.project_id })
     for (const sessionID of ids.slice().reverse()) {
       toolParts += await abortOpenToolParts(sessionID, input.reason)
-      if (project) {
-        await publishSessionAbortInProject(sessionID, project.worktree, input.reason)
-        SessionPrompt.cancel(sessionID, project.worktree)
-      } else {
-        SessionStatus.abortActivityGate(sessionID, new DOMException(input.reason, "AbortError"))
-        SessionStatus.set(sessionID, {
-          type: "terminal",
-          reason: "aborted",
-          error: input.reason,
-        })
-        SessionPrompt.cancel(sessionID)
-      }
+      await cancelSessionPromptByID({
+        sessionID,
+        taskID: task.id,
+        handle: "terminateTaskOwnedSessionsAndFail",
+      })
       sessions += 1
     }
   }
@@ -441,20 +434,6 @@ async function provideTaskRootSessionDirectory<T>(task: TaskRow, fn: () => Promi
   return Instance.provide({
     directory: session.directory,
     fn,
-  })
-}
-
-async function publishSessionAbortInProject(sessionID: string, directory: string, reason: string) {
-  await Instance.provide({
-    directory,
-    async fn() {
-      SessionStatus.abortActivityGate(sessionID, new DOMException(reason, "AbortError"))
-      SessionStatus.set(sessionID, {
-        type: "terminal",
-        reason: "aborted",
-        error: reason,
-      })
-    },
   })
 }
 
@@ -670,17 +649,12 @@ export async function abortLiveOrchestratorToolOwnership(input: {
 
   for (const ownership of ownerships) {
     const childSessionID = ownership.payload.child_session_id
-    if (input.promptDirectory) {
-      await publishSessionAbortInProject(childSessionID, input.promptDirectory, input.reason)
-    } else {
-      SessionStatus.abortActivityGate(childSessionID, new DOMException(input.reason, "AbortError"))
-      SessionStatus.set(childSessionID, {
-        type: "terminal",
-        reason: "aborted",
-        error: input.reason,
-      })
-    }
-    SessionPrompt.cancel(childSessionID, input.promptDirectory)
+    const childSession = await Session.get(childSessionID)
+    cancelSessionPromptInScope({
+      session: childSession,
+      taskID: input.taskID,
+      handle: "abortLiveOrchestratorToolOwnership",
+    })
     sessions += 1
 
     if (ownership.payload.goal_run_id) {

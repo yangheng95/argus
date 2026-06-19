@@ -90,6 +90,8 @@ import {
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
 import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
+import { cancelSessionPromptByID, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
 import { discardQueuedTaskEvent } from "@/engine/queue"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
@@ -210,8 +212,9 @@ function requireInteractionInCurrentProject(interactionID: string): InteractionR
  * Per-call deadline for `executor.abort()` during cancelTask / abortRun.
  * Mirrorcode and other executors await child-process cooperation; if the
  * child is unresponsive (hung opencorvus adapter, dead network), the abort
- * promise can hang forever. 5s is generous for an in-process abort and
- * tight enough that users see the cancel succeed (UI stops spinning).
+ * promise can hang forever. Expiry is fatal to cancellation success: callers
+ * surface TaskCancellationIncompleteError instead of marking a zombie-prone
+ * task cancelled.
  * Tests can override via CancelTaskOptions.
  */
 const CANCEL_ABORT_TIMEOUT_MS = 5_000
@@ -1778,13 +1781,10 @@ export namespace EngineService {
     const abortTimeoutMs = options?.abortTimeoutMs ?? CANCEL_ABORT_TIMEOUT_MS
     const cleanupTimeoutMs = options?.cleanupTimeoutMs ?? CANCEL_CLEANUP_TIMEOUT_MS
 
-    // Helper: log + decision_log breadcrumb when an abort exceeds its
-    // deadline, but never throw. cancelTask MUST reach updateTask({status:
-    // "cancelled"}) so the API stops blocking and the UI unblocks; an
-    // unresponsive executor is recorded so the operator can investigate
-    // potential zombie children separately (rule 22 — fail loud, don't
-    // bypass the lifecycle).
-    const onAbortTimeout = (label: string, err: unknown, refs: Record<string, unknown>) => {
+    // Helper: log + decision_log breadcrumb when an abort cannot be proven.
+    // Cancellation success must mean the owned handle stopped; otherwise the
+    // route returns a typed conflict instead of stamping a false terminal task.
+    const onAbortFailure = (label: string, err: unknown, refs: Record<string, unknown>): never => {
       if (err instanceof AwaitTimeoutError) {
         log.warn(`${label} timed out during cancelTask`, { taskID, ...refs, ms: err.ms })
         decisions.append({
@@ -1792,7 +1792,7 @@ export namespace EngineService {
           key: "abort_timeout",
           value: JSON.stringify({ label, ms: err.ms, ...refs }),
           reason:
-            "executor.abort or cleanup did not respond within deadline; cancel proceeded so UI unblocks. Possible zombie child — investigate before another task starts in the same workspace.",
+            "executor.abort or cleanup did not respond within deadline; cancellation is incomplete and task status was not marked cancelled.",
         })
       } else {
         log.warn(`${label} failed during cancelTask`, {
@@ -1800,7 +1800,14 @@ export namespace EngineService {
           ...refs,
           error: err instanceof Error ? err.message : String(err),
         })
+        decisions.append({
+          phase: "cancel",
+          key: "abort_failed",
+          value: JSON.stringify({ label, ...refs, error: err instanceof Error ? err.message : String(err) }),
+          reason: "executor.abort or cleanup failed; cancellation is incomplete and task status was not marked cancelled.",
+        })
       }
+      throw createTaskCancellationIncomplete({ taskID, handle: label, cause: err })
     }
 
     // Abort Orchestrator and any in-progress pipeline stage
@@ -1811,7 +1818,7 @@ export namespace EngineService {
       : []
     for (const sessionID of sessionIDs.reverse()) {
       const session = await Session.get(sessionID)
-      SessionPrompt.cancel(sessionID, session.directory)
+      cancelSessionPromptInScope({ session, taskID })
     }
     const liveGoalRuns = listGoalRunsForTask(taskID).filter(
       (row) => !["completed", "failed", "aborted"].includes(row.status),
@@ -1826,14 +1833,23 @@ export namespace EngineService {
         // was dead (written only, never read). Resolve via the parent run.
         const coordinatorRun = findRun(row.coordinator_run_id)
         if (!coordinatorRun) return
-        const abortP = ExecutorRegistry.require(coordinatorRun.executor).abort({
-          sessionID:
-            typeof refs?.provider_session_id === "string" ? refs.provider_session_id : (row.session_id ?? undefined),
-          queueTaskID: typeof refs?.queue_task_id === "string" ? refs.queue_task_id : undefined,
-        })
-        await withTimeout(abortP, abortTimeoutMs, "executor.abort liveGoalRun").catch((err) =>
-          onAbortTimeout("executor.abort liveGoalRun", err, { goalRunID: row.id, runID: coordinatorRun.id }),
+        const succeeded = await withTimeout(
+          ExecutorRegistry.require(coordinatorRun.executor).abort({
+            sessionID:
+              typeof refs?.provider_session_id === "string" ? refs.provider_session_id : (row.session_id ?? undefined),
+            queueTaskID: typeof refs?.queue_task_id === "string" ? refs.queue_task_id : undefined,
+          }),
+          abortTimeoutMs,
+          "executor.abort liveGoalRun",
+        ).catch((err) =>
+          onAbortFailure("executor.abort liveGoalRun", err, { goalRunID: row.id, runID: coordinatorRun.id }),
         )
+        if (!succeeded) {
+          onAbortFailure("executor.abort liveGoalRun", new Error("executor.abort returned false"), {
+            goalRunID: row.id,
+            runID: coordinatorRun.id,
+          })
+        }
       }),
     )
     const { abortLiveExecutionForTask } = await import("@/engine/writer")
@@ -1846,17 +1862,20 @@ export namespace EngineService {
       }),
       cleanupTimeoutMs,
       "abortLiveExecutionForTask",
-    ).catch((err) => onAbortTimeout("abortLiveExecutionForTask", err, {}))
+    ).catch((err) => onAbortFailure("abortLiveExecutionForTask", err, {}))
     const run = findActiveRunForTask(task.id)
     if (run) {
-      await withTimeout(
+      const succeeded = await withTimeout(
         ExecutorRegistry.require(run.executor).abort({
           sessionID: run.session_id ?? undefined,
           queueTaskID: run.executor_ref?.queue_task_id,
         }),
         abortTimeoutMs,
         "executor.abort run",
-      ).catch((err) => onAbortTimeout("executor.abort run", err, { runID: run.id }))
+      ).catch((err) => onAbortFailure("executor.abort run", err, { runID: run.id }))
+      if (!succeeded) {
+        onAbortFailure("executor.abort run", new Error("executor.abort returned false"), { runID: run.id })
+      }
     }
     if (run) {
       await updateRun(
@@ -1890,7 +1909,7 @@ export namespace EngineService {
   export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean }) {
     const ids = await Session.tree(sessionID)
     for (const id of ids) {
-      SessionPrompt.cancel(id)
+      await cancelSessionPromptByID({ sessionID: id })
     }
     TaskQueueService.cancelSessionPrompts({
       sessionIDs: ids,
@@ -2160,14 +2179,7 @@ export namespace EngineService {
     const run = requireRun(runID)
     const abortTimeoutMs = options?.abortTimeoutMs ?? CANCEL_ABORT_TIMEOUT_MS
     const decisions = createDecisionLog(run.task_id)
-    await withTimeout(
-      ExecutorRegistry.require(run.executor).abort({
-        sessionID: run.session_id ?? undefined,
-        queueTaskID: run.executor_ref?.queue_task_id,
-      }),
-      abortTimeoutMs,
-      "executor.abort run",
-    ).catch((err) => {
+    const abortFailure = (err: unknown): never => {
       if (err instanceof AwaitTimeoutError) {
         log.warn("executor.abort timed out during abortRun", { runID, ms: err.ms })
         decisions.append({
@@ -2175,15 +2187,31 @@ export namespace EngineService {
           key: "abort_timeout",
           value: JSON.stringify({ label: "executor.abort run", ms: err.ms, runID }),
           reason:
-            "abortRun's executor.abort exceeded deadline; run will still be marked aborted so the API unblocks. Possible zombie child.",
+            "abortRun's executor.abort exceeded deadline; cancellation is incomplete and run status was not marked aborted.",
         })
       } else {
         log.warn("executor.abort failed during abortRun", {
           runID,
           error: err instanceof Error ? err.message : String(err),
         })
+        decisions.append({
+          phase: "cancel",
+          key: "abort_failed",
+          value: JSON.stringify({ label: "executor.abort run", runID, error: err instanceof Error ? err.message : String(err) }),
+          reason: "abortRun's executor.abort failed; cancellation is incomplete and run status was not marked aborted.",
+        })
       }
-    })
+      throw createTaskCancellationIncomplete({ taskID: run.task_id, runID, handle: "executor.abort run", cause: err })
+    }
+    const succeeded = await withTimeout(
+      ExecutorRegistry.require(run.executor).abort({
+        sessionID: run.session_id ?? undefined,
+        queueTaskID: run.executor_ref?.queue_task_id,
+      }),
+      abortTimeoutMs,
+      "executor.abort run",
+    ).catch(abortFailure)
+    if (!succeeded) abortFailure(new Error("executor.abort returned false"))
     await updateRun(
       run,
       {

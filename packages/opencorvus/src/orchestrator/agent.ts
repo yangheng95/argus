@@ -70,6 +70,7 @@ import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { recordToolExecuteError } from "@/engine/persist"
+import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { toolGuard } from "@/util/tool-guard"
 import { createOrchestratorTools } from "./tools"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
@@ -673,35 +674,31 @@ export namespace Orchestrator {
       // Cancel order is descendants-first so a parent's processor sees its
       // tool's child session already terminal when it unwinds.
       const abortPrompt = () => {
-        try {
-          void (async () => {
-            try {
-              const ids = await Session.tree(agentSession.id)
-              for (const descendantID of ids.slice().reverse()) {
-                try {
-                  SessionPrompt.cancel(descendantID)
-                } catch {
-                  /* descendant session may already be stopped */
-                }
-              }
-            } catch (err) {
-              log.warn("orchestrator abort cascade failed", {
+        void (async () => {
+          try {
+            const ids = await Session.tree(agentSession.id)
+            for (const descendantID of ids.slice().reverse()) {
+              const descendant = descendantID === agentSession.id ? agentSession : await Session.get(descendantID)
+              cancelSessionPromptInScope({
+                session: descendant,
                 taskID,
-                sessionID: agentSession.id,
-                error: err instanceof Error ? err.message : String(err),
+                handle: "orchestrator.abort-cascade",
               })
-              // Still cancel the orchestrator session itself even if the
-              // tree walk failed, so the LLM loop unblocks.
-              try {
-                SessionPrompt.cancel(agentSession.id)
-              } catch {
-                /* already stopped */
-              }
             }
-          })()
-        } catch {
-          /* already-aborted listener was a no-op */
-        }
+          } catch (err) {
+            log.warn("orchestrator abort cascade failed", {
+              taskID,
+              sessionID: agentSession.id,
+              error: err instanceof Error ? err.message : String(err),
+            })
+            cancelSessionPromptInScope({
+              session: agentSession,
+              taskID,
+              handle: "orchestrator.abort-cascade",
+            })
+            throw err
+          }
+        })()
       }
       ctrl.signal.addEventListener("abort", abortPrompt, { once: true })
 

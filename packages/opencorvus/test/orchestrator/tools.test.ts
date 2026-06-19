@@ -76,6 +76,10 @@ import {
 import { Config } from "../../src/config/config"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { Provider } from "../../src/provider/provider"
+import { createRun } from "../../src/engine/writer"
+import { updateRun } from "../../src/engine/state"
+import { ExecutorRegistry } from "../../src/executor/registry"
+import type { ExecutorAdapter } from "../../src/executor/contract"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -97,6 +101,80 @@ function buildToolOptions(label = "build") {
       toolPartID: `prt_${label}_${stamp}`,
     },
   } as any
+}
+
+function toolText(result: unknown): string {
+  if (typeof result === "string") return result
+  if (
+    result &&
+    typeof result === "object" &&
+    (result as { type?: unknown }).type === "final" &&
+    typeof (result as { output?: unknown }).output === "string"
+  ) {
+    return (result as { output: string }).output
+  }
+  if (
+    result &&
+    typeof result === "object" &&
+    typeof (result as { output?: unknown }).output === "string" &&
+    typeof (result as { title?: unknown }).title === "string" &&
+    typeof (result as { metadata?: unknown }).metadata === "object"
+  ) {
+    return (result as { output: string }).output
+  }
+  throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
+}
+
+function successfulAbortAdapter(): ExecutorAdapter {
+  return {
+    capabilities: () => ({
+      submit: true,
+      status: true,
+      abort: true,
+      acceptance: false,
+      resume: false,
+      events: false,
+    }),
+    submit: async () => {
+      throw new Error("not used")
+    },
+    status: async () => {
+      throw new Error("not used")
+    },
+    abort: async () => true,
+    acceptance: async () => {
+      throw new Error("not used")
+    },
+    resume: async () => {
+      throw new Error("not used")
+    },
+    events: () => {
+      throw new Error("not used")
+    },
+  } as unknown as ExecutorAdapter
+}
+
+async function createAbortableCoordinatorRun(input: { taskID: string; sessionID: string; now: number }) {
+  ExecutorRegistry.register("opencorvus", successfulAbortAdapter())
+  const run = createRun({
+    taskID: input.taskID,
+    sessionID: input.sessionID,
+    executor: "opencorvus",
+    status: "running",
+    phase: "execute",
+    now: input.now,
+  })
+  await updateRun(
+    run,
+    {
+      executor_ref: {
+        session_id: input.sessionID,
+        queue_task_id: `queue_${run.id}`,
+      },
+    },
+    "bind test abort handle",
+  )
+  return run.id
 }
 
 function activeOnlyLineage(taskID: string, specSnapshotID: string) {
@@ -671,6 +749,7 @@ describe("orchestrator tools", () => {
     frontendResearchRunImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
+    ExecutorRegistry.reset()
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
@@ -1692,7 +1771,7 @@ describe("orchestrator tools", () => {
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
         )
-        const runID = `run_cancel_subagent_${stamp}`
+        const runID = await createAbortableCoordinatorRun({ taskID, sessionID: child.id, now })
         const goalRunID = beginBuildAttempt({
           taskID,
           goalID,
@@ -1708,12 +1787,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.cancel_subagent.execute(
-          {
-            session_id: child.id,
-            reason: "steer gave no useful progress; abort the stale child before re-dispatch",
-          },
-          buildToolOptions(),
+        const result = toolText(
+          await tools.cancel_subagent.execute(
+            {
+              session_id: child.id,
+              reason: "steer gave no useful progress; abort the stale child before re-dispatch",
+            },
+            buildToolOptions(),
+          ),
         )
 
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
@@ -1759,7 +1840,7 @@ describe("orchestrator tools", () => {
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
         )
-        const runID = `run_cancel_subagent_goal_${stamp}`
+        const runID = await createAbortableCoordinatorRun({ taskID, sessionID: child.id, now })
         const goalRunID = beginBuildAttempt({
           taskID,
           goalID,
@@ -1773,12 +1854,14 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.cancel_subagent.execute(
-          {
-            goal_id: goalID,
-            reason: "resume should terminate the latest live child session for this goal before re-dispatch",
-          },
-          buildToolOptions(),
+        const result = toolText(
+          await tools.cancel_subagent.execute(
+            {
+              goal_id: goalID,
+              reason: "resume should terminate the latest live child session for this goal before re-dispatch",
+            },
+            buildToolOptions(),
+          ),
         )
 
         expect(findGoalRun(goalRunID)?.status).toBe("aborted")
@@ -1823,9 +1906,11 @@ describe("orchestrator tools", () => {
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
         )
+        const runID = await createAbortableCoordinatorRun({ taskID, sessionID: child.id, now })
         const goalRunID = beginBuildAttempt({
           taskID,
           goalID,
+          runID,
           sessionID: child.id,
         })
         const ownershipPayload = createOrchestratorToolOwnershipPayload({
@@ -1852,24 +1937,28 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const modifyResult = await tools.modify_goal.execute(
-          {
-            goalID,
-            updates: { objective: "Mutated while live" },
-            reason: "should be rejected while live owned",
-          },
-          buildToolOptions(),
+        const modifyResult = toolText(
+          await tools.modify_goal.execute(
+            {
+              goalID,
+              updates: { objective: "Mutated while live" },
+              reason: "should be rejected while live owned",
+            },
+            buildToolOptions(),
+          ),
         )
         expect(modifyResult).toContain("Error: modify_goal refused")
         expect(findGoal(goalID)?.objective).toBe("Guard live build ownership")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
 
-        const cancelResult = await tools.cancel_subagent.execute(
-          {
-            goal_id: goalID,
-            reason: "operator changed direction while this build was still running",
-          },
-          buildToolOptions(),
+        const cancelResult = toolText(
+          await tools.cancel_subagent.execute(
+            {
+              goal_id: goalID,
+              reason: "operator changed direction while this build was still running",
+            },
+            buildToolOptions(),
+          ),
         )
         expect(cancelResult).toContain("Cancelled live-owned build session")
         expect(cancelResult).toContain(`goal_run ${goalRunID} aborted`)
@@ -2062,7 +2151,7 @@ describe("orchestrator tools", () => {
         Database.use((db) =>
           db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
         )
-        const runID = `run_cancel_subagent_recover_stale_${stamp}`
+        const runID = await createAbortableCoordinatorRun({ taskID, sessionID: child.id, now })
         const goalRunID = beginBuildAttempt({
           taskID,
           goalID,
@@ -2131,13 +2220,15 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.cancel_subagent.execute(
-          {
-            goal_run_id: goalRunID,
-            mode: "recover_stale",
-            reason: "operator note arrived after the build session stopped producing events",
-          },
-          buildToolOptions("cancel_subagent"),
+        const result = toolText(
+          await tools.cancel_subagent.execute(
+            {
+              goal_run_id: goalRunID,
+              mode: "recover_stale",
+              reason: "operator note arrived after the build session stopped producing events",
+            },
+            buildToolOptions("cancel_subagent"),
+          ),
         )
 
         expect(result).toContain(`Recovered stale live-owned build ${child.id}`)
@@ -2222,13 +2313,15 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.cancel_subagent.execute(
-          {
-            goal_id: goalID,
-            mode: "recover_stale",
-            reason: "should not abort an active stream",
-          },
-          buildToolOptions("recover_streaming_build"),
+        const result = toolText(
+          await tools.cancel_subagent.execute(
+            {
+              goal_id: goalID,
+              mode: "recover_stale",
+              reason: "should not abort an active stream",
+            },
+            buildToolOptions("recover_streaming_build"),
+          ),
         )
 
         expect(result).toContain("refused stale recovery because build session")
@@ -2282,13 +2375,15 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.cancel_subagent.execute(
-          {
-            session_id: child.id,
-            mode: "recover_stale",
-            reason: "there is no live ownership to recover",
-          },
-          buildToolOptions("recover_no_owner"),
+        const result = toolText(
+          await tools.cancel_subagent.execute(
+            {
+              session_id: child.id,
+              mode: "recover_stale",
+              reason: "there is no live ownership to recover",
+            },
+            buildToolOptions("recover_no_owner"),
+          ),
         )
 
         expect(result).toContain("No live build ownership found")

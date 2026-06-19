@@ -34,6 +34,7 @@ import type {
   ChannelRuntimeRestartResponses,
   CodingCliOpenResponses,
   CodingCliProfilesResponses,
+  CodingSessionAbortErrors,
   CodingSessionAbortResponses,
   CodingSessionCreateResponses,
   CodingSessionDeleteResponses,
@@ -136,6 +137,7 @@ import type {
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
+  MissionAbortErrors,
   MissionAbortResponses,
   MissionDeleteResponses,
   MissionListResponses,
@@ -4352,7 +4354,7 @@ export class Session2 extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<CodingSessionAbortResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<CodingSessionAbortResponses, CodingSessionAbortErrors, ThrowOnError>({
       url: "/coding/session/{sessionID}/abort",
       ...options,
       ...params,
@@ -5133,7 +5135,7 @@ export class Mission extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<MissionAbortResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).post<MissionAbortResponses, MissionAbortErrors, ThrowOnError>({
       url: "/mission/{missionID}/abort",
       ...options,
       ...params,

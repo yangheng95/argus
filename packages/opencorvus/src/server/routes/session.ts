@@ -35,6 +35,7 @@ import {
   isRightSidebarCodingAssistantSession,
 } from "@/coding-assistant/session"
 import { SessionAgentIdentity } from "@/session/agent-identity"
+import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 
 const log = Log.create({ service: "server" })
 
@@ -143,7 +144,7 @@ async function getActiveProjectSession(sessionID: string) {
 }
 
 async function assertActiveProjectSession(sessionID: string) {
-  await getActiveProjectSession(sessionID)
+  return getActiveProjectSession(sessionID)
 }
 
 export const SessionRoutes = lazy(() =>
@@ -716,7 +717,7 @@ export const SessionRoutes = lazy(() =>
             description: "Aborted session",
             content: { "application/json": { schema: resolver(z.boolean()) } },
           },
-          ...errors(400, 404),
+          ...errors(400, 404, 409),
         },
       }),
       validator(
@@ -727,8 +728,8 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await assertActiveProjectSession(sessionID)
-        SessionPrompt.cancel(sessionID)
+        const session = await assertActiveProjectSession(sessionID)
+        cancelSessionPromptInScope({ session })
         TaskQueueService.cancelSessionPrompts({
           sessionIDs: [sessionID],
           reason: "session aborted",

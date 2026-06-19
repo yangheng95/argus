@@ -14,6 +14,7 @@ import { PermissionNext } from "@/permission/next"
 import { resolveAgentModelRef } from "@/agent/model"
 import type { SessionKind } from "@/session/session.sql"
 import { ExploreAgent } from "@/explore/agent"
+import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
@@ -236,7 +237,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       const messageID = Identifier.ascending("message")
 
       function cancel() {
-        SessionPrompt.cancel(session.id)
+        cancelSessionPromptInScope({ session })
       }
       ctx.abort.addEventListener("abort", cancel)
       using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))

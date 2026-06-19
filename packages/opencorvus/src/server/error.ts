@@ -71,7 +71,7 @@ export const ERRORS = {
     description: "Conflict",
     content: {
       "application/json": {
-        schema: namedErrorUnionSchema("ReplyTargetEnvelopeMissingError"),
+        schema: namedErrorUnionSchema("ReplyTargetEnvelopeMissingError", "TaskCancellationIncompleteError"),
       },
     },
   },

@@ -5875,6 +5875,22 @@ export type SessionAbortErrors = {
           [key: string]: unknown
         }
       }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type SessionAbortError = SessionAbortErrors[keyof SessionAbortErrors]
@@ -8142,6 +8158,43 @@ export type CodingSessionAbortData = {
   url: "/coding/session/{sessionID}/abort"
 }
 
+export type CodingSessionAbortErrors = {
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type CodingSessionAbortError = CodingSessionAbortErrors[keyof CodingSessionAbortErrors]
+
 export type CodingSessionAbortResponses = {
   /**
    * Aborted coding assistant session
@@ -9062,6 +9115,27 @@ export type MissionAbortData = {
   }
   url: "/mission/{missionID}/abort"
 }
+
+export type MissionAbortErrors = {
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type MissionAbortError = MissionAbortErrors[keyof MissionAbortErrors]
 
 export type MissionAbortResponses = {
   /**
@@ -12687,12 +12761,19 @@ export type TaskOperatorModelContextErrors = {
   /**
    * Conflict
    */
-  409: {
-    name: "ReplyTargetEnvelopeMissingError"
-    data: {
-      [key: string]: unknown
-    }
-  }
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskOperatorModelContextError = TaskOperatorModelContextErrors[keyof TaskOperatorModelContextErrors]
@@ -12899,12 +12980,19 @@ export type TaskMessageErrors = {
   /**
    * Conflict
    */
-  409: {
-    name: "ReplyTargetEnvelopeMissingError"
-    data: {
-      [key: string]: unknown
-    }
-  }
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskMessageError = TaskMessageErrors[keyof TaskMessageErrors]
@@ -12966,12 +13054,19 @@ export type TaskInjectErrors = {
   /**
    * Conflict
    */
-  409: {
-    name: "ReplyTargetEnvelopeMissingError"
-    data: {
-      [key: string]: unknown
-    }
-  }
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskInjectError = TaskInjectErrors[keyof TaskInjectErrors]
@@ -13054,12 +13149,19 @@ export type TaskSessionReplyErrors = {
   /**
    * Conflict
    */
-  409: {
-    name: "ReplyTargetEnvelopeMissingError"
-    data: {
-      [key: string]: unknown
-    }
-  }
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
   /**
    * Session runtime contract no longer present
    */
@@ -13117,6 +13219,22 @@ export type TaskSessionCancelErrors = {
           [key: string]: unknown
         }
       }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type TaskSessionCancelError = TaskSessionCancelErrors[keyof TaskSessionCancelErrors]
@@ -13161,6 +13279,22 @@ export type TaskCancelErrors = {
       }
     | {
         name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
         }
@@ -13618,6 +13752,22 @@ export type RunAbortErrors = {
       }
     | {
         name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
         data: {
           [key: string]: unknown
         }
@@ -15810,12 +15960,19 @@ export type GlobalDbResetErrors = {
   /**
    * Conflict
    */
-  409: {
-    name: "ReplyTargetEnvelopeMissingError"
-    data: {
-      [key: string]: unknown
-    }
-  }
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type GlobalDbResetError = GlobalDbResetErrors[keyof GlobalDbResetErrors]
@@ -15937,12 +16094,19 @@ export type GlobalDbMysqlImportErrors = {
   /**
    * Conflict
    */
-  409: {
-    name: "ReplyTargetEnvelopeMissingError"
-    data: {
-      [key: string]: unknown
-    }
-  }
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
 }
 
 export type GlobalDbMysqlImportError = GlobalDbMysqlImportErrors[keyof GlobalDbMysqlImportErrors]
