@@ -39,6 +39,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-retire-dialog-head-residue.md](2026-06-19-retire-dialog-head-residue.md)                           | Retire Dialog Head Residue |
 | [2026-06-19-image-preview-trigger-accessible-name.md](2026-06-19-image-preview-trigger-accessible-name.md)     | Image Preview Trigger Accessible Name |
 | [2026-06-19-file-changes-row-keyboard-single-activation.md](2026-06-19-file-changes-row-keyboard-single-activation.md) | File Changes Row Keyboard Single Activation |
+| [2026-06-19-retire-provider-page-title-residue.md](2026-06-19-retire-provider-page-title-residue.md)           | Retire Provider Page Title Residue |
 
 ## 2026-06-18
 

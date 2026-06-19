@@ -437,7 +437,9 @@ test(
             titleBottom: title.bottom,
             toolbarRight: toolbar.right,
             llmResidueCount: document.querySelectorAll('[class*="llm-"]').length,
+            providerPageTitleResidueCount: document.querySelectorAll(".provider-page-title").length,
             providerRows: document.querySelectorAll(".provider-settings-row").length,
+            surfaceHeaderCount: document.querySelectorAll(".provider-title-block .oc-surface-header").length,
           }
         })
         assert.ok(layout.actionsRight <= layout.toolbarRight + 1)
@@ -445,6 +447,8 @@ test(
         assert.ok(layout.saveRight <= layout.contentRight + 1)
         assert.ok(layout.searchTop >= layout.titleBottom - 1)
         assert.equal(layout.llmResidueCount, 0)
+        assert.equal(layout.providerPageTitleResidueCount, 0)
+        assert.equal(layout.surfaceHeaderCount, 1)
         assert.ok(layout.providerRows >= 3)
 
         const dialog = await tab.$("#configDialog")

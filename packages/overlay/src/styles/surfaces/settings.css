@@ -1671,13 +1671,6 @@ button.s-row:focus-visible {
   gap: var(--ui-gap-sm);
   flex-wrap: wrap;
 }
-.provider-page-title {
-  margin: 0;
-  color: var(--text-strong);
-  font-size: var(--ui-font-heading);
-  font-weight: var(--ui-font-weight-strong);
-  line-height: 1.2;
-}
 .provider-toolbar-count {
   min-width: 0;
   color: var(--text-muted);
