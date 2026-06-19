@@ -383,6 +383,11 @@
   display: inline-flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  box-shadow: var(--shadow);
   opacity: var(--ui-opacity-hidden);
   transition: opacity var(--ui-duration-base) var(--ui-timing-standard);
   pointer-events: none;
@@ -397,7 +402,7 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--ui-letter-spacing-loose);
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-strong);
   padding: 0 calc(4px * var(--ui-scale));
 }
 .oc-button[data-ui="markdown-code-copy"] {

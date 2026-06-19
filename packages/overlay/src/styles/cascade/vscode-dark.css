@@ -97,6 +97,21 @@ body[data-theme="vscode-dark"] {
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
 
+  /* Markdown / hljs (highlight.js) syntax palette. Code blocks render on
+   * --surface-inset, so syntax colors are theme-scoped instead of fixed at
+   * design-language root. */
+  --oc-syntax-keyword: #ff7b72;
+  --oc-syntax-string: #a5d6ff;
+  --oc-syntax-comment: #b1bac4;
+  --oc-syntax-number: #79c0ff;
+  --oc-syntax-function: #d2a8ff;
+  --oc-syntax-variable: #ffa657;
+  --oc-syntax-meta: #7ee787;
+  --oc-syntax-addition-text: #aff5b4;
+  --oc-syntax-addition-bg: color-mix(in srgb, #3fb950 15%, transparent);
+  --oc-syntax-deletion-text: #ffdcd7;
+  --oc-syntax-deletion-bg: color-mix(in srgb, #f85149 15%, transparent);
+
   --dialog-bg: rgb(37, 37, 38);
   --dialog-backdrop: color-mix(in srgb, black 60%, transparent);
   --ui-scrim: color-mix(in srgb, black 60%, transparent);

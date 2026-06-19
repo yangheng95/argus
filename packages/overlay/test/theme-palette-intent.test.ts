@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles", "cascade")
+const DESIGN_LANGUAGE_PATH = join(import.meta.dir, "..", "src", "styles", "tokens", "design-language.css")
 
 function readTheme(name: string): string {
   return readFileSync(join(STYLES_ROOT, name), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
@@ -19,6 +20,7 @@ describe("overlay theme palette intent", () => {
   const dark = readTheme("dark.css")
   const light = readTheme("light.css")
   const vscodeDark = readTheme("vscode-dark.css")
+  const designLanguage = readFileSync(DESIGN_LANGUAGE_PATH, "utf8")
 
   test("dark keeps the April-mid historical Overlay palette", () => {
     expect(themeToken(dark, "--bg")).toBe("rgba(26, 27, 30, 0.78)")
@@ -125,6 +127,40 @@ describe("overlay theme palette intent", () => {
     expect(contrastRatio(toRgba(themeToken(light, "--warn")), warnDim)).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(toRgba(themeToken(light, "--accent")), accentDim)).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(toRgba(themeToken(light, "--text-muted")), accentDim)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  test("Markdown syntax tokens are theme-scoped and readable on code surfaces", () => {
+    const themes = [
+      ["dark", dark],
+      ["light", light],
+      ["vscode-dark", vscodeDark],
+    ] as const
+    const syntaxTokens = [
+      "--oc-syntax-keyword",
+      "--oc-syntax-string",
+      "--oc-syntax-comment",
+      "--oc-syntax-number",
+      "--oc-syntax-function",
+      "--oc-syntax-variable",
+      "--oc-syntax-meta",
+      "--oc-syntax-addition-text",
+      "--oc-syntax-deletion-text",
+    ]
+    const violations: string[] = []
+
+    expect(designLanguage).not.toMatch(/--oc-syntax-[a-z-]+\s*:/)
+
+    for (const [themeName, css] of themes) {
+      const windowBacking = composite(toRgba(resolveThemeValue(css, themeToken(css, "--bg"))), { r: 255, g: 255, b: 255, a: 1 })
+      const contentSurface = composite(toRgba(resolveThemeValue(css, themeToken(css, "--surface"))), windowBacking)
+      const codeSurface = composite(toRgba(resolveThemeValue(css, themeToken(css, "--surface-inset"))), contentSurface)
+      for (const token of syntaxTokens) {
+        const contrast = contrastRatio(toRgba(resolveThemeValue(css, themeToken(css, token))), codeSurface)
+        if (contrast < 4.5) violations.push(`${themeName} ${token}: ${contrast}`)
+      }
+    }
+
+    expect(violations).toEqual([])
   })
 })
 

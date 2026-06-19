@@ -183,21 +183,6 @@
   --oc-theme-swatch-vscode-dark: linear-gradient(135deg, #1e1e1e 50%, #252526 50%);
   --oc-theme-swatch-system: linear-gradient(135deg, #1a1b1e 50%, #f2f2f2 50%);
 
-  /* Markdown / hljs (highlight.js) syntax palette. The fixed GitHub-Dark
-     hue set is intentional metadata — code listings keep a stable
-     identity across overlay themes so users can build muscle memory. */
-  --oc-syntax-keyword: #ff7b72;
-  --oc-syntax-string: #a5d6ff;
-  --oc-syntax-comment: #8b949e;
-  --oc-syntax-number: #79c0ff;
-  --oc-syntax-function: #d2a8ff;
-  --oc-syntax-variable: #ffa657;
-  --oc-syntax-meta: #7ee787;
-  --oc-syntax-addition-text: #aff5b4;
-  --oc-syntax-addition-bg: color-mix(in srgb, #3fb950 15%, transparent);
-  --oc-syntax-deletion-text: #ffdcd7;
-  --oc-syntax-deletion-bg: color-mix(in srgb, #f85149 15%, transparent);
-
   /* Agent stage palette. Each pipeline stage carries a stable identity
      hue so users can spot which agent emitted a card in a long log:
      goal=violet, architect=teal, planner=cobalt, executor=amber,
