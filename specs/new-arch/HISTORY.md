@@ -37,6 +37,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-retire-session-dialog-diff-residue.md](2026-06-19-retire-session-dialog-diff-residue.md)           | Retire Session Dialog Diff Residue |
 | [2026-06-19-card-header-chrome-single-source.md](2026-06-19-card-header-chrome-single-source.md)               | Card Header Chrome Single Source |
 | [2026-06-19-retire-dialog-head-residue.md](2026-06-19-retire-dialog-head-residue.md)                           | Retire Dialog Head Residue |
+| [2026-06-19-image-preview-trigger-accessible-name.md](2026-06-19-image-preview-trigger-accessible-name.md)     | Image Preview Trigger Accessible Name |
 
 ## 2026-06-18
 
