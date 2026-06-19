@@ -369,17 +369,10 @@
   font-size: var(--ui-font-small);
 }
 
-.change-subline {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-}
-
 .change-row[data-selected] .change-scope,
 .change-row[data-selected] .change-directory,
-.change-row[data-selected] .change-subline,
 .change-row[aria-expanded="true"] .change-scope,
-.change-row[aria-expanded="true"] .change-directory,
-.change-row[aria-expanded="true"] .change-subline {
+.change-row[aria-expanded="true"] .change-directory {
   color: var(--text-soft);
 }
 

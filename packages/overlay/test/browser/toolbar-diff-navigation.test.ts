@@ -217,8 +217,13 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]')
     await page.evaluate(async (taskID) => {
+      await (window as any).applyDirectory("D:/overlay/workspace/app", {
+        persist: false,
+        restoreWorkspace: false,
+        save: false,
+      })
       await (window as any).loadTasks()
-      await (window as any).selectTask(taskID)
+      await (window as any).selectTask(taskID, { directory: "D:/overlay/workspace/app" })
     }, TASK_ID)
     await page
       .waitForFunction(
@@ -531,6 +536,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       }
     })
     assert.ok(fileChangesContrastState.filters.length > 0)
+    assert.equal(await page.evaluate(() => document.querySelectorAll(".change-subline").length), 0)
     assert.equal(fileChangesContrastState.rows.some((row) => row.selected), true)
     assert.equal(fileChangesContrastState.rows.some((row) => row.hovered), true)
     assert.equal(
