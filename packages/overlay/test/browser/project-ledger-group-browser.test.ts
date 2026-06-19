@@ -129,6 +129,7 @@ async function verifyProjectGroup(
     const group = node as HTMLElement
     const heading = group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')
     const body = group.querySelector<HTMLElement>(".project-group-body")
+    const headingControls = heading?.getAttribute("aria-controls") ?? ""
     return {
       tag: group.tagName,
       className: group.className,
@@ -139,9 +140,12 @@ async function verifyProjectGroup(
       headingSize: heading?.dataset.size ?? "",
       headingTone: heading?.dataset.tone ?? "",
       headingExpanded: heading?.getAttribute("aria-expanded") ?? "",
+      headingControls,
       headingLabel: heading?.getAttribute("aria-label") ?? "",
       headingTabIndex: heading?.tabIndex ?? null,
       count: group.querySelector<HTMLElement>(".project-group-count")?.textContent?.trim() ?? "",
+      bodyID: body?.id ?? "",
+      bodyMatchesControls: !!headingControls && body?.id === headingControls && document.getElementById(headingControls) === body,
       bodyVisible: !!body && body.getClientRects().length > 0,
     }
   })
@@ -155,9 +159,12 @@ async function verifyProjectGroup(
   assert.equal(openState.headingSize, "mini")
   assert.equal(openState.headingTone, "neutral")
   assert.equal(openState.headingExpanded, "true")
+  assert.ok(openState.headingControls.length > 0)
   assert.ok(openState.headingLabel.length > 0)
   assert.equal(openState.headingTabIndex, 0)
   assert.equal(openState.count, input.expectedCount)
+  assert.equal(openState.bodyID, openState.headingControls)
+  assert.equal(openState.bodyMatchesControls, true)
   assert.equal(openState.bodyVisible, true)
 
   await page.focus(`${input.groupSelector} [data-ui="project-group-toggle"]`)
@@ -173,10 +180,11 @@ async function verifyProjectGroup(
       expanded:
         group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')?.getAttribute("aria-expanded") ??
         "",
+      controls: group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')?.getAttribute("aria-controls") ?? "",
       bodyCount: group.querySelectorAll(".project-group-body").length,
     }
   })
-  assert.deepEqual(collapsedState, { expanded: "false", bodyCount: 0 })
+  assert.deepEqual(collapsedState, { expanded: "false", controls: "", bodyCount: 0 })
 
   await page.focus(`${input.groupSelector} [data-ui="project-group-toggle"]`)
   await page.keyboard.press(" ")

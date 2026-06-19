@@ -17,6 +17,8 @@ describe("retired sidebar list heading", () => {
     expect(TASK_LIST).toContain("ProjectLedgerGroup")
     expect(PROJECT_LEDGER_GROUP).toContain('import { Button } from "./ui/Button"')
     expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-toggle"')
+    expect(PROJECT_LEDGER_GROUP).toContain("aria-controls={props.collapsed ? undefined : bodyElementID()}")
+    expect(PROJECT_LEDGER_GROUP).toContain('id={bodyElementID()}')
     expect(PROJECT_LEDGER_GROUP).not.toContain('class="project-group-heading"')
     expect(PROJECT_LEDGER_GROUP).not.toContain("<button")
     expect(SIDEBAR_CSS).not.toMatch(/\.project-group-heading\b/)
