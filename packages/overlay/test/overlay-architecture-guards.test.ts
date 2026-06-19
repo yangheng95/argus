@@ -2239,7 +2239,6 @@ describe("overlay architecture guards", () => {
     for (const className of [
       "titlebar-menubar",
       "titlebar-menubar-slot",
-      "titlebar-menubar-trigger",
       "titlebar-menubar-panel",
       "titlebar-menubar-group",
       "titlebar-menubar-group-title",
@@ -2255,6 +2254,8 @@ describe("overlay architecture guards", () => {
       expect(styles).not.toMatch(new RegExp(`^\\.${className}\\b`, "m"))
       expect(titlebarSurface).toMatch(new RegExp(`\\.${className}\\b`))
     }
+    expect(titlebarSurface).not.toMatch(/\.titlebar-menubar-trigger(?:\s|[,>{:+~.#\[]|$)/)
+    expect(titlebarSurface).toContain('.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"]')
   })
 
   test("bold font-weight declarations cannot increase across overlay stylesheets", () => {

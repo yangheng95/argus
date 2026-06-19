@@ -452,32 +452,6 @@
   display: flex;
 }
 
-/* iter43: the menubar reads as a primary navigation surface with weight
-   600 and ui-font-body sizing; resting color stays --text-soft, hover /
-   active lifts to --text-strong. */
-.titlebar-menubar-trigger {
-  height: var(--ui-titlebar-btn-height);
-  padding: 0 calc(9px * var(--ui-scale));
-  border: var(--oc-border-width) solid transparent;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  color: var(--oc-titlebar-menu-text);
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-medium);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-/* Flat-redesign Step 2 (2026-05-04): hover/active no longer flips
- * border-color (rule §2.2 C). Background tint carries the affordance. */
-.titlebar-menubar-trigger:hover,
-.titlebar-menubar-trigger:focus-visible,
-.titlebar-menubar-trigger[data-active="true"] {
-  color: var(--text-strong);
-  background: var(--surface-hover);
-  outline: none;
-}
-
 .titlebar-menubar-panel {
   --titlebar-menu-viewport-shift: 0px;
 

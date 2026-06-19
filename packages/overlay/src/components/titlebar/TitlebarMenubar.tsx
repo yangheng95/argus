@@ -26,6 +26,7 @@ import {
 } from "../../services/workspace"
 import { getHostTransport } from "../../services/host-transport"
 import { t } from "../../utils/i18n"
+import { Button } from "../ui/Button"
 
 type MenuID = "workspace" | "provider" | "run" | "view" | "settings" | "help"
 
@@ -417,11 +418,11 @@ export function TitlebarMenubar() {
           <Menubar.Menu value={menu.id} placement="bottom-start" gutter={7} fitViewport slide={false} flip={false}>
             <div class="titlebar-menubar-slot">
               <Menubar.Trigger
+                as={Button}
                 type="button"
-                class="oc-button"
-                data-variant="ghost"
-                data-size="sm"
-                data-tone="neutral"
+                variant="ghost"
+                size="sm"
+                tone="neutral"
                 data-ui="titlebar-menubar-trigger"
                 data-menu-trigger={menu.id}
                 data-compact={menu.compact}
