@@ -29,13 +29,11 @@
 }
 
 .field-label,
-.change-subline,
 .knowledge-item-meta,
 .config-status-box {
   font-size: var(--ui-font-control);
 }
 
-.change-subline,
 .field-label {
   letter-spacing: 0.03em;
 }

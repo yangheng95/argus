@@ -5,7 +5,7 @@
 // letter-spacing) but had no pill chrome (no background, no
 // border-radius, no accent color):
 //
-//   .change-subline                (path/context line under a
+//   .change-directory              (path/context line under a
 //                                    file row in the changes list)
 //   .diff-preview-scope            (file scope label in diff
 //                                    preview header)
@@ -35,6 +35,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs"
 import path from "node:path"
 
 const STYLES_ROOT = path.resolve(import.meta.dir, "..", "src", "styles")
+const COMPONENTS_ROOT = path.resolve(import.meta.dir, "..", "src", "components")
 
 function walkCss(dir: string): string[] {
   const out: string[] = []
@@ -42,6 +43,16 @@ function walkCss(dir: string): string[] {
     const full = path.join(dir, entry)
     if (statSync(full).isDirectory()) out.push(...walkCss(full))
     else if (entry.endsWith(".css")) out.push(full)
+  }
+  return out
+}
+
+function walkSource(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...walkSource(full))
+    else if (/\.(tsx?|css)$/.test(entry)) out.push(full)
   }
   return out
 }
@@ -63,7 +74,7 @@ function ruleBody(selector: string): string {
 
 describe("content-area subtitles render Title Case", () => {
   for (const sel of [
-    ".change-subline",
+    ".change-directory",
     ".diff-preview-scope",
     ".msg-todo-card__label",
     ".msg-read-reminder__label",
@@ -73,6 +84,15 @@ describe("content-area subtitles render Title Case", () => {
       expect(ruleBody(sel)).not.toContain("text-transform: uppercase")
     })
   }
+})
+
+describe("retired file-change subtitle selector stays absent", () => {
+  test(".change-subline is not reintroduced as a second file-change path owner", () => {
+    const files = [...walkSource(COMPONENTS_ROOT), ...walkCss(STYLES_ROOT)]
+    for (const file of files) {
+      expect(readFileSync(file, "utf8")).not.toContain("change-subline")
+    }
+  })
 })
 
 describe("legitimate tier-3 pills keep uppercase (negative control)", () => {

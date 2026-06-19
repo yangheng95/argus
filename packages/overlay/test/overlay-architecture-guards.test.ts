@@ -1139,8 +1139,8 @@ describe("overlay architecture guards", () => {
 
     // .config-status-box appears in a cross-surface multi-class
     // typography rule that shares font-size with .field-label /
-    // .change-subline / .knowledge-item-meta — only assert it
-    // lives in the surface, not that it's absent from styles.
+    // .knowledge-item-meta — only assert it lives in the surface,
+    // not that it's absent from styles.
     for (const className of [
       "about-body",
       "about-section",
