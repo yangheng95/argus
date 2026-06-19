@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -72,6 +74,7 @@ async function verifyBrandGuide(page: any, url: string, viewport: { width: numbe
     return {
       ok: true,
       expanded: trigger.getAttribute("aria-expanded"),
+      dataExpanded: trigger.hasAttribute("data-expanded"),
       controls: trigger.getAttribute("aria-controls"),
       cardRole: card.getAttribute("role") || "",
       cardHidden: card.getAttribute("aria-hidden"),
@@ -97,6 +100,7 @@ async function verifyBrandGuide(page: any, url: string, viewport: { width: numbe
   })
   assert.equal(metrics.ok, true)
   assert.equal(metrics.expanded, "true")
+  assert.equal(metrics.dataExpanded, true)
   assert.ok(metrics.controls)
   assert.equal(metrics.cardRole, "dialog")
   assert.equal(metrics.cardHidden, null)
@@ -107,6 +111,10 @@ async function verifyBrandGuide(page: any, url: string, viewport: { width: numbe
   assert.equal(metrics.mentionsTools, false, metricContext)
   assert.equal(metrics.hitMenu, "", metricContext)
   assert.equal(metrics.localeTextPresent, true, metricContext)
+
+  const screenshotPath = resolve(`.scratch/titlebar-brand-guide-popover-${viewport.width}.png`)
+  mkdirSync(dirname(screenshotPath), { recursive: true })
+  writeFileSync(screenshotPath, await page.screenshot({ fullPage: false }))
 
   await page.keyboard.press("Escape")
   await page.waitForFunction(() => {
@@ -119,6 +127,7 @@ async function verifyBrandGuide(page: any, url: string, viewport: { width: numbe
     return styles.display === "none" || styles.visibility === "hidden" || rect.width === 0 || rect.height === 0
   })
   assert.equal(await page.$eval(".brand-guide", (node: Element) => node.getAttribute("aria-expanded")), "false")
+  assert.equal(await page.$eval(".brand-guide", (node: Element) => node.hasAttribute("data-expanded")), false)
 }
 
 test("titlebar brand guide popover stays accessible and clears compact titlebar", async () => {

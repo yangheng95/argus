@@ -40,6 +40,8 @@ describe("titlebar brand guide primitive", () => {
     expect(COMPONENT).toContain('aria-label={t("brand.guide_trigger")}')
     expect(COMPONENT).not.toMatch(/<Popover\.Content[^>]*aria-hidden/)
     expect(COMPONENT).not.toMatch(/tabindex=["']0["']/)
+    expect(TITLEBAR_CSS).toContain(".brand-guide:hover,\n.brand-guide:focus-visible,\n.brand-guide[data-expanded]")
+    expect(TITLEBAR_CSS).not.toContain('.brand-guide[aria-expanded="true"]')
     expect(TITLEBAR_CSS).not.toMatch(/\.brand-guide:hover\s+\.brand-guide-card/)
     expect(TITLEBAR_CSS).not.toMatch(/\.brand-guide:focus-within\s+\.brand-guide-card/)
     expect(bodyOf(TITLEBAR_CSS, ".brand-guide-card")).not.toMatch(
