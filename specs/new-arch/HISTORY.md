@@ -22,6 +22,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-browser-preview-loading-status-live.md](2026-06-19-browser-preview-loading-status-live.md)         | Browser Preview Loading Status Live |
 | [2026-06-19-trace-panel-i18n-source.md](2026-06-19-trace-panel-i18n-source.md)                                 | Trace Panel i18n Source |
 | [2026-06-19-task-dirbar-recent-popover-semantics.md](2026-06-19-task-dirbar-recent-popover-semantics.md)       | TaskDirBar Recent Popover Semantics |
+| [2026-06-19-workflow-generating-status-live.md](2026-06-19-workflow-generating-status-live.md)             | Workflow Generating Status Live Regions |
 | [2026-06-19-browser-evidence-title-font-weight-token.md](2026-06-19-browser-evidence-title-font-weight-token.md) | Browser Evidence Title Font Weight Token |
 | [2026-06-19-section-summary-focus-visible.md](2026-06-19-section-summary-focus-visible.md)                     | Section Summary Focus Visible |
 | [2026-06-19-connection-badge-button-diagnostics.md](2026-06-19-connection-badge-button-diagnostics.md)         | Connection Badge Button Diagnostics |
