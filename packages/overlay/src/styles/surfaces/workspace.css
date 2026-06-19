@@ -289,26 +289,6 @@ body[data-center-workbench-panel-resizing="true"] .center-workbench-panel-separa
   font-family: var(--font);
 }
 
-.file-editor-nav {
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.file-editor-nav {
-  width: var(--oc-density-icon-button);
-  height: var(--oc-density-icon-button);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.file-editor-nav:hover {
-  color: var(--text-strong);
-  background: var(--subtle-2);
-}
-
 .file-editor-header .oc-button[data-ui="file-editor-save"] {
   --oc-button-height: calc(24px * var(--ui-scale));
   --oc-button-padding-x: calc(8px * var(--ui-scale));
