@@ -4,7 +4,8 @@ import {
   bindLocalModuleToSourceRegion,
   type LocalModuleSourceBindingResult,
 } from "@/browser-preview/local-module-source-binding"
-import { BrowserPreviewRegionLocator } from "@/browser-preview/region-comparison"
+import { BrowserPreviewRegionLocator, BrowserPreviewSourceReferenceArtifactID } from "@/browser-preview/region-comparison"
+import { browserPreviewTaskEvidenceRoot } from "@/browser-preview/task-evidence-root"
 import { BrowserPreviewViewportID } from "@/browser-preview/viewport"
 import { Instance } from "@/project/instance"
 import { buildMultimodalToolResult } from "./multimodal-result"
@@ -25,8 +26,7 @@ export const BrowserPreviewBindLocalModuleToolParameters = z
       .default([])
       .describe("Project source files that implement the local module."),
     sourceReferenceArtifactID: z
-      .string()
-      .min(1)
+      .enum(BrowserPreviewSourceReferenceArtifactID.options)
       .default("web-clone-source/reference.png")
       .describe(
         "Source reference screenshot artifact. Defaults to the task frontend-design source package reference.png.",
@@ -55,7 +55,7 @@ export const BrowserPreviewBindLocalModuleTool = Tool.define(BrowserPreviewBindL
       throw new Error("browser_preview_bind_local_module requires a task context.")
     }
     const result = await bindLocalModuleToSourceRegion({
-      projectRoot: Instance.directory,
+      projectRoot: browserPreviewTaskEvidenceRoot(),
       taskID,
       targetID: params.targetID,
       viewportID: params.viewportID,

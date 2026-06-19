@@ -13,6 +13,7 @@ import {
   BrowserPreviewRegionBox,
   BrowserPreviewRegionLocator,
   resolveSourceReferencePath,
+  type BrowserPreviewSourceReferenceArtifactID,
 } from "./region-comparison"
 import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
 
@@ -27,7 +28,7 @@ export type LocalModuleSourceBindingInput = {
   route: string
   implementationLocator: BrowserPreviewRegionLocator
   componentFiles: string[]
-  sourceReferenceArtifactID: string
+  sourceReferenceArtifactID: BrowserPreviewSourceReferenceArtifactID
   textAnchors: string[]
   sourcePadding: number
   localPadding: number
@@ -178,7 +179,7 @@ export async function bindLocalModuleToSourceRegion(
     taskID: input.taskID,
     targetID: input.targetID,
     viewportID: input.viewportID,
-    operationKind: "reference-comparison",
+    operationKind: "source-binding",
     regionID: input.regionID,
     manifestPath,
     artifactPaths: {

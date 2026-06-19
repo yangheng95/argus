@@ -3,8 +3,8 @@ import { persistBrowserPreviewTarget } from "@/browser-preview/persist"
 import { deriveBrowserPreviewUrlsFromDevServerCommand } from "@/browser-preview/dev-server-command"
 import { extractBrowserPreviewUrlsFromText } from "@/browser-preview/extract"
 import { waitForBrowserPreviewUrlReachable } from "@/browser-preview/liveness"
+import { browserPreviewTaskEvidenceRoot } from "@/browser-preview/task-evidence-root"
 import { missingBrowserPreviewTarget, normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "@/browser-preview/target"
-import { Instance } from "@/project/instance"
 import { BashTool } from "./bash"
 import { BrowserPreviewToolID } from "./browser-preview-tool-ids"
 import { Tool } from "./tool"
@@ -152,14 +152,15 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
         .filter((item) => item.persistedTargetID)
         .map((item) => ({ id: item.persistedTargetID!, url: item.url, source: item.source }))
       const noStartupTargetDiagnostic = "No browser_preview_target was persisted for this service startup."
+      const projectRoot = browserPreviewTaskEvidenceRoot()
       const target =
         startupTargets.length > 0
           ? await resolveBrowserPreviewTarget({
-              projectRoot: Instance.directory,
+              projectRoot,
               taskID,
             })
           : missingBrowserPreviewTarget({
-              projectRoot: Instance.directory,
+              projectRoot,
               taskID,
               diagnostics: [noStartupTargetDiagnostic],
             })

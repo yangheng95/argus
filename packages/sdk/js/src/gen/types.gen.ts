@@ -9231,7 +9231,7 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     taskID: string
     targetID: string
     viewportID: string
-    operationKind?: "preview-capture" | "reference-comparison"
+    operationKind?: "preview-capture" | "reference-comparison" | "source-binding"
     regionID?: string
     stateID?: string
     manifestPath?: string
@@ -9456,7 +9456,11 @@ export type BrowserPreviewCompareTaskTargetRegionsData = {
       state_id?: string
       region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
       source: {
-        reference_artifact_id: string
+        reference_artifact_id:
+          | "reference.png"
+          | "reference-mobile.png"
+          | "web-clone-source/reference.png"
+          | "web-clone-source/reference-mobile.png"
         bbox: {
           x: number
           y: number
@@ -9541,6 +9545,46 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
         y: number
         width: number
         height: number
+      }
+      source_image_size?: {
+        width: number
+        height: number
+      }
+      implementation_viewport?: {
+        width: number
+        height: number
+      }
+      implementation_fullpage_size?: {
+        width: number
+        height: number
+      }
+      implementation_screenshot_path?: string
+      route_diagnostics?: {
+        route: string
+        url?: string
+        status?: number
+        content_type?: string
+        body_length?: number
+        title?: string
+        dom?: {
+          text_length: number
+          node_count: number
+          body_descendant_count: number
+        }
+        page_size?: {
+          width: number
+          height: number
+        }
+        failed_requests?: Array<{
+          url: string
+          status: number
+          reason: string
+        }>
+        console_errors?: Array<string>
+        page_errors?: Array<string>
+        valid_app_page: boolean
+        reason?: string
+        screenshot_path?: string
       }
       visual?: {
         overall_score: number

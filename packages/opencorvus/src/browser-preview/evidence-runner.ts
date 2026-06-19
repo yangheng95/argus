@@ -69,8 +69,32 @@ export type BrowserPreviewRegionComparisonCaptureResult = {
     status: "completed" | "failed"
     bbox?: BrowserPreviewRegionBox
     screenshotPath?: string
+    viewport?: { width: number; height: number }
+    fullpageSize?: { width: number; height: number }
+    routeDiagnostics?: BrowserPreviewRegionRouteDiagnostics
     reason?: string
   }>
+}
+
+export type BrowserPreviewRegionRouteDiagnostics = {
+  route: string
+  url?: string
+  status?: number
+  content_type?: string
+  body_length?: number
+  title?: string
+  dom?: {
+    text_length: number
+    node_count: number
+    body_descendant_count: number
+  }
+  page_size?: { width: number; height: number }
+  failed_requests: Array<{ url: string; status: number; reason: string }>
+  console_errors: string[]
+  page_errors: string[]
+  valid_app_page: boolean
+  reason?: string
+  screenshot_path?: string
 }
 
 type SidecarViewportInput = {
@@ -751,8 +775,149 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
 
+function isBrowserImplicitAssetRequest(rawUrl) {
+  try {
+    return new URL(rawUrl).pathname === "/favicon.ico";
+  } catch {
+    return false;
+  }
+}
+
 function routeUrl(base, route) {
   return new URL(route || "/", base).toString();
+}
+
+async function collectDom(page) {
+  return page.evaluate(() => {
+    const body = document.body;
+    const text = body ? (body.innerText || "").trim() : "";
+    return {
+      text_length: text.length,
+      node_count: document.querySelectorAll("*").length,
+      body_descendant_count: body ? body.getElementsByTagName("*").length : 0,
+    };
+  });
+}
+
+async function collectPageSize(page) {
+  return page.evaluate(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    const width = Math.max(
+      window.innerWidth,
+      root ? root.scrollWidth : 0,
+      body ? body.scrollWidth : 0,
+      root ? root.offsetWidth : 0,
+      body ? body.offsetWidth : 0,
+    );
+    const height = Math.max(
+      window.innerHeight,
+      root ? root.scrollHeight : 0,
+      body ? body.scrollHeight : 0,
+      root ? root.offsetHeight : 0,
+      body ? body.offsetHeight : 0,
+    );
+    return { width, height };
+  });
+}
+
+function createRouteDiagnosticsRecorder(page) {
+  let failedRequests = [];
+  let consoleErrors = [];
+  let pageErrors = [];
+  page.on("response", (res) => {
+    const status = res.status();
+    if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(res.url())) {
+      failedRequests.push({ url: res.url(), status, reason: res.statusText() || "HTTP " + status });
+    }
+  });
+  page.on("requestfailed", (req) => {
+    if (isBrowserImplicitAssetRequest(req.url())) return;
+    failedRequests.push({ url: req.url(), status: 0, reason: req.failure()?.errorText || "request failed" });
+  });
+  page.on("console", (msg) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text().slice(0, 400));
+  });
+  page.on("pageerror", (err) => pageErrors.push((err?.message || String(err)).slice(0, 400)));
+  return {
+    reset() {
+      failedRequests = [];
+      consoleErrors = [];
+      pageErrors = [];
+    },
+    snapshot() {
+      return {
+        failed_requests: failedRequests.slice(),
+        console_errors: consoleErrors.slice(),
+        page_errors: pageErrors.slice(),
+      };
+    },
+  };
+}
+
+async function navigateAndDiagnose(page, recorder, input, route, screenshotPath) {
+  recorder.reset();
+  let response = null;
+  let navigationError = "";
+  try {
+    response = await page.goto(routeUrl(input.url, route), { waitUntil: "networkidle", timeout: 30000 });
+  } catch (error) {
+    navigationError = error?.message || String(error);
+  }
+  const status = response ? response.status() : 0;
+  const headers = response ? response.headers() : {};
+  const contentType = String(headers["content-type"] || "").toLowerCase();
+  let bodyLength = 0;
+  if (response) {
+    try {
+      bodyLength = (await response.body()).length;
+    } catch {
+      bodyLength = 0;
+    }
+  }
+  let dom = { text_length: 0, node_count: 0, body_descendant_count: 0 };
+  try {
+    dom = await collectDom(page);
+  } catch {}
+  let pageSize = { width: 0, height: 0 };
+  try {
+    pageSize = await collectPageSize(page);
+  } catch {}
+  let title = "";
+  try {
+    title = await page.title();
+  } catch {}
+  try {
+    await page.screenshot({ path: screenshotPath, type: "png", fullPage: true });
+  } catch {}
+  const recorded = recorder.snapshot();
+  const validAppPage =
+    !navigationError &&
+    status >= 200 &&
+    status < 300 &&
+    contentType.includes("text/html") &&
+    bodyLength >= 200 &&
+    dom.body_descendant_count > 0;
+  const reasons = [];
+  if (navigationError) reasons.push("navigation=" + navigationError);
+  if (status < 200 || status >= 300) reasons.push("status=" + status);
+  if (!contentType.includes("text/html")) reasons.push("content-type=" + (contentType || "(missing)"));
+  if (bodyLength < 200) reasons.push("body=" + bodyLength + "B");
+  if (dom.body_descendant_count <= 0) reasons.push("dom_descendants=" + dom.body_descendant_count);
+  return {
+    route,
+    url: page.url(),
+    status,
+    content_type: contentType,
+    body_length: bodyLength,
+    title,
+    dom,
+    page_size: pageSize,
+    ...recorded,
+    valid_app_page: validAppPage,
+    reason: validAppPage ? undefined : reasons.join(", "),
+    screenshot_path: screenshotPath,
+  };
 }
 
 async function locate(page, locator) {
@@ -803,20 +968,36 @@ async function main() {
       const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
       try {
         const page = await context.newPage();
+        const recorder = createRouteDiagnosticsRecorder(page);
         const firstRoute = input.bindings.find((binding) => binding.viewportID === viewportID)?.route || "/";
-        await page.goto(routeUrl(input.url, firstRoute), { waitUntil: "networkidle", timeout: 30000 });
         let currentRoute = firstRoute;
         const viewportDir = path.join(input.outDir, "implementation", viewportID);
         await fs.mkdir(viewportDir, { recursive: true });
         const screenshotPath = path.join(viewportDir, "full.png");
-        await page.screenshot({ path: screenshotPath, type: "png", fullPage: true });
+        let currentRouteDiagnostics = await navigateAndDiagnose(page, recorder, input, firstRoute, screenshotPath);
         for (const binding of input.bindings.filter((item) => item.viewportID === viewportID)) {
           if (binding.route !== currentRoute) {
-            await page.goto(routeUrl(input.url, binding.route), { waitUntil: "networkidle", timeout: 30000 });
             currentRoute = binding.route;
+            currentRouteDiagnostics = await navigateAndDiagnose(page, recorder, input, binding.route, screenshotPath);
           }
           const regionScreenshotPath = path.join(viewportDir, sanitizeSegment(binding.viewportID + ":" + binding.stateID + ":" + binding.regionID) + ".png");
           await page.screenshot({ path: regionScreenshotPath, type: "png", fullPage: true });
+          const routeDiagnostics = { ...currentRouteDiagnostics, screenshot_path: regionScreenshotPath };
+          if (!routeDiagnostics.valid_app_page) {
+            const reason = "Implementation route did not render a valid app page: route=" + binding.route + " url=" + (routeDiagnostics.url || "") + " " + (routeDiagnostics.reason || "route health failed");
+            regions.push({
+              regionID: binding.regionID,
+              stateID: binding.stateID,
+              viewportID,
+              status: "failed",
+              reason,
+              screenshotPath: regionScreenshotPath,
+              viewport,
+              fullpageSize: routeDiagnostics.page_size,
+              routeDiagnostics,
+            });
+            continue;
+          }
           const bbox = await locate(page, binding.locator);
           if (!bbox) {
             regions.push({
@@ -825,6 +1006,10 @@ async function main() {
               viewportID,
               status: "failed",
               reason: "Implementation locator did not match any visible element.",
+              screenshotPath: regionScreenshotPath,
+              viewport,
+              fullpageSize: routeDiagnostics.page_size,
+              routeDiagnostics,
             });
             continue;
           }
@@ -835,6 +1020,9 @@ async function main() {
             status: "completed",
             bbox,
             screenshotPath: regionScreenshotPath,
+            viewport,
+            fullpageSize: routeDiagnostics.page_size,
+            routeDiagnostics,
           });
         }
       } finally {
