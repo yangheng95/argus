@@ -1458,9 +1458,29 @@ describe("overlay architecture guards", () => {
     expect(memoryPanelSource).toContain('data-ui="memory-search-clear"')
     expect(settingsSurface).toMatch(/\.knowledge-toolbar \.memory-search\s*\{/)
     expect(settingsSurface).toMatch(/\.knowledge-toolbar:hover,\s*\.knowledge-toolbar:focus-within\s*\{/)
+    expect(settingsSurface).toMatch(/\.memory-panel\[data-compact="true"\] \.knowledge-toolbar\s*\{/)
+    expect(settingsSurface).toMatch(/\.memory-panel\[data-compact="true"\] \.knowledge-list\s*\{/)
+    expect(settingsSurface).toMatch(/\.memory-panel\[data-compact="true"\] \.knowledge-item\s*\{/)
+    expect(settingsSurface).toMatch(/\.memory-panel\[data-compact="true"\] \.memory-inline-detail\s*\{/)
     expect(settingsSurface).toMatch(/\.knowledge-item\[data-mode="search"\]/)
     for (const variant of ["global", "session"]) {
       expect(settingsSurface).toMatch(new RegExp(`\\.knowledge-scope\\[data-scope="${variant}"\\]`))
+    }
+    for (const className of [
+      "memory-panel",
+      "knowledge-list",
+      "knowledge-item",
+      "knowledge-item-row",
+      "knowledge-item-main",
+      "knowledge-item-title",
+      "knowledge-item-meta",
+      "knowledge-item-meta-row",
+      "knowledge-scope",
+      "memory-inline-detail",
+      "memory-detail-meta",
+      "memory-detail-content",
+    ]) {
+      expect(activitySurface).not.toMatch(new RegExp(`\\.sidebar-tool-panel\\s+\\.${className}\\b`))
     }
     expect(settingsSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.04\)/)
   })
