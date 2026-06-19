@@ -17,6 +17,7 @@ test("coding assistant activity selects an independent session in the shared mes
   const html = readOverlay("src/index.html")
   const main = readOverlay("src/main.tsx")
   const css = readOverlay("src/styles/surfaces/coding-assistant.css")
+  const workspaceCss = readOverlay("src/styles/surfaces/workspace.css")
   const sessionList = readOverlay("src/components/CodingAssistantSessionList.tsx")
   const icons = readOverlay("src/components/Icon.tsx")
   const service = readOverlay("src/services/coding-assistant.ts")
@@ -107,6 +108,7 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(main).not.toContain("TuiHostPanel")
 
   expect(css).toContain(".coding-assistant-row")
+  expect(workspaceCss).not.toContain(".coding-assistant-activity")
   expect(sessionList).toContain("ProjectLedgerGroup")
   expect(sessionList).toContain("createProjectLedgerGroupCollapseState")
   expect(sessionList).toContain('class="coding-assistant-project-group"')

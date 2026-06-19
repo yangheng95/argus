@@ -203,11 +203,6 @@ body[data-center-workbench-panel-resizing="true"] .center-workbench-panel-separa
   min-width: 0;
 }
 
-.coding-assistant-activity {
-  justify-content: center;
-  align-items: center;
-}
-
 .chat-content-frame {
   flex: 1 1 auto;
   min-height: 0;
