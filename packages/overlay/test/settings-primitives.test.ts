@@ -199,6 +199,7 @@ describe("settings primitives — Solid exports", () => {
     expect(SEGMENTED_SRC).toContain("<KobalteToggleGroupRoot")
     expect(SEGMENTED_SRC).toContain("<KobalteToggleGroupItem")
     expect(SEGMENTED_SRC).toContain("onClick={() => props.onActivate?.(option.value)}")
+    expect(SEGMENTED_SRC).toContain('if (event.key === "Enter" || event.key === " ") props.onActivate(option.value)')
     expect(SEGMENTED_SRC).not.toContain("data-active=")
     expect(PRIMITIVES_SRC).not.toContain('role="group"')
     expect(PRIMITIVES_SRC).not.toContain("aria-pressed")

@@ -68,7 +68,12 @@ export function AppDialogHost() {
         return
       }
       if (isTaskCardDecision()) {
-        document.querySelector<HTMLButtonElement>("#appDialogBody .app-dialog-decision__choice")?.focus()
+        const choices = Array.from(
+          document.querySelectorAll<HTMLButtonElement>("#appDialogBody .app-dialog-decision__choice"),
+        )
+        const selected = choices.find((choice) => choice.dataset.value === dialogStore.app.selectValue)
+        const focusTarget = selected ?? choices[0]
+        focusTarget?.focus()
         return
       }
       okButtonRef?.focus()

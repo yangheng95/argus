@@ -47,6 +47,10 @@ export function SegmentedControl<T extends string>(props: SegmentedControlProps<
             title={option.title}
             disabled={option.disabled}
             onClick={() => props.onActivate?.(option.value)}
+            onKeyDown={(event) => {
+              if (option.disabled || !props.onActivate) return
+              if (event.key === "Enter" || event.key === " ") props.onActivate(option.value)
+            }}
           >
             {props.renderOption ? props.renderOption(option) : option.label}
           </KobalteToggleGroupItem>
