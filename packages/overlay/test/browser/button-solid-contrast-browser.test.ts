@@ -11,12 +11,13 @@ const OVERLAY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const SCRATCH_ROOT = resolve(OVERLAY_ROOT, "../../.scratch")
 const THEMES = ["light", "dark", "vscode-dark"] as const
 const SAMPLES = [
-  { selector: '[data-button-sample="neutral"]', label: "solid neutral" },
-  { selector: '[data-button-sample="accent"]', label: "solid accent" },
-  { selector: '[data-button-sample="danger"]', label: "solid danger" },
-  { selector: '[data-ui="sidebar-new-task-button"]', label: "sidebar new task CTA" },
-  { selector: '[data-ui="mission-new"]', label: "mission new CTA" },
-  { selector: '[data-ui="coding-assistant-new"]', label: "coding assistant new CTA" },
+  { selector: '[data-button-sample="neutral"]', label: "solid neutral", minimumContrast: 4.5 },
+  { selector: '[data-button-sample="accent"]', label: "solid accent", minimumContrast: 4.5 },
+  { selector: '[data-button-sample="danger"]', label: "solid danger", minimumContrast: 4.5 },
+  { selector: '[data-ui="sidebar-new-task-button"]', label: "sidebar new task CTA", minimumContrast: 4.5 },
+  { selector: '[data-ui="mission-new"]', label: "mission new CTA", minimumContrast: 4.5 },
+  { selector: '[data-ui="coding-assistant-new"]', label: "coding assistant new CTA", minimumContrast: 4.5 },
+  { selector: '[data-ui="window-close"]', label: "window close control", minimumContrast: 3 },
 ] as const
 
 function readCss(rel: string): string {
@@ -86,6 +87,9 @@ test("solid Button foregrounds stay readable across themes and interaction state
               font-size: var(--ui-font-control);
               line-height: var(--ui-line-tight);
             }
+            .button-solid-contrast-row.titlebar-window-controls {
+              justify-content: flex-start;
+            }
             [data-ui="focus-sentinel"] {
               position: fixed;
               top: 0;
@@ -117,6 +121,12 @@ test("solid Button foregrounds stay readable across themes and interaction state
                 <span class="sidebar-btn-label">New Chat</span>
               </button>
             </section>
+            <section class="button-solid-contrast-row titlebar-window-controls" aria-label="Titlebar window controls">
+              <strong>Titlebar window controls</strong>
+              <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="window-control" data-ui="window-minimize" type="button" aria-label="Minimize">-</button>
+              <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="window-control" data-ui="window-maximize" type="button" aria-label="Maximize">[]</button>
+              <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="danger" data-chrome="window-control" data-ui="window-close" type="button" aria-label="Close">x</button>
+            </section>
           </main>
         </body>
       </html>
@@ -126,6 +136,15 @@ test("solid Button foregrounds stay readable across themes and interaction state
     assert.ok(stage)
     const failures: string[] = []
     const screenshots: string[] = []
+    const focusSample = async (selector: string): Promise<boolean> => {
+      await page.focus('[data-ui="focus-sentinel"]')
+      for (let attempt = 0; attempt < 24; attempt += 1) {
+        await page.keyboard.press("Tab")
+        const focused = await page.$eval(selector, (node: Element) => document.activeElement === node)
+        if (focused) return true
+      }
+      return false
+    }
 
     for (const theme of THEMES) {
       await page.evaluate((themeName) => {
@@ -138,20 +157,21 @@ test("solid Button foregrounds stay readable across themes and interaction state
 
       for (const sample of SAMPLES) {
         const normal = await page.$eval(sample.selector, buttonMetrics)
-        if (normal.contrast < 4.5) failures.push(`${theme} ${sample.label} normal ${normal.contrast.toFixed(2)}`)
+        if (normal.contrast < sample.minimumContrast)
+          failures.push(`${theme} ${sample.label} normal ${normal.contrast.toFixed(2)}`)
 
         await page.hover(sample.selector)
         const hover = await page.$eval(sample.selector, buttonMetrics)
-        if (hover.contrast < 4.5) failures.push(`${theme} ${sample.label} hover ${hover.contrast.toFixed(2)}`)
+        if (hover.contrast < sample.minimumContrast)
+          failures.push(`${theme} ${sample.label} hover ${hover.contrast.toFixed(2)}`)
 
         await page.mouse.move(1, 1)
-        await page.focus('[data-ui="focus-sentinel"]')
-        for (let idx = 0; idx <= SAMPLES.findIndex((item) => item.selector === sample.selector); idx += 1) {
-          await page.keyboard.press("Tab")
-        }
+        const sampleFocused = await focusSample(sample.selector)
+        if (!sampleFocused) failures.push(`${theme} ${sample.label} could not be focused by keyboard`)
         const focus = await page.$eval(sample.selector, buttonMetrics)
         if (!focus.focusVisible) failures.push(`${theme} ${sample.label} did not receive focus-visible`)
-        if (focus.contrast < 4.5) failures.push(`${theme} ${sample.label} focus ${focus.contrast.toFixed(2)}`)
+        if (focus.contrast < sample.minimumContrast)
+          failures.push(`${theme} ${sample.label} focus ${focus.contrast.toFixed(2)}`)
       }
 
       await page.focus('[data-ui="focus-sentinel"]')
@@ -159,6 +179,12 @@ test("solid Button foregrounds stay readable across themes and interaction state
       await page.keyboard.press("Tab")
       await page.hover('[data-button-sample="danger"]')
       screenshots.push(await saveScreenshot(stage, `button-solid-contrast-${theme}-states.png`))
+
+      await page.mouse.move(1, 1)
+      await focusSample('[data-ui="window-close"]')
+      screenshots.push(await saveScreenshot(stage, `button-window-close-contrast-${theme}-focus.png`))
+      await page.hover('[data-ui="window-close"]')
+      screenshots.push(await saveScreenshot(stage, `button-window-close-contrast-${theme}-hover.png`))
     }
 
     assert.deepEqual(failures, [])
