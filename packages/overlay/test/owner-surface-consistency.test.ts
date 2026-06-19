@@ -45,7 +45,7 @@ test("titlebar controls stay on the surface family", () => {
   expect(
     bodyOf(
       TITLEBAR_CSS,
-      ".titlebar-menubar-item:hover:not(:disabled):not([data-disabled]), .titlebar-menubar-item[data-highlighted]:not(:disabled):not([data-disabled]), .titlebar-menubar-item:focus-visible, .titlebar-menubar-toggle:hover, .titlebar-menubar-toggle:focus-within, .titlebar-menubar-range:hover, .titlebar-menubar-range:focus-within",
+      ".titlebar-menubar-item:hover:not(:disabled):not([data-disabled]), .titlebar-menubar-item[data-highlighted]:not(:disabled):not([data-disabled]), .titlebar-menubar-item:focus-visible, .titlebar-menubar-range:hover, .titlebar-menubar-range:focus-within",
     ),
   ).toMatch(/background:\s*var\(--surface-hover\)/)
   expect(

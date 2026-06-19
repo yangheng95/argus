@@ -543,7 +543,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config/prompt") return send([])
-      if (path === "/config") return send({})
+      if (path === "/config") return send({ experimental: { auto_question: false, confirm_proposed_tasks: true } })
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
@@ -665,29 +665,74 @@ test(
       await page.keyboard.press("r")
       await page.keyboard.up("Alt")
       await page.waitForSelector('[data-testid="titlebar-menu-run"]', { visible: true })
-      await page.focus('[data-testid="titlebar-confirm-proposed-tasks"]')
-      const toggleFocusState = await page.$eval(
-        '[data-testid="titlebar-confirm-proposed-tasks"]',
-        (node: HTMLInputElement) => {
-          const row = node.closest<HTMLElement>(".titlebar-menubar-toggle")
-          if (!row) throw new Error("missing titlebar toggle row")
-          return {
-            activeTestid: (document.activeElement as HTMLElement | null)?.dataset.testid || "",
-            focusWithin: row.matches(":focus-within"),
-            background: getComputedStyle(row).backgroundColor,
-            color: getComputedStyle(row).color,
-          }
+      const runCheckboxStructure = await page.$eval('[data-testid="titlebar-menu-run"]', (node) => {
+        const items = Array.from(node.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'))
+        return {
+          testids: items.map((item) => item.dataset.testid || ""),
+          roles: items.map((item) => item.getAttribute("role")),
+          checked: items.map((item) => ({
+            testid: item.dataset.testid || "",
+            ariaChecked: item.getAttribute("aria-checked"),
+            dataChecked: item.hasAttribute("data-checked"),
+            className: item.className,
+          })),
+          legacyCheckboxCount: node.querySelectorAll('input[type="checkbox"]').length,
+          legacyToggleCount: node.querySelectorAll(".titlebar-menubar-toggle").length,
+        }
+      })
+      assert.deepEqual(runCheckboxStructure.testids, ["titlebar-auto-question", "titlebar-confirm-proposed-tasks"])
+      assert.deepEqual([...new Set(runCheckboxStructure.roles)], ["menuitemcheckbox"])
+      assert.equal(runCheckboxStructure.legacyCheckboxCount, 0)
+      assert.equal(runCheckboxStructure.legacyToggleCount, 0)
+      assert.deepEqual(runCheckboxStructure.checked, [
+        {
+          testid: "titlebar-auto-question",
+          ariaChecked: "false",
+          dataChecked: false,
+          className: "titlebar-menubar-item titlebar-menubar-checkbox",
         },
-      )
-      assert.equal(toggleFocusState.activeTestid, "titlebar-confirm-proposed-tasks")
-      assert.equal(toggleFocusState.focusWithin, true)
-      assert.notEqual(toggleFocusState.background, "rgba(0, 0, 0, 0)")
-      assert.notEqual(toggleFocusState.color, "")
+        {
+          testid: "titlebar-confirm-proposed-tasks",
+          ariaChecked: "true",
+          dataChecked: true,
+          className: "titlebar-menubar-item titlebar-menubar-checkbox",
+        },
+      ])
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const activeTestid = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid || "")
+        if (activeTestid === "titlebar-confirm-proposed-tasks") break
+        await page.keyboard.press("ArrowDown")
+      }
+      const checkboxFocusState = await page.$eval('[data-testid="titlebar-confirm-proposed-tasks"]', (node) => {
+        const item = node as HTMLElement
+        const indicator = item.querySelector<HTMLElement>(".titlebar-menubar-checkbox-indicator")
+        if (!indicator) throw new Error("missing titlebar checkbox indicator")
+        return {
+          activeTestid: (document.activeElement as HTMLElement | null)?.dataset.testid || "",
+          role: item.getAttribute("role"),
+          ariaChecked: item.getAttribute("aria-checked"),
+          highlighted: item.hasAttribute("data-highlighted"),
+          checked: item.hasAttribute("data-checked"),
+          background: getComputedStyle(item).backgroundColor,
+          color: getComputedStyle(item).color,
+          indicatorBackground: getComputedStyle(indicator).backgroundColor,
+          indicatorBorderColor: getComputedStyle(indicator).borderColor,
+        }
+      })
+      assert.equal(checkboxFocusState.activeTestid, "titlebar-confirm-proposed-tasks")
+      assert.equal(checkboxFocusState.role, "menuitemcheckbox")
+      assert.equal(checkboxFocusState.ariaChecked, "true")
+      assert.equal(checkboxFocusState.highlighted, true)
+      assert.equal(checkboxFocusState.checked, true)
+      assert.notEqual(checkboxFocusState.background, "rgba(0, 0, 0, 0)")
+      assert.notEqual(checkboxFocusState.color, "")
+      assert.notEqual(checkboxFocusState.indicatorBackground, "rgba(0, 0, 0, 0)")
+      assert.notEqual(checkboxFocusState.indicatorBorderColor, "rgba(0, 0, 0, 0)")
       const runMenuElement = await page.$('[data-testid="titlebar-menu-run"]')
       assert.ok(runMenuElement)
-      const toggleScreenshotPath = resolve(".scratch/titlebar-run-toggle-focus.png")
-      mkdirSync(dirname(toggleScreenshotPath), { recursive: true })
-      writeFileSync(toggleScreenshotPath, await runMenuElement.screenshot({}))
+      const checkboxScreenshotPath = resolve(".scratch/titlebar-run-checkbox-menuitem-focus.png")
+      mkdirSync(dirname(checkboxScreenshotPath), { recursive: true })
+      writeFileSync(checkboxScreenshotPath, await runMenuElement.screenshot({}))
 
       await page.keyboard.down("Alt")
       await page.keyboard.press("v")

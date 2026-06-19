@@ -20,6 +20,7 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).toContain("<Menubar.Item")
     expect(SOURCE).toContain("<Menubar.Group")
     expect(SOURCE).toContain("<Menubar.GroupLabel")
+    expect(SOURCE).toContain("<Menubar.CheckboxItem")
     expect(SOURCE).toContain("<Menubar.RadioGroup")
     expect(SOURCE).toContain("<Menubar.RadioItem")
     expect(SOURCE).not.toMatch(/<[^>]+role="menubar"/)
@@ -80,6 +81,21 @@ describe("TitlebarMenubar primitive ownership", () => {
 
   test("styles Kobalte highlighted theme radio items", () => {
     expect(CSS).toContain(".titlebar-theme-option[data-highlighted]")
+  })
+
+  test("routes Run menu boolean settings through Kobalte checkbox items", () => {
+    expect(SOURCE).toContain("function MenuCheckboxItem")
+    expect(SOURCE).toContain("<Menubar.CheckboxItem")
+    expect(SOURCE).toContain('class="titlebar-menubar-item titlebar-menubar-checkbox"')
+    expect(SOURCE).toContain("checked={props.checked}")
+    expect(SOURCE).toContain("onChange={(checked) => void props.onChange(checked)}")
+    expect(SOURCE).toContain('testid="titlebar-auto-question"')
+    expect(SOURCE).toContain('testid="titlebar-confirm-proposed-tasks"')
+    expect(SOURCE).not.toContain('class="titlebar-menubar-toggle"')
+    expect(SOURCE).not.toContain('type="checkbox"')
+    expect(CSS).not.toContain(".titlebar-menubar-toggle")
+    expect(CSS).not.toContain('input[type="checkbox"]')
+    expect(CSS).toContain(".titlebar-menubar-checkbox[data-checked] .titlebar-menubar-checkbox-indicator")
   })
 
   test("styles Kobalte checked theme radio items without local active state", () => {
