@@ -165,7 +165,33 @@ export namespace SessionLoop {
   // live collectors and tool functions, so they cannot be serialized into DB.
   // ---------------------------------------------------------------------------
   const sessionRuntimeContracts = new Map<string, SessionRuntimeContract>()
+  const runtimeContractWakeWaiters = new Map<string, Set<() => void>>()
   const preTerminalReflectionSeen = new Set<string>()
+
+  function isPendingRuntimeContractTurn(contract: SessionRuntimeContract | undefined): boolean {
+    return contract?.identity.contractKind === "orchestrator-wake" && contract.runOnce === true
+  }
+
+  function notifyRuntimeContractWake(sessionID: string): void {
+    const waiters = runtimeContractWakeWaiters.get(sessionID)
+    if (!waiters) return
+    for (const wake of [...waiters]) wake()
+  }
+
+  function subscribeRuntimeContractWake(sessionID: string, wake: () => void): () => void {
+    let waiters = runtimeContractWakeWaiters.get(sessionID)
+    if (!waiters) {
+      waiters = new Set()
+      runtimeContractWakeWaiters.set(sessionID, waiters)
+    }
+    waiters.add(wake)
+    return () => {
+      const current = runtimeContractWakeWaiters.get(sessionID)
+      if (!current) return
+      current.delete(wake)
+      if (current.size === 0) runtimeContractWakeWaiters.delete(sessionID)
+    }
+  }
 
   export function setSessionRuntimeContract(sessionID: string, contract: SessionRuntimeContract | undefined): void {
     if (
@@ -187,6 +213,7 @@ export namespace SessionLoop {
       )
     }
     sessionRuntimeContracts.set(sessionID, contract)
+    if (isPendingRuntimeContractTurn(contract)) notifyRuntimeContractWake(sessionID)
   }
 
   export function getSessionRuntimeContract(sessionID: string): SessionRuntimeContract | undefined {
@@ -199,8 +226,7 @@ export namespace SessionLoop {
   }
 
   function shouldRunRuntimeContractTurn(sessionID: string): boolean {
-    const contract = sessionRuntimeContracts.get(sessionID)
-    return contract?.identity.contractKind === "orchestrator-wake" && contract.runOnce === true
+    return isPendingRuntimeContractTurn(sessionRuntimeContracts.get(sessionID))
   }
 
   function consumeRuntimeContractTurn(sessionID: string): void {
@@ -2598,14 +2624,19 @@ export namespace SessionLoop {
       }
 
       let settled = false
+      let unsubscribeMessage = () => {}
+      let unsubscribeRuntimeWake = () => {}
+      const onAbort = () => settle()
       const settle = () => {
         if (settled) return
         settled = true
-        unsub()
+        unsubscribeMessage()
+        unsubscribeRuntimeWake()
+        abort.removeEventListener("abort", onAbort)
         resolve()
       }
 
-      const unsub = Bus.subscribe(Message.Event.Updated, (event) => {
+      unsubscribeMessage = Bus.subscribe(Message.Event.Updated, (event) => {
         if (
           event.properties.info.role === "user" &&
           event.properties.info.sessionID === sessionID &&
@@ -2614,7 +2645,13 @@ export namespace SessionLoop {
           settle()
         }
       })
-      abort.addEventListener("abort", settle, { once: true })
+      unsubscribeRuntimeWake = subscribeRuntimeContractWake(sessionID, settle)
+      abort.addEventListener("abort", onAbort, { once: true })
+
+      if (shouldRunRuntimeContractTurn(sessionID)) {
+        settle()
+        return
+      }
 
       void (async () => {
         for await (const item of Message.stream(sessionID)) {
