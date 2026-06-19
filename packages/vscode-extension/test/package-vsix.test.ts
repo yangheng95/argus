@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { checkVsixSize, readPackageMeta, resolveSourceDist, vsixFilename } from "../script/package-vsix"
+import {
+  assertPackageOverlayUiAssets,
+  checkVsixSize,
+  prepareOverlayUiForVsix,
+  readPackageMeta,
+  resolveSourceDist,
+  vsixFilename,
+} from "../script/package-vsix"
 
 describe("resolveSourceDist", () => {
   test("maps each supported VS Code target to the matching opencorvus dist directory", () => {
@@ -101,5 +108,71 @@ describe("readPackageMeta", () => {
   test("throws when name/version/publisher are missing", () => {
     fs.writeFileSync(path.join(extensionRoot, "package.json"), JSON.stringify({ name: "x" }))
     expect(() => readPackageMeta(extensionRoot)).toThrow(/missing version/)
+  })
+})
+
+describe("prepareOverlayUiForVsix", () => {
+  let extensionRoot: string
+  let mediaUi: string
+
+  function writeMediaUi(marker = ""): void {
+    fs.mkdirSync(path.join(mediaUi, "assets"), { recursive: true })
+    fs.writeFileSync(
+      path.join(mediaUi, "index.html"),
+      `<main class="prompt-profile-select-wrap"><button class="prompt-profile-select-trigger"></button>${marker}</main><script type="module" src="./assets/app.js"></script>`,
+    )
+    fs.writeFileSync(
+      path.join(mediaUi, "assets", "app.js"),
+      "const assetBase = window.__OPENCORVUS_ASSET_BASE__; console.log(assetBase);",
+    )
+  }
+
+  beforeEach(() => {
+    extensionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-vsix-overlay-ui-"))
+    mediaUi = path.join(extensionRoot, "media", "ui")
+  })
+
+  afterEach(() => {
+    try {
+      fs.rmSync(extensionRoot, { recursive: true, force: true })
+    } catch {}
+  })
+
+  test("validates existing media/ui when --skip-build is used", () => {
+    writeMediaUi()
+    let buildCalled = false
+    prepareOverlayUiForVsix({
+      extensionRoot,
+      skipBuild: true,
+      buildAndSync: () => {
+        buildCalled = true
+      },
+    })
+    expect(buildCalled).toBe(false)
+  })
+
+  test("rejects stale prompt-profile native select assets even when --skip-build is used", () => {
+    writeMediaUi('<select class="prompt-profile-select"></select>')
+    expect(() =>
+      prepareOverlayUiForVsix({
+        extensionRoot,
+        skipBuild: true,
+        buildAndSync: () => undefined,
+      }),
+    ).toThrow(/retired prompt-profile native select implementation/)
+  })
+
+  test("runs the normal build hook before validating fresh media/ui", () => {
+    let buildCalled = false
+    prepareOverlayUiForVsix({
+      extensionRoot,
+      skipBuild: false,
+      buildAndSync: () => {
+        buildCalled = true
+        writeMediaUi()
+      },
+    })
+    expect(buildCalled).toBe(true)
+    expect(() => assertPackageOverlayUiAssets(extensionRoot)).not.toThrow()
   })
 })

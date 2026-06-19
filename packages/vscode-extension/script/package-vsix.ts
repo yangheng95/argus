@@ -29,6 +29,7 @@ import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
+import { assertOverlayUiBundleDir } from "./overlay-ui-bundle-assertions.mjs"
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -115,6 +116,24 @@ export function readPackageMeta(extensionRoot: string): {
   return { version: pkg.version, publisher: pkg.publisher, name: bareName }
 }
 
+export function assertPackageOverlayUiAssets(extensionRoot: string): void {
+  assertOverlayUiBundleDir(path.join(extensionRoot, "media", "ui"))
+}
+
+export function prepareOverlayUiForVsix(opts: {
+  extensionRoot: string
+  skipBuild: boolean
+  buildAndSync: (extensionRoot: string) => void
+  log?: (message: string) => void
+}): void {
+  if (!opts.skipBuild) {
+    opts.buildAndSync(opts.extensionRoot)
+  } else {
+    opts.log?.("[package-vsix] --skip-build: verifying existing dist/ + media/ui/")
+  }
+  assertPackageOverlayUiAssets(opts.extensionRoot)
+}
+
 // ── Main flow (skipped in unit tests) ──────────────────────────────
 
 function parseArgs(argv: string[]): { target: string; outDir: string; skipBuild: boolean } {
@@ -194,17 +213,12 @@ async function main(): Promise<void> {
   console.log(`[package-vsix] staged ${binaryPath} → ${path.join(stagedDir, binaryName)}`)
 
   // 2. Build extension + sync overlay UI (esbuild.mjs handles both)
-  if (!args.skipBuild) {
-    const build = spawnSync("node", ["esbuild.mjs", "--production"], {
-      cwd: extensionRoot,
-      stdio: "inherit",
-    })
-    if (build.status !== 0) {
-      throw new Error(`esbuild --production failed (exit ${build.status})`)
-    }
-  } else {
-    console.log("[package-vsix] --skip-build: assuming dist/ + media/ui/ are current")
-  }
+  prepareOverlayUiForVsix({
+    extensionRoot,
+    skipBuild: args.skipBuild,
+    buildAndSync: buildExtensionWithFreshOverlayUi,
+    log: console.log,
+  })
 
   // 3. Run vsce package
   const outDir = path.resolve(extensionRoot, args.outDir)
@@ -235,6 +249,16 @@ if (import.meta.main) {
     console.error(`[package-vsix] ${err instanceof Error ? err.message : String(err)}`)
     process.exit(2)
   })
+}
+
+function buildExtensionWithFreshOverlayUi(extensionRoot: string): void {
+  const build = spawnSync("node", ["esbuild.mjs", "--production"], {
+    cwd: extensionRoot,
+    stdio: "inherit",
+  })
+  if (build.status !== 0) {
+    throw new Error(`esbuild --production failed (exit ${build.status})`)
+  }
 }
 
 void os
