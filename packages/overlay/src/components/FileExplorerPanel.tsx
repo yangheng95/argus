@@ -372,7 +372,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
           <label class="file-explorer-toolbar file-explorer-search search-field">
             <Icon name="search" size={12} class="search-field-icon" />
             <input
-              class="file-explorer-search-input search-field-input field-input"
+              class="file-explorer-search-input search-field-input"
               type="search"
               value={query()}
               placeholder={t("explorer.search_placeholder")}
