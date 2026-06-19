@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
-import { assertOverlayUiBundleDir } from "./script/overlay-ui-bundle-assertions.mjs"
+import { assertOverlayUiBundleDir, assertOverlayUiBundleSynced } from "./script/overlay-ui-bundle-assertions.mjs"
 
 /**
  * VS Code extension build:
@@ -26,7 +26,10 @@ const skipUi = process.argv.includes("--skip-ui")
 if (!skipUi) {
   buildOverlayUi(here)
   syncOverlayUi(here)
-  assertOverlayUiBundleDir(path.resolve(here, "media", "ui"))
+  const mediaUi = path.resolve(here, "media", "ui")
+  const distVite = path.resolve(here, "..", "overlay", "dist-vite")
+  assertOverlayUiBundleDir(mediaUi)
+  assertOverlayUiBundleSynced(distVite, mediaUi)
 }
 
 await esbuild.build({

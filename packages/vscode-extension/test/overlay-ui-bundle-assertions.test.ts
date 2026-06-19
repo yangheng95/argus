@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { assertOverlayUiBundleDir } from "../script/overlay-ui-bundle-assertions.mjs"
+import { assertOverlayUiBundleDir, assertOverlayUiBundleSynced } from "../script/overlay-ui-bundle-assertions.mjs"
 
 describe("overlay-ui-bundle-assertions", () => {
+  let distVite: string
   let mediaUi: string
 
   beforeEach(() => {
+    distVite = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-dist-vite-"))
     mediaUi = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-media-ui-"))
     fs.mkdirSync(path.join(mediaUi, "assets"), { recursive: true })
     fs.writeFileSync(
@@ -19,10 +21,12 @@ describe("overlay-ui-bundle-assertions", () => {
       'const assetBase = window.__OPENCORVUS_ASSET_BASE__; console.log(assetBase);',
     )
     fs.writeFileSync(path.join(mediaUi, "assets", "style.css"), ".prompt-profile-select-trigger{display:flex}")
+    fs.cpSync(mediaUi, distVite, { recursive: true })
   })
 
   afterEach(() => {
     try {
+      fs.rmSync(distVite, { recursive: true, force: true })
       fs.rmSync(mediaUi, { recursive: true, force: true })
     } catch {}
   })
@@ -43,5 +47,14 @@ describe("overlay-ui-bundle-assertions", () => {
   test("rejects bundles that do not consume the webview asset base", () => {
     fs.writeFileSync(path.join(mediaUi, "assets", "app.js"), "console.log('missing asset base')")
     expect(() => assertOverlayUiBundleDir(mediaUi)).toThrow(/__OPENCORVUS_ASSET_BASE__/)
+  })
+
+  test("rejects media/ui drift from dist-vite even when retired markers are absent", () => {
+    fs.writeFileSync(
+      path.join(mediaUi, "assets", "style.css"),
+      ".prompt-profile-select-trigger{display:flex}.mission-conversation-body{scrollbar-width:auto}",
+    )
+    expect(() => assertOverlayUiBundleDir(mediaUi)).not.toThrow()
+    expect(() => assertOverlayUiBundleSynced(distVite, mediaUi)).toThrow(/not synced with dist-vite/)
   })
 })

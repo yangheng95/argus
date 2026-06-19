@@ -29,7 +29,7 @@ import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { assertOverlayUiBundleDir } from "./overlay-ui-bundle-assertions.mjs"
+import { assertOverlayUiBundleDir, assertOverlayUiBundleSynced } from "./overlay-ui-bundle-assertions.mjs"
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -117,7 +117,10 @@ export function readPackageMeta(extensionRoot: string): {
 }
 
 export function assertPackageOverlayUiAssets(extensionRoot: string): void {
-  assertOverlayUiBundleDir(path.join(extensionRoot, "media", "ui"))
+  const mediaUi = path.join(extensionRoot, "media", "ui")
+  const distVite = path.join(extensionRoot, "..", "overlay", "dist-vite")
+  assertOverlayUiBundleDir(mediaUi)
+  assertOverlayUiBundleSynced(distVite, mediaUi)
 }
 
 export function prepareOverlayUiForVsix(opts: {
