@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| [2026-06-19-retire-topbar-dead-control.md](2026-06-19-retire-topbar-dead-control.md)                         | Retire TopBar Dead Control |
 | [2026-06-19-ledger-row-action-rail-keyboard-single-source.md](2026-06-19-ledger-row-action-rail-keyboard-single-source.md) | Ledger Row Action Rail Keyboard Single Source |
 | [2026-06-19-retire-overlay-orphan-css-residue.md](2026-06-19-retire-overlay-orphan-css-residue.md)             | Retire Overlay Orphan CSS Residue |
 | [2026-06-19-kobalte-tabpanel-state-single-source.md](2026-06-19-kobalte-tabpanel-state-single-source.md)       | Kobalte TabPanel State Single Source |
