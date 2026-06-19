@@ -728,7 +728,15 @@
 }
 
 .msg-file-download:hover {
+  color: var(--accent-hover);
   background: transparent;
+}
+
+.msg-file-download:focus-visible {
+  color: var(--accent-hover);
+  background: transparent;
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(2px * var(--ui-scale));
 }
 
 .msg-file-error {
