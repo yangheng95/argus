@@ -1547,7 +1547,7 @@ function seedTurnBoard(request: string): void {
   resetWriter()
 }
 
-test("orchestrator turns stay in one complete session card around child agents", () => {
+test("orchestrator turns stay chronological around child agents", () => {
   seedTurnBoard("interleave turns")
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_o1`
@@ -1640,19 +1640,22 @@ test("orchestrator turns stay in one complete session card around child agents",
   })
 
   const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2)
-  expect(ordered).toEqual([o1, childCard])
+  expect(ordered).toEqual([o1, childCard, o2])
 
   const o1Texts = (cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)
   expect(o1Texts).toContain("turn one")
-  expect(o1Texts).toContain("turn two")
-  expect(cardTreeStore.cards[o2]).toBeUndefined()
+  expect(o1Texts).not.toContain("turn two")
+  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toContain("turn two")
 
-  expect(cardTreeStore.cards[o1]?.status).toBe("running")
+  expect(cardTreeStore.cards[o1]?.status).toBe("completed")
+  expect(cardTreeStore.cards[o2]?.status).toBe("running")
   expect(cardTreeStore.cards[o1]?.sessionID).toBe(ROOT_SID)
   expect(cardTreeStore.cards[o1]?.messageID).toBe("msg_o1")
+  expect(cardTreeStore.cards[o2]?.sessionID).toBe(ROOT_SID)
+  expect(cardTreeStore.cards[o2]?.messageID).toBe("msg_o2")
 })
 
-test("late child agent event does not split an already-arrived orchestrator session card", () => {
+test("late child agent event restores chronological orchestrator card order", () => {
   seedTurnBoard("out-of-order interleave turns")
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_late_o1`
@@ -1748,12 +1751,12 @@ test("late child agent event does not split an already-arrived orchestrator sess
   })
 
   const ordered = cardTreeStore.order.filter((id) => id === o1 || id === childCard || id === o2)
-  expect(ordered).toEqual([o1, childCard])
-  expect(cardTreeStore.cards[o2]).toBeUndefined()
-  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toContain("turn two after late child")
+  expect(ordered).toEqual([o1, childCard, o2])
+  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).not.toContain("turn two after late child")
+  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toContain("turn two after late child")
 })
 
-test("consecutive messages from the same agent stay in one card", () => {
+test("consecutive messages from the same agent stay in separate message cards", () => {
   seedTurnBoard("consecutive turns")
 
   const cardID = `assistant:session:${ROOT_SID}:message:msg_c1`
@@ -1816,16 +1819,12 @@ test("consecutive messages from the same agent stay in one card", () => {
   })
 
   expect(cardTreeStore.cards[cardID]).toBeDefined()
-  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
-  expect(cardTreeStore.order.filter((id) => id === cardID || id === secondCardID)).toEqual([cardID])
-  expect((cardTreeStore.cards[cardID]?.parts || []).map((p: any) => p.text)).toEqual([
-    "first consecutive turn",
-    undefined,
-    "second consecutive turn",
-  ])
-  expect(cardTreeStore.cards[cardID]?.parts.some((p: any) => p.type === "boundary" && p.role === "assistant")).toBe(
-    true,
-  )
+  expect(cardTreeStore.cards[secondCardID]).toBeDefined()
+  expect(cardTreeStore.order.filter((id) => id === cardID || id === secondCardID)).toEqual([cardID, secondCardID])
+  expect((cardTreeStore.cards[cardID]?.parts || []).map((p: any) => p.text)).toEqual(["first consecutive turn"])
+  expect((cardTreeStore.cards[secondCardID]?.parts || []).map((p: any) => p.text)).toEqual(["second consecutive turn"])
+  expect(cardTreeStore.cards[cardID]?.parts.some((p: any) => p.type === "boundary")).toBe(false)
+  expect(cardTreeStore.cards[secondCardID]?.parts.some((p: any) => p.type === "boundary")).toBe(false)
 })
 
 test("repeated message.updated for the same agent message does not reset card start time", () => {
@@ -1950,11 +1949,13 @@ test("explore channel owns the card while resolvedRole owns in-card authorship",
 
   const card = cardTreeStore.cards[cardID]
   expect(card).toBeDefined()
-  expect(cardTreeStore.cards[secondCardID]).toBeUndefined()
+  expect(cardTreeStore.cards[secondCardID]).toBeDefined()
   expect(card?.stage).toBe("explore")
   expect(card?.title).toBe("chat.role.explore")
-  expect(card?.parts.map((part: any) => part.text)).toEqual(["inspect repo", undefined, "repo inspected"])
-  expect(card?.parts.some((part: any) => part.type === "boundary" && part.role === "orchestrator")).toBe(true)
+  expect(card?.parts.map((part: any) => part.text)).toEqual(["inspect repo"])
+  expect(card?.parts.some((part: any) => part.type === "boundary")).toBe(false)
+  expect(cardTreeStore.cards[secondCardID]?.parts.map((part: any) => part.text)).toEqual(["repo inspected"])
+  expect(cardTreeStore.cards[secondCardID]?.parts.some((part: any) => part.type === "boundary")).toBe(false)
 })
 
 test("mission session splits user turns from mission agent turns", () => {
@@ -2037,7 +2038,7 @@ test("mission session splits user turns from mission agent turns", () => {
   expect(cardTreeStore.order).toContain(missionCard!.id)
 })
 
-test("phase-absorbed agent does not split a later orchestrator turn", () => {
+test("phase-absorbed agent does not merge surrounding orchestrator turns", () => {
   seedTurnBoard("phase interruption")
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_phase_i1`
@@ -2100,10 +2101,25 @@ test("phase-absorbed agent does not split a later orchestrator turn", () => {
       }),
     },
   })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      ...stampedPartEvent("assistant", {
+        id: "prt_phase_i2",
+        messageID: "msg_phase_i2",
+        sessionID: ROOT_SID,
+        type: "text",
+        text: "orchestrator after phase",
+      }),
+    },
+  })
 
   expect(cardTreeStore.cards[o1]).toBeDefined()
-  expect(cardTreeStore.cards[o2]).toBeUndefined()
-  expect(cardTreeStore.order.filter((id) => id === o1 || id === o2)).toEqual([o1])
+  expect(cardTreeStore.cards[o2]).toBeDefined()
+  expect(cardTreeStore.order.filter((id) => id === o1 || id === o2)).toEqual([o1, o2])
+  expect((cardTreeStore.cards[o1]?.parts || []).map((p: any) => p.text)).toEqual(["orchestrator before phase"])
+  expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).toEqual(["orchestrator after phase"])
 })
 
 test("phase-absorbed empty build messages do not create timestamp-only boundaries", () => {
@@ -2483,7 +2499,7 @@ test("late part.delta lands on the original turn card after a newer message star
   expect((cardTreeStore.cards[o2]?.parts || []).map((p: any) => p.text)).not.toContain("late tail")
 })
 
-test("session.status terminal updates the complete session card", () => {
+test("session.status terminal updates the active message card", () => {
   seedTurnBoard("status active only")
 
   const o1 = `assistant:session:${ROOT_SID}:message:msg_s1`
@@ -2543,11 +2559,12 @@ test("session.status terminal updates the complete session card", () => {
   })
 
   expect(cardTreeStore.cards[o1]?.status).toBe("completed")
-  expect(cardTreeStore.cards[o1]?.terminalReason).toBe("completed")
-  expect(cardTreeStore.cards[o2]).toBeUndefined()
+  expect(cardTreeStore.cards[o1]?.terminalReason).toBeUndefined()
+  expect(cardTreeStore.cards[o2]?.status).toBe("completed")
+  expect(cardTreeStore.cards[o2]?.terminalReason).toBe("completed")
 })
 
-test("hydrate keeps consecutive same-agent messages in one card", () => {
+test("hydrate keeps consecutive same-agent messages in separate message cards", () => {
   resetWriter()
   setBoardStore("board", {
     task: {
@@ -2582,10 +2599,11 @@ test("hydrate keeps consecutive same-agent messages in one card", () => {
   const h1 = `assistant:session:${ROOT_SID}:message:msg_h1`
   const h2 = `assistant:session:${ROOT_SID}:message:msg_h2`
   expect(cardTreeStore.order).toContain(h1)
-  expect(cardTreeStore.order).not.toContain(h2)
+  expect(cardTreeStore.order).toContain(h2)
   expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "first turn")).toBe(true)
-  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "second turn")).toBe(true)
-  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.type === "boundary" && p.role === "assistant")).toBe(true)
-  expect(cardTreeStore.cards[h2]).toBeUndefined()
+  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.text === "second turn")).toBe(false)
+  expect(cardTreeStore.cards[h1]?.parts.some((p: any) => p.type === "boundary")).toBe(false)
+  expect(cardTreeStore.cards[h2]?.parts.some((p: any) => p.text === "second turn")).toBe(true)
+  expect(cardTreeStore.cards[h2]?.parts.some((p: any) => p.type === "boundary")).toBe(false)
   expect(cardTreeStore.cards[`assistant:session:${ROOT_SID}`]).toBeUndefined()
 })

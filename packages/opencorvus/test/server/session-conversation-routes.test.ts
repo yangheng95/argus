@@ -67,6 +67,74 @@ describe("session conversation routes", () => {
           type: "text",
           text: "wake mission",
         })
+        const mission = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          time: { created: created + 1 },
+          parentID: user.id,
+          agent: "mission",
+          modelID: "test-model",
+          providerID: "test",
+          path: { cwd: tmp.path, root: tmp.path },
+          cost: 0,
+          tokens: {
+            total: 0,
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        } as any)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: mission.id,
+          type: "text",
+          text: "mission awake",
+        })
+        const user2 = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: created + 2 },
+          parentID: mission.id,
+          agent: "user",
+          model: { providerID: "test", modelID: "test-model" },
+        } as any)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: user2.id,
+          type: "text",
+          text: "continue mission",
+        })
+        const mission2 = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          time: { created: created + 3 },
+          parentID: user2.id,
+          agent: "mission",
+          modelID: "test-model",
+          providerID: "test",
+          path: { cwd: tmp.path, root: tmp.path },
+          cost: 0,
+          tokens: {
+            total: 0,
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        } as any)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: mission2.id,
+          type: "text",
+          text: "mission continues",
+        })
 
         const response = await Server.App().request(`/session/${session.id}/conversation`, {
           headers: { "x-opencorvus-directory": tmp.path },
@@ -83,10 +151,22 @@ describe("session conversation routes", () => {
         expect(body.timeline).toEqual([])
         expect(body.events).toEqual([])
         expect(body.agentView).toEqual(body.view)
-        expect(body.transcript).toHaveLength(1)
+        expect(body.transcript).toHaveLength(4)
         expect(body.transcript[0].info.channel).toBe("main")
         expect(body.transcript[0].info.resolvedRole).toBe("user")
+        expect(body.transcript.map((message: any) => [message.info.id, message.info.channel])).toEqual([
+          [user.id, "main"],
+          [mission.id, "mission"],
+          [user2.id, "main"],
+          [mission2.id, "mission"],
+        ])
         expect(body.view.topLevelSessionIDs).toContain(session.id)
+        expect(body.view.messages.map((message: any) => [message.messageID, message.stage])).toEqual([
+          [user.id, "user"],
+          [mission.id, "mission"],
+          [user2.id, "user"],
+          [mission2.id, "mission"],
+        ])
       },
     })
   })
@@ -101,11 +181,12 @@ describe("session conversation routes", () => {
           title: "Right sidebar",
           metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
         })
+        const created = Date.now()
         const user = await Session.updateMessage({
           id: Identifier.ascending("message"),
           sessionID: session.id,
           role: "user",
-          time: { created: Date.now() },
+          time: { created },
           agent: "coding-assistant",
           model: { providerID: "test", modelID: "test-model" },
         } as any)
@@ -120,7 +201,7 @@ describe("session conversation routes", () => {
           id: Identifier.ascending("message"),
           sessionID: session.id,
           role: "assistant",
-          time: { created: Date.now() + 1 },
+          time: { created: created + 1 },
           parentID: user.id,
           modelID: "test-model",
           providerID: "test",
@@ -142,6 +223,48 @@ describe("session conversation routes", () => {
           type: "text",
           text: "inspection complete",
         })
+        const user2 = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "user",
+          time: { created: created + 2 },
+          parentID: assistant.id,
+          agent: "coding-assistant",
+          model: { providerID: "test", modelID: "test-model" },
+        } as any)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: user2.id,
+          type: "text",
+          text: "inspect more",
+        })
+        const assistant2 = await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          time: { created: created + 3 },
+          parentID: user2.id,
+          modelID: "test-model",
+          providerID: "test",
+          agent: "coding-assistant",
+          path: { cwd: tmp.path, root: tmp.path },
+          cost: 0,
+          tokens: {
+            total: 0,
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        } as any)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: assistant2.id,
+          type: "text",
+          text: "second inspection complete",
+        })
 
         const response = await Server.App().request(`/session/${session.id}/conversation`, {
           headers: { "x-opencorvus-directory": tmp.path },
@@ -154,11 +277,29 @@ describe("session conversation routes", () => {
           [
             [user.id, "main", "user"],
             [assistant.id, "assistant", "assistant"],
+            [user2.id, "main", "user"],
+            [assistant2.id, "assistant", "assistant"],
           ],
         )
-        expect(transcript.map((message) => message.parts[0]?.channel)).toEqual([undefined, undefined])
-        expect(transcript.map((message) => message.parts[0]?.resolvedRole)).toEqual([undefined, undefined])
+        expect(transcript.map((message) => message.parts[0]?.channel)).toEqual([
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ])
+        expect(transcript.map((message) => message.parts[0]?.resolvedRole)).toEqual([
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ])
         expect(body.view.topLevelSessionIDs).toContain(session.id)
+        expect(body.view.messages.map((message: any) => [message.messageID, message.stage])).toEqual([
+          [user.id, "user"],
+          [assistant.id, "assistant"],
+          [user2.id, "user"],
+          [assistant2.id, "assistant"],
+        ])
       },
     })
   })

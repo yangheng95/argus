@@ -67,6 +67,15 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
       lastDisplayMessageID: "msg_build",
     }),
   )
+  expect(view.messages.map((message) => [message.messageID, message.stage, message.placement])).toEqual([
+    ["msg_user", "user", "top_level"],
+    ["msg_executor", "executor", "hidden"],
+    ["msg_build", "build", "goal_phase"],
+  ])
+  expect(view.messages.find((message) => message.messageID === "msg_build")?.phase).toEqual({
+    stepID: "build",
+    phaseID: "build",
+  })
 })
 
 test("projectConversationView tracks the last message with displayable content", () => {
@@ -108,6 +117,59 @@ test("projectConversationView tracks the last message with displayable content",
       lastDisplayMessageID: "msg_display",
     }),
   )
+  expect(view.messages.map((message) => message.messageID)).toEqual(["msg_display"])
+})
+
+test("projectConversationView preserves display message identity across shared-session turns", () => {
+  const transcript = [
+    {
+      info: {
+        id: "msg_user_1",
+        sessionID: "ses_shared",
+        channel: "main",
+        time: { created: 10 },
+      },
+      parts: [{ type: "text", text: "first user" }],
+    },
+    {
+      info: {
+        id: "msg_mission_1",
+        sessionID: "ses_shared",
+        channel: "mission",
+        time: { created: 20 },
+      },
+      parts: [{ type: "text", text: "first mission" }],
+    },
+    {
+      info: {
+        id: "msg_user_2",
+        sessionID: "ses_shared",
+        channel: "main",
+        time: { created: 30 },
+      },
+      parts: [{ type: "text", text: "second user" }],
+    },
+    {
+      info: {
+        id: "msg_mission_2",
+        sessionID: "ses_shared",
+        channel: "mission",
+        time: { created: 40 },
+      },
+      parts: [{ type: "text", text: "second mission" }],
+    },
+  ]
+
+  const view = projectConversationView({}, transcript)
+
+  expect(view.sessions).toHaveLength(1)
+  expect(view.sessions[0]?.messageIDs).toEqual(["msg_user_1", "msg_mission_1", "msg_user_2", "msg_mission_2"])
+  expect(view.messages.map((message) => [message.messageID, message.stage, message.sessionID])).toEqual([
+    ["msg_user_1", "user", "ses_shared"],
+    ["msg_mission_1", "mission", "ses_shared"],
+    ["msg_user_2", "user", "ses_shared"],
+    ["msg_mission_2", "mission", "ses_shared"],
+  ])
 })
 
 test("projectConversationView keeps lifecycle-only events out of display sessions", () => {
@@ -134,6 +196,7 @@ test("projectConversationView keeps lifecycle-only events out of display session
 
   expect(view.topLevelSessionIDs).toEqual([])
   expect(view.sessions).toEqual([])
+  expect(view.messages).toEqual([])
 })
 
 test("conversationMessageHasDisplay rejects envelope-only and control-only messages", () => {

@@ -16,9 +16,21 @@ export interface ConversationSessionView {
   phase?: ConversationPhaseLocation
 }
 
+export interface ConversationMessageView {
+  messageID: string
+  sessionID: string
+  stage: string
+  parentSessionID?: string
+  goalID?: string
+  time: number
+  placement: ConversationSessionView["placement"]
+  phase?: ConversationPhaseLocation
+}
+
 export interface ConversationView {
   topLevelSessionIDs: string[]
   sessions: ConversationSessionView[]
+  messages: ConversationMessageView[]
 }
 
 interface ConversationLifecycleEvent {
@@ -87,6 +99,7 @@ export function projectConversationView(
   )
 
   const bySession = new Map<string, ConversationSessionView>()
+  const messages: ConversationMessageView[] = []
   for (const message of sorted) {
     const info = message?.info
     const messageID = String(info?.id || "")
@@ -102,6 +115,20 @@ export function projectConversationView(
     const parentSessionID = String(info?.parentSessionID || "")
     const goalID = String(info?.goalID || "")
     const displayMessageID = conversationMessageHasDisplay(message) ? messageID : ""
+    const phase = phaseLocation(board, stage)
+    const placement = placementOf(board, stage, goalID)
+    if (displayMessageID) {
+      messages.push({
+        messageID,
+        sessionID,
+        stage,
+        parentSessionID: parentSessionID || undefined,
+        goalID: goalID || undefined,
+        time: created,
+        placement,
+        phase,
+      })
+    }
     const existing = bySession.get(sessionID)
     if (existing) {
       existing.messageIDs.push(messageID)
@@ -111,7 +138,6 @@ export function projectConversationView(
       if (!existing.goalID && goalID) existing.goalID = goalID
       continue
     }
-    const phase = phaseLocation(board, stage)
     bySession.set(sessionID, {
       sessionID,
       stage,
@@ -121,7 +147,7 @@ export function projectConversationView(
       lastDisplayMessageID: displayMessageID || undefined,
       firstMessageTime: created,
       lastMessageTime: created,
-      placement: placementOf(board, stage, goalID),
+      placement,
       phase,
     })
   }
@@ -133,5 +159,6 @@ export function projectConversationView(
   return {
     topLevelSessionIDs,
     sessions,
+    messages,
   }
 }

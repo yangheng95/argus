@@ -972,9 +972,21 @@ export const TaskConversationSessionView = z.object({
   phase: TaskConversationPhaseLocation.optional(),
 })
 
+export const TaskConversationMessageView = z.object({
+  messageID: z.string(),
+  sessionID: z.string(),
+  stage: z.string(),
+  parentSessionID: z.string().optional(),
+  goalID: z.string().optional(),
+  time: z.number(),
+  placement: z.enum(["top_level", "goal_phase", "hidden", "filtered"]),
+  phase: TaskConversationPhaseLocation.optional(),
+})
+
 export const TaskConversationView = z.object({
   topLevelSessionIDs: z.array(z.string()),
   sessions: TaskConversationSessionView.array(),
+  messages: TaskConversationMessageView.array(),
 })
 
 export const TaskConversationEventReplay = z.object({

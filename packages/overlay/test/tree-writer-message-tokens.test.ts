@@ -216,7 +216,7 @@ test("hydrateConversationView keeps user and assistant turns on the real timelin
   ])
 })
 
-test("message regroup only reuses the current semantic run within a shared session", async () => {
+test("message regroup keeps every displayable non-phase message on its own card", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
     goals: [],
@@ -253,6 +253,7 @@ test("message regroup only reuses the current semantic run within a shared sessi
 
   expect(cardTreeStore.order.filter((id) => id.includes(`:session:${SID}:message:`))).toEqual([
     `assistant:session:${SID}:message:msg_group_assistant_1`,
+    `assistant:session:${SID}:message:msg_group_assistant_2`,
     `user:session:${SID}:message:msg_group_user_1`,
     `assistant:session:${SID}:message:msg_group_assistant_3`,
   ])
@@ -260,7 +261,12 @@ test("message regroup only reuses the current semantic run within a shared sessi
     cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_assistant_1`]?.parts.map(
       (part: any) => part.messageID,
     ),
-  ).toEqual(["msg_group_assistant_1", "msg_group_assistant_2", "msg_group_assistant_2"])
+  ).toEqual(["msg_group_assistant_1"])
+  expect(
+    cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_assistant_2`]?.parts.map(
+      (part: any) => part.messageID,
+    ),
+  ).toEqual(["msg_group_assistant_2"])
 })
 
 test("handleMessageUpdated projects the actual assistant model from message info", async () => {
@@ -292,7 +298,7 @@ test("handleMessageUpdated projects the actual assistant model from message info
   })
 })
 
-test("grouped assistant card displays latest real model from grouped messages", async () => {
+test("separate assistant cards display their own real model", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
     goals: [],
@@ -323,15 +329,21 @@ test("grouped assistant card displays latest real model from grouped messages", 
     }),
   )
 
-  const cardID = `assistant:session:${SID}:message:msg_model_group_a`
-  expect(cardTreeStore.cards[cardID]?.model).toEqual({
+  const firstCardID = `assistant:session:${SID}:message:msg_model_group_a`
+  const secondCardID = `assistant:session:${SID}:message:msg_model_group_b`
+  expect(cardTreeStore.cards[firstCardID]?.model).toEqual({
+    providerID: "hexin",
+    modelID: "old-model",
+    display: "hexin/old-model",
+  })
+  expect(cardTreeStore.cards[secondCardID]?.model).toEqual({
     providerID: "openai-compatible",
     modelID: "new-model",
     display: "openai-compatible/new-model",
   })
 })
 
-test("grouped assistant card clears model when latest assistant message has no real model fields", async () => {
+test("separate assistant card with no model fields does not clear the previous card model", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
     goals: [],
@@ -360,8 +372,14 @@ test("grouped assistant card clears model when latest assistant message has no r
     }),
   )
 
-  const cardID = `assistant:session:${SID}:message:msg_model_missing_a`
-  expect(cardTreeStore.cards[cardID]?.model).toBeUndefined()
+  const firstCardID = `assistant:session:${SID}:message:msg_model_missing_a`
+  const secondCardID = `assistant:session:${SID}:message:msg_model_missing_b`
+  expect(cardTreeStore.cards[firstCardID]?.model).toEqual({
+    providerID: "hexin",
+    modelID: "old-model",
+    display: "hexin/old-model",
+  })
+  expect(cardTreeStore.cards[secondCardID]?.model).toBeUndefined()
 })
 
 test("handleMessageUpdated leaves card.usage unset for assistant messages with zero usage", async () => {
@@ -473,7 +491,7 @@ test("hydrateConversationView restores actual model from transcript message info
   })
 })
 
-test("context token hint uses the latest grouped message instead of cumulative spend", async () => {
+test("context token hint stays scoped to each message card", async () => {
   setBoardStore("board", {
     task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
     goals: [],
@@ -504,16 +522,24 @@ test("context token hint uses the latest grouped message instead of cumulative s
     }),
   )
 
-  const cardID = `assistant:session:${SID}:message:msg_group_a`
-  const card = cardTreeStore.cards[cardID]
-  expect(card).toBeDefined()
-  expect(card!.usage).toEqual({
-    inputTokens: 1_300,
-    outputTokens: 350,
-    totalTokens: 1_650,
-    costUSD: 0.035,
+  const firstCard = cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_a`]
+  const secondCard = cardTreeStore.cards[`assistant:session:${SID}:message:msg_group_b`]
+  expect(firstCard).toBeDefined()
+  expect(secondCard).toBeDefined()
+  expect(firstCard!.usage).toEqual({
+    inputTokens: 500,
+    outputTokens: 100,
+    totalTokens: 600,
+    costUSD: 0.01,
   })
-  expect(card!.contextTokens).toBe(800)
+  expect(firstCard!.contextTokens).toBe(500)
+  expect(secondCard!.usage).toEqual({
+    inputTokens: 800,
+    outputTokens: 250,
+    totalTokens: 1_050,
+    costUSD: 0.025,
+  })
+  expect(secondCard!.contextTokens).toBe(800)
 })
 
 test("external executor cumulative usage does not masquerade as current context", async () => {

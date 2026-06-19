@@ -246,6 +246,15 @@ test("hydrateTaskConversation preserves agent rail records until the replacement
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_preserve_agents" })
   hydrateConversationAgentView("task:tsk_preserve_agents", {
+    messages: [
+      {
+        sessionID: "ses_existing_agent",
+        stage: "integrity",
+        messageID: "msg_existing",
+        time: 1_776_000_010_000,
+        placement: "top_level",
+      },
+    ],
     sessions: [
       {
         sessionID: "ses_existing_agent",
@@ -297,8 +306,17 @@ test("hydrateTaskConversation preserves agent rail records until the replacement
     transcript: [],
     timeline: [],
     events: [],
-    view: { sessions: [], topLevelSessionIDs: [] },
+    view: { sessions: [], messages: [], topLevelSessionIDs: [] },
     agentView: {
+      messages: [
+        {
+          sessionID: "ses_new_agent",
+          stage: "visual-qa",
+          messageID: "msg_visual_qa",
+          time: 1_776_000_020_000,
+          placement: "top_level",
+        },
+      ],
       sessions: [
         {
           sessionID: "ses_new_agent",
@@ -386,6 +404,15 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
             timeline: [],
             events: [],
             view: {
+              messages: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_latest",
+                  time: 1_776_000_000_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_root",
@@ -399,6 +426,22 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
               topLevelSessionIDs: ["ses_root"],
             },
             agentView: {
+              messages: [
+                {
+                  sessionID: "ses_old",
+                  stage: "integrity",
+                  messageID: "msg_old",
+                  time: 1_776_000_000_100,
+                  placement: "top_level",
+                },
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_latest",
+                  time: 1_776_000_000_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_old",
@@ -437,6 +480,15 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
             timeline: [],
             events: [],
             view: {
+              messages: [
+                {
+                  sessionID: "ses_old",
+                  stage: "integrity",
+                  messageID: "msg_old",
+                  time: 1_776_000_000_100,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_old",
@@ -544,6 +596,15 @@ test("history paging replays lifecycle-only frontend agent events without blank 
             timeline: [],
             events: [],
             view: {
+              messages: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_lifecycle_latest",
+                  time: 1_776_000_030_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_root",
@@ -557,6 +618,15 @@ test("history paging replays lifecycle-only frontend agent events without blank 
               topLevelSessionIDs: ["ses_root"],
             },
             agentView: {
+              messages: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_lifecycle_latest",
+                  time: 1_776_000_030_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_frontend_lifecycle",
@@ -599,6 +669,7 @@ test("history paging replays lifecycle-only frontend agent events without blank 
             timeline: [],
             events: [lifecycleEvent],
             view: {
+              messages: [],
               sessions: [
                 {
                   sessionID: "ses_frontend_lifecycle",
@@ -743,6 +814,15 @@ test("history paging continues when a goal phase card exists but its target mess
             timeline: [],
             events: [],
             view: {
+              messages: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_latest_phase",
+                  time: 1_776_000_010_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_root",
@@ -756,6 +836,25 @@ test("history paging continues when a goal phase card exists but its target mess
               topLevelSessionIDs: ["ses_root"],
             },
             agentView: {
+              messages: [
+                {
+                  sessionID: "ses_build_old",
+                  stage: "build",
+                  parentSessionID: "ses_root",
+                  goalID: "gol_phase",
+                  messageID: "msg_build_old",
+                  time: 1_776_000_010_200,
+                  placement: "goal_phase",
+                  phase: { stepID: "build", phaseID: "build" },
+                },
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_latest_phase",
+                  time: 1_776_000_010_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_build_old",
@@ -800,6 +899,18 @@ test("history paging continues when a goal phase card exists but its target mess
             timeline: [],
             events: [],
             view: {
+              messages: [
+                {
+                  sessionID: "ses_build_old",
+                  stage: "build",
+                  parentSessionID: "ses_root",
+                  goalID: "gol_phase",
+                  messageID: "msg_build_old",
+                  time: 1_776_000_010_200,
+                  placement: "goal_phase",
+                  phase: { stepID: "build", phaseID: "build" },
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_build_old",
@@ -948,6 +1059,15 @@ test("goal phase history can hydrate a build session directly by session id", as
             timeline: [],
             events: [],
             view: {
+              messages: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_latest_session",
+                  time: 1_776_000_020_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_root",
@@ -961,6 +1081,18 @@ test("goal phase history can hydrate a build session directly by session id", as
               topLevelSessionIDs: ["ses_root"],
             },
             agentView: {
+              messages: [
+                {
+                  sessionID: "ses_build_session",
+                  stage: "build",
+                  parentSessionID: "ses_root",
+                  goalID: "gol_phase_session",
+                  messageID: "msg_build_session",
+                  time: 1_776_000_020_200,
+                  placement: "goal_phase",
+                  phase: { stepID: "build", phaseID: "build" },
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_build_session",
@@ -998,6 +1130,18 @@ test("goal phase history can hydrate a build session directly by session id", as
             timeline: [],
             events: [],
             view: {
+              messages: [
+                {
+                  sessionID: "ses_build_session",
+                  stage: "build",
+                  parentSessionID: "ses_root",
+                  goalID: "gol_phase_session",
+                  messageID: "msg_build_session",
+                  time: 1_776_000_020_200,
+                  placement: "goal_phase",
+                  phase: { stepID: "build", phaseID: "build" },
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_build_session",
@@ -1114,6 +1258,15 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
             timeline: [],
             events: [],
             view: {
+              messages: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_lifecycle_session_latest",
+                  time: 1_776_000_040_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_root",
@@ -1127,6 +1280,15 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
               topLevelSessionIDs: ["ses_root"],
             },
             agentView: {
+              messages: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageID: "msg_lifecycle_session_latest",
+                  time: 1_776_000_040_900,
+                  placement: "top_level",
+                },
+              ],
               sessions: [
                 {
                   sessionID: "ses_frontend_session",
@@ -1169,6 +1331,7 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
             timeline: [],
             events: [lifecycleEvent],
             view: {
+              messages: [],
               sessions: [
                 {
                   sessionID: "ses_frontend_session",
