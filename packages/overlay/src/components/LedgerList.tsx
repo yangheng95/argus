@@ -4,11 +4,26 @@ import { Button } from "./ui/Button"
 export interface LedgerListProps<T> {
   items: T[]
   loading?: boolean
+  loadingLabel: string
   error?: string
   emptyLabel: string
   retryLabel?: string
   onRetry?: () => void
   children: (item: T) => JSX.Element
+}
+
+export function LedgerLoadingStatus(props: { label: string; class?: string; dataUi?: string }) {
+  const className = () => (props.class ? `ledger-skeleton ${props.class}` : "ledger-skeleton")
+  return (
+    <div class={className()} role="status" aria-live="polite" aria-busy="true" data-ui={props.dataUi ?? "ledger-loading"}>
+      <span class="ledger-loading-label">{props.label}</span>
+      <div class="ledger-skeleton-rows" aria-hidden="true">
+        <div class="ledger-skeleton-row task-list-skeleton-row" />
+        <div class="ledger-skeleton-row task-list-skeleton-row" />
+        <div class="ledger-skeleton-row task-list-skeleton-row" />
+      </div>
+    </div>
+  )
 }
 
 export function LedgerList<T>(props: LedgerListProps<T>) {
@@ -25,11 +40,7 @@ export function LedgerList<T>(props: LedgerListProps<T>) {
         </div>
       </Show>
       <Show when={props.loading}>
-        <div class="ledger-skeleton" aria-hidden="true" data-ui="ledger-loading">
-          <div class="ledger-skeleton-row" />
-          <div class="ledger-skeleton-row" />
-          <div class="ledger-skeleton-row" />
-        </div>
+        <LedgerLoadingStatus label={props.loadingLabel} />
       </Show>
       <Show when={!props.loading && props.items.length === 0 && !props.error}>
         <div class="ledger-empty" data-ui="ledger-empty">

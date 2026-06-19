@@ -772,21 +772,47 @@
   margin: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
 }
 
-.task-list-skeleton {
+.task-list-skeleton,
+.ledger-skeleton {
   display: flex;
   flex-direction: column;
   gap: var(--ui-gap-sm);
   padding: var(--ui-gap-md) var(--ui-gap-md) 0;
 }
-.task-list-skeleton-row {
+
+.ledger-skeleton-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+
+.ledger-loading-label {
+  --px-exact: 1; /* visually-hidden text uses exact 1px clipping geometry. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.task-list-skeleton-row,
+.ledger-skeleton-row {
   height: calc(48px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   background: var(--subtle-2);
 }
-.task-list-skeleton-row:nth-child(2) {
+
+.task-list-skeleton-row:nth-child(2),
+.ledger-skeleton-row:nth-child(2) {
   opacity: var(--ui-opacity-subtle);
 }
-.task-list-skeleton-row:nth-child(3) {
+
+.task-list-skeleton-row:nth-child(3),
+.ledger-skeleton-row:nth-child(3) {
   opacity: var(--ui-opacity-dim);
 }
 
