@@ -280,6 +280,38 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     assert.equal(changesTabPanelState.labelledby, changesTabPanelState.tabID)
     assert.equal(changesTabPanelState.panelVisible, true)
 
+    await page.focus(".change-row")
+    const focusedRowBeforeKeyboard = await page.$eval(".change-row", (node) => ({
+      active: document.activeElement === node,
+      expanded: node.getAttribute("aria-expanded") ?? "",
+    }))
+    assert.deepEqual(focusedRowBeforeKeyboard, { active: true, expanded: "false" })
+
+    await page.keyboard.press("Enter")
+    await page.waitForFunction(() => document.querySelector(".change-row")?.getAttribute("aria-expanded") === "true")
+    await page.waitForSelector(".change-inline-diff")
+    const enterActivationState = await page.$eval(".change-row", (node) => ({
+      active: document.activeElement === node,
+      expanded: node.getAttribute("aria-expanded") ?? "",
+      inlineDiffs: document.querySelectorAll(".change-inline-diff").length,
+    }))
+    assert.deepEqual(enterActivationState, { active: true, expanded: "true", inlineDiffs: 1 })
+
+    const keyboardScreenshotPath = resolve(".scratch/file-changes-keyboard-row-focus.png")
+    mkdirSync(dirname(keyboardScreenshotPath), { recursive: true })
+    const keyboardChangesPanel = await page.$(".file-changes-panel")
+    assert.ok(keyboardChangesPanel)
+    writeFileSync(keyboardScreenshotPath, await keyboardChangesPanel.screenshot({}))
+
+    await page.keyboard.press("Space")
+    await page.waitForFunction(() => document.querySelector(".change-row")?.getAttribute("aria-expanded") === "false")
+    const spaceActivationState = await page.$eval(".change-row", (node) => ({
+      active: document.activeElement === node,
+      expanded: node.getAttribute("aria-expanded") ?? "",
+      inlineDiffs: document.querySelectorAll(".change-inline-diff").length,
+    }))
+    assert.deepEqual(spaceActivationState, { active: true, expanded: "false", inlineDiffs: 0 })
+
     const initialFilterControlState = await page.evaluate(() => {
       const strip = document.querySelector<HTMLElement>(".changes-status-strip")
       const options = Array.from(

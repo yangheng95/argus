@@ -144,6 +144,8 @@ function ChangeRow(props: {
       onClick={open}
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return
+        event.preventDefault()
+        event.stopPropagation()
         open()
       }}
     >
