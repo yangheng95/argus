@@ -233,8 +233,7 @@ button.s-row:focus-visible {
   padding: 0;
 }
 
-.s-toolbar > .field-input,
-.s-toolbar > input.s-toolbar-search {
+.s-toolbar > .field-input {
   flex: 1;
   min-width: calc(160px * var(--ui-scale));
 }
