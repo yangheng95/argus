@@ -21,6 +21,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-ledger-loading-status-live.md](2026-06-19-ledger-loading-status-live.md)                           | Ledger Loading Status Live |
 | [2026-06-19-retire-change-subline-residue.md](2026-06-19-retire-change-subline-residue.md)                     | Retire Change Subline Residue |
 | [2026-06-19-interaction-card-textarea-primitive.md](2026-06-19-interaction-card-textarea-primitive.md)         | Interaction Card Textarea Primitive |
+| [2026-06-19-workspace-split-menu-focus-ring.md](2026-06-19-workspace-split-menu-focus-ring.md)                 | Workspace Split Menu Focus Ring |
 | [2026-06-19-markdown-syntax-theme-contrast.md](2026-06-19-markdown-syntax-theme-contrast.md) | Markdown Syntax Theme Contrast |
 | [2026-06-19-file-changes-light-contrast-runtime-guard.md](2026-06-19-file-changes-light-contrast-runtime-guard.md) | File Changes Light Contrast Runtime Guard |
 | [2026-06-19-agent-models-i18n-source.md](2026-06-19-agent-models-i18n-source.md)                               | Agent Models i18n Source |
