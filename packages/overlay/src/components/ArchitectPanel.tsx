@@ -43,7 +43,7 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
   return (
     <div class="arch-panel">
       <Show when={props.isGenerating && !props.architect}>
-        <div class="arch-generating">
+        <div class="arch-generating" role="status" aria-live="polite" aria-busy="true">
           <span class="card__spinner" />
           <span class="arch-generating-label">{t("workflow.architect_generating")}</span>
         </div>

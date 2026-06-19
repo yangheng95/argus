@@ -51,7 +51,7 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
       {/* State 1: Generating — show streaming messages */}
       <Show when={props.isGenerating && !hasData()}>
         <div class="req-streaming">
-          <div class="req-streaming-indicator">
+          <div class="req-streaming-indicator" role="status" aria-live="polite" aria-busy="true">
             <span class="card__spinner" />
             <span class="req-streaming-label">{t("workflow.requirements_generating")}</span>
           </div>

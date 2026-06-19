@@ -1,0 +1,240 @@
+import assert from "node:assert/strict"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
+import test from "node:test"
+
+import { launchBrowser } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
+
+await ensureOverlayDist()
+
+const enUSMessages = JSON.parse(readFileSync(resolve("packages/overlay/src/i18n/en-US.json"), "utf8")) as Record<
+  string,
+  string
+>
+
+function route(url: URL) {
+  return url.pathname.replace(/\/+$/, "") || "/"
+}
+
+function send(value: unknown, init?: ResponseInit) {
+  return new Response(JSON.stringify(value), {
+    ...init,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...(init?.headers || {}),
+    },
+  })
+}
+
+function eventStream() {
+  return new Response(":\n\n", {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
+    },
+  })
+}
+
+async function saveElementScreenshot(page: any, selector: string, filename: string) {
+  const screenshotPath = resolve(".scratch", filename)
+  mkdirSync(dirname(screenshotPath), { recursive: true })
+  const element = await page.$(selector)
+  assert.ok(element, `${selector} should exist before screenshot`)
+  writeFileSync(screenshotPath, await element.screenshot({}))
+  return screenshotPath
+}
+
+test("workflow generating panels expose live busy status regions", async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
+  const now = Date.now()
+  const taskID = "task-workflow-generating-status"
+  const projectRoot = "D:/overlay/workspace/workflow-status"
+  const task = {
+    id: taskID,
+    title: "Workflow generating status",
+    directory: projectRoot,
+    status: "running",
+    sessionID: "session-workflow-generating-status",
+    time: { created: now - 30_000, started: now - 25_000, updated: now - 1_000 },
+  }
+  const board = {
+    snapshotVersion: "workflow-generating-status-board",
+    lastSequence: 0,
+    task,
+    run: { executor: "opencorvus", phase: "requirements", status: "active" },
+    overview: {
+      headline: "Workflow generating status",
+      summary: "Exercise workflow generating live-region contracts.",
+      controls: {},
+    },
+    workflow: {
+      id: "pipeline",
+      label: "Pipeline",
+      steps: [
+        { id: "frontend_research", label: "Frontend Research", status: "running" },
+        { id: "requirements", label: "Requirements", status: "running" },
+        { id: "architect", label: "Architect", status: "running" },
+        { id: "build", label: "Build", status: "pending" },
+      ],
+    },
+    requirements: [],
+    goalWorkflows: [],
+    interactions: [],
+  }
+
+  const server = await startBrowserFixture(async (req) => {
+    const url = new URL(req.url)
+    const path = route(url)
+    if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+    if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+    const staticResponse = await overlayStaticResponse(path)
+    if (staticResponse) return staticResponse
+    if (path === "/global/health") return send({ version: "workflow-generating-status" })
+    if (path === "/global/projects/discover") return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
+    if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/mission") return send([])
+    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
+    if (path === "/project/current/worktrees") return send([])
+    if (path === "/path") return send({ directory: projectRoot })
+    if (path === "/vcs")
+      return send({
+        branch: "workflow-status",
+        clean: true,
+        dirty: false,
+        staged: 0,
+        modified: 0,
+        untracked: 0,
+        conflicts: 0,
+        ahead: 0,
+        behind: 0,
+      })
+    if (path === "/provider") return send({ all: [], connected: [], default: {} })
+    if (path === "/provider/auth") return send({})
+    if (path === "/agent") return send([])
+    if (path === "/config/providers") return send({ providers: [], default: {} })
+    if (path === "/config/prompt") return send([])
+    if (path === "/config/prompt-profile")
+      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+    if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
+    if (path === "/channel") return send([])
+    if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
+    if (path === "/skill/directories")
+      return send({
+        global_config: "D:/skills/config",
+        managed_skills: "D:/skills/config/skills-market",
+        remote_cache: "D:/skills/cache",
+      })
+    if (path === "/mcp") return send({})
+    if (path === "/session") return send([])
+    if (path === "/control/timeline") return send([])
+    if (path === `/task/${taskID}/board`) return send(board, { headers: { etag: `"board-${now}"` } })
+    if (path === `/task/${taskID}/conversation`)
+      return send({
+        board,
+        transcript: [],
+        timeline: [],
+        events: [],
+        view: { sessions: [] },
+        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+        lastSequence: 0,
+      })
+    if (path === `/task/${taskID}/operator-model-context`)
+      return send({ taskID, sessionID: "session-workflow-generating-status", agent: "orchestrator", model: null })
+    if (path === `/task/${taskID}/browser-preview`) return send({ target: null, verification: null })
+    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+    if (path === `/task/${taskID}/transcript`) return send([])
+    if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
+    if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
+    if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
+    if (path === "/log" && req.method === "POST") return send({ ok: true })
+    return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
+  })
+
+  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  try {
+    const page = await browser.newPage()
+    const errors: string[] = []
+    page.on("pageerror", (error: any) => errors.push(`pageerror: ${error.message || String(error)}`))
+    page.on("console", (message: any) => {
+      if (message.type() === "error") errors.push(`console: ${message.text()}`)
+    })
+    page.on("response", (response: any) => {
+      if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
+    })
+    await page.setViewport({ width: 1280, height: 860 })
+    await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
+      localStorage.setItem("oc_locale", "en-US")
+      localStorage.setItem("oc_theme", "light")
+      localStorage.setItem("oc_server_url", seed.serverUrl)
+      localStorage.setItem("oc_auto_server", "false")
+      localStorage.setItem("oc_directory", seed.projectRoot)
+      localStorage.setItem("oc_workspace_directory", seed.projectRoot)
+      localStorage.setItem("oc_workspace_task", seed.taskID)
+    }, { serverUrl: server.origin, taskID, projectRoot })
+
+    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+    await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]', {
+      visible: true,
+      timeout: 15_000,
+    })
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+    await page.waitForSelector('[data-ui="workflow-section-stack"]', { visible: true, timeout: 15_000 })
+    await page.waitForSelector("#frontendResearchSection .req-streaming-indicator", { visible: true, timeout: 15_000 })
+    await page.waitForSelector("#requirementsSection .req-streaming-indicator", { visible: true, timeout: 15_000 })
+    await page.waitForSelector("#architectSection .arch-generating", { visible: true, timeout: 15_000 })
+
+    const statuses = await page.evaluate(() => {
+      const read = (selector: string) => {
+        const node = document.querySelector<HTMLElement>(selector)
+        if (!node) throw new Error(`missing ${selector}`)
+        return {
+          role: node.getAttribute("role"),
+          live: node.getAttribute("aria-live"),
+          busy: node.getAttribute("aria-busy"),
+          text: node.textContent?.trim() ?? "",
+          spinner: Boolean(node.querySelector(".card__spinner")),
+        }
+      }
+      return {
+        frontendResearch: read("#frontendResearchSection .req-streaming-indicator"),
+        requirements: read("#requirementsSection .req-streaming-indicator"),
+        architect: read("#architectSection .arch-generating"),
+      }
+    })
+
+    assert.deepEqual(statuses.frontendResearch, {
+      role: "status",
+      live: "polite",
+      busy: "true",
+      text: enUSMessages["workflow.frontend_research_generating"],
+      spinner: true,
+    })
+    assert.deepEqual(statuses.requirements, {
+      role: "status",
+      live: "polite",
+      busy: "true",
+      text: enUSMessages["workflow.requirements_generating"],
+      spinner: true,
+    })
+    assert.deepEqual(statuses.architect, {
+      role: "status",
+      live: "polite",
+      busy: "true",
+      text: enUSMessages["workflow.architect_generating"],
+      spinner: true,
+    })
+    assert.deepEqual(errors, [])
+
+    const screenshot = await saveElementScreenshot(page, ".workflow-section-stack", "workflow-generating-status-live.png")
+    assert.ok(screenshot.endsWith("workflow-generating-status-live.png"))
+  } finally {
+    await browser.close()
+    await server.close()
+  }
+})
