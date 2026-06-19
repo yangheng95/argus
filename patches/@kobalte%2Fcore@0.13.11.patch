@@ -61,7 +61,7 @@ diff --git a/dist/index-42fe8e12.d.ts b/dist/index-42fe8e12.d.ts
 index 5d986b2..197580f 100644
 --- a/dist/index-42fe8e12.d.ts
 +++ b/dist/index-42fe8e12.d.ts
-@@ -48,34 +48,34 @@ declare const Combobox: typeof ComboboxRoot & {
+@@ -48,37 +48,37 @@ declare const Combobox: typeof ComboboxRoot & {
  };
  
  declare const index_Combobox: typeof Combobox;
