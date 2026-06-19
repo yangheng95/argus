@@ -111,6 +111,34 @@ function MenuItem(props: {
   )
 }
 
+function MenuCheckboxItem(props: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: (checked: boolean) => void | Promise<void>
+  testid?: string
+}) {
+  return (
+    <Menubar.CheckboxItem
+      as="button"
+      type="button"
+      class="titlebar-menubar-item titlebar-menubar-checkbox"
+      checked={props.checked}
+      textValue={props.label}
+      title={props.description}
+      aria-label={props.label}
+      data-testid={props.testid}
+      onChange={(checked) => void props.onChange(checked)}
+    >
+      <span class="titlebar-menubar-checkbox-copy">
+        <span class="titlebar-menubar-item-title">{props.label}</span>
+        <span class="titlebar-menubar-item-meta">{props.description}</span>
+      </span>
+      <span class="titlebar-menubar-checkbox-indicator" aria-hidden="true" />
+    </Menubar.CheckboxItem>
+  )
+}
+
 function MenuGroup(props: { title: string; children: any }) {
   return (
     <Menubar.Group class="titlebar-menubar-group">
@@ -508,37 +536,20 @@ export function TitlebarMenubar() {
                     <MenuItem onClick={() => undefined} meta={activeTaskLabel()} disabled>
                       {t("task.status.running")}
                     </MenuItem>
-                    <label class="titlebar-menubar-toggle">
-                      <span>
-                        <span class="titlebar-menubar-item-title">{t("titlebar.auto_question")}</span>
-                        <span class="titlebar-menubar-item-meta">{t("titlebar.auto_question_hint")}</span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={(appStore.config as any)?.experimental?.auto_question === true}
-                        aria-label={t("titlebar.auto_question")}
-                        onChange={(event) =>
-                          void patchConfig({
-                            experimental: { auto_question: (event.currentTarget as HTMLInputElement).checked },
-                          })
-                        }
-                      />
-                    </label>
-                    <label class="titlebar-menubar-toggle">
-                      <span>
-                        <span class="titlebar-menubar-item-title">{t("titlebar.confirm_proposed_tasks")}</span>
-                        <span class="titlebar-menubar-item-meta">{t("titlebar.confirm_proposed_tasks_hint")}</span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={(appStore.config as any)?.experimental?.confirm_proposed_tasks === true}
-                        aria-label={t("titlebar.confirm_proposed_tasks")}
-                        data-testid="titlebar-confirm-proposed-tasks"
-                        onChange={(event) =>
-                          void handlePatchProposedTaskConfirmation((event.currentTarget as HTMLInputElement).checked)
-                        }
-                      />
-                    </label>
+                    <MenuCheckboxItem
+                      label={t("titlebar.auto_question")}
+                      description={t("titlebar.auto_question_hint")}
+                      checked={(appStore.config as any)?.experimental?.auto_question === true}
+                      onChange={(checked) => patchConfig({ experimental: { auto_question: checked } })}
+                      testid="titlebar-auto-question"
+                    />
+                    <MenuCheckboxItem
+                      label={t("titlebar.confirm_proposed_tasks")}
+                      description={t("titlebar.confirm_proposed_tasks_hint")}
+                      checked={(appStore.config as any)?.experimental?.confirm_proposed_tasks === true}
+                      onChange={handlePatchProposedTaskConfirmation}
+                      testid="titlebar-confirm-proposed-tasks"
+                    />
                     <MenuRange
                       label={t("titlebar.budget_max_executor_groups")}
                       description={t("titlebar.budget_max_executor_groups_hint")}

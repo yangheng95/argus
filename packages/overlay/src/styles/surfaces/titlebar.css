@@ -523,7 +523,6 @@
 }
 
 .titlebar-menubar-item,
-.titlebar-menubar-toggle,
 .titlebar-menubar-range {
   width: 100%;
   min-height: calc(32px * var(--ui-scale));
@@ -546,8 +545,6 @@
 .titlebar-menubar-item:hover:not(:disabled):not([data-disabled]),
 .titlebar-menubar-item[data-highlighted]:not(:disabled):not([data-disabled]),
 .titlebar-menubar-item:focus-visible,
-.titlebar-menubar-toggle:hover,
-.titlebar-menubar-toggle:focus-within,
 .titlebar-menubar-range:hover,
 .titlebar-menubar-range:focus-within {
   background: var(--surface-hover);
@@ -640,11 +637,55 @@
   white-space: nowrap;
 }
 
-.titlebar-menubar-toggle > span,
+.titlebar-menubar-checkbox-copy,
 .titlebar-menubar-range-copy {
   min-width: 0;
   display: grid;
   gap: calc(2px * var(--ui-scale));
+}
+
+.titlebar-menubar-checkbox-copy {
+  flex: 1 1 auto;
+}
+
+.titlebar-menubar-checkbox .titlebar-menubar-item-meta {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: left;
+}
+
+.titlebar-menubar-checkbox-indicator {
+  flex: none;
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--oc-border-width) solid var(--border-hover);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+  color: var(--accent);
+}
+
+.titlebar-menubar-checkbox-indicator::after {
+  content: "";
+  width: calc(4px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  border-right: var(--oc-border-width) solid currentColor;
+  border-bottom: var(--oc-border-width) solid currentColor;
+  opacity: 0;
+  transform: translateY(calc(-1px * var(--ui-scale))) rotate(45deg);
+}
+
+.titlebar-menubar-checkbox[data-checked] .titlebar-menubar-checkbox-indicator {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.titlebar-menubar-checkbox[data-checked] .titlebar-menubar-checkbox-indicator::after {
+  opacity: 1;
 }
 
 .titlebar-menubar-range-copy {
@@ -666,11 +707,6 @@
   line-height: 1;
   text-align: right;
   white-space: nowrap;
-}
-
-.titlebar-menubar-toggle input[type="checkbox"] {
-  flex: none;
-  /* `accent-color` declared globally on body (tokens/design-language.css). */
 }
 
 .titlebar-menubar-range input[type="range"] {

@@ -32,7 +32,7 @@ test("Run-menu proposed-task confirmation toggle routes through patchConfig", ()
   expect(TITLEBAR_SOURCE).toContain("titlebar.confirm_proposed_tasks")
   expect(TITLEBAR_SOURCE).toContain("handlePatchProposedTaskConfirmation")
   expect(TITLEBAR_SOURCE).toContain("confirm_proposed_tasks: enabled")
-  expect(TITLEBAR_SOURCE).toContain('data-testid="titlebar-confirm-proposed-tasks"')
+  expect(TITLEBAR_SOURCE).toContain('testid="titlebar-confirm-proposed-tasks"')
 })
 
 test("GeneralPanel no longer owns the compaction threshold control", () => {
