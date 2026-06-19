@@ -112,34 +112,43 @@ describe("readPackageMeta", () => {
 })
 
 describe("prepareOverlayUiForVsix", () => {
+  let monorepoRoot: string
   let extensionRoot: string
+  let overlayDistVite: string
   let mediaUi: string
 
-  function writeMediaUi(marker = ""): void {
-    fs.mkdirSync(path.join(mediaUi, "assets"), { recursive: true })
+  function writeUiBundle(root: string, marker = ""): void {
+    fs.mkdirSync(path.join(root, "assets"), { recursive: true })
     fs.writeFileSync(
-      path.join(mediaUi, "index.html"),
+      path.join(root, "index.html"),
       `<main class="prompt-profile-select-wrap"><button class="prompt-profile-select-trigger"></button>${marker}</main><script type="module" src="./assets/app.js"></script>`,
     )
     fs.writeFileSync(
-      path.join(mediaUi, "assets", "app.js"),
+      path.join(root, "assets", "app.js"),
       "const assetBase = window.__OPENCORVUS_ASSET_BASE__; console.log(assetBase);",
     )
   }
 
+  function writeSyncedUi(marker = ""): void {
+    writeUiBundle(overlayDistVite, marker)
+    writeUiBundle(mediaUi, marker)
+  }
+
   beforeEach(() => {
-    extensionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-vsix-overlay-ui-"))
+    monorepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "opencorvus-vsix-overlay-ui-"))
+    extensionRoot = path.join(monorepoRoot, "packages", "vscode-extension")
+    overlayDistVite = path.join(monorepoRoot, "packages", "overlay", "dist-vite")
     mediaUi = path.join(extensionRoot, "media", "ui")
   })
 
   afterEach(() => {
     try {
-      fs.rmSync(extensionRoot, { recursive: true, force: true })
+      fs.rmSync(monorepoRoot, { recursive: true, force: true })
     } catch {}
   })
 
   test("validates existing media/ui when --skip-build is used", () => {
-    writeMediaUi()
+    writeSyncedUi()
     let buildCalled = false
     prepareOverlayUiForVsix({
       extensionRoot,
@@ -152,7 +161,8 @@ describe("prepareOverlayUiForVsix", () => {
   })
 
   test("rejects stale prompt-profile native select assets even when --skip-build is used", () => {
-    writeMediaUi('<select class="prompt-profile-select"></select>')
+    writeUiBundle(overlayDistVite)
+    writeUiBundle(mediaUi, '<select class="prompt-profile-select"></select>')
     expect(() =>
       prepareOverlayUiForVsix({
         extensionRoot,
@@ -162,6 +172,18 @@ describe("prepareOverlayUiForVsix", () => {
     ).toThrow(/retired prompt-profile native select implementation/)
   })
 
+  test("rejects drifted media/ui when --skip-build is used", () => {
+    writeUiBundle(overlayDistVite)
+    writeUiBundle(mediaUi, "<span>stale bundle without retired markers</span>")
+    expect(() =>
+      prepareOverlayUiForVsix({
+        extensionRoot,
+        skipBuild: true,
+        buildAndSync: () => undefined,
+      }),
+    ).toThrow(/not synced with dist-vite/)
+  })
+
   test("runs the normal build hook before validating fresh media/ui", () => {
     let buildCalled = false
     prepareOverlayUiForVsix({
@@ -169,7 +191,7 @@ describe("prepareOverlayUiForVsix", () => {
       skipBuild: false,
       buildAndSync: () => {
         buildCalled = true
-        writeMediaUi()
+        writeSyncedUi()
       },
     })
     expect(buildCalled).toBe(true)

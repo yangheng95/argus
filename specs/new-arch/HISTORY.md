@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| [2026-06-19-vscode-media-ui-dist-vite-single-source.md](2026-06-19-vscode-media-ui-dist-vite-single-source.md) | VS Code Media UI Dist-Vite Single Source |
 | [2026-06-19-session-dialog-body-single-source.md](2026-06-19-session-dialog-body-single-source.md)             | Session Dialog Body Single Source |
 | [2026-06-19-ledger-scrollbar-visible-source.md](2026-06-19-ledger-scrollbar-visible-source.md)                 | Ledger Scrollbar Visible Source |
 | [2026-06-19-retire-mission-conversation-scrollbar-residue.md](2026-06-19-retire-mission-conversation-scrollbar-residue.md) | Retire Mission Conversation Scrollbar Residue |

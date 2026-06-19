@@ -42,6 +42,35 @@ export function assertOverlayUiBundleDir(target) {
   }
 }
 
+export function assertOverlayUiBundleSynced(source, target) {
+  const sourceRoot = path.resolve(source)
+  const targetRoot = path.resolve(target)
+  const sourceFiles = relativeFiles(sourceRoot)
+  const targetFiles = relativeFiles(targetRoot)
+
+  const sourceSet = sourceFiles.join("\n")
+  const targetSet = targetFiles.join("\n")
+  if (sourceSet !== targetSet) {
+    throw new Error(
+      `[build] overlay media/ui is not synced with dist-vite: file set differs\n` +
+        `source=${sourceRoot}\n` +
+        `target=${targetRoot}`,
+    )
+  }
+
+  for (const file of sourceFiles) {
+    const sourceBytes = fs.readFileSync(path.join(sourceRoot, file))
+    const targetBytes = fs.readFileSync(path.join(targetRoot, file))
+    if (!sourceBytes.equals(targetBytes)) {
+      throw new Error(
+        `[build] overlay media/ui is not synced with dist-vite: ${file} differs\n` +
+          `source=${sourceRoot}\n` +
+          `target=${targetRoot}`,
+      )
+    }
+  }
+}
+
 export function listFiles(dir) {
   const result = []
   for (const entry of fs.readdirSync(dir)) {
@@ -50,4 +79,10 @@ export function listFiles(dir) {
     else result.push(full)
   }
   return result
+}
+
+function relativeFiles(root) {
+  return listFiles(root)
+    .map((file) => path.relative(root, file).split(path.sep).join("/"))
+    .sort()
 }
