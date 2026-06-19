@@ -22,6 +22,7 @@ import { projectDirectoryKey } from "../utils/project-directory"
 import { Icon } from "./Icon"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { Button } from "./ui/Button"
+import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"
 
 const COMPACT_GROUP_VISIBLE_LIMIT = 5
 
@@ -346,32 +347,8 @@ function TaskRow(props: {
   const hasFailedChild = () => !!props.directChildren?.some((child) => child?.task?.status === "failed")
   const [editing, setEditing] = createSignal(false)
   const [draftTitle, setDraftTitle] = createSignal("")
-  // Hidden row actions stay out of plain Tab order; ArrowRight opens the
-  // contextual rail for keyboard users without changing the mouse hover path.
-  const [actionsKeyboardOpen, setActionsKeyboardOpen] = createSignal(false)
   let inputRef: HTMLInputElement | undefined
-  let rowRef: HTMLDivElement | undefined
-  let mainButtonRef: HTMLButtonElement | undefined
-
-  const actionButtonTabIndex = () => (actionsKeyboardOpen() ? undefined : -1)
-
-  function focusFirstAction(): void {
-    rowRef?.querySelector<HTMLButtonElement>(".task-row-actions .oc-button:not(:disabled)")?.focus()
-  }
-
-  function openActionsFromKeyboard(event: KeyboardEvent): void {
-    if (event.key !== "ArrowRight") return
-    if (!hasActions()) return
-    event.preventDefault()
-    event.stopPropagation()
-    setActionsKeyboardOpen(true)
-    queueMicrotask(focusFirstAction)
-  }
-
-  function closeActionsFromKeyboard(): void {
-    setActionsKeyboardOpen(false)
-    queueMicrotask(() => mainButtonRef?.focus())
-  }
+  const rowActions = useTaskRowActionsKeyboard(hasActions)
 
   function beginRename(): void {
     if (!canRename()) return
@@ -398,10 +375,10 @@ function TaskRow(props: {
 
   return (
     <div
-      ref={(el) => (rowRef = el)}
+      ref={(el) => rowActions.setRowRef(el)}
       class="task-row-mini global-task-row"
       data-task-row-id={pending() ? undefined : id()}
-      data-actions-keyboard-open={actionsKeyboardOpen() ? "true" : undefined}
+      data-actions-keyboard-open={rowActions.actionsKeyboardOpenData()}
       data-active={isActive() ? "true" : undefined}
       data-status={status()}
       data-notification-unread={hasUnreadNotification() ? "true" : undefined}
@@ -437,8 +414,7 @@ function TaskRow(props: {
       }}
       onDragEnd={() => props.onDragEnd?.()}
       onFocusOut={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-        setActionsKeyboardOpen(false)
+        rowActions.closeActionsOnFocusOut(event)
       }}
     >
       <span
@@ -550,7 +526,7 @@ function TaskRow(props: {
           }
         >
           <button
-            ref={(el) => (mainButtonRef = el)}
+            ref={(el) => rowActions.setMainButtonRef(el)}
             type="button"
             class="task-row-main"
             data-task-id={pending() ? undefined : id()}
@@ -559,7 +535,7 @@ function TaskRow(props: {
             aria-current={isActive() ? "page" : undefined}
             aria-keyshortcuts={hasActions() ? "ArrowRight" : undefined}
             title={rowTip()}
-            onKeyDown={openActionsFromKeyboard}
+            onKeyDown={rowActions.openActionsFromKeyboard}
             onClick={(event) => {
               event.stopPropagation()
               if (!pending() && id()) props.onSelectTask(id())
@@ -584,37 +560,32 @@ function TaskRow(props: {
         <Show when={hasActions()}>
           <div
             class="task-row-actions"
-            onKeyDown={(event) => {
-              if (event.key !== "Escape" && event.key !== "ArrowLeft") return
-              event.preventDefault()
-              event.stopPropagation()
-              closeActionsFromKeyboard()
-            }}
+            onKeyDown={rowActions.closeActionsFromKeyboardEvent}
           >
             <Show when={canStartNow()}>
               <StartNowButton
                 id={id()}
                 busy={props.startNowBusyID === id()}
                 onStartNow={props.onStartNow!}
-                tabIndex={actionButtonTabIndex()}
+                tabIndex={rowActions.actionButtonTabIndex()}
               />
             </Show>
             <Show when={canCancel()}>
-              <CancelButton id={id()} onCancel={props.onCancelTask!} tabIndex={actionButtonTabIndex()} />
+              <CancelButton id={id()} onCancel={props.onCancelTask!} tabIndex={rowActions.actionButtonTabIndex()} />
             </Show>
             <Show when={canDownload()}>
               <DownloadProjectButton
                 id={id()}
                 busy={props.downloadBusyID === id()}
                 onDownload={props.onDownloadProject!}
-                tabIndex={actionButtonTabIndex()}
+                tabIndex={rowActions.actionButtonTabIndex()}
               />
             </Show>
             <Show when={canRename() && !editing()}>
-              <RenameButton id={id()} onClick={beginRename} tabIndex={actionButtonTabIndex()} />
+              <RenameButton id={id()} onClick={beginRename} tabIndex={rowActions.actionButtonTabIndex()} />
             </Show>
             <Show when={canDelete()}>
-              <DeleteButton id={id()} onDelete={props.onDeleteTask!} tabIndex={actionButtonTabIndex()} />
+              <DeleteButton id={id()} onDelete={props.onDeleteTask!} tabIndex={rowActions.actionButtonTabIndex()} />
             </Show>
           </div>
         </Show>
