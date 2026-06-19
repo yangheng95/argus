@@ -1880,19 +1880,6 @@
   gap: var(--ui-gap-xs);
 }
 
-.integrity__reviewer-chip {
-  color: var(--text-muted);
-  font-size: var(--ui-font-tiny);
-  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
-  border-radius: var(--oc-radius-pill);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
-}
-
-.integrity__reviewer-chip[data-tone="warn"] {
-  color: var(--warn);
-  border-color: color-mix(in srgb, var(--warn) 44%, transparent);
-}
-
 .integrity__manifest-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1951,21 +1938,6 @@
 
 .integrity__issue-title::after {
   content: ": ";
-}
-
-/* Tag pill: classifies an issue/correction by intent. Default tone
-   is warn; `--action` data-attribute remaps to accent / warn / bad
-   based on what the LLM proposes. */
-.integrity__tag {
-  flex-shrink: 0;
-  font-size: var(--ui-font-tiny);
-  font-weight: var(--ui-font-weight-strong);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  padding: var(--ui-badge-padding-y) var(--ui-badge-padding-x);
-  border-radius: var(--oc-radius-pill);
-  background: var(--warn-dim);
-  color: var(--warn);
 }
 
 /* Issue type taxonomy: hard violations push the rail to `--bad`;
@@ -2058,16 +2030,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--ui-gap-xs);
-}
-
-.arch-cat-badge {
-  font-size: var(--ui-font-small);
-  font-weight: var(--ui-font-weight-strong);
-  padding: var(--ui-badge-padding-y) var(--ui-pill-padding-x);
-  border-radius: var(--oc-radius-pill);
-  background: var(--surface-hover);
-  color: var(--text-soft);
-  white-space: nowrap;
 }
 
 .arch-detail {

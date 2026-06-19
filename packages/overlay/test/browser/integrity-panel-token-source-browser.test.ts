@@ -92,9 +92,30 @@ result: concern until verified</pre>
                     </span>
                   </div>
                   <p class="integrity__reviewer-summary">The report chrome must stay readable on white surfaces.</p>
+                  <div class="integrity__reviewer-meta">
+                    <span class="oc-badge" data-tone="neutral" data-size="sm" data-ui="integrity-reviewer-chip">1 finding</span>
+                    <span class="oc-badge" data-tone="warn" data-size="sm" data-ui="integrity-reviewer-chip">1 question</span>
+                  </div>
                   <div class="integrity__manifest-meta">
                     <span>browser screenshot</span>
                     <span>light theme</span>
+                  </div>
+                </li>
+              </ul>
+              <ul class="integrity__list">
+                <li class="integrity__issue" data-type="blocking">
+                  <span class="oc-badge" data-tone="bad" data-size="sm" data-ui="integrity-issue-tag">blocking</span>
+                  <div class="integrity__issue-body">
+                    <div class="integrity__issue-desc">
+                      <span class="integrity__issue-title">White surface contrast</span>
+                      <span>Private chip chrome must not return.</span>
+                    </div>
+                  </div>
+                </li>
+                <li class="integrity__correction">
+                  <div class="integrity__correction-head">
+                    <span class="oc-badge" data-tone="neutral" data-size="sm" data-ui="integrity-repair-tag">repair-1</span>
+                    <span class="integrity__correction-reason">Use the shared Badge primitive.</span>
                   </div>
                 </li>
               </ul>
@@ -122,10 +143,14 @@ result: concern until verified</pre>
         detail: sample(".integrity__report-detail"),
         reviewer: sample(".integrity__reviewer"),
         manifest: sample(".integrity__manifest-meta span"),
+        badge: sample('.oc-badge[data-ui="integrity-issue-tag"]'),
+        retiredBadgePresent:
+          document.querySelector(".integrity__reviewer-chip") !== null || document.querySelector(".integrity__tag") !== null,
       }
     })
 
-    for (const [name, metric] of Object.entries(metrics)) {
+    const { retiredBadgePresent, ...chromeMetrics } = metrics
+    for (const [name, metric] of Object.entries(chromeMetrics)) {
       if (name !== "reviewer") {
         assert.notEqual(metric.backgroundColor, "rgba(0, 0, 0, 0)", `${name} background should resolve`)
       }
@@ -134,6 +159,8 @@ result: concern until verified</pre>
       assert.notEqual(metric.borderTopColor, "rgba(0, 0, 0, 0)", `${name} border color should resolve`)
       assert.notEqual(metric.borderRadius, "0px", `${name} radius should resolve`)
     }
+
+    assert.equal(retiredBadgePresent, false)
 
     const fixture = await page.$(".integrity-fixture")
     assert.ok(fixture)

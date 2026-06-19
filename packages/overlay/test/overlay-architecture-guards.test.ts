@@ -1540,7 +1540,6 @@ describe("overlay architecture guards", () => {
       "arch-count",
       "arch-count-label",
       "arch-categories",
-      "arch-cat-badge",
       "arch-detail",
       "arch-decisions",
       "arch-decision",
@@ -1555,6 +1554,12 @@ describe("overlay architecture guards", () => {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+
+    const architectPanel = readText(join(OVERLAY_ROOT, "src/components/ArchitectPanel.tsx"))
+    expect(architectPanel).toContain('import { Badge } from "./ui/Badge"')
+    expect(architectPanel).toContain('data-ui="architect-category-badge"')
+    expect(architectPanel).not.toContain("arch-cat-badge")
+    expect(inspectorSurface).not.toMatch(/(^|\n)\.arch-cat-badge(?:\s|\.|:|\{|,|\[|-)/)
   })
 
   test("integrity panel is owned by surfaces/inspector.css", () => {
@@ -1576,12 +1581,10 @@ describe("overlay architecture guards", () => {
       "integrity__reviewer-name",
       "integrity__reviewer-summary",
       "integrity__reviewer-meta",
-      "integrity__reviewer-chip",
       "integrity__manifest-meta",
       "integrity__issue-body",
       "integrity__issue-desc",
       "integrity__issue-title",
-      "integrity__tag",
       "integrity__correction-head",
       "integrity__correction-reason",
       "integrity__missing-title",
@@ -1608,6 +1611,15 @@ describe("overlay architecture guards", () => {
       expect(inspectorSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[|-)`))
     }
 
+    const integrityCard = readText(join(OVERLAY_ROOT, "src/components/IntegrityCard.tsx"))
+    expect(integrityCard).toContain('import { Badge } from "./ui/Badge"')
+    expect(integrityCard).toContain('data-ui="integrity-reviewer-chip"')
+    expect(integrityCard).toContain('data-ui="integrity-issue-tag"')
+    expect(integrityCard).toContain('data-ui="integrity-repair-tag"')
+    expect(integrityCard).not.toContain("integrity__reviewer-chip")
+    expect(integrityCard).not.toContain("integrity__tag")
+    expect(inspectorSurface).not.toMatch(/(^|\n)\.integrity__reviewer-chip(?:\s|\.|:|\{|,|\[|-)/)
+    expect(inspectorSurface).not.toMatch(/(^|\n)\.integrity__tag(?:\s|\.|:|\{|,|\[|-)/)
     expect(inspectorSurface).not.toMatch(/\.integrity__tag\[data-action=/)
   })
 

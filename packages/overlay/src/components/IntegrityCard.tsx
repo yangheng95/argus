@@ -1,6 +1,8 @@
 import { For, Show, createSignal } from "solid-js"
 import type { CardNode } from "../store/card-tree"
 import { t } from "../utils/i18n"
+import { Badge } from "./ui/Badge"
+import type { BadgeTone } from "./ui/Badge"
 
 type Integrity = NonNullable<CardNode["integrity"]>
 type Verdict = Integrity["verdict"]
@@ -16,6 +18,12 @@ function verdictLabel(verdict: Verdict): string {
 
 function reviewerLabel(reviewer: Reviewer): string {
   return reviewer.reviewerID || reviewer.scope || t("chat.role.integrity")
+}
+
+function integritySeverityTone(severity: "blocking" | "advisory" | undefined): BadgeTone {
+  if (severity === "blocking") return "bad"
+  if (severity === "advisory") return "warn"
+  return "neutral"
 }
 
 function ReviewerCard(props: { reviewer: Reviewer }) {
@@ -42,19 +50,19 @@ function ReviewerCard(props: { reviewer: Reviewer }) {
       <Show when={evidence().length > 0 || openQuestions().length > 0 || findingCount() > 0}>
         <div class="integrity__reviewer-meta">
           <Show when={findingCount() > 0}>
-            <span class="integrity__reviewer-chip">
+            <Badge tone="neutral" size="sm" data-ui="integrity-reviewer-chip">
               {t("integrity.reviewer_findings", { n: String(findingCount()) })}
-            </span>
+            </Badge>
           </Show>
           <Show when={evidence().length > 0}>
-            <span class="integrity__reviewer-chip">
+            <Badge tone="neutral" size="sm" data-ui="integrity-reviewer-chip">
               {t("integrity.reviewer_evidence", { n: String(evidence().length) })}
-            </span>
+            </Badge>
           </Show>
           <Show when={openQuestions().length > 0}>
-            <span class="integrity__reviewer-chip" data-tone="warn">
+            <Badge tone="warn" size="sm" data-ui="integrity-reviewer-chip">
               {t("integrity.reviewer_questions", { n: String(openQuestions().length) })}
-            </span>
+            </Badge>
           </Show>
         </div>
       </Show>
@@ -146,7 +154,9 @@ export function IntegrityBody(props: { integrity: Integrity }) {
             <For each={props.integrity.findings}>
               {(finding) => (
                 <li class="integrity__issue" data-type={finding.severity}>
-                  <span class="integrity__tag">{finding.severity}</span>
+                  <Badge tone={integritySeverityTone(finding.severity)} size="sm" data-ui="integrity-issue-tag">
+                    {finding.severity}
+                  </Badge>
                   <div class="integrity__issue-body">
                     <div class="integrity__issue-desc">
                       <Show when={finding.title}>
@@ -176,7 +186,9 @@ export function IntegrityBody(props: { integrity: Integrity }) {
               {(repair) => (
                 <li class="integrity__correction">
                   <div class="integrity__correction-head">
-                    <span class="integrity__tag">{repair.id}</span>
+                    <Badge tone={integritySeverityTone(repair.severity)} size="sm" data-ui="integrity-repair-tag">
+                      {repair.id}
+                    </Badge>
                     <span class="integrity__correction-reason">{repair.description}</span>
                   </div>
                   <ManifestMeta item={repair} />
