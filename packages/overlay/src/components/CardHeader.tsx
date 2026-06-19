@@ -9,6 +9,7 @@ import {
 import { t } from "../utils/i18n"
 import { goalRevisionLabel } from "../utils/goal-label"
 import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"
+import { CardTodoSummary } from "./CardTodoSummary"
 
 function leadingGlyph(node: CardNode): string {
   if (node.kind === "tool") return displayToolIcon(node.stage || node.title)
@@ -54,11 +55,6 @@ export function CardHeader(props: {
   const collapsedPreview = () =>
     collapsedActive() ? collapsedActivityPreviewText(collectLatestActivityText(props.node), props.node.title) : ""
   const todoSummary = () => (collapsedActive() ? collectTodoSummary(props.node) : null)
-  const todoProgressPct = () => {
-    const s = todoSummary()
-    if (!s || s.total === 0) return 0
-    return Math.round((s.completed / s.total) * 100)
-  }
   // Drives `card__head--with-meta` (flex-start vs center). Only true when
   // we render a row BELOW the title row — subtitle is inline, so it does
   // not count toward "needs vertical alignment to top".
@@ -112,27 +108,7 @@ export function CardHeader(props: {
             </span>
           </Show>
           <Show when={todoSummary()}>
-            {(summary) => (
-              <span
-                class="card__todo-summary"
-                title={`${summary().completed}/${summary().total} done${summary().current ? ` · ${summary().current}` : ""}`}
-              >
-                <span
-                  class="card__todo-progress"
-                  role="progressbar"
-                  aria-valuenow={summary().completed}
-                  aria-valuemin={0}
-                  aria-valuemax={summary().total}
-                  style={{ "--pct": `${todoProgressPct()}%` }}
-                />
-                <span class="card__todo-count">
-                  {summary().completed}/{summary().total}
-                </span>
-                <Show when={summary().current}>
-                  <span class="card__todo-current">{summary().current}</span>
-                </Show>
-              </span>
-            )}
+            {(summary) => <CardTodoSummary summary={summary()} />}
           </Show>
         </span>
       </button>

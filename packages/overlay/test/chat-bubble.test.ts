@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const CHAT_BUBBLE_TSX = readFileSync(join(import.meta.dir, "..", "src", "components", "ChatBubble.tsx"), "utf8")
+const CARD_TODO_SUMMARY_TSX = readFileSync(
+  join(import.meta.dir, "..", "src", "components", "CardTodoSummary.tsx"),
+  "utf8",
+)
 const CARD_HEADER_CHROME_TSX = readFileSync(
   join(import.meta.dir, "..", "src", "components", "CardHeaderChrome.tsx"),
   "utf8",
@@ -43,8 +47,10 @@ test("ChatBubble uses one unified IM bubble for user and agent cards with restor
   expect(CHAT_BUBBLE_TSX).toContain("collectLatestActivityText")
   expect(CHAT_BUBBLE_TSX).toContain('class="card__collapsed-preview"')
   expect(CHAT_BUBBLE_TSX).toContain("collectTodoSummary")
-  expect(CHAT_BUBBLE_TSX).toContain('class="card__todo-summary"')
-  expect(CHAT_BUBBLE_TSX).toContain('class="card__todo-progress"')
+  expect(CHAT_BUBBLE_TSX).toContain('import { CardTodoSummary } from "./CardTodoSummary"')
+  expect(CHAT_BUBBLE_TSX).toContain("<CardTodoSummary summary={summary()} />")
+  expect(CARD_TODO_SUMMARY_TSX).toContain('class="card__todo-summary"')
+  expect(CARD_TODO_SUMMARY_TSX).toContain('class="card__todo-progress"')
   expect(CHAT_BUBBLE_TSX).toContain("if (expanded()) return null")
   expect(CHAT_BUBBLE_TSX).toContain("collectTodoSummary(props.node)")
   expect(CHAT_BUBBLE_TSX).not.toContain("cardMessageSegments(props.node)")

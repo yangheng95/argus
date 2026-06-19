@@ -22,6 +22,7 @@ import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
 import { Avatar } from "./Avatar"
 import { CardDurationChip, CardHeaderChrome } from "./CardHeaderChrome"
 import { CardParts } from "./CardParts"
+import { CardTodoSummary } from "./CardTodoSummary"
 import { IntegrityBody } from "./IntegrityCard"
 import { ReviewStreamSection } from "./ReviewStreamSection"
 import { storeCardNode } from "./StoreCardNode"
@@ -155,11 +156,6 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
   const todoSummary = createMemo(() =>
     !expanded() && props.node.status !== "running" && isAgentBubble() ? collectTodoSummary(props.node) : null,
   )
-  const todoProgressPct = () => {
-    const summary = todoSummary()
-    if (!summary || summary.total === 0) return 0
-    return Math.round((summary.completed / summary.total) * 100)
-  }
 
   const traceSessionID = createMemo(() => (props.node.kind === "agent" ? props.node.sessionID || undefined : undefined))
   const directAgentSessionID = createMemo(() => {
@@ -291,27 +287,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
               </div>
             </Show>
             <Show when={todoSummary()}>
-              {(summary) => (
-                <div
-                  class="card__todo-summary"
-                  title={`${summary().completed}/${summary().total} done${summary().current ? ` · ${summary().current}` : ""}`}
-                >
-                  <span
-                    class="card__todo-progress"
-                    role="progressbar"
-                    aria-valuenow={summary().completed}
-                    aria-valuemin={0}
-                    aria-valuemax={summary().total}
-                    style={{ "--pct": `${todoProgressPct()}%` }}
-                  />
-                  <span class="card__todo-count">
-                    {summary().completed}/{summary().total}
-                  </span>
-                  <Show when={summary().current}>
-                    <span class="card__todo-current">{summary().current}</span>
-                  </Show>
-                </div>
-              )}
+              {(summary) => <CardTodoSummary summary={summary()} />}
             </Show>
           </div>
           <Show when={expanded()}>
