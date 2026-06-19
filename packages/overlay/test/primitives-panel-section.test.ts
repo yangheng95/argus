@@ -324,14 +324,17 @@ describe("TracePanel.tsx — Panel primitive adoption", () => {
   })
 
   test("event disclosure rows expose visible keyboard focus", () => {
+    expect(tsx).toMatch(/<Button[\s\S]*data-ui="trace-event-head"[\s\S]*aria-expanded=\{open\(\)\}/)
     expect(tsx).toContain('class="trace-event-head"')
+    expect(tsx).toContain('data-ui="trace-event-head"')
     expect(tsx).toContain("aria-expanded={open()}")
     expect(tsx).toContain("aria-controls={open() ? bodyElementID() : undefined}")
     expect(tsx).toContain('id={bodyElementID()}')
-    expect(cardCss).toMatch(/\.trace-event-head:hover\s*\{[^}]*background:\s*var\(--surface-hover\);/s)
-    expect(cardCss).toMatch(
-      /\.trace-event-head:focus-visible\s*\{[^}]*background:\s*var\(--surface-hover\);[^}]*box-shadow:\s*inset 0 0 0 var\(--oc-border-width\) var\(--accent\);/s,
-    )
+    expect(tsx).not.toMatch(/<button[\s\S]*class="trace-event-head"/)
+    expect(cardCss).toMatch(/\.trace-event-head\s*\{[^}]*--oc-button-height:\s*auto;/s)
+    expect(cardCss).toMatch(/\.trace-event-head\s*\{[^}]*--oc-button-gap:\s*calc\(8px \* var\(--ui-scale\)\);/s)
+    expect(cardCss).not.toMatch(/\.trace-event-head:hover\s*\{/)
+    expect(cardCss).not.toMatch(/\.trace-event-head:focus-visible\s*\{/)
   })
 
   test("uses <Panel> element", () => {

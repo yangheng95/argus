@@ -156,9 +156,13 @@ function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
   const bodyElementID = () => traceEventBodyElementID(props.event)
   return (
     <div class="trace-event" data-kind={props.event.kind} data-open={open() ? "true" : "false"}>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
+        tone="neutral"
         class="trace-event-head"
+        data-ui="trace-event-head"
         aria-expanded={open()}
         aria-controls={open() ? bodyElementID() : undefined}
         onClick={() => setOpen((v) => !v)}
@@ -173,7 +177,7 @@ function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
         <span class="trace-event-chevron" aria-hidden="true">
           <Icon name={open() ? "caret-down" : "chevron"} />
         </span>
-      </button>
+      </Button>
       <Show when={open()}>
         <pre id={bodyElementID()} class="trace-event-body">{payloadJson(props.event)}</pre>
       </Show>

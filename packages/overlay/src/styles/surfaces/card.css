@@ -1378,27 +1378,20 @@ body {
   border-bottom: 0;
 }
 .trace-event-head {
-  display: flex;
-  align-items: center;
-  gap: calc(8px * var(--ui-scale));
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(10px * var(--ui-scale));
+  --oc-button-padding-y: calc(4px * var(--ui-scale));
+  --oc-button-gap: calc(8px * var(--ui-scale));
+
   width: 100%;
-  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  background: transparent;
-  border: 0;
+  min-height: 0;
+  justify-content: flex-start;
   color: var(--text);
   font-family: var(--mono);
   font-size: calc(11.5px * var(--ui-scale));
-  cursor: pointer;
+  font-weight: var(--ui-font-weight-body);
+  line-height: 1.35;
   text-align: left;
-}
-.trace-event-head:hover {
-  background: var(--surface-hover);
-}
-
-.trace-event-head:focus-visible {
-  background: var(--surface-hover);
-  outline: none;
-  box-shadow: inset 0 0 0 var(--oc-border-width) var(--accent);
 }
 .trace-event-ts {
   color: var(--text-muted);
