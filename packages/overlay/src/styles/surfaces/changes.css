@@ -139,11 +139,11 @@
   text-transform: none;
 }
 
-.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"][data-status="added"][data-active="true"] {
+.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"][data-status="added"][data-pressed] {
   --oc-tab-bg: color-mix(in srgb, var(--diff-add-fg) 12%, transparent);
 }
 
-.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"][data-status="deleted"][data-active="true"] {
+.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"][data-status="deleted"][data-pressed] {
   --oc-tab-bg: color-mix(in srgb, var(--bad) 12%, transparent);
 }
 

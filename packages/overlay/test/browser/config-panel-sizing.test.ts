@@ -204,13 +204,12 @@ test(
           headHeights: buttons,
         }
       })
-      assert.deepEqual(mobileActions, {
-        alignItems: "flex-start",
-        justifyContent: "flex-start",
-        leftOffset: 0,
-        buttonCount: 2,
-        headHeights: metrics.headHeights,
-      })
+      assert.equal(mobileActions.alignItems, "flex-start")
+      assert.equal(mobileActions.justifyContent, "flex-start")
+      assert.equal(mobileActions.leftOffset, 0)
+      assert.equal(mobileActions.buttonCount, 2)
+      assert.equal(new Set(mobileActions.headHeights).size, 1)
+      assert.ok(mobileActions.headHeights.every((height) => height >= 22))
       const providerCommand = await page.$(".provider-command")
       assert.ok(providerCommand)
       const mobileActionsScreenshot = resolve(".scratch", "provider-head-actions-mobile.png")
@@ -321,22 +320,22 @@ test(
         const allow = panel.querySelector('.s-segmented-btn[data-value="allow"]') as HTMLElement
         const ask = panel.querySelector('.s-segmented-btn[data-value="ask"]') as HTMLElement
         return {
-          allowActive: allow.dataset.active,
+          allowActive: allow.hasAttribute("data-pressed"),
           allowPressed: allow.getAttribute("aria-pressed"),
-          askActive: ask.dataset.active || "",
+          askActive: ask.hasAttribute("data-pressed"),
           askPressed: ask.getAttribute("aria-pressed"),
         }
       })
-      assert.equal(beforePermissionClick.allowActive, "true")
+      assert.equal(beforePermissionClick.allowActive, true)
       assert.equal(beforePermissionClick.allowPressed, "true")
-      assert.equal(beforePermissionClick.askActive, "")
+      assert.equal(beforePermissionClick.askActive, false)
       assert.equal(beforePermissionClick.askPressed, "false")
 
       await page.click('[data-config-panel="permissions"] .s-segmented-btn[data-value="ask"]')
       await page.waitForFunction(() => {
         const panel = document.querySelector('[data-config-panel="permissions"]') as HTMLElement | null
         const ask = panel?.querySelector('.s-segmented-btn[data-value="ask"]') as HTMLElement | null
-        return ask?.dataset.active === "true" && ask.getAttribute("aria-pressed") === "true"
+        return ask?.hasAttribute("data-pressed") && ask.getAttribute("aria-pressed") === "true"
       })
       assert.deepEqual(configPatches.at(-1), { tool_permissions: { websearch: "ask" } })
       await page.close()

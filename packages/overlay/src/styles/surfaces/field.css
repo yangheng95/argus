@@ -127,6 +127,11 @@
   white-space: nowrap;
 }
 
+.oc-select-option[data-selected] {
+  background: var(--accent-dim);
+  color: var(--text-strong);
+}
+
 .oc-select-option[data-highlighted],
 .oc-select-option:hover {
   background: var(--surface-hover);

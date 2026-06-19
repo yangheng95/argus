@@ -61,11 +61,13 @@
   --oc-tab-color: var(--text-soft);
 }
 
-.oc-tab[data-active="true"] {
+.oc-tab[data-selected],
+.oc-tab[data-pressed] {
   --oc-tab-bg: var(--oc-tab-active-bg);
   --oc-tab-color: var(--oc-tab-active-color);
 }
 
+.oc-tab[data-highlighted],
 .oc-tab:hover {
   --oc-tab-bg: var(--surface-hover);
   --oc-tab-color: var(--text-strong);

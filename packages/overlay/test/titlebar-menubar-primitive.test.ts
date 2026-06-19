@@ -81,4 +81,10 @@ describe("TitlebarMenubar primitive ownership", () => {
   test("styles Kobalte highlighted theme radio items", () => {
     expect(CSS).toContain(".titlebar-theme-option[data-highlighted]")
   })
+
+  test("styles Kobalte checked theme radio items without local active state", () => {
+    expect(CSS).toContain(".titlebar-theme-option[data-checked]")
+    expect(CSS).not.toContain('.titlebar-theme-option[data-active="true"]')
+    expect(SOURCE).not.toContain('data-active={settingsStore.theme === item.id')
+  })
 })

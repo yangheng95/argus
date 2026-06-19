@@ -85,7 +85,7 @@ describe("settings primitives — CSS contract", () => {
   test("segmented active states wire through good/warn/bad/accent/neutral", () => {
     for (const tone of ["ok", "warn", "bad", "accent", "neutral"]) {
       expect(SETTINGS_CSS).toMatch(
-        new RegExp(`\\.s-segmented-btn\\[data-active="true"\\]\\[data-tone="${tone}"\\]\\s*\\{`),
+        new RegExp(`\\.s-segmented-btn\\[data-pressed\\]\\[data-tone="${tone}"\\]\\s*\\{`),
       )
     }
   })
@@ -199,6 +199,7 @@ describe("settings primitives — Solid exports", () => {
     expect(SEGMENTED_SRC).toContain("<KobalteToggleGroupRoot")
     expect(SEGMENTED_SRC).toContain("<KobalteToggleGroupItem")
     expect(SEGMENTED_SRC).toContain("onClick={() => props.onActivate?.(option.value)}")
+    expect(SEGMENTED_SRC).not.toContain("data-active=")
     expect(PRIMITIVES_SRC).not.toContain('role="group"')
     expect(PRIMITIVES_SRC).not.toContain("aria-pressed")
   })

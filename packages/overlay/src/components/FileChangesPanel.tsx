@@ -38,7 +38,6 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
             <TabList size="sm" tone="neutral" data-ui="file-changes-view-tabs">
               <Tab
                 value="changes"
-                active={activeView() === "changes"}
                 size="sm"
                 tone="neutral"
                 data-ui="file-changes-view-tab"
@@ -49,7 +48,6 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
               </Tab>
               <Tab
                 value="diff"
-                active={activeView() === "diff"}
                 size="sm"
                 tone="neutral"
                 data-ui="file-changes-view-tab"

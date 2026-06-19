@@ -294,31 +294,31 @@ button.s-row:focus-visible {
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
-.s-segmented-btn[data-active="true"][data-tone="ok"] {
+.s-segmented-btn[data-pressed][data-tone="ok"] {
   background: color-mix(in srgb, var(--good) 24%, transparent);
   border-color: color-mix(in srgb, var(--good) 60%, transparent);
   color: var(--good);
 }
 
-.s-segmented-btn[data-active="true"][data-tone="warn"] {
+.s-segmented-btn[data-pressed][data-tone="warn"] {
   background: color-mix(in srgb, var(--warn) 24%, transparent);
   border-color: color-mix(in srgb, var(--warn) 60%, transparent);
   color: var(--warn);
 }
 
-.s-segmented-btn[data-active="true"][data-tone="bad"] {
+.s-segmented-btn[data-pressed][data-tone="bad"] {
   background: color-mix(in srgb, var(--bad) 24%, transparent);
   border-color: color-mix(in srgb, var(--bad) 60%, transparent);
   color: var(--bad);
 }
 
-.s-segmented-btn[data-active="true"][data-tone="accent"] {
+.s-segmented-btn[data-pressed][data-tone="accent"] {
   background: color-mix(in srgb, var(--accent) 24%, transparent);
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
   color: var(--accent-hover);
 }
 
-.s-segmented-btn[data-active="true"][data-tone="neutral"] {
+.s-segmented-btn[data-pressed][data-tone="neutral"] {
   background: var(--surface);
   border-color: color-mix(in srgb, var(--border) 60%, transparent);
   color: var(--text-strong);
@@ -1069,7 +1069,7 @@ button.s-row:focus-visible {
   color: var(--text-strong);
 }
 
-.config-sidebar .oc-tab[data-active="true"] {
+.config-sidebar .oc-tab[data-selected] {
   --oc-tab-bg: transparent;
   --oc-tab-color: var(--accent-hover);
 
@@ -1078,7 +1078,7 @@ button.s-row:focus-visible {
   font-weight: var(--ui-font-weight-strong);
 }
 
-.config-sidebar .oc-tab[data-active="true"]::before {
+.config-sidebar .oc-tab[data-selected]::before {
   content: "";
   position: absolute;
   left: 0;
@@ -1101,7 +1101,7 @@ button.s-row:focus-visible {
   opacity: var(--ui-opacity-dim);
 }
 
-.config-sidebar .oc-tab[data-active="true"] .config-nav-icon {
+.config-sidebar .oc-tab[data-selected] .config-nav-icon {
   opacity: var(--ui-opacity-full);
 }
 
@@ -1125,7 +1125,7 @@ button.s-row:focus-visible {
   display: none;
 }
 
-.config-sidebar .oc-tab[data-active="true"] .config-nav-badge {
+.config-sidebar .oc-tab[data-selected] .config-nav-badge {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent-hover);
 }

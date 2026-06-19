@@ -42,7 +42,11 @@ test("app dialog task decision segmented control stays readable in light theme",
         <head>
           <style>
             ${css}
-            :root { --ui-scale: 1; }
+            :root {
+              --ui-scale: 1;
+              --dialog-drag-x: 0px;
+              --dialog-drag-y: 0px;
+            }
             body {
               min-height: 100vh;
               display: grid;
@@ -66,14 +70,14 @@ test("app dialog task decision segmented control stays readable in light theme",
                   <p>Should this new task wait in the queue or start when the directory is idle?</p>
                 </div>
                 <div class="app-dialog-decision__choices" aria-label="Start mode">
-                  <button class="app-dialog-decision__choice" data-active="true" data-tone="neutral" data-value="start" data-recommended="true" type="button">
+                  <button class="app-dialog-decision__choice" aria-pressed="true" data-pressed="" data-tone="neutral" data-value="start" data-recommended="true" type="button">
                     <span class="app-dialog-decision__choice-top">
                       <span>Start when idle</span>
                       <span class="app-dialog-decision__badge">Recommended</span>
                     </span>
                     <span class="app-dialog-decision__choice-body">Start as soon as this directory is idle; if a task is already active in the same directory, enter the directory queue.</span>
                   </button>
-                  <button class="app-dialog-decision__choice" data-tone="neutral" data-value="queue" data-recommended="false" type="button">
+                  <button class="app-dialog-decision__choice" aria-pressed="false" data-tone="neutral" data-value="queue" data-recommended="false" type="button">
                     <span class="app-dialog-decision__choice-top">
                       <span>Wait in queue</span>
                     </span>
@@ -107,10 +111,20 @@ test("app dialog task decision segmented control stays readable in light theme",
       const inactiveStyle = getComputedStyle(inactive)
       const badgeStyle = getComputedStyle(active.querySelector(".app-dialog-decision__badge") as HTMLElement)
       const bodyStyle = getComputedStyle(active.querySelector(".app-dialog-decision__choice-body") as HTMLElement)
+      const choicesRect = choices.getBoundingClientRect()
+      const inactiveRect = inactive.getBoundingClientRect()
       return {
         choiceDisplay: getComputedStyle(choices).display,
         columns: getComputedStyle(choices).gridTemplateColumns.split(" ").length,
-        activeAttr: active.getAttribute("data-active"),
+        formLeft: Math.round(formRect.left),
+        formRight: Math.round(formRect.right),
+        choicesClientWidth: Math.round(choices.clientWidth),
+        choicesScrollWidth: Math.round(choices.scrollWidth),
+        choicesLeft: Math.round(choicesRect.left),
+        inactiveRight: Math.round(inactiveRect.right),
+        choicesRight: Math.round(choicesRect.right),
+        activeAttr: active.getAttribute("data-pressed"),
+        pressedAttr: active.getAttribute("aria-pressed"),
         selectedAttr: active.getAttribute("data-selected"),
         activeBorder: activeStyle.borderColor,
         inactiveBorder: inactiveStyle.borderColor,
@@ -128,7 +142,12 @@ test("app dialog task decision segmented control stays readable in light theme",
 
     assert.equal(metrics.choiceDisplay, "grid")
     assert.equal(metrics.columns, 2)
-    assert.equal(metrics.activeAttr, "true")
+    assert.ok(metrics.choicesScrollWidth <= metrics.choicesClientWidth)
+    assert.ok(metrics.inactiveRight <= metrics.choicesRight)
+    assert.ok(metrics.choicesLeft >= metrics.formLeft)
+    assert.ok(metrics.inactiveRight <= metrics.formRight)
+    assert.equal(metrics.activeAttr, "")
+    assert.equal(metrics.pressedAttr, "true")
     assert.equal(metrics.selectedAttr, null)
     assert.notEqual(metrics.activeBorder, metrics.inactiveBorder)
     assert.notEqual(metrics.activeBg, metrics.inactiveBg)

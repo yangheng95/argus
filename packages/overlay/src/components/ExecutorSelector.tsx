@@ -575,7 +575,6 @@ export function ExecutorSelector() {
               <TabList size="sm" tone="neutral" data-ui="executor-popover-tabs">
                 <Tab
                   value={EXTERNAL_DISABLED_TAB_ID}
-                  active={!isExternalActive()}
                   size="sm"
                   tone="neutral"
                   data-ui="executor-popover-tab"
@@ -586,7 +585,6 @@ export function ExecutorSelector() {
                   {(tab) => (
                     <Tab
                       value={tab.id}
-                      active={isExternalActive() && tab.id === focusedExternalID()}
                       size="sm"
                       tone="neutral"
                       data-ui="executor-popover-tab"
