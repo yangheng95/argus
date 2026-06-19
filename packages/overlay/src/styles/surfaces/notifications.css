@@ -185,6 +185,7 @@ body[data-notifications-panel-open="true"] .app-notifications[data-surface="toas
   border-radius: var(--oc-radius-pill);
   border: calc(2px * var(--ui-scale)) solid color-mix(in srgb, var(--accent) 24%, transparent);
   border-top-color: var(--accent);
+  animation: oc-spin var(--ui-duration-loop-notification-spin) linear infinite;
 }
 
 .app-notification__copy {

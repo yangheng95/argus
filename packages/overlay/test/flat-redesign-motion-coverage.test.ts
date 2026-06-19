@@ -23,6 +23,10 @@ import { join } from "node:path"
 
 const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles")
 const SURFACES_ROOT = join(STYLES_ROOT, "surfaces")
+const BASE_CSS = readFileSync(join(STYLES_ROOT, "cascade", "base.css"), "utf8")
+const CARD_CSS = readFileSync(join(SURFACES_ROOT, "card.css"), "utf8")
+const NOTIFICATIONS_CSS = readFileSync(join(SURFACES_ROOT, "notifications.css"), "utf8")
+const SIDEBAR_CSS = readFileSync(join(SURFACES_ROOT, "sidebar.css"), "utf8")
 
 function listCss(dir: string): string[] {
   const out: string[] = []
@@ -104,6 +108,13 @@ function isAutofillTransitionException(file: string, prop: string, value: string
   )
 }
 
+function cssBlock(source: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const match = source.match(new RegExp(`${escaped}\\s*\\{[^}]*\\}`, "s"))
+  if (!match) throw new Error(`CSS rule not found: ${selector}`)
+  return match[0]
+}
+
 describe("flat-redesign Step 8a — motion token coverage", () => {
   const files = listCss(STYLES_ROOT).filter((f) => !f.endsWith("design-language.css"))
   const surfaceFiles = listCss(SURFACES_ROOT)
@@ -175,8 +186,31 @@ describe("flat-redesign Step 8a — motion token coverage", () => {
     expect(dl).toContain("--ui-duration-base: 120ms")
     expect(dl).toContain("--ui-duration-slow: 200ms")
     expect(dl).toContain("--ui-duration-loop-spin: 0.8s")
+    expect(dl).toContain("--ui-duration-loop-connection-pulse: 1.4s")
     expect(dl).toContain("--ui-duration-loop-pulse: 1.6s")
     expect(dl).toContain("--ui-duration-loop-progress: 1.1s")
     expect(dl).toContain("--ui-timing-standard: ease")
+  })
+
+  test("loading spinners use the shared tokenized spin animation", () => {
+    expect(BASE_CSS).toMatch(/@keyframes\s+oc-spin\s*\{/)
+    expect(CARD_CSS).not.toContain("@keyframes card-spin")
+    expect(cssBlock(CARD_CSS, ".card__spinner")).toContain(
+      "animation: oc-spin var(--ui-duration-loop-agent-spin) linear infinite;",
+    )
+    expect(cssBlock(NOTIFICATIONS_CSS, ".app-notification__spinner")).toContain(
+      "animation: oc-spin var(--ui-duration-loop-notification-spin) linear infinite;",
+    )
+    expect(BASE_CSS).toMatch(
+      /\.card__spinner,\s*\.app-notification__spinner\s*\{[\s\S]*animation:\s*none !important;/,
+    )
+  })
+
+  test("task tree active pulse uses the shared loop motion tokens", () => {
+    expect(SIDEBAR_CSS).toContain(
+      "animation: task-row-children-pulse var(--ui-duration-loop-connection-pulse) var(--ui-timing-standard) infinite;",
+    )
+    expect(SIDEBAR_CSS).not.toContain("task-row-children-pulse 1.4s")
+    expect(SIDEBAR_CSS).not.toContain("task-row-children-pulse 1400ms")
   })
 })
