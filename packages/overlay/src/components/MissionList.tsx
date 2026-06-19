@@ -252,7 +252,7 @@ function MissionRow(props: {
                     ref={(el) => {
                       inputRef = el
                     }}
-                    class="mission-row-rename-input"
+                    class="task-row-rename-input"
                     data-ui="mission-row-rename-input"
                     type="text"
                     maxLength={200}
