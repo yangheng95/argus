@@ -107,6 +107,8 @@
   "chat.usage_tooltip": "全会话用量估计 — 汇总每个 session 累计的 token 与美元成本。",
   "chat.usage_aria": "会话用量估计",
   "chat.empty": "对话进展会显示在这里",
+  "chat.render_error_title": "卡片渲染失败",
+  "chat.render_error_unknown": "未知渲染错误",
   "chat.git.baseline_created": "已创建初始 Git 检查点",
   "chat.git.baseline_recorded": "已将当前 HEAD 标记为初始检查点",
   "chat.git.branch": "分支",
