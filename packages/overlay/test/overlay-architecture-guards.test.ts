@@ -2498,6 +2498,8 @@ describe("overlay architecture guards", () => {
 
   test("retired field input action/icon/row selectors stay removed while live field primitives remain", () => {
     const fieldSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/field.css")))
+    const conversationSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")))
+    const taskDirBarSource = withoutComments(readText(join(OVERLAY_ROOT, "src/components/TaskDirBar.tsx")))
     const productionSource = walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:ts|tsx|html|json)$/.test(path))
       .map((path) => withoutComments(readText(path)))
       .join("\n")
@@ -2517,6 +2519,10 @@ describe("overlay architecture guards", () => {
     expect(productionSource).toContain("field-input-group")
     expect(productionSource).toContain("search-field-icon")
     expect(productionSource).toContain("search-field-input")
+    expect(taskDirBarSource).toMatch(/<input[\s\S]*class="field-input"[\s\S]*data-ui="cwd-path-input"/)
+    expect(conversationSurface).toMatch(/\.recent-dir-edit-label\s+\.field-input\s*\{/)
+    expect(conversationSurface).not.toMatch(/\.recent-dir-edit-label\s+input\b/)
+    expect(conversationSurface).not.toMatch(/\.recent-dir-edit-label\s+input:focus\b/)
   })
 
   test("composer shell does not rely on theme chrome resets", () => {

@@ -1495,21 +1495,11 @@
   font-weight: var(--ui-font-weight-medium);
 }
 
-.recent-dir-edit-label input {
+.recent-dir-edit-label .field-input {
   width: 100%;
   min-width: 0;
   height: calc(30px * var(--ui-scale));
   padding: 0 calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: var(--oc-radius-soft);
-  background: var(--surface-inset);
-  color: var(--text-strong);
-  font: inherit;
-}
-
-.recent-dir-edit-label input:focus {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  outline: none;
 }
 
 .recent-dir-edit-form .oc-button[data-ui="recent-dir-edit-submit"] {
