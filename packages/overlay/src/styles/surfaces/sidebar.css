@@ -442,43 +442,31 @@
    expand/collapse the subtree. data-has-active triggers a subtle pulse
    when any direct child is mid-run; data-has-failed paints the chip in
    the danger tone so red bubbles up to the parent. */
-.task-row-children-toggle {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
-  padding: 0 calc(5px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  border-radius: var(--oc-radius-pill);
-  background: transparent;
-  color: var(--text-soft);
-  font-size: var(--ui-font-small);
-  line-height: 1;
-  cursor: pointer;
-  pointer-events: auto;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease;
-}
+.oc-button[data-ui="task-row-children-toggle"] {
+  --oc-button-height: calc(18px * var(--ui-scale));
+  --oc-button-padding-x: calc(5px * var(--ui-scale));
+  --oc-button-padding-y: 0;
+  --oc-button-gap: calc(2px * var(--ui-scale));
+  --oc-button-color: var(--text-soft);
+  --oc-button-border: var(--oc-border-width) solid var(--border);
+  --oc-button-bg: transparent;
+  --oc-button-shadow: none;
 
-.task-row-children-toggle:hover,
-.task-row-children-toggle:focus-visible {
-  background: color-mix(in srgb, var(--text-soft) 10%, transparent);
-  color: var(--text);
+  flex: 0 0 auto;
+  border-radius: var(--oc-radius-pill);
+  pointer-events: auto;
 }
 
 .task-row-children-count {
   font-variant-numeric: tabular-nums;
 }
 
-.task-row-children-toggle[data-has-active="true"] {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+.oc-button[data-ui="task-row-children-toggle"][data-has-active="true"] {
+  --oc-button-color: var(--accent);
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
-.task-row-children-toggle[data-has-active="true"]::before {
+.oc-button[data-ui="task-row-children-toggle"][data-has-active="true"]::before {
   content: "";
   display: block;
   width: calc(6px * var(--ui-scale));
@@ -503,13 +491,13 @@
 /* Failed beats active — if both are present, failed colour wins so
    the user is not lulled by the active accent on a row that already
    has a broken descendant. */
-.task-row-children-toggle[data-has-failed="true"] {
-  color: var(--bad);
-  border-color: color-mix(in srgb, var(--bad) 32%, transparent);
-  background: color-mix(in srgb, var(--bad) 8%, transparent);
+.oc-button[data-ui="task-row-children-toggle"][data-has-failed="true"] {
+  --oc-button-color: var(--bad);
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 32%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--bad) 8%, transparent);
 }
 
-.task-row-children-toggle[data-has-failed="true"]::before {
+.oc-button[data-ui="task-row-children-toggle"][data-has-failed="true"]::before {
   background: var(--bad);
 }
 

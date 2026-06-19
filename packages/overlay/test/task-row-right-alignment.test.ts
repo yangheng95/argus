@@ -64,7 +64,7 @@ describe("task row right column stays anchored to the row edge", () => {
   })
 
   test(".task-row-right keeps the tree child toggle clickable", () => {
-    const body = soloRuleBody(".task-row-children-toggle")
+    const body = soloRuleBody('.oc-button[data-ui="task-row-children-toggle"]')
     expect(body).toMatch(/pointer-events:\s*auto\s*;/)
   })
 

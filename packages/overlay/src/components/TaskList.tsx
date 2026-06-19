@@ -262,6 +262,12 @@ function DownloadProjectButton(props: { id: string; busy?: boolean; onDownload: 
 
 const INTERRUPTABLE_TASK_STATUSES = new Set(["queued", "active"])
 
+function taskTreeEntryKey(entry: TaskTreeEntry, index: number): string {
+  const id = entry.item?.task?.id
+  if (typeof id === "string" && id) return `task:${id}`
+  return `entry:${index}`
+}
+
 function TaskRow(props: {
   item: any
   /** Solid createSelector function — returns true only for the currently
@@ -430,9 +436,12 @@ function TaskRow(props: {
               out, onMouseDown stopPropagation keeps the outer div from
               seeing the press, onDragStart preventDefault is belt-and-
               suspenders for browsers that still try to initiate. */}
-          <button
+          <Button
             type="button"
-            class="task-row-children-toggle"
+            variant="ghost"
+            size="mini"
+            tone="neutral"
+            data-ui="task-row-children-toggle"
             draggable={false}
             data-expanded={props.expanded ? "true" : undefined}
             data-has-active={hasActiveChild() ? "true" : undefined}
@@ -458,7 +467,7 @@ function TaskRow(props: {
           >
             <Icon name={props.expanded ? "chevron-down" : "chevron"} size={11} />
             <span class="task-row-children-count">{directChildCount()}</span>
-          </button>
+          </Button>
         </Show>
         <Show
           when={!editing()}
@@ -579,41 +588,52 @@ function TaskSection(props: {
   onDragEnd?: () => void
   onToggleExpand?: (id: string) => void
 }) {
+  const entryKeys = createMemo(() => props.entries.map(taskTreeEntryKey))
+  const entriesByKey = createMemo(() => {
+    const byKey = new Map<string, TaskTreeEntry>()
+    props.entries.forEach((entry, index) => byKey.set(taskTreeEntryKey(entry, index), entry))
+    return byKey
+  })
+
   return (
     <Show when={props.entries.length > 0}>
       <section class="sidebar-list-group">
         <div class="sidebar-list-cluster">
-          <For each={props.entries}>
-            {(entry) => (
-              <TaskRow
-                item={entry.item}
-                isSelected={props.isSelected}
-                queuePos={props.queuePositions?.get(entry.item?.task?.id || "")}
-                onSelectTask={props.onSelectTask}
-                onDeleteTask={props.onDeleteTask}
-                onCancelTask={props.onCancelTask}
-                onStartNow={props.onStartNow}
-                onDownloadProject={props.onDownloadProject}
-                onRenameTask={props.onRenameTask}
-                startNowBusyID={props.startNowBusyID}
-                downloadBusyID={props.downloadBusyID}
-                canDrag={props.canReorder}
-                dragging={props.draggingID === (entry.item?.task?.id || "")}
-                dragOver={props.dragOverID === (entry.item?.task?.id || "")}
-                onDragStart={props.onDragStart}
-                onDragOver={props.onDragOver}
-                onDrop={props.onDrop}
-                onDragEnd={props.onDragEnd}
-                depth={entry.depth}
-                directChildren={entry.directChildren}
-                expanded={entry.expanded}
-                crossDirectory={entry.crossDirectory}
-                onToggleExpand={() => {
-                  const id = entry.item?.task?.id
-                  if (id) props.onToggleExpand?.(id)
-                }}
-              />
-            )}
+          <For each={entryKeys()}>
+            {(key) => {
+              const entry = () => entriesByKey().get(key)
+              const taskID = () => entry()?.item?.task?.id || ""
+              return (
+                <TaskRow
+                  item={entry()?.item}
+                  isSelected={props.isSelected}
+                  queuePos={props.queuePositions?.get(taskID())}
+                  onSelectTask={props.onSelectTask}
+                  onDeleteTask={props.onDeleteTask}
+                  onCancelTask={props.onCancelTask}
+                  onStartNow={props.onStartNow}
+                  onDownloadProject={props.onDownloadProject}
+                  onRenameTask={props.onRenameTask}
+                  startNowBusyID={props.startNowBusyID}
+                  downloadBusyID={props.downloadBusyID}
+                  canDrag={props.canReorder}
+                  dragging={props.draggingID === taskID()}
+                  dragOver={props.dragOverID === taskID()}
+                  onDragStart={props.onDragStart}
+                  onDragOver={props.onDragOver}
+                  onDrop={props.onDrop}
+                  onDragEnd={props.onDragEnd}
+                  depth={entry()?.depth}
+                  directChildren={entry()?.directChildren}
+                  expanded={entry()?.expanded ?? false}
+                  crossDirectory={entry()?.crossDirectory}
+                  onToggleExpand={() => {
+                    const id = taskID()
+                    if (id) props.onToggleExpand?.(id)
+                  }}
+                />
+              )
+            }}
           </For>
         </div>
       </section>
