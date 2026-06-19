@@ -76,12 +76,19 @@ export async function nativeSelect(
     okLabel?: string
     cancelLabel?: string
     selectLabel?: string
-    selectValue?: string
+    selectValue: string
     options?: SelectOption[]
   },
 ): Promise<string | null> {
   const list = Array.isArray(options?.options) ? options!.options : []
   if (!list.length) return null
+  const selectValue = typeof options?.selectValue === "string" ? options.selectValue : ""
+  if (!selectValue) {
+    throw new Error("nativeSelect requires selectValue when options are provided")
+  }
+  if (!list.some((item) => item.value === selectValue)) {
+    throw new Error(`nativeSelect selectValue ${JSON.stringify(selectValue)} is not in options`)
+  }
   const result = await showAppDialog({
     title: options?.title,
     message,
@@ -92,7 +99,7 @@ export async function nativeSelect(
     select: true,
     selectLabel: options?.selectLabel,
     selectOptions: list,
-    selectValue: options?.selectValue || list[0]?.value || "",
+    selectValue,
   })
   return result?.confirmed ? (result.value ?? null) : null
 }

@@ -2175,6 +2175,7 @@ export type QuestionAnswer = Array<string>
 export type ProviderAuthMethod = {
   type: "oauth" | "api"
   label: string
+  preferred?: boolean
 }
 
 export type HexinBudget = {
@@ -2194,17 +2195,24 @@ export type HexinBudgetResponse =
       error: string
     }
 
-export type ProviderAuthPrompt = {
-  type: "text" | "select"
-  key: string
-  message: string
-  placeholder?: string
-  options?: Array<{
-    label: string
-    value: string
-    hint?: string
-  }>
-}
+export type ProviderAuthPrompt =
+  | {
+      type: "text"
+      key: string
+      message: string
+      placeholder?: string
+    }
+  | {
+      type: "select"
+      key: string
+      message: string
+      selectValue: string
+      options: Array<{
+        label: string
+        value: string
+        hint?: string
+      }>
+    }
 
 export type ProviderAuthAuthorization = {
   url: string

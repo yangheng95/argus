@@ -34,6 +34,7 @@ export interface AuthMethodItem {
   type: "oauth" | "api"
   label: string
   index: number
+  preferred?: boolean
 }
 
 export interface ProviderStatusInfo {
@@ -65,6 +66,7 @@ export type AuthPrompt =
       type: "select"
       key: string
       message: string
+      selectValue: string
       options: Array<{ label: string; value: string; hint?: string }>
     }
 
@@ -89,6 +91,7 @@ export interface AuthDialogCallbacks {
       title: string
       selectLabel: string
       options: Array<{ label: string; value: string; hint?: string }>
+      selectValue: string
       okLabel?: string
       cancelLabel?: string
     },
@@ -146,7 +149,7 @@ export function providerAuthMethods(providerID: string): AuthMethodItem[] {
       const type: "oauth" | "api" = item.type === "oauth" ? "oauth" : "api"
       const label =
         typeof item.label === "string" && item.label.trim() ? item.label.trim() : type === "oauth" ? "OAuth" : "API key"
-      result.push({ type, label, index })
+      result.push({ type, label, index, ...(item.preferred === true ? { preferred: true } : {}) })
     } else if (typeof item === "string") {
       const value = item.trim()
       if (value) {
@@ -161,13 +164,19 @@ export function providerAuthMethods(providerID: string): AuthMethodItem[] {
 }
 
 /**
- * Return the preferred OAuth method for a provider (browser-flow first).
+ * Return the explicitly preferred OAuth method for a provider.
  * Returns null if no OAuth methods exist.
  */
 export function providerPreferredOauthMethod(providerID: string): AuthMethodItem | null {
   const methods = providerAuthMethods(providerID).filter((m) => m.type === "oauth")
   if (methods.length === 0) return null
-  return methods.find((m) => /browser/i.test(m.label)) ?? methods[0]
+  if (methods.length === 1) return methods.at(0)!
+  const preferred = methods.filter((m) => m.preferred)
+  if (preferred.length === 1) return preferred[0]!
+  if (preferred.length > 1) {
+    throw new Error(`${providerLabel(providerID)} has multiple preferred OAuth auth methods`)
+  }
+  throw new Error(`${providerLabel(providerID)} requires one preferred OAuth auth method`)
 }
 
 /**
@@ -350,7 +359,10 @@ export function providerAuthPrompt(prompt: any): AuthPrompt | null {
     }
   }
 
-  if (prompt.type !== "select" || !Array.isArray(prompt.options)) return null
+  if (prompt.type !== "select") return null
+  if (!Array.isArray(prompt.options)) {
+    throw new Error(`Provider auth select prompt ${prompt.key} requires options`)
+  }
 
   const options = (prompt.options as any[]).flatMap((item: any) => {
     if (!record(item) || typeof item.label !== "string" || typeof item.value !== "string") {
@@ -365,14 +377,33 @@ export function providerAuthPrompt(prompt: any): AuthPrompt | null {
     ]
   })
 
-  if (!options.length) return null
+  if (!options.length) {
+    throw new Error(`Provider auth select prompt ${prompt.key} requires options`)
+  }
+  const selectValue = typeof prompt.selectValue === "string" ? prompt.selectValue : ""
+  if (!selectValue) {
+    throw new Error(`Provider auth select prompt ${prompt.key} requires selectValue`)
+  }
+  if (!options.some((option) => option.value === selectValue)) {
+    throw new Error(`Provider auth select prompt ${prompt.key} selectValue ${JSON.stringify(selectValue)} is not in options`)
+  }
 
   return {
     type: "select",
     key: prompt.key,
     message: prompt.message,
+    selectValue,
     options,
   }
+}
+
+function preferredAuthMethod(providerID: string, methods: AuthMethodItem[]): AuthMethodItem {
+  const preferred = methods.filter((method) => method.preferred)
+  if (preferred.length === 1) return preferred[0]!
+  if (preferred.length > 1) {
+    throw new Error(`${providerLabel(providerID)} has multiple preferred auth methods`)
+  }
+  throw new Error(`${providerLabel(providerID)} requires one preferred auth method`)
 }
 
 // ── Provider auth input collection ──
@@ -411,6 +442,7 @@ export async function providerAuthInputs(
         title: label,
         selectLabel: prompt.message,
         options: prompt.options,
+        selectValue: prompt.selectValue,
         okLabel: t("common.ok"),
         cancelLabel: t("common.cancel"),
       })
@@ -578,8 +610,10 @@ export async function authenticateSelectedProvider(
   const methods = providerAuthMethods(providerID)
   if (!providerID || methods.length === 0) return false
 
-  if (methods.length === 1 && methods[0]) {
-    const result = await runProviderAuthMethod(providerID, methods[0], callbacks)
+  if (methods.length === 1) {
+    const method = methods.at(0)
+    if (!method) return false
+    const result = await runProviderAuthMethod(providerID, method, callbacks)
     return result === true
   }
 
@@ -591,6 +625,7 @@ export async function authenticateSelectedProvider(
       value: String(m.index),
       hint: m.type === "oauth" ? t("llm.auth_type_oauth") : t("llm.auth_type_api"),
     })),
+    selectValue: String(preferredAuthMethod(providerID, methods).index),
   })
 
   if (value == null) return false
