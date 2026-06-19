@@ -84,6 +84,22 @@ body[data-theme="light"] {
   --subtle-3: color-mix(in srgb, var(--accent) 8.5%, transparent);
   --subtle-4: color-mix(in srgb, var(--accent) 12%, transparent);
   --subtle-5: color-mix(in srgb, var(--accent) 16%, transparent);
+
+  /* Markdown / hljs (highlight.js) syntax palette. Code blocks render on
+   * --surface-inset, so syntax colors are theme-scoped instead of fixed at
+   * design-language root. */
+  --oc-syntax-keyword: #cf222e;
+  --oc-syntax-string: #0a3069;
+  --oc-syntax-comment: #57606a;
+  --oc-syntax-number: #0550ae;
+  --oc-syntax-function: #8250df;
+  --oc-syntax-variable: #953800;
+  --oc-syntax-meta: #116329;
+  --oc-syntax-addition-text: #116329;
+  --oc-syntax-addition-bg: color-mix(in srgb, #1a7f37 14%, transparent);
+  --oc-syntax-deletion-text: #82071e;
+  --oc-syntax-deletion-bg: color-mix(in srgb, #cf222e 12%, transparent);
+
   --dialog-bg: rgb(255, 255, 255);
   --dialog-backdrop: rgba(0, 0, 0, 0.4);
   --ui-scrim: color-mix(in srgb, black 40%, transparent);

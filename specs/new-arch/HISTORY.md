@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| [2026-06-19-markdown-syntax-theme-contrast.md](2026-06-19-markdown-syntax-theme-contrast.md) | Markdown Syntax Theme Contrast |
 | [2026-06-19-file-changes-light-contrast-runtime-guard.md](2026-06-19-file-changes-light-contrast-runtime-guard.md) | File Changes Light Contrast Runtime Guard |
 | [2026-06-19-agent-models-i18n-source.md](2026-06-19-agent-models-i18n-source.md)                               | Agent Models i18n Source |
 | [2026-06-19-agent-models-loading-spinner-motion.md](2026-06-19-agent-models-loading-spinner-motion.md)         | Agent Models Loading Spinner Motion |

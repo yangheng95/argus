@@ -86,6 +86,22 @@ body[data-theme="dark"] {
   --subtle-3: rgba(255, 255, 255, 0.07);
   --subtle-4: rgba(255, 255, 255, 0.09);
   --subtle-5: rgba(255, 255, 255, 0.12);
+
+  /* Markdown / hljs (highlight.js) syntax palette. Code blocks render on
+   * --surface-inset, so syntax colors are theme-scoped instead of fixed at
+   * design-language root. */
+  --oc-syntax-keyword: #ff7b72;
+  --oc-syntax-string: #a5d6ff;
+  --oc-syntax-comment: #b1bac4;
+  --oc-syntax-number: #79c0ff;
+  --oc-syntax-function: #d2a8ff;
+  --oc-syntax-variable: #ffa657;
+  --oc-syntax-meta: #7ee787;
+  --oc-syntax-addition-text: #aff5b4;
+  --oc-syntax-addition-bg: color-mix(in srgb, #3fb950 15%, transparent);
+  --oc-syntax-deletion-text: #ffdcd7;
+  --oc-syntax-deletion-bg: color-mix(in srgb, #f85149 15%, transparent);
+
   --dialog-bg: rgb(40, 42, 46);
   --dialog-backdrop: rgba(0, 0, 0, 0.38);
   --ui-scrim: rgba(0, 0, 0, 0.38);
