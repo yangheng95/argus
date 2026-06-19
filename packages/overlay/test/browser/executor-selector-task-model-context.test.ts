@@ -304,7 +304,11 @@ test(
 
       await page.click('[data-ui="executor-chip-mirror"]')
       await page.waitForSelector('[data-section="mirror"]')
-      await page.click('[data-section="mirror"] .executor-popover-model[title="openai/task-b-new"]')
+      await page.waitForSelector(
+        '[data-section="mirror"] .executor-model-option[data-model-value="openai/task-b-new"]',
+        { visible: true },
+      )
+      await page.click('[data-section="mirror"] .executor-model-option[data-model-value="openai/task-b-new"]')
       await page.waitForFunction(() =>
         (document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null)?.innerText.includes(
           "task-b-new",

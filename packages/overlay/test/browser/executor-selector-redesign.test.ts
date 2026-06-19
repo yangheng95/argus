@@ -50,6 +50,22 @@ async function saveScreenshot(page: { screenshot(options?: Record<string, unknow
   return target
 }
 
+function modelListboxSelector(section: "mirror" | "external", providerID: string): string {
+  return `[data-section="${section}"] .executor-popover-group[data-provider-id="${providerID}"] .executor-model-listbox`
+}
+
+function modelOptionSelector(section: "mirror" | "external", modelValue: string): string {
+  return `[data-section="${section}"] .executor-model-option[data-model-value="${modelValue}"]`
+}
+
+async function focusModelListbox(page: any, section: "mirror" | "external", providerID: string, modelValue: string) {
+  const listboxSelector = modelListboxSelector(section, providerID)
+  await page.waitForSelector(listboxSelector, { visible: true })
+  await page.waitForSelector(modelOptionSelector(section, modelValue), { visible: true })
+  await page.focus(listboxSelector)
+  return listboxSelector
+}
+
 async function saveElementScreenshot(
   element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
   name: string,
@@ -460,7 +476,7 @@ test(
       assert.ok(mirrorBody.includes("openai"))
       assert.ok(mirrorBody.includes("hexin"))
       assert.equal(mirrorBody.includes("anthropic"), false)
-      assert.ok(mirrorBody.includes("gpt-5.5-pro"))
+      assert.ok(mirrorBody.includes("gpt-5.5-pro"), mirrorBody)
       assert.ok(mirrorBody.includes("gpt-5.5-codex"))
       assert.ok(mirrorBody.includes("kimi-k2.7-code"))
       const mirrorPlacement = await page.evaluate(() => {
@@ -496,39 +512,78 @@ test(
       assert.ok(mirrorPlacement!.popoverRight <= mirrorPlacement!.viewportWidth + 1, JSON.stringify(mirrorPlacement))
       assert.ok(mirrorPlacement!.popoverLeft <= mirrorPlacement!.triggerLeft + 1, JSON.stringify(mirrorPlacement))
       assert.ok(mirrorPlacement!.popoverRight >= mirrorPlacement!.triggerRight - 1, JSON.stringify(mirrorPlacement))
-      const mirrorModelState = await page.evaluate(() => {
-        const current = document.querySelector(
-          '[data-section="mirror"] .executor-popover-model[title="hexin/kimi-k2.7-code"]',
-        ) as HTMLElement | null
-        const inactive = document.querySelector(
-          '[data-section="mirror"] .executor-popover-model[title="openai/gpt-5.5-pro"]',
-        ) as HTMLElement | null
-        return {
-          currentActive: current?.dataset.active ?? "",
-          currentAria: current?.getAttribute("aria-current") ?? "",
-          inactiveActive: inactive?.dataset.active ?? "",
-          inactiveAria: inactive?.getAttribute("aria-current") ?? "",
-        }
-      })
-      assert.deepEqual(mirrorModelState, {
-        currentActive: "true",
-        currentAria: "true",
-        inactiveActive: "false",
-        inactiveAria: "",
-      })
-      const visibleErrorNotifications = await page.$$eval('.app-notification[data-tone="error"]', (nodes) =>
-        nodes.map((node) => (node as HTMLElement).innerText.trim()),
+      const mirrorListboxSelector = await focusModelListbox(page, "mirror", "hexin", "hexin/kimi-k2.7-code")
+      const mirrorModelState = await page.evaluate(
+        (args: { listboxSelector: string; currentSelector: string }) => {
+          const { listboxSelector, currentSelector } = args
+          const listbox = document.querySelector(listboxSelector) as HTMLElement | null
+          const current = document.querySelector(currentSelector) as HTMLElement | null
+          const retiredButtons = document.querySelectorAll('[data-section="mirror"] .executor-popover-model')
+          return {
+            listboxRole: listbox?.getAttribute("role") ?? "",
+            listboxFocused: document.activeElement === listbox,
+            currentRole: current?.getAttribute("role") ?? "",
+            currentSelected: current?.hasAttribute("data-selected") ?? false,
+            currentAriaSelected: current?.getAttribute("aria-selected") ?? "",
+            currentText: current?.textContent?.trim() ?? "",
+            retiredButtonCount: retiredButtons.length,
+          }
+        },
+        {
+          listboxSelector: mirrorListboxSelector,
+          currentSelector: modelOptionSelector("mirror", "hexin/kimi-k2.7-code"),
+        },
       )
-      assert.deepEqual(visibleErrorNotifications, [])
-      await saveScreenshot(page, "executor-selector-current-model-aria.png")
+      assert.deepEqual(mirrorModelState, {
+        listboxRole: "listbox",
+        listboxFocused: true,
+        currentRole: "option",
+        currentSelected: true,
+        currentAriaSelected: "true",
+        currentText: "kimi-k2.7-code",
+        retiredButtonCount: 0,
+      })
+      await saveScreenshot(page, "executor-selector-current-model-listbox.png")
 
-      await page.click('[data-section="mirror"] .executor-popover-model[title="openai/gpt-5.5-pro"]')
+      await focusModelListbox(page, "mirror", "openai", "openai/gpt-5.5-pro")
+      const openaiModelOptionState = await page.$eval(
+        modelOptionSelector("mirror", "openai/gpt-5.5-pro"),
+        (node: HTMLElement) => ({
+          role: node.getAttribute("role") ?? "",
+          selected: node.hasAttribute("data-selected"),
+          ariaSelected: node.getAttribute("aria-selected") ?? "",
+          text: node.textContent?.trim() ?? "",
+        }),
+      )
+      assert.deepEqual(openaiModelOptionState, {
+        role: "option",
+        selected: false,
+        ariaSelected: "false",
+        text: "gpt-5.5-pro",
+      })
+      await page.focus(modelOptionSelector("mirror", "openai/gpt-5.5-codex"))
+      await page.waitForFunction(
+        () => (document.activeElement as HTMLElement | null)?.dataset.modelValue === "openai/gpt-5.5-codex",
+      )
+      await page.keyboard.press("ArrowDown")
+      await page.waitForFunction(
+        () => (document.activeElement as HTMLElement | null)?.dataset.modelValue === "openai/gpt-5.5-pro",
+      )
+      await page.keyboard.press("Enter")
       await page.waitForFunction(() =>
         (document.querySelector('[data-ui="executor-chip-mirror"]') as HTMLElement | null)?.innerText.includes(
           "gpt-5.5-pro",
         ),
       )
       await page.waitForFunction(() => document.querySelector('[data-ui="executor-hexin-budget"]') === null)
+      const keyboardSelection = await page.$eval('[data-ui="executor-chip-mirror"]', (node: HTMLElement) =>
+        node.innerText.trim(),
+      )
+      assert.ok(keyboardSelection.includes("gpt-5.5-pro"))
+      const visibleErrorNotifications = await page.$$eval('.app-notification[data-tone="error"]', (nodes) =>
+        nodes.map((node) => (node as HTMLElement).innerText.trim()),
+      )
+      assert.deepEqual(visibleErrorNotifications, [])
       assert.ok(budgetRequests.every((item) => item.directory), JSON.stringify(budgetRequests))
       await page.click('[data-ui="executor-chip-mirror"]')
       await page.waitForSelector('[data-section="mirror"]')
@@ -603,26 +658,39 @@ test(
       assert.equal(codexTabPanelState.labelledby, codexTabPanelState.tabID)
       assert.equal(codexTabPanelState.panelVisible, true)
       await saveScreenshot(page, "executor-selector-external-tabs-tabpanel.png")
-      const externalModelState = await page.evaluate(() => {
-        const current = document.querySelector(
-          '[data-section="external"] .executor-popover-model[title="gpt-5.5-codex"]',
-        ) as HTMLElement | null
-        const inactive = document.querySelector(
-          '[data-section="external"] .executor-popover-model[title="gpt-5.5-pro"]',
-        ) as HTMLElement | null
-        return {
-          currentActive: current?.dataset.active ?? "",
-          currentAria: current?.getAttribute("aria-current") ?? "",
-          inactiveActive: inactive?.dataset.active ?? "",
-          inactiveAria: inactive?.getAttribute("aria-current") ?? "",
-        }
-      })
+      const externalListboxSelector = await focusModelListbox(page, "external", "openai", "gpt-5.5-codex")
+      const externalModelState = await page.evaluate(
+        (args: { listboxSelector: string; currentSelector: string; inactiveSelector: string }) => {
+          const { listboxSelector, currentSelector, inactiveSelector } = args
+          const listbox = document.querySelector(listboxSelector) as HTMLElement | null
+          const current = document.querySelector(currentSelector) as HTMLElement | null
+          const inactive = document.querySelector(inactiveSelector) as HTMLElement | null
+          return {
+            listboxRole: listbox?.getAttribute("role") ?? "",
+            currentRole: current?.getAttribute("role") ?? "",
+            currentSelected: current?.hasAttribute("data-selected") ?? false,
+            currentAriaSelected: current?.getAttribute("aria-selected") ?? "",
+            inactiveRole: inactive?.getAttribute("role") ?? "",
+            inactiveSelected: inactive?.hasAttribute("data-selected") ?? false,
+            inactiveAriaSelected: inactive?.getAttribute("aria-selected") ?? "",
+          }
+        },
+        {
+          listboxSelector: externalListboxSelector,
+          currentSelector: modelOptionSelector("external", "gpt-5.5-codex"),
+          inactiveSelector: modelOptionSelector("external", "gpt-5.5-pro"),
+        },
+      )
       assert.deepEqual(externalModelState, {
-        currentActive: "true",
-        currentAria: "true",
-        inactiveActive: "false",
-        inactiveAria: "",
+        listboxRole: "listbox",
+        currentRole: "option",
+        currentSelected: true,
+        currentAriaSelected: "true",
+        inactiveRole: "option",
+        inactiveSelected: false,
+        inactiveAriaSelected: "false",
       })
+      await saveScreenshot(page, "executor-selector-external-model-listbox.png")
       const externalBody = (
         await page.$eval('[data-section="external"]', (node) => (node as HTMLElement).innerText)
       ).toLowerCase()
