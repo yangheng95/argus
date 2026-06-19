@@ -7,7 +7,11 @@ const STYLES = readFileSync(join(import.meta.dir, "../src/styles/surfaces/settin
 
 test("ProvidersPanel uses a dedicated command area and provider row summary", () => {
   expect(SOURCE).toContain('class="provider-command"')
+  expect(SOURCE).toContain('class="provider-title-block"')
+  expect(SOURCE).toContain("<SurfaceHeader")
   expect(SOURCE).toContain('class="provider-stat-strip"')
+  expect(SOURCE).not.toContain("provider-page-title")
+  expect(STYLES).not.toContain(".provider-page-title")
   expect(SOURCE).toContain("SettingsRow")
   expect(SOURCE).toContain('class="provider-settings-row"')
   expect(SOURCE).toContain('class="provider-row-summary"')
