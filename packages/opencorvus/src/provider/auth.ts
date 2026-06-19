@@ -3,7 +3,7 @@ import { Plugin } from "../plugin"
 import { map, filter, pipe, fromEntries, mapValues } from "remeda"
 import z from "zod"
 import { fn } from "@/util/fn"
-import type { AuthOuathResult } from "@opencorvus-ai/plugin"
+import type { AuthHook, AuthOuathResult } from "@opencorvus-ai/plugin"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Auth } from "@/auth"
 
@@ -22,6 +22,7 @@ export namespace ProviderAuth {
     .object({
       type: z.union([z.literal("oauth"), z.literal("api")]),
       label: z.string(),
+      preferred: z.boolean().optional(),
     })
     .meta({
       ref: "ProviderAuthMethod",
@@ -35,6 +36,7 @@ export namespace ProviderAuth {
         (y): Method => ({
           type: y.type,
           label: y.label,
+          preferred: y.preferred === true ? true : undefined,
         }),
       ),
     )
@@ -118,24 +120,42 @@ export namespace ProviderAuth {
     },
   )
 
+  const PromptOption = z.object({
+    label: z.string(),
+    value: z.string(),
+    hint: z.string().optional(),
+  })
   export const Prompt = z
-    .object({
-      type: z.union([z.literal("text"), z.literal("select")]),
-      key: z.string(),
-      message: z.string(),
-      placeholder: z.string().optional(),
-      options: z
-        .array(
-          z.object({
-            label: z.string(),
-            value: z.string(),
-            hint: z.string().optional(),
-          }),
-        )
-        .optional(),
-    })
+    .discriminatedUnion("type", [
+      z.object({
+        type: z.literal("text"),
+        key: z.string(),
+        message: z.string(),
+        placeholder: z.string().optional(),
+      }),
+      z.object({
+        type: z.literal("select"),
+        key: z.string(),
+        message: z.string(),
+        selectValue: z.string(),
+        options: z.array(PromptOption).min(1),
+      }),
+    ])
     .meta({ ref: "ProviderAuthPrompt" })
   export type Prompt = z.infer<typeof Prompt>
+
+  function selectPromptValue(prompt: Extract<NonNullable<AuthHook["methods"][number]["prompts"]>[number], { type: "select" }>) {
+    const selectValue = typeof prompt.selectValue === "string" ? prompt.selectValue : ""
+    if (!selectValue) {
+      throw new Error(`Provider auth select prompt ${prompt.key} requires selectValue`)
+    }
+    if (!prompt.options.some((option) => option.value === selectValue)) {
+      throw new Error(
+        `Provider auth select prompt ${prompt.key} selectValue ${JSON.stringify(selectValue)} is not in options`,
+      )
+    }
+    return selectValue
+  }
 
   export const prompts = fn(
     z.object({
@@ -152,13 +172,23 @@ export namespace ProviderAuth {
       return method.prompts
         .filter((p) => !p.condition || p.condition(currentInputs))
         .map(
-          (p): Prompt => ({
-            type: p.type,
-            key: p.key,
-            message: p.message,
-            placeholder: "placeholder" in p ? p.placeholder : undefined,
-            options: "options" in p ? p.options : undefined,
-          }),
+          (p): Prompt => {
+            if (p.type === "select") {
+              return {
+                type: "select",
+                key: p.key,
+                message: p.message,
+                selectValue: selectPromptValue(p),
+                options: p.options,
+              }
+            }
+            return {
+              type: "text",
+              key: p.key,
+              message: p.message,
+              placeholder: p.placeholder,
+            }
+          },
         )
     },
   )

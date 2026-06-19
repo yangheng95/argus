@@ -20,6 +20,7 @@ describe("app/session dialog single source", () => {
   const configHost = readText("src/components/ConfigDialogHost.tsx")
   const dialogStore = readText("src/store/dialog.ts")
   const networkPanel = readText("src/components/settings/NetworkPanel.tsx")
+  const llmService = readText("src/services/llm.ts")
 
   test("app dialog service is store-backed, not bridge-backed DOM mutation", () => {
     expect(appDialogService).not.toContain("installAppDialogBridge")
@@ -117,7 +118,14 @@ describe("app/session dialog single source", () => {
     expect(appHost).not.toContain("<Select.Trigger")
     expect(appHost).not.toContain("<Select.HiddenSelect")
     expect(appHost).not.toContain("function AppDialogSelectOptionItem")
-    expect(appDialogService).toContain("dialogStore.app.selectValue || null")
+    expect(appDialogService).toContain("dialogStore.app.selectValue")
+    expect(appDialogService).not.toContain("dialogStore.app.selectValue || null")
+    expect(appDialogService).toContain("validatedChoiceValue")
+    expect(appDialogService).not.toContain("options.selectOptions?.[0]?.value")
+    expect(appDialogService).not.toContain("dialogStore.app.selectValue || dialogStore.app.recommendedValue")
+    expect(appHost).not.toContain("selectOptions()[0]")
+    expect(llmService).not.toContain("prompt.options[0]")
+    expect(llmService).not.toContain("methods[0]?.index")
     expect(appDialogService).not.toContain('document.getElementById("appDialogSelect")')
     expect(appDialogService).not.toContain("HTMLSelectElement")
     expect(appHost).not.toContain("<select")

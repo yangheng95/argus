@@ -51,7 +51,34 @@ function armAutoSettleTimer(epoch: number, countdownSeconds: number): number {
   return deadline
 }
 
+function dialogUsesChoiceValue(options: AppDialogOptions): boolean {
+  return options.select === true || options.kind === "task-queue-decision"
+}
+
+function validatedChoiceValue(options: AppDialogOptions): string {
+  if (!dialogUsesChoiceValue(options)) return typeof options.selectValue === "string" ? options.selectValue : ""
+  const selectOptions = Array.isArray(options.selectOptions) ? options.selectOptions : []
+  if (selectOptions.length === 0) {
+    throw new Error(`showAppDialog ${options.kind || "select"} requires non-empty selectOptions`)
+  }
+  for (const option of selectOptions) {
+    if (typeof option?.value !== "string" || option.value.length === 0) {
+      throw new Error(`showAppDialog ${options.kind || "select"} received an option without a value`)
+    }
+  }
+  const selectValue = typeof options.selectValue === "string" ? options.selectValue : ""
+  if (!selectValue) {
+    throw new Error(`showAppDialog ${options.kind || "select"} requires selectValue`)
+  }
+  if (!selectOptions.some((option) => option.value === selectValue)) {
+    throw new Error(`showAppDialog ${options.kind || "select"} selectValue ${JSON.stringify(selectValue)} is not in selectOptions`)
+  }
+  return selectValue
+}
+
 export function showAppDialog(options: AppDialogOptions = {}): Promise<AppDialogResult> {
+  const selectValue = validatedChoiceValue(options)
+
   if (resolver) {
     const resolve = resolver
     resolver = null
@@ -82,7 +109,7 @@ export function showAppDialog(options: AppDialogOptions = {}): Promise<AppDialog
     inputValue: options.inputValue || "",
     select: options.select === true,
     selectLabel: options.selectLabel || t("dialog.input"),
-    selectValue: options.selectValue || options.selectOptions?.[0]?.value || "",
+    selectValue,
     selectOptions: options.selectOptions || [],
     recommendedValue: options.recommendedValue || "",
     countdownSeconds: options.countdownSeconds ?? 0,
@@ -118,11 +145,11 @@ export function settleAppDialog(confirmed: boolean, epoch?: number, valueOverrid
     valueOverride !== undefined
       ? valueOverride
       : isTaskCardDecision
-        ? dialogStore.app.selectValue || dialogStore.app.recommendedValue || null
+        ? dialogStore.app.selectValue
         : dialogStore.app.input
           ? (inputValue ?? dialogStore.app.inputValue ?? "")
           : dialogStore.app.select
-            ? dialogStore.app.selectValue || null
+            ? dialogStore.app.selectValue
             : null
   const resolve = resolver
   resolver = null

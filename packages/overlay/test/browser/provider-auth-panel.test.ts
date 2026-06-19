@@ -308,17 +308,25 @@ async function submitDialogInput(tab: Page, value: string) {
   )
 }
 
-async function submitDialogSelect(tab: Page, value: string) {
+async function submitDialogSelect(tab: Page, value: string, expectedInitialText: string, screenshotName?: string) {
   await tab.waitForFunction(
     () =>
       document.querySelector("#appDialog") !== null &&
       document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false,
   )
+  const initialState = await tab.evaluate(() => ({
+    triggerText: document.querySelector("#appDialogSelect")?.textContent?.trim() || "",
+  }))
+  assert.equal(initialState.triggerText, expectedInitialText)
   const before = await tab.evaluate(() => ({
     body: document.querySelector("#appDialogBody")?.textContent || "",
     label: document.querySelector("#appDialogSelectLabel")?.textContent || "",
   }))
   await clickVisible(tab, "#appDialogSelect")
+  if (screenshotName) {
+    const screenshotPath = await saveElementScreenshot(tab, screenshotName)
+    assert.ok(screenshotPath.endsWith(screenshotName))
+  }
   await clickVisible(tab, `.app-dialog-select-option[data-value="${value}"]`)
   await tab.click("#btnAppDialogOk")
   await tab.waitForFunction(
@@ -559,6 +567,7 @@ test(
                 type: "select",
                 key: "flow",
                 message: "Choose callback handling",
+                selectValue: "manual",
                 options: [{ label: "Paste redirect URL", value: "manual", hint: "Overlay-friendly" }],
               },
             ])
@@ -569,6 +578,7 @@ test(
                 type: "select",
                 key: "flow",
                 message: "Choose callback handling",
+                selectValue: "manual",
                 options: [{ label: "Paste redirect URL", value: "manual", hint: "Overlay-friendly" }],
               },
               {
@@ -584,6 +594,7 @@ test(
               type: "select",
               key: "flow",
               message: "Choose callback handling",
+              selectValue: "manual",
               options: [{ label: "Paste redirect URL", value: "manual", hint: "Overlay-friendly" }],
             },
             {
@@ -622,7 +633,12 @@ test(
         await clickVisible(tab, '[data-testid="provider-auth-openai-codex"]')
         const firstDialog = await dialogState(tab)
         if (!firstDialog.inputVisible && !firstDialog.selectVisible) await acceptDialog(tab)
-        await submitDialogSelect(tab, "manual")
+        await submitDialogSelect(
+          tab,
+          "manual",
+          "Paste redirect URL - Overlay-friendly",
+          "app-dialog-select-value-single-source.png",
+        )
         await submitDialogInput(tab, "overlay")
         await submitDialogInput(tab, "http://localhost:1455/auth/callback?code=oauth-code&state=overlay-state")
 
@@ -758,6 +774,7 @@ test(
               type: "select",
               key: "region",
               message: "Region",
+              selectValue: "eu",
               options: [
                 { label: "Europe", value: "eu" },
                 { label: "United States", value: "us" },
@@ -783,7 +800,7 @@ test(
         await tab.waitForSelector('[data-testid="provider-auth-custom-api"]')
         await clickVisible(tab, '[data-testid="provider-auth-custom-api"]')
         await submitDialogInput(tab, "team-a")
-        await submitDialogSelect(tab, "eu")
+        await submitDialogSelect(tab, "eu", "Europe")
 
         await acceptDialog(tab)
         await tab.waitForFunction(() => document.body.textContent?.includes("Connected"))

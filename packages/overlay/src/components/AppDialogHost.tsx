@@ -32,8 +32,7 @@ export function AppDialogHost() {
     settleAppDialog(true, dialogStore.app.epoch, value)
   }
   const selectOptions = () => (dialogStore.app.selectOptions || []) as AppDialogSelectOption[]
-  const selectedOption = () =>
-    selectOptions().find((item) => item.value === dialogStore.app.selectValue) ?? selectOptions()[0] ?? null
+  const selectedOption = () => selectOptions().find((item) => item.value === dialogStore.app.selectValue) ?? null
   const setSelectOption = (option: AppDialogSelectOption | null) => {
     if (!option) return
     setDialogStore("app", "selectValue", option.value)
@@ -131,7 +130,7 @@ export function AppDialogHost() {
             class="app-dialog-decision__choices"
             itemClass="app-dialog-decision__choice"
             options={decisionOptions()}
-            value={dialogStore.app.selectValue || ""}
+            value={dialogStore.app.selectValue}
             ariaLabel={dialogStore.app.selectLabel || ""}
             onActivate={chooseTaskDecision}
             itemAttributes={(option) => ({
