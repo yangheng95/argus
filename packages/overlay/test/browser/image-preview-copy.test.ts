@@ -373,6 +373,17 @@ test(
       await page.focus('.card[data-kind="tool"] > .card__head .card__head-main')
       await page.keyboard.press("Enter")
       await page.waitForSelector(".msg-browser-evidence__trigger")
+      const evidenceTypography = await page.$eval(".msg-browser-evidence__title", (title) => {
+        const style = getComputedStyle(title)
+        const token = getComputedStyle(document.documentElement).getPropertyValue("--ui-font-weight-strong").trim()
+        return {
+          fontWeight: style.fontWeight,
+          strongToken: token,
+          text: title.textContent?.trim() || "",
+        }
+      })
+      assert.equal(evidenceTypography.fontWeight, evidenceTypography.strongToken)
+      assert.ok(evidenceTypography.text.length > 0)
       const expandedToolHeader = await page.$eval('.card[data-kind="tool"] > .card__head .card__head-main', (main) =>
         main.getAttribute("aria-expanded"),
       )

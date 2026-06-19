@@ -148,7 +148,7 @@
 }
 
 .msg-browser-evidence__title {
-  font-weight: 600;
+  font-weight: var(--ui-font-weight-strong);
 }
 
 .msg-browser-evidence__url,

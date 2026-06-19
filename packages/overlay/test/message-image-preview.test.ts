@@ -138,6 +138,14 @@ describe("message image preview", () => {
     expect(trigger).toContain("justify-self: start;")
   })
 
+  test("browser evidence title uses the shared strong font-weight token", () => {
+    const messagesCss = read("src/styles/surfaces/messages.css")
+    const title = block(messagesCss, ".msg-browser-evidence__title")
+
+    expect(title).toContain("font-weight: var(--ui-font-weight-strong);")
+    expect(title).not.toMatch(/font-weight:\s*[0-9]+;/)
+  })
+
   test("modal preview owns zoom controls and does not cap the image to thumbnail size", () => {
     const component = read("src/components/ImagePreview.tsx")
     const css = read("src/styles/surfaces/messages.css")
