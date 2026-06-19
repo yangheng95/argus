@@ -303,6 +303,45 @@ test(
         background: aboutLinkStates[0].background,
         borderColor: aboutLinkStates[0].borderColor,
       })
+      await taskPage.mouse.move(0, 0)
+      await taskPage.evaluate(() => {
+        const active = document.activeElement
+        if (active instanceof HTMLElement) active.blur()
+      })
+      let aboutLinkFocused = false
+      for (let attempt = 0; attempt < 160; attempt += 1) {
+        await taskPage.keyboard.press("Tab")
+        aboutLinkFocused = await taskPage.$eval(".about-link", (node: HTMLElement) => document.activeElement === node)
+        if (aboutLinkFocused) break
+      }
+      assert.equal(aboutLinkFocused, true)
+      const focusedAboutLinkState = await taskPage.$eval(".about-link", (node: HTMLAnchorElement) => {
+        const style = getComputedStyle(node)
+        return {
+          focusVisible: node.matches(":focus-visible"),
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+          color: style.color,
+          background: style.backgroundColor,
+          borderColor: style.borderColor,
+        }
+      })
+      assert.equal(focusedAboutLinkState.focusVisible, true)
+      assert.notEqual(focusedAboutLinkState.outlineStyle, "none")
+      assert.notEqual(focusedAboutLinkState.outlineWidth, "0px")
+      assert.notDeepEqual(
+        {
+          color: focusedAboutLinkState.color,
+          background: focusedAboutLinkState.background,
+          borderColor: focusedAboutLinkState.borderColor,
+        },
+        {
+          color: aboutLinkStates[0].color,
+          background: aboutLinkStates[0].background,
+          borderColor: aboutLinkStates[0].borderColor,
+        },
+      )
+      await saveElementScreenshot(taskPage, ".about-links", "runtime-icon-about-link-focus-visible.png")
       await saveElementScreenshot(taskPage, "#configDialog", "runtime-icon-about-panel.png")
       await taskPage.close()
 
