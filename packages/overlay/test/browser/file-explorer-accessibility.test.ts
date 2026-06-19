@@ -155,7 +155,9 @@ test("file explorer current file and directory expansion are exposed on the row 
         })),
       )
     }
-    if (path === "/find/file") return send(["src/main.tsx"])
+    if (path === "/find/file") {
+      return send(Array.from({ length: 130 }, (_, index) => `virtual-${String(index).padStart(3, "0")}.ts`))
+    }
     if (path === "/file/content") return send({ type: "text", content: "export const file = true;\n" })
     if (path === "/task/events") return eventStream()
     return send({})
@@ -179,10 +181,12 @@ test("file explorer current file and directory expansion are exposed on the row 
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", serverUrl)
       localStorage.setItem("oc_right_panel_collapsed", "false")
+      document.documentElement.style.setProperty("--ui-scale", "1.25")
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
+    await page.evaluate(() => document.documentElement.style.setProperty("--ui-scale", "1.25"))
     await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
     await page.waitForSelector('.file-explorer-row[title="README.md"]', { visible: true })
 
@@ -217,6 +221,43 @@ test("file explorer current file and directory expansion are exposed on the row 
     const explorerElementForSearchFocus = await page.$("#centerWorkbenchExplorer")
     assert.ok(explorerElementForSearchFocus)
     writeFileSync(searchFocusScreenshotPath, await explorerElementForSearchFocus.screenshot({}))
+
+    await page.type(".file-explorer-search-input", "virtual")
+    await page.waitForSelector('.file-explorer-row[title="virtual-000.ts"]', { visible: true })
+    const virtualGeometry = await page.$eval('.file-explorer-row[title="virtual-000.ts"]', (node) => {
+      const row = node as HTMLElement
+      const item = row.closest(".file-explorer-virtual-item") as HTMLElement | null
+      const list = row.closest(".file-explorer-list") as HTMLElement | null
+      const rowBox = row.getBoundingClientRect()
+      const itemBox = item?.getBoundingClientRect()
+      const style = getComputedStyle(row)
+      return {
+        rowClass: row.className,
+        dataUi: row.dataset.ui ?? "",
+        variant: row.dataset.variant ?? "",
+        virtualized: list?.dataset.virtualized ?? "",
+        rootScale: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")),
+        rowHeight: rowBox.height,
+        itemHeight: itemBox?.height ?? 0,
+        computedHeight: style.height,
+        depth: style.getPropertyValue("--file-explorer-row-depth").trim(),
+      }
+    })
+    assert.match(virtualGeometry.rowClass, /\boc-button\b/)
+    assert.equal(virtualGeometry.dataUi, "file-explorer-row")
+    assert.equal(virtualGeometry.variant, "ghost")
+    assert.equal(virtualGeometry.virtualized, "true")
+    assert.equal(virtualGeometry.depth, "0")
+    assert.ok(virtualGeometry.rootScale > 1.2, JSON.stringify(virtualGeometry))
+    assert.ok(Math.abs(virtualGeometry.rowHeight - 26 * virtualGeometry.rootScale) < 0.5, JSON.stringify(virtualGeometry))
+    assert.ok(Math.abs(virtualGeometry.itemHeight - virtualGeometry.rowHeight) < 0.5, JSON.stringify(virtualGeometry))
+
+    await page.$eval(".file-explorer-search-input", (node) => {
+      const input = node as HTMLInputElement
+      input.value = ""
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }))
+    })
+    await page.waitForSelector('.file-explorer-row[title="README.md"]', { visible: true })
 
     const initialState = await page.evaluate(() => {
       const list = document.querySelector<HTMLElement>(".file-explorer-list")
@@ -429,7 +470,7 @@ test("file explorer current file and directory expansion are exposed on the row 
 
     const fileEditorCloseSelector = '.file-editor-pane .oc-button[data-ui="file-editor-close"]'
     let closeFocusedByKeyboard = false
-    for (let idx = 0; idx < 80; idx += 1) {
+    for (let idx = 0; idx < 240; idx += 1) {
       await page.keyboard.press("Tab")
       closeFocusedByKeyboard = await page.$eval(fileEditorCloseSelector, (node) => document.activeElement === node)
       if (closeFocusedByKeyboard) break

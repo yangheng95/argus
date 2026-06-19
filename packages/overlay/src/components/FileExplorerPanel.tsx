@@ -12,13 +12,20 @@ import {
 import { Virtualizer, type CustomContainerComponentProps, type CustomItemComponentProps } from "virtua/solid"
 import { apiJson } from "../services/api"
 import { openFileEditor, selectedFilePath, uploadDroppedFiles, type FileNode } from "../services/file-workbench"
+import { currentUIScale } from "../services/pane"
 import { t, tc } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
 
 const VIRTUAL_EXPLORER_ROW_THRESHOLD = 120
-const EXPLORER_ROW_HEIGHT = 26
+const FILE_EXPLORER_ROW_HEIGHT_PX = 26
+const FILE_EXPLORER_ROW_INDENT_PX = 14
+const FILE_EXPLORER_ROW_CHEVRON_WIDTH_PX = 14
+const FILE_EXPLORER_ROW_ICON_WIDTH_PX = 16
+const FILE_EXPLORER_ROW_GAP_PX = 4
+const FILE_EXPLORER_ROW_PADDING_START_PX = 3
+const FILE_EXPLORER_ROW_PADDING_END_PX = 7
 const SEARCH_LIMIT = 80
 const INITIAL_DIRECTORY_LOAD_DELAY_MS = 250
 const ACTIVE_DIRECTORY_REFRESH_INTERVAL_MS = 15_000
@@ -67,6 +74,10 @@ function fileName(path: string): string {
 
 function dirname(path: string): string {
   return parentPath(path)
+}
+
+function scaledExplorerRowHeight(): number {
+  return FILE_EXPLORER_ROW_HEIGHT_PX * currentUIScale()
 }
 
 function dragHasFiles(event: DragEvent): boolean {
@@ -219,10 +230,20 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   })
 
   const shouldVirtualize = createMemo(() => rows().length > VIRTUAL_EXPLORER_ROW_THRESHOLD)
+  const explorerRowItemSize = () => scaledExplorerRowHeight()
   const rootLoading = createMemo(() => !deferredQuery() && loadingPaths().has("") && !childrenByPath().has(""))
   const searchLoading = createMemo(() => !!deferredQuery() && searchResults.loading)
   const rootError = createMemo(() => (!deferredQuery() ? (directoryErrors().get("") ?? "") : ""))
   const uploadTargetLabel = createMemo(() => uploadDragTarget() || ".")
+  const explorerPanelStyle = () => ({
+    "--file-explorer-row-height": `calc(${FILE_EXPLORER_ROW_HEIGHT_PX}px * var(--ui-scale))`,
+    "--file-explorer-row-indent": `calc(${FILE_EXPLORER_ROW_INDENT_PX}px * var(--ui-scale))`,
+    "--file-explorer-row-chevron-width": `calc(${FILE_EXPLORER_ROW_CHEVRON_WIDTH_PX}px * var(--ui-scale))`,
+    "--file-explorer-row-icon-width": `calc(${FILE_EXPLORER_ROW_ICON_WIDTH_PX}px * var(--ui-scale))`,
+    "--file-explorer-row-gap": `calc(${FILE_EXPLORER_ROW_GAP_PX}px * var(--ui-scale))`,
+    "--file-explorer-row-padding-start": `calc(${FILE_EXPLORER_ROW_PADDING_START_PX}px * var(--ui-scale))`,
+    "--file-explorer-row-padding-end": `calc(${FILE_EXPLORER_ROW_PADDING_END_PX}px * var(--ui-scale))`,
+  })
 
   const toggleDirectory = (path: string) => {
     setExpandedPaths((prev) => {
@@ -276,13 +297,17 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
     if (row.kind === "search") {
       const isSearchRowCurrent = () => selectedFilePath() === row.path
       return (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
+          tone="neutral"
           class="file-explorer-row"
+          data-ui="file-explorer-row"
           data-kind="file"
           data-active={isSearchRowCurrent() ? "true" : "false"}
           aria-current={isSearchRowCurrent() ? "true" : undefined}
-          style={{ "padding-left": `calc(${row.depth * 14 + 3}px * var(--ui-scale))` }}
+          style={{ "--file-explorer-row-depth": String(row.depth) }}
           title={row.path}
           onClick={() => openFileEditor(row.path)}
         >
@@ -290,7 +315,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
           <Icon name="file-document" size={13} />
           <span class="file-explorer-name">{fileName(row.path)}</span>
           <span class="file-explorer-dir">{dirname(row.path)}</span>
-        </button>
+        </Button>
       )
     }
 
@@ -299,16 +324,20 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
     const isNodeCurrent = () => selectedFilePath() === node.path
     const isUploadTarget = () => isDirectory && uploadDragTarget() === node.path
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
+        tone="neutral"
         class="file-explorer-row"
+        data-ui="file-explorer-row"
         data-kind={node.type}
         data-active={isNodeCurrent() ? "true" : "false"}
         data-upload-target={isUploadTarget() ? "true" : undefined}
         data-ignored={node.ignored ? "true" : "false"}
         aria-current={isNodeCurrent() ? "true" : undefined}
         aria-expanded={isDirectory ? row.expanded : undefined}
-        style={{ "padding-left": `calc(${row.depth * 14 + 3}px * var(--ui-scale))` }}
+        style={{ "--file-explorer-row-depth": String(row.depth) }}
         title={node.path}
         onClick={() => {
           if (isDirectory) toggleDirectory(node.path)
@@ -347,7 +376,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
         <Show when={!row.loading && row.error}>
           <span class="file-explorer-meta">{t("common.error")}</span>
         </Show>
-      </button>
+      </Button>
     )
   }
 
@@ -357,6 +386,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
       aria-label={t("explorer.title")}
       data-upload-drag={uploadDragTarget() ? "true" : "false"}
       data-uploading={uploading() ? "true" : "false"}
+      style={explorerPanelStyle()}
       onDragEnter={(event) => beginUploadDrag(event, "")}
       onDragOver={(event) => handleUploadDragOver(event, "")}
       onDragLeave={(event) => {
@@ -454,7 +484,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
               <Show when={shouldVirtualize()} fallback={<For each={rows()}>{renderRow}</For>}>
                 <Virtualizer
                   data={rows()}
-                  itemSize={EXPLORER_ROW_HEIGHT}
+                  itemSize={explorerRowItemSize()}
                   overscan={12}
                   as={ExplorerVirtualWindow}
                   item={ExplorerVirtualItem}

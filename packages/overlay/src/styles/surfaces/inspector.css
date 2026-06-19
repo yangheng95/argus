@@ -461,6 +461,7 @@
   min-height: 0;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
+  --file-explorer-row-depth: 0;
 }
 
 .file-explorer-toolbar {
@@ -551,47 +552,51 @@
 }
 
 .file-explorer-row {
+  --oc-button-height: var(--file-explorer-row-height);
+  --oc-button-padding-x: 0;
+  --oc-button-padding-y: 0;
+  --oc-button-gap: var(--file-explorer-row-gap);
+  --oc-button-color: var(--text-soft);
+  --oc-button-bg: transparent;
+
   width: 100%;
   min-width: 0;
-  height: calc(26px * var(--ui-scale));
+  height: var(--file-explorer-row-height);
+  min-height: var(--file-explorer-row-height);
   display: grid;
-  grid-template-columns: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale)) minmax(0, 1fr) auto;
+  grid-template-columns: var(--file-explorer-row-chevron-width) var(--file-explorer-row-icon-width) minmax(0, 1fr) auto;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  padding: 0 calc(7px * var(--ui-scale)) 0 calc(3px * var(--ui-scale));
-  border: 0;
-  background: transparent;
-  color: var(--text-soft);
+  padding: 0 var(--file-explorer-row-padding-end) 0
+    calc(var(--file-explorer-row-padding-start) + var(--file-explorer-row-depth) * var(--file-explorer-row-indent));
   font-size: var(--ui-font-control);
   text-align: left;
-  cursor: pointer;
 }
 
 .file-explorer-row:hover {
-  background: var(--subtle-2);
-  color: var(--text-strong);
+  --oc-button-bg: var(--subtle-2);
+  --oc-button-color: var(--text-strong);
 }
 
 .file-explorer-row:focus-visible {
-  background: var(--subtle-2);
-  color: var(--text-strong);
+  --oc-button-bg: var(--subtle-2);
+  --oc-button-color: var(--text-strong);
   outline: var(--oc-border-width) solid var(--accent);
   outline-offset: calc(-1px * var(--ui-scale));
 }
 
 .file-explorer-row[data-active="true"] {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--text-strong);
+  --oc-button-bg: color-mix(in srgb, var(--accent) 16%, transparent);
+  --oc-button-color: var(--text-strong);
 }
 
 .file-explorer-row[data-upload-target="true"] {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface-hover));
-  color: var(--text-strong);
+  --oc-button-bg: color-mix(in srgb, var(--accent) 12%, var(--surface-hover));
+  --oc-button-color: var(--text-strong);
   box-shadow: inset calc(2px * var(--ui-scale)) 0 0 color-mix(in srgb, var(--accent) 84%, transparent);
 }
 
 .file-explorer-row[data-ignored="true"] {
-  color: color-mix(in srgb, var(--text-muted) 70%, transparent);
+  --oc-button-color: color-mix(in srgb, var(--text-muted) 70%, transparent);
 }
 
 .file-explorer-chevron {

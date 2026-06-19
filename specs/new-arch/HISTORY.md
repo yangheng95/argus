@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                       | Title                          |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| [2026-06-20-file-explorer-row-button-size-source.md](2026-06-20-file-explorer-row-button-size-source.md) | File Explorer Row Button Size Source |
 | [2026-06-20-trace-event-head-button-primitive.md](2026-06-20-trace-event-head-button-primitive.md) | Trace Event Head Button Primitive |
 | [2026-06-20-architect-integrity-badge-primitive.md](2026-06-20-architect-integrity-badge-primitive.md) | Architect Integrity Badge Primitive |
 | [2026-06-20-app-dialog-recommended-badge-primitive.md](2026-06-20-app-dialog-recommended-badge-primitive.md) | AppDialog Recommended Badge Primitive |
