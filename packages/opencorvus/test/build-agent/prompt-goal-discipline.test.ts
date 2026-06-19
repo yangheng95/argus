@@ -81,6 +81,8 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("`reference-comparison` evidence")
     expect(normalized).toContain("route-health failure")
     expect(normalized).toContain("do not hand-normalize source bounding boxes")
+    expect(normalized).toContain("request only `desktop` viewport region comparison evidence")
+    expect(normalized).toContain("do not block on mobile or tablet reference evidence")
     expect(normalized).toContain("use plain screenshots only as surrounding context")
     expect(normalized).toContain("Do not report frontend parity success without fresh region-comparison artifacts")
     expect(normalized).toContain("bound to the current goal, region, or delivered surface")

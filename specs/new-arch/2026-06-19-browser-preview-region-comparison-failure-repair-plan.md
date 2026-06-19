@@ -285,6 +285,20 @@ the current goal worktree.
 
 ## Repair Plan
 
+### Desktop-only scope correction - 2026-06-19
+
+The World Economy clone acceptance currently only needs the desktop page. Mobile
+and tablet evidence must not be used to block this task's visual comparison.
+
+For desktop Reference vs Implementation comparison, the source desktop reference
+screenshot width is the viewport authority. The runner should capture the local
+implementation at that same desktop width instead of failing because the built-in
+`desktop` preset is `1280px` while `web-clone-source/reference.png` is `1440px`.
+This keeps a single coordinate source and avoids manual bbox normalization.
+
+Non-desktop mismatches remain explicit failures unless a future task introduces
+an intentional source reference for that viewport.
+
 ### Phase 1 - Canonical Source Reference Schema
 
 Create one exported schema for source reference IDs, for example:

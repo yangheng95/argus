@@ -46,6 +46,7 @@ const BrowserPreviewImageSize = z
     height: z.number().finite().positive(),
   })
   .strict()
+type BrowserPreviewImageSizeValue = z.infer<typeof BrowserPreviewImageSize>
 
 const BrowserPreviewRouteDiagnostics = z
   .object({
@@ -228,7 +229,7 @@ export async function compareBrowserPreviewRegions(
 
   const sourceRefs = new Map<
     string,
-    { path: string; bbox: BrowserPreviewRegionBox; imageSize: z.infer<typeof BrowserPreviewImageSize> }
+    { path: string; bbox: BrowserPreviewRegionBox; imageSize: BrowserPreviewImageSizeValue }
   >()
   for (const binding of selectedBindings) {
     try {
@@ -256,12 +257,18 @@ export async function compareBrowserPreviewRegions(
   }
 
   const runnableBindings = selectedBindings.filter((binding) => sourceRefs.has(bindingKey(binding)))
+  const implementationViewportByID = comparisonImplementationViewportByID({
+    selectedViewportIDs,
+    runnableBindings,
+    sourceRefs,
+  })
   const sidecar = runnableBindings.length
     ? await runBrowserPreviewRegionComparisonCapture({
         projectRoot: input.projectRoot,
         taskID: input.taskID,
         targetID: input.targetID,
         viewportIDs: selectedViewportIDs,
+        viewportByID: implementationViewportByID,
         bindings: runnableBindings,
         includeFullpageOverview: input.includeFullpageOverview === true,
         signal: input.signal,
@@ -295,7 +302,7 @@ export async function compareBrowserPreviewRegions(
           reason,
           source_bbox: binding.source.bbox,
           source_image_size: source.imageSize,
-          implementation_viewport: region.viewport ?? browserPreviewViewportByID(binding.viewport_id),
+          implementation_viewport: region.viewport ?? implementationViewportByID[binding.viewport_id],
           implementation_fullpage_size: region.fullpageSize,
           implementation_screenshot_path: region.screenshotPath,
           route_diagnostics: region.routeDiagnostics,
@@ -313,7 +320,7 @@ export async function compareBrowserPreviewRegions(
             sourceImageSize: source.imageSize,
             implementationImagePath: region.screenshotPath,
             implementationBox: region.bbox,
-            implementationViewport: region.viewport ?? browserPreviewViewportByID(binding.viewport_id),
+            implementationViewport: region.viewport ?? implementationViewportByID[binding.viewport_id],
             implementationFullpageSize: region.fullpageSize,
             implementationScreenshotPath: region.screenshotPath,
             routeDiagnostics: region.routeDiagnostics,
@@ -332,7 +339,7 @@ export async function compareBrowserPreviewRegions(
           source_bbox: binding.source.bbox,
           implementation_bbox: region.bbox,
           source_image_size: source.imageSize,
-          implementation_viewport: region.viewport ?? browserPreviewViewportByID(binding.viewport_id),
+          implementation_viewport: region.viewport ?? implementationViewportByID[binding.viewport_id],
           implementation_fullpage_size: region.fullpageSize,
           implementation_screenshot_path: region.screenshotPath,
           route_diagnostics: region.routeDiagnostics,
@@ -417,11 +424,11 @@ async function materializeRegionComparison(input: {
   binding: BrowserPreviewRegionBinding
   sourceImagePath: string
   sourceBox: BrowserPreviewRegionBox
-  sourceImageSize: z.infer<typeof BrowserPreviewImageSize>
+  sourceImageSize: BrowserPreviewImageSizeValue
   implementationImagePath: string
   implementationBox: BrowserPreviewRegionBox
-  implementationViewport: z.infer<typeof BrowserPreviewImageSize>
-  implementationFullpageSize?: z.infer<typeof BrowserPreviewImageSize>
+  implementationViewport: BrowserPreviewImageSizeValue
+  implementationFullpageSize?: BrowserPreviewImageSizeValue
   implementationScreenshotPath: string
   routeDiagnostics?: z.infer<typeof BrowserPreviewRouteDiagnostics>
   includeSideBySide: boolean
@@ -517,7 +524,7 @@ async function materializeRegionComparison(input: {
   }
 }
 
-async function readPngSize(inputPath: string): Promise<z.infer<typeof BrowserPreviewImageSize>> {
+async function readPngSize(inputPath: string): Promise<BrowserPreviewImageSizeValue> {
   const metadata = await sharp(inputPath).metadata()
   if (!metadata.width || !metadata.height) throw new Error(`Cannot read PNG dimensions: ${inputPath}`)
   return { width: metadata.width, height: metadata.height }
@@ -636,6 +643,34 @@ function dedupeViewportIDs(ids: BrowserPreviewViewportID[]): BrowserPreviewViewp
   const out: BrowserPreviewViewportID[] = []
   for (const id of ids) {
     if (!out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+function comparisonImplementationViewportByID(input: {
+  selectedViewportIDs: BrowserPreviewViewportID[]
+  runnableBindings: BrowserPreviewRegionBinding[]
+  sourceRefs: Map<string, { imageSize: BrowserPreviewImageSizeValue }>
+}): Record<BrowserPreviewViewportID, BrowserPreviewImageSizeValue> {
+  const out: Record<BrowserPreviewViewportID, BrowserPreviewImageSizeValue> = {
+    desktop: browserPreviewViewportByID("desktop"),
+    tablet: browserPreviewViewportByID("tablet"),
+    mobile: browserPreviewViewportByID("mobile"),
+  }
+  for (const viewportID of input.selectedViewportIDs) {
+    const preset = browserPreviewViewportByID(viewportID)
+    out[viewportID] = { width: preset.width, height: preset.height }
+    if (viewportID !== "desktop") continue
+
+    const sourceWidths = new Set<number>()
+    for (const binding of input.runnableBindings) {
+      if (binding.viewport_id !== viewportID) continue
+      const source = input.sourceRefs.get(bindingKey(binding))
+      if (source) sourceWidths.add(Math.ceil(source.imageSize.width))
+    }
+    if (sourceWidths.size !== 1) continue
+    const [sourceWidth] = [...sourceWidths]
+    out[viewportID] = { width: sourceWidth, height: preset.height }
   }
   return out
 }

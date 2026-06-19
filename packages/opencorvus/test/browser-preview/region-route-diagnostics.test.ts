@@ -82,11 +82,54 @@ describe("browser preview region route diagnostics", () => {
     },
     { timeout: REGION_ROUTE_DIAGNOSTICS_TEST_TIMEOUT_MILLISECONDS },
   )
+
+  test(
+    "does not block region comparison on long-lived network requests after page load",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+      await writeReferenceScreenshot(paths.sourcePackageAbsolute)
+      const server = await startLongRequestPreviewServer()
+      try {
+        const target = await Instance.provide({
+          directory: tmp.path,
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+        })
+
+        const result = await compareBrowserPreviewRegions({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportIDs: ["desktop"],
+          bindings: [
+            routeBinding({
+              regionID: "long-request-region",
+              route: "/long-request",
+              locatorValue: "economic-trends-dashboard",
+            }),
+          ],
+          includeDiff: true,
+        })
+
+        expect(result.status).toBe("passed")
+        const region = result.regions[0]
+        expect(region.status).toBe("completed")
+        expect(region.route_diagnostics?.status).toBe(200)
+        expect(region.route_diagnostics?.valid_app_page).toBe(true)
+        expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
+        expect(await fileExists(resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side))).toBe(true)
+      } finally {
+        await server.close()
+      }
+    },
+    { timeout: REGION_ROUTE_DIAGNOSTICS_TEST_TIMEOUT_MILLISECONDS },
+  )
 })
 
 function routeBinding(input: {
   regionID: string
-  route: "/world-economy" | "/world-economy/"
+  route: string
   locatorValue: string
 }): BrowserPreviewRegionBinding {
   return {
@@ -206,6 +249,64 @@ async function startRouteDiagnosticsServer(): Promise<{ url: string; close: () =
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("route diagnostics test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function startLongRequestPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((req, res) => {
+    const pathname = new URL(req.url ?? "/", "http://127.0.0.1").pathname
+    if (pathname === "/never") {
+      res.writeHead(200, { "content-type": "text/plain; charset=utf-8" })
+      res.write("still running")
+      return
+    }
+    if (pathname !== "/long-request") {
+      res.writeHead(404, { "content-type": "text/plain" })
+      res.end("not found")
+      return
+    }
+    const body = `<!doctype html>
+      <html>
+        <head>
+          <title>World Economy</title>
+          <style>
+            body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; }
+            main { padding: 60px 40px; min-height: 720px; }
+            [data-oc-region="economic-trends-dashboard"] {
+              width: 320px;
+              height: 140px;
+              background: #dbeafe;
+              color: #1e3a8a;
+              box-sizing: border-box;
+              padding: 24px;
+              font-size: 24px;
+            }
+          </style>
+          <script>
+            fetch("/never").catch(() => undefined)
+          </script>
+        </head>
+        <body>
+          <main>
+            <section data-oc-region="economic-trends-dashboard">Economic trends long request</section>
+            <p>Additional content keeps the route body representative of an application shell.</p>
+          </main>
+        </body>
+      </html>`
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(body)
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("long request test server did not bind a TCP address")
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>

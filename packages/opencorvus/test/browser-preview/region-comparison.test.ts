@@ -375,7 +375,7 @@ describe("browser preview region comparison", () => {
   )
 
   test(
-    "fails source reference viewport widths that exceed the implementation viewport before crop scoring",
+    "captures desktop implementation at the source reference width before crop scoring",
     async () => {
       await using tmp = await tmpdir({ git: true })
       const taskID = await seedTask(tmp.path)
@@ -439,16 +439,36 @@ describe("browser preview region comparison", () => {
           includeDiff: true,
         })
 
-        expect(result.status).toBe("failed")
+        expect(result.status).toBe("passed")
         const region = result.regions[0]
-        expect(region.status).toBe("failed")
-        expect(region.reason).toContain("Source reference viewport width 1440")
-        expect(region.reason).toContain("implementation viewport width 1280")
-        expect(region.visual).toBeUndefined()
-        expect(region.artifacts).toBeUndefined()
+        expect(region.status).toBe("completed")
+        expect(region.reason).toBeUndefined()
+        expect(region.visual).toBeTruthy()
+        expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
+        expect(region.artifacts?.diff).toEndWith("diff.png")
         expect(region.source_image_size).toEqual({ width: 1440, height: 600 })
-        expect(region.implementation_viewport).toEqual({ width: 1280, height: 800 })
+        expect(region.implementation_viewport).toEqual({ width: 1440, height: 800 })
+        expect(region.implementation_fullpage_size?.width).toBe(1440)
         expect(region.implementation_screenshot_path).toEndWith(".png")
+        expect(region.coverage).toEqual({
+          source_width: 320,
+          source_height: 140,
+          implementation_width: 320,
+          implementation_height: 140,
+          implementation_covers_source: true,
+        })
+        await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.source_crop), {
+          width: 320,
+          height: 140,
+        })
+        await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.implementation_crop), {
+          width: 320,
+          height: 140,
+        })
+        await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side), {
+          width: 656,
+          height: 216,
+        })
         const evidence = await Instance.provide({
           directory: tmp.path,
           fn: () =>
@@ -458,7 +478,8 @@ describe("browser preview region comparison", () => {
               evidenceID: result.evidenceIDs["desktop:default:economy-wide-reference"],
             }),
         })
-        expect(evidence?.status).toBe("failed")
+        expect(evidence?.status).toBe("passed")
+        expect(evidence?.artifactPaths?.side_by_side).toBe(region.artifacts?.side_by_side)
       } finally {
         await server.close()
       }
