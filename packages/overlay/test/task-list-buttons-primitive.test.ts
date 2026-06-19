@@ -59,6 +59,13 @@ test("TaskList task rows stay one-line while preserving detail in tooltips", () 
   expect(TASK_LIST_SOURCE).not.toContain('class="project-group-heading"')
   expect(TASK_LIST_SOURCE).not.toContain('class="project-group-count"')
   expect(TASK_LIST_SOURCE).not.toContain('class="project-group-chevron"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('import { Button } from "./ui/Button"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('data-ui="project-group-toggle"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('variant="ghost"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('size="mini"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('tone="neutral"')
+  expect(PROJECT_LEDGER_GROUP_SOURCE).not.toContain("<button")
+  expect(PROJECT_LEDGER_GROUP_SOURCE).not.toContain('class="project-group-heading"')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('class="project-group-count"')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('aria-expanded={props.collapsed ? "false" : "true"}')
   expect(PROJECT_LEDGER_GROUP_SOURCE).toContain('class="project-group-chevron"')
@@ -102,11 +109,16 @@ test("TaskList task rows stay one-line while preserving detail in tooltips", () 
   expect(SIDEBAR_CSS).toMatch(/\.task-row-actions\s*\{[^}]*flex:\s*0 0 auto;/)
   expect(SIDEBAR_CSS).toMatch(/\.task-row-mini\s*\{[^}]*min-height:\s*calc\(28px \* var\(--ui-scale\)\);/)
   expect(SIDEBAR_CSS).toMatch(
-    /\.project-group-heading\s*\{[^}]*grid-template-columns:\s*calc\(18px \* var\(--ui-scale\)\) minmax\(0, 1fr\) auto calc\(16px \* var\(--ui-scale\)\);/,
+    /\.project-group \.oc-button\[data-ui="project-group-toggle"\]\s*\{[^}]*grid-template-columns:\s*calc\(18px \* var\(--ui-scale\)\) minmax\(0, 1fr\) auto calc\(16px \* var\(--ui-scale\)\);/,
   )
-  expect(SIDEBAR_CSS).toMatch(/\.project-group-heading\s*\{[^}]*appearance:\s*none;/)
+  expect(SIDEBAR_CSS).toMatch(
+    /\.project-group \.oc-button\[data-ui="project-group-toggle"\]\s*\{[^}]*--oc-button-height:\s*calc\(26px \* var\(--ui-scale\)\);/,
+  )
   expect(SIDEBAR_CSS).toMatch(/\.project-group-copy\s*\{[^}]*display:\s*flex;/)
-  expect(SIDEBAR_CSS).toMatch(/\.project-group-heading\s*\{[^}]*min-height:\s*calc\(26px \* var\(--ui-scale\)\);/)
+  expect(SIDEBAR_CSS).toMatch(
+    /\.project-group \.oc-button\[data-ui="project-group-toggle"\]\s*\{[^}]*min-height:\s*calc\(26px \* var\(--ui-scale\)\);/,
+  )
+  expect(SIDEBAR_CSS).not.toMatch(/\.project-group-heading\b/)
   expect(SIDEBAR_CSS).toMatch(
     /\.project-group-body\s*\{[^}]*padding-left:\s*calc\(18px \* var\(--ui-scale\) \+ 5px \* var\(--ui-scale\)\);/,
   )

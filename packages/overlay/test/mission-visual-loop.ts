@@ -587,7 +587,9 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
     })
     await page.evaluate(() => {
       const headings = [
-        ...document.querySelectorAll<HTMLButtonElement>('[data-ui="mission-project-group"] .project-group-heading'),
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[data-ui="mission-project-group"] [data-ui="project-group-toggle"]',
+        ),
       ]
       if (headings.length < 2) throw new Error("expected at least two mission project group headings")
       headings[0].click()
@@ -597,7 +599,7 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
     })
     await page.evaluate(() => {
       const heading = document.querySelector<HTMLButtonElement>(
-        '[data-ui="mission-project-group"] .project-group-heading',
+        '[data-ui="mission-project-group"] [data-ui="project-group-toggle"]',
       )
       if (!heading) throw new Error("mission project group heading missing after collapse")
       heading.click()

@@ -147,6 +147,7 @@ const LEGACY_BUTTON_CLASSES = [
   "executor-chip",
   "chat-toolbar-btn",
   "titlebar-menubar-trigger",
+  "project-group-heading",
 ]
 const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
   btn: 0,
@@ -160,6 +161,7 @@ const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
   "executor-chip": 0,
   "chat-toolbar-btn": 0,
   "titlebar-menubar-trigger": 0,
+  "project-group-heading": 0,
 }
 
 function countThemeLayoutOverrides(css: string): number {
@@ -587,7 +589,6 @@ describe("overlay architecture guards", () => {
       "sidebar-list-group",
       "sidebar-list-cluster",
       "project-group",
-      "project-group-heading",
       "project-group-copy",
       "project-group-name",
       "project-group-parent",
@@ -600,6 +601,8 @@ describe("overlay architecture guards", () => {
 
     expect(sidebarSurface).toMatch(/\.sidebar-footer a:hover\s*\{/)
     expect(sidebarSurface).toMatch(/\.sidebar-list\.session-list-panel\s*\{/)
+    expect(sidebarSurface).not.toMatch(/\.project-group-heading\b/)
+    expect(sidebarSurface).toContain('.project-group .oc-button[data-ui="project-group-toggle"]')
     expect(sidebarSurface).toMatch(/\.project-group-icon\s*\{/)
     expect(sidebarSurface).toMatch(/@keyframes project-group-body-reveal\s*\{/)
     expect(sidebarSurface).not.toMatch(/data-active-project/)
