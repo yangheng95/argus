@@ -18,7 +18,7 @@ export interface MissionListProps {
   searchQuery: string
   onSearchChange: (next: string) => void
   onSelectMission: (mission: MissionRecord) => void
-  onSelectTask: (taskID: string) => void
+  onSelectTask: (task: MissionTaskProjection) => void
   onAbortMission: (mission: MissionRecord) => void
   onDeleteMission: (mission: MissionRecord) => void
   onRenameMission: (mission: MissionRecord, title: string) => void | Promise<void>
@@ -134,7 +134,10 @@ function missionTaskProjectionTip(task: MissionTaskProjection): string {
   return [task.title || task.id, task.id ? `ID: ${task.id}` : "", task.directory].filter(Boolean).join(" / ")
 }
 
-function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelectTask: (taskID: string) => void }) {
+function MissionTaskProjectionRow(props: {
+  task: MissionTaskProjection
+  onSelectTask: (task: MissionTaskProjection) => void
+}) {
   return (
     <li
       class="mission-task-projection-row"
@@ -151,7 +154,7 @@ function MissionTaskProjectionRow(props: { task: MissionTaskProjection; onSelect
         title={missionTaskProjectionTip(props.task)}
         onClick={(event) => {
           event.stopPropagation()
-          props.onSelectTask(props.task.id)
+          props.onSelectTask(props.task)
         }}
       >
         <span class="mission-task-projection-main">
@@ -169,7 +172,7 @@ function MissionRow(props: {
   mission: MissionRecord
   selected: boolean
   onSelectMission: (mission: MissionRecord) => void
-  onSelectTask: (taskID: string) => void
+  onSelectTask: (task: MissionTaskProjection) => void
   onAbortMission: (mission: MissionRecord) => void
   onDeleteMission: (mission: MissionRecord) => void
   onRenameMission: (mission: MissionRecord, title: string) => void | Promise<void>

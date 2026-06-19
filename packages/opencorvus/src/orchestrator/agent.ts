@@ -186,6 +186,22 @@ export function classifyOrchestratorDecisionStop(input: {
       `text=${JSON.stringify(snippet(finalText, 280))}`
     )
   }
+  let lastDecisionIndex = -1
+  let lastNonDecisionIndex = -1
+  for (let index = 0; index < input.wakeTools.length; index++) {
+    const tool = input.wakeTools[index]
+    if (tool.decisionEffect === "decision") lastDecisionIndex = index
+    if (tool.decisionEffect !== "decision" || isOrchestratorNoDecisionObservationToolName(tool.name)) {
+      lastNonDecisionIndex = index
+    }
+  }
+  if (lastNonDecisionIndex > lastDecisionIndex) {
+    return (
+      "Orchestrator stopped after non-decision tools following the latest task decision; no follow-up task decision was made. " +
+      `wake_tools=[${wakeToolNames.join(",")}]; effects=[${input.wakeTools.map((tool) => tool.decisionEffect ?? "missing").join(",")}]; ` +
+      `text=${JSON.stringify(snippet(finalText, 280))}`
+    )
+  }
 
   return undefined
 }

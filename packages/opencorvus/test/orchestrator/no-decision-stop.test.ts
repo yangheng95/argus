@@ -54,6 +54,21 @@ describe("orchestrator no-decision stop classifier", () => {
     expect(reason).toContain("only observation or pause tools")
   })
 
+  test("rejects stop when a same-wake decision is followed by state observation", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "stop",
+      finalText: "G1 is complete. The next executable goal is G2.",
+      providerVisiblePartCount: 1,
+      wakeTools: [
+        { name: "build", decisionEffect: "decision" },
+        { name: "read_context", decisionEffect: "observation" },
+      ],
+    })
+
+    expect(reason).toContain("following the latest task decision")
+  })
+
   test("rejects prose stop with no tool calls on an active task", () => {
     const reason = classifyOrchestratorDecisionStop({
       taskTerminal: false,

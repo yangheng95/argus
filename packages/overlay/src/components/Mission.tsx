@@ -10,6 +10,7 @@ import {
   missionPage,
   renameMission,
   type MissionRecord,
+  type MissionTaskProjection,
 } from "../services/mission"
 import { startSSE, stopSSE } from "../services/sse"
 import { resetWriter } from "../services/tree-writer"
@@ -39,7 +40,7 @@ export interface MissionProps {
   active: boolean
   activationToken?: number
   refreshToken?: number
-  onSelectTask: (taskID: string) => void
+  onSelectTask: (taskID: string, directory?: string) => void
 }
 
 export function Mission(props: MissionProps) {
@@ -128,8 +129,8 @@ function MissionContent(props: MissionProps) {
     }
   }
 
-  function handleTaskSelect(taskID: string): void {
-    props.onSelectTask(taskID)
+  function handleTaskSelect(task: MissionTaskProjection): void {
+    props.onSelectTask(task.id, task.directory)
   }
 
   async function handleMissionAbort(mission: MissionRecord): Promise<void> {

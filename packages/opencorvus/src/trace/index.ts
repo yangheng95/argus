@@ -55,7 +55,9 @@ import path from "node:path"
 import crypto from "node:crypto"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { requireTask } from "@/engine/store"
 import { SessionObservability } from "@/util/session-observability"
 import type { AgentReport } from "@/agent/report"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
@@ -98,49 +100,62 @@ export namespace AgentTrace {
     return traceDir()
   }
 
-  function traceDir(): string {
+  function explicitTraceDir(): string | undefined {
     // Override path: benchmark runs / CI pipelines that wipe Instance.directory
     // at the end of the run (overlay-web-benchmark deletes the entire
     // temp.dir on exit) set this env to a stable location so traces survive.
     // Default — Instance.directory/.opencorvus/r — is the right answer
     // for normal interactive sessions where the project dir is permanent.
     const override = process.env.OPENCORVUS_AGENT_TRACE_DIR
-    if (override && override.length > 0) {
-      const normalized = override.replaceAll("\\", "/")
-      if (normalized.includes("/.opencorvus/runtime") || normalized.endsWith("/.opencorvus/runtime")) {
-        throw new Error(`OPENCORVUS_AGENT_TRACE_DIR must not point at legacy runtime layout: ${override}`)
-      }
-      return override
+    if (!override || override.length === 0) return undefined
+    const normalized = override.replaceAll("\\", "/")
+    if (normalized.includes("/.opencorvus/runtime") || normalized.endsWith("/.opencorvus/runtime")) {
+      throw new Error(`OPENCORVUS_AGENT_TRACE_DIR must not point at legacy runtime layout: ${override}`)
     }
+    return override
+  }
+
+  function traceDir(): string {
+    const override = explicitTraceDir()
+    if (override) return override
     return ProjectRuntimePaths.projectRuntimeRoot(Instance.directory)
   }
 
-  function ensureDir() {
+  function taskTraceDir(taskID: string): string {
+    const override = explicitTraceDir()
+    if (override) return override
+    const task = requireTask(taskID)
+    const project = Project.get(task.project_id)
+    if (!project) throw new Error(`Trace project not found for task ${taskID}: ${task.project_id}`)
+    return ProjectRuntimePaths.projectRuntimeRoot(project.worktree)
+  }
+
+  function ensureDir(taskID?: string) {
     try {
-      fs.mkdirSync(traceDir(), { recursive: true })
+      fs.mkdirSync(taskID ? taskTraceDir(taskID) : traceDir(), { recursive: true })
     } catch {
       /* dir may already exist */
     }
   }
 
   function sessionFile(sessionID: string, taskID: string): string {
-    return ProjectRuntimePaths.tracePathFromRuntimeRoot(traceDir(), taskID, sessionID)
+    return ProjectRuntimePaths.tracePathFromRuntimeRoot(taskTraceDir(taskID), taskID, sessionID)
   }
 
   function domainFile(taskID: string, domain: string): string {
-    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace", `_${domain}.jsonl`)
+    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(taskTraceDir(taskID), taskID, "trace", `_${domain}.jsonl`)
   }
 
   function taskFile(taskID: string): string {
-    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace.jsonl")
+    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(taskTraceDir(taskID), taskID, "trace.jsonl")
   }
 
   function indexFile(taskID: string): string {
-    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace", "_index.jsonl")
+    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(taskTraceDir(taskID), taskID, "trace", "_index.jsonl")
   }
 
   function blobDir(taskID: string): string {
-    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(traceDir(), taskID, "trace", "blobs")
+    return ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(taskTraceDir(taskID), taskID, "trace", "blobs")
   }
 
   type TraceBucket = { sessionID: string } | { domain: string }
@@ -169,7 +184,7 @@ export namespace AgentTrace {
     if (seenBuckets.has(key)) return
     seenBuckets.add(key)
     try {
-      ensureDir()
+      ensureDir(event.taskID)
       const bucketFields =
         "sessionID" in bucket
           ? { kind: "session_open", sessionID: bucket.sessionID }
@@ -358,10 +373,10 @@ export namespace AgentTrace {
   ) {
     if (!ENABLED) return
     try {
-      ensureDir()
       if (typeof event.taskID !== "string" || event.taskID.length === 0) {
         throw new Error(`trace event ${event.kind} missing taskID`)
       }
+      ensureDir(event.taskID)
       maybeWriteIndex(bucket, {
         parentSessionID: event.parentSessionID,
         taskID: event.taskID,
@@ -426,7 +441,7 @@ export namespace AgentTrace {
   }
 
   function writeSessionTraceIndex(sessionID: string, taskID: string) {
-    const indexPath = ProjectRuntimePaths.sessionTraceIndexPathFromRuntimeRoot(traceDir(), sessionID)
+    const indexPath = ProjectRuntimePaths.sessionTraceIndexPathFromRuntimeRoot(taskTraceDir(taskID), sessionID)
     fs.mkdirSync(path.dirname(indexPath), { recursive: true })
     fs.writeFileSync(indexPath, JSON.stringify({ sessionID, taskID }) + "\n", "utf8")
   }

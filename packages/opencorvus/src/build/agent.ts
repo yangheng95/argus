@@ -36,6 +36,7 @@ import { AgentRunError, runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
 import { EffectiveConfig } from "@/config/effective"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import { Session } from "@/session"
@@ -863,6 +864,7 @@ export namespace BuildAgent {
           const externalOut = await runWithExternalProvider({
             executor,
             target: input.target,
+            task: input.task,
             taskID: input.task.id,
             parentSessionID: input.parentSessionID,
             existingSessionID: buildSession.id,
@@ -1523,9 +1525,16 @@ function makeExternalFailedBuildResult(input: {
   }
 }
 
+export function buildSessionRuntimeDirForTask(task: Pick<TaskRow, "id" | "project_id">, sessionID: string): string {
+  const project = Project.get(task.project_id)
+  if (!project) throw new Error(`BuildAgent.run: project ${task.project_id} not found for task ${task.id}`)
+  return ProjectRuntimePaths.sessionRoot(project.worktree, task.id, sessionID)
+}
+
 async function runWithExternalProvider(args: {
   executor: Exclude<TaskRow["executor"], "opencorvus">
   target: BuildTarget
+  task: Pick<TaskRow, "id" | "project_id">
   taskID: string
   parentSessionID?: string
   existingSessionID: string
@@ -1566,6 +1575,7 @@ async function runWithExternalProvider(args: {
 async function runWithExternalProviderImpl(args: {
   executor: Exclude<TaskRow["executor"], "opencorvus">
   target: BuildTarget
+  task: Pick<TaskRow, "id" | "project_id">
   taskID: string
   parentSessionID?: string
   existingSessionID: string
@@ -1734,7 +1744,7 @@ async function runWithExternalProviderImpl(args: {
     prompt,
     taskID: args.taskID,
     logicalSessionID: session.id,
-    runtimeDir: ProjectRuntimePaths.sessionRoot(Instance.directory, args.taskID, session.id),
+    runtimeDir: buildSessionRuntimeDirForTask(args.task, session.id),
     worktreeDir: args.worktreeDir,
     cwd: args.worktreeDir,
     system: composedSystem.system,
