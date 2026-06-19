@@ -59,6 +59,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-19-browser-preview-live-frame-application-role.md](2026-06-19-browser-preview-live-frame-application-role.md) | Browser Preview Live Frame Application Role |
 | [2026-06-19-goal-workflow-button-primitive.md](2026-06-19-goal-workflow-button-primitive.md)                         | Goal Workflow Button Primitive |
 | [2026-06-19-task-row-action-keyboard-rail.md](2026-06-19-task-row-action-keyboard-rail.md)                           | Task Row Action Keyboard Rail |
+| [2026-06-19-card-todo-summary-progressbar-a11y.md](2026-06-19-card-todo-summary-progressbar-a11y.md)                 | Card Todo Summary Progressbar Accessibility |
 
 ## 2026-06-18
 
