@@ -63,7 +63,7 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
             <div class="task-row-mini global-task-row mission-row" data-ui="mission-row" data-session-id="mission-a" data-active="true" title="Mission A">
               <span class="task-row-badge mission-row-kind-badge" aria-hidden="true">M</span>
               <div class="task-row-body">
-                <button type="button" class="task-row-main mission-row-main" data-action="mission-select" aria-current="page" aria-keyshortcuts="ArrowRight">
+                <button type="button" class="oc-button task-row-main mission-row-main" data-size="sm" data-variant="ghost" data-tone="neutral" data-ui="ledger-row-main" data-action="mission-select" aria-current="page" aria-keyshortcuts="ArrowRight">
                   <div class="task-row-head"><strong>Mission A</strong></div>
                 </button>
               </div>
@@ -85,7 +85,7 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
             <div class="task-row-mini global-task-row coding-assistant-row" data-ui="coding-assistant-row" data-session-id="assistant-a" title="Assistant A">
               <span class="task-row-badge coding-assistant-row-kind-badge" aria-hidden="true">A</span>
               <div class="task-row-body">
-                <button type="button" class="task-row-main coding-assistant-row-main" data-action="assistant-select" aria-keyshortcuts="ArrowRight">
+                <button type="button" class="oc-button task-row-main coding-assistant-row-main" data-size="sm" data-variant="ghost" data-tone="neutral" data-ui="ledger-row-main" data-action="assistant-select" aria-keyshortcuts="ArrowRight">
                   <div class="task-row-head"><strong>Assistant A</strong></div>
                 </button>
               </div>
@@ -165,6 +165,10 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
         assistantTabindex: assistantRow.getAttribute("tabindex"),
         missionCurrent: missionRow.querySelector(".mission-row-main")?.getAttribute("aria-current"),
         assistantCurrent: assistantRow.querySelector(".coding-assistant-row-main")?.getAttribute("aria-current"),
+        missionPrimitive: missionRow.querySelector(".mission-row-main")?.matches('.oc-button[data-ui="ledger-row-main"]'),
+        assistantPrimitive: assistantRow.querySelector(".coding-assistant-row-main")?.matches(
+          '.oc-button[data-ui="ledger-row-main"]',
+        ),
         missionButtons: missionRow.querySelectorAll("button").length,
         assistantButtons: assistantRow.querySelectorAll("button").length,
         missionShortcut: missionRow.querySelector(".mission-row-main")?.getAttribute("aria-keyshortcuts"),
@@ -178,6 +182,8 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
     assert.equal(structure.assistantTabindex, null)
     assert.equal(structure.missionCurrent, "page")
     assert.equal(structure.assistantCurrent, null)
+    assert.equal(structure.missionPrimitive, true)
+    assert.equal(structure.assistantPrimitive, true)
     assert.equal(structure.missionButtons, 4)
     assert.equal(structure.assistantButtons, 4)
     assert.equal(structure.missionShortcut, "ArrowRight")

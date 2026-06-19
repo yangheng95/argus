@@ -5,6 +5,7 @@ import { t } from "../utils/i18n"
 import { detailStamp, relativeTime } from "../utils/time"
 import { Icon } from "./Icon"
 import { LedgerList } from "./LedgerList"
+import { LedgerRowMainButton } from "./LedgerRowMainButton"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { Button } from "./ui/Button"
 import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"
@@ -247,9 +248,8 @@ function CodingAssistantSessionRow(props: {
             </div>
           }
         >
-          <button
-            type="button"
-            class="task-row-main coding-assistant-row-main"
+          <LedgerRowMainButton
+            class="coding-assistant-row-main"
             ref={(el) => rowActions.setMainButtonRef(el)}
             title={sessionRowTip(props.session)}
             disabled={props.busy}
@@ -270,7 +270,7 @@ function CodingAssistantSessionRow(props: {
             <div class="task-row-head">
               <strong>{title()}</strong>
             </div>
-          </button>
+          </LedgerRowMainButton>
         </Show>
       </div>
       <div class="task-row-right">

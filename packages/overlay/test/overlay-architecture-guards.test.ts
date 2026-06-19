@@ -558,7 +558,6 @@ describe("overlay architecture guards", () => {
     for (const className of [
       "task-row-mini",
       "task-row-drag-handle",
-      "task-row-main",
       "task-row-head",
       "task-row-stamp",
       "task-row-badge",
@@ -568,6 +567,10 @@ describe("overlay architecture guards", () => {
       expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
+    expect(styles).not.toMatch(/(^|\n)\.task-row-main\s*\{/)
+    expect(sidebarSurface).not.toMatch(/(^|\n)\.task-row-main\s*\{/)
+    expect(sidebarSurface).toMatch(/(^|\n)\.oc-button\[data-ui="ledger-row-main"\]\s*\{/)
+    expect(sidebarSurface).toMatch(/(^|\n)\.oc-button\[data-ui="ledger-row-main"\]\s+strong\s*\{/)
     expect(sidebarSurface).toMatch(/\.task-row-badge::before\s*\{/)
     expect(sidebarSurface).toMatch(/\.task-row-badge\[data-status="active"\]/)
     expect(sidebarSurface).toMatch(/\.task-row-badge\[data-status="queued"\]/)
