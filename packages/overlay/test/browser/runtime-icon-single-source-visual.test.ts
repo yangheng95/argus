@@ -263,19 +263,32 @@ test(
       assert.equal(aboutIcon.hidden, "true")
       assert.equal(aboutIcon.box, 40)
       assert.notEqual(aboutIcon.color, "rgba(0, 0, 0, 0)")
-      const aboutLinkState = await taskPage.$eval(".about-link", (node: HTMLAnchorElement) => {
-        const style = getComputedStyle(node)
-        return {
-          authorLinkCount: document.querySelectorAll(".about-author-link").length,
-          href: node.href,
-          color: style.color,
-          background: style.backgroundColor,
-          borderColor: style.borderColor,
-        }
-      })
-      assert.equal(aboutLinkState.authorLinkCount, 0)
-      assert.ok(aboutLinkState.href.startsWith("https://github.com/yangheng95"))
-      assert.notEqual(aboutLinkState.color, "rgba(0, 0, 0, 0)")
+      const aboutLinkStates = await taskPage.$$eval(".about-link", (nodes: HTMLAnchorElement[]) =>
+        nodes.map((node) => {
+          const style = getComputedStyle(node)
+          return {
+            authorLinkCount: document.querySelectorAll(".about-author-link").length,
+            text: node.textContent?.trim() ?? "",
+            href: node.href,
+            color: style.color,
+            background: style.backgroundColor,
+            borderColor: style.borderColor,
+          }
+        }),
+      )
+      assert.equal(aboutLinkStates.length, 2)
+      assert.equal(aboutLinkStates.every((link) => link.authorLinkCount === 0), true)
+      assert.deepEqual(
+        aboutLinkStates.map((link) => link.text),
+        ["GitHub", "Issues"],
+      )
+      assert.deepEqual(
+        aboutLinkStates.map((link) => link.href),
+        ["https://github.com/yangheng95", "https://github.com/yangheng95/opencorvus/issues"],
+      )
+      assert.notEqual(aboutLinkStates[0].href, aboutLinkStates[1].href)
+      assert.equal(aboutLinkStates.every((link) => link.color !== "rgba(0, 0, 0, 0)"), true)
+      await saveElementScreenshot(taskPage, ".about-links", "runtime-icon-about-links.png")
       await taskPage.hover(".about-link")
       const hoveredAboutLinkState = await taskPage.$eval(".about-link", (node: HTMLAnchorElement) => {
         const style = getComputedStyle(node)
@@ -286,9 +299,9 @@ test(
         }
       })
       assert.notDeepEqual(hoveredAboutLinkState, {
-        color: aboutLinkState.color,
-        background: aboutLinkState.background,
-        borderColor: aboutLinkState.borderColor,
+        color: aboutLinkStates[0].color,
+        background: aboutLinkStates[0].background,
+        borderColor: aboutLinkStates[0].borderColor,
       })
       await saveElementScreenshot(taskPage, "#configDialog", "runtime-icon-about-panel.png")
       await taskPage.close()
