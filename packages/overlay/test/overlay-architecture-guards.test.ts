@@ -1174,6 +1174,10 @@ describe("overlay architecture guards", () => {
       expect(settingsSurface).toMatch(new RegExp(`\\.config-status-box\\[data-status="${status}"\\]\\s*\\{`))
     }
     expect(settingsSurface).toMatch(/\.about-link:hover\s*\{/)
+    expect(settingsSurface).toMatch(
+      /\.about-link:focus-visible\s*\{[\s\S]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/,
+    )
+    expect(soloRuleBody(settingsSurface, ".about-link:focus-visible")).not.toContain("outline: none")
     expect(settingsSurface).toMatch(/\.about-shortcut-grid kbd\s*\{/)
     expect(settingsSurface).toMatch(/\.about-shortcut-grid span\s*\{/)
   })
