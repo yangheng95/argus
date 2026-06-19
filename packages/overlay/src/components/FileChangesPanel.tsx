@@ -61,18 +61,10 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
           }
         />
         <div class="file-changes-body">
-          <TabPanel
-            value="changes"
-            class="file-changes-view"
-            data-active={activeView() === "changes" ? "true" : "false"}
-          >
+          <TabPanel value="changes" class="file-changes-view">
             <ChangesPanel hasSelectedTask />
           </TabPanel>
-          <TabPanel
-            value="diff"
-            class="file-changes-view file-changes-diff"
-            data-active={activeView() === "diff" ? "true" : "false"}
-          >
+          <TabPanel value="diff" class="file-changes-view file-changes-diff">
             <Show
               when={hasDiff()}
               fallback={
