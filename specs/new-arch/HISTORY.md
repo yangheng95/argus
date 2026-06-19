@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                       | Title                          |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| [2026-06-20-browser-preview-candidate-trigger-focus.md](2026-06-20-browser-preview-candidate-trigger-focus.md) | Browser Preview Candidate Trigger Focus |
 | [2026-06-20-titlebar-brand-guide-open-state-contrast.md](2026-06-20-titlebar-brand-guide-open-state-contrast.md) | Titlebar Brand Guide Open State And Contrast Coverage |
 | [2026-06-20-file-explorer-search-input-single-source.md](2026-06-20-file-explorer-search-input-single-source.md) | File Explorer Search Input Single Source |
 | [2026-06-20-file-changes-search-field-single-source.md](2026-06-20-file-changes-search-field-single-source.md) | File Changes Search Field Single Source |

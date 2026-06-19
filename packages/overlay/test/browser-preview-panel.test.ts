@@ -288,8 +288,12 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(css).toContain(".browser-preview-controls")
   expect(css).toContain(".browser-preview-candidate-select")
   expect(css).toContain(".browser-preview-candidate-trigger")
+  expect(css).toContain(".browser-preview-candidate-trigger:focus-visible")
   expect(css).toContain(".browser-preview-candidate-content")
   expect(css).toContain(".browser-preview-candidate-option")
+  const candidateTriggerFocusBlock = css.match(/\.browser-preview-candidate-trigger:focus-visible\s*{[^}]*}/)?.[0] ?? ""
+  expect(candidateTriggerFocusBlock).toMatch(/outline:\s*var\(--oc-border-width\)\s+solid\s+var\(--accent\)/)
+  expect(candidateTriggerFocusBlock).toMatch(/outline-offset:\s*calc\(2px \* var\(--ui-scale\)\)/)
   const candidateContentBlock = css.match(/\.browser-preview-candidate-content\s*{[^}]*}/)?.[0] ?? ""
   const candidateOptionBlock = css.match(/\.browser-preview-candidate-option\s*{[^}]*}/)?.[0] ?? ""
   expect(candidateContentBlock).toMatch(/min-width/)
