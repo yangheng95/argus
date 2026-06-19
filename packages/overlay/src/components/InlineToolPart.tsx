@@ -16,6 +16,7 @@ import { toolFileChangesFromState, type ToolFileChange } from "../utils/file-cha
 import { STREAMING_ACTIVE_TEXT_LIMIT, visibleStreamingText } from "./text-part-model"
 import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
 import { PreviewableImage } from "./ImagePreview"
+import { Button } from "./ui/Button"
 
 // Same tool-kind sets used to drive code rendering below.
 const FILE_WRITE_TOOLS = new Set(["write", "writefile"])
@@ -149,9 +150,17 @@ function ToolDiffList(props: { items: ToolFileChange[] }) {
           <section class="msg-tool-diff-card">
             <header class="msg-tool-diff-card__head">
               <div class="msg-tool-diff-card__copy">
-                <a class="msg-tool-diff-link" href="#" data-file-path={item.openPath} title={item.openPath}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  tone="accent"
+                  data-ui="tool-diff-open-file"
+                  data-file-path={item.openPath}
+                  title={item.openPath}
+                >
                   {item.displayPath}
-                </a>
+                </Button>
                 <span class="change-status" data-status={item.status}>
                   {changeStatusLabel(item.status)}
                 </span>
