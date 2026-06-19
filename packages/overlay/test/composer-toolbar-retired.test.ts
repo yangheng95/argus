@@ -44,6 +44,13 @@ describe("composer toolbar is retired", () => {
 
     expect(source).toContain("onDrop={handleDrop}")
     expect(source).toContain('class="chat-resize-handle"')
+    expect(source).toContain('role="separator"')
+    expect(source).toContain('aria-controls={props.textareaID ?? "chatTextarea"}')
+    expect(source).toContain("aria-valuemin")
+    expect(source).toContain("aria-valuemax")
+    expect(source).toContain("aria-valuenow")
+    expect(source).toContain("tabIndex={0}")
+    expect(source).toContain("onKeyDown={handleResizeKeyDown}")
     expect(css).toMatch(/\.chat-resize-handle\s*\{/)
     expect(css).toContain("--chat-textarea-height")
   })
