@@ -122,7 +122,7 @@ function projectDirectoryOf(item: any): string {
 
 const CONFIRM_WINDOW_MS = 3000 // confirm window length in milliseconds.
 
-function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
+function DeleteButton(props: { id: string; onDelete: (id: string) => void; tabIndex?: number }) {
   const confirmDelete = useArmedConfirm(CONFIRM_WINDOW_MS)
 
   return (
@@ -137,6 +137,7 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
       data-confirm={confirmDelete.armed() ? "true" : undefined}
       title={t("task.delete_button_title")}
       aria-label={t("task.delete_button_title")}
+      tabIndex={props.tabIndex}
       onClick={(e) => {
         e.stopPropagation()
         confirmDelete.confirm(() => props.onDelete(props.id))
@@ -157,7 +158,7 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void }) {
 // Mirrors DeleteButton shape/behavior so the row's two actions read as a
 // coherent pair. Shown only for interruptable tasks (queued / active).
 
-function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
+function CancelButton(props: { id: string; onCancel: (id: string) => void; tabIndex?: number }) {
   const confirmCancel = useArmedConfirm(CONFIRM_WINDOW_MS)
 
   return (
@@ -172,6 +173,7 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
       data-confirm={confirmCancel.armed() ? "true" : undefined}
       title={t("task.cancel_button_title")}
       aria-label={t("task.cancel_button_title")}
+      tabIndex={props.tabIndex}
       onClick={(e) => {
         e.stopPropagation()
         confirmCancel.confirm(() => props.onCancel(props.id))
@@ -188,7 +190,7 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void }) {
   )
 }
 
-function RenameButton(props: { id: string; onClick: () => void }) {
+function RenameButton(props: { id: string; onClick: () => void; tabIndex?: number }) {
   return (
     <Button
       type="button"
@@ -200,6 +202,7 @@ function RenameButton(props: { id: string; onClick: () => void }) {
       data-task-rename={props.id}
       title={t("task.rename_button_title")}
       aria-label={t("task.rename_button_title")}
+      tabIndex={props.tabIndex}
       onClick={(e) => {
         e.stopPropagation()
         props.onClick()
@@ -210,7 +213,7 @@ function RenameButton(props: { id: string; onClick: () => void }) {
   )
 }
 
-function StartNowButton(props: { id: string; busy?: boolean; onStartNow: (id: string) => void }) {
+function StartNowButton(props: { id: string; busy?: boolean; onStartNow: (id: string) => void; tabIndex?: number }) {
   return (
     <Button
       type="button"
@@ -224,6 +227,7 @@ function StartNowButton(props: { id: string; busy?: boolean; onStartNow: (id: st
       disabled={props.busy}
       title={t("task.start_now_button_title")}
       aria-label={t("task.start_now_button_title")}
+      tabIndex={props.tabIndex}
       onClick={(e) => {
         e.stopPropagation()
         props.onStartNow(props.id)
@@ -234,7 +238,12 @@ function StartNowButton(props: { id: string; busy?: boolean; onStartNow: (id: st
   )
 }
 
-function DownloadProjectButton(props: { id: string; busy?: boolean; onDownload: (id: string) => void }) {
+function DownloadProjectButton(props: {
+  id: string
+  busy?: boolean
+  onDownload: (id: string) => void
+  tabIndex?: number
+}) {
   return (
     <Button
       type="button"
@@ -248,6 +257,7 @@ function DownloadProjectButton(props: { id: string; busy?: boolean; onDownload: 
       disabled={props.busy}
       title={t("task.download_project_button_title")}
       aria-label={t("task.download_project_button_title")}
+      tabIndex={props.tabIndex}
       onClick={(e) => {
         e.stopPropagation()
         props.onDownload(props.id)
@@ -336,7 +346,32 @@ function TaskRow(props: {
   const hasFailedChild = () => !!props.directChildren?.some((child) => child?.task?.status === "failed")
   const [editing, setEditing] = createSignal(false)
   const [draftTitle, setDraftTitle] = createSignal("")
+  // Hidden row actions stay out of plain Tab order; ArrowRight opens the
+  // contextual rail for keyboard users without changing the mouse hover path.
+  const [actionsKeyboardOpen, setActionsKeyboardOpen] = createSignal(false)
   let inputRef: HTMLInputElement | undefined
+  let rowRef: HTMLDivElement | undefined
+  let mainButtonRef: HTMLButtonElement | undefined
+
+  const actionButtonTabIndex = () => (actionsKeyboardOpen() ? undefined : -1)
+
+  function focusFirstAction(): void {
+    rowRef?.querySelector<HTMLButtonElement>(".task-row-actions .oc-button:not(:disabled)")?.focus()
+  }
+
+  function openActionsFromKeyboard(event: KeyboardEvent): void {
+    if (event.key !== "ArrowRight") return
+    if (!hasActions()) return
+    event.preventDefault()
+    event.stopPropagation()
+    setActionsKeyboardOpen(true)
+    queueMicrotask(focusFirstAction)
+  }
+
+  function closeActionsFromKeyboard(): void {
+    setActionsKeyboardOpen(false)
+    queueMicrotask(() => mainButtonRef?.focus())
+  }
 
   function beginRename(): void {
     if (!canRename()) return
@@ -363,8 +398,10 @@ function TaskRow(props: {
 
   return (
     <div
+      ref={(el) => (rowRef = el)}
       class="task-row-mini global-task-row"
       data-task-row-id={pending() ? undefined : id()}
+      data-actions-keyboard-open={actionsKeyboardOpen() ? "true" : undefined}
       data-active={isActive() ? "true" : undefined}
       data-status={status()}
       data-notification-unread={hasUnreadNotification() ? "true" : undefined}
@@ -399,6 +436,10 @@ function TaskRow(props: {
         props.onDrop?.(id(), event)
       }}
       onDragEnd={() => props.onDragEnd?.()}
+      onFocusOut={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+        setActionsKeyboardOpen(false)
+      }}
     >
       <span
         class="task-row-badge"
@@ -509,13 +550,16 @@ function TaskRow(props: {
           }
         >
           <button
+            ref={(el) => (mainButtonRef = el)}
             type="button"
             class="task-row-main"
             data-task-id={pending() ? undefined : id()}
             disabled={pending()}
             aria-disabled={pending() ? "true" : undefined}
             aria-current={isActive() ? "page" : undefined}
+            aria-keyshortcuts={hasActions() ? "ArrowRight" : undefined}
             title={rowTip()}
+            onKeyDown={openActionsFromKeyboard}
             onClick={(event) => {
               event.stopPropagation()
               if (!pending() && id()) props.onSelectTask(id())
@@ -538,25 +582,39 @@ function TaskRow(props: {
           {taskListMeta(props.item)}
         </small>
         <Show when={hasActions()}>
-          <div class="task-row-actions">
+          <div
+            class="task-row-actions"
+            onKeyDown={(event) => {
+              if (event.key !== "Escape" && event.key !== "ArrowLeft") return
+              event.preventDefault()
+              event.stopPropagation()
+              closeActionsFromKeyboard()
+            }}
+          >
             <Show when={canStartNow()}>
-              <StartNowButton id={id()} busy={props.startNowBusyID === id()} onStartNow={props.onStartNow!} />
+              <StartNowButton
+                id={id()}
+                busy={props.startNowBusyID === id()}
+                onStartNow={props.onStartNow!}
+                tabIndex={actionButtonTabIndex()}
+              />
             </Show>
             <Show when={canCancel()}>
-              <CancelButton id={id()} onCancel={props.onCancelTask!} />
+              <CancelButton id={id()} onCancel={props.onCancelTask!} tabIndex={actionButtonTabIndex()} />
             </Show>
             <Show when={canDownload()}>
               <DownloadProjectButton
                 id={id()}
                 busy={props.downloadBusyID === id()}
                 onDownload={props.onDownloadProject!}
+                tabIndex={actionButtonTabIndex()}
               />
             </Show>
             <Show when={canRename() && !editing()}>
-              <RenameButton id={id()} onClick={beginRename} />
+              <RenameButton id={id()} onClick={beginRename} tabIndex={actionButtonTabIndex()} />
             </Show>
             <Show when={canDelete()}>
-              <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
+              <DeleteButton id={id()} onDelete={props.onDeleteTask!} tabIndex={actionButtonTabIndex()} />
             </Show>
           </div>
         </Show>
