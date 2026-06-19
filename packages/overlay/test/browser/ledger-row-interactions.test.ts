@@ -104,6 +104,16 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
                 </div>
               </div>
             </div>
+            <div class="task-row-mini global-task-row mission-row" data-ui="mission-row-editing" data-session-id="mission-editing" title="Mission Editing">
+              <span class="task-row-badge mission-row-kind-badge" aria-hidden="true">M</span>
+              <div class="task-row-body">
+                <div class="task-row-main task-row-main--editing" data-ui="mission-row-rename-editor">
+                  <div class="task-row-head">
+                    <input class="task-row-rename-input" data-ui="mission-row-rename-input" type="text" value="Mission Editing" aria-label="Rename mission">
+                  </div>
+                </div>
+              </div>
+            </div>
           </main>
           <script>
             window.__ledgerEvents = []
@@ -209,13 +219,41 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
     }
 
     const focused: string[] = []
-    for (let i = 0; i < 2; i += 1) {
+    for (let i = 0; i < 3; i += 1) {
       await page.keyboard.press("Tab")
       focused.push(
-        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute("data-action") || ""),
+        await page.evaluate(
+          () =>
+            (document.activeElement as HTMLElement | null)?.getAttribute("data-action") ||
+            (document.activeElement as HTMLElement | null)?.getAttribute("data-ui") ||
+            "",
+        ),
       )
     }
-    assert.deepEqual(focused, ["mission-select", "assistant-select"])
+    assert.deepEqual(focused, ["mission-select", "assistant-select", "mission-row-rename-input"])
+
+    const missionRenameInput = await page.evaluate(() => {
+      const input = document.querySelector<HTMLInputElement>('[data-ui="mission-row-rename-input"]')
+      if (!input) throw new Error("Mission rename input not found")
+      const style = getComputedStyle(input)
+      return {
+        className: input.className,
+        privateClass: input.classList.contains("mission-row-rename-input"),
+        sharedClass: input.classList.contains("task-row-rename-input"),
+        active: document.activeElement === input,
+        boxShadow: style.boxShadow,
+        outlineStyle: style.outlineStyle,
+        borderColor: style.borderColor,
+      }
+    })
+    assert.equal(missionRenameInput.sharedClass, true, JSON.stringify(missionRenameInput))
+    assert.equal(missionRenameInput.privateClass, false, JSON.stringify(missionRenameInput))
+    assert.equal(missionRenameInput.active, true, JSON.stringify(missionRenameInput))
+    assert.notEqual(missionRenameInput.boxShadow, "none", JSON.stringify(missionRenameInput))
+    assert.notEqual(missionRenameInput.borderColor, "rgba(0, 0, 0, 0)", JSON.stringify(missionRenameInput))
+    const editingMission = await page.$('[data-ui="mission-row-editing"]')
+    assert.ok(editingMission)
+    await saveScreenshot(editingMission, "mission-rename-input-shared-focus.png")
 
     await page.focus('[data-action="mission-select"]')
     await page.keyboard.press("ArrowRight")
