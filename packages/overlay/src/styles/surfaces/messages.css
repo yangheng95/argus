@@ -847,25 +847,6 @@
 .msg-tool-code {
   margin: calc(4px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) 0;
 }
-.msg-tool-expand {
-  display: block;
-  width: 100%;
-  padding: calc(4px * var(--ui-scale)) 0;
-  text-align: center;
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  cursor: pointer;
-  background: none;
-  border: var(--oc-border-width) dashed var(--border);
-  border-radius: 0 0 var(--oc-radius-soft) var(--oc-radius-soft);
-  border-top: none;
-  margin-top: calc(-2px * var(--ui-scale));
-}
-.msg-tool-expand:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
 /* ─────────────────────────────────────────────────────────────
    Message overflow guards (extracted 2026-05-04): the cross-class
    min-width: 0 / max-width: 100% reset that prevents long message
@@ -876,8 +857,6 @@
 .change-row,
 .extension-settings-row,
 .channel-doc-card,
-.plan-summary,
-.change-path,
 .msg-text,
 .msg-tool,
 .msg-tool-output,

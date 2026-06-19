@@ -695,11 +695,6 @@ body {
 .card[data-kind="tool"] .card__title-spacer {
   display: none;
 }
-.card[data-kind="tool"] .card__meta-row {
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: calc(4px * var(--ui-scale, 1));
-}
 .card[data-kind="tool"] .card__subtitle {
   flex: 1 1 100%;
   min-width: 0;
