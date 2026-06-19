@@ -42,7 +42,6 @@ export function SegmentedControl<T extends string>(props: SegmentedControlProps<
             {...(props.itemAttributes?.(option) ?? {})}
             class={props.itemClass ?? "oc-segmented__item"}
             value={option.value}
-            data-active={props.value === option.value ? "true" : undefined}
             data-tone={option.tone ?? "neutral"}
             data-value={option.value}
             title={option.title}

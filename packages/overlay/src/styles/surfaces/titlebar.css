@@ -196,7 +196,7 @@
   outline: none;
 }
 
-.titlebar-theme-option[data-active="true"] {
+.titlebar-theme-option[data-checked] {
   border-color: var(--accent);
   background: var(--accent-dim);
   color: var(--text-strong);

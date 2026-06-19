@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| [2026-06-19-kobalte-selected-state-single-source.md](2026-06-19-kobalte-selected-state-single-source.md)       | Kobalte Selected State Single Source |
 | [2026-06-19-dropdown-menu-highlighted-contrast-source.md](2026-06-19-dropdown-menu-highlighted-contrast-source.md) | Dropdown Menu Highlighted Contrast Source |
 | [2026-06-19-deep-performance-investigation.md](2026-06-19-deep-performance-investigation.md)                   | Deep Performance Investigation |
 | [2026-06-19-system-performance-high-confidence-pass.md](2026-06-19-system-performance-high-confidence-pass.md) | System Performance High Confidence Pass |

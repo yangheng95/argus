@@ -692,7 +692,7 @@
   --oc-tab-color: var(--text-strong);
 }
 
-.oc-tab[data-ui="executor-popover-tab"][data-active="true"] {
+.oc-tab[data-ui="executor-popover-tab"][data-selected] {
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 

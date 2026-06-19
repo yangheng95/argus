@@ -653,7 +653,7 @@
   font-size: var(--ui-font-control);
 }
 
-.file-changes-panel .oc-surface-header__actions .oc-tab[data-active="true"] {
+.file-changes-panel .oc-surface-header__actions .oc-tab[data-selected] {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 

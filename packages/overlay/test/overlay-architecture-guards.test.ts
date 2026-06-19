@@ -874,7 +874,9 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).not.toMatch(
       /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))[\s\S]*?\.task-bar\b/,
     )
-    expect(conversationSurface).toMatch(/\.recent-dir-row:hover\s*\{/)
+    expect(conversationSurface).toMatch(
+      /\.recent-dir-row:hover,\s*\.recent-dir-row:has\(\.recent-dir-item\[data-highlighted\]\)\s*\{/,
+    )
     expect(conversationSurface).toMatch(/\.recent-dir-row\[data-active="true"\]\s*\{/)
   })
 
@@ -1081,7 +1083,7 @@ describe("overlay architecture guards", () => {
 
     expect(composerSurface).toMatch(/\.oc-tabs\[data-ui="executor-popover-tabs"\]\s*\{/)
     expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\s*\{/)
-    expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\[data-active="true"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\[data-selected\]\s*\{/)
     expect(composerSurface).toMatch(/\.executor-model-option\[data-selected\]\s*\{/)
     expect(composerSurface).toMatch(/\.executor-model-option\[data-highlighted\]\s*\{/)
     expect(composerSurface).not.toContain(".executor-model-option[data-focused]")
@@ -1267,10 +1269,10 @@ describe("overlay architecture guards", () => {
     expect(configDialog).toContain('orientation="vertical"')
     expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tabs\s*\{/)
     expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\s*\{/)
-    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-active="true"\]\s*\{/)
-    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-active="true"\]::before\s*\{/)
-    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-active="true"\] \.config-nav-icon\s*\{/)
-    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-active="true"\] \.config-nav-badge\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-selected\]\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-selected\]::before\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-selected\] \.config-nav-icon\s*\{/)
+    expect(settingsSurface).toMatch(/\.config-sidebar \.oc-tab\[data-selected\] \.config-nav-badge\s*\{/)
     expect(settingsSurface).not.toMatch(/rgba\(84,\s*138,\s*247,\s*0\.15\)/)
     expect(settingsSurface).not.toMatch(/rgba\(84,\s*138,\s*247,\s*0\.2\)/)
   })
@@ -1479,7 +1481,7 @@ describe("overlay architecture guards", () => {
     // through good/warn/bad via data-tone, just on the primitive class.
     for (const tone of ["ok", "warn", "bad"]) {
       expect(settingsSurface).toMatch(
-        new RegExp(`\\.s-segmented-btn\\[data-active="true"\\]\\[data-tone="${tone}"\\]\\s*\\{`),
+        new RegExp(`\\.s-segmented-btn\\[data-pressed\\]\\[data-tone="${tone}"\\]\\s*\\{`),
       )
     }
 

@@ -636,7 +636,7 @@ test(
           (node) => ({
             text: (node as HTMLElement).innerText.trim(),
             role: node.getAttribute("role") ?? "",
-            active: (node as HTMLElement).dataset.active ?? "",
+            selectedData: (node as HTMLElement).hasAttribute("data-selected"),
             selected: node.getAttribute("aria-selected") ?? "",
           }),
         ),
@@ -645,13 +645,13 @@ test(
         externalTabState.map((row) => ({
           text: row.text,
           role: row.role,
-          active: row.active,
+          selectedData: row.selectedData,
           selected: row.selected,
         })),
         [
-          { text: "None", role: "tab", active: "false", selected: "false" },
-          { text: "Codex", role: "tab", active: "true", selected: "true" },
-          { text: "Claude Code", role: "tab", active: "false", selected: "false" },
+          { text: "None", role: "tab", selectedData: false, selected: "false" },
+          { text: "Codex", role: "tab", selectedData: true, selected: "true" },
+          { text: "Claude Code", role: "tab", selectedData: false, selected: "false" },
         ],
       )
       const codexTabPanelState = await page.$eval(
@@ -736,7 +736,7 @@ test(
         Array.from(document.querySelectorAll('[data-section="external"] [data-ui="executor-popover-tab"]')).map(
           (node) => ({
             text: (node as HTMLElement).innerText.trim(),
-            active: (node as HTMLElement).dataset.active ?? "",
+            selectedData: (node as HTMLElement).hasAttribute("data-selected"),
             selected: node.getAttribute("aria-selected") ?? "",
           }),
         ),
@@ -744,13 +744,13 @@ test(
       assert.deepEqual(
         claudeTabState.map((row) => ({
           text: row.text,
-          active: row.active,
+          selectedData: row.selectedData,
           selected: row.selected,
         })),
         [
-          { text: "None", active: "false", selected: "false" },
-          { text: "Codex", active: "false", selected: "false" },
-          { text: "Claude Code", active: "true", selected: "true" },
+          { text: "None", selectedData: false, selected: "false" },
+          { text: "Codex", selectedData: false, selected: "false" },
+          { text: "Claude Code", selectedData: true, selected: "true" },
         ],
       )
       const claudeTabPanelState = await page.$eval(

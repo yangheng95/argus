@@ -101,6 +101,8 @@ describe("shared Kobalte select popup colors", () => {
   test(".oc-select content and options use readable foreground tokens", () => {
     const contentBlock = fieldCss.match(/\.oc-select-content\s*{[^}]*}/)?.[0] ?? ""
     const optionBlock = fieldCss.match(/\.oc-select-option\s*{[^}]*}/)?.[0] ?? ""
+    const selectedOptionBlock = fieldCss.match(/\.oc-select-option\[data-selected\]\s*{[^}]*}/)?.[0] ?? ""
+    const highlightedOptionBlock = fieldCss.match(/\.oc-select-option\[data-highlighted\],[\s\S]*?\.oc-select-option:hover\s*{[^}]*}/)?.[0] ?? ""
     const secondaryBlock = fieldCss.match(/\.oc-select-option\s+small\s*{[^}]*}/)?.[0] ?? ""
     const optionCopyBlock = fieldCss.match(/\.oc-select-option-copy\s*{[^}]*}/)?.[0] ?? ""
 
@@ -108,6 +110,9 @@ describe("shared Kobalte select popup colors", () => {
     expect(contentBlock).not.toMatch(/background\s*:\s*var\(--surface\)/)
     expect(contentBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
     expect(optionBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
+    expect(selectedOptionBlock).toMatch(/background\s*:\s*var\(--accent-dim\)/)
+    expect(selectedOptionBlock).toMatch(/color\s*:\s*var\(--text-strong\)/)
+    expect(highlightedOptionBlock).toMatch(/background\s*:\s*var\(--surface-hover\)/)
     expect(secondaryBlock).toMatch(/color\s*:\s*var\(--text-soft\)/)
     expect(secondaryBlock).not.toMatch(/var\(--text-muted\)/)
     expect(optionCopyBlock).toMatch(/flex-direction\s*:\s*column/)

@@ -270,6 +270,7 @@
   appearance: none;
   -webkit-appearance: none;
   position: relative;
+  min-width: 0;
   min-height: calc(104px * var(--ui-scale));
   display: flex;
   flex-direction: column;
@@ -302,7 +303,7 @@
   background: color-mix(in srgb, var(--accent) 5%, var(--surface-hover));
 }
 
-.app-dialog-decision__choice[data-active="true"] {
+.app-dialog-decision__choice[data-pressed] {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
   background: color-mix(in srgb, var(--accent) 8%, var(--surface-inset));
   box-shadow: inset calc(3px * var(--ui-scale)) 0 0 var(--accent);
@@ -313,9 +314,16 @@
   align-items: center;
   justify-content: space-between;
   gap: calc(8px * var(--ui-scale));
+  min-width: 0;
   color: var(--text-strong);
   font-size: var(--ui-font-title);
   font-weight: var(--ui-font-weight-strong);
+}
+
+.app-dialog-decision__choice-top > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-dialog-decision__badge {
@@ -329,6 +337,7 @@
 }
 
 .app-dialog-decision__choice-body {
+  min-width: 0;
   color: var(--text-muted);
   font-size: var(--ui-font-small);
   line-height: 1.5;

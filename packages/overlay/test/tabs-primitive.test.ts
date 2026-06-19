@@ -56,7 +56,9 @@ test("Tabs primitive exposes the canonical data-attribute contract", () => {
   expect(source).toContain("<KobalteTabs.List")
   expect(source).toContain("<KobalteTabs.Trigger")
   expect(source).toContain("<KobalteTabs.Content")
-  expect(source).toContain('data-active={local.active ? "true" : "false"}')
+  expect(source).not.toContain("active: boolean")
+  expect(source).not.toContain("local.active")
+  expect(source).not.toContain("data-active=")
   expect(source).not.toMatch(/\b(?:right-panel-tab|btn|workspace-toggle)\b/)
 })
 
@@ -98,8 +100,17 @@ test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA",
     expect(tabOpenTags.length).toBeGreaterThan(0)
     for (const tag of tabOpenTags) {
       expect(tag).not.toContain("onClick=")
+      expect(tag).not.toContain("active=")
     }
   }
+})
+
+test("Tabs primitive styles Kobalte selected, highlighted, and pressed states", () => {
+  const css = readFileSync(TABS_CSS, "utf8")
+
+  expect(css).toContain(".oc-tab[data-selected],\n.oc-tab[data-pressed]")
+  expect(css).toContain(".oc-tab[data-highlighted],\n.oc-tab:hover")
+  expect(css).not.toContain('data-active="true"')
 })
 
 test("Tabs primitive owns the canonical keyboard focus ring", () => {

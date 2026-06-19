@@ -225,9 +225,16 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       {},
       fileChangesFixture.length,
     )
+    await page.waitForFunction(
+      () =>
+        typeof (window as any).openWorkspaceDiff === "function" &&
+        document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "changes",
+    )
 
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
       ;(window as any).openWorkspaceDiff({ filePath: "src/live-file.ts", goalRunID: "gr_diff_preview" })
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
     })
     await page.waitForFunction(
       () => document.querySelector<HTMLElement>(".file-changes-panel")?.dataset.activeView === "diff",
@@ -336,7 +343,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
         tag: node.tagName,
         className: node.className,
         status: node.dataset.status ?? "",
-        dataActive: node.dataset.active ?? "",
+        dataPressed: node.hasAttribute("data-pressed"),
         ariaPressed: node.getAttribute("aria-pressed"),
       }))
       return {
@@ -352,7 +359,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       ["all", "modified", "added", "deleted"],
     )
     assert.equal(initialFilterControlState.options.every((item) => item.className.includes("oc-tab")), true)
-    assert.equal(initialFilterControlState.options.find((item) => item.status === "all")?.dataActive, "true")
+    assert.equal(initialFilterControlState.options.find((item) => item.status === "all")?.dataPressed, true)
 
     await page.type(".changes-filter-input", "added-filter")
     await page.waitForSelector('[data-ui="file-changes-filter-clear"]')
@@ -392,7 +399,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     await page.waitForFunction(
       () =>
         document.querySelector<HTMLElement>('[data-ui="file-changes-status-filter-option"][data-status="added"]')
-          ?.dataset.active === "true",
+          ?.hasAttribute("data-pressed") === true,
     )
     const addedFilterState = await page.evaluate(() => {
       const rowStatuses = Array.from(document.querySelectorAll<HTMLElement>(".change-row .change-status")).map(
@@ -401,11 +408,11 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       return {
         activeAdded:
           document.querySelector<HTMLElement>('[data-ui="file-changes-status-filter-option"][data-status="added"]')
-            ?.dataset.active ?? "",
+            ?.hasAttribute("data-pressed") ?? false,
         rowStatuses,
       }
     })
-    assert.equal(addedFilterState.activeAdded, "true")
+    assert.equal(addedFilterState.activeAdded, true)
     assert.ok(addedFilterState.rowStatuses.length > 0)
     assert.equal(addedFilterState.rowStatuses.every((status) => status === "added"), true)
 

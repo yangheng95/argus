@@ -350,7 +350,6 @@ export function ConfigDialogHost() {
                 {(tab) => (
                   <Tab
                     value={tab.id}
-                    active={dialogStore.config.activeTab === tab.id}
                     size="md"
                     tone="neutral"
                     data-config-tab={tab.id}
@@ -365,7 +364,6 @@ export function ConfigDialogHost() {
               </For>
               <Tab
                 value="about"
-                active={dialogStore.config.activeTab === "about"}
                 size="md"
                 tone="neutral"
                 data-config-tab="about"

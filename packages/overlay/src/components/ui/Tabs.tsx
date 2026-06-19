@@ -23,7 +23,6 @@ export interface TabListProps
 export interface TabProps
   extends Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList" | "role" | "type" | "onClick"> {
   value: string
-  active: boolean
   size: TabsSize
   tone: TabsTone
 }
@@ -59,14 +58,13 @@ export function TabList(props: TabListProps): JSX.Element {
 }
 
 export function Tab(props: TabProps): JSX.Element {
-  const [local, tabProps] = splitProps(props, ["value", "active", "size", "tone"])
+  const [local, tabProps] = splitProps(props, ["value", "size", "tone"])
 
   return (
     <KobalteTabs.Trigger
       {...tabProps}
       value={local.value}
       class="oc-tab"
-      data-active={local.active ? "true" : "false"}
       data-size={local.size}
       data-tone={local.tone}
     />

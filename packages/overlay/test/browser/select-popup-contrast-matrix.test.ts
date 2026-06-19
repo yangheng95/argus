@@ -92,8 +92,15 @@ test("shared Select popup consumers keep readable options on a light popup surfa
                   <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="false">
                     <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>General</span><small>Baseline prompt set.</small></span>
                   </li>
-                  <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="true" data-highlighted="">
+                  <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="false" data-highlighted="">
+                    <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>Research</span><small>Evidence gathering squad.</small></span>
+                  </li>
+                  <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="true" data-selected="">
                     <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>Frontend</span><small>Visual UI verification squad.</small></span>
+                    <span class="oc-select-indicator">✓</span>
+                  </li>
+                  <li class="oc-select-option prompt-profile-select-option" role="option" aria-selected="true" data-selected="" data-highlighted="">
+                    <span class="oc-select-option-copy prompt-profile-select-option-copy"><span>Benchmark</span><small>Regression verification squad.</small></span>
                     <span class="oc-select-indicator">✓</span>
                   </li>
                 </ul>
@@ -107,8 +114,15 @@ test("shared Select popup consumers keep readable options on a light popup surfa
                   <li class="oc-select-option agent-model-select-option" role="option" aria-selected="false" data-model-value="openai/gpt-5.4">
                     <span class="oc-select-option-copy agent-model-select-option-text"><span>openai/gpt-5.4</span><small>Primary coding model.</small></span>
                   </li>
-                  <li class="oc-select-option agent-model-select-option" role="option" aria-selected="true" data-highlighted="" data-model-value="anthropic/claude-sonnet-4-6">
+                  <li class="oc-select-option agent-model-select-option" role="option" aria-selected="false" data-highlighted="" data-model-value="openai/gpt-5.3">
+                    <span class="oc-select-option-copy agent-model-select-option-text"><span>openai/gpt-5.3</span><small>Alternate coding model.</small></span>
+                  </li>
+                  <li class="oc-select-option agent-model-select-option" role="option" aria-selected="true" data-selected="" data-model-value="anthropic/claude-sonnet-4-6">
                     <span class="oc-select-option-copy agent-model-select-option-text"><span>anthropic/claude-sonnet-4-6</span><small>Configured specialist model.</small></span>
+                    <span class="oc-select-indicator">✓</span>
+                  </li>
+                  <li class="oc-select-option agent-model-select-option" role="option" aria-selected="true" data-selected="" data-highlighted="" data-model-value="google/gemini-2.7-pro">
+                    <span class="oc-select-option-copy agent-model-select-option-text"><span>google/gemini-2.7-pro</span><small>Selected highlighted specialist.</small></span>
                     <span class="oc-select-indicator">✓</span>
                   </li>
                 </ul>
@@ -122,8 +136,15 @@ test("shared Select popup consumers keep readable options on a light popup surfa
                   <li class="oc-select-option settings-form-select-option" role="option" aria-selected="false">
                     <span class="oc-select-option-copy"><span>Local directory</span><small>Use a filesystem-backed source.</small></span>
                   </li>
-                  <li class="oc-select-option settings-form-select-option" role="option" aria-selected="true" data-highlighted="">
+                  <li class="oc-select-option settings-form-select-option" role="option" aria-selected="false" data-highlighted="">
+                    <span class="oc-select-option-copy"><span>Remote source</span><small>Use a remote configured source.</small></span>
+                  </li>
+                  <li class="oc-select-option settings-form-select-option" role="option" aria-selected="true" data-selected="">
                     <span class="oc-select-option-copy"><span>Managed source</span><small>Use the shared managed source.</small></span>
+                    <span class="oc-select-indicator">✓</span>
+                  </li>
+                  <li class="oc-select-option settings-form-select-option" role="option" aria-selected="true" data-selected="" data-highlighted="">
+                    <span class="oc-select-option-copy"><span>Workspace source</span><small>Use the workspace source.</small></span>
                     <span class="oc-select-indicator">✓</span>
                   </li>
                 </ul>
@@ -135,7 +156,9 @@ test("shared Select popup consumers keep readable options on a light popup surfa
               <div class="oc-select-content app-dialog-select-content" data-expanded="">
                 <ul class="oc-select-listbox app-dialog-select-listbox" role="listbox">
                   <li class="oc-select-option app-dialog-select-option" role="option" aria-selected="false" data-value="view">View changed files</li>
-                  <li class="oc-select-option app-dialog-select-option" role="option" aria-selected="true" data-highlighted="" data-value="continue">Continue current task <span class="oc-select-indicator">✓</span></li>
+                  <li class="oc-select-option app-dialog-select-option" role="option" aria-selected="false" data-highlighted="" data-value="queue">Queue task</li>
+                  <li class="oc-select-option app-dialog-select-option" role="option" aria-selected="true" data-selected="" data-value="continue">Continue current task <span class="oc-select-indicator">✓</span></li>
+                  <li class="oc-select-option app-dialog-select-option" role="option" aria-selected="true" data-selected="" data-highlighted="" data-value="start">Start next task <span class="oc-select-indicator">✓</span></li>
                 </ul>
               </div>
             </section>
@@ -147,8 +170,14 @@ test("shared Select popup consumers keep readable options on a light popup surfa
                   <li class="oc-select-option browser-preview-candidate-option" role="option" aria-selected="false" data-ui="browser-preview-candidate-option" data-target-id="landing">
                     <span>http://localhost:4173/landing</span>
                   </li>
-                  <li class="oc-select-option browser-preview-candidate-option" role="option" aria-selected="true" data-highlighted="" data-ui="browser-preview-candidate-option" data-target-id="checkout">
+                  <li class="oc-select-option browser-preview-candidate-option" role="option" aria-selected="false" data-highlighted="" data-ui="browser-preview-candidate-option" data-target-id="settings">
+                    <span>http://localhost:4173/settings</span>
+                  </li>
+                  <li class="oc-select-option browser-preview-candidate-option" role="option" aria-selected="true" data-selected="" data-ui="browser-preview-candidate-option" data-target-id="checkout">
                     <span>http://localhost:4173/checkout</span><span class="oc-select-indicator">✓</span>
+                  </li>
+                  <li class="oc-select-option browser-preview-candidate-option" role="option" aria-selected="true" data-selected="" data-highlighted="" data-ui="browser-preview-candidate-option" data-target-id="dashboard">
+                    <span>http://localhost:4173/dashboard</span><span class="oc-select-indicator">✓</span>
                   </li>
                 </ul>
               </div>
@@ -159,7 +188,9 @@ test("shared Select popup consumers keep readable options on a light popup surfa
               <div class="oc-select-content log-level-select-content" data-expanded="">
                 <ul class="oc-select-listbox log-level-select-listbox" role="listbox">
                   <li class="oc-select-option log-level-select-option" role="option" aria-selected="false">INFO</li>
-                  <li class="oc-select-option log-level-select-option" role="option" aria-selected="true" data-highlighted="">WARN <span class="oc-select-indicator">✓</span></li>
+                  <li class="oc-select-option log-level-select-option" role="option" aria-selected="false" data-highlighted="">DEBUG</li>
+                  <li class="oc-select-option log-level-select-option" role="option" aria-selected="true" data-selected="">WARN <span class="oc-select-indicator">✓</span></li>
+                  <li class="oc-select-option log-level-select-option" role="option" aria-selected="true" data-selected="" data-highlighted="">ERROR <span class="oc-select-indicator">✓</span></li>
                 </ul>
               </div>
             </section>
@@ -181,11 +212,20 @@ test("shared Select popup consumers keep readable options on a light popup surfa
         a: number
       }
       function parseColor(value: string): Rgba {
-        const match = value.match(/rgba?\(([^)]+)\)/)
-        if (!match) throw new Error(`Unsupported color: ${value}`)
-        const parts = match[1].split(",").map((part) => Number.parseFloat(part.trim()))
-        const [r, g, b] = parts
-        const a = parts.length >= 4 ? parts[3] : 1
+        const rgb = value.match(/rgba?\(([^)]+)\)/)
+        if (rgb) {
+          const parts = rgb[1].split(",").map((part) => Number.parseFloat(part.trim()))
+          const [r, g, b] = parts
+          const a = parts.length >= 4 ? parts[3] : 1
+          if (![r, g, b, a].every(Number.isFinite)) throw new Error(`Invalid color: ${value}`)
+          return { r, g, b, a }
+        }
+        const srgb = value.match(/color\(srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*([0-9.]+))?\)/)
+        if (!srgb) throw new Error(`Unsupported color: ${value}`)
+        const r = Number.parseFloat(srgb[1]) * 255
+        const g = Number.parseFloat(srgb[2]) * 255
+        const b = Number.parseFloat(srgb[3]) * 255
+        const a = srgb[4] === undefined ? 1 : Number.parseFloat(srgb[4])
         if (![r, g, b, a].every(Number.isFinite)) throw new Error(`Invalid color: ${value}`)
         return { r, g, b, a }
       }
@@ -240,7 +280,9 @@ test("shared Select popup consumers keep readable options on a light popup surfa
           return {
             text: option.textContent?.trim().replace(/\s+/g, " ") ?? "",
             selectedAttribute: option.getAttribute("aria-selected"),
+            selectedData: option.hasAttribute("data-selected"),
             selected: option.getAttribute("aria-selected") === "true" || option.hasAttribute("data-selected"),
+            highlighted: option.hasAttribute("data-highlighted"),
             color: getComputedStyle(option).color,
             background: getComputedStyle(option).backgroundColor,
             contrast: contrastRatio(optionColor, surface),
@@ -286,7 +328,7 @@ test("shared Select popup consumers keep readable options on a light popup surfa
 
     for (const sample of result) {
       assert.equal(sample.contentBackgroundAlpha, 1, `${sample.id} popup background must be opaque`)
-      assert.ok(sample.options.length >= 2, `${sample.id} should include selected and unselected options`)
+      assert.ok(sample.options.length >= 4, `${sample.id} should include plain, selected, highlighted, and combined options`)
       assert.ok(
         sample.options.some((option) => !option.selected),
         `${sample.id} must cover at least one unselected option`,
@@ -294,6 +336,22 @@ test("shared Select popup consumers keep readable options on a light popup surfa
       assert.ok(
         sample.options.some((option) => option.selectedAttribute === "false"),
         `${sample.id} must cover an explicit aria-selected=false option`,
+      )
+      assert.ok(
+        sample.options.some((option) => !option.selectedData && !option.highlighted),
+        `${sample.id} must cover a plain unselected option`,
+      )
+      assert.ok(
+        sample.options.some((option) => option.selectedData && !option.highlighted),
+        `${sample.id} must cover a selected-only option`,
+      )
+      assert.ok(
+        sample.options.some((option) => !option.selectedData && option.highlighted),
+        `${sample.id} must cover a highlighted-only option`,
+      )
+      assert.ok(
+        sample.options.some((option) => option.selectedData && option.highlighted),
+        `${sample.id} must cover a selected+highlighted option`,
       )
       for (const copy of sample.copyLayouts.filter((layout) => layout.hasDescription)) {
         assert.equal(copy.display, "flex", `${sample.id} described option copy must use shared flex layout`)

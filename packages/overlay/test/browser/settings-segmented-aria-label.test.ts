@@ -263,7 +263,7 @@ test("settings segmented controls expose per-row accessible names", async () => 
     await page.waitForFunction(() => {
       const panel = document.querySelector('[data-config-panel="permissions"]') as HTMLElement | null
       const ask = panel?.querySelector('.s-segmented-btn[data-value="ask"]') as HTMLElement | null
-      return ask?.dataset.active === "true" && ask.getAttribute("aria-pressed") === "true"
+      return ask?.hasAttribute("data-pressed") && ask.getAttribute("aria-pressed") === "true"
     })
     assert.deepEqual(configPatches.at(-1), { tool_permissions: { websearch: "ask" } })
     assert.deepEqual(errors, [])

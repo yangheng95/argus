@@ -592,7 +592,6 @@ export function TitlebarMenubar() {
                             value={item.id}
                             textValue={t(`settings.theme.${item.i18nSlug}`)}
                             closeOnSelect={false}
-                            data-active={settingsStore.theme === item.id ? "true" : "false"}
                             data-testid={`titlebar-theme-${item.id}`}
                           >
                             <span class="titlebar-theme-option-swatch" data-theme={item.id} aria-hidden="true" />
