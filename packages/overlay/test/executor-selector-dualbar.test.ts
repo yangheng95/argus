@@ -117,9 +117,17 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/await setExecutorModel\(executorID, model\)/)
   })
 
-  test("model buttons expose the current selection to assistive technology", () => {
-    expect(SRC).toMatch(/data-active=\{modelID === props\.currentModel \? "true" : "false"\}/)
-    expect(SRC).toMatch(/aria-current=\{modelID === props\.currentModel \? "true" : undefined\}/)
+  test("model picker delegates selection semantics to Kobalte listbox", () => {
+    expect(SRC).toContain('import * as Listbox from "@kobalte/core/listbox"')
+    expect(SRC).toContain("<Listbox.Root<ExecutorModelOption>")
+    expect(SRC).toContain('class="executor-model-listbox"')
+    expect(SRC).toContain('class="executor-model-option"')
+    expect(SRC).toContain('data-model-value={option.id}')
+    expect(SRC).not.toContain("<ComboboxControl<ExecutorModelOption>")
+    expect(SRC).not.toContain('class="executor-model-combobox"')
+    expect(SRC).not.toContain('class="executor-popover-model"')
+    expect(SRC).not.toMatch(/data-active=\{modelID === props\.currentModel/)
+    expect(SRC).not.toMatch(/aria-current=\{modelID === props\.currentModel/)
     expect(SRC).not.toMatch(/aria-pressed=\{modelID === props\.currentModel/)
   })
 

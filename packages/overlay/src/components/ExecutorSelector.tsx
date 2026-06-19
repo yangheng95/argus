@@ -18,6 +18,7 @@
 //     otherwise appStore.config.model via patchConfig
 
 import * as Popover from "@kobalte/core/popover"
+import * as Listbox from "@kobalte/core/listbox"
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import { appStore } from "../store/app"
 import { activeTaskID, hasSelectedTask } from "../store/board"
@@ -60,6 +61,12 @@ interface ProviderGroup {
   available: boolean
   /** Fully-qualified model IDs ("<provider>/<model>"). */
   models: string[]
+}
+
+interface ExecutorModelOption {
+  id: string
+  label: string
+  providerName: string
 }
 
 const INTERNAL_EXECUTOR_ID = "opencorvus"
@@ -704,28 +711,54 @@ interface ProviderModelGroupProps {
 }
 
 function ProviderModelGroup(props: ProviderModelGroupProps) {
+  const options = createMemo<ExecutorModelOption[]>(() =>
+    props.group.models.map((modelID) => ({
+      id: modelID,
+      label: splitModelID(modelID).name,
+      providerName: props.group.providerName,
+    })),
+  )
+  const selectedOption = createMemo(() => options().find((option) => option.id === props.currentModel) ?? null)
+  const selectedKeys = createMemo(() => {
+    const option = selectedOption()
+    return option ? [option.id] : []
+  })
+
   return (
-    <div class="executor-popover-group">
+    <div class="executor-popover-group" data-provider-id={props.group.providerID}>
       <div class="executor-popover-group-header">
         <span class="executor-popover-group-name">{props.group.providerName}</span>
       </div>
-      <div class="executor-popover-models">
-        <For each={props.group.models}>
-          {(modelID) => (
-            <button
+      <Listbox.Root<ExecutorModelOption>
+        class="executor-model-listbox"
+        aria-label={props.group.providerName}
+        options={options()}
+        value={selectedKeys()}
+        optionValue={(option) => option.id}
+        optionTextValue={(option) => `${option.label} ${option.providerName} ${option.id}`}
+        optionDisabled={() => !!props.disabled}
+        disallowEmptySelection={options().length > 0}
+        allowDuplicateSelectionEvents
+        shouldFocusWrap
+        onChange={(keys) => {
+          const modelID = [...keys][0]
+          if (modelID) props.onPick(modelID)
+        }}
+        renderItem={(node) => {
+          const option = node.rawValue as ExecutorModelOption
+          return (
+            <Listbox.Item
+              item={node}
+              as="button"
               type="button"
-              class="executor-popover-model"
-              data-active={modelID === props.currentModel ? "true" : "false"}
-              aria-current={modelID === props.currentModel ? "true" : undefined}
-              title={modelID}
-              disabled={props.disabled}
-              onClick={() => props.onPick(modelID)}
+              class="executor-model-option"
+              data-model-value={option.id}
             >
-              <span class="executor-popover-model-name">{splitModelID(modelID).name}</span>
-            </button>
-          )}
-        </For>
-      </div>
+              <span class="executor-model-option-label">{option.label}</span>
+            </Listbox.Item>
+          )
+        }}
+      />
     </div>
   )
 }

@@ -108,9 +108,17 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                   <span class="executor-popover-hint" data-popup-text>Choose the runtime profile for this task.</span>
                 </div>
                 <div class="executor-popover-empty" data-popup-text>No external executors are configured.</div>
-                <button class="executor-popover-model" type="button" disabled data-popup-text>
-                  Unavailable model
-                </button>
+                <ul id="popup-executor-model-listbox" class="executor-model-listbox" role="listbox">
+                  <li
+                    class="executor-model-option"
+                    role="option"
+                    data-selected
+                    data-model-value="openai/gpt-5.5-pro"
+                    data-popup-text
+                  >
+                    <span class="executor-model-option-label">gpt-5.5-pro</span>
+                  </li>
+                </ul>
                 <div class="executor-popover-group">
                   <div class="executor-popover-group-header">
                     <span class="executor-popover-group-name" data-popup-text>OpenAI</span>

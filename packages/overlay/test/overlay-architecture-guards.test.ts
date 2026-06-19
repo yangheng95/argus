@@ -1066,8 +1066,9 @@ describe("overlay architecture guards", () => {
       "executor-popover-body",
       "executor-popover-empty",
       "executor-popover-group",
-      "executor-popover-models",
-      "executor-popover-model",
+      "executor-model-listbox",
+      "executor-model-option",
+      "executor-model-option-label",
     ]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -1076,7 +1077,7 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(/\.oc-tabs\[data-ui="executor-popover-tabs"\]\s*\{/)
     expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\s*\{/)
     expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\[data-active="true"\]\s*\{/)
-    expect(composerSurface).toMatch(/\.executor-popover-model\[data-active="true"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-model-option\[data-selected\]\s*\{/)
     expect(composerSurface).not.toMatch(/rgba\(146,\s*184,\s*252/)
     expect(composerSurface).not.toMatch(/rgba\(86,\s*126,\s*196/)
     expect(composerSurface).not.toMatch(/rgba\(196,\s*215,\s*252/)

@@ -746,13 +746,17 @@
 }
 
 
-.executor-popover-models {
+.executor-model-listbox {
   display: flex;
   flex-direction: column;
   gap: calc(1px * var(--ui-scale));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  outline: none;
 }
 
-.executor-popover-model {
+.executor-model-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -766,27 +770,25 @@
   padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
   font-size: var(--ui-font-small);
   cursor: pointer;
+  user-select: none;
+  outline: none;
   transition:
     background var(--ui-duration-fast),
     color var(--ui-duration-fast);
 }
 
-.executor-popover-model:hover {
+.executor-model-option:hover,
+.executor-model-option[data-focused] {
   background: var(--executor-menu-row-hover-bg);
   color: var(--text-strong);
 }
 
-.executor-popover-model:disabled {
-  cursor: not-allowed;
-  color: var(--text-muted);
+.executor-model-option:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) var(--accent-ring);
 }
 
-.executor-popover-model:disabled:hover {
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.executor-popover-model[data-active="true"] {
+.executor-model-option[data-selected] {
   background: linear-gradient(
     135deg,
     color-mix(in srgb, var(--accent) 18%, transparent),
@@ -797,7 +799,7 @@
   font-weight: var(--ui-font-weight-strong);
 }
 
-.executor-popover-model-name {
+.executor-model-option-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
