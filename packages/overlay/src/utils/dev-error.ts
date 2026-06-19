@@ -265,9 +265,9 @@ const DEV_ERROR_CSS = `
   overflow: hidden;
   font-family: var(--mono, "Consolas", "Monaco", monospace);
   font-size: 11px;
-  background: rgba(20, 20, 24, 0.96);
-  border: 1px solid rgba(255, 80, 80, 0.4);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  background: var(--menu-panel-bg);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 44%, var(--border));
+  box-shadow: var(--shadow-lg);
   pointer-events: auto;
 }
 #devErrorOverlay.dev-error--empty { display: none; }
@@ -278,14 +278,14 @@ const DEV_ERROR_CSS = `
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  background: rgba(255, 60, 60, 0.15);
+  background: var(--bad-dim);
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
 }
 .dev-error-title {
   font-weight: 600;
-  color: #ff6b6b;
+  color: var(--bad);
   flex: 1;
 }
 .dev-error-badge {
@@ -296,20 +296,28 @@ const DEV_ERROR_CSS = `
   border-radius: 9px;
   font-size: 10px;
   font-weight: 700;
-  color: #fff;
+  border: var(--oc-border-width) solid transparent;
 }
-.dev-error-badge--error { background: #d43f3f; }
-.dev-error-badge--warn { background: #b8860b; }
+.dev-error-badge--error {
+  background: var(--bad-dim);
+  border-color: color-mix(in srgb, var(--bad) 42%, transparent);
+  color: var(--bad);
+}
+.dev-error-badge--warn {
+  background: var(--warn-dim);
+  border-color: color-mix(in srgb, var(--warn) 42%, transparent);
+  color: var(--warn);
+}
 .dev-error-clear {
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 14px;
   padding: 0 2px;
   line-height: 1;
 }
-.dev-error-clear:hover { color: #fff; }
+.dev-error-clear:hover { color: var(--text-strong); }
 
 .dev-error-list {
   overflow-y: auto;
@@ -320,33 +328,33 @@ const DEV_ERROR_CSS = `
 .dev-error-entry {
   position: relative;
   padding: 4px 24px 4px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: var(--oc-border-width) solid var(--divider-soft);
 }
-.dev-error-entry--error { border-left: 3px solid #d43f3f; }
-.dev-error-entry--warn { border-left: 3px solid #b8860b; }
+.dev-error-entry--error { border-left: calc(3px * var(--ui-scale)) solid var(--bad); }
+.dev-error-entry--warn { border-left: calc(3px * var(--ui-scale)) solid var(--warn); }
 
 .dev-error-level {
   font-weight: 700;
   margin-right: 4px;
 }
-.dev-error-entry--error .dev-error-level { color: #ff6b6b; }
-.dev-error-entry--warn .dev-error-level { color: #f0c040; }
+.dev-error-entry--error .dev-error-level { color: var(--bad); }
+.dev-error-entry--warn .dev-error-level { color: var(--warn); }
 
 .dev-error-time {
-  color: #666;
+  color: var(--text-muted);
   margin-right: 6px;
 }
 .dev-error-loc {
-  color: #7cb3ff;
+  color: var(--info);
   word-break: break-all;
 }
 .dev-error-count {
-  color: #f0c040;
+  color: var(--warn);
   font-weight: 700;
   margin-left: 4px;
 }
 .dev-error-msg {
-  color: #ccc;
+  color: var(--text);
   margin-top: 2px;
   line-height: 1.35;
   white-space: pre-wrap;
@@ -358,11 +366,11 @@ const DEV_ERROR_CSS = `
   right: 4px;
   background: none;
   border: none;
-  color: #666;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 13px;
   line-height: 1;
   padding: 0;
 }
-.dev-error-dismiss:hover { color: #fff; }
+.dev-error-dismiss:hover { color: var(--text-strong); }
 `
