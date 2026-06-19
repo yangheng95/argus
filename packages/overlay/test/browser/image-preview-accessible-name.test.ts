@@ -5,7 +5,6 @@ import { dirname, join, resolve } from "node:path"
 import test from "node:test"
 import { fileURLToPath } from "node:url"
 
-import { imagePreviewTriggerLabel } from "../../src/utils/image-preview-label.ts"
 import { launchBrowser } from "../launch.ts"
 
 const OVERLAY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
@@ -24,6 +23,10 @@ async function saveScreenshot(element: { screenshot(options?: Record<string, unk
   return target
 }
 
+function triggerLabel(messages: Record<string, string>, alt: string): string {
+  return messages["image_preview.open_trigger_with_alt"]!.replace("{{alt}}", alt)
+}
+
 test("image preview triggers expose distinct accessible names and visible focus", async () => {
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
@@ -32,11 +35,13 @@ test("image preview triggers expose distinct accessible names and visible focus"
     readCss("tokens/design-language.css"),
     readCss("cascade/base.css"),
     readCss("cascade/light.css"),
+    readCss("primitives/button.css"),
     readCss("surfaces/messages.css"),
     readCss("surfaces/markdown.css"),
   ].join("\n")
-  const firstLabel = imagePreviewTriggerLabel("Revenue chart")
-  const secondLabel = imagePreviewTriggerLabel("Cash flow screenshot")
+  const zhCN = JSON.parse(readFileSync(join(OVERLAY_ROOT, "src/i18n/zh-CN.json"), "utf8")) as Record<string, string>
+  const firstLabel = triggerLabel(zhCN, "Revenue chart")
+  const secondLabel = triggerLabel(zhCN, "Cash flow screenshot")
 
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
@@ -72,10 +77,10 @@ test("image preview triggers expose distinct accessible names and visible focus"
         </head>
         <body data-theme="light">
           <main class="fixture-row" aria-label="Image preview trigger fixture">
-            <button type="button" class="msg-image-trigger" data-image-preview-trigger="true" data-image-preview-src="${SAMPLE_PNG}" data-image-preview-alt="Revenue chart" title="${firstLabel}" aria-label="${firstLabel}">
+            <button type="button" class="oc-button msg-image-trigger" data-variant="ghost" data-size="md" data-tone="neutral" data-ui="image-preview-trigger" data-image-preview-trigger="true" data-image-preview-src="${SAMPLE_PNG}" data-image-preview-alt="Revenue chart" title="${firstLabel}" aria-label="${firstLabel}">
               <img class="md-img" src="${SAMPLE_PNG}" alt="Revenue chart" loading="lazy">
             </button>
-            <button type="button" class="msg-image-trigger" data-image-preview-trigger="true" data-image-preview-src="${SAMPLE_PNG}" data-image-preview-alt="Cash flow screenshot" title="${secondLabel}" aria-label="${secondLabel}">
+            <button type="button" class="oc-button msg-image-trigger" data-variant="ghost" data-size="md" data-tone="neutral" data-ui="image-preview-trigger" data-image-preview-trigger="true" data-image-preview-src="${SAMPLE_PNG}" data-image-preview-alt="Cash flow screenshot" title="${secondLabel}" aria-label="${secondLabel}">
               <img class="md-img" src="${SAMPLE_PNG}" alt="Cash flow screenshot" loading="lazy">
             </button>
           </main>
@@ -88,13 +93,29 @@ test("image preview triggers expose distinct accessible names and visible focus"
         ariaLabel: button.getAttribute("aria-label") || "",
         title: button.getAttribute("title") || "",
         imageAlt: button.querySelector("img")?.getAttribute("alt") || "",
+        usesButtonPrimitive: button.classList.contains("oc-button"),
+        dataUi: button.getAttribute("data-ui") || "",
       })),
     )
     assert.deepEqual(names, [
-      { ariaLabel: firstLabel, title: firstLabel, imageAlt: "Revenue chart" },
-      { ariaLabel: secondLabel, title: secondLabel, imageAlt: "Cash flow screenshot" },
+      {
+        ariaLabel: firstLabel,
+        title: firstLabel,
+        imageAlt: "Revenue chart",
+        usesButtonPrimitive: true,
+        dataUi: "image-preview-trigger",
+      },
+      {
+        ariaLabel: secondLabel,
+        title: secondLabel,
+        imageAlt: "Cash flow screenshot",
+        usesButtonPrimitive: true,
+        dataUi: "image-preview-trigger",
+      },
     ])
     assert.notEqual(names[0]!.ariaLabel, names[1]!.ariaLabel)
+    assert.ok(names.every((item) => item.ariaLabel.startsWith("打开图片预览")))
+    assert.ok(names.every((item) => !item.ariaLabel.includes("Open image preview")))
 
     await page.keyboard.press("Tab")
     const focusState = await page.$eval('[data-image-preview-trigger]', (button) => {

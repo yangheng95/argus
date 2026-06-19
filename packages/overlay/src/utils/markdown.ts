@@ -188,7 +188,7 @@ marked.use({
       const titleAttr = title ? ` title="${escapeAttr(title)}"` : ""
       const alt = escapeAttr(text || "")
       const triggerLabel = escapeAttr(imagePreviewTriggerLabel(text || ""))
-      return `<button type="button" class="msg-image-trigger" data-image-preview-trigger="true" data-image-preview-src="${escapeAttr(src)}" data-image-preview-alt="${alt}" title="${triggerLabel}" aria-label="${triggerLabel}"><img class="md-img" src="${escapeAttr(src)}" alt="${alt}"${titleAttr} loading="lazy"></button>`
+      return `<button type="button" class="oc-button msg-image-trigger" data-variant="ghost" data-size="md" data-tone="neutral" data-ui="image-preview-trigger" data-image-preview-trigger="true" data-image-preview-src="${escapeAttr(src)}" data-image-preview-alt="${alt}" title="${triggerLabel}" aria-label="${triggerLabel}"><img class="md-img" src="${escapeAttr(src)}" alt="${alt}"${titleAttr} loading="lazy"></button>`
     },
   },
 })

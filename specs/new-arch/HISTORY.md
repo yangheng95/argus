@@ -18,6 +18,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | [2026-06-20-conversation-render-error-i18n.md](2026-06-20-conversation-render-error-i18n.md)               | Conversation Render Error i18n |
 | [2026-06-20-settings-textarea-primitive.md](2026-06-20-settings-textarea-primitive.md)                     | Settings Textarea Primitive    |
+| [2026-06-20-image-preview-trigger-i18n-button.md](2026-06-20-image-preview-trigger-i18n-button.md)         | Image Preview Trigger i18n Button |
 
 ## 2026-06-19
 
