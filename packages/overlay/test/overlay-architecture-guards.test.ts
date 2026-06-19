@@ -1003,7 +1003,11 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer:hover::before/)
     expect(activitySurface).toMatch(/\.file-changes-diff-header \.oc-button\[data-ui="file-changes-diff-close"\]\s*\{/)
-    expect(workspaceSurface).toMatch(/code \.file-link:hover\s*\{/)
+    expect(workspaceSurface).toMatch(/code \.file-link:hover,\s*code \.file-link:focus-visible\s*\{/)
+    expect(workspaceSurface).toMatch(
+      /code \.file-link:focus-visible\s*\{[\s\S]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/,
+    )
+    expect(soloRuleBody(workspaceSurface, "code .file-link:focus-visible")).not.toContain("outline: none")
   })
 
   test("conn-banner routes action controls through the shared Button primitive", () => {
