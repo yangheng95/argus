@@ -745,6 +745,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
               >
                 <figure
                   class="browser-preview-live-frame"
+                  role="application"
                   tabIndex={0}
                   onPointerDown={handleLivePointerDown}
                   onWheel={handleLiveWheel}

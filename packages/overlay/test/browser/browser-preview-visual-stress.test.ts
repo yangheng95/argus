@@ -1189,6 +1189,17 @@ test(
         )
       })
       await page.focus(".browser-preview-live-frame")
+      const liveFrameA11y = await page.$eval(".browser-preview-live-frame", (node) => {
+        const frame = node as HTMLElement
+        return {
+          active: document.activeElement === frame,
+          role: frame.getAttribute("role") ?? "",
+          label: frame.getAttribute("aria-label") ?? "",
+        }
+      })
+      assert.equal(liveFrameA11y.active, true)
+      assert.equal(liveFrameA11y.role, "application")
+      assert.ok(liveFrameA11y.label.trim().length > 0, "live frame must expose a non-empty accessible name")
       await page.keyboard.press("A")
       await waitForActivityState(
         page,
