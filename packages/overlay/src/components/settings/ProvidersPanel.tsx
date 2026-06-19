@@ -747,12 +747,12 @@ export default function ProvidersPanel() {
               {t("provider.action.add")}
             </Button>
           </div>
-          <label class="provider-search-field">
-            <span class="provider-search-icon" aria-hidden="true">
+          <label class="provider-search-field search-field">
+            <span class="provider-search-icon search-field-icon" aria-hidden="true">
               <Icon name="search" size={14} />
             </span>
             <input
-              class="field-input provider-search-input"
+              class="provider-search-input search-field-input"
               type="search"
               value={providerSearch()}
               placeholder={t("provider.search.placeholder")}

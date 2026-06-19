@@ -33,7 +33,7 @@ describe("icon affordances stay visible at rest", () => {
     expect(body).toContain("--oc-button-border:")
     expect(body).toContain("--oc-button-bg:")
     expect(body).toContain("--oc-button-color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));")
-    expect(body).toContain("opacity: 1;")
+    expect(body).toContain("opacity: var(--ui-opacity-full);")
     expect(body).not.toContain("white 78%")
     expect(body).not.toContain("var(--accent) 44%")
   })
@@ -51,7 +51,7 @@ describe("icon affordances stay visible at rest", () => {
       css,
       '.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-rename"],\n.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-download"],\n.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-start-now"]',
     )
-    expect(body).toContain("opacity: 0;")
+    expect(body).toContain("opacity: var(--ui-opacity-hidden);")
     expect(body).toContain("pointer-events: none;")
     expect(body).toContain("--oc-button-shadow: none;")
     expect(body).not.toContain("--oc-button-color: var(--text-muted);")
@@ -73,15 +73,8 @@ describe("icon affordances stay visible at rest", () => {
 
   test("search clear buttons share the visible icon-action resting state", () => {
     const fieldCss = read("src/styles/surfaces/field.css")
-    const providerCss = read("src/styles/surfaces/settings.css")
     const sharedClear = soloRuleBody(fieldCss, '.search-field .oc-button[data-ui$="-search-clear"]')
-    const providerClear = soloRuleBody(
-      providerCss,
-      '.provider-search-field .oc-button[data-ui="provider-search-clear"]',
-    )
-    for (const body of [sharedClear, providerClear]) {
-      expect(body).not.toContain("--oc-button-color: var(--text-muted);")
-      expect(body).not.toContain("--oc-button-shadow:")
-    }
+    expect(sharedClear).not.toContain("--oc-button-color: var(--text-muted);")
+    expect(sharedClear).not.toContain("--oc-button-shadow:")
   })
 })

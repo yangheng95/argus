@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import test from "node:test"
+import { fileURLToPath } from "node:url"
 
 import { launchBrowser, type OverlayBrowser, type OverlayPage } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
@@ -38,6 +39,9 @@ type HarnessData = {
 
 await ensureOverlayDist()
 
+const TEST_DIR = dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = resolve(TEST_DIR, "..", "..", "..", "..")
+
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
 }
@@ -53,7 +57,7 @@ function send(value: unknown, init?: ResponseInit) {
 }
 
 async function saveElementScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
-  const screenshotPath = resolve(".scratch", name)
+  const screenshotPath = resolve(REPO_ROOT, ".scratch", name)
   mkdirSync(dirname(screenshotPath), { recursive: true })
   writeFileSync(screenshotPath, await element.screenshot({}))
   return screenshotPath
@@ -430,7 +434,12 @@ test(
           const content = document.querySelector("#configContent")!.getBoundingClientRect()
           const toolbar = document.querySelector(".provider-command")!.getBoundingClientRect()
           const title = document.querySelector(".provider-title-block .oc-surface-header")!.getBoundingClientRect()
-          const search = document.querySelector('[data-testid="provider-search-input"]')!.getBoundingClientRect()
+          const searchField = document.querySelector<HTMLElement>(".provider-search-field")!
+          const searchInput = document.querySelector<HTMLElement>('[data-testid="provider-search-input"]')!
+          const searchIcon = document.querySelector<HTMLElement>(".provider-search-icon")!
+          const search = searchInput.getBoundingClientRect()
+          const searchFieldBox = searchField.getBoundingClientRect()
+          const searchIconBox = searchIcon.getBoundingClientRect()
           const actions = document.querySelector(".provider-head-actions")!.getBoundingClientRect()
           const save = document
             .querySelector('[data-testid="provider-api-key-save-anthropic"]')!
@@ -440,6 +449,12 @@ test(
             contentRight: content.right,
             saveRight: save.right,
             searchBottom: search.bottom,
+            searchClasses: searchField.className,
+            searchIconClasses: searchIcon.className,
+            searchIconRight: searchIconBox.right,
+            searchInputClasses: searchInput.className,
+            searchLeft: search.left,
+            searchFieldLeft: searchFieldBox.left,
             searchRight: search.right,
             searchTop: search.top,
             titleBottom: title.bottom,
@@ -454,10 +469,24 @@ test(
         assert.ok(layout.searchRight <= layout.contentRight + 1)
         assert.ok(layout.saveRight <= layout.contentRight + 1)
         assert.ok(layout.searchTop >= layout.titleBottom - 1)
+        assert.match(layout.searchClasses, /\bsearch-field\b/)
+        assert.match(layout.searchIconClasses, /\bsearch-field-icon\b/)
+        assert.match(layout.searchInputClasses, /\bsearch-field-input\b/)
+        assert.ok(layout.searchIconRight <= layout.searchLeft - 2)
+        assert.ok(layout.searchLeft > layout.searchFieldLeft)
         assert.equal(layout.llmResidueCount, 0)
         assert.equal(layout.providerPageTitleResidueCount, 0)
         assert.equal(layout.surfaceHeaderCount, 1)
         assert.ok(layout.providerRows >= 3)
+
+        await tab.focus('[data-testid="provider-search-input"]')
+        const focusedSearchField = await tab.$(".provider-search-field")
+        assert.ok(focusedSearchField)
+        const focusedSearchScreenshotPath = await saveElementScreenshot(
+          focusedSearchField,
+          "provider-search-field-focus.png",
+        )
+        assert.ok(focusedSearchScreenshotPath.endsWith("provider-search-field-focus.png"))
 
         const dialog = await tab.$("#configDialog")
         assert.ok(dialog)
@@ -508,6 +537,34 @@ test(
         assert.ok(addFormScreenshotPath.endsWith("provider-models-textarea-primitive.png"))
 
         await tab.type('[data-testid="provider-search-input"]', "claude")
+        const typedSearchState = await tab.evaluate(() => {
+          const field = document.querySelector<HTMLElement>(".provider-search-field")
+          const input = document.querySelector<HTMLInputElement>('[data-testid="provider-search-input"]')
+          const clear = document.querySelector<HTMLButtonElement>('[data-testid="provider-search-clear"]')
+          const fieldBox = field?.getBoundingClientRect()
+          const inputBox = input?.getBoundingClientRect()
+          const clearBox = clear?.getBoundingClientRect()
+          return {
+            fieldClasses: field?.className || "",
+            inputClasses: input?.className || "",
+            inputValue: input?.value || "",
+            clearDataUi: clear?.dataset.ui || "",
+            clearRight: Math.round(clearBox?.right ?? 0),
+            fieldRight: Math.round(fieldBox?.right ?? 0),
+            inputRight: Math.round(inputBox?.right ?? 0),
+          }
+        })
+        assert.match(typedSearchState.fieldClasses, /\bsearch-field\b/)
+        assert.match(typedSearchState.inputClasses, /\bsearch-field-input\b/)
+        assert.equal(typedSearchState.inputValue, "claude")
+        assert.equal(typedSearchState.clearDataUi, "provider-search-clear")
+        assert.ok(typedSearchState.clearRight <= typedSearchState.fieldRight + 1)
+        assert.ok(typedSearchState.inputRight <= typedSearchState.clearRight)
+        const typedSearchField = await tab.$(".provider-search-field")
+        assert.ok(typedSearchField)
+        const typedSearchScreenshotPath = await saveElementScreenshot(typedSearchField, "provider-search-field-typed.png")
+        assert.ok(typedSearchScreenshotPath.endsWith("provider-search-field-typed.png"))
+
         await tab.waitForFunction(
           () =>
             !!document.querySelector('[data-testid="provider-catalog-row-anthropic"]') &&
