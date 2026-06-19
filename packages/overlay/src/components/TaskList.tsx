@@ -20,6 +20,7 @@ import { t } from "../utils/i18n"
 import { stamp, fullStampWithRelative } from "../utils/time"
 import { projectDirectoryKey } from "../utils/project-directory"
 import { Icon } from "./Icon"
+import { LedgerRowMainButton } from "./LedgerRowMainButton"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { Button } from "./ui/Button"
 import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"
@@ -525,10 +526,8 @@ function TaskRow(props: {
             </div>
           }
         >
-          <button
+          <LedgerRowMainButton
             ref={(el) => rowActions.setMainButtonRef(el)}
-            type="button"
-            class="task-row-main"
             data-task-id={pending() ? undefined : id()}
             disabled={pending()}
             aria-disabled={pending() ? "true" : undefined}
@@ -550,7 +549,7 @@ function TaskRow(props: {
             <div class="task-row-head">
               <strong>{title()}</strong>
             </div>
-          </button>
+          </LedgerRowMainButton>
         </Show>
       </div>
       <div class="task-row-right">

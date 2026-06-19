@@ -194,20 +194,21 @@
   max-width: 100%;
 }
 
-.task-row-main {
+.oc-button[data-ui="ledger-row-main"] {
+  --oc-button-height: auto;
+  --oc-button-padding-x: calc(3px * var(--ui-scale));
+  --oc-button-padding-y: calc(2px * var(--ui-scale));
+  --oc-button-gap: calc(4px * var(--ui-scale));
+  --oc-button-color: var(--text-soft);
+
   display: flex;
   align-items: center;
-  gap: calc(4px * var(--ui-scale));
+  justify-content: flex-start;
   flex: 1 1 0;
-  padding: calc(2px * var(--ui-scale)) calc(3px * var(--ui-scale));
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-align: left;
-  border: 0 solid transparent;
-  background: transparent;
-  color: var(--text-soft);
-  cursor: pointer;
 }
 
 .task-row-head {
@@ -220,7 +221,7 @@
   overflow: hidden;
 }
 
-.task-row-main strong {
+.oc-button[data-ui="ledger-row-main"] strong {
   display: block;
   font-size: var(--ui-font-body);
   font-weight: var(--ui-font-weight-medium);
@@ -694,7 +695,6 @@
   display: inline-flex;
 }
 
-.task-row-main:focus-visible,
 .task-row-actions .oc-button[data-ui="task-row-delete"]:focus-visible,
 .task-row-actions .oc-button[data-ui="task-row-cancel"]:focus-visible,
 .task-row-actions .oc-button[data-ui="task-row-rename"]:focus-visible,

@@ -7,6 +7,7 @@ import { useArmedConfirm } from "../solid/armed-confirm"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { LedgerList } from "./LedgerList"
+import { LedgerRowMainButton } from "./LedgerRowMainButton"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"
 
@@ -279,9 +280,8 @@ function MissionRow(props: {
               </div>
             }
           >
-            <button
-              type="button"
-              class="task-row-main mission-row-main"
+            <LedgerRowMainButton
+              class="mission-row-main"
               ref={(el) => rowActions.setMainButtonRef(el)}
               aria-current={props.selected ? "page" : undefined}
               aria-keyshortcuts={hasActions() ? "ArrowRight" : undefined}
@@ -302,7 +302,7 @@ function MissionRow(props: {
               <div class="task-row-head">
                 <strong>{title()}</strong>
               </div>
-            </button>
+            </LedgerRowMainButton>
           </Show>
         </div>
         <div class="task-row-right">

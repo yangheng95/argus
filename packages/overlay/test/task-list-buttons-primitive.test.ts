@@ -7,6 +7,10 @@ const TASK_ROW_ACTIONS_KEYBOARD_SOURCE = readFileSync(
   join(import.meta.dir, "../src/components/useTaskRowActionsKeyboard.ts"),
   "utf8",
 )
+const LEDGER_ROW_MAIN_BUTTON_SOURCE = readFileSync(
+  join(import.meta.dir, "../src/components/LedgerRowMainButton.tsx"),
+  "utf8",
+)
 const PROJECT_LEDGER_GROUP_SOURCE = readFileSync(
   join(import.meta.dir, "../src/components/ProjectLedgerGroup.tsx"),
   "utf8",
@@ -15,6 +19,14 @@ const SIDEBAR_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/s
 
 test("TaskList sidebar controls route through the Button primitive", () => {
   expect(TASK_LIST_SOURCE).toMatch(/import \{ Button \} from "\.\/ui\/Button"/)
+  expect(TASK_LIST_SOURCE).toContain('import { LedgerRowMainButton } from "./LedgerRowMainButton"')
+  expect(TASK_LIST_SOURCE).toContain("<LedgerRowMainButton")
+  expect(TASK_LIST_SOURCE).not.toContain('<button\n            ref={(el) => rowActions.setMainButtonRef(el)}')
+  expect(LEDGER_ROW_MAIN_BUTTON_SOURCE).toContain('import { Button } from "./ui/Button"')
+  expect(LEDGER_ROW_MAIN_BUTTON_SOURCE).toContain('data-ui="ledger-row-main"')
+  expect(LEDGER_ROW_MAIN_BUTTON_SOURCE).toContain('variant="ghost"')
+  expect(LEDGER_ROW_MAIN_BUTTON_SOURCE).toContain('size="sm"')
+  expect(LEDGER_ROW_MAIN_BUTTON_SOURCE).toContain('tone="neutral"')
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-row-delete"')
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-row-cancel"')
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-row-download"')
@@ -97,18 +109,23 @@ test("TaskList task rows stay one-line while preserving detail in tooltips", () 
   expect(SIDEBAR_CSS).toMatch(/\.task-row-badge\s*\{[^}]*grid-column:\s*1;/)
   expect(SIDEBAR_CSS).toMatch(/\.task-row-drag-handle\s*\{[^}]*grid-column:\s*2;/)
   // grid-column:3 lives on the .task-row-body wrapper, not on
-  // .task-row-main itself — the wrapper pairs the optional chevron with
+  // the ledger-row-main Button itself — the wrapper pairs the optional chevron with
   // the main title button at column 3 so the chevron sits outside the
   // .task-row-actions absolute panel's coverage area (bug 2026-05-27).
   expect(SIDEBAR_CSS).toMatch(/\.task-row-body\s*\{[^}]*grid-column:\s*3;/)
   expect(SIDEBAR_CSS).toMatch(/\.task-row-body\s*\{[^}]*display:\s*flex;/)
-  expect(SIDEBAR_CSS).toMatch(/\.task-row-main\s*\{[^}]*flex:\s*1 1 0;/)
-  expect(SIDEBAR_CSS).toMatch(/\.task-row-main\s*\{[^}]*color:\s*var\(--text-soft\);/)
-  expect(SIDEBAR_CSS).toMatch(/\.task-row-main\s*\{[^}]*max-width:\s*100%;/)
-  expect(SIDEBAR_CSS).toMatch(/\.task-row-main\s*\{[^}]*overflow:\s*hidden;/)
-  expect(SIDEBAR_CSS).toMatch(/\.task-row-main strong\s*\{[^}]*min-width:\s*0;/)
-  expect(SIDEBAR_CSS).toMatch(/\.task-row-main strong\s*\{[^}]*max-width:\s*100%;/)
-  expect(SIDEBAR_CSS).toMatch(/\.task-row-main strong\s*\{[^}]*color:\s*var\(--text-soft\);/)
+  expect(SIDEBAR_CSS).not.toMatch(/(^|\n)\.task-row-main\s*\{/)
+  expect(SIDEBAR_CSS).toMatch(/\.oc-button\[data-ui="ledger-row-main"\]\s*\{[^}]*flex:\s*1 1 0;/)
+  expect(SIDEBAR_CSS).toMatch(
+    /\.oc-button\[data-ui="ledger-row-main"\]\s*\{[^}]*--oc-button-color:\s*var\(--text-soft\);/,
+  )
+  expect(SIDEBAR_CSS).toMatch(/\.oc-button\[data-ui="ledger-row-main"\]\s*\{[^}]*max-width:\s*100%;/)
+  expect(SIDEBAR_CSS).toMatch(/\.oc-button\[data-ui="ledger-row-main"\]\s*\{[^}]*overflow:\s*hidden;/)
+  expect(SIDEBAR_CSS).toMatch(/\.oc-button\[data-ui="ledger-row-main"\] strong\s*\{[^}]*min-width:\s*0;/)
+  expect(SIDEBAR_CSS).toMatch(/\.oc-button\[data-ui="ledger-row-main"\] strong\s*\{[^}]*max-width:\s*100%;/)
+  expect(SIDEBAR_CSS).toMatch(
+    /\.oc-button\[data-ui="ledger-row-main"\] strong\s*\{[^}]*color:\s*var\(--text-soft\);/,
+  )
   expect(SIDEBAR_CSS).toMatch(/\.task-row-badge-text\s*\{[^}]*position:\s*absolute;/)
   expect(SIDEBAR_CSS).toMatch(/\.task-row-badge-text\s*\{[^}]*clip:\s*rect\(0 0 0 0\);/)
   expect(SIDEBAR_CSS).toMatch(/\.task-row-badge::before\s*\{[^}]*content:\s*"";/)
