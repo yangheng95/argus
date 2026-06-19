@@ -7,6 +7,7 @@ import { Icon } from "./Icon"
 import { LedgerList } from "./LedgerList"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { Button } from "./ui/Button"
+import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"
 
 export interface CodingAssistantSessionListProps {
   sessions: CodingAssistantSessionInfo[]
@@ -55,6 +56,7 @@ function sessionRowTip(session: CodingAssistantSessionInfo): string {
 function CodingAssistantStopButton(props: {
   session: CodingAssistantSessionInfo
   disabled?: boolean
+  tabIndex?: number
   onStop: (session: CodingAssistantSessionInfo) => void
 }) {
   const confirmStop = useArmedConfirm(CONFIRM_WINDOW_MS)
@@ -68,6 +70,7 @@ function CodingAssistantStopButton(props: {
       data-chrome="icon-action"
       data-ui="task-row-cancel"
       data-confirm={confirmStop.armed() ? "true" : undefined}
+      tabIndex={props.tabIndex}
       title={t("coding_assistant.ledger.stop_title")}
       aria-label={t("coding_assistant.ledger.stop_title")}
       onClick={(event) => {
@@ -89,6 +92,7 @@ function CodingAssistantStopButton(props: {
 function CodingAssistantDeleteButton(props: {
   session: CodingAssistantSessionInfo
   disabled?: boolean
+  tabIndex?: number
   onDelete: (session: CodingAssistantSessionInfo) => void
 }) {
   const confirmDelete = useArmedConfirm(CONFIRM_WINDOW_MS)
@@ -102,6 +106,7 @@ function CodingAssistantDeleteButton(props: {
       data-chrome="icon-action"
       data-ui="task-row-delete"
       data-confirm={confirmDelete.armed() ? "true" : undefined}
+      tabIndex={props.tabIndex}
       title={t("coding_assistant.ledger.delete_title")}
       aria-label={t("coding_assistant.ledger.delete_title")}
       onClick={(event) => {
@@ -120,7 +125,7 @@ function CodingAssistantDeleteButton(props: {
   )
 }
 
-function CodingAssistantRenameButton(props: { disabled?: boolean; onClick: () => void }) {
+function CodingAssistantRenameButton(props: { disabled?: boolean; tabIndex?: number; onClick: () => void }) {
   return (
     <Button
       type="button"
@@ -130,6 +135,7 @@ function CodingAssistantRenameButton(props: { disabled?: boolean; onClick: () =>
       disabled={props.disabled}
       data-chrome="icon-action"
       data-ui="task-row-rename"
+      tabIndex={props.tabIndex}
       title={t("coding_assistant.ledger.rename_title")}
       aria-label={t("coding_assistant.ledger.rename_title")}
       onClick={(event) => {
@@ -156,6 +162,8 @@ function CodingAssistantSessionRow(props: {
   let inputRef: HTMLInputElement | undefined
   const title = () => sessionTitle(props.session)
   const updated = () => sessionUpdated(props.session)
+  const hasActions = () => true
+  const rowActions = useTaskRowActionsKeyboard(hasActions)
 
   function beginRename(): void {
     if (props.busy) return
@@ -185,12 +193,17 @@ function CodingAssistantSessionRow(props: {
       class="task-row-mini global-task-row coding-assistant-row"
       data-ui="coding-assistant-row"
       data-session-id={props.session.id}
+      data-actions-keyboard-open={rowActions.actionsKeyboardOpenData()}
       data-active={props.selected ? "true" : undefined}
       title={sessionRowTip(props.session)}
+      ref={(el) => rowActions.setRowRef(el)}
       onDblClick={(event) => {
         event.stopPropagation()
         event.preventDefault()
         beginRename()
+      }}
+      onFocusOut={(event) => {
+        rowActions.closeActionsOnFocusOut(event)
       }}
     >
       <span class="task-row-badge coding-assistant-row-kind-badge" aria-hidden="true">
@@ -237,10 +250,13 @@ function CodingAssistantSessionRow(props: {
           <button
             type="button"
             class="task-row-main coding-assistant-row-main"
+            ref={(el) => rowActions.setMainButtonRef(el)}
             title={sessionRowTip(props.session)}
             disabled={props.busy}
             aria-disabled={props.busy ? "true" : undefined}
             aria-current={props.selected ? "page" : undefined}
+            aria-keyshortcuts={hasActions() ? "ArrowRight" : undefined}
+            onKeyDown={rowActions.openActionsFromKeyboard}
             onClick={(event) => {
               event.stopPropagation()
               if (!props.busy) props.onSelectSession(props.session)
@@ -261,10 +277,24 @@ function CodingAssistantSessionRow(props: {
         <small class="task-row-stamp coding-assistant-row-stamp" title={updated() ? detailStamp(updated()) : ""}>
           {updated() ? relativeTime(updated()) : t("coding_assistant.ledger.updated_unknown")}
         </small>
-        <div class="task-row-actions">
-          <CodingAssistantStopButton session={props.session} disabled={props.busy} onStop={props.onStopSession} />
-          <CodingAssistantRenameButton disabled={props.busy} onClick={beginRename} />
-          <CodingAssistantDeleteButton session={props.session} disabled={props.busy} onDelete={props.onDeleteSession} />
+        <div class="task-row-actions" onKeyDown={rowActions.closeActionsFromKeyboardEvent}>
+          <CodingAssistantStopButton
+            session={props.session}
+            disabled={props.busy}
+            tabIndex={rowActions.actionButtonTabIndex()}
+            onStop={props.onStopSession}
+          />
+          <CodingAssistantRenameButton
+            disabled={props.busy}
+            tabIndex={rowActions.actionButtonTabIndex()}
+            onClick={beginRename}
+          />
+          <CodingAssistantDeleteButton
+            session={props.session}
+            disabled={props.busy}
+            tabIndex={rowActions.actionButtonTabIndex()}
+            onDelete={props.onDeleteSession}
+          />
         </div>
       </div>
     </div>

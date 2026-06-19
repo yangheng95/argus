@@ -45,4 +45,17 @@ describe("Mission and Coding Assistant ledger row interactions", () => {
     expect(assistantMain).toBeGreaterThan(0)
     expect(assistantActions).toBeGreaterThan(assistantMain)
   })
+
+  test("ledger rows share the task-row action keyboard contract", () => {
+    for (const source of [mission, assistant]) {
+      expect(source).toContain('import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"')
+      expect(source).toContain("const hasActions = () => true")
+      expect(source).toContain("const rowActions = useTaskRowActionsKeyboard(hasActions)")
+      expect(source).toContain('data-actions-keyboard-open={rowActions.actionsKeyboardOpenData()}')
+      expect(source).toContain('aria-keyshortcuts={hasActions() ? "ArrowRight" : undefined}')
+      expect(source).toContain("onKeyDown={rowActions.openActionsFromKeyboard}")
+      expect(source).toContain("onKeyDown={rowActions.closeActionsFromKeyboardEvent}")
+      expect(source).toContain("tabIndex={rowActions.actionButtonTabIndex()}")
+    }
+  })
 })

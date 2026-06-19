@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const TASK_LIST_SOURCE = readFileSync(join(import.meta.dir, "../src/components/TaskList.tsx"), "utf8")
+const TASK_ROW_ACTIONS_KEYBOARD_SOURCE = readFileSync(
+  join(import.meta.dir, "../src/components/useTaskRowActionsKeyboard.ts"),
+  "utf8",
+)
 const PROJECT_LEDGER_GROUP_SOURCE = readFileSync(
   join(import.meta.dir, "../src/components/ProjectLedgerGroup.tsx"),
   "utf8",
@@ -18,9 +22,15 @@ test("TaskList sidebar controls route through the Button primitive", () => {
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-row-children-toggle"')
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-list-search-clear"')
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-list-error-retry"')
-  expect(TASK_LIST_SOURCE).toContain("actionsKeyboardOpen")
+  expect(TASK_LIST_SOURCE).toContain('import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"')
+  expect(TASK_LIST_SOURCE).toContain("const rowActions = useTaskRowActionsKeyboard(hasActions)")
   expect(TASK_LIST_SOURCE).toContain('aria-keyshortcuts={hasActions() ? "ArrowRight" : undefined}')
-  expect(TASK_LIST_SOURCE).toContain("tabIndex={actionButtonTabIndex()}")
+  expect(TASK_LIST_SOURCE).toContain("tabIndex={rowActions.actionButtonTabIndex()}")
+  expect(TASK_LIST_SOURCE).not.toContain("const [actionsKeyboardOpen, setActionsKeyboardOpen]")
+  expect(TASK_ROW_ACTIONS_KEYBOARD_SOURCE).toContain("function openActionsFromKeyboard")
+  expect(TASK_ROW_ACTIONS_KEYBOARD_SOURCE).toContain('event.key !== "ArrowRight"')
+  expect(TASK_ROW_ACTIONS_KEYBOARD_SOURCE).toContain('event.key !== "Escape" && event.key !== "ArrowLeft"')
+  expect(TASK_ROW_ACTIONS_KEYBOARD_SOURCE).toContain("actionsKeyboardOpenData")
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-delete"')
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-cancel"')
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-export"')

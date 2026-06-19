@@ -8,6 +8,7 @@ import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { LedgerList } from "./LedgerList"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
+import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"
 
 export interface MissionListProps {
   missions: MissionRecord[]
@@ -42,7 +43,7 @@ function missionRowTip(mission: MissionRecord): string {
 
 const CONFIRM_WINDOW_MS = 3000
 
-function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: MissionRecord) => void }) {
+function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: MissionRecord) => void; tabIndex?: number }) {
   const confirmAbort = useArmedConfirm(CONFIRM_WINDOW_MS)
   return (
     <Button
@@ -53,6 +54,7 @@ function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: 
       data-chrome="icon-action"
       data-ui="task-row-cancel"
       data-confirm={confirmAbort.armed() ? "true" : undefined}
+      tabIndex={props.tabIndex}
       title={t("mission.ledger.abort_title")}
       aria-label={t("mission.ledger.abort_title")}
       onClick={(event) => {
@@ -71,7 +73,7 @@ function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: 
   )
 }
 
-function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission: MissionRecord) => void }) {
+function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission: MissionRecord) => void; tabIndex?: number }) {
   const confirmDelete = useArmedConfirm(CONFIRM_WINDOW_MS)
   return (
     <Button
@@ -82,6 +84,7 @@ function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission
       data-chrome="icon-action"
       data-ui="task-row-delete"
       data-confirm={confirmDelete.armed() ? "true" : undefined}
+      tabIndex={props.tabIndex}
       title={t("mission.ledger.delete_title")}
       aria-label={t("mission.ledger.delete_title")}
       onClick={(event) => {
@@ -100,7 +103,7 @@ function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission
   )
 }
 
-function MissionRenameButton(props: { onClick: () => void }) {
+function MissionRenameButton(props: { onClick: () => void; tabIndex?: number }) {
   return (
     <Button
       type="button"
@@ -109,6 +112,7 @@ function MissionRenameButton(props: { onClick: () => void }) {
       tone="neutral"
       data-chrome="icon-action"
       data-ui="task-row-rename"
+      tabIndex={props.tabIndex}
       title={t("mission.ledger.rename_title")}
       aria-label={t("mission.ledger.rename_title")}
       onClick={(event) => {
@@ -176,6 +180,8 @@ function MissionRow(props: {
   let inputRef: HTMLInputElement | undefined
   const title = () => props.mission.title || props.mission.missionID
   const canAbort = () => props.mission.interruptible
+  const hasActions = () => true
+  const rowActions = useTaskRowActionsKeyboard(hasActions)
 
   function beginRename(): void {
     setDraftTitle(title())
@@ -212,6 +218,7 @@ function MissionRow(props: {
         data-ui="mission-row"
         data-mission-id={props.mission.missionID}
         data-session-id={props.mission.sessionID}
+        data-actions-keyboard-open={rowActions.actionsKeyboardOpenData()}
         data-active={props.selected ? "true" : undefined}
         data-copied={debugCopied() ? "true" : undefined}
         title={debugCopied() ? t("common.copied") : missionRowTip(props.mission)}
@@ -223,6 +230,10 @@ function MissionRow(props: {
             console.error("[mission-row dblclick] clipboard write failed", error)
           })
         }}
+        onFocusOut={(event) => {
+          rowActions.closeActionsOnFocusOut(event)
+        }}
+        ref={(el) => rowActions.setRowRef(el)}
       >
         <span class="task-row-badge mission-row-kind-badge" aria-hidden="true">
           <Icon name="mission" size={14} />
@@ -268,8 +279,11 @@ function MissionRow(props: {
             <button
               type="button"
               class="task-row-main mission-row-main"
+              ref={(el) => rowActions.setMainButtonRef(el)}
               aria-current={props.selected ? "page" : undefined}
+              aria-keyshortcuts={hasActions() ? "ArrowRight" : undefined}
               title={debugCopied() ? t("common.copied") : missionRowTip(props.mission)}
+              onKeyDown={rowActions.openActionsFromKeyboard}
               onClick={(event) => {
                 event.stopPropagation()
                 props.onSelectMission(props.mission)
@@ -292,12 +306,20 @@ function MissionRow(props: {
           <small class="task-row-stamp mission-row-stamp" title={detailStamp(props.mission.updated)}>
             {relativeTime(props.mission.updated) || t("mission.ledger.updated_unknown")}
           </small>
-          <div class="task-row-actions">
+          <div class="task-row-actions" onKeyDown={rowActions.closeActionsFromKeyboardEvent}>
             <Show when={canAbort()}>
-              <MissionAbortButton mission={props.mission} onAbort={props.onAbortMission} />
+              <MissionAbortButton
+                mission={props.mission}
+                onAbort={props.onAbortMission}
+                tabIndex={rowActions.actionButtonTabIndex()}
+              />
             </Show>
-            <MissionRenameButton onClick={beginRename} />
-            <MissionDeleteButton mission={props.mission} onDelete={props.onDeleteMission} />
+            <MissionRenameButton onClick={beginRename} tabIndex={rowActions.actionButtonTabIndex()} />
+            <MissionDeleteButton
+              mission={props.mission}
+              onDelete={props.onDeleteMission}
+              tabIndex={rowActions.actionButtonTabIndex()}
+            />
           </div>
         </div>
       </div>

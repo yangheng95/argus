@@ -63,20 +63,20 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
             <div class="task-row-mini global-task-row mission-row" data-ui="mission-row" data-session-id="mission-a" data-active="true" title="Mission A">
               <span class="task-row-badge mission-row-kind-badge" aria-hidden="true">M</span>
               <div class="task-row-body">
-                <button type="button" class="task-row-main mission-row-main" data-action="mission-select" aria-current="page">
+                <button type="button" class="task-row-main mission-row-main" data-action="mission-select" aria-current="page" aria-keyshortcuts="ArrowRight">
                   <div class="task-row-head"><strong>Mission A</strong></div>
                 </button>
               </div>
               <div class="task-row-right">
                 <small class="task-row-stamp mission-row-stamp">now</small>
                 <div class="task-row-actions">
-                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="neutral" data-chrome="icon-action" data-ui="task-row-cancel" data-action="mission-stop" aria-label="Stop">
+                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="neutral" data-chrome="icon-action" data-ui="task-row-cancel" data-action="mission-stop" aria-label="Stop" tabindex="-1">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>
                   </button>
-                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="neutral" data-chrome="icon-action" data-ui="task-row-rename" data-action="mission-rename" aria-label="Rename">
+                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="neutral" data-chrome="icon-action" data-ui="task-row-rename" data-action="mission-rename" aria-label="Rename" tabindex="-1">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h4L19 9l-4-4L5 15v4Z" fill="currentColor"/></svg>
                   </button>
-                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="danger" data-chrome="icon-action" data-ui="task-row-delete" data-action="mission-delete" aria-label="Delete">
+                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="danger" data-chrome="icon-action" data-ui="task-row-delete" data-action="mission-delete" aria-label="Delete" tabindex="-1">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10l-1 12H8L7 7Zm2-3h6l1 2H8l1-2Z" fill="currentColor"/></svg>
                   </button>
                 </div>
@@ -85,20 +85,20 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
             <div class="task-row-mini global-task-row coding-assistant-row" data-ui="coding-assistant-row" data-session-id="assistant-a" title="Assistant A">
               <span class="task-row-badge coding-assistant-row-kind-badge" aria-hidden="true">A</span>
               <div class="task-row-body">
-                <button type="button" class="task-row-main coding-assistant-row-main" data-action="assistant-select">
+                <button type="button" class="task-row-main coding-assistant-row-main" data-action="assistant-select" aria-keyshortcuts="ArrowRight">
                   <div class="task-row-head"><strong>Assistant A</strong></div>
                 </button>
               </div>
               <div class="task-row-right">
                 <small class="task-row-stamp coding-assistant-row-stamp">now</small>
                 <div class="task-row-actions">
-                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="neutral" data-chrome="icon-action" data-ui="task-row-cancel" data-action="assistant-stop" aria-label="Stop">
+                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="neutral" data-chrome="icon-action" data-ui="task-row-cancel" data-action="assistant-stop" aria-label="Stop" tabindex="-1">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>
                   </button>
-                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="neutral" data-chrome="icon-action" data-ui="task-row-rename" data-action="assistant-rename" aria-label="Rename">
+                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="neutral" data-chrome="icon-action" data-ui="task-row-rename" data-action="assistant-rename" aria-label="Rename" tabindex="-1">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h4L19 9l-4-4L5 15v4Z" fill="currentColor"/></svg>
                   </button>
-                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="danger" data-chrome="icon-action" data-ui="task-row-delete" data-action="assistant-delete" aria-label="Delete">
+                  <button type="button" class="oc-button" data-size="icon" data-variant="ghost" data-tone="danger" data-chrome="icon-action" data-ui="task-row-delete" data-action="assistant-delete" aria-label="Delete" tabindex="-1">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10l-1 12H8L7 7Zm2-3h6l1 2H8l1-2Z" fill="currentColor"/></svg>
                   </button>
                 </div>
@@ -110,6 +110,42 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
             for (const node of document.querySelectorAll("[data-action]")) {
               node.addEventListener("click", () => window.__ledgerEvents.push(node.getAttribute("data-action")))
             }
+            function wireRow(rowSelector, mainSelector) {
+              const row = document.querySelector(rowSelector)
+              const main = document.querySelector(mainSelector)
+              const actions = row.querySelector(".task-row-actions")
+              const buttons = Array.from(actions.querySelectorAll(".oc-button"))
+              const setOpen = (open) => {
+                if (open) row.setAttribute("data-actions-keyboard-open", "true")
+                else row.removeAttribute("data-actions-keyboard-open")
+                for (const button of buttons) {
+                  if (open) button.removeAttribute("tabindex")
+                  else button.setAttribute("tabindex", "-1")
+                }
+              }
+              const focusFirstAction = () => buttons.find((button) => !button.disabled)?.focus()
+              main.addEventListener("keydown", (event) => {
+                if (event.key !== "ArrowRight") return
+                event.preventDefault()
+                event.stopPropagation()
+                setOpen(true)
+                queueMicrotask(focusFirstAction)
+              })
+              actions.addEventListener("keydown", (event) => {
+                if (event.key !== "Escape" && event.key !== "ArrowLeft") return
+                event.preventDefault()
+                event.stopPropagation()
+                setOpen(false)
+                queueMicrotask(() => main.focus())
+              })
+              row.addEventListener("focusout", (event) => {
+                if (row.contains(event.relatedTarget)) return
+                setOpen(false)
+              })
+              setOpen(false)
+            }
+            wireRow('[data-ui="mission-row"]', '[data-action="mission-select"]')
+            wireRow('[data-ui="coding-assistant-row"]', '[data-action="assistant-select"]')
           </script>
         </body>
       </html>
@@ -117,8 +153,7 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
 
     const fixture = await page.$(".ledger-fixture")
     assert.ok(fixture)
-    await page.hover('[data-ui="mission-row"]')
-    await saveScreenshot(fixture, "ledger-row-interactions.png")
+    await saveScreenshot(fixture, "ledger-row-actions-closed.png")
 
     const structure = await page.evaluate(() => {
       const missionRow = document.querySelector('[data-ui="mission-row"]') as HTMLElement
@@ -132,6 +167,8 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
         assistantCurrent: assistantRow.querySelector(".coding-assistant-row-main")?.getAttribute("aria-current"),
         missionButtons: missionRow.querySelectorAll("button").length,
         assistantButtons: assistantRow.querySelectorAll("button").length,
+        missionShortcut: missionRow.querySelector(".mission-row-main")?.getAttribute("aria-keyshortcuts"),
+        assistantShortcut: assistantRow.querySelector(".coding-assistant-row-main")?.getAttribute("aria-keyshortcuts"),
       }
     })
 
@@ -143,24 +180,105 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
     assert.equal(structure.assistantCurrent, null)
     assert.equal(structure.missionButtons, 4)
     assert.equal(structure.assistantButtons, 4)
+    assert.equal(structure.missionShortcut, "ArrowRight")
+    assert.equal(structure.assistantShortcut, "ArrowRight")
+
+    const closedActions = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>('[data-ui="mission-row"], [data-ui="coding-assistant-row"]')).map(
+        (row) => {
+          const actions = Array.from(row.querySelectorAll<HTMLElement>(".task-row-actions .oc-button"))
+          return {
+            ui: row.dataset.ui ?? "",
+            open: row.getAttribute("data-actions-keyboard-open"),
+            tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+            opacities: actions.map((action) => getComputedStyle(action).opacity),
+          }
+        },
+      ),
+    )
+    for (const row of closedActions) {
+      assert.equal(row.open, null, JSON.stringify(row))
+      assert.deepEqual(row.tabIndexes, row.tabIndexes.map(() => "-1"))
+      assert.equal(row.opacities.every((value) => value === "0"), true, JSON.stringify(row))
+    }
 
     const focused: string[] = []
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; i < 2; i += 1) {
       await page.keyboard.press("Tab")
       focused.push(
         await page.evaluate(() => (document.activeElement as HTMLElement | null)?.getAttribute("data-action") || ""),
       )
     }
-    assert.deepEqual(focused, [
-      "mission-select",
-      "mission-stop",
-      "mission-rename",
-      "mission-delete",
-      "assistant-select",
-      "assistant-stop",
-      "assistant-rename",
-      "assistant-delete",
-    ])
+    assert.deepEqual(focused, ["mission-select", "assistant-select"])
+
+    await page.focus('[data-action="mission-select"]')
+    await page.keyboard.press("ArrowRight")
+    let missionOpen = {
+      open: "",
+      activeAction: "",
+      activeInActions: false,
+      tabIndexes: [] as Array<string | null>,
+      opacities: [] as string[],
+    }
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      missionOpen = await page.evaluate(() => {
+        const row = document.querySelector<HTMLElement>('[data-ui="mission-row"]')!
+        const active = document.activeElement as HTMLElement | null
+        const actions = Array.from(row.querySelectorAll<HTMLElement>(".task-row-actions .oc-button"))
+        return {
+          open: row.getAttribute("data-actions-keyboard-open") ?? "",
+          activeAction: active?.getAttribute("data-action") ?? "",
+          activeInActions: row.querySelector(".task-row-actions")?.contains(active) ?? false,
+          tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+          opacities: actions.map((action) => getComputedStyle(action).opacity),
+        }
+      })
+      if (missionOpen.opacities.every((value) => Number.parseFloat(value) > 0.95)) break
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    assert.equal(missionOpen.open, "true", JSON.stringify(missionOpen))
+    assert.equal(missionOpen.activeAction, "mission-stop")
+    assert.equal(missionOpen.activeInActions, true)
+    assert.equal(missionOpen.tabIndexes.every((value) => value === null), true, JSON.stringify(missionOpen))
+    assert.equal(missionOpen.opacities.every((value) => Number.parseFloat(value) > 0.95), true, JSON.stringify(missionOpen))
+    await saveScreenshot(fixture, "ledger-row-actions-keyboard-open.png")
+
+    await page.keyboard.press("Escape")
+    const missionClosed = await page.evaluate(() => {
+      const row = document.querySelector<HTMLElement>('[data-ui="mission-row"]')!
+      const active = document.activeElement as HTMLElement | null
+      const actions = Array.from(row.querySelectorAll<HTMLElement>(".task-row-actions .oc-button"))
+      return {
+        open: row.getAttribute("data-actions-keyboard-open"),
+        activeAction: active?.getAttribute("data-action") ?? "",
+        activeInActions: row.querySelector(".task-row-actions")?.contains(active) ?? false,
+        tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+      }
+    })
+    assert.equal(missionClosed.open, null)
+    assert.equal(missionClosed.activeAction, "mission-select")
+    assert.equal(missionClosed.activeInActions, false)
+    assert.deepEqual(missionClosed.tabIndexes, missionClosed.tabIndexes.map(() => "-1"))
+
+    await page.focus('[data-action="assistant-select"]')
+    await page.keyboard.press("ArrowRight")
+    await page.waitForFunction(
+      () => document.querySelector('[data-ui="coding-assistant-row"]')?.getAttribute("data-actions-keyboard-open") === "true",
+    )
+    await page.keyboard.press("ArrowLeft")
+    const assistantClosed = await page.evaluate(() => {
+      const row = document.querySelector<HTMLElement>('[data-ui="coding-assistant-row"]')!
+      const active = document.activeElement as HTMLElement | null
+      const actions = Array.from(row.querySelectorAll<HTMLElement>(".task-row-actions .oc-button"))
+      return {
+        open: row.getAttribute("data-actions-keyboard-open"),
+        activeAction: active?.getAttribute("data-action") ?? "",
+        tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+      }
+    })
+    assert.equal(assistantClosed.open, null)
+    assert.equal(assistantClosed.activeAction, "assistant-select")
+    assert.deepEqual(assistantClosed.tabIndexes, assistantClosed.tabIndexes.map(() => "-1"))
 
     await page.hover('[data-ui="mission-row"]')
     await page.click('[data-action="mission-stop"]')
