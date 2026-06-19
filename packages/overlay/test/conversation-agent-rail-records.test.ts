@@ -81,9 +81,45 @@ test("ConversationAgentRail records stay in global chronological order", () => {
   expect(sorted.map((item) => item.sessionID)).toEqual(["earliest_parent_a", "early_parent_b", "later_parent_a"])
 })
 
-test("hydrated agent records target the latest display message in the session", () => {
+test("hydrated agent records target the latest canonical display message", () => {
   resetConversationAgentView()
   hydrateConversationAgentView("task:tsk", {
+    messages: [
+      {
+        sessionID: "ses_build",
+        stage: "build",
+        messageID: "msg_old",
+        time: 100,
+        placement: "top_level",
+      },
+      {
+        sessionID: "ses_build",
+        stage: "build",
+        messageID: "msg_latest",
+        time: 200,
+        placement: "top_level",
+      },
+      {
+        sessionID: "ses_goal_build",
+        stage: "build",
+        parentSessionID: "ses_root",
+        goalID: "goal_a",
+        messageID: "msg_goal_old",
+        time: 300,
+        placement: "goal_phase",
+        phase: { stepID: "build", phaseID: "build" },
+      },
+      {
+        sessionID: "ses_goal_build",
+        stage: "build",
+        parentSessionID: "ses_root",
+        goalID: "goal_a",
+        messageID: "msg_goal_latest",
+        time: 400,
+        placement: "goal_phase",
+        phase: { stepID: "build", phaseID: "build" },
+      },
+    ],
     sessions: [
       {
         sessionID: "ses_build",
@@ -109,13 +145,13 @@ test("hydrated agent records target the latest display message in the session", 
     ],
   })
 
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("build:session:ses_build:message:msg_old")
-  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_old")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("build:session:ses_build:message:msg_latest")
+  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_latest")
   expect(conversationAgentStore.records[1]?.renderedCardID).toBe("step:goal_a:build")
-  expect(conversationAgentStore.records[1]?.targetMessageID).toBe("msg_goal_old")
+  expect(conversationAgentStore.records[1]?.targetMessageID).toBe("msg_goal_latest")
 })
 
-test("hydrated agent records fall back to the latest message without a display marker", () => {
+test("hydrated top-level agent records require a display message target", () => {
   resetConversationAgentView()
   hydrateConversationAgentView("task:tsk", {
     sessions: [
@@ -130,8 +166,7 @@ test("hydrated agent records fall back to the latest message without a display m
     ],
   })
 
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("build:session:ses_build:message:msg_latest")
-  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_latest")
+  expect(conversationAgentStore.records).toEqual([])
 })
 
 test("hydrated lifecycle-only agent records do not create blank session cards", () => {
@@ -177,6 +212,15 @@ test("hydrated goal-phase agent records may target the phase card without a disp
 test("hydrated agent records are scoped to the selected task or session source", () => {
   resetConversationAgentView()
   hydrateConversationAgentView("task:task_a", {
+    messages: [
+      {
+        sessionID: "ses_build_a",
+        stage: "build",
+        messageID: "msg_a",
+        time: 120,
+        placement: "top_level",
+      },
+    ],
     sessions: [
       {
         sessionID: "ses_build_a",
@@ -196,6 +240,15 @@ test("hydrated agent records are scoped to the selected task or session source",
   ])
 
   hydrateConversationAgentView("session:ses_coding", {
+    messages: [
+      {
+        sessionID: "ses_coding_child",
+        stage: "assistant",
+        messageID: "msg_coding",
+        time: 220,
+        placement: "top_level",
+      },
+    ],
     sessions: [
       {
         sessionID: "ses_coding_child",

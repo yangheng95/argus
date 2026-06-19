@@ -68,12 +68,15 @@ describe("explore subagent session split", () => {
     expect(assistant?.messageIDs).toEqual(["msg_assistant"])
   })
 
-  test("orchestrator explore tool stamps kind:'explore' (not the generic assistant bucket)", () => {
+  test("orchestrator explore tool delegates to the explore agent runner", () => {
     const toolsSource = readFileSync(join(__dirname, "..", "..", "src", "orchestrator", "tools.ts"), "utf8")
-    // The explore dispatch site must create an explore-kinded session.
-    const exploreCreate = /const exploreSession = await Session\.createNext\(\{\s*kind:\s*"([^"]+)"/m.exec(toolsSource)
-    expect(exploreCreate).not.toBeNull()
-    expect(exploreCreate![1]).toBe("explore")
+    expect(toolsSource).toContain("const exploreResult = await ExploreAgent.run({")
+    expect(toolsSource).toContain("parentSessionID: input.agentSessionID")
+  })
+
+  test("ExploreAgent runner stamps kind:'explore' (not the generic assistant bucket)", () => {
+    const agentSource = readFileSync(join(__dirname, "..", "..", "src", "explore", "agent.ts"), "utf8")
+    expect(agentSource).toMatch(/runAgentSession<Record<string, never>>\(\{\s*kind:\s*"explore"/m)
   })
 
   test("SESSION_KINDS single-source tuple declares the dedicated 'explore' member", () => {

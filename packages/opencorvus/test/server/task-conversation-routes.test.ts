@@ -372,7 +372,10 @@ describe("task conversation routes", () => {
           throw new Error(await response.text())
         }
         const body = (await response.json()) as {
-          transcript?: Array<{ info?: { id?: string; sessionID?: string; channel?: string }; parts?: Array<{ text?: string }> }>
+          transcript?: Array<{
+            info?: { id?: string; sessionID?: string; channel?: string }
+            parts?: Array<{ text?: string }>
+          }>
         }
 
         expect(body.transcript?.map((message) => message.info?.id)).toEqual(["msg_requested_session"])
@@ -1419,7 +1422,7 @@ describe("task conversation routes", () => {
             source: "overlay_direct_reply",
           },
         })
-        SessionStatus.set(requirements.id, { type: "busy" })
+        SessionStatus.set(requirements.id, { type: "streaming" })
 
         // Resumable worker sessions require an in-memory runtime contract
         // (session/loop.ts:159 runtimeContractRequiredAgentKinds). Install
