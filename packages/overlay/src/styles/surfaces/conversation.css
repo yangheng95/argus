@@ -1264,17 +1264,28 @@
     color var(--ui-duration-fast);
 }
 
-.task-dir-tool:hover {
+.task-dir-tool:hover,
+.task-dir-tool:focus-visible {
   background: var(--subtle-3);
   color: var(--text-strong);
+}
+
+.task-dir-tool:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
 }
 
 /* The "danger" affordance on the delete tool tints with --bad.
    Raw light-red rgba (literal expansion of `--bad` at 12%)
    routed through color-mix. */
-.task-dir-tool.danger:hover {
+.task-dir-tool.danger:hover,
+.task-dir-tool.danger:focus-visible {
   background: color-mix(in srgb, var(--bad) 12%, transparent);
   color: var(--bad);
+}
+
+.task-dir-tool.danger:focus-visible {
+  outline-color: var(--bad);
 }
 
 .task-dir-node,
@@ -1295,8 +1306,14 @@
   flex-shrink: 0;
 }
 
-.task-dir-node:hover {
+.task-dir-node:hover,
+.task-dir-node:focus-visible {
   background: var(--subtle-3);
+}
+
+.task-dir-node:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
 }
 
 .task-dir-node[data-current="true"] {
@@ -1315,9 +1332,15 @@
     color var(--ui-duration-fast);
 }
 
-.task-dir-step:hover {
+.task-dir-step:hover,
+.task-dir-step:focus-visible {
   background: var(--accent-dim);
   color: var(--accent);
+}
+
+.task-dir-step:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(1px * var(--ui-scale));
 }
 
 .task-dir-empty {
