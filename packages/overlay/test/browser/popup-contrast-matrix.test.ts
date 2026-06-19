@@ -83,6 +83,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
             .popup-sample .workspace-editor-menu,
             .popup-sample .workspace-coding-cli-menu,
             .popup-sample .titlebar-menubar-panel,
+            .popup-sample .brand-guide-card,
             .popup-sample .cmdk-panel {
               position: static;
               width: 100%;
@@ -278,6 +279,32 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                     <span class="titlebar-menubar-item-title" data-popup-text>Unavailable action</span>
                     <span class="titlebar-menubar-item-meta" data-popup-text>Offline</span>
                   </button>
+                </div>
+              </div>
+            </section>
+
+            <section class="popup-sample" data-popup-sample="brand-guide">
+              <strong>Brand Guide</strong>
+              <div class="brand-guide-card">
+                <div class="brand-guide-kicker" data-popup-text>Quick Guide</div>
+                <div class="brand-guide-section">
+                  <div class="brand-guide-title" data-popup-text>Where OpenCorvus fits</div>
+                  <p class="brand-guide-copy" data-popup-text>
+                    Keep the titlebar compact while giving users enough context for the workspace surface.
+                  </p>
+                </div>
+                <div class="brand-guide-section">
+                  <div class="brand-guide-title" data-popup-text>Use it for navigation</div>
+                  <div class="brand-guide-steps">
+                    <div class="brand-guide-step">
+                      <span class="brand-guide-step-index" data-popup-text>1</span>
+                      <span class="brand-guide-step-copy" data-popup-text>Open workspace, providers, runs, view, settings, and help menus.</span>
+                    </div>
+                    <div class="brand-guide-step">
+                      <span class="brand-guide-step-index" data-popup-text>2</span>
+                      <span class="brand-guide-step-copy" data-popup-text>Keep project context visible while popup menus are open.</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -598,6 +625,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
         "recent-directory",
         "workspace-launcher-menu",
         "titlebar-menu",
+        "brand-guide",
         "command-palette",
       ],
     )

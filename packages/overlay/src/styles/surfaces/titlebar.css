@@ -274,7 +274,7 @@
 
 .brand-guide:hover,
 .brand-guide:focus-visible,
-.brand-guide[aria-expanded="true"] {
+.brand-guide[data-expanded] {
   border-color: transparent;
   background: var(--surface-hover);
   box-shadow: none;
