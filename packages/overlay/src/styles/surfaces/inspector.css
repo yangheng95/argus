@@ -789,7 +789,8 @@
   transition:
     background var(--ui-duration-base) var(--ui-timing-standard),
     color var(--ui-duration-base) var(--ui-timing-standard),
-    border-color var(--ui-duration-base) var(--ui-timing-standard);
+    border-color var(--ui-duration-base) var(--ui-timing-standard),
+    box-shadow var(--ui-duration-base) var(--ui-timing-standard);
   line-height: 1.25;
   background: var(--oc-header-bg);
 }
@@ -803,7 +804,8 @@
   content: "";
 }
 
-.oc-section__head:hover {
+.oc-section__head:hover,
+.oc-section__head:focus-visible {
   background:
     linear-gradient(180deg, var(--ui-highlight-tone), transparent 74%),
     color-mix(in srgb, var(--surface-strong) 66%, var(--surface-inset) 34%);
@@ -847,6 +849,10 @@
 
 .oc-section[data-phase-state="active"] > .oc-section__head::before {
   border-left-color: var(--accent);
+}
+
+.oc-section > .oc-section__head:focus-visible {
+  box-shadow: inset 0 0 0 var(--oc-border-width) var(--accent);
 }
 
 .oc-section[data-phase-state="active"] .oc-section__icon,
@@ -1369,8 +1375,7 @@
 }
 
 /* Eval verdict pill — accepted / rejected / inconclusive. The
-   inset rings' raw rgba(--good/--bad/--warn at 35%) routed
-   through color-mix on the matching semantic token. */
+   inset rings are routed through color-mix on matching semantic tokens. */
 .gwg-verdict {
   align-self: flex-start;
   padding: calc(3px * var(--ui-scale)) var(--ui-gap-md);
