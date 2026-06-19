@@ -622,7 +622,6 @@
   "log.empty": "No logs",
   "log.fields": "Structured fields",
   "log.filter_level": "Log level",
-  "log.load_server": "Load server logs",
   "log.raw": "Raw line",
   "log.title": "Logs",
   "mcp.add_action": "Add MCP",

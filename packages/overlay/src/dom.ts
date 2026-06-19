@@ -114,7 +114,6 @@ export interface DomRefs {
   btnLogCopy: HTMLButtonElement | null
   btnLogClear: HTMLButtonElement | null
   btnCloseLog: HTMLButtonElement | null
-  btnLogServerLogs: HTMLButtonElement | null
 }
 
 // ── Factory ──
@@ -241,6 +240,5 @@ export function getDomRefs(): DomRefs {
     btnLogCopy: $<HTMLButtonElement>("#btnLogCopy"),
     btnLogClear: $<HTMLButtonElement>("#btnLogClear"),
     btnCloseLog: $<HTMLButtonElement>("#btnCloseLog"),
-    btnLogServerLogs: $<HTMLButtonElement>("#btnLogServerLogs"),
   }
 }

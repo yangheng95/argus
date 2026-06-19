@@ -315,17 +315,6 @@ export function LogViewer(props: LogViewerProps) {
           />
           <Button
             type="button"
-            id="btnLogServerLogs"
-            variant="ghost"
-            size="sm"
-            tone="neutral"
-            onClick={() => void refreshAction.run()}
-            disabled={refreshAction.pending()}
-          >
-            {t("log.load_server")}
-          </Button>
-          <Button
-            type="button"
             id="btnLogRefresh"
             variant="ghost"
             size="sm"

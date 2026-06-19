@@ -4,6 +4,9 @@ import { join } from "node:path"
 
 const LOG_VIEWER_SOURCE = join(import.meta.dir, "../src/components/LogViewer.tsx")
 const SETTINGS_CSS = join(import.meta.dir, "../src/styles/surfaces/settings.css")
+const DOM_SOURCE = join(import.meta.dir, "../src/dom.ts")
+const EN_LOCALE = join(import.meta.dir, "../src/i18n/en-US.json")
+const ZH_LOCALE = join(import.meta.dir, "../src/i18n/zh-CN.json")
 
 function ruleBody(css: string, selector: string): string {
   const start = css.indexOf(`${selector} {`)
@@ -48,5 +51,22 @@ describe("LogViewer primitives", () => {
     expect(body).toContain("min-height:")
     expect(body).toContain("max-height:")
     expect(body).toContain("box-sizing: border-box")
+  })
+
+  test("header exposes one refresh entry for server log loading", () => {
+    const source = readFileSync(LOG_VIEWER_SOURCE, "utf8")
+    const domSource = readFileSync(DOM_SOURCE, "utf8")
+    const enLocale = JSON.parse(readFileSync(EN_LOCALE, "utf8")) as Record<string, string>
+    const zhLocale = JSON.parse(readFileSync(ZH_LOCALE, "utf8")) as Record<string, string>
+
+    expect(source).toContain('id="btnLogRefresh"')
+    expect(source).not.toContain("btnLogServerLogs")
+    expect(source).not.toContain('t("log.load_server")')
+    expect(domSource).not.toContain("btnLogServerLogs")
+    expect(enLocale).not.toHaveProperty("log.load_server")
+    expect(zhLocale).not.toHaveProperty("log.load_server")
+
+    const clickRefreshEntrypoints = source.match(/onClick=\{\(\) => void refreshAction\.run\(\)\}/g) ?? []
+    expect(clickRefreshEntrypoints).toHaveLength(1)
   })
 })

@@ -317,8 +317,19 @@ test(
         const viewer = document.querySelector<HTMLElement>(".log-viewer")
         const dialogBox = dialog?.getBoundingClientRect()
         const viewerBox = viewer?.getBoundingClientRect()
+        const headerActions = Array.from(
+          document.querySelectorAll<HTMLButtonElement>("#logDialog .dialog-header-actions button"),
+        ).map((button) => ({
+          id: button.id,
+          text: button.textContent?.trim() || "",
+          disabled: button.disabled,
+        }))
         return {
           logPathResidueCount: document.querySelectorAll(".log-path").length,
+          serverLogsButtonCount: document.querySelectorAll("#btnLogServerLogs").length,
+          refreshButtonCount: document.querySelectorAll("#btnLogRefresh").length,
+          refreshActionLabels: headerActions.filter((button) => button.id === "btnLogRefresh").map((button) => button.text),
+          commandActionIds: headerActions.filter((button) => button.id.startsWith("btn")).map((button) => button.id),
           lineCount: document.querySelectorAll(".log-line").length,
           dialogWidth: Math.round(dialogBox?.width ?? 0),
           dialogHeight: Math.round(dialogBox?.height ?? 0),
@@ -326,13 +337,17 @@ test(
         }
       })
       assert.equal(logLayout.logPathResidueCount, 0)
+      assert.equal(logLayout.serverLogsButtonCount, 0)
+      assert.equal(logLayout.refreshButtonCount, 1)
+      assert.deepEqual(logLayout.refreshActionLabels, ["Refresh"])
+      assert.deepEqual(logLayout.commandActionIds, ["btnLogRefresh", "btnLogCopy", "btnLogClear", "btnCloseLog"])
       assert.ok(logLayout.lineCount > 0)
       assert.ok(logLayout.dialogWidth > 320)
       assert.ok(logLayout.dialogHeight > 240)
       assert.ok(logLayout.viewerHeight > 180)
       const logDialog = await tab.$("#logDialog")
       assert.ok(logDialog)
-      const screenshotPath = resolve(".scratch/log-viewer-no-log-path.png")
+      const screenshotPath = resolve(".scratch/log-viewer-single-refresh-entry.png")
       mkdirSync(dirname(screenshotPath), { recursive: true })
       writeFileSync(screenshotPath, await logDialog.screenshot({}))
 

@@ -622,7 +622,6 @@
   "log.empty": "暂无日志",
   "log.fields": "结构化字段",
   "log.filter_level": "日志级别",
-  "log.load_server": "加载服务端日志",
   "log.raw": "原始日志",
   "log.title": "日志",
   "mcp.add_action": "添加 MCP",
