@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File                                                                                                           | Title                      |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | [2026-06-19-kobalte-tabpanel-state-single-source.md](2026-06-19-kobalte-tabpanel-state-single-source.md)       | Kobalte TabPanel State Single Source |
+| [2026-06-19-prompt-profile-select-runtime-contrast.md](2026-06-19-prompt-profile-select-runtime-contrast.md)   | Prompt Profile Select Runtime Contrast |
 | [2026-06-19-kobalte-selected-state-single-source.md](2026-06-19-kobalte-selected-state-single-source.md)       | Kobalte Selected State Single Source |
 | [2026-06-19-dropdown-menu-highlighted-contrast-source.md](2026-06-19-dropdown-menu-highlighted-contrast-source.md) | Dropdown Menu Highlighted Contrast Source |
 | [2026-06-19-deep-performance-investigation.md](2026-06-19-deep-performance-investigation.md)                   | Deep Performance Investigation |
