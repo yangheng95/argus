@@ -8,6 +8,13 @@ const MAIN = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
 const APP = readFileSync(join(import.meta.dir, "../src/components/App.tsx"), "utf8")
 const NOTIFY = readFileSync(join(import.meta.dir, "../src/services/notify.ts"), "utf8")
 
+function cssRuleBody(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const match = STYLES.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`))
+  if (!match) throw new Error(`missing CSS rule: ${selector}`)
+  return match[1]!
+}
+
 test("NotificationCenter routes dismiss control through the Button primitive", () => {
   expect(SOURCE).toContain('import { Button } from "./ui/Button"')
   expect(SOURCE).toContain('data-ui="app-notification-close"')
@@ -80,6 +87,14 @@ test("NotificationCenter separates toast visibility from task-grouped panel hist
   expect(NOTIFY).toContain("MAX_NOTIFICATION_HISTORY")
   expect(NOTIFY).toContain("visibleNotificationItems")
   expect(NOTIFY).toContain("centerHistoryNotificationItems")
+})
+
+test("dismissed notification history keeps readable text without whole-card opacity", () => {
+  expect(SOURCE).toContain('data-dismissed={props.item.dismissedAt > 0 ? "true" : "false"}')
+  const dismissedRule = cssRuleBody('.app-notification[data-dismissed="true"]')
+  expect(dismissedRule).not.toMatch(/(?<!-)\bopacity\s*:/)
+  expect(dismissedRule).toContain("color-mix(in srgb, var(--surface-strong)")
+  expect(STYLES).toContain('.app-notification[data-dismissed="true"] .app-notification__mark')
 })
 
 test("NotificationCenter waits for the loaded i18n bundle before translating", () => {

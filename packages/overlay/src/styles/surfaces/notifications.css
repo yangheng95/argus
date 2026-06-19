@@ -52,10 +52,6 @@ body[data-notifications-panel-open="true"] .app-notifications[data-surface="toas
   box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
 }
 
-.app-notification[data-dismissed="true"] {
-  opacity: 0.72;
-}
-
 .notification-center-panel {
   display: flex;
   flex: 1 1 0;
@@ -145,6 +141,13 @@ body[data-notifications-panel-open="true"] .app-notifications[data-surface="toas
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
 }
 
+.app-notification[data-dismissed="true"] {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--text-muted) 5%, transparent), transparent 58%),
+    color-mix(in srgb, var(--surface-strong) 88%, var(--surface-inset));
+  box-shadow: inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
+}
+
 .app-notification__mark {
   width: calc(24px * var(--ui-scale));
   height: calc(24px * var(--ui-scale));
@@ -177,6 +180,11 @@ body[data-notifications-panel-open="true"] .app-notifications[data-surface="toas
 .app-notification[data-tone="info"] .app-notification__mark {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
+}
+
+.app-notification[data-dismissed="true"] .app-notification__mark {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  color: var(--text-muted);
 }
 
 .app-notification__spinner {
