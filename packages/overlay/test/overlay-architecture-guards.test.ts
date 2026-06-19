@@ -2213,10 +2213,12 @@ describe("overlay architecture guards", () => {
       expect(titlebarSurface).not.toMatch(new RegExp(`(^|\\n)\\.${className}(?:\\s|\\.|:|\\{|,|\\[)`))
     }
 
-    for (const className of ["titlebar-utility", "titlebar-actions", "titlebar-window-controls", "conn-badge"]) {
+    for (const className of ["titlebar-utility", "titlebar-actions", "titlebar-window-controls"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
+    expect(styles).not.toMatch(/(^|\n)\.conn-badge(?:\s|\{|:)/)
+    expect(titlebarSurface).toContain('.oc-button[data-ui="connection-badge"].conn-badge')
   })
 
   test("dead static titlebar window button classes stay retired", () => {
