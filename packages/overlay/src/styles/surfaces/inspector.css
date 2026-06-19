@@ -125,6 +125,11 @@
   cursor: pointer;
 }
 
+.browser-preview-candidate-trigger:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(2px * var(--ui-scale));
+}
+
 .browser-preview-candidate-trigger > span:first-child {
   min-width: 0;
   overflow: hidden;

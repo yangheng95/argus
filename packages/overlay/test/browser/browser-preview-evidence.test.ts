@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -516,6 +518,36 @@ test(
         () => ({ errors, requestLog }),
       )
       await waitForPageText(page, previewTarget(), "preview target text")
+      const candidateTriggerSelector = '[data-ui="browser-preview-candidate-trigger"]'
+      await page.waitForSelector(candidateTriggerSelector, { visible: true })
+      let triggerFocusedByKeyboard = false
+      for (let idx = 0; idx < 80; idx += 1) {
+        await page.keyboard.press("Tab")
+        triggerFocusedByKeyboard = await page.$eval(candidateTriggerSelector, (node) => document.activeElement === node)
+        if (triggerFocusedByKeyboard) break
+      }
+      assert.equal(triggerFocusedByKeyboard, true)
+      const triggerFocusState = await page.$eval(candidateTriggerSelector, (node) => {
+        const element = node as HTMLElement
+        const styles = getComputedStyle(element)
+        return {
+          focusVisible: element.matches(":focus-visible"),
+          outlineStyle: styles.outlineStyle,
+          outlineWidth: styles.outlineWidth,
+          outlineColor: styles.outlineColor,
+        }
+      })
+      assert.equal(triggerFocusState.focusVisible, true)
+      assert.notEqual(triggerFocusState.outlineStyle, "none")
+      assert.notEqual(triggerFocusState.outlineWidth, "0px")
+      assert.notEqual(triggerFocusState.outlineColor, "rgba(0, 0, 0, 0)")
+
+      const triggerFocusScreenshotPath = resolve(".scratch/browser-preview-candidate-trigger-focus-visible.png")
+      mkdirSync(dirname(triggerFocusScreenshotPath), { recursive: true })
+      const previewPanel = await page.$(".browser-preview-panel")
+      assert.ok(previewPanel)
+      writeFileSync(triggerFocusScreenshotPath, await previewPanel.screenshot({}))
+
       await page.click('[aria-label="Capture Playwright evidence from the saved backend preview target."]')
       await waitForPageText(page, "primary target desktop capture passed", "primary target evidence summary")
       await waitForPageState(
@@ -543,7 +575,7 @@ test(
       await waitForPageState(
         page,
         () => {
-          const error = document.querySelector<HTMLElement>('[data-ui="browser-preview-target-error"]')
+          const error = document.querySelector<HTMLElement>('[data-ui="browser-preview-selection-failed"]')
           const loading = document.querySelector<HTMLElement>(".browser-preview-stage [data-status='loading']")
           return (
             error?.textContent?.includes("Preview target selection failed.") === true &&
