@@ -122,10 +122,25 @@ function refsForFile(file: string): string[] {
   return refs
 }
 
+function markdownTableRows(text: string): string[][] {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("|"))
+    .map((line) =>
+      line
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.trim()),
+    )
+    .filter((cells) => cells.length > 0 && !cells.every((cell) => /^:?-{3,}:?$/.test(cell)))
+}
+
 function retiredRefs(): Set<string> {
   const ledger = fs.readFileSync(path.join(repoRoot, "specs/retired-reference-ledger.md"), "utf8")
   return new Set(
-    Array.from(ledger.matchAll(/\| `([^`]+)` \|/g), (match) => match[1]!).filter((ref) => ref.endsWith(".md")),
+    markdownTableRows(ledger)
+      .map((cells) => cells[0]?.match(/^`([^`]+)`$/)?.[1])
+      .filter((ref): ref is string => Boolean(ref?.endsWith(".md"))),
   )
 }
 
@@ -141,13 +156,12 @@ function rootSpecFiles(): string[] {
 function indexedRootSpecs(): Map<string, string> {
   const readme = fs.readFileSync(path.join(repoRoot, "specs/README.md"), "utf8")
   const rows = new Map<string, string>()
-  for (const match of readme.matchAll(/^\| `([^`]+)` \| ([^|]+) \|/gm)) {
-    rows.set(match[1]!, match[2]!.trim())
-  }
-  for (const match of readme.matchAll(/^\| `([^`]+)`, `([^`]+)`, `([^`]+)` \| ([^|]+) \|/gm)) {
-    rows.set(match[1]!, match[4]!.trim())
-    rows.set(match[2]!, match[4]!.trim())
-    rows.set(match[3]!, match[4]!.trim())
+  for (const cells of markdownTableRows(readme)) {
+    const status = cells[1]?.trim()
+    if (!status) continue
+    for (const match of cells[0]?.matchAll(/`([^`]+)`/g) ?? []) {
+      rows.set(match[1]!, status)
+    }
   }
   return rows
 }
@@ -155,8 +169,12 @@ function indexedRootSpecs(): Map<string, string> {
 function indexedSpecTable(indexPath: string): Map<string, string> {
   const readme = fs.readFileSync(indexPath, "utf8")
   const rows = new Map<string, string>()
-  for (const match of readme.matchAll(/^\| `([^`]+)` \| ([^|]+) \|/gm)) {
-    rows.set(match[1]!, match[2]!.trim())
+  for (const cells of markdownTableRows(readme)) {
+    const status = cells[1]?.trim()
+    if (!status) continue
+    for (const match of cells[0]?.matchAll(/`([^`]+)`/g) ?? []) {
+      rows.set(match[1]!, status)
+    }
   }
   return rows
 }
@@ -183,9 +201,8 @@ function newArchHistoricalFiles(): string[] {
 function indexedNewArchHistory(): Set<string> {
   const history = fs.readFileSync(path.join(repoRoot, "specs/new-arch/HISTORY.md"), "utf8")
   return new Set(
-    history
-      .split(/\r?\n/)
-      .map((line) => line.match(/^\| \[([^\]]+\.md)\]\([^)]+\) \|/)?.[1])
+    markdownTableRows(history)
+      .map((cells) => cells[0]?.match(/^\[([^\]]+\.md)\]\([^)]+\)$/)?.[1])
       .filter((file): file is string => Boolean(file)),
   )
 }

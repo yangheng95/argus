@@ -50,16 +50,24 @@ Output:
 
 ## Timeout Strategy
 
-Manual benchmark runs must use the existing inactivity-aware process runner, not
-a mechanical process-start deadline:
+Manual benchmark runs must use the dedicated inactivity-aware benchmark runner,
+not a mechanical process-start deadline:
 
 ```powershell
-bun test test/browser-preview/local-module-source-binding.test.ts test/browser-preview/region-comparison.test.ts test/browser-preview/region-visible-locator.test.ts test/browser-preview/region-source-bbox.test.ts test/browser-preview/region-route-state.test.ts test/browser-preview/region-strict-schema.test.ts test/agent/runner-prompt.test.ts test/tool/browser-preview.test.ts
+bun script/benchmark/browser-preview-repair-pressure.ts --idle-timeout-ms 120000 --per-test-timeout-ms 30000
+```
+
+The runner executes this pressure file list with Bun's per-test timeout set
+explicitly:
+
+```powershell
+bun test --timeout 30000 test/browser-preview/local-module-source-binding.test.ts test/browser-preview/region-comparison.test.ts test/browser-preview/region-visible-locator.test.ts test/browser-preview/region-source-bbox.test.ts test/browser-preview/region-route-diagnostics.test.ts test/browser-preview/region-route-state.test.ts test/browser-preview/region-strict-schema.test.ts test/agent/runner-prompt.test.ts test/tool/browser-preview.test.ts test/visual-qa/output-tools.test.ts test/integrity/acceptance-tools.test.ts
 ```
 
 When wrapped by benchmark automation, the wrapper refreshes activity on stdout
 or stderr and fails after an idle window. Bun's per-test timeout remains only a
-last-resort hung-test guard for Playwright calls.
+last-resort hung-test guard for Playwright calls and runner prompt tests with
+database/session setup overhead.
 
 ## Pressure Cases
 
