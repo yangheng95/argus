@@ -28,19 +28,19 @@ const FRONTEND_DESIGN_VALUE_LIMITS: Record<(typeof FRONTEND_DESIGN_KEYS_FOR_VISU
   frontend_project: 1_000,
 }
 
-const STRICT_REFERENCE_IMAGE_FIDELITY_SECTION = [
-  "## Strict Reference Image Fidelity",
-  "A reference image is present. Treat it as the authoritative visual truth.",
-  "Require 1:1 layout and style fidelity. 1:1 means one-to-one visible geometry and styling, not a relaxed similarity standard.",
-  "Do not accept differences in layout geometry, spacing, typography, colors, component styling, or visible state styling unless the task explicitly changed that exact element.",
+const REFERENCE_EVIDENCE_SCOPE_SECTION = [
+  "## Reference Evidence Scope",
+  "Reference artifacts are evidence, not an automatic universal clone requirement.",
+  "Enforce reference/parity fidelity only when the task, current goal, visual_consistency_contract, or acceptance evidence explicitly requires it.",
+  "When reference parity is explicitly required, cite fresh task-scoped evidence for the affected regions or report a production_blocker.",
 ].join("\n")
 
 export function renderVisualQaFrontendDesignContext(entries: VisualQaDecisionEntry[]): string {
   const latest = latestDecisionByKey(entries)
   const lines = ["# Frontend Design Pointers", "", "Only the Visual QA-relevant frontend-design fields are included."]
   let included = 0
-  if (hasFrontendDesignReferenceImage(latest)) {
-    lines.push("", STRICT_REFERENCE_IMAGE_FIDELITY_SECTION)
+  if (hasFrontendDesignReferenceArtifacts(latest)) {
+    lines.push("", REFERENCE_EVIDENCE_SCOPE_SECTION)
   }
   for (const key of FRONTEND_DESIGN_KEYS_FOR_VISUAL_QA) {
     const entry = latest.get(key)
@@ -63,7 +63,7 @@ export function renderVisualQaFrontendResearchContext(brief?: ResearchBrief): st
   ]
   if (contract.reference_image_evidence_ids.length) {
     lines.push(`reference_image_evidence_ids: ${contract.reference_image_evidence_ids.join(", ")}`)
-    lines.push("", STRICT_REFERENCE_IMAGE_FIDELITY_SECTION)
+    lines.push("", REFERENCE_EVIDENCE_SCOPE_SECTION)
   }
   lines.push(
     renderBulletGroup(
@@ -194,7 +194,7 @@ function latestDecisionByKey(entries: VisualQaDecisionEntry[]): Map<string, Visu
   return latest
 }
 
-function hasFrontendDesignReferenceImage(latest: Map<string, VisualQaDecisionEntry>): boolean {
+function hasFrontendDesignReferenceArtifacts(latest: Map<string, VisualQaDecisionEntry>): boolean {
   const referenceArtifacts = latest.get("reference_artifacts")?.value
   return Boolean(referenceArtifacts?.trim())
 }

@@ -35,6 +35,7 @@ export const BuildGoalInput = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   objective: z.string().min(1),
+  requirement_ids: z.array(z.string().min(1)).default([]),
   acceptance_specs: z.array(z.string()).default([]),
   owned_paths: z.array(z.string()).default([]),
   depends_on: z.array(z.string()).default([]),
@@ -165,6 +166,12 @@ const BuildResultBase = {
     .array(BuildTestResult)
     .default([])
     .describe("Evidence the build actually ran verification; empty when no tests were required."),
+  reference_comparison_evidence_refs: z
+    .array(z.string().min(1))
+    .optional()
+    .describe(
+      "Task-scoped browser_preview_evidence refs produced by browser_preview_compare_regions. Required for passed builds only when the active build context declares structured reference parity evidence.",
+    ),
   contract_restatement: z
     .string()
     .trim()

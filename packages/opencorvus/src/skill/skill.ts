@@ -86,6 +86,8 @@ export namespace Skill {
     /** Descriptive tool hints for agents that load this skill. Empty or
      *  omitted = no tool hints. */
     required_tools: z.array(z.string()).optional().default([]),
+    /** Optional agent-name allow list. Empty or omitted means any compatible agent may load it. */
+    agents: z.array(z.string()).optional().default([]),
     expires_at: ExpirationTimestamp,
     duplicate_locations: z.array(z.string()).optional().default([]),
   })
@@ -179,6 +181,7 @@ export namespace Skill {
         auto_detect: true,
         priority: true,
         required_tools: true,
+        agents: true,
         expires_at: true,
       }).safeParse(md.data)
       if (!parsed.success) continue
@@ -195,6 +198,7 @@ export namespace Skill {
         auto_detect: parsed.data.auto_detect,
         priority: parsed.data.priority,
         required_tools: parsed.data.required_tools,
+        agents: parsed.data.agents,
         expires_at: parsed.data.expires_at,
         duplicate_locations: [],
       })
@@ -219,6 +223,7 @@ export namespace Skill {
         auto_detect: true,
         priority: true,
         required_tools: true,
+        agents: true,
         expires_at: true,
       }).safeParse(md.data)
       if (!parsed.success) return
@@ -236,6 +241,7 @@ export namespace Skill {
         auto_detect: parsed.data.auto_detect,
         priority: parsed.data.priority,
         required_tools: parsed.data.required_tools,
+        agents: parsed.data.agents,
         expires_at: parsed.data.expires_at,
         duplicate_locations: [],
       })

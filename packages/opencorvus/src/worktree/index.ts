@@ -39,7 +39,7 @@ export namespace Worktree {
     gitLocks.set(key, next)
     await prev
     try {
-      const lockDir = ProjectRuntimePaths.projectGitLock(Instance.worktree)
+      const lockDir = ProjectRuntimePaths.projectGitLock(Instance.project.worktree)
       const stopHeartbeat = await acquireDiskLock(lockDir)
       try {
         return await fn()

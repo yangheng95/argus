@@ -5,6 +5,7 @@ import {
   EngineInteractionRequestTable,
   EngineTaskTable,
   type EngineArtifactKind,
+  type EngineInteractionType,
 } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -44,10 +45,10 @@ export namespace EngineRuntime {
         if (!task || task.time_completed !== null) return false
         return findActiveRunForTask(row.task_id)?.id === row.id
       })
-      const noLiveGoalWakes = await Promise.all(rows.map((row) => syncRun(row.id, hooks)))
+      const goalRefillWakes = await Promise.all(rows.map((row) => syncRun(row.id, hooks)))
       return {
         observedRuns: rows.length,
-        dispatchedLivenessWakes: noLiveGoalWakes.filter(Boolean).length,
+        dispatchedLivenessWakes: goalRefillWakes.filter(Boolean).length,
       }
     } finally {
       current.syncing = false
@@ -55,29 +56,40 @@ export namespace EngineRuntime {
   }
 
   /**
-   * Per-goal execution is owned by GoalPool + the event bridge.
-   *
-   * Startup orphan cleanup was moved to engine/recovery.ts so runtime polling
-   * no longer tries to reconcile previous-process state here.
+   * Observe terminal goal runs and wake the orchestrator for FIFO refill.
+   * Runtime writes durable facts only; graph repair and next goal selection
+   * remain LLM-owned in the next orchestrator turn.
    */
-  async function syncNoLiveGoalRuns(runID: string, _hooks: RuntimeHooks): Promise<boolean> {
+  async function syncTerminalGoalRefills(runID: string, _hooks: RuntimeHooks): Promise<boolean> {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
     if (run.status === "blocked" && run.blocking_reason === "orchestrator_stream_error") return false
     const goalRuns = listGoalRunsForRun(runID)
-    if (goalRuns.some((goalRun) => isLiveGoalRunStatus(goalRun.status))) return false
 
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) return false
 
-    const fingerprint = noLiveGoalWakeFingerprint(goalRuns)
-    if (hasNoLiveGoalWakeFact({ taskID: run.task_id, runID: run.id, fingerprint })) return false
-
     const { dispatchTaskLoop } = await import("@/engine/queue")
-    const dispatchResult = await dispatchTaskLoop({ taskID: run.task_id })
-    if (dispatchResult !== "started") return false
-    recordNoLiveGoalWakeFact({ taskID: run.task_id, runID: run.id, fingerprint, goalRuns })
-    return true
+    let dispatched = false
+    for (const terminalGoalRun of goalRuns.filter((goalRun) => !isLiveGoalRunStatus(goalRun.status))) {
+      const fingerprint = terminalGoalRefillFingerprint(terminalGoalRun)
+      if (hasTerminalGoalRefillWakeFact({ taskID: run.task_id, runID: run.id, fingerprint })) continue
+      const liveSiblingGoalRuns = goalRuns.filter(
+        (goalRun) => goalRun.id !== terminalGoalRun.id && isLiveGoalRunStatus(goalRun.status),
+      )
+      const dispatchResult = await dispatchTaskLoop({ taskID: run.task_id })
+      if (dispatchResult !== "started" && dispatchResult !== "queued") continue
+      recordTerminalGoalRefillWakeFact({
+        taskID: run.task_id,
+        runID: run.id,
+        fingerprint,
+        terminalGoalRun,
+        liveSiblingGoalRuns,
+        dispatchResult,
+      })
+      dispatched = true
+    }
+    return dispatched
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -95,11 +107,14 @@ export namespace EngineRuntime {
     if (!task || task.time_completed !== null) return false
     if (findActiveRunForTask(run.task_id)?.id !== run.id) return false
 
-    // Runtime sync is an observation surface. It records no-live-goal
-    // liveness wakes only; it does not poll executor queues, auto-reject
-    // interactions, or rewrite run status.
+    const interactionProjection = await syncInteractionBlocker(run, hooks)
+    if (interactionProjection) return false
+
+    // Runtime sync is an observation surface. It records terminal-goal refill
+    // wakes and projects durable interaction blockers. It does not poll
+    // executor queues or auto-reject interactions.
     if (run.status !== "completed" && run.status !== "failed" && run.status !== "aborted") {
-      return syncNoLiveGoalRuns(runID, hooks)
+      return syncTerminalGoalRefills(runID, hooks)
     }
     return false
   }
@@ -107,20 +122,68 @@ export namespace EngineRuntime {
 
 type RuntimeHooks = import("./runtime-hooks").RuntimeHooks
 
-function noLiveGoalWakeFingerprint(
-  goalRuns: Array<{
-    id: string
-    status: string
-  }>,
-) {
-  if (goalRuns.length === 0) return "no-goal-runs"
-  return goalRuns
-    .map((goalRun) => [goalRun.id, goalRun.status].join(":"))
-    .sort()
-    .join("|")
+async function syncInteractionBlocker(run: RunRow, hooks: RuntimeHooks): Promise<boolean> {
+  const pending = findPendingInteractions(run.id)
+  if (pending.length > 0) {
+    const blocker = pending[0].request_type
+    if (run.status === "blocked" && !isInteractionBlocker(run.blocking_reason)) return true
+    if (run.status !== "blocked" || run.blocking_reason !== blocker) {
+      await hooks.updateRun(
+        run,
+        {
+          status: "blocked",
+          blocking_reason: blocker,
+          error: pending[0].title || pending[0].body || `Pending ${blocker} interaction`,
+        },
+        `${blocker} interaction pending`,
+      )
+    }
+    return true
+  }
+
+  if (!isInteractionBlocker(run.blocking_reason)) return false
+  if (!hasResolvedInteractionForBlocker(run.id, run.blocking_reason, run.time_updated)) return false
+  await hooks.updateRun(
+    run,
+    {
+      status: "running",
+      blocking_reason: null,
+      error: null,
+    },
+    `${run.blocking_reason} interaction resolved`,
+  )
+  return true
 }
 
-function hasNoLiveGoalWakeFact(input: { taskID: string; runID: string; fingerprint: string }) {
+function isInteractionBlocker(input: string | null | undefined): input is EngineInteractionType {
+  return input === "permission" || input === "question"
+}
+
+function hasResolvedInteractionForBlocker(runID: string, blocker: EngineInteractionType, blockedAt: number) {
+  return Boolean(
+    Database.use((db) =>
+      db
+        .select({ id: EngineInteractionRequestTable.id })
+        .from(EngineInteractionRequestTable)
+        .where(
+          and(
+            eq(EngineInteractionRequestTable.run_id, runID),
+            eq(EngineInteractionRequestTable.request_type, blocker),
+            sql`${EngineInteractionRequestTable.status} != 'pending'`,
+            sql`${EngineInteractionRequestTable.time_updated} >= ${blockedAt}`,
+          ),
+        )
+        .limit(1)
+        .get(),
+    ),
+  )
+}
+
+function terminalGoalRefillFingerprint(goalRun: { id: string; status: string }) {
+  return `${goalRun.id}:${goalRun.status}`
+}
+
+function hasTerminalGoalRefillWakeFact(input: { taskID: string; runID: string; fingerprint: string }) {
   return Boolean(
     Database.use((db) =>
       db
@@ -130,7 +193,7 @@ function hasNoLiveGoalWakeFact(input: { taskID: string; runID: string; fingerpri
           and(
             eq(EngineArtifactTable.task_id, input.taskID),
             eq(EngineArtifactTable.run_id, input.runID),
-            eq(EngineArtifactTable.kind, "goal_batch_notification" as EngineArtifactKind),
+            eq(EngineArtifactTable.kind, "goal_refill_notification" as EngineArtifactKind),
             sql`json_extract(${EngineArtifactTable.payload}, '$.fingerprint') = ${input.fingerprint}`,
           ),
         )
@@ -140,11 +203,13 @@ function hasNoLiveGoalWakeFact(input: { taskID: string; runID: string; fingerpri
   )
 }
 
-function recordNoLiveGoalWakeFact(input: {
+function recordTerminalGoalRefillWakeFact(input: {
   taskID: string
   runID: string
   fingerprint: string
-  goalRuns: Array<{ id: string; status: string }>
+  terminalGoalRun: { id: string; goal_id: string; status: string }
+  liveSiblingGoalRuns: Array<{ id: string; goal_id: string; status: string }>
+  dispatchResult: "started" | "queued"
 }) {
   const now = Date.now()
   Database.use((db) =>
@@ -154,16 +219,22 @@ function recordNoLiveGoalWakeFact(input: {
         id: Identifier.ascending("artifact"),
         task_id: input.taskID,
         run_id: input.runID,
-        goal_run_id: null,
-        kind: "goal_batch_notification" as EngineArtifactKind,
-        label: input.goalRuns.length === 0 ? "no-live-goal-wake-dispatched" : "goal-batch-wake-dispatched",
+        goal_run_id: input.terminalGoalRun.id,
+        kind: "goal_refill_notification" as EngineArtifactKind,
+        label: "goal-refill-wake-dispatched",
         payload: {
           task_id: input.taskID,
           run_id: input.runID,
           fingerprint: input.fingerprint,
-          goal_runs: input.goalRuns
-            .map((goalRun) => ({ id: goalRun.id, status: goalRun.status }))
+          terminal_goal_run: {
+            id: input.terminalGoalRun.id,
+            goal_id: input.terminalGoalRun.goal_id,
+            status: input.terminalGoalRun.status,
+          },
+          live_sibling_goal_runs: input.liveSiblingGoalRuns
+            .map((goalRun) => ({ id: goalRun.id, goal_id: goalRun.goal_id, status: goalRun.status }))
             .sort((a, b) => a.id.localeCompare(b.id)),
+          dispatch_result: input.dispatchResult,
           time_dispatched: now,
         },
         time_created: now,

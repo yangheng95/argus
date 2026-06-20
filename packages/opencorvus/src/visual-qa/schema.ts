@@ -85,8 +85,8 @@ export const VisualQaRepairSchema = z.object({
 export const VisualQaEvidenceSchema = z.object({
   type: z.enum([
     "screenshot",
+    "reference_comparison",
     "visual_diff",
-    "vision_judge",
     "text_diff",
     "console",
     "network",
@@ -98,6 +98,20 @@ export const VisualQaEvidenceSchema = z.object({
   viewport: VisualQaViewportSchema.optional(),
   state: z.string().optional(),
   note: z.string().min(1),
+})
+
+export const VisualQaReferenceParitySchema = z.object({
+  required: z.boolean().default(false),
+  required_regions: z.array(z.string().min(1)).default([]),
+  reference_comparison_evidence_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Artifact IDs from browser_preview_compare_regions reference-comparison evidence."),
+  missing_regions: z.array(z.string().min(1)).default([]),
+  blocker_ids: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Production blocker IDs explaining missing comparison evidence when accepted=false."),
 })
 
 export const VisualQaCommandSchema = z.object({
@@ -116,6 +130,13 @@ export const VisualQaReportSchema = z.object({
   follow_up_task: VisualQaFollowUpTaskSchema.nullable().default(null),
   repairs: z.array(VisualQaRepairSchema).default([]),
   evidence: z.array(VisualQaEvidenceSchema).default([]),
+  reference_parity: VisualQaReferenceParitySchema.default({
+    required: false,
+    required_regions: [],
+    reference_comparison_evidence_refs: [],
+    missing_regions: [],
+    blocker_ids: [],
+  }),
   commands: z.array(VisualQaCommandSchema).default([]),
   changed_files: z.array(z.string().min(1)).default([]),
   open_questions: z.array(z.string().min(1)).default([]),

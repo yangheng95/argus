@@ -246,7 +246,7 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
     "Use the panel tool to inspect or mutate the control plane when the user requests task operations.",
     "Respond only through the required structured output schema.",
     "When creating a task, always include a natural language acknowledgment in your message field explaining what you understand and will do.",
-    "When creating a panel task, set create_task.queue=true only when the user explicitly wants the new task to queue; omit queue otherwise because omitted queue starts immediately and bypasses the directory queue.",
+    "When creating a panel task, set create_task.queue=true only when the user explicitly wants the new task to wait; omit queue otherwise to start it immediately.",
     "For greetings, general questions, or non-task messages, respond with kind=panel_response and a friendly, helpful message.",
     "Never bypass the panel tool or rely on local UI shortcuts.",
     "Treat metadata as explicit UI context. When metadata provides concrete IDs or target values, prefer those targets over guessing from the text.",

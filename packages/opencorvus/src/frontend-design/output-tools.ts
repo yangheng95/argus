@@ -394,61 +394,28 @@ function renderFrontendProjectReport(final: FrontendTemplateFinal): string {
 function renderVisualBaselineQualityStatus(final: FrontendTemplateFinal): string {
   const evidence = inspectVisualBaselineQuality(final)
   if (evidence.status === "evidence_missing") {
-    return "- visual_quality_status: evidence_missing. No measured `webpage_evaluate` diagnostic score was reported for the visual HTML skeleton; treat the skeleton as unproven until rendered screenshot evidence and visual review are recorded."
+    return "- visual_quality_status: evidence_missing. No rendered screenshot review evidence was reported for the visual HTML skeleton; treat the skeleton as unproven until rendered screenshot evidence and visual review are recorded."
   }
   if (evidence.status === "incomplete_visual_fidelity") {
-    const score =
-      evidence.lastScore === undefined
-        ? ""
-        : ` Last reported diagnostic score: ${formatNumber(evidence.lastScore)}/100.`
-    const similarity =
-      evidence.lastSimilarity === undefined
-        ? ""
-        : ` Last reported diagnostic similarity: ${formatNumber(evidence.lastSimilarity)}.`
     const debt = evidence.hasRemainingDebt ? " Remaining visual debt is present in the submitted contract." : ""
-    return `- visual_quality_status: incomplete_visual_fidelity.${score}${similarity}${debt} This skeleton is unproven and must not be treated as ready for downstream transcription.`
+    return `- visual_quality_status: incomplete_visual_fidelity.${debt} This skeleton is unproven and must not be treated as ready for downstream transcription.`
   }
-  return "- visual_quality_status: visual_evidence_reported. Render/evaluate evidence was reported; source traceability, screenshot inspection, visual judge findings, and placeholder review remain authoritative."
+  return "- visual_quality_status: visual_evidence_reported. Rendered screenshot review evidence was reported; source traceability, screenshot inspection, and placeholder review remain authoritative."
 }
 
 function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
   status: "high_fidelity_evidence_reported" | "incomplete_visual_fidelity" | "evidence_missing"
-  lastScore?: number
-  lastSimilarity?: number
   hasRemainingDebt: boolean
 } {
   const text = collectVisualBaselineText(final)
-  const scores = Array.from(
-    text.matchAll(/\b(?:score|overallScore|current score)\s*:?\s*(\d{1,3}(?:\.\d+)?)\s*\/\s*100\b/gi),
-  )
-    .map((match) => Number(match[1]))
-    .filter((score) => Number.isFinite(score))
-  const similarities = Array.from(text.matchAll(/\b(?:similarity|mean)\s*(?:=|:)\s*(0(?:\.\d+)?|1(?:\.0+)?)\b/gi))
-    .map((match) => Number(match[1]))
-    .filter((score) => Number.isFinite(score))
-  const lastScore = scores.at(-1)
-  const lastSimilarity = similarities.at(-1)
   const hasRemainingDebt = /\bremaining visual debt\s*:\s*(?!\s*(?:none|no|0|\(\s*none\s*\))\b)/i.test(text)
+  const hasRenderedScreenshotEvidence =
+    /\b(task-scoped preview|preview evidence|rendered screenshot|screenshot artifact|screenshot review)\b/i.test(text)
 
   if (hasRemainingDebt) {
-    return { status: "incomplete_visual_fidelity", lastScore, lastSimilarity, hasRemainingDebt }
+    return { status: "incomplete_visual_fidelity", hasRemainingDebt }
   }
-  if (lastScore !== undefined) {
-    return {
-      status: "high_fidelity_evidence_reported",
-      lastScore,
-      lastSimilarity,
-      hasRemainingDebt,
-    }
-  }
-  if (lastSimilarity !== undefined) {
-    return {
-      status: "high_fidelity_evidence_reported",
-      lastScore,
-      lastSimilarity,
-      hasRemainingDebt,
-    }
-  }
+  if (hasRenderedScreenshotEvidence) return { status: "high_fidelity_evidence_reported", hasRemainingDebt }
   return { status: "evidence_missing", hasRemainingDebt }
 }
 
@@ -468,10 +435,6 @@ function collectVisualBaselineText(final: FrontendTemplateFinal): string {
     ...final.reference_artifacts,
     ...final.open_questions,
   ].join("\n")
-}
-
-function formatNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")
 }
 
 // Row builders — each flattens its category-specific schema into a VisualSpec

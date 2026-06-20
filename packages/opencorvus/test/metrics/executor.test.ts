@@ -72,22 +72,12 @@ function visualBundle(overrides: Partial<VisualEvidenceBundle> = {}): VisualEvid
       projectDirectory: os.tmpdir(),
       commitRef: "abc123",
     },
-    evaluation: {
-      path: "webpage-evidence/eval-result.json",
-      overallScore: 98,
-      passThreshold: 96,
-      passed: true,
-      ssimScore: 0.99,
-      pixelDiffPercent: 0.2,
-      dimensionsMatch: true,
-    },
-    vision: {
-      path: "webpage-evidence/vision-judge.json",
-      accepted: true,
-      differenceCount: 0,
-      criticalCount: 0,
-      majorCount: 0,
-      minorCount: 0,
+    inspection: {
+      path: "visual-qa-report.json",
+      reviewedAt: "2026-06-08T00:00:00.000Z",
+      status: "passing",
+      blockerCount: 0,
+      notes: "No production blockers remain.",
     },
     regions: [
       {
@@ -99,7 +89,7 @@ function visualBundle(overrides: Partial<VisualEvidenceBundle> = {}): VisualEvid
         viewport: "desktop-primary",
         required: true,
         status: "passing",
-        evidenceRefs: ["webpage-evidence/rendered.png", "webpage-evidence/eval-result.json"],
+        evidenceRefs: ["webpage-evidence/rendered.png", "visual-qa-report.json"],
         notes: "Header matches the reference.",
       },
     ],

@@ -141,6 +141,8 @@ import type {
   MissionAbortResponses,
   MissionDeleteResponses,
   MissionListResponses,
+  MissionProjectArchiveErrors,
+  MissionProjectArchiveResponses,
   MissionRenameResponses,
   MissionStatusResponses,
   MissionWakeResponses,
@@ -5070,6 +5072,40 @@ export class Mission extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<MissionStatusResponses, unknown, ThrowOnError>({
       url: "/mission/{missionID}/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Download Mission project archive
+   *
+   * Return a ZIP containing the Mission project's Git-included files plus Mission execution evidence exported from Mission projections.
+   */
+  public projectArchive<ThrowOnError extends boolean = false>(
+    parameters: {
+      missionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "missionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      MissionProjectArchiveResponses,
+      MissionProjectArchiveErrors,
+      ThrowOnError
+    >({
+      url: "/mission/{missionID}/project-archive",
       ...options,
       ...params,
     })

@@ -150,6 +150,7 @@ import {
   viewSnapshot,
   viewTask,
   type GoalRow,
+  type GoalRunRow,
   type TaskListRow,
   type TaskRow,
   type PlanRow,
@@ -202,10 +203,34 @@ function requireGoalInCurrentProject(goalID: string): GoalRow {
   return row
 }
 
+function requireRunInCurrentProject(runID: string): RunRow {
+  const row = requireRun(runID)
+  requireTaskInCurrentProject(row.task_id)
+  return row
+}
+
+function requireGoalRunInCurrentProject(goalRunID: string): GoalRunRow {
+  const row = findGoalRun(goalRunID)
+  if (!row) throw new NotFoundError({ message: `goal_run ${goalRunID} not found` })
+  requireTaskInCurrentProject(row.task_id)
+  return row
+}
+
 function requireInteractionInCurrentProject(interactionID: string): InteractionRow {
   const row = requireInteraction(interactionID)
   requireTaskInCurrentProject(row.task_id)
   return row
+}
+
+async function requireSessionTraceTaskInCurrentProject(sessionID: string): Promise<string> {
+  const current = Instance.current()
+  if (current) await Session.getInProject({ sessionID, projectID: current.project.id })
+  else await Session.get(sessionID)
+
+  const taskID = taskIDForSession(sessionID)
+  if (!taskID) throw new NotFoundError({ message: `Session ${sessionID} is not bound to a task trace` })
+  requireTaskInCurrentProject(taskID)
+  return taskID
 }
 
 /**
@@ -1339,15 +1364,17 @@ export namespace EngineService {
 
   export async function getRun(runID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
-    return viewRun(requireRun(runID))
+    return viewRun(requireRunInCurrentProject(runID))
   }
 
   export async function getBrief(input: { taskID: string; runID?: string }) {
     // Read-only — poll loop handles state advancement asynchronously.
     const task = requireTaskInCurrentProject(input.taskID)
+    const run = input.runID ? requireRunInCurrentProject(input.runID) : undefined
+    if (run && run.task_id !== task.id) throw new NotFoundError({ message: `Run not found for task: ${input.runID}` })
     return compileBrief({
       taskID: task.id,
-      runID: input.runID ?? findActiveRunForTask(task.id)?.id,
+      runID: run?.id ?? findActiveRunForTask(task.id)?.id,
       planVersionID: findActivePlanForTask(task.id)?.id,
       sessionID: task.session_id ?? undefined,
     })
@@ -1459,6 +1486,7 @@ export namespace EngineService {
 
   export async function getAcceptance(runID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
+    requireRunInCurrentProject(runID)
     // Prefer task-level acceptance (goal_run_id IS NULL); fall back to any acceptance for this run
     // so that goal-run deliveries (shown in the board) are also previewable.
     const acceptance = findAcceptanceByRun(runID) ?? findLatestAcceptanceForRun(runID)
@@ -1473,9 +1501,7 @@ export namespace EngineService {
     // exists but acceptance has not landed yet" (legitimate in-flight state).
     // Mirrors the convention documented on getSessionTrace below: in-flight
     // resources return 200 with an empty payload, not 404.
-    if (!findGoalRun(goalRunID)) {
-      throw new NotFoundError({ message: `goal_run ${goalRunID} not found` })
-    }
+    requireGoalRunInCurrentProject(goalRunID)
     const acceptance = findAcceptanceByGoalRun(goalRunID)
     if (!acceptance) return null
     return viewAcceptance(acceptance)
@@ -1493,11 +1519,12 @@ export namespace EngineService {
     traceDir: string
     enabled: boolean
   }> {
+    const taskID = await requireSessionTraceTaskInCurrentProject(sessionID)
     const { AgentTrace } = await import("@/trace")
     return {
       ok: true,
-      events: AgentTrace.readSessionEvents(sessionID),
-      traceDir: AgentTrace.getTraceDir(),
+      events: AgentTrace.readSessionEvents(sessionID, taskID),
+      traceDir: AgentTrace.getTaskTraceDir(taskID),
       enabled: AgentTrace.isEnabled(),
     }
   }
@@ -1524,20 +1551,20 @@ export namespace EngineService {
     return {
       ok: true,
       events: AgentTrace.readTaskEvents(taskID),
-      traceDir: AgentTrace.getTraceDir(),
+      traceDir: AgentTrace.getTaskTraceDir(taskID),
       enabled: AgentTrace.isEnabled(),
     }
   }
 
   export async function listArtifacts(runID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
-    requireRun(runID)
+    requireRunInCurrentProject(runID)
     return findArtifacts(runID).map(viewArtifact)
   }
 
   export async function listEvaluations(runID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
-    requireRun(runID)
+    requireRunInCurrentProject(runID)
     return findEvaluations(runID).map(viewEvaluation)
   }
 
@@ -2178,7 +2205,7 @@ export namespace EngineService {
   }
 
   export async function abortRun(runID: string, options?: { abortTimeoutMs?: number }) {
-    const run = requireRun(runID)
+    const run = requireRunInCurrentProject(runID)
     const abortTimeoutMs = options?.abortTimeoutMs ?? CANCEL_ABORT_TIMEOUT_MS
     const decisions = createDecisionLog(run.task_id)
     const abortFailure = (err: unknown): never => {
@@ -2224,7 +2251,7 @@ export namespace EngineService {
       },
       "Run aborted",
     )
-    const task = requireTask(run.task_id)
+    const task = requireTaskInCurrentProject(run.task_id)
     if (findActiveRunForTask(task.id)?.id === run.id) {
       await updateTask(task, { status: "failed", error: "run aborted", time_completed: Date.now() }, "Run aborted")
     }

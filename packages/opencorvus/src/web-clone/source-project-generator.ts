@@ -42,7 +42,7 @@ export interface SourceProjectVisualIterationViewport {
 
 export interface SourceProjectVisualIteration {
   referenceImage: string
-  comparisonTool: "webpage_evaluate"
+  evidenceMethod: "task_scoped_preview_screenshots"
   viewportMatrix: SourceProjectVisualIterationViewport[]
   rule: string
 }
@@ -68,7 +68,8 @@ function buildSourceProjectVisualIterationViewports(primary: {
       height: primary.height,
       evidenceRole: "primary_reference",
       evidenceSource: primary.evidenceSource,
-      comparison: "Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement.",
+      comparison:
+        "Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement.",
     },
     {
       name: "mobile-review",
@@ -78,7 +79,7 @@ function buildSourceProjectVisualIterationViewports(primary: {
       evidenceSource: "matching_reference",
       referenceImage: "web-clone-source/reference-mobile.png",
       comparison:
-        "Run measured webpage_evaluate against web-clone-source/reference-mobile.png for the mobile viewport before claiming responsive parity.",
+        "Capture and inspect a task-scoped mobile preview screenshot against web-clone-source/reference-mobile.png before claiming responsive parity.",
     },
     {
       name: "wide-review",
@@ -87,7 +88,7 @@ function buildSourceProjectVisualIterationViewports(primary: {
       evidenceRole: "responsive_review",
       evidenceSource: "default",
       comparison:
-        "Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+        "Capture and inspect the root app at this viewport; use matching reference evidence when it exists, otherwise record the evidence gap.",
     },
   ]
 }
@@ -1121,7 +1122,7 @@ export async function generateWebCloneSourceProject(
     rules: [
       "Use sourceData.ts and framework components as the editable implementation surface.",
       "Do not render reference.png, reference-mobile.png, screenshot files, base64 payloads, or hidden semantic coverage layers as the clone.",
-      "Use reference.png and reference-mobile.png only as visual validation evidence with webpage_evaluate or overlay comparison.",
+      "Use reference.png and reference-mobile.png only as task-scoped visual validation evidence.",
     ],
   })
 
@@ -7330,24 +7331,24 @@ function renderSourceDomIterationStateTs(
     nextReplacement,
     visualIteration: {
       referenceImage: "web-clone-source/reference.png",
-      comparisonTool: visualIteration.comparisonTool,
+      evidenceMethod: visualIteration.evidenceMethod,
       viewportMatrix,
       evidenceRule:
-        "Do not delete a source-dom region after replacement until desktop-reference has measured evidence and responsive-review captures have either matching evidence or an explicit source-evidence gap.",
+        "Do not delete a source-dom region after replacement until desktop-reference has inspected preview screenshot evidence and responsive-review captures have either matching evidence or an explicit source-evidence gap.",
     },
     recommendedLoop: [
       `Adopt the current source project as the visual baseline and compare the viewport matrix (${viewportNames}) against reference.png or matching reference artifacts.`,
       "Replace nextReplacement.regionFilePath with nextReplacement.recommendedComponentName using source data, sidecar assets, and scoped styles.",
-      "Delete the replaced source-dom region only after the screenshot comparison is stable for the unchanged surrounding surface.",
+      "Delete the replaced source-dom region only after rendered screenshot inspection is stable for the unchanged surrounding surface.",
       "Run web_clone_source_audit with finalAcceptanceMode=maintainable_replacement_required after each region replacement.",
-      "Repeat until remainingRegionCount is zero or each remaining source-dom region has measured evidence proving it is outside the requested acceptance surface.",
+      "Repeat until remainingRegionCount is zero or each remaining source-dom region has preview screenshot evidence proving it is outside the requested acceptance surface.",
     ],
     stopCondition: {
       sourceDomRegionFileCount: 0,
       generatedBaselineDetected: false,
       maintainableAuditMode: "maintainable_replacement_required",
       requiresMaintainableAuditPassed: true,
-      requiresMeasuredVisualParity: true,
+      requiresInspectedVisualParity: true,
       visualIterationViewports: viewportMatrix.map((viewport) => viewport.name),
     },
   }
@@ -7734,9 +7735,9 @@ async function buildSourceProjectVisualIteration(webpageEvidenceDir: string): Pr
   const viewportMatrix = buildSourceProjectVisualIterationViewports(primary)
   return {
     referenceImage: "reference.png",
-    comparisonTool: "webpage_evaluate",
+    evidenceMethod: "task_scoped_preview_screenshots",
     viewportMatrix,
-    rule: "Use the desktop-reference viewport as the primary measured comparison after each region replacement. Use responsive-review viewports for screenshot review and measured comparison when matching reference evidence exists; otherwise record the missing evidence instead of claiming responsive parity.",
+    rule: "Use the desktop-reference viewport as the primary inspected preview screenshot after each region replacement. Use responsive-review viewports for screenshot review when matching reference evidence exists; otherwise record the missing evidence instead of claiming responsive parity.",
   }
 }
 

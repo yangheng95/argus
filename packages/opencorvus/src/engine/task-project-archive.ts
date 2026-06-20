@@ -8,20 +8,20 @@ import { Filesystem } from "@/util/filesystem"
 import { git } from "@/util/git"
 import { requireTask } from "./store"
 
-export type TaskProjectArchive = {
+export type ProjectArchive = {
   bytes: Uint8Array
   filename: string
   fileCount: number
 }
 
-export class TaskProjectArchiveUnsupportedProjectError extends Error {
+export class ProjectArchiveUnsupportedProjectError extends Error {
   constructor(message: string) {
     super(message)
-    this.name = "TaskProjectArchiveUnsupportedProjectError"
+    this.name = "ProjectArchiveUnsupportedProjectError"
   }
 }
 
-type ExecutionFlow = {
+type TaskExecutionFlow = {
   manifest: Record<string, unknown>
   task: Awaited<ReturnType<typeof EngineService.getTask>>
   board: Awaited<ReturnType<typeof EngineService.getBoard>>
@@ -42,7 +42,8 @@ function safeArchiveSegment(value: string): string {
     .trim()
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "")
-  return cleaned || "task"
+  if (!cleaned) throw new Error("Project archive filename subject has no safe characters")
+  return cleaned
 }
 
 function zipPath(...parts: string[]): string {
@@ -134,12 +135,12 @@ async function addProjectFile(zip: ZipWriter<Blob>, projectDir: string, relative
   await zip.add(zipPath("project", ...relativePath.split(/[\\/]+/)), new Uint8ArrayReader(data))
 }
 
-async function collectExecutionFlow(input: {
+async function collectTaskExecutionFlow(input: {
   taskID: string
   project: Project.Info
   fileCount: number
   transcript: unknown[]
-}): Promise<ExecutionFlow> {
+}): Promise<TaskExecutionFlow> {
   const task = await EngineService.getTask(input.taskID)
   const board = await EngineService.getBoard(input.taskID)
   const runs = await EngineService.listRuns(input.taskID)
@@ -198,29 +199,13 @@ async function collectExecutionFlow(input: {
   }
 }
 
-export async function buildTaskProjectArchive(input: {
+async function addTaskExecutionFlow(zip: ZipWriter<Blob>, input: {
   taskID: string
+  project: Project.Info
+  fileCount: number
   transcript: unknown[]
-}): Promise<TaskProjectArchive> {
-  const task = requireTask(input.taskID)
-  const project = Project.get(task.project_id)
-  if (!project) throw new Error(`Project not found for task ${input.taskID}: ${task.project_id}`)
-  if (!Project.isGitRepo(project.worktree)) {
-    throw new TaskProjectArchiveUnsupportedProjectError(
-      `Task ${input.taskID} project is not a Git worktree and cannot be archived with gitignore semantics`,
-    )
-  }
-  const files = await listGitIncludedFiles(project.worktree)
-  const zip = new ZipWriter(new BlobWriter("application/zip"))
-  for (const file of files) {
-    await addProjectFile(zip, project.worktree, file)
-  }
-  const flow = await collectExecutionFlow({
-    taskID: input.taskID,
-    project,
-    fileCount: files.length,
-    transcript: input.transcript,
-  })
+}): Promise<void> {
+  const flow = await collectTaskExecutionFlow(input)
   const flowRoot = "opencorvus-task-execution-flow"
   await addJson(zip, zipPath(flowRoot, "manifest.json"), flow.manifest)
   await addJson(zip, zipPath(flowRoot, "task.json"), flow.task)
@@ -231,12 +216,126 @@ export async function buildTaskProjectArchive(input: {
   await addJson(zip, zipPath(flowRoot, "protocol-events.json"), flow.protocolEvents)
   await addJson(zip, zipPath(flowRoot, "trace.json"), flow.trace)
   await addJson(zip, zipPath(flowRoot, "transcript.json"), flow.transcript)
+}
 
+async function addMissionExecutionFlow(zip: ZipWriter<Blob>, input: {
+  missionID: string
+  sessionID: string
+  title: string
+  directory: string
+  project: Project.Info
+  fileCount: number
+  record: unknown
+  status: unknown
+  tasks: unknown
+  transcript: unknown[]
+}): Promise<void> {
+  const executionFiles = ["manifest.json", "mission.json", "status.json", "tasks.json", "transcript.json"]
+  const flowRoot = "opencorvus-mission-execution-flow"
+  const manifest = {
+    schema: "opencorvus.mission-project-archive.v1",
+    exportedAt: new Date().toISOString(),
+    missionID: input.missionID,
+    sessionID: input.sessionID,
+    title: input.title,
+    directory: input.directory,
+    project: {
+      id: input.project.id,
+      name: input.project.name,
+      worktree: input.project.worktree,
+    },
+    projectFileRoot: "project/",
+    projectFileSelection: "git ls-files --cached --others --exclude-standard -z -- . + OpenCorvus runtime filter",
+    projectFileCount: input.fileCount,
+    executionFlowRoot: `${flowRoot}/`,
+    executionFiles,
+    executionFlowBounds: {
+      maxStringChars: ARCHIVE_MAX_STRING_CHARS,
+      maxArrayItems: ARCHIVE_MAX_ARRAY_ITEMS,
+      maxDepth: ARCHIVE_MAX_DEPTH,
+    },
+  }
+  await addJson(zip, zipPath(flowRoot, "manifest.json"), manifest)
+  await addJson(zip, zipPath(flowRoot, "mission.json"), boundArchiveValue(input.record))
+  await addJson(zip, zipPath(flowRoot, "status.json"), boundArchiveValue(input.status))
+  await addJson(zip, zipPath(flowRoot, "tasks.json"), boundArchiveValue(input.tasks))
+  await addJson(zip, zipPath(flowRoot, "transcript.json"), boundArchiveValue(input.transcript))
+}
+
+async function buildProjectArchive(input: {
+  project: Project.Info
+  filenameSubject: string
+  unsupportedProjectMessage: string
+  addExecutionFlow: (zip: ZipWriter<Blob>, fileCount: number) => Promise<void>
+}): Promise<ProjectArchive> {
+  if (!Project.isGitRepo(input.project.worktree)) {
+    throw new ProjectArchiveUnsupportedProjectError(input.unsupportedProjectMessage)
+  }
+  const files = await listGitIncludedFiles(input.project.worktree)
+  const zip = new ZipWriter(new BlobWriter("application/zip"))
+  for (const file of files) {
+    await addProjectFile(zip, input.project.worktree, file)
+  }
+  await input.addExecutionFlow(zip, files.length)
   const blob = await zip.close()
   const bytes = new Uint8Array(await blob.arrayBuffer())
   return {
     bytes,
-    filename: `${safeArchiveSegment(input.taskID)}-project.zip`,
+    filename: `${safeArchiveSegment(input.filenameSubject)}-project.zip`,
     fileCount: files.length,
   }
+}
+
+export async function buildTaskProjectArchive(input: {
+  taskID: string
+  transcript: unknown[]
+}): Promise<ProjectArchive> {
+  const task = requireTask(input.taskID)
+  const project = Project.get(task.project_id)
+  if (!project) throw new Error(`Project not found for task ${input.taskID}: ${task.project_id}`)
+  return buildProjectArchive({
+    project,
+    filenameSubject: input.taskID,
+    unsupportedProjectMessage: `Task ${input.taskID} project is not a Git worktree and cannot be archived with gitignore semantics`,
+    addExecutionFlow: (zip, fileCount) =>
+      addTaskExecutionFlow(zip, {
+        taskID: input.taskID,
+        project,
+        fileCount,
+        transcript: input.transcript,
+      }),
+  })
+}
+
+export async function buildMissionProjectArchive(input: {
+  missionID: string
+  sessionID: string
+  projectID: string
+  title: string
+  directory: string
+  record: unknown
+  status: unknown
+  tasks: unknown
+  transcript: unknown[]
+}): Promise<ProjectArchive> {
+  const project = Project.get(input.projectID)
+  if (!project) throw new Error(`Project not found for mission ${input.missionID}: ${input.projectID}`)
+  return buildProjectArchive({
+    project,
+    filenameSubject: input.missionID,
+    unsupportedProjectMessage: `Mission ${input.missionID} project is not a Git worktree and cannot be archived with gitignore semantics`,
+    addExecutionFlow: (zip, fileCount) =>
+      addMissionExecutionFlow(zip, {
+        missionID: input.missionID,
+        sessionID: input.sessionID,
+        title: input.title,
+        directory: input.directory,
+        project,
+        fileCount,
+        record: input.record,
+        status: input.status,
+        tasks: input.tasks,
+        transcript: input.transcript,
+      }),
+  })
 }

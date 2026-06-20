@@ -42,8 +42,10 @@ export type BrowserPreviewEvidenceRunnerResult = {
 
 type BrowserPreviewEvidenceRunnerInput = {
   projectRoot: string
+  jobID: string
   taskID: string
   targetID: string
+  outDir: string
   viewportIDs: BrowserPreviewViewportID[]
   signal?: AbortSignal
 }
@@ -157,9 +159,14 @@ export async function runBrowserPreviewEvidenceJob(
   if (!target) {
     throw new BrowserPreviewEvidenceTargetNotFoundError(input.targetID)
   }
-  const jobID = Identifier.ascending("artifact")
   const projectRoot = path.resolve(input.projectRoot)
-  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)
+  const outDir = requireBrowserPreviewJobRoot({
+    projectRoot,
+    taskID: input.taskID,
+    targetID: input.targetID,
+    jobID: input.jobID,
+    outDir: input.outDir,
+  })
   const executablePath = await BrowserRuntime.findBrowserExecutable()
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(undefined)
   const navigationTimeoutMs = RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms
@@ -225,7 +232,7 @@ export async function runBrowserPreviewEvidenceJob(
 
   const manifest = await writeBrowserEvidenceManifest({
     outDir,
-    jobID,
+    jobID: input.jobID,
     taskID: input.taskID,
     targetID: input.targetID,
     url: target.url,
@@ -381,6 +388,22 @@ function requireBrowserEvidenceIdentity(input: {
   if (missing.length > 0) {
     throw new Error(`Browser preview evidence runner requires non-empty ${missing.join(", ")}.`)
   }
+}
+
+function requireBrowserPreviewJobRoot(input: {
+  projectRoot: string
+  taskID: string
+  targetID: string
+  jobID: string
+  outDir: string
+}): string {
+  requireBrowserEvidenceIdentity(input)
+  const expected = path.resolve(ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, input.jobID))
+  const actual = path.resolve(input.outDir)
+  if (actual !== expected) {
+    throw new Error(`Browser preview evidence outDir must match task runtime job root: ${expected}`)
+  }
+  return actual
 }
 
 export async function finalizeBrowserPreviewSidecarCapture(input: {

@@ -8,6 +8,7 @@ import { createReadonlyRetrievalTools } from "@/agent/retrieval-tools"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Instance } from "@/project/instance"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { Log } from "@/util/log"
 import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
@@ -246,10 +247,11 @@ async function prepareInputWebpagePrdEvidence(
   if (!input.taskID) {
     throw new Error("webpage PRD research requires taskID so rendered evidence can be persisted under task runtime")
   }
+  const projectDir = researchTaskProjectRoot(input.taskID)
   if (mode === "read-existing-for-source-url") {
     try {
       return await readPreparedWebpagePrdEvidence({
-        projectDir: Instance.directory,
+        projectDir,
         taskID: input.taskID,
         url: sourceUrls.find((url) => /^https?:\/\//i.test(url))!,
       })
@@ -262,8 +264,8 @@ async function prepareInputWebpagePrdEvidence(
     }
   }
   return prepareWebpagePrdEvidence({
-    projectDir: Instance.directory,
-    worktreeDir: Instance.directory,
+    projectDir,
+    worktreeDir: projectDir,
     taskID: input.taskID,
     sourceUrls,
     signal: input.signal,
@@ -310,10 +312,11 @@ async function writeResearchBundle(input: {
   if (!input.taskID) {
     throw new Error("research bundle persistence requires taskID")
   }
+  const projectDir = researchTaskProjectRoot(input.taskID)
   const paths =
     input.kind === "frontend-research"
-      ? ProjectRuntimePaths.frontendResearchPaths(Instance.directory, input.taskID, input.sessionID)
-      : ProjectRuntimePaths.deepResearchPaths(Instance.directory, input.taskID, input.sessionID)
+      ? ProjectRuntimePaths.frontendResearchPaths(projectDir, input.taskID, input.sessionID)
+      : ProjectRuntimePaths.deepResearchPaths(projectDir, input.taskID, input.sessionID)
   await fs.mkdir(paths.absoluteDir, { recursive: true })
   await Promise.all([
     fs.writeFile(paths.fullMarkdownAbsolute, input.bundle.full_markdown, "utf8"),
@@ -321,8 +324,12 @@ async function writeResearchBundle(input: {
     fs.writeFile(paths.citationMapAbsolute, input.bundle.citation_map_json, "utf8"),
   ])
   return {
-    full_markdown_path: path.relative(Instance.directory, paths.fullMarkdownAbsolute).replaceAll("\\", "/"),
-    evidence_json_path: path.relative(Instance.directory, paths.evidenceJsonAbsolute).replaceAll("\\", "/"),
-    citation_map_path: path.relative(Instance.directory, paths.citationMapAbsolute).replaceAll("\\", "/"),
+    full_markdown_path: path.relative(projectDir, paths.fullMarkdownAbsolute).replaceAll("\\", "/"),
+    evidence_json_path: path.relative(projectDir, paths.evidenceJsonAbsolute).replaceAll("\\", "/"),
+    citation_map_path: path.relative(projectDir, paths.citationMapAbsolute).replaceAll("\\", "/"),
   }
+}
+
+function researchTaskProjectRoot(taskID: string): string {
+  return taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
 }

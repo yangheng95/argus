@@ -6,8 +6,8 @@
  *   session.directory → project.worktree.
  *
  * queue=true tasks in the same cwd are serialized. queue=false creation
- * persists an active task before this module runs, so it intentionally bypasses
- * this directory queue and may run beside active same-cwd tasks.
+ * intentionally starts immediately so same-project tasks can run in parallel;
+ * runtime isolation is provided by task/session-scoped runtime paths.
  *
  * All queued scheduling requests must go through this module so queued-task
  * claiming and active-task re-entry share one coordinator.
@@ -483,8 +483,8 @@ export async function advanceQueue(cwd: string): Promise<void> {
 async function convergeDeadOwnerActiveTasksForCwd(cwd: string): Promise<void> {
   const activeTasks = listActiveForCwd(cwd)
   if (activeTasks.length === 0) return
-  const { convergeDeadOwnerLiveExecutionForTasks } = await import("./writer")
-  const converged = await convergeDeadOwnerLiveExecutionForTasks({
+  const { abortDeadOwnerLiveExecutionForTasks } = await import("./writer")
+  const converged = await abortDeadOwnerLiveExecutionForTasks({
     tasks: activeTasks,
     reason: DEAD_OWNER_QUEUE_CONVERGENCE_REASON,
   })

@@ -42,7 +42,7 @@ export const BrowserPreviewCompareRegionsTool = Tool.define(BrowserPreviewCompar
     if (!target) {
       throw new Error(`Browser preview target not found: ${params.targetID}`)
     }
-    const projectRoot = browserPreviewTaskEvidenceRoot()
+    const projectRoot = browserPreviewTaskEvidenceRoot(taskID)
     const result = await compareBrowserPreviewRegions({
       projectRoot,
       taskID,

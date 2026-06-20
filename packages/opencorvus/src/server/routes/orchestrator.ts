@@ -47,7 +47,7 @@ import { ChannelIngress } from "@/channel/ingress"
 import { Identifier } from "@/id/id"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
-import { buildTaskProjectArchive, TaskProjectArchiveUnsupportedProjectError } from "@/engine/task-project-archive"
+import { buildTaskProjectArchive, ProjectArchiveUnsupportedProjectError } from "@/engine/task-project-archive"
 import { errors, replyRouteErrors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
@@ -63,6 +63,7 @@ import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/pro
 import { DIRECT_AGENT_SESSION_CONTROL_KINDS } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 const log = Log.create({ service: "server.routes.orchestrator" })
 const CONVERSATION_EVENT_PAGE_LIMIT = 500
 const TASK_MESSAGE_CHANGE_POLL_MS = 2_000
@@ -131,7 +132,7 @@ const TaskListQuery = z.object({
   limit: z.coerce.number().int().positive().max(100).optional(),
 })
 
-const TaskProjectArchiveUnsupportedProjectResponse = z.object({
+const ProjectArchiveUnsupportedProjectResponse = z.object({
   message: z.string(),
 })
 
@@ -489,7 +490,7 @@ export const EngineRoutes = lazy(() =>
             description: "Task project is not a Git worktree",
             content: {
               "application/json": {
-                schema: resolver(TaskProjectArchiveUnsupportedProjectResponse),
+                schema: resolver(ProjectArchiveUnsupportedProjectResponse),
               },
             },
           },
@@ -514,7 +515,7 @@ export const EngineRoutes = lazy(() =>
             },
           })
         } catch (error) {
-          if (error instanceof TaskProjectArchiveUnsupportedProjectError) {
+          if (error instanceof ProjectArchiveUnsupportedProjectError) {
             return c.json({ message: error.message }, 422)
           }
           throw error
@@ -599,6 +600,7 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         const taskID = c.req.valid("param").taskID
+        taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
         const after = Math.max(0, parseInt(c.req.query("after") ?? "0", 10) || 0)
         const afterLiveRaw = c.req.query("after_live")
         const shouldReplayLive = afterLiveRaw !== undefined

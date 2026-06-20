@@ -21,10 +21,6 @@ export const FRONTEND_DESIGN_STATIC_TOOL_IDS = [
   "webpage_compile",
   "webpage_analyze",
   "webpage_runtime_state",
-  "webpage_render",
-  "webpage_evaluate",
-  "webpage_text_diff",
-  "webpage_vision_judge",
 ] as const
 
 export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
@@ -50,10 +46,6 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "webpage_compile",
   "webpage_analyze",
   "webpage_runtime_state",
-  "webpage_render",
-  "webpage_evaluate",
-  "webpage_text_diff",
-  "webpage_vision_judge",
   "read_attachment",
   "submit_frontend_template",
 ] as const
@@ -80,10 +72,6 @@ export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = [
   "write",
   "apply_patch",
   "web_clone_source_audit",
-  "webpage_render",
-  "webpage_evaluate",
-  "webpage_text_diff",
-  "webpage_vision_judge",
 ] as const
 
 export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = ["skill"] as const

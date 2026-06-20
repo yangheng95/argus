@@ -27,3 +27,9 @@ test("orchestrator core prompt leaves frontend evidence tool selection to orches
   expect(prompt).not.toContain("MUST be first")
   expect(prompt).not.toContain("Typical shape")
 })
+
+test("orchestrator dynamic workflow prompt passes task id for persisted step projection", async () => {
+  const source = await Bun.file(new URL("../../src/orchestrator/agent.ts", import.meta.url)).text()
+  expect(source).toContain("renderWorkflowPrompt(workflow, workflowState, task.id)")
+  expect(source).not.toContain("renderWorkflowPrompt(workflow, workflowState))")
+})

@@ -105,7 +105,7 @@ export async function summarizeHostPreparedSourceAudit(input: {
   }
   lines.push(
     "Supervision rule: a passing visual_baseline_allowed audit proves only traceable captured-source baseline adoption. " +
-      "A maintainable final remains unproven until maintainable_replacement_required passes with measured visual parity evidence.",
+      "A maintainable final remains unproven until maintainable_replacement_required passes with rendered screenshot review evidence.",
   )
   return lines.join("\n")
 }
@@ -179,7 +179,7 @@ interface SourceProjectManifestForSummary {
   }
   visualIteration?: {
     referenceImage?: string
-    comparisonTool?: string
+    evidenceMethod?: string
     viewportMatrix?: Array<{
       name?: string
       width?: number
@@ -230,7 +230,7 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
     lines.push("")
     lines.push("Visual iteration matrix:")
     lines.push(`- referenceImage: ${visualIteration.referenceImage ?? "unknown"}`)
-    lines.push(`- comparisonTool: ${visualIteration.comparisonTool ?? "unknown"}`)
+    lines.push(`- evidenceMethod: ${visualIteration.evidenceMethod ?? "unknown"}`)
     for (const viewport of visualIteration.viewportMatrix ?? []) {
       const size =
         typeof viewport.width === "number" && typeof viewport.height === "number"
@@ -599,10 +599,10 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
     "The host already prepared the frontend-design high-fidelity skeleton evidence project before this model turn. Do not call `create_frontend_skeleton_project` again unless status is blocked and you can name a different output path.",
     "Host-prepared means source evidence exists; it does not mean the frontend template or visual HTML skeleton is already designed. Use `read_file`, `list_directory`, `find_files`, and `search_code` to inspect the bounded task-runtime evidence and any existing frontend app constraints before finalizing. Do not call webpage evidence acquisition tools again unless the host-prepared status is blocked and you can name the exact missing evidence.",
     "Register `frontend-design-skeleton` only as captured source evidence. Register the current workflow output as `frontend_project.role=visual_baseline_input` when frontend_design has restored a separate static HTML/CSS visual skeleton; do not register implementation_target unless the operator explicitly combines skeleton restoration and full project transcription in this same pass.",
-    "Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton` as the final deliverable. Create or populate the task-scoped visual HTML skeleton first; all render, visual comparison, and parity repair commands for this workflow must target that skeleton.",
-    "Use the visual HTML skeleton restoration algorithm inside the normal frontend-design agent flow: source map, region map, one replacement decision per visual region, then HTML/CSS/assets/content restoration with source data/content extraction, HTML boundary, scoped style ownership, asset ownership, interaction-state visuals, screenshot comparison, and evaluation evidence. Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.",
+    "Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton` as the final deliverable. Create or populate the task-scoped visual HTML skeleton first; all screenshot inspection and parity repair commands for this workflow must target that skeleton.",
+    "Use the visual HTML skeleton restoration algorithm inside the normal frontend-design agent flow: source map, region map, one replacement decision per visual region, then HTML/CSS/assets/content restoration with source data/content extraction, HTML boundary, scoped style ownership, asset ownership, interaction-state visuals, and task-scoped screenshot inspection evidence. Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.",
     `Visual iteration viewport matrix: ${visualIterationMatrix}`,
-    "For webpage clones, perform and describe source-region traceable visual restoration: every HTML boundary, content group, style rule, asset, representative state, and deferred transcription note must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source content/data extraction, HTML/CSS restoration, screenshot comparison for that region, and measured webpage_evaluate evidence for the visual iteration viewport matrix. If a region is deferred, frontend_design must label it as unfinished visual/source debt.",
+    "For webpage clones, perform and describe source-region traceable visual restoration: every HTML boundary, content group, style rule, asset, representative state, and deferred transcription note must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source content/data extraction, HTML/CSS restoration, rendered screenshot inspection for that region, and visual iteration viewport evidence. If a region is deferred, frontend_design must label it as unfinished visual/source debt.",
     "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
     "Webpage/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `webpage-evidence/`, `references/`, `reference.png`, or `reference-mobile.png` into the visual skeleton as app-owned deliverables; extract only the observed source structure, content, styles, and assets needed by the HTML/CSS skeleton.",
     "Do not output a standalone component checklist or advice-only report. Use the full `submit_frontend_template` schema to identify the source baseline, visual-region restoration plan, skeleton-to-project quality contract, visual/data contracts, completeness review, and open questions needed for later maintainable project transcription.",

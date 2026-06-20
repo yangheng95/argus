@@ -198,15 +198,6 @@ export function findLiveBuildOwnershipByGoalRun(input: {
   )
 }
 
-export function assertNoLiveBuildOwnershipForGoal(input: { taskID: string; goalID: string; action: string }): void {
-  const owner = findLiveBuildOwnershipByGoal(input)
-  if (!owner) return
-  throw new Error(
-    `${input.action}: goal ${input.goalID} is owned by live build tool ${owner.payload.tool_part_id} ` +
-      `(session ${owner.payload.child_session_id}, ownership ${owner.ownershipID}); wait for the build tool result or explicitly cancel it.`,
-  )
-}
-
 export function findLatestOwnershipByID(taskID: string, ownershipID: string): OrchestratorToolOwnershipRow | undefined {
   const rows = Database.use((db) =>
     db

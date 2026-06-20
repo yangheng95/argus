@@ -90,7 +90,7 @@ describe("live webpage evidence pipeline", () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_webpage_evidence_reuse"
     const evidenceDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).webpageEvidenceAbsolute
-    await writeCompleteEvidence(evidenceDir, "https://example.com/markets")
+    await writeCompleteEvidence(evidenceDir, taskID, "https://example.com/markets")
     const calls: string[] = []
 
     const result = await ensureLiveWebpageEvidence({
@@ -155,7 +155,7 @@ describe("live webpage evidence pipeline", () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_webpage_evidence_capture_only"
     const evidenceDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).webpageEvidenceAbsolute
-    await writeCompleteEvidence(evidenceDir, "https://example.com/markets")
+    await writeCompleteEvidence(evidenceDir, taskID, "https://example.com/markets")
 
     expect(await fileExists(path.join(evidenceDir, "capture.html"))).toBe(true)
     expect(await fileExists(path.join(evidenceDir, "singlefile.html"))).toBe(false)
@@ -243,10 +243,10 @@ function fakePipeline(calls: string[]): LiveWebpageEvidencePipeline {
       calls.push("compile")
       await fs.mkdir(outputDir, { recursive: true })
     },
-    analyze: async ({ outputDir }) => {
+    analyze: async ({ outputDir, taskID }) => {
       calls.push("analyze")
       const extracted = JSON.parse(await fs.readFile(path.join(outputDir, "extracted-page.json"), "utf8"))
-      await writeCompleteEvidence(outputDir, extracted.url)
+      await writeCompleteEvidence(outputDir, taskID, extracted.url)
     },
     captureRuntimeState: async ({ outputDir, url }) => {
       calls.push(`captureRuntimeState:${url}`)
@@ -263,10 +263,12 @@ async function fileExists(file: string): Promise<boolean> {
   }
 }
 
-async function writeCompleteEvidence(evidenceDir: string, url: string): Promise<void> {
+async function writeCompleteEvidence(evidenceDir: string, taskID: string, url: string): Promise<void> {
   await fs.mkdir(evidenceDir, { recursive: true })
-  for (const artifact of primaryWebpageEvidenceArtifacts()) {
-    const relative = artifact.replace(/^webpage-evidence[\\/]/, "")
+  const artifactRoot = ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative
+  for (const artifact of primaryWebpageEvidenceArtifacts(taskID)) {
+    if (!artifact.startsWith(`${artifactRoot}/`)) throw new Error(`unexpected webpage evidence artifact ${artifact}`)
+    const relative = artifact.slice(artifactRoot.length + 1)
     const file = path.join(evidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
     if (relative === "reference.png" || relative === "reference-mobile.png") {

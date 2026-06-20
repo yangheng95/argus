@@ -31,7 +31,15 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      const continuation = {
+        sessionID: "ses_architect_existing",
+        artifactID: "artifact_architect_continuation",
+        reason: "continue architect finalizer miss",
+        kind: "protocol-finalizer-miss" as const,
+        finalizerName: "submit_architect",
+      }
       runnerImpl = async (input: any) => {
+        expect(input.continuation).toEqual(continuation)
         expect(input.format).toBeUndefined()
         expect(input.terminalTool?.toolName).toBe("submit_architect")
         expect(input.terminalTool?.isSatisfied(input.toolKit.getCollector())).toBe(false)
@@ -147,6 +155,7 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           },
         ],
         requirementDecisions: [],
+        continuation,
         decisionLog: {
           append() {},
           toPromptSection() {

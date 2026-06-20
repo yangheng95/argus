@@ -1,6 +1,15 @@
 import { tool } from "ai"
 import { limitSummary, markdownList, requireReportString } from "@/agent/report"
+import { browserPreviewEvidenceIDFromRef } from "@/acceptance/visual-evidence"
+import { findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
 import { VisualQaReportSchema, type VisualQaReport } from "./schema"
+
+export interface VisualQaOutputToolContext {
+  taskID?: string
+  projectRoot?: string
+  referenceParityRequired?: boolean
+  requiredReferenceRegions?: string[]
+}
 
 export interface VisualQaCollector {
   final?: VisualQaReport
@@ -16,7 +25,17 @@ function openBlockingFindings(report: VisualQaReport): VisualQaReport["findings"
   )
 }
 
-function validateVisualQaReport(report: VisualQaReport): string[] {
+function parseReferenceRegionKey(key: string): { regionID: string; viewportID: string } | { issue: string } {
+  const [regionID, viewportID, extra] = key.split("@")
+  if (extra !== undefined || !regionID?.trim() || !viewportID?.trim()) {
+    return {
+      issue: `reference region "${key}" must use the exact format region_id@viewport_id, for example region_header@desktop.`,
+    }
+  }
+  return { regionID: regionID.trim(), viewportID: viewportID.trim() }
+}
+
+async function validateVisualQaReport(report: VisualQaReport, context: VisualQaOutputToolContext): Promise<string[]> {
   const issues: string[] = []
   if (report.accepted && report.evidence.length === 0) {
     issues.push("accepted=true requires at least one fresh visual and functional evidence item.")
@@ -40,6 +59,100 @@ function validateVisualQaReport(report: VisualQaReport): string[] {
   }
   if (!report.accepted && report.production_blockers.length === 0 && openBlocking.length === 0) {
     issues.push("accepted=false requires production_blockers or open critical/major findings with actionable evidence.")
+  }
+  const referenceParityRequired = Boolean(context.referenceParityRequired || report.reference_parity.required)
+  if (referenceParityRequired) {
+    const comparisonEvidence = report.evidence.filter((item) => item.type === "reference_comparison")
+    const refs = new Set(
+      [
+        ...report.reference_parity.reference_comparison_evidence_refs,
+        ...comparisonEvidence.map((item) => item.ref),
+        ...report.coverage.flatMap((item) => item.evidence_refs),
+      ].flatMap((ref) => {
+        const evidenceID = browserPreviewEvidenceIDFromRef(ref)
+        return evidenceID ? [evidenceID] : []
+      }),
+    )
+    const requiredRegions = new Set([
+      ...(context.requiredReferenceRegions ?? []),
+      ...report.reference_parity.required_regions,
+    ])
+    const requiredRegionKeys = [...requiredRegions].sort()
+    if (report.accepted && context.referenceParityRequired && !report.reference_parity.required) {
+      issues.push("accepted=true for reference parity requires reference_parity.required=true.")
+    }
+    if (
+      report.accepted &&
+      context.referenceParityRequired &&
+      (context.requiredReferenceRegions?.length ?? 0) === 0
+    ) {
+      issues.push(
+        "accepted=true for reference parity requires authoritative requiredReferenceRegions from task evidence; self-reported regions are not enough.",
+      )
+    }
+    if (report.accepted && requiredRegionKeys.length === 0) {
+      issues.push(
+        "accepted=true for reference parity requires reference_parity.required_regions with region_id@viewport_id entries.",
+      )
+    }
+    if (report.accepted && refs.size === 0) {
+      issues.push(
+        "accepted=true for reference parity requires browser_preview_compare_regions reference_comparison evidence refs; screenshots are supporting evidence only.",
+      )
+    }
+    if (report.accepted && refs.size > 0) {
+      if (!context.taskID || !context.projectRoot) {
+        issues.push("accepted=true for reference parity requires task-scoped project context to verify comparison evidence.")
+      } else {
+        const validEvidence: Array<{ id: string; regionID?: string; viewportID: string }> = []
+        for (const evidenceID of refs) {
+          const evidence = await findReadableBrowserPreviewEvidenceByID({
+            projectRoot: context.projectRoot,
+            taskID: context.taskID,
+            evidenceID,
+          })
+          if (evidence?.operationKind === "reference-comparison" && evidence.status === "passed") {
+            validEvidence.push({
+              id: evidenceID,
+              regionID: evidence.regionID,
+              viewportID: evidence.viewportID,
+            })
+          }
+        }
+        if (validEvidence.length === 0) {
+          issues.push(
+            "accepted=true for reference parity requires readable passed browser_preview_compare_regions reference-comparison evidence.",
+          )
+        }
+        for (const key of requiredRegionKeys) {
+          const parsed = parseReferenceRegionKey(key)
+          if ("issue" in parsed) {
+            issues.push(parsed.issue)
+            continue
+          }
+          const matched = validEvidence.some(
+            (evidence) => evidence.regionID === parsed.regionID && evidence.viewportID === parsed.viewportID,
+          )
+          if (!matched) {
+            issues.push(
+              `accepted=true lacks readable passed reference-comparison evidence for ${parsed.regionID}@${parsed.viewportID}.`,
+            )
+          }
+        }
+      }
+    }
+    if (report.accepted && report.reference_parity.missing_regions.length > 0) {
+      issues.push(
+        `accepted=true cannot leave reference regions without comparison evidence: ${report.reference_parity.missing_regions.join(", ")}.`,
+      )
+    }
+    if (!report.accepted && report.reference_parity.blocker_ids.length > 0) {
+      const blockerIDs = new Set(report.production_blockers.map((blocker) => blocker.id))
+      const unknown = report.reference_parity.blocker_ids.filter((id) => !blockerIDs.has(id))
+      if (unknown.length > 0) {
+        issues.push(`reference_parity.blocker_ids references unknown production blockers: ${unknown.join(", ")}.`)
+      }
+    }
   }
   if (report.follow_up_task) {
     const blockerIDs = new Set(report.production_blockers.map((blocker) => blocker.id))
@@ -97,7 +210,7 @@ export function buildVisualQaReport(collector: VisualQaCollector) {
   }
 }
 
-export function createVisualQaOutputTools() {
+export function createVisualQaOutputTools(context: VisualQaOutputToolContext = {}) {
   let collector = emptyCollector()
   const tools = {
     submit_visual_qa_report: tool({
@@ -110,7 +223,7 @@ export function createVisualQaOutputTools() {
         if (collector.final)
           return "Error: visual QA report already submitted; duplicate submit_visual_qa_report ignored."
         const report = VisualQaReportSchema.parse(raw)
-        const issues = validateVisualQaReport(report)
+        const issues = await validateVisualQaReport(report, context)
         if (issues.length > 0) {
           return `BLOCKERS (${issues.length}):\n${issues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}\nFix the report or continue testing/repairing, then call submit_visual_qa_report again.`
         }

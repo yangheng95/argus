@@ -25,7 +25,7 @@ import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
 import z from "zod"
-import { WEBPAGE_EVIDENCE_TOOL_IDS } from "@/frontend-design/tools/ids"
+import { WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS } from "@/frontend-design/tools/ids"
 
 const log = Log.create({ service: "mcp.serve" })
 
@@ -67,7 +67,7 @@ function executorToolImpl(id: ExecutorToolID): Tool.Info {
 }
 
 const EXECUTOR_PROXIED_TOOL_DENY_IDS = new Set([
-  ...WEBPAGE_EVIDENCE_TOOL_IDS,
+  ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS,
   "web_clone_prepare_context",
   "web_clone_generate_source_project",
 ])

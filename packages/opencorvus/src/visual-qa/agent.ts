@@ -17,12 +17,6 @@ import { WriteTool } from "@/tool/write"
 import { ApplyPatchTool } from "@/tool/apply_patch"
 import { SkillTool } from "@/tool/skill"
 import {
-  WebpageRenderTool,
-  WebpageEvaluateTool,
-  WebpageTextDiffTool,
-  WebpageVisionJudgeTool,
-} from "@/frontend-design/tools"
-import {
   VISUAL_QA_CONTEXT_TOOL_IDS,
   VISUAL_QA_IMPLEMENTATION_TOOL_IDS,
   VISUAL_QA_SESSION_TOOL_IDS,
@@ -49,6 +43,9 @@ export namespace VisualQaAgent {
     integrityContext?: string
     buildEvidence?: string
     priorVisualQa?: string
+    projectRoot?: string
+    referenceParityRequired?: boolean
+    requiredReferenceRegions?: string[]
     taskID?: string
     parentSessionID?: string
     model?: { providerID: string; modelID: string }
@@ -63,7 +60,12 @@ export namespace VisualQaAgent {
   }
 
   export async function analyze(input: AnalyzeInput): Promise<AnalyzeResult> {
-    const outputToolKit = createVisualQaOutputTools()
+    const outputToolKit = createVisualQaOutputTools({
+      taskID: input.taskID,
+      projectRoot: input.projectRoot,
+      referenceParityRequired: input.referenceParityRequired,
+      requiredReferenceRegions: input.requiredReferenceRegions,
+    })
     const contextTools = await createVisualQaContextTools({
       taskID: input.taskID,
       sessionID: input.parentSessionID,
@@ -130,7 +132,7 @@ export namespace VisualQaAgent {
 
 function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   const sections = [
-    "# Delegation\n\nOrchestrator is asking visual-qa to run post-goal-batch frontend visual GUI fidelity and functional testing. GUI means Graphical User Interface: the visible application screen and controls. Visual QA and integrity are peer post-build review agents: visual-qa owns focused frontend visual/product-design evidence, while integrity owns system-completeness final acceptance. Consume task-scoped frontend_design/build evidence plus any prior integrity evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Review like a picky professional product designer and design QA reviewer: decide whether the product is fit to generate or ship, and list concrete production blockers when it is not. Do not give draft-quality, visibly incomplete, clipped, fake, or misleading UI the benefit of the doubt. Visual QA is not a style-only pass: if the component family, visualization type, layout structure, information architecture, or interaction model is fundamentally wrong, block delivery and require removing/replacing/rebuilding that component instead of CSS tweaking. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. If any reference image is present, it is the authoritative visual truth: require 1:1 layout and style fidelity. 1:1 means one-to-one visible geometry and styling, not a relaxed similarity standard. Numeric similarity scores are evidence, not the verdict; do not use a fixed score as the only pass/fail rule. For reference/clone regions with source evidence and local implementation regions, call `browser_preview_bind_local_module` for missing or questionable bindings and then pass the binding to `browser_preview_compare_regions`; do not accept standalone `webpage_render`, `webpage_evaluate`, `webpage_vision_judge`, or screenshot-only evidence as the final region-parity proof when task-scoped `reference-comparison` artifacts can be produced. Treat `browser_preview_bind_local_module` evidence as `source-binding`: it proves a local/source binding candidate only and cannot be cited as final Reference vs Implementation proof. If the task or latest user instruction scopes a clone/parity task to desktop only, request only `desktop` viewport region comparison evidence and do not block on mobile or tablet reference evidence.",
+    "# Delegation\n\nOrchestrator is asking visual-qa to run the final frontend visual GUI and functional product review for the task. GUI means Graphical User Interface: the visible application screen and controls. Visual QA and integrity are peer post-build review agents: visual-qa owns focused frontend visual/product-design evidence, while integrity owns system-completeness final acceptance. Consume task-scoped frontend_design/build evidence plus any prior integrity evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Review like a picky professional product designer and design QA reviewer: decide whether the product is fit to generate or ship, and list concrete production blockers when it is not. Do not give draft-quality, visibly incomplete, clipped, fake, or misleading UI the benefit of the doubt. Visual QA is not a style-only pass: if the component family, visualization type, layout structure, information architecture, or interaction model is fundamentally wrong, block delivery and require removing/replacing/rebuilding that component instead of CSS tweaking. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. Do not chase visual scores or external judge verdicts; Visual QA acceptance is the blocker-free structured report. Reference/clone fidelity is enforced only when the current task, current goal, or acceptance evidence explicitly requires reference parity. For explicitly required reference/clone regions with source evidence and local implementation regions, call `browser_preview_bind_local_module` for missing or questionable bindings and then pass the binding to `browser_preview_compare_regions`. Treat `browser_preview_bind_local_module` evidence as `source-binding`: it proves a local/source binding candidate only and cannot be cited as final Reference vs Implementation proof. If the task or latest user instruction scopes a clone/parity task to desktop only, request only `desktop` viewport region comparison evidence and do not block on mobile or tablet reference evidence.",
     renderUserRequestSection({
       heading: "# Task",
       title: input.taskTitle,
@@ -149,6 +151,15 @@ function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
         "Use Node for Playwright/browser automation on Windows. Do not launch Playwright through bun.",
     )
   }
+  if (input.referenceParityRequired) {
+    sections.push(
+      "# Reference Parity Evidence Contract\n\n" +
+        "This task has structured visual/reference parity acceptance. A passing report must include " +
+        "`reference_parity.required=true` and cite fresh `browser_preview_compare_regions` reference-comparison " +
+        "artifact IDs for the required regions. Standalone screenshots may support the review but do not satisfy " +
+        "Reference vs Implementation proof.",
+    )
+  }
   pushContextSection(sections, "Frontend Design Context", input.frontendDesign)
   pushContextSection(sections, "Frontend Research Context", input.frontendResearch)
   pushContextSection(sections, "Integrity Review Context", input.integrityContext)
@@ -156,7 +167,7 @@ function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   pushContextSection(sections, "Prior Visual QA Context", input.priorVisualQa)
   sections.push(
     "# Required Output\n\n" +
-      "Call `submit_visual_qa_report` exactly once. A passing report needs fresh evidence paths or URLs, coverage of checked GUI regions/viewports/states/functions, no open critical/major finding, no production_blockers, no follow_up_task, and evidence that coarse component/function defects named by build evidence or integrity are actually repaired before style polish. With a reference image, accepted=true also requires evidence that the rendered screenshot matches the reference image's layout geometry, spacing, typography, colors, component styling, and visible state styling 1:1. For required reference/clone regions with available source evidence, accepted=true requires task-scoped `reference-comparison` evidence from `browser_preview_compare_regions` or a named production blocker explaining why the bind/compare chain could not run. If the surface is not production-ready, set accepted=false and list production_blockers with principle_ids, region, reason, user-visible impact, evidence refs, and required correction. If a production blocker cannot be safely fixed by visual-qa inside the current worktree, include follow_up_task with a complete new-round task request tied to the blocker IDs; do not simply end with a failed report. If you repair files, include changed_files and verification evidence.",
+      "Call `submit_visual_qa_report` exactly once. A passing report needs fresh evidence paths or URLs, coverage of checked GUI regions/viewports/states/functions, no open critical/major finding, no production_blockers, no follow_up_task, and evidence that coarse component/function defects named by build evidence or integrity are actually repaired before style polish. If explicit reference parity is in scope, accepted=true also requires task-scoped `reference-comparison` evidence from `browser_preview_compare_regions` for required bound regions or a named production blocker explaining why the bind/compare chain could not run. If the surface is not production-ready, set accepted=false and list production_blockers with principle_ids, region, reason, user-visible impact, evidence refs, and required correction. If a production blocker cannot be safely fixed by visual-qa inside the current worktree, include follow_up_task with a complete new-round task request tied to the blocker IDs; do not simply end with a failed report. If you repair files, include changed_files and verification evidence.",
   )
   return sections.join("\n\n")
 }
@@ -184,10 +195,6 @@ async function createVisualQaImplementationTools(input: { taskID?: string; signa
     edit: await createVisualQaTool(EditTool, input),
     write: await createVisualQaTool(WriteTool, input),
     apply_patch: await createVisualQaTool(ApplyPatchTool, input),
-    webpage_render: await createVisualQaTool(WebpageRenderTool, input),
-    webpage_evaluate: await createVisualQaTool(WebpageEvaluateTool, input),
-    webpage_text_diff: await createVisualQaTool(WebpageTextDiffTool, input),
-    webpage_vision_judge: await createVisualQaTool(WebpageVisionJudgeTool, input),
   }
   return selectVisualQaStaticTools(tools, VISUAL_QA_IMPLEMENTATION_TOOL_IDS, "visual-qa implementation")
 }

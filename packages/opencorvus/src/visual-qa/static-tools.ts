@@ -1,5 +1,3 @@
-import { WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS } from "@/frontend-design/tools/ids"
-
 export const VISUAL_QA_CONTEXT_TOOL_IDS = [
   "read_file",
   "find_files",
@@ -17,7 +15,6 @@ export const VISUAL_QA_IMPLEMENTATION_TOOL_IDS = [
   "edit",
   "write",
   "apply_patch",
-  ...WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS,
 ] as const
 
 export const VISUAL_QA_UTILITY_TOOL_IDS = ["skill"] as const

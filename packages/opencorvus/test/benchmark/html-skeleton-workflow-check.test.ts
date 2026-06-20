@@ -133,7 +133,7 @@ describe("html skeleton workflow check", () => {
       [
         "- role: visual_baseline_input",
         "- entrypoints: visual-html-skeleton/index.html",
-        "- evidence: webpage_evaluate visual-diff",
+        "- evidence: task-scoped preview screenshot inspection",
         "submit_frontend_template",
       ].join("\n"),
     )

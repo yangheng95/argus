@@ -746,6 +746,33 @@ test("register_goal rejects script_ref acceptance specs whose scripts do not exi
   expect(kit.getCollector().goals).toEqual([])
 })
 
+test("register_goal rejects package.json masquerading as script_ref", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-package-script-ref-"))
+  fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ scripts: { build: "tsc" } }, null, 2))
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_package_script_ref",
+      title: "Package script ref",
+      objective: "Define a goal whose package-manager acceptance must use shell rather than package.json.",
+      acceptance_specs: [scriptRefAcceptance("goal_package_script_ref", "package.json")],
+      owned_paths: ["src/package-script-ref.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("invalid or missing script_ref acceptance scorer path(s)")
+  expect(out).toContain("package.json")
+  expect(out).toContain("package manifests are not executable repo scripts")
+  expect(out).toContain("package-manager commands")
+  expect(kit.getCollector().goals).toEqual([])
+})
+
 test("register_goal explains contract_audit is not a script_ref path", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-contract-audit-script-ref-"))
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
@@ -795,6 +822,43 @@ test("register_goal accepts existing script_ref and exposes scorer kind in goal 
 
   expect(out).toContain('OK: goal "goal_existing_script" registered')
   expect(out).toContain("heuristic:script_ref:scripts/check.sh")
+})
+
+test("modify_goal rejects package.json masquerading as script_ref without mutating prior goal", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oc-architect-package-script-ref-"))
+  fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ scripts: { build: "tsc" } }, null, 2))
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: tmp })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_modify_package_script_ref",
+      title: "Modify package script ref",
+      objective: "Define a stable goal whose later package-manager acceptance must use shell.",
+      acceptance_specs: [acceptance("goal_modify_package_script_ref")],
+      owned_paths: ["src/modify-package-script-ref.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  const before = JSON.stringify(kit.getCollector().goals[0])
+
+  const out = await kit.tools.modify_goal.execute!(
+    {
+      id: "goal_modify_package_script_ref",
+      updates: {
+        acceptance_specs: [scriptRefAcceptance("goal_modify_package_script_ref", "package.json")],
+      },
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain("invalid or missing script_ref acceptance scorer path(s)")
+  expect(out).toContain("package manifests are not executable repo scripts")
+  expect(out).toContain("collector unchanged")
+  expect(JSON.stringify(kit.getCollector().goals[0])).toBe(before)
 })
 
 test("register_goal exposes shell scorer kind and command preview in goal snapshot", async () => {

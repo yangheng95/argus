@@ -33,7 +33,11 @@ import { AgentRoleContract, type AgentRoleID } from "./role-contract"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { entries, values as objectValues } from "@/util/object"
-import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS, WEBPAGE_EVIDENCE_TOOL_IDS } from "@/frontend-design/tools/ids"
+import {
+  WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS,
+  WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS,
+  WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS,
+} from "@/frontend-design/tools/ids"
 import { VISUAL_QA_STATIC_TOOL_IDS } from "@/visual-qa/static-tools"
 import { INTEGRITY_PREVIEW_TOOL_IDS } from "@/integrity/static-tools"
 
@@ -123,21 +127,24 @@ export namespace Agent {
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
     const webpageEvidenceDenied = PermissionNext.fromConfig(
-      Object.fromEntries(WEBPAGE_EVIDENCE_TOOL_IDS.map((id) => [id, "deny"])),
+      Object.fromEntries(WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS.map((id) => [id, "deny"])),
     )
     const webpageEvidenceAnalysisDenied = PermissionNext.fromConfig(
       Object.fromEntries(WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS.map((id) => [id, "deny"])),
     )
+    const webpageEvidenceRetiredVisualDenied = PermissionNext.fromConfig(
+      Object.fromEntries(WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS.map((id) => [id, "deny"])),
+    )
     const nonDesignPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
       PermissionNext.merge(defaults, ...rulesets, user, webpageEvidenceDenied)
     const visualQaPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
-      PermissionNext.merge(defaults, ...rulesets, user, webpageEvidenceAnalysisDenied)
+      PermissionNext.merge(defaults, ...rulesets, user, webpageEvidenceAnalysisDenied, webpageEvidenceRetiredVisualDenied)
 
     const result: Record<string, Info> = {
       coding: {
         name: "coding",
         description: AgentRoleContract.description("coding"),
-        tools: { exclude: ["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS] },
+        tools: { exclude: ["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS] },
         options: {},
         prompt: PROMPT_CODING,
         permission: nonDesignPermissions(
@@ -153,7 +160,7 @@ export namespace Agent {
         name: "coding-assistant",
         description:
           "Right-sidebar coding assistant session. Uses the project conversation panel and executes tools based on configured permissions.",
-        tools: { exclude: ["task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS] },
+        tools: { exclude: ["task_report", "analytics", ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS] },
         options: {},
         prompt: PROMPT_CODING,
         permission: nonDesignPermissions(
@@ -177,7 +184,7 @@ export namespace Agent {
             "analytics",
             "web_clone_prepare_context",
             "web_clone_generate_source_project",
-            ...WEBPAGE_EVIDENCE_TOOL_IDS,
+            ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS,
           ],
         },
         options: {},
@@ -202,10 +209,6 @@ export namespace Agent {
           PermissionNext.fromConfig({
             question: "allow",
             webfetch: "allow",
-            webpage_render: "allow",
-            webpage_evaluate: "allow",
-            webpage_text_diff: "allow",
-            webpage_vision_judge: "allow",
             browser_preview: "allow",
             browser_preview_bind_local_module: "allow",
             browser_preview_compare_regions: "allow",
@@ -226,7 +229,7 @@ export namespace Agent {
             "analytics",
             "todoread",
             "todowrite",
-            ...WEBPAGE_EVIDENCE_TOOL_IDS,
+            ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS,
           ],
         },
         prompt: PROMPT_GENERAL,
@@ -415,7 +418,7 @@ export namespace Agent {
         steps: 1000,
         // Whitelist: orchestrator is a SCHEDULER, not an executor. The benchmark
         // caught it bypassing the build agent entirely (calling webpage_extract
-        // / webpage_render / webpage_evaluate / bash /
+        // / bash /
         // edit / read directly across 20 steps) because the default toolset
         // exposed every executor surface. Rule 22 — one role per tool list.
         // Allowed:
@@ -736,7 +739,11 @@ export namespace Agent {
       if (item.permission) {
         item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
         if (key === "visual-qa") {
-          item.permission = PermissionNext.merge(item.permission, webpageEvidenceAnalysisDenied)
+          item.permission = PermissionNext.merge(
+            item.permission,
+            webpageEvidenceAnalysisDenied,
+            webpageEvidenceRetiredVisualDenied,
+          )
         }
       }
     }

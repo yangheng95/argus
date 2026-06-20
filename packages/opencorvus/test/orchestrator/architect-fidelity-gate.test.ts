@@ -274,7 +274,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
     expect(findings.some((finding) => finding.code === "missing_final_visual_acceptance")).toBe(true)
   })
 
-  test("reports final visual evidence spec that omits a registered reference region", () => {
+  test("reports final visual evidence spec that omits a registered reference region as a concern", () => {
     const spec: AcceptanceSpec = {
       ...prebuiltVisualEvidenceSpec,
       title: "Desktop visual evidence bundle passes",
@@ -287,14 +287,10 @@ describe("orchestrator architect fidelity diagnostics", () => {
       findings.some(
         (finding) =>
           finding.code === "missing_visual_region_acceptance_ownership" &&
-          finding.severity === "blocker",
+          finding.severity === "concern",
       ),
     ).toBe(true)
-    expect(architectValidationIssues(collectorForReferenceTask([spec]), { requireReferenceCoverage: true })).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining("has no matching final visual acceptance ownership"),
-      ]),
-    )
+    expect(architectValidationIssues(collectorForReferenceTask([spec]), { requireReferenceCoverage: true })).toEqual([])
   })
 
   test("allows reference-driven architecture with visual_evidence judge input", () => {

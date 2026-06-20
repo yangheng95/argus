@@ -2,13 +2,15 @@ import { afterEach, expect, test } from "bun:test"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import type { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineService } from "../../src/task-api"
 import { Instance } from "../../src/project/instance"
 import { Identifier } from "../../src/id/id"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Worktree } from "../../src/worktree"
+import { Session } from "../../src/session"
+import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 const previousTraceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
@@ -23,7 +25,7 @@ function restoreEnv(name: string, value: string | undefined) {
   else process.env[name] = value
 }
 
-function seedTraceTask(input: { projectID: string; taskID: string }) {
+function seedTraceTask(input: { projectID: string; taskID: string; sessionID?: string }) {
   const now = Date.now()
   Database.use((db) =>
     db
@@ -31,6 +33,7 @@ function seedTraceTask(input: { projectID: string; taskID: string }) {
       .values({
         id: input.taskID,
         project_id: input.projectID,
+        session_id: input.sessionID,
         source: "test",
         title: "trace task",
         request: "trace task",
@@ -44,7 +47,7 @@ function seedTraceTask(input: { projectID: string; taskID: string }) {
   )
 }
 
-afterEach(() => {
+afterEach(async () => {
   restoreEnv("OPENCORVUS_AGENT_TRACE_DIR", previousTraceDir)
   restoreEnv("OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS", previousRedactAttachments)
   restoreEnv("OPENCORVUS_AGENT_TRACE_EVENT_MAX_BYTES", previousEventMaxBytes)
@@ -52,6 +55,8 @@ afterEach(() => {
   restoreEnv("OPENCORVUS_AGENT_TRACE_TASK_BLOB_MAX_BYTES", previousTaskBlobMaxBytes)
   if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true })
   tempDir = ""
+  await Instance.disposeAll()
+  await resetDatabase()
 })
 
 test("trace override rejects legacy .opencorvus/runtime layout", async () => {
@@ -97,6 +102,46 @@ test("task trace rollup includes llm_request task and parent metadata", async ()
 })
 
 test(
+  "session trace service reads from the task primary runtime when called inside a managed worktree",
+  async () => {
+    restoreEnv("OPENCORVUS_AGENT_TRACE_DIR", undefined)
+    const { AgentTrace } = await import("../../src/trace")
+
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "trace primary runtime" })
+        const taskID = Identifier.create("task", false)
+        seedTraceTask({ projectID: Instance.project.id, taskID, sessionID: session.id })
+        AgentTrace.recordLLMRequest({
+          sessionID: session.id,
+          taskID,
+          agentName: "orchestrator",
+          agentMode: "task",
+          model: { providerID: "test", modelID: "model" },
+          system: ["system"],
+          messages: [{ role: "user", content: "hi" }],
+          tools: [],
+        })
+
+        const worktree = await Worktree.create({ name: "trace-primary-runtime", taskID, sessionID: session.id })
+        await Instance.provide({
+          directory: worktree.directory,
+          fn: async () => {
+            const trace = await EngineService.getSessionTrace(session.id)
+            expect(trace.traceDir).toBe(ProjectRuntimePaths.projectRuntimeRoot(tmp.path))
+            expect(trace.events).toHaveLength(1)
+            expect(trace.events[0]?.kind).toBe("llm_request")
+          },
+        })
+      },
+    })
+  },
+  { timeout: 20_000 },
+)
+
+test(
   "task trace writes to the primary project runtime when ambient directory is a build worktree",
   async () => {
     delete process.env.OPENCORVUS_AGENT_TRACE_DIR
@@ -134,7 +179,7 @@ test(
         const worktreeTrace = ProjectRuntimePaths.tracePath(worktree.directory, taskID, sessionID)
         expect(fs.existsSync(primaryTrace)).toBe(true)
         expect(fs.existsSync(worktreeTrace)).toBe(false)
-        expect(AgentTrace.readSessionEvents(sessionID)[0]).toMatchObject({
+        expect(AgentTrace.readSessionEvents(sessionID, taskID)[0]).toMatchObject({
           domain: "session",
           sessionID,
           taskID,

@@ -55,7 +55,7 @@ export const BrowserPreviewBindLocalModuleTool = Tool.define(BrowserPreviewBindL
       throw new Error("browser_preview_bind_local_module requires a task context.")
     }
     const result = await bindLocalModuleToSourceRegion({
-      projectRoot: browserPreviewTaskEvidenceRoot(),
+      projectRoot: browserPreviewTaskEvidenceRoot(taskID),
       taskID,
       targetID: params.targetID,
       viewportID: params.viewportID,

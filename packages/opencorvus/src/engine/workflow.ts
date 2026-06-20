@@ -15,6 +15,11 @@
  * "推荐路径 + 当前进度" 的形式注入。
  */
 import { createDecisionLog } from "@/decision-log"
+import { browserPreviewEvidenceIDFromRef, readLatestTaskVisualEvidenceBundleSync } from "@/acceptance/visual-evidence"
+import { FRONTEND_DESIGN_COMPLETION_KEYS } from "@/frontend-design/handoff"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
+import { VisualQaReportSchema } from "@/visual-qa/schema"
+import { deriveVisualQaReferenceParityContext } from "@/visual-qa/reference-parity-context"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
 import {
@@ -161,7 +166,7 @@ const DIRECT: MiniWorkflow = {
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
  *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → workload_analysis → per-goal[build] → visual_qa / integrity；
- *  visual_qa 是 terminal frontend goal batch 后的同级视觉/产品审查证据；integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
+ *  visual_qa 是所有 blocking build terminal 后、final acceptance 前的一次性前端视觉/产品审查证据；integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
@@ -244,7 +249,7 @@ const PIPELINE: MiniWorkflow = {
       id: "visual_qa",
       tool: "visual_qa",
       label: "Visual QA",
-      hint: "terminal frontend goal batch 后的同级 GUI 视觉/功能/产品审查与 in-scope repair 证据。GUI=Graphical User Interface，图形用户界面。它消费 frontend_design/build 以及可选 prior integrity evidence；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；accepted=false 或 production_blockers>0 时由 orchestrator 基于证据选择 build / modify_goal / architect / propose_task / fail_task。",
+      hint: "所有 blocking build terminal 后、final acceptance 前的一次性 GUI 视觉/功能/产品审查与 in-scope repair 证据。GUI=Graphical User Interface，图形用户界面。它消费 frontend_design/build 以及可选 prior integrity evidence；先修组件真实性和可见功能，再修布局结构，最后才做样式微调。它不是 host gate，不替代 integrity，也不是 integrity 的前置状态机；accepted=false 或 production_blockers>0 时由 orchestrator 基于证据选择 build / modify_goal / architect / propose_task / fail_task。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -371,17 +376,7 @@ function taskStepStatusByTool(
           .readByPhase("frontend_design")
           .map((entry) => entry.key),
       )
-      return [
-        "public_report",
-        "frontend_template",
-        "fillable_modules",
-        "material_inventory",
-        "visual_consistency_contract",
-        "ui_data_contract",
-        "template_iteration_notes",
-        "completeness_review",
-        "evidence_source_manifest",
-      ].every((key) => keys.has(key))
+      return FRONTEND_DESIGN_COMPLETION_KEYS.every((key) => keys.has(key))
         ? "completed"
         : "pending"
     }
@@ -404,7 +399,7 @@ function taskStepStatusByTool(
       return verdict === "pass" ? "completed" : "failed"
     }
     case "visual_qa":
-      return visualQaProjectedStatus(taskID)
+      return visualQaProjectedStatus(taskID, taskPrimaryProjectRoot(taskID))
     case "build":
       // direct workflow: any run (artifact kind="run") means a build occurred
       return findRuns(taskID).length > 0 ? "completed" : "pending"
@@ -413,44 +408,87 @@ function taskStepStatusByTool(
   }
 }
 
-function visualQaProjectedStatus(taskID: string): GoalStepStatus["status"] {
+function visualQaProjectedStatus(taskID: string, projectDir: string): GoalStepStatus["status"] {
   const entries = createDecisionLog(taskID).readByPhase("visual_qa")
+  const activeSpec = findActiveSpecForTask(taskID)
+  const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir, taskID })
+  const referenceParity = deriveVisualQaReferenceParityContext({
+    taskID,
+    specSnapshotID: activeSpec?.id,
+    goals: listGoals(taskID),
+    frontendDesignEntries: createDecisionLog(taskID).readByPhase("frontend_design"),
+    visualEvidence,
+  })
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]
     if (entry.key.startsWith("report_")) {
-      const report = parseVisualQaReportProjection(entry.value)
+      const report = parseVisualQaReportProjection(entry.value, { referenceParityRequired: referenceParity.required })
       if (!report) return "failed"
+      if (
+        report.accepted &&
+        report.productionBlockers === 0 &&
+        (referenceParity.required || report.referenceParityRequired)
+      ) {
+        return "pending"
+      }
       return report.accepted && report.productionBlockers === 0 ? "completed" : "failed"
     }
     if (entry.key === "latest_summary") {
-      const summary = parseVisualQaSummaryProjection(entry.value)
-      if (!summary) return "failed"
-      return summary.accepted && summary.productionBlockers === 0 ? "completed" : "failed"
+      continue
     }
   }
   return "pending"
 }
 
-function parseVisualQaReportProjection(value: string): { accepted: boolean; productionBlockers: number } | undefined {
+function parseVisualQaReportProjection(
+  value: string,
+  context: { referenceParityRequired: boolean },
+): { accepted: boolean; productionBlockers: number; referenceParityRequired: boolean } | undefined {
   try {
-    const parsed = JSON.parse(value) as Record<string, unknown>
-    if (typeof parsed.accepted !== "boolean") return undefined
-    if (!Array.isArray(parsed.production_blockers)) return undefined
-    const blockers = parsed.production_blockers.length
-    return { accepted: parsed.accepted, productionBlockers: blockers }
+    const parsed = VisualQaReportSchema.safeParse(JSON.parse(value))
+    if (!parsed.success) return undefined
+    const report = parsed.data
+    if (report.accepted) {
+      if (report.coverage.length === 0 || report.evidence.length === 0) return undefined
+      if (report.follow_up_task) return undefined
+      if (context.referenceParityRequired && !report.reference_parity.required) return undefined
+      if (
+        report.findings.some(
+          (finding) =>
+            finding.status === "open" &&
+            (finding.severity === "critical" || finding.severity === "major"),
+        )
+      ) {
+        return undefined
+      }
+      if (report.reference_parity.required) {
+        const referenceComparisonRefs = new Set(
+          [
+            ...report.reference_parity.reference_comparison_evidence_refs,
+            ...report.evidence.filter((item) => item.type === "reference_comparison").map((item) => item.ref),
+            ...report.coverage.flatMap((item) => item.evidence_refs),
+          ].flatMap((ref) => {
+            const evidenceID = browserPreviewEvidenceIDFromRef(ref)
+            return evidenceID ? [evidenceID] : []
+          }),
+        )
+        if (
+          report.reference_parity.required_regions.length === 0 ||
+          referenceComparisonRefs.size === 0 ||
+          report.reference_parity.missing_regions.length > 0
+        ) {
+          return undefined
+        }
+      }
+    }
+    const blockers = report.production_blockers.length
+    return {
+      accepted: report.accepted,
+      productionBlockers: blockers,
+      referenceParityRequired: report.reference_parity.required,
+    }
   } catch {
     return undefined
-  }
-}
-
-function parseVisualQaSummaryProjection(value: string): { accepted: boolean; productionBlockers: number } | undefined {
-  const accepted = /^accepted=(true|false)$/m.exec(value)
-  if (!accepted) return undefined
-  const blockers = /^production_blockers=(\d+)$/m.exec(value)
-  if (!blockers) return undefined
-  return {
-    accepted: accepted[1] === "true",
-    productionBlockers: Number.parseInt(blockers[1], 10),
   }
 }
 

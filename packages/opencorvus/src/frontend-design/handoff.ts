@@ -23,22 +23,30 @@ export function frontendDesignArtifactPaths(projectDir: string, taskID: string) 
   return ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
 }
 
-const HANDOFF_KEYS = [
+export const FRONTEND_DESIGN_COMPLETION_KEYS = [
   "public_report",
   "frontend_template",
-  "final_acceptance_mode",
   "fillable_modules",
+  "material_inventory",
+  "visual_consistency_contract",
+  "ui_data_contract",
+  "template_iteration_notes",
+  "completeness_review",
+  "evidence_source_manifest",
+] as const
+
+const FRONTEND_DESIGN_ADDITIONAL_HANDOFF_KEYS = [
+  "final_acceptance_mode",
   "component_reuse_plan",
   "baseline_replacement_plan",
   "quality_project_contract",
   "frontend_project",
-  "material_inventory",
-  "template_iteration_notes",
-  "visual_consistency_contract",
-  "ui_data_contract",
-  "completeness_review",
   "reference_artifacts",
-  "evidence_source_manifest",
+] as const
+
+export const FRONTEND_DESIGN_HANDOFF_KEYS = [
+  ...FRONTEND_DESIGN_COMPLETION_KEYS,
+  ...FRONTEND_DESIGN_ADDITIONAL_HANDOFF_KEYS,
 ] as const
 
 function cap(value: string, maxChars: number, templatePath: string): string {
@@ -50,7 +58,7 @@ function cap(value: string, maxChars: number, templatePath: string): string {
 function latestByKey(entries: DecisionEntry[]): Map<string, DecisionEntry> {
   const result = new Map<string, DecisionEntry>()
   for (const entry of entries) {
-    if ((HANDOFF_KEYS as readonly string[]).includes(entry.key)) result.set(entry.key, entry)
+    if ((FRONTEND_DESIGN_HANDOFF_KEYS as readonly string[]).includes(entry.key)) result.set(entry.key, entry)
   }
   return result
 }
@@ -83,7 +91,7 @@ function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>)
     "- Requirements: express follow-up work as completing the missing visual HTML skeleton or transcribing an accepted skeleton into maintainable source, depending on what the frontend_design report says is missing.",
     "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose work by named sourceDomReplacementPlan/source region only when that region is in scope.",
     "- Build: do not treat frontend-design-skeleton as app source. Use it only as captured source evidence; create/repair the visual skeleton first if frontend_design did not provide one, or transcribe the accepted skeleton into maintainable project source in the later workflow.",
-    "- Evidence rule: keep source data extraction, measured webpage_evaluate evidence, and zero-finding web_clone_source_audit evidence visible as source-package handoff facts.",
+    "- Evidence rule: keep source data extraction, rendered screenshot review evidence, and zero-finding web_clone_source_audit evidence visible as source-package handoff facts.",
     "- Deletion rule: do not delete `web-clone-source/` content until source-derived style evidence and styling obligations have been migrated into the accepted downstream project source and verified against the reference evidence.",
     "- Acceptance/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every restored/deferred source region.",
   ].join("\n")
@@ -144,7 +152,7 @@ export function renderFrontendDesignHandoffReference(
   if (!includeExcerpts) return lines.join("\n")
 
   const entries = latestByKey(createDecisionLog(taskID).readByPhase("frontend_design"))
-  const present = HANDOFF_KEYS.filter((key) => entries.has(key))
+  const present = FRONTEND_DESIGN_HANDOFF_KEYS.filter((key) => entries.has(key))
   if (present.length === 0) return lines.join("\n")
 
   const sourceRegionGuidance = renderSourceRegionRefactorGuidance(entries)

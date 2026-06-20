@@ -100,6 +100,10 @@ export namespace AgentTrace {
     return traceDir()
   }
 
+  export function getTaskTraceDir(taskID: string): string {
+    return taskTraceDir(taskID)
+  }
+
   function explicitTraceDir(): string | undefined {
     // Override path: benchmark runs / CI pipelines that wipe Instance.directory
     // at the end of the run (overlay-web-benchmark deletes the entire
@@ -423,8 +427,8 @@ export namespace AgentTrace {
     return { sessionID: ambient?.id ?? explicitSessionID }
   }
 
-  function findSessionTraceFile(sessionID: string): string | undefined {
-    const indexPath = ProjectRuntimePaths.sessionTraceIndexPathFromRuntimeRoot(traceDir(), sessionID)
+  function findSessionTraceFileInRuntime(sessionID: string, runtimeRoot: string, taskID?: string): string | undefined {
+    const indexPath = ProjectRuntimePaths.sessionTraceIndexPathFromRuntimeRoot(runtimeRoot, sessionID)
     let raw: string
     try {
       raw = fs.readFileSync(indexPath, "utf8")
@@ -434,10 +438,15 @@ export namespace AgentTrace {
     try {
       const parsed = JSON.parse(raw) as { sessionID?: unknown; taskID?: unknown }
       if (parsed.sessionID !== sessionID || typeof parsed.taskID !== "string") return undefined
+      if (taskID && parsed.taskID !== taskID) return undefined
       return sessionFile(sessionID, parsed.taskID)
     } catch {
       return undefined
     }
+  }
+
+  function findSessionTraceFile(sessionID: string, taskID?: string): string | undefined {
+    return findSessionTraceFileInRuntime(sessionID, taskID ? taskTraceDir(taskID) : traceDir(), taskID)
   }
 
   function writeSessionTraceIndex(sessionID: string, taskID: string) {
@@ -549,9 +558,9 @@ export namespace AgentTrace {
    *  missing files as "no trace yet", not as an error. Lines that fail to parse
    *  are skipped (defensive — append-only writes can race with reads on a
    *  partial-line boundary). */
-  export function readSessionEvents(sessionID: string): TraceEvent[] {
+  export function readSessionEvents(sessionID: string, taskID?: string): TraceEvent[] {
     if (!sessionID) return []
-    const file = findSessionTraceFile(sessionID)
+    const file = findSessionTraceFile(sessionID, taskID)
     if (!file) return []
     return readJsonlTail(file)
   }
@@ -561,8 +570,9 @@ export namespace AgentTrace {
    *  there at write time, including llm_request and terminal reports. */
   export function readTaskEvents(taskID: string): TraceEvent[] {
     if (!taskID) return []
+    const runtimeRoot = taskTraceDir(taskID)
     const file =
-      firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace.jsonl")) ??
+      firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(runtimeRoot, taskID, "trace.jsonl")) ??
       taskFile(taskID)
     const all = readJsonlTail(file)
     all.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0))
@@ -572,9 +582,10 @@ export namespace AgentTrace {
   /** Read every event for a non-session domain bucket. */
   export function readDomainEvents(domain: string, taskID?: string): TraceEvent[] {
     if (!domain || !taskID) return []
+    const runtimeRoot = taskTraceDir(taskID)
     const file =
       firstExisting(
-        ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace", `_${domain}.jsonl`),
+        ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(runtimeRoot, taskID, "trace", `_${domain}.jsonl`),
       ) ?? domainFile(taskID, domain)
     return readJsonlTail(file)
   }

@@ -22,7 +22,8 @@
 
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import z from "zod"
-import { createDecisionLog } from "@/decision-log"
+import { createDecisionLog, type DecisionEntry } from "@/decision-log"
+import { FRONTEND_DESIGN_COMPLETION_KEYS, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
@@ -47,7 +48,7 @@ import {
   findLatestResearchBriefArtifact,
   findRuns,
   findTask,
-  listGoalBatchNotificationArtifacts,
+  listGoalRefillNotificationArtifacts,
   listGoalRunsByGoal,
   listGoals,
   listOrchestratorStreamErrorArtifacts,
@@ -66,13 +67,15 @@ const STREAM_FAILURE_PROMPT_CAP = 5
 const AGENT_FAILURE_PROMPT_CAP = 5
 const TOOL_EXECUTE_FAILURE_PROMPT_CAP = 5
 const OPEN_TOOL_CALL_PROMPT_CAP = 5
-const TERMINAL_GOAL_BATCH_PROMPT_CAP = 5
+const TERMINAL_GOAL_REFILL_PROMPT_CAP = 5
 
-const TerminalGoalBatchNotificationPayloadSchema = z.object({
+const TerminalGoalRefillNotificationPayloadSchema = z.object({
   task_id: z.string(),
   run_id: z.string(),
   fingerprint: z.string(),
-  goal_runs: z.array(z.object({ id: z.string(), status: z.string() })),
+  terminal_goal_run: z.object({ id: z.string(), goal_id: z.string(), status: z.string() }),
+  live_sibling_goal_runs: z.array(z.object({ id: z.string(), goal_id: z.string(), status: z.string() })),
+  dispatch_result: z.enum(["started", "queued"]),
   time_dispatched: z.number(),
 })
 
@@ -185,13 +188,15 @@ export interface OpenToolCallDesc {
   status: string
 }
 
-export interface TerminalGoalBatchNotificationDesc {
+export interface TerminalGoalRefillNotificationDesc {
   artifact_id: string
   run_id: string
   time_created: number
   time_dispatched: number
   fingerprint: string
-  goal_runs: Array<{ id: string; status: string }>
+  terminal_goal_run: { id: string; goal_id: string; status: string }
+  live_sibling_goal_runs: Array<{ id: string; goal_id: string; status: string }>
+  dispatch_result: "started" | "queued"
 }
 
 export interface AcceptanceVerdictDesc {
@@ -222,6 +227,7 @@ export interface TaskDesc {
   workload_stale?: boolean
   research?: ResearchBriefDesc
   frontend_research?: ResearchBriefDesc
+  frontend_design?: FrontendDesignHandoffDesc
   active_run_id?: string
   active_run_status?: string
   /** True when `active_run_id` refers to a run that currently has no live
@@ -263,11 +269,11 @@ export interface TaskDesc {
    *  pending/running while no current process owns the tool session. This is
    *  execution evidence for the orchestrator LLM, not a lifecycle transition. */
   open_tool_calls_without_current_owner?: OpenToolCallDesc[]
-  /** Durable facts that a terminal per-goal batch already woke the
-   *  orchestrator. Written after dispatchTaskLoop starts and read here so the
-   *  next model turn can distinguish "batch already surfaced" from "no batch
-   *  evidence." */
-  recent_terminal_goal_batches?: TerminalGoalBatchNotificationDesc[]
+  /** Durable facts that a terminal goal completion already woke the
+   *  orchestrator for FIFO refill. Written after dispatchTaskLoop starts and
+   *  read here so the next model turn can distinguish "terminal completion
+   *  already surfaced" from "no refill evidence." */
+  recent_terminal_goal_refills?: TerminalGoalRefillNotificationDesc[]
   /** Recent sub-agent session failures recorded in decision_log phase
    *  "agent_error". These are the model-visible counterpart to overlay red
    *  session cards: provider quota, network, schema, and terminal session
@@ -286,6 +292,20 @@ export interface ResearchBriefDesc {
   blocking_open_question_count: number
   bundle_paths: string[]
   summary: string
+}
+
+export interface FrontendDesignHandoffDesc {
+  is_complete: boolean
+  has_public_report: boolean
+  has_evidence_source_manifest: boolean
+  frontend_template_path: string
+  source_manifest_path: string
+  present_keys: string[]
+  missing_completion_keys: string[]
+  latest_decision_id: string
+  latest_updated_at: number
+  public_report_decision_id?: string
+  evidence_source_manifest_decision_id?: string
 }
 
 export interface CollaborationClosureDesc {
@@ -326,6 +346,34 @@ function describeResearchBriefArtifact(input: {
       artifact.payload.bundle.citation_map_path,
     ],
     summary: artifact.payload.summary,
+  }
+}
+
+function describeFrontendDesignHandoff(taskID: string): FrontendDesignHandoffDesc | undefined {
+  const entries = createDecisionLog(taskID).readByPhase("frontend_design")
+  if (entries.length === 0) return undefined
+
+  const latestByKey = new Map<string, DecisionEntry>()
+  for (const entry of entries) latestByKey.set(entry.key, entry)
+
+  const missingCompletionKeys = FRONTEND_DESIGN_COMPLETION_KEYS.filter((key) => !latestByKey.has(key))
+  const latestEntry = entries.reduce((latest, entry) =>
+    entry.timeCreated >= latest.timeCreated ? entry : latest,
+  )
+  const paths = frontendDesignArtifactPaths("", taskID)
+
+  return {
+    is_complete: missingCompletionKeys.length === 0,
+    has_public_report: latestByKey.has("public_report"),
+    has_evidence_source_manifest: latestByKey.has("evidence_source_manifest"),
+    frontend_template_path: paths.templateRelative,
+    source_manifest_path: paths.manifestRelative,
+    present_keys: [...latestByKey.keys()].sort(),
+    missing_completion_keys: [...missingCompletionKeys],
+    latest_decision_id: latestEntry.id,
+    latest_updated_at: latestEntry.timeCreated,
+    public_report_decision_id: latestByKey.get("public_report")?.id,
+    evidence_source_manifest_decision_id: latestByKey.get("evidence_source_manifest")?.id,
   }
 }
 
@@ -546,12 +594,12 @@ function describeVerdict(taskID: string): AcceptanceVerdictDesc | undefined {
   }
 }
 
-function describeTerminalGoalBatchNotifications(taskID: string): TerminalGoalBatchNotificationDesc[] {
-  return listGoalBatchNotificationArtifacts(taskID, TERMINAL_GOAL_BATCH_PROMPT_CAP).map((row) => {
-    const payload = TerminalGoalBatchNotificationPayloadSchema.parse(row.payload)
+function describeTerminalGoalRefillNotifications(taskID: string): TerminalGoalRefillNotificationDesc[] {
+  return listGoalRefillNotificationArtifacts(taskID, TERMINAL_GOAL_REFILL_PROMPT_CAP).map((row) => {
+    const payload = TerminalGoalRefillNotificationPayloadSchema.parse(row.payload)
     if (payload.task_id !== taskID) {
       throw new Error(
-        `goal_batch_notification ${row.id} task_id mismatch: payload=${payload.task_id} query=${taskID}`,
+        `goal_refill_notification ${row.id} task_id mismatch: payload=${payload.task_id} query=${taskID}`,
       )
     }
     return {
@@ -560,7 +608,9 @@ function describeTerminalGoalBatchNotifications(taskID: string): TerminalGoalBat
       time_created: row.time_created,
       time_dispatched: payload.time_dispatched,
       fingerprint: payload.fingerprint,
-      goal_runs: payload.goal_runs,
+      terminal_goal_run: payload.terminal_goal_run,
+      live_sibling_goal_runs: payload.live_sibling_goal_runs,
+      dispatch_result: payload.dispatch_result,
     }
   })
 }
@@ -609,6 +659,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     task,
     artifact: findLatestFrontendResearchBriefArtifact(task.id),
   })
+  const frontendDesign = describeFrontendDesignHandoff(task.id)
 
   let planSummary: string | undefined
   const activePlan = findActivePlanForTask(task.id)
@@ -691,7 +742,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       goal_id: entry.goalID ?? undefined,
     }))
   const openToolCallsWithoutCurrentOwner = listOpenToolCallsWithoutCurrentOwner(task)
-  const recentTerminalGoalBatches = describeTerminalGoalBatchNotifications(task.id)
+  const recentTerminalGoalRefills = describeTerminalGoalRefillNotifications(task.id)
 
   // Bootstrap-first signal. Single source — derived from goal status and
   // surfaced as collaboration context. This is not a dispatch gate.
@@ -711,6 +762,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     workload_stale: workloadStale,
     research,
     frontend_research: frontendResearch,
+    frontend_design: frontendDesign,
     active_run_id: activeRunForTask?.id,
     active_run_status: activeRunStatus,
     run_orphan: runOrphan,
@@ -729,7 +781,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     recent_tool_execute_failures: recentToolExecuteFailures.length > 0 ? recentToolExecuteFailures : undefined,
     open_tool_calls_without_current_owner:
       openToolCallsWithoutCurrentOwner.length > 0 ? openToolCallsWithoutCurrentOwner : undefined,
-    recent_terminal_goal_batches: recentTerminalGoalBatches.length > 0 ? recentTerminalGoalBatches : undefined,
+    recent_terminal_goal_refills: recentTerminalGoalRefills.length > 0 ? recentTerminalGoalRefills : undefined,
     recent_agent_failures: recentAgentFailures.length > 0 ? recentAgentFailures : undefined,
     iterations_count: history.length,
   }
@@ -782,22 +834,25 @@ export function renderGoal(g: GoalDesc): string[] {
   return lines
 }
 
-export function renderTerminalGoalBatchNotifications(
-  batches: TerminalGoalBatchNotificationDesc[] | undefined,
+export function renderTerminalGoalRefillNotifications(
+  refills: TerminalGoalRefillNotificationDesc[] | undefined,
 ): string[] {
-  if (!batches || batches.length === 0) return []
+  if (!refills || refills.length === 0) return []
   const lines: string[] = []
-  lines.push(`## Terminal goal batch wake facts (${batches.length})`)
-  for (const batch of batches) {
-    const ts = new Date(batch.time_dispatched).toISOString()
-    const goalRuns = batch.goal_runs.map((goalRun) => `${goalRun.id}:${goalRun.status}`).join(", ")
+  lines.push(`## Terminal goal refill wake facts (${refills.length})`)
+  for (const refill of refills) {
+    const ts = new Date(refill.time_dispatched).toISOString()
+    const liveSiblings =
+      refill.live_sibling_goal_runs.length > 0
+        ? refill.live_sibling_goal_runs.map((goalRun) => `${goalRun.id}:${goalRun.status}`).join(", ")
+        : "(none)"
     lines.push(
-      `- ${ts} run=${batch.run_id} fingerprint=${batch.fingerprint} goals=${goalRuns} artifact=${batch.artifact_id}`,
+      `- ${ts} run=${refill.run_id} dispatch=${refill.dispatch_result} fingerprint=${refill.fingerprint} terminal=${refill.terminal_goal_run.id}:${refill.terminal_goal_run.status} live_siblings=${liveSiblings} artifact=${refill.artifact_id}`,
     )
   }
   lines.push(
-    `Each entry means a terminal per-goal batch already started an orchestrator wake. ` +
-      `Use this as current execution evidence; do not infer that the terminal batch was invisible merely because the wake has not produced a later decision yet.`,
+    `Each entry means a terminal goal completion already started an orchestrator refill wake. ` +
+      `Use this as current execution evidence; do not wait for sibling goals merely because the refill wake has not produced a later decision yet.`,
   )
   return lines
 }
@@ -892,6 +947,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
   lines.push(...renderResearchBriefDesc("Deep Research Brief", desc.research))
   lines.push(...renderResearchBriefDesc("Frontend Research Brief", desc.frontend_research))
+  lines.push(...renderFrontendDesignHandoffDesc(desc.frontend_design))
   if (desc.active_run_id) {
     const orphanTag = desc.run_orphan ? " ORPHAN" : ""
     lines.push(
@@ -922,10 +978,10 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
     lines.push(...closureLines)
   }
 
-  const terminalGoalBatchLines = renderTerminalGoalBatchNotifications(desc.recent_terminal_goal_batches)
-  if (terminalGoalBatchLines.length > 0) {
+  const terminalGoalRefillLines = renderTerminalGoalRefillNotifications(desc.recent_terminal_goal_refills)
+  if (terminalGoalRefillLines.length > 0) {
     lines.push("")
-    lines.push(...terminalGoalBatchLines)
+    lines.push(...terminalGoalRefillLines)
   }
 
   if (desc.clarifications) {
@@ -1083,5 +1139,39 @@ function renderResearchBriefDesc(title: string, desc?: ResearchBriefDesc): strin
   lines.push(
     "Research is advisory evidence only. It is not a route selector; choose the next tool from full task context.",
   )
+  return lines
+}
+
+function renderFrontendDesignHandoffDesc(desc?: FrontendDesignHandoffDesc): string[] {
+  if (!desc) return []
+  const lines: string[] = []
+  lines.push("")
+  lines.push("## Frontend Design Handoff")
+  lines.push(`- is_complete: ${desc.is_complete ? "true" : "false"}`)
+  lines.push(`- has_public_report: ${desc.has_public_report ? "true" : "false"}`)
+  lines.push(`- has_evidence_source_manifest: ${desc.has_evidence_source_manifest ? "true" : "false"}`)
+  lines.push(`- frontend_template_path: ${desc.frontend_template_path}`)
+  lines.push(`- source_manifest_path: ${desc.source_manifest_path}`)
+  lines.push(`- latest_decision_id: ${desc.latest_decision_id}`)
+  lines.push(`- latest_updated_at: ${new Date(desc.latest_updated_at).toISOString()}`)
+  if (desc.public_report_decision_id) lines.push(`- public_report_decision_id: ${desc.public_report_decision_id}`)
+  if (desc.evidence_source_manifest_decision_id) {
+    lines.push(`- evidence_source_manifest_decision_id: ${desc.evidence_source_manifest_decision_id}`)
+  }
+  lines.push(`- present_keys: ${desc.present_keys.join(", ")}`)
+  lines.push(
+    `- missing_completion_keys: ${
+      desc.missing_completion_keys.length > 0 ? desc.missing_completion_keys.join(", ") : "(none)"
+    }`,
+  )
+  if (desc.is_complete) {
+    lines.push(
+      "Frontend design is complete durable task-scope handoff evidence. Consume these report and manifest pointers for downstream requirements, architect, build, visual QA, and integrity decisions instead of reacquiring the same frontend_design scope.",
+    )
+  } else {
+    lines.push(
+      "Frontend design is partial durable task-scope evidence. Missing completion keys above are the concrete recovery evidence if this scope needs frontend_design continuation.",
+    )
+  }
   return lines
 }

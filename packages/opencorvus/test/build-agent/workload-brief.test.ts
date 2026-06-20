@@ -7,6 +7,7 @@ const goalTarget = {
   id: "gol_abc",
   title: "Visual shell",
   objective: "Build the chart workspace shell",
+  requirement_ids: [],
   acceptance_specs: ["renders at 1440x900"],
   owned_paths: ["src/shell"],
   depends_on: [],

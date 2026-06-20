@@ -110,7 +110,7 @@ describe("research webpage PRD evidence", () => {
       const url = "https://example.com/markets/world-economy/"
       const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
 
-      await writeCompleteEvidence(paths.webpageEvidenceAbsolute, url, {})
+      await writeCompleteEvidence(paths.webpageEvidenceAbsolute, taskID, url, {})
       await prepareWebCloneContext({
         webpageEvidenceDir: paths.webpageEvidenceAbsolute,
         outputDir: paths.sourcePackageAbsolute,
@@ -158,10 +158,10 @@ function fakePipeline(calls: string[], options: { longEvidenceSummary?: boolean 
       calls.push("compile")
       await fs.mkdir(outputDir, { recursive: true })
     },
-    analyze: async ({ outputDir }) => {
+    analyze: async ({ outputDir, taskID }) => {
       calls.push("analyze")
       const extracted = JSON.parse(await fs.readFile(path.join(outputDir, "extracted-page.json"), "utf8"))
-      await writeCompleteEvidence(outputDir, extracted.url, options)
+      await writeCompleteEvidence(outputDir, taskID, extracted.url, options)
     },
     captureRuntimeState: async ({ outputDir, url }) => {
       calls.push(`captureRuntimeState:${url}`)
@@ -172,12 +172,15 @@ function fakePipeline(calls: string[], options: { longEvidenceSummary?: boolean 
 
 async function writeCompleteEvidence(
   webpageEvidenceDir: string,
+  taskID: string,
   url: string,
   options: { longEvidenceSummary?: boolean },
 ): Promise<void> {
   await fs.mkdir(webpageEvidenceDir, { recursive: true })
-  for (const artifact of primaryWebpageEvidenceArtifacts()) {
-    const relative = artifact.replace(/^webpage-evidence[\\/]/, "")
+  const artifactRoot = ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative
+  for (const artifact of primaryWebpageEvidenceArtifacts(taskID)) {
+    if (!artifact.startsWith(`${artifactRoot}/`)) throw new Error(`unexpected webpage evidence artifact ${artifact}`)
+    const relative = artifact.slice(artifactRoot.length + 1)
     const file = path.join(webpageEvidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
     if (relative === "reference.png" || relative === "reference-mobile.png") {

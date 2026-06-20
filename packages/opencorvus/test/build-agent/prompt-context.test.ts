@@ -29,6 +29,7 @@ describe("build agent prompt context", () => {
         id: "gol_calc",
         title: "Calculator UI",
         objective: "Build a scientific calculator UI.",
+        requirement_ids: [],
         acceptance_specs: ["calculator renders"],
         owned_paths: ["src/App.tsx"],
         depends_on: [],
@@ -59,6 +60,7 @@ describe("build agent prompt context", () => {
         id: "gol_chat_ui",
         title: "聊天UI组件",
         objective: "Build the chat UI components per Gemini design.",
+        requirement_ids: [],
         acceptance_specs: ["MessageList renders streaming messages"],
         owned_paths: ["src/components"],
         depends_on: [],
@@ -94,6 +96,7 @@ describe("build agent prompt context", () => {
         id: "gol_settings",
         title: "Settings repair",
         objective: "Repair settings validation.",
+        requirement_ids: [],
         acceptance_specs: ["settings are validated"],
         owned_paths: ["src/services/storage.ts"],
         depends_on: [],
@@ -123,6 +126,7 @@ describe("build agent prompt context", () => {
         id: "gol_replica_tabs",
         title: "Replica tabs",
         objective: "Implement the floating tab content region.",
+        requirement_ids: ["REQ-12"],
         acceptance_specs: ["floating tab region works"],
         owned_paths: ["src/components/tabs"],
         depends_on: [],
@@ -161,6 +165,7 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("supplies roughly 30% style, geometry, CSS, assets, and pixel-consistency support")
     expect(prompt).toContain("Frontend_research packets are coverage and investigation prompts")
     expect(prompt).toContain("REQ-12")
+    expect(prompt).toContain("**Requirement IDs**: REQ-12")
     expect(prompt).toContain("fr-interaction-scroll-tabs")
     expect(prompt).toContain("## Terminal Report Contract")
     expect(prompt).toContain("contract_restatement")
@@ -300,6 +305,7 @@ describe("build agent prompt context", () => {
       id: "gol_x",
       title: "X",
       objective: "Build X.",
+      requirement_ids: [],
       acceptance_specs: [],
       owned_paths: [],
       depends_on: [],
@@ -321,6 +327,7 @@ describe("build agent prompt context", () => {
         id: "gol_visual",
         title: "Replica hero",
         objective: "Rebuild the referenced hero section.",
+        requirement_ids: [],
         acceptance_specs: ["hero matches reference"],
         owned_paths: ["src/App.tsx"],
         depends_on: [],
@@ -350,6 +357,7 @@ describe("build agent prompt context", () => {
         id: "gol_visual",
         title: "Replica hero",
         objective: "Rebuild the referenced hero section with the existing app shell.",
+        requirement_ids: [],
         acceptance_specs: ["hero matches reference"],
         owned_paths: ["src/App.tsx"],
         depends_on: [],
@@ -400,6 +408,7 @@ describe("build agent prompt context", () => {
         id: "gol_feature",
         title: "Feature surface",
         objective: "Implement the feature and integrate it with the shared shell.",
+        requirement_ids: [],
         acceptance_specs: ["feature works in shell"],
         owned_paths: ["src/feature.ts"],
         depends_on: ["gol_shell"],
@@ -446,6 +455,7 @@ describe("build agent prompt context", () => {
         id: "gol_feature",
         title: "Feature surface",
         objective: "Implement the feature and integrate it with the shared shell.",
+        requirement_ids: [],
         acceptance_specs: ["feature works in shell"],
         owned_paths: ["src/feature.ts", "src/App.tsx"],
         depends_on: ["gol_shell"],
@@ -621,6 +631,38 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain(`web-clone-source/reference.png\` means \`${paths.sourcePackageRelative}/reference.png\``)
     expect(prompt).toContain(`Resolve \`web-clone-source/...\` refs under \`${paths.sourcePackageRelative}/...\``)
     expect(prompt).toContain(`\`frontend-design-skeleton/...\` refs under \`${paths.skeletonProjectRelative}/...\``)
+    expect(prompt).toContain("not `./web-clone-source/reference.png` in the acceptance root")
+  })
+
+  test("goal-path build resolves web-clone source references through the primary project runtime root", () => {
+    const taskID = "tsk_goal_reference_path_contract"
+    const projectDir = "C:\\primary\\runtime-project"
+    const prompt = buildUserPrompt(
+      {
+        kind: "goal",
+        id: "gol_clone_surface",
+        title: "Clone reference surface",
+        objective: "Implement the reference surface from frontend-design evidence.",
+        requirement_ids: [],
+        acceptance_specs: ["reference surface matches the frontend-design handoff"],
+        owned_paths: ["src/App.tsx"],
+        depends_on: [],
+      },
+      {
+        projectDir,
+        frontendDesign:
+          "# Frontend Design Public Report\n\n" +
+          "- key=frontend_project value=status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\n" +
+          "- key=fillable_modules value=Use web-clone-source/reference.png and frontend-design-skeleton/src/App.tsx.",
+      },
+      taskID,
+    )
+
+    const paths = ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
+    expect(prompt).toContain(`web-clone-source/reference.png\` means \`${paths.absoluteDir}/web-clone-source/reference.png\``)
+    expect(prompt).toContain(`Resolve \`web-clone-source/...\` refs under \`${paths.absoluteDir}/web-clone-source/...\``)
+    expect(prompt).toContain(`\`frontend-design-skeleton/...\` refs under \`${paths.absoluteDir}/frontend-design-skeleton/...\``)
+    expect(prompt).toContain(`Treat \`${paths.absoluteDir}/\` as read-only input`)
     expect(prompt).toContain("not `./web-clone-source/reference.png` in the acceptance root")
   })
 })
