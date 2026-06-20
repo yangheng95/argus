@@ -12,6 +12,8 @@ import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { findActivePlanForTask, findRun, findTask } from "../../src/engine/store"
+import { EngineRuntime } from "../../src/engine/runtime"
+import { hooks } from "../../src/engine/state"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import { EngineService } from "../../src/task-api"
 import { ProtocolStore } from "../../src/protocol/store"
@@ -182,7 +184,7 @@ describe("EngineService.replanTask — structured replan intent", () => {
 })
 
 describe("EngineService.recordOperatorNote — active blocked run wake", () => {
-  test("operator notes wake without rewriting the active run", async () => {
+  test("operator notes reopen stale active run blockers before waking", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -238,10 +240,10 @@ describe("EngineService.recordOperatorNote — active blocked run wake", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(result.resumed).toBe(true)
-        const blocked = findRun(runID)
-        expect(blocked?.status).toBe("blocked")
-        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
-        expect(blocked?.error).toBe("MessageAbortedError: total deadline")
+        const reopened = findRun(runID)
+        expect(reopened?.status).toBe("running")
+        expect(reopened?.blocking_reason).toBeNull()
+        expect(reopened?.error).toBeNull()
         const runArtifacts = Database.use((db) =>
           db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
         )
@@ -257,7 +259,7 @@ describe("EngineService.recordOperatorNote — active blocked run wake", () => {
     })
   })
 
-  test("operator notes on failed tasks reactivate the task without rewriting the active run", async () => {
+  test("operator notes on failed tasks reactivate the task and reopen the active run", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -321,10 +323,10 @@ describe("EngineService.recordOperatorNote — active blocked run wake", () => {
         expect(task.error).toBeNull()
         expect(task.time_completed).toBeNull()
         expect((task.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
-        const blocked = findRun(runID)
-        expect(blocked?.status).toBe("blocked")
-        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
-        expect(blocked?.error).toBe("session prompt loop finished")
+        const reopened = findRun(runID)
+        expect(reopened?.status).toBe("running")
+        expect(reopened?.blocking_reason).toBeNull()
+        expect(reopened?.error).toBeNull()
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
@@ -467,7 +469,7 @@ describe("EngineService.handleTaskMessage — active blocked run wake", () => {
     })
   })
 
-  test("service-level messages dispatch without rewriting stale active run blockers", async () => {
+  test("service-level messages reopen stale active run blockers before dispatch", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
     await Instance.provide({
       directory: tmp.path,
@@ -527,10 +529,10 @@ describe("EngineService.handleTaskMessage — active blocked run wake", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(result.should_resume).toBe(true)
-        const blocked = findRun(runID)
-        expect(blocked?.status).toBe("blocked")
-        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
-        expect(blocked?.error).toBe("MessageAbortedError: total deadline")
+        const reopened = findRun(runID)
+        expect(reopened?.status).toBe("running")
+        expect(reopened?.blocking_reason).toBeNull()
+        expect(reopened?.error).toBeNull()
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
           taskID,
@@ -540,6 +542,113 @@ describe("EngineService.handleTaskMessage — active blocked run wake", () => {
             },
           },
         })
+      },
+    })
+  })
+
+  test("service-level continue lets a completed goal retry trigger the next refill wake", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "test-provider/test-model" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const goalRunID = Identifier.ascending("grun")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "message refill wake" })
+        await seedRootSession(root.id)
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Message continues blocked task",
+              request: "continue",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            } as any)
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-blocked",
+              payload: {
+                plan_version_id: null,
+                session_id: root.id,
+                executor: "opencorvus",
+                status: "blocked",
+                phase: "dispatch",
+                blocking_reason: "orchestrator_stream_error",
+                error: "OrchestratorAborted: orchestrator aborted",
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: goalRunID,
+              task_id: taskID,
+              run_id: runID,
+              goal_run_id: goalRunID,
+              kind: "goal_run_attempt",
+              label: "goal-run-completed",
+              payload: {
+                goal_id: "gol_retry_completed",
+                session_id: null,
+                status: "completed",
+                retry_count: 1,
+                workspace_dir: null,
+                workspace_branch: null,
+                workspace_base_ref: null,
+                owner: null,
+                summary: "retry completed",
+                error: null,
+                files: null,
+                metrics: null,
+                time_started: now + 1,
+                time_completed: now + 2,
+              },
+              time_created: now + 2,
+              time_updated: now + 2,
+            })
+            .run()
+        })
+
+        await EngineService.handleTaskMessage(taskID, {
+          text: "继续",
+          source: "panel",
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const reopened = findRun(runID)
+        expect(reopened?.status).toBe("running")
+        expect(reopened?.blocking_reason).toBeNull()
+        expect(reopened?.error).toBeNull()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({ taskID })
+        const refillFacts = Database.use((db) =>
+          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
+        ).filter((row) => row.kind === "goal_refill_notification")
+        expect(refillFacts).toHaveLength(1)
       },
     })
   })
