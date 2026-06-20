@@ -2197,65 +2197,8 @@
   display: flex;
   gap: var(--ui-gap-sm);
   flex-wrap: wrap;
+  align-items: center;
   padding: var(--ui-gap-sm) var(--ui-section-padding-x);
-}
-
-/* Two task-actions button rules previously lived in styles.css
- * (base padding/font-size, then deeper presentation
- * with positioning + ::before dot 1500 lines lower). The deeper rule's
- * padding shorthand stomped the base rule's padding; merging here
- * collapses both into a single canonical so the cascade has one
- * source. The font-size from the base rule is preserved because the
- * deeper rule never set it. */
-.task-actions-buttons .oc-button {
-  --oc-button-height: auto;
-
-  min-height: auto;
-  padding: 0 0 0 var(--ui-btn-mini-padding-x);
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  position: relative;
-  color: var(--text-soft);
-  font-weight: var(--ui-font-weight-strong);
-  font-size: var(--ui-font-control);
-}
-
-.task-actions-buttons .oc-button::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: calc(5px * var(--ui-scale));
-  height: calc(5px * var(--ui-scale));
-  border-radius: var(--oc-radius-pill);
-  background: color-mix(in srgb, var(--subtle-4) 94%, transparent);
-  transform: translateY(-50%);
-}
-
-.task-actions-buttons .oc-button:hover {
-  background: transparent;
-  color: var(--text-strong);
-  box-shadow: none;
-}
-
-.task-actions-buttons .oc-button:focus-visible {
-  outline: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 36%, transparent);
-  outline-offset: calc(2px * var(--ui-scale));
-  box-shadow: none;
-}
-
-.task-actions-buttons .oc-button[data-task-action="retry"] {
-  color: var(--accent);
-}
-
-.task-actions-buttons .oc-button[data-task-action="retry"]::before {
-  background: color-mix(in srgb, var(--accent) 84%, transparent);
-}
-
-.task-actions-buttons .oc-button:disabled {
-  background: transparent;
 }
 
 .verdict-pill {

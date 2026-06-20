@@ -334,7 +334,7 @@ interface TaskActionsPanelProps {
 
 export function TaskActionsPanel(props: TaskActionsPanelProps) {
   const controls = createMemo(() => props.overview?.controls || {})
-  const hasButtons = createMemo(() => controls().canRetry || controls().canReplan)
+  const hasButtons = createMemo(() => controls().canRetry || controls().canReplan || controls().canCancel)
 
   return (
     <Show when={hasButtons()}>
@@ -365,6 +365,20 @@ export function TaskActionsPanel(props: TaskActionsPanelProps) {
             onClick={() => props.onReplan?.()}
           >
             {t("task.action.replan")}
+          </Button>
+        </Show>
+        <Show when={controls().canCancel}>
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            tone="danger"
+            data-task-action="cancel"
+            title={t("task.action.cancel_title")}
+            aria-label={t("task.action.cancel_title")}
+            onClick={() => props.onCancel?.()}
+          >
+            {t("task.action.cancel")}
           </Button>
         </Show>
       </div>

@@ -765,18 +765,18 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toContain("var(--ui-highlight-tone)")
   })
 
-  test("task action buttons opt out of fixed primitive height inside inspector", () => {
+  test("task action buttons keep shared Button primitive dimensions inside inspector", () => {
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const boardSource = readText(join(OVERLAY_ROOT, "src/components/Board.tsx"))
 
-    const body = soloRuleBody(inspectorSurface, ".task-actions-buttons .oc-button")
-
     expect(boardSource).toContain('class="task-actions-buttons"')
     expect(boardSource).toContain("<Button")
-    expect(body).toContain("--oc-button-height: auto")
-    expect(body).toContain("min-height: auto")
-    expect(body).toContain("background: transparent")
-    expect(body).not.toMatch(/height:\s*calc\(/)
+    expect(boardSource).toContain('data-task-action="cancel"')
+    expect(boardSource).toContain('title={t("task.action.cancel_title")}')
+    expect(inspectorSurface).not.toMatch(/\.task-actions-buttons\s+\.oc-button\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.task-actions-buttons\s+\.oc-button::before\s*\{/)
+    expect(inspectorSurface).not.toMatch(/\.task-actions-buttons\s+\.oc-button[^{]*--oc-button-height:\s*auto/s)
+    expect(inspectorSurface).not.toMatch(/\.task-actions-buttons\s+\.oc-button[^{]*min-height:\s*auto/s)
   })
 
   test("task dir bar (TaskDirBar) is owned by surfaces/conversation.css", () => {
