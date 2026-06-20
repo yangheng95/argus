@@ -9,8 +9,9 @@
 // Close (when an `onClose` is supplied).
 //
 // Active entry point:
-//   <TracePanel sessionID="..." /> — per-session, mounted by the 🔍 button
-//                                    on each card (see Card.tsx).
+//   <TracePanel sessionID="..." directory="..." /> — per-session, mounted by
+//                                                   the trace button on each
+//                                                   card (see Card.tsx).
 //
 // The taskID mode of the prop is preserved for future cross-session views
 // but is currently unused — the panel-level "Show all session trace" bar
@@ -33,8 +34,8 @@ import { t } from "../utils/i18n"
 import { createVisibilityInterval } from "../utils/visibility-interval"
 
 type TracePanelProps =
-  | { sessionID: string; taskID?: never; onClose?: () => void }
-  | { taskID: string; sessionID?: never; onClose?: () => void }
+  | { sessionID: string; taskID?: never; directory: string; onClose?: () => void }
+  | { taskID: string; sessionID?: never; directory: string; onClose?: () => void }
 
 function formatTime(ts: number): string {
   if (!Number.isFinite(ts) || ts <= 0) return "—"
@@ -186,17 +187,17 @@ function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
 }
 
 export function TracePanel(props: TracePanelProps) {
-  const cacheKey = createMemo(() => props.sessionID ?? `task:${props.taskID ?? ""}`)
+  const cacheKey = createMemo(() => `${props.directory}:${props.sessionID ?? `task:${props.taskID ?? ""}`}`)
   const [refreshTick, setRefreshTick] = createSignal(0)
 
   const [data] = createResource<TraceFetchResult, { key: string; tick: number }>(
     () => ({ key: cacheKey(), tick: refreshTick() }),
     async () => {
       if ("sessionID" in props && props.sessionID) {
-        return fetchSessionTrace(props.sessionID, { force: refreshTick() > 0 })
+        return fetchSessionTrace({ sessionID: props.sessionID, directory: props.directory }, { force: refreshTick() > 0 })
       }
       if ("taskID" in props && props.taskID) {
-        return fetchTaskTrace(props.taskID, { force: refreshTick() > 0 })
+        return fetchTaskTrace({ taskID: props.taskID, directory: props.directory }, { force: refreshTick() > 0 })
       }
       return { ok: true, events: [], traceDir: "", enabled: true }
     },
@@ -209,9 +210,9 @@ export function TracePanel(props: TracePanelProps) {
 
   const refresh = () => {
     if ("sessionID" in props && props.sessionID) {
-      invalidateTraceCache({ sessionID: props.sessionID })
+      invalidateTraceCache({ sessionID: props.sessionID, directory: props.directory })
     } else if ("taskID" in props && props.taskID) {
-      invalidateTraceCache({ taskID: props.taskID })
+      invalidateTraceCache({ taskID: props.taskID, directory: props.directory })
     }
     setRefreshTick((v) => v + 1)
   }

@@ -15,6 +15,10 @@ const HELPERS = readFileSync(join(import.meta.dir, "../src/utils/mission-helpers
 const I18N_ZH_CN = readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")
 const I18N_EN_US = readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")
 
+function count(source: string, needle: string): number {
+  return source.split(needle).length - 1
+}
+
 test("Mission.tsx no longer imports the decompose service surface", () => {
   expect(MISSION_TSX).not.toContain("decomposeRequirement")
   expect(MISSION_TSX).not.toContain("MissionTaskCandidate")
@@ -103,6 +107,28 @@ test("Mission row selection is not blocked by unrelated row action busy state", 
   expect(block).not.toContain("withBusy")
 })
 
+test("Mission row action busy state disables every row action from one source", () => {
+  expect(MISSION_TSX).toContain("await withBusy(`abort:${mission.missionID}`")
+  expect(MISSION_TSX).toContain("await withBusy(`delete:${mission.missionID}`")
+  expect(MISSION_TSX).toContain("await withBusy(`rename:${mission.missionID}`")
+  expect(MISSION_TSX).toContain("await withBusy(`download:${mission.missionID}`")
+  expect(MISSION_TSX).toContain("actionBusy={actionBusy()}")
+
+  expect(MISSION_LIST_TSX).toContain("const missionActionDisabled = () => Boolean(props.actionBusy)")
+  expect(MISSION_LIST_TSX).toContain(
+    'const missionActionBusy = (action: "abort" | "delete" | "download" | "rename") =>',
+  )
+  expect(count(MISSION_LIST_TSX, "disabled={missionActionDisabled()}")).toBe(5)
+  expect(MISSION_LIST_TSX).toContain("if (missionActionDisabled()) return")
+  expect(MISSION_LIST_TSX).toContain("disabled={missionActionDisabled()}")
+  expect(MISSION_LIST_TSX).toContain('data-ui="mission-row-rename-input"')
+  expect(MISSION_LIST_TSX).toContain('busy={missionActionBusy("abort")}')
+  expect(MISSION_LIST_TSX).toContain('busy={missionActionBusy("download")}')
+  expect(MISSION_LIST_TSX).toContain('busy={missionActionBusy("rename")}')
+  expect(MISSION_LIST_TSX).toContain('busy={missionActionBusy("delete")}')
+  expect(MISSION_LIST_TSX).not.toContain("disabled={props.busy}")
+})
+
 test("Mission row selection ignores superseded conversation aborts without surfacing action errors", () => {
   const start = MISSION_TSX.indexOf("async function handleMissionSelect")
   const end = MISSION_TSX.indexOf("function handleTaskSelect", start)
@@ -173,11 +199,13 @@ test("Mission ledger is embedded in the left task panel without its retired pane
   expect(MISSION_LIST_TSX).not.toContain("compactDirectory")
   expect(MISSION_CSS).toContain(".mission-row.task-row-mini")
   expect(MISSION_LIST_TSX).toContain('data-ui="task-row-cancel"')
+  expect(MISSION_LIST_TSX).toContain('data-ui="task-row-download"')
   expect(MISSION_LIST_TSX).toContain('data-ui="task-row-rename"')
   expect(MISSION_LIST_TSX).toContain('data-ui="task-row-delete"')
   expect(MISSION_LIST_TSX).toContain("ArmedConfirmButton")
   expect(MISSION_LIST_TSX).not.toContain("../solid/armed-confirm")
   expect(MISSION_LIST_TSX).not.toContain("useArmedConfirm(")
+  expect(MISSION_LIST_TSX).toContain("onDownloadMission")
   expect(MISSION_LIST_TSX).toContain('class="task-row-rename-input"')
   expect(MISSION_LIST_TSX).toContain('data-ui="mission-row-rename-input"')
   expect(MISSION_LIST_TSX).toContain("<Show when={canAbort()}>")

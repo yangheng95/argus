@@ -24,6 +24,7 @@ import { flushBufferedPartDeltas, resetWriter } from "../src/services/tree-write
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+const TEST_DIRECTORY = "D:/conversation-runtime"
 
 installRealOverlayI18n()
 
@@ -209,7 +210,7 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
   )
 
   let settled = false
-  const hydration = hydrateTaskConversation("tsk_replay").then((sequence) => {
+  const hydration = hydrateTaskConversation("tsk_replay", { directory: TEST_DIRECTORY }).then((sequence) => {
     settled = true
     return sequence
   })
@@ -285,7 +286,7 @@ test("hydrateTaskConversation preserves agent rail records until the replacement
     }),
   )
 
-  const hydration = hydrateTaskConversation("tsk_preserve_agents")
+  const hydration = hydrateTaskConversation("tsk_preserve_agents", { directory: TEST_DIRECTORY })
   await Promise.resolve()
   expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_existing_agent"])
 
@@ -509,7 +510,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_lazy", { tailLimit: 1 })).resolves.toBe(5)
+  await expect(hydrateTaskConversation("tsk_lazy", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(5)
   expect(cardTreeStore.order.filter((id) => id !== "ctx:user-request")).toEqual([
     "assistant:session:ses_root:message:msg_latest",
   ])
@@ -696,7 +697,9 @@ test("history paging replays lifecycle-only frontend agent events without blank 
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1 })).resolves.toBe(8)
+  await expect(hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(
+    8,
+  )
   expect(conversationAgentStore.records.map((record) => record.sessionID)).not.toContain("ses_frontend_lifecycle")
   expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
@@ -939,7 +942,7 @@ test("history paging continues when a goal phase card exists but its target mess
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_phase_history", { tailLimit: 1 })).resolves.toBe(7)
+  await expect(hydrateTaskConversation("tsk_phase_history", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(7)
   expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
   expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(false)
 
@@ -1171,7 +1174,7 @@ test("goal phase history can hydrate a build session directly by session id", as
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_phase_session", { tailLimit: 1 })).resolves.toBe(8)
+  await expect(hydrateTaskConversation("tsk_phase_session", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(8)
   expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe("ses_build_session")
   expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(false)
 
@@ -1358,7 +1361,9 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1 })).resolves.toBe(7)
+  await expect(hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(
+    7,
+  )
   expect(conversationAgentStore.records.map((record) => record.sessionID)).not.toContain("ses_frontend_session")
   expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
@@ -1394,7 +1399,7 @@ test("stale session-history response after task switch does not hydrate the curr
     }),
   )
 
-  const history = loadConversationSessionHistory("ses_old_build", "tsk_history_old")
+  const history = loadConversationSessionHistory("ses_old_build", "tsk_history_old", { directory: TEST_DIRECTORY })
   await Promise.resolve()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_history_new" })
 

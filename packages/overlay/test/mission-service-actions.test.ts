@@ -28,7 +28,9 @@ function fakeTransport(responder: (req: TransportRequest) => TransportResponse<u
   } satisfies HostTransport
 }
 
-const { abortMission, deleteMission, renameMission } = await import("../src/services/mission")
+const { abortMission, deleteMission, loadMissionStatus, loadTaskStatus, renameMission } = await import(
+  "../src/services/mission"
+)
 
 let captured: Captured[]
 
@@ -114,6 +116,28 @@ describe("Mission service action contract", () => {
         path: "mission/m-alpha",
         method: "DELETE",
         query: { directory: "D:/repo" },
+        body: undefined,
+      },
+    ])
+  })
+
+  test("status readers send the owning row directory explicitly", async () => {
+    __setHostTransportForTest(recordingTransport())
+
+    await loadMissionStatus({ missionID: "m-alpha", directory: "D:/repo/mission" })
+    await loadTaskStatus({ taskID: "tsk-alpha", directory: "D:/repo/task" })
+
+    expect(captured).toEqual([
+      {
+        path: "mission/m-alpha/status",
+        method: "GET",
+        query: { directory: "D:/repo/mission" },
+        body: undefined,
+      },
+      {
+        path: "task/tsk-alpha/status",
+        method: "GET",
+        query: { directory: "D:/repo/task" },
         body: undefined,
       },
     ])

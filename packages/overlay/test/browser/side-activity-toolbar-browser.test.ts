@@ -165,6 +165,7 @@ test(
 
     const requestLog: Array<{ method: string; path: string }> = []
     let missionInterruptible = true
+    let resolveMissionArchive: ((response: Response) => void) | null = null
     const promptProfileCatalog = {
       active: "general",
       project_active: "general",
@@ -195,6 +196,11 @@ test(
       if (path === "/mission/mis_side_activity/abort") {
         missionInterruptible = false
         return send(true)
+      }
+      if (path === "/mission/mis_side_activity/project-archive") {
+        return await new Promise<Response>((resolve) => {
+          resolveMissionArchive = resolve
+        })
       }
       if (path === "/session/ses_mission_side_activity/conversation") {
         return send({
@@ -930,6 +936,79 @@ test(
 
       const missionRowSelector = '.mission-ledger [data-ui="mission-row"][data-session-id="ses_mission_side_activity"]'
       const missionAbortSelector = `${missionRowSelector} [data-ui="task-row-cancel"]`
+      const missionDownloadSelector = `${missionRowSelector} [data-ui="task-row-download"]`
+      const missionRenameSelector = `${missionRowSelector} [data-ui="task-row-rename"]`
+      const missionDeleteSelector = `${missionRowSelector} [data-ui="task-row-delete"]`
+      await page.hover(missionRowSelector)
+      await clickButton(missionDownloadSelector)
+      await waitForState("mission project archive request should start", () =>
+        requestLog.some(
+          (entry) => entry.method === "GET" && entry.path === "/mission/mis_side_activity/project-archive",
+        ),
+      )
+      const missionActionBusyState = await page.evaluate(
+        ([rowSelector, selectors]) => {
+          const row = document.querySelector<HTMLElement>(rowSelector)
+          if (!row) throw new Error("missing mission row")
+          return Object.entries(selectors as Record<string, string>).map(([name, selector]) => {
+            const button = document.querySelector<HTMLButtonElement>(selector)
+            if (!button) throw new Error(`missing mission action ${name}`)
+            const style = getComputedStyle(button)
+            return {
+              name,
+              disabled: button.disabled,
+              busy: button.dataset.busy || "",
+              opacity: style.opacity,
+              pointerEvents: style.pointerEvents,
+            }
+          })
+        },
+        [
+          missionRowSelector,
+          {
+            abort: missionAbortSelector,
+            download: missionDownloadSelector,
+            rename: missionRenameSelector,
+            delete: missionDeleteSelector,
+          },
+        ],
+      )
+      assert.deepEqual(
+        missionActionBusyState.map((item: any) => ({ name: item.name, disabled: item.disabled, busy: item.busy })),
+        [
+          { name: "abort", disabled: true, busy: "" },
+          { name: "download", disabled: true, busy: "true" },
+          { name: "rename", disabled: true, busy: "" },
+          { name: "delete", disabled: true, busy: "" },
+        ],
+      )
+      assert.ok(missionActionBusyState.every((item: any) => item.opacity !== "1"))
+      await page.evaluate((selector) => {
+        document.querySelector<HTMLButtonElement>(selector)?.click()
+      }, missionAbortSelector)
+      assert.equal(
+        requestLog.some((entry) => entry.method === "POST" && entry.path === "/mission/mis_side_activity/abort"),
+        false,
+      )
+      const missionBusyLedger = await page.$('[data-ui="mission-ledger"]')
+      assert.ok(missionBusyLedger)
+      const missionBusyScreenshotPath = resolve(".scratch/mission-action-busy-disabled.png")
+      mkdirSync(dirname(missionBusyScreenshotPath), { recursive: true })
+      writeFileSync(missionBusyScreenshotPath, await missionBusyLedger.screenshot({}))
+      assert.ok(resolveMissionArchive, "mission archive request should be held by the fixture")
+      resolveMissionArchive(
+        new Response(JSON.stringify({ message: "archive unavailable after busy-state verification" }), {
+          status: 503,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        }),
+      )
+      await page.waitForFunction((selector) => {
+        const button = document.querySelector<HTMLButtonElement>(selector)
+        return !!button && !button.disabled
+      }, {}, missionDownloadSelector)
+
       await page.hover(missionRowSelector)
       await clickButton(missionAbortSelector)
       await page.hover(missionRowSelector)

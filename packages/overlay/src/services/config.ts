@@ -146,6 +146,24 @@ export interface HexinBudget {
 
 export type HexinBudgetResponse = { ok: true; budget: HexinBudget } | { ok: false; error: string }
 
+export interface SessionConfigRequest {
+  sessionID: string
+  directory: string
+}
+
+export interface SessionConfigPatchRequest extends SessionConfigRequest {
+  diff: Record<string, any>
+}
+
+export interface TaskOperatorModelContextRequest {
+  taskID: string
+  directory: string
+}
+
+export interface DirectoryScopedRequest {
+  directory: string
+}
+
 export interface NetworkProxyDraft {
   url: string
   llmProvider: boolean
@@ -231,38 +249,55 @@ export function markSessionConfigStale(_sessionID?: string): void {
   setSessionConfigRefreshTokenValue((value) => value + 1)
 }
 
-export async function getSessionConfig(sessionID: string): Promise<SessionConfigResponse> {
+function directoryScopedPath(path: string, directory: string, label: string): string {
+  const trimmed = directory.trim()
+  if (!trimmed) throw new Error(`${label}: directory is required`)
+  const params = new URLSearchParams({ directory: trimmed })
+  return `${path}?${params.toString()}`
+}
+
+export async function getSessionConfig(input: SessionConfigRequest): Promise<SessionConfigResponse> {
   if (!appStore.connected) {
     throw new Error("Cannot load session config while disconnected")
   }
-  return await apiJson(`session/${encodeURIComponent(sessionID)}/config`)
+  const sessionID = input.sessionID.trim()
+  if (!sessionID) throw new Error("getSessionConfig: sessionID is required")
+  return await apiJson(directoryScopedPath(`session/${encodeURIComponent(sessionID)}/config`, input.directory, "getSessionConfig"))
 }
 
-export async function patchSessionConfig(sessionID: string, diff: Record<string, any>): Promise<SessionConfigResponse> {
+export async function patchSessionConfig(input: SessionConfigPatchRequest): Promise<SessionConfigResponse> {
   if (!appStore.connected) {
     throw new Error("Cannot patch session config while disconnected")
   }
-  const saved = await apiJson(`session/${encodeURIComponent(sessionID)}/config`, {
+  const sessionID = input.sessionID.trim()
+  if (!sessionID) throw new Error("patchSessionConfig: sessionID is required")
+  const saved = await apiJson(directoryScopedPath(`session/${encodeURIComponent(sessionID)}/config`, input.directory, "patchSessionConfig"), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(diff),
+    body: JSON.stringify(input.diff),
   })
   markSessionConfigStale(sessionID)
   return saved
 }
 
-export async function getTaskOperatorModelContext(taskID: string): Promise<TaskOperatorModelContext> {
+export async function getTaskOperatorModelContext(
+  input: TaskOperatorModelContextRequest,
+): Promise<TaskOperatorModelContext> {
   if (!appStore.connected) {
     throw new Error("Cannot load task operator model context while disconnected")
   }
-  return await apiJson(`task/${encodeURIComponent(taskID)}/operator-model-context`)
+  const taskID = input.taskID.trim()
+  if (!taskID) throw new Error("getTaskOperatorModelContext: taskID is required")
+  return await apiJson(
+    directoryScopedPath(`task/${encodeURIComponent(taskID)}/operator-model-context`, input.directory, "getTaskOperatorModelContext"),
+  )
 }
 
-export async function getHexinBudget(): Promise<HexinBudgetResponse> {
+export async function getHexinBudget(input: DirectoryScopedRequest): Promise<HexinBudgetResponse> {
   if (!appStore.connected) {
     throw new Error("Cannot load Hexin budget while disconnected")
   }
-  return await apiJson("provider/hexin/budget")
+  return await apiJson(directoryScopedPath("provider/hexin/budget", input.directory, "getHexinBudget"))
 }
 
 export async function testNetworkProxy(proxy: NetworkProxyDraft): Promise<NetworkProxyTestResult> {
@@ -534,8 +569,9 @@ export async function setProjectPromptProfileActive(profileID: string): Promise<
 export async function setSessionPromptProfileActive(
   sessionID: string,
   profileID: string,
+  directory: string,
 ): Promise<SessionConfigResponse> {
-  return await patchSessionConfig(sessionID, { prompt_profile: { active: profileID } })
+  return await patchSessionConfig({ sessionID, directory, diff: { prompt_profile: { active: profileID } } })
 }
 
 export async function syncAgentPromptLocale(locale: string): Promise<void> {
@@ -666,7 +702,7 @@ export async function reloadProjectScope(options: { restoreWorkspace?: boolean }
     loadExtensions(),
     loadMeta(),
     loadTasks(),
-    loadExecutors(),
+    loadExecutors(directory),
   ])
   if (options.restoreWorkspace) {
     try {

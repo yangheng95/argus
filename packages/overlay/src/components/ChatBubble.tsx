@@ -17,6 +17,7 @@ import { stageAccent } from "../utils/card-color"
 import { fullStampWithRelative, stamp } from "../utils/time"
 import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
 import { submitTaskRewind } from "../services/rewind"
+import { currentTraceDirectory } from "../services/trace-directory"
 import { t } from "../utils/i18n"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
 import { Avatar } from "./Avatar"
@@ -298,7 +299,11 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
           <Show when={expanded()}>
             <div class="chat-bubble__body">
               <Show when={traceOpen() && traceSessionID()}>
-                <TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />
+                <TracePanel
+                  sessionID={traceSessionID()!}
+                  directory={currentTraceDirectory()}
+                  onClose={() => setTraceOpen(false)}
+                />
               </Show>
               <div class="chat-bubble__body-inner">
                 <Show when={props.node.parts.length > 0}>

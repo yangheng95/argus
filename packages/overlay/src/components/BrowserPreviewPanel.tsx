@@ -25,6 +25,7 @@ import { browserPreviewLivePoint } from "./browser-preview-live-point"
 type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
 
 type BrowserPreviewLiveImage = {
+  directory: string
   taskID: string
   targetID: string
   viewportID: BrowserPreviewViewportID
@@ -32,6 +33,7 @@ type BrowserPreviewLiveImage = {
 }
 
 type BrowserPreviewEvidenceImage = {
+  directory: string
   taskID: string
   evidenceID: string
   viewportID: BrowserPreviewViewportID
@@ -60,6 +62,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [targetLoadError, setTargetLoadError] = createSignal<{ taskID: string; message: string }>()
   const panelActive = createMemo(() => props.active())
   const [verificationRequest, setVerificationRequest] = createSignal<{
+    directory: string
     taskID: string
     targetID: string
     viewportIDs: BrowserPreviewViewportID[]
@@ -74,7 +77,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     },
     async (scope) => {
       try {
-        return await loadTaskBrowserPreviewTarget(scope.taskID)
+        return await loadTaskBrowserPreviewTarget({ taskID: scope.taskID, directory: scope.directory })
       } catch (error) {
         setTargetLoadError({ taskID: scope.taskID, message: String(error) })
         return undefined
@@ -84,6 +87,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [verification] = createResource(verificationRequest, (request) =>
     captureTaskBrowserPreviewEvidence({
       taskID: request.taskID,
+      directory: request.directory,
       targetID: request.targetID,
       viewportIDs: request.viewportIDs,
     }),
@@ -113,8 +117,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       const taskID = props.taskID()
       const targetID = currentTarget()?.id
       const evidenceID = currentTarget()?.latestEvidenceIDs?.[viewportID()]
-      if (!taskID || !targetID || !evidenceID) return undefined
-      return { taskID, evidenceID, targetID, viewportID: viewportID() }
+      const directory = props.directory()
+      if (!taskID || !directory || !targetID || !evidenceID) return undefined
+      return { taskID, directory, evidenceID, targetID, viewportID: viewportID() }
     },
     (scope) => loadTaskBrowserPreviewEvidence(scope),
   )
@@ -141,9 +146,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const currentVerificationRequest = createMemo(() => {
     const request = verificationRequest()
     const taskID = props.taskID()
+    const directory = props.directory()
     const resolved = currentTarget()
-    if (!request || !taskID || resolved?.status !== "ready" || !resolved.id) return undefined
-    if (request.taskID !== taskID || request.targetID !== resolved.id) return undefined
+    if (!request || !taskID || !directory || resolved?.status !== "ready" || !resolved.id) return undefined
+    if (request.taskID !== taskID || request.directory !== directory || request.targetID !== resolved.id) return undefined
     return request
   })
   const currentVerification = createMemo(() => (currentVerificationRequest() ? verification() : undefined))
@@ -151,10 +157,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const currentVerificationLoading = createMemo(() => Boolean(currentVerificationRequest() && verification.loading))
   const liveScope = createMemo(() => {
     const taskID = props.taskID()
+    const directory = props.directory()
     const resolved = currentTarget()
     const viewport = selectedViewport()
-    if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.id || !viewport) return undefined
-    return { taskID, targetID: resolved.id, viewportID: viewport.id, viewport }
+    if (!panelActive() || !taskID || !directory || resolved?.status !== "ready" || !resolved.id || !viewport) {
+      return undefined
+    }
+    return { taskID, directory, targetID: resolved.id, viewportID: viewport.id, viewport }
   })
   const liveImageUrl = createMemo(() => {
     const scope = liveScope()
@@ -186,7 +195,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     () => {
       const evidence = renderedEvidence()
       if (!evidence?.capture?.captured) return undefined
-      return { taskID: evidence.taskID, evidenceID: evidence.id, viewportID: evidence.viewportID }
+      const directory = props.directory()
+      if (!directory) return undefined
+      return { taskID: evidence.taskID, directory, evidenceID: evidence.id, viewportID: evidence.viewportID }
     },
     async (scope): Promise<BrowserPreviewEvidenceImage> => ({
       ...scope,
@@ -272,17 +283,20 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   createEffect(() => {
     const taskID = props.taskID()
+    const directory = props.directory()
     const resolved = currentTarget()
     const viewportIDs = viewports().map((viewport) => viewport.id)
-    if (!panelActive() || !taskID || resolved?.status !== "ready" || !resolved.url || !resolved.id) return
+    if (!panelActive() || !taskID || !directory || resolved?.status !== "ready" || !resolved.url || !resolved.id) {
+      return
+    }
     const latestEvidenceIDs = resolved.latestEvidenceIDs ?? {}
     if (viewportIDs.length === 0 || viewportIDs.every((id) => latestEvidenceIDs[id]) || currentVerificationLoading()) {
       return
     }
-    const key = `${taskID}:${resolved.id}:${viewportIDs.join(",")}`
+    const key = `${directory}:${taskID}:${resolved.id}:${viewportIDs.join(",")}`
     if (lastAutoCapturedPreviewKey() === key) return
     setLastAutoCapturedPreviewKey(key)
-    setVerificationRequest({ taskID, targetID: resolved.id, viewportIDs, token: Date.now() })
+    setVerificationRequest({ taskID, directory, targetID: resolved.id, viewportIDs, token: Date.now() })
   })
 
   createEffect(() => {
@@ -295,12 +309,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   const selectCandidate = (candidate: BrowserPreviewCandidate | null) => {
     const taskID = props.taskID()
-    if (!taskID || !candidate || candidate.selected) return
+    const directory = props.directory()
+    if (!taskID || !directory || !candidate || candidate.selected) return
     setPendingSelectedTargetID(candidate.id)
     setTargetSelectionError("")
     setVerificationRequest(undefined)
     clearLiveImageUrl()
-    void selectTaskBrowserPreviewTarget({ taskID, targetID: candidate.id })
+    void selectTaskBrowserPreviewTarget({ taskID, directory, targetID: candidate.id })
       .then(() => setRefreshToken((value) => value + 1))
       .catch((error) => {
         if (props.taskID() !== taskID) return
@@ -313,11 +328,12 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   const captureEvidence = () => {
     const taskID = props.taskID()
+    const directory = props.directory()
     const resolved = currentTarget()
-    if (!taskID || resolved?.status !== "ready" || !resolved.url || !resolved.id) return
+    if (!taskID || !directory || resolved?.status !== "ready" || !resolved.url || !resolved.id) return
     const viewportIDs = viewports().map((viewport) => viewport.id)
     if (viewportIDs.length === 0) return
-    setVerificationRequest({ taskID, targetID: resolved.id, viewportIDs, token: Date.now() })
+    setVerificationRequest({ taskID, directory, targetID: resolved.id, viewportIDs, token: Date.now() })
   }
 
   let liveFrameRequestSequence = 0
@@ -325,6 +341,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const replaceLiveImageUrl = (scope: NonNullable<ReturnType<typeof liveScope>>, next: string) => {
     const previous = liveImage()
     setLiveImage({
+      directory: scope.directory,
       taskID: scope.taskID,
       targetID: scope.targetID,
       viewportID: scope.viewportID,
@@ -875,16 +892,17 @@ function evidenceFromVerification(
 }
 
 function browserPreviewLiveScopeKey(input: {
+  directory: string
   taskID: string
   targetID: string
   viewportID: BrowserPreviewViewportID
 }): string {
-  return `${input.taskID}:${input.targetID}:${input.viewportID}`
+  return `${input.directory}:${input.taskID}:${input.targetID}:${input.viewportID}`
 }
 
 function browserPreviewLiveImageMatchesScope(
   image: BrowserPreviewLiveImage,
-  scope: { taskID: string; targetID: string; viewportID: BrowserPreviewViewportID },
+  scope: { directory: string; taskID: string; targetID: string; viewportID: BrowserPreviewViewportID },
 ): boolean {
   return browserPreviewLiveScopeKey(image) === browserPreviewLiveScopeKey(scope)
 }

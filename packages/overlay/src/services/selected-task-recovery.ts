@@ -1,5 +1,10 @@
 import { boardStore, activeTaskID } from "../store/board"
-import { cancelConversationReplay, hydrateTaskConversation, mergeLatestConversationTail } from "./conversation"
+import {
+  cancelConversationReplay,
+  conversationSourceDirectory,
+  hydrateTaskConversation,
+  mergeLatestConversationTail,
+} from "./conversation"
 import { resetSelectedLiveCursor } from "./selected-stream-cursor"
 import {
   recordConversationRecoveryAborted,
@@ -82,11 +87,12 @@ export async function recoverSelectedTaskConversation(
       throw new Error(`Selected task recovery refused full conversation refresh after load: ${reason}`)
     }
     const replayLive = !isLiveReplayExpiredReason(reason)
+    const directory = conversationSourceDirectory({ kind: "task", id: taskID })
     if (!replayLive) resetSelectedLiveCursor()
     if (replayLive) cancelConversationReplay()
-    startSSE({ kind: "task", id: taskID }, sequence, { replayLive })
+    startSSE({ kind: "task", id: taskID }, sequence, { replayLive, directory })
     if (!replayLive) {
-      void mergeLatestConversationTail(taskID).catch((error) => {
+      void mergeLatestConversationTail(taskID, { directory }).catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return
         console.error("[selected-task-recovery] live replay gap tail merge failed", error)
       })
@@ -152,13 +158,15 @@ export async function recoverSelectedTaskAfterRewindClear(
     try {
       assertCurrentRecovery(taskID, generation, controller.signal)
       resetSelectedLiveCursor()
+      const directory = conversationSourceDirectory({ kind: "task", id: taskID })
       const sequence = await hydrateTaskConversation(taskID, {
         signal: controller.signal,
         scrollIntent: "bottom",
         resetCause: "task-rewind-clear",
+        directory,
       })
       assertCurrentRecovery(taskID, generation, controller.signal)
-      startSSE({ kind: "task", id: taskID }, sequence)
+      startSSE({ kind: "task", id: taskID }, sequence, { directory })
       recordConversationRecoverySucceeded({
         channel: "rewind-clear",
         reason,

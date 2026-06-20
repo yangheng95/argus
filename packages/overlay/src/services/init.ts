@@ -106,7 +106,7 @@ async function loadInitialData(): Promise<boolean> {
     loadConfigInfo(CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS, {
       includeSettingsData: false,
     }),
-    loadExecutors(),
+    loadExecutors(directory),
   ])
   return true
 }

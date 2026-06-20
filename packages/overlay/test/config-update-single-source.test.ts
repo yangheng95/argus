@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { setAppStore, appStore } from "../src/store/app"
+import { configure as configureApi } from "../src/services/api"
 import {
   __setHostTransportForTest,
   type HostTransport,
@@ -73,12 +74,14 @@ function fakeConfigTransport(calls: TransportRequest[]): HostTransport {
 describe("updateConfig writes through the Solid config store", () => {
   afterEach(() => {
     __setHostTransportForTest(undefined)
+    configureApi({ directory: "" })
     setAppStore({ config: null, connected: false })
   })
 
   test("PATCH response becomes the local config mirror without a second config fetch", async () => {
     const calls: TransportRequest[] = []
     __setHostTransportForTest(fakeConfigTransport(calls))
+    configureApi({ directory: "D:/workspace/app" })
     setAppStore("config", { model: "stale" })
     const { updateConfig } = await import("../src/services/config")
 
@@ -92,6 +95,7 @@ describe("updateConfig writes through the Solid config store", () => {
     expect(appStore.config.provider.openai.api).toBe("https://api.openai.com/v1")
     expect(appStore.config.agent.build.model).toBe("hexin/old-build")
     expect(calls.map((call) => call.method)).toEqual(["GET", "PATCH"])
+    expect(calls.map((call) => call.query?.directory)).toEqual(["D:/workspace/app", "D:/workspace/app"])
     expect(calls[1].body?.kind).toBe("json")
     expect(calls[1].body?.value).toEqual({
       model: "after",
@@ -102,8 +106,9 @@ describe("updateConfig writes through the Solid config store", () => {
     expect(calls[1].body?.value).not.toHaveProperty("agent")
   })
 
-  test("session config helpers use /session/:id/config and do not update appStore.config", async () => {
+  test("session config helpers use explicit directory and do not update appStore.config", async () => {
     const calls: TransportRequest[] = []
+    const directory = "D:/workspace/session-app"
     let sessionConfig = {
       config: {
         model: "openai/gpt-4o-mini",
@@ -153,8 +158,12 @@ describe("updateConfig writes through the Solid config store", () => {
     setAppStore({ connected: true, config: { model: "project/base" } })
     const { getSessionConfig, patchSessionConfig } = await import("../src/services/config")
 
-    const before = await getSessionConfig("session_123")
-    const after = await patchSessionConfig("session_123", { model: "anthropic/claude-sonnet-4-6" })
+    const before = await getSessionConfig({ sessionID: "session_123", directory })
+    const after = await patchSessionConfig({
+      sessionID: "session_123",
+      directory,
+      diff: { model: "anthropic/claude-sonnet-4-6" },
+    })
 
     expect(before.config.model).toBe("openai/gpt-4o-mini")
     expect(after.config.model).toBe("anthropic/claude-sonnet-4-6")
@@ -163,5 +172,6 @@ describe("updateConfig writes through the Solid config store", () => {
       "GET session/session_123/config",
       "PATCH session/session_123/config",
     ])
+    expect(calls.map((call) => call.query?.directory)).toEqual([directory, directory])
   })
 })

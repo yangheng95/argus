@@ -9,7 +9,7 @@ import { t } from "../../utils/i18n"
 import { renderMarkdown } from "../../utils/markdown"
 import { appStore } from "../../store/app"
 import { activeSessionID, rootTaskSessionID } from "../../store/board"
-import { settingsStore } from "../../store/settings"
+import { activeDirectory } from "../../services/workspace"
 import {
   createPromptProfileID,
   deletePromptProfile,
@@ -120,7 +120,7 @@ export default function PromptCatalog() {
   })
 
   async function refreshPromptProfiles(): Promise<void> {
-    if (!appStore.connected || !settingsStore.directory.trim()) {
+    if (!appStore.connected || !activeDirectory().trim()) {
       setProfileCatalog(null)
       return
     }
@@ -143,7 +143,7 @@ export default function PromptCatalog() {
 
   createEffect(() => {
     const connected = appStore.connected
-    const directory = settingsStore.directory.trim()
+    const directory = activeDirectory().trim()
     const version = profileConfigVersion()
     const sessionID = currentScopeSessionID()
     void version
@@ -297,9 +297,11 @@ export default function PromptCatalog() {
     const profile = currentProfile()
     const sessionID = currentScopeSessionID()
     if (!profile || !sessionID || sessionActiveProfileID() === profile.id) return
+    const directory = activeDirectory().trim()
+    if (!directory) return
     setSaving(true)
     try {
-      await setSessionPromptProfileActive(sessionID, profile.id)
+      await setSessionPromptProfileActive(sessionID, profile.id, directory)
       await reloadPromptSurfaces(profile.id)
       showNotice(t("prompt_profile.activated_session"), "active")
     } catch (error) {

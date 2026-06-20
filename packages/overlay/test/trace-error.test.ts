@@ -3,6 +3,8 @@ import { fetchTaskTrace } from "../src/services/trace"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
+const DIRECTORY = "D:/repo/trace"
+
 function fakeTransport(responder: (req: TransportRequest) => TransportResponse<unknown>): HostTransport {
   return {
     kind: "tauri",
@@ -30,18 +32,24 @@ test("fetchTaskTrace returns explicit error result on transport failure", async 
     }),
   )
 
-  const result = await fetchTaskTrace("task_1", { force: true })
+  const result = await fetchTaskTrace({ taskID: "task_1", directory: DIRECTORY }, { force: true })
   expect(result.ok).toBe(false)
   expect(result.events).toEqual([])
   expect(result.ok === false ? result.error : "").toContain("trace route down")
 })
 
 test("fetchTaskTrace returns explicit error result on malformed response", async () => {
+  let captured: TransportRequest | undefined
   __setHostTransportForTest(
-    fakeTransport(() => ({ status: 200, ok: true, headers: {}, body: { events: "not-array" } })),
+    fakeTransport((req) => {
+      captured = req
+      return { status: 200, ok: true, headers: {}, body: { events: "not-array" } }
+    }),
   )
 
-  const result = await fetchTaskTrace("task_1", { force: true })
+  const result = await fetchTaskTrace({ taskID: "task_1", directory: DIRECTORY }, { force: true })
   expect(result.ok).toBe(false)
   expect(result.ok === false ? result.error : "").toContain("events must be an array")
+  expect(captured?.path).toBe("task/task_1/trace")
+  expect(captured?.query?.directory).toBe(DIRECTORY)
 })

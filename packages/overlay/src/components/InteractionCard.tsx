@@ -17,6 +17,7 @@ import { t } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
 import { loadBoard } from "../store/board"
 import { type InteractionReplyEndpoint, replyInteraction, rejectInteraction } from "../services/interaction-reply"
+import { currentTraceDirectory } from "../services/trace-directory"
 import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
 import { Button } from "./ui/Button"
 
@@ -36,6 +37,7 @@ export interface InteractionData {
   status: string
   payload?: { questions?: InteractionQuestion[] }
   replyEndpoint?: InteractionReplyEndpoint
+  directory?: string
 }
 
 export function InteractionCard(props: { interaction: InteractionData }) {
@@ -60,6 +62,10 @@ export function InteractionCard(props: { interaction: InteractionData }) {
   const replyEndpoint = createMemo<InteractionReplyEndpoint>(() =>
     props.interaction.replyEndpoint === "question" ? "question" : "interaction",
   )
+  const replyTarget = () => ({
+    id: props.interaction.id,
+    directory: String(props.interaction.directory || "").trim() || currentTraceDirectory(),
+  })
 
   function getSelected(qIdx: number): string[] {
     return drafts()[qIdx] ?? []
@@ -105,8 +111,8 @@ export function InteractionCard(props: { interaction: InteractionData }) {
   }
 
   const resolvePermission = (action: "once" | "always") =>
-    runAction(() => replyInteraction(props.interaction.id, action, false, {}, replyEndpoint()))
-  const reject = () => runAction(() => rejectInteraction(props.interaction.id, false, replyEndpoint()))
+    runAction(() => replyInteraction(replyTarget(), action, false, {}, replyEndpoint()))
+  const reject = () => runAction(() => rejectInteraction(replyTarget(), false, replyEndpoint()))
   const submitAnswers = () =>
     runAction(() => {
       const answers = questions().map((_, idx) => {
@@ -115,7 +121,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
         return custom ? [...picked, custom] : picked
       })
       return replyInteraction(
-        props.interaction.id,
+        replyTarget(),
         "answer",
         false,
         {

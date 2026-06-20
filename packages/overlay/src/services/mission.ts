@@ -10,6 +10,7 @@
 // not duplicate task storage.
 
 import { apiJson } from "./api"
+import { downloadProjectArchive } from "./project-archive"
 
 // ── Types mirroring server route responses ──
 
@@ -220,6 +221,18 @@ export interface MissionActionTarget {
   directory: string
 }
 
+export interface MissionStatusRequest {
+  missionID: string
+  directory: string
+  signal?: AbortSignal
+}
+
+export interface TaskStatusRequest {
+  taskID: string
+  directory: string
+  signal?: AbortSignal
+}
+
 // ── API helpers ──
 
 export async function loadMissionStats(
@@ -260,16 +273,24 @@ export async function loadMissions(
   return data as MissionRecord[]
 }
 
-export async function loadMissionStatus(missionID: string, signal?: AbortSignal): Promise<MissionStatusSnapshot> {
-  const trimmed = missionID.trim()
-  if (!trimmed) throw new Error("loadMissionStatus: missionID is required")
-  return (await apiJson(`mission/${encodeURIComponent(trimmed)}/status`, { signal })) as MissionStatusSnapshot
+export async function loadMissionStatus(input: MissionStatusRequest): Promise<MissionStatusSnapshot> {
+  const missionID = input.missionID.trim()
+  const directory = input.directory.trim()
+  if (!missionID || !directory) throw new Error("loadMissionStatus: missionID and directory are required")
+  const params = new URLSearchParams({ directory })
+  return (await apiJson(`mission/${encodeURIComponent(missionID)}/status?${params.toString()}`, {
+    signal: input.signal,
+  })) as MissionStatusSnapshot
 }
 
-export async function loadTaskStatus(taskID: string, signal?: AbortSignal): Promise<TaskStatusDetail> {
-  const trimmed = taskID.trim()
-  if (!trimmed) throw new Error("loadTaskStatus: taskID is required")
-  return (await apiJson(`task/${encodeURIComponent(trimmed)}/status`, { signal })) as TaskStatusDetail
+export async function loadTaskStatus(input: TaskStatusRequest): Promise<TaskStatusDetail> {
+  const taskID = input.taskID.trim()
+  const directory = input.directory.trim()
+  if (!taskID || !directory) throw new Error("loadTaskStatus: taskID and directory are required")
+  const params = new URLSearchParams({ directory })
+  return (await apiJson(`task/${encodeURIComponent(taskID)}/status?${params.toString()}`, {
+    signal: input.signal,
+  })) as TaskStatusDetail
 }
 
 export async function wakeMission(input: MissionWakeInput): Promise<MissionWakeResult> {
@@ -322,4 +343,10 @@ export async function deleteMission(target: MissionActionTarget): Promise<boolea
   return (await apiJson(missionActionPath(target), {
     method: "DELETE",
   })) as boolean
+}
+
+export async function downloadMissionProjectArchive(target: MissionActionTarget): Promise<boolean> {
+  return downloadProjectArchive({
+    path: missionActionPath(target, "/project-archive"),
+  })
 }

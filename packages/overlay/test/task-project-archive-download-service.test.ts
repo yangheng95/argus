@@ -3,6 +3,7 @@ import { ApiError, configure } from "../src/services/api"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import { downloadTaskProjectArchive } from "../src/services/task"
+import { downloadMissionProjectArchive } from "../src/services/mission"
 
 type AnchorRecord = { href: string; download: string; rel: string; clicked: boolean }
 
@@ -103,7 +104,7 @@ describe("downloadTaskProjectArchive", () => {
       }),
     )
 
-    await expect(downloadTaskProjectArchive("task-123")).resolves.toBe(true)
+    await expect(downloadTaskProjectArchive({ taskID: "task-123", directory: "/repo/project" })).resolves.toBe(true)
 
     expect(requests).toHaveLength(1)
     expect(requests[0]!.path).toBe("task/task-123/project-archive")
@@ -128,15 +129,57 @@ describe("downloadTaskProjectArchive", () => {
 
     let caught: unknown
     try {
-      await downloadTaskProjectArchive("task-123")
+      await downloadTaskProjectArchive({ taskID: "task-123", directory: "/repo/project" })
     } catch (error) {
       caught = error
     }
 
     expect(caught).toBeInstanceOf(ApiError)
     expect((caught as ApiError).status).toBe(422)
-    expect((caught as ApiError).path).toBe("task/task-123/project-archive")
+    expect((caught as ApiError).path).toBe("task/task-123/project-archive?directory=%2Frepo%2Fproject")
     expect((caught as ApiError).body).toEqual({ message: "not a Git worktree" })
     expect(anchors).toHaveLength(0)
+  })
+
+  test("rejects successful archive responses that omit the server filename", async () => {
+    __setHostTransportForTest(
+      fakeTransport({
+        status: 200,
+        ok: true,
+        headers: {},
+        body: new Uint8Array([80, 75, 3, 4]),
+      }),
+    )
+
+    await expect(downloadTaskProjectArchive({ taskID: "task-123", directory: "/repo/project" })).rejects.toThrow(
+      "missing a Content-Disposition filename",
+    )
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.responseKind).toBe("binary")
+    expect(anchors).toHaveLength(0)
+  })
+})
+
+describe("downloadMissionProjectArchive", () => {
+  test("requests a binary Mission project archive with the Mission row directory", async () => {
+    __setHostTransportForTest(
+      fakeTransport({
+        status: 200,
+        ok: true,
+        headers: { "content-disposition": 'attachment; filename="mission-123-project.zip"' },
+        body: new Uint8Array([80, 75, 3, 4]),
+      }),
+    )
+
+    await expect(downloadMissionProjectArchive({ missionID: "mission-123", directory: "D:/repo" })).resolves.toBe(true)
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0]!.path).toBe("mission/mission-123/project-archive")
+    expect(requests[0]!.query?.directory).toBe("D:/repo")
+    expect(requests[0]!.responseKind).toBe("binary")
+    expect(anchors).toHaveLength(1)
+    expect(anchors[0]!.download).toBe("mission-123-project.zip")
+    expect(anchors[0]!.clicked).toBe(true)
   })
 })

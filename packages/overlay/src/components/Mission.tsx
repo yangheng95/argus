@@ -6,6 +6,7 @@ import { loadConversation } from "../services/conversation"
 import {
   abortMission,
   deleteMission,
+  downloadMissionProjectArchive,
   loadMissions,
   missionPage,
   renameMission,
@@ -116,7 +117,7 @@ function MissionContent(props: MissionProps) {
       resetCause: "mission-session-hydrate",
       directory,
     })
-    startSSE(source, 0)
+    startSSE(source, 0, { directory })
   }
 
   async function handleMissionSelect(mission: MissionRecord): Promise<void> {
@@ -161,6 +162,12 @@ function MissionContent(props: MissionProps) {
     await withBusy(`rename:${mission.missionID}`, async () => {
       await renameMission(mission, title)
       await missionRecordsCtl.refetch()
+    })
+  }
+
+  async function handleMissionDownload(mission: MissionRecord): Promise<void> {
+    await withBusy(`download:${mission.missionID}`, async () => {
+      await downloadMissionProjectArchive(mission)
     })
   }
 
@@ -245,8 +252,10 @@ function MissionContent(props: MissionProps) {
         onSelectMission={(mission) => void handleMissionSelect(mission)}
         onSelectTask={handleTaskSelect}
         onAbortMission={(mission) => void handleMissionAbort(mission)}
+        onDownloadMission={(mission) => void handleMissionDownload(mission)}
         onDeleteMission={(mission) => void handleMissionDelete(mission)}
         onRenameMission={(mission, title) => void handleMissionRename(mission, title)}
+        actionBusy={actionBusy()}
         onRetry={() => void missionRecordsCtl.refetch()}
         hasMore={missionRecords()?.hasMore}
         loadingMore={missionsLoadingMore()}

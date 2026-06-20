@@ -47,7 +47,7 @@ describe("MemoryPanel inline detail lifecycle", () => {
     expect(source).toContain('import { syncActiveDirectoryApiContext } from "../services/workspace"')
     expect(source).toContain("directory?: string | (() => string | undefined)")
     expect(source).toContain("const currentDirectory = () =>")
-    expect(source).toContain("configureApi({ directory })")
+    expect(source).not.toContain("configureApi({ directory })")
     expect(source).toContain("const directory = currentDirectory()")
     expect(source).toContain("if (!isActive() && !props.compact) return")
     expect(source).toContain("void loadMemory(taskID, directory)")

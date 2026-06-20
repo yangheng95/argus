@@ -21,11 +21,18 @@ const { startSSE, stopSSE } = await import("../src/services/sse")
 const { __setHostTransportForTest } = await import("../src/services/host-transport")
 const { resetWriter } = await import("../src/services/tree-writer")
 const { markSelectedMessageWatermark, resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor")
+const { registerConversationSourceDirectory } = await import("../src/services/conversation")
 const { setLocaleData } = await import("../src/utils/i18n")
 const { __resetConversationRecoveryDiagnosticsSinkForTest, __setConversationRecoveryDiagnosticsSinkForTest } =
   await import("../src/services/refresh-diagnostics")
 
 setLocaleData("en-US", JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")))
+
+const TEST_DIRECTORY = "D:/selected-task-recovery"
+
+function registerTaskDirectory(taskID: string): void {
+  registerConversationSourceDirectory({ kind: "task", id: taskID }, TEST_DIRECTORY)
+}
 
 function fakeTransport(opts: {
   request: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>
@@ -147,12 +154,13 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
     }),
   ).toBe(true)
 
+  registerTaskDirectory("tsk_live")
   await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live")).resolves.toBe(12)
 
   expect(streams).toEqual([
     {
       path: "task/tsk_live/events",
-      query: { after: "12", after_live: "7", after_live_epoch: "1776" },
+      query: { directory: TEST_DIRECTORY, after: "12", after_live: "7", after_live_epoch: "1776" },
     },
   ])
 })
@@ -181,12 +189,13 @@ test("selected-task recovery advances the live cursor for non-message selected e
     }),
   ).toBe(true)
 
+  registerTaskDirectory("tsk_live_non_message")
   await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live_non_message")).resolves.toBe(12)
 
   expect(streams).toEqual([
     {
       path: "task/tsk_live_non_message/events",
-      query: { after: "12", after_live: "8", after_live_epoch: "1777" },
+      query: { directory: TEST_DIRECTORY, after: "12", after_live: "8", after_live_epoch: "1777" },
     },
   ])
 })
@@ -215,12 +224,13 @@ test("selected-task recovery advances the live cursor for board-invalidating sel
   expect(routeSSEEvent(event)).toBe(false)
   handleEventStreamEvent(event)
 
+  registerTaskDirectory("tsk_live_board")
   await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live_board")).resolves.toBe(13)
 
   expect(streams).toEqual([
     {
       path: "task/tsk_live_board/events",
-      query: { after: "13", after_live: "9", after_live_epoch: "1778" },
+      query: { directory: TEST_DIRECTORY, after: "13", after_live: "9", after_live_epoch: "1778" },
     },
   ])
 })
@@ -244,17 +254,20 @@ test("selected-task recovery restarts the stream from the current sequence witho
   setBoardStore("selectedSource", { kind: "task", id: "tsk_atomic" })
   setBoardStore("taskSequence", 9)
 
-  startSSE({ kind: "task", id: "tsk_atomic" }, 3)
-  expect(streams).toEqual([{ path: "task/tsk_atomic/events", query: { after: "3", after_live: "0" } }])
+  startSSE({ kind: "task", id: "tsk_atomic" }, 3, { directory: TEST_DIRECTORY })
+  expect(streams).toEqual([
+    { path: "task/tsk_atomic/events", query: { directory: TEST_DIRECTORY, after: "3", after_live: "0" } },
+  ])
   const treeEpoch = cardTreeStore.treeEpoch
 
+  registerTaskDirectory("tsk_atomic")
   await expect(recoverSelectedTaskConversation("test atomic recovery", "tsk_atomic")).resolves.toBe(9)
 
   expect(closeCalls.count).toBe(1)
   expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
   expect(streams).toEqual([
-    { path: "task/tsk_atomic/events", query: { after: "3", after_live: "0" } },
-    { path: "task/tsk_atomic/events", query: { after: "9", after_live: "0" } },
+    { path: "task/tsk_atomic/events", query: { directory: TEST_DIRECTORY, after: "3", after_live: "0" } },
+    { path: "task/tsk_atomic/events", query: { directory: TEST_DIRECTORY, after: "9", after_live: "0" } },
   ])
   expect(diagnostics).toEqual([
     {
@@ -336,10 +349,11 @@ test("rewind clear recovery hydrates the authoritative conversation before resta
   )
   setBoardStore("selectedSource", { kind: "task", id: "tsk_rewind_clear" })
   setBoardStore("taskSequence", 2)
-  startSSE({ kind: "task", id: "tsk_rewind_clear" }, 2)
+  startSSE({ kind: "task", id: "tsk_rewind_clear" }, 2, { directory: TEST_DIRECTORY })
   pruneCardsAfterCursor(1_779_000_050_000)
   expect(cardTreeStore.rewindCursor).toBe(1_779_000_050_000)
 
+  registerTaskDirectory("tsk_rewind_clear")
   await expect(recoverSelectedTaskAfterRewindClear("task rewind cleared", "tsk_rewind_clear")).resolves.toBe(5)
 
   const restored = Object.values(cardTreeStore.cards).find((card: any) =>
@@ -348,8 +362,8 @@ test("rewind clear recovery hydrates the authoritative conversation before resta
   expect(requests).toEqual(["task/tsk_rewind_clear/conversation"])
   expect(closeCalls.count).toBe(1)
   expect(streams).toEqual([
-    { path: "task/tsk_rewind_clear/events", query: { after: "2", after_live: "0" } },
-    { path: "task/tsk_rewind_clear/events", query: { after: "5", after_live: "0" } },
+    { path: "task/tsk_rewind_clear/events", query: { directory: TEST_DIRECTORY, after: "2", after_live: "0" } },
+    { path: "task/tsk_rewind_clear/events", query: { directory: TEST_DIRECTORY, after: "5", after_live: "0" } },
   ])
   expect(cardTreeStore.rewindCursor).toBe(null)
   expect(restored).toBeDefined()
@@ -394,10 +408,11 @@ test("rewind clear recovery is not superseded by selected sequence-gap recovery"
   )
   setBoardStore("selectedSource", { kind: "task", id: "tsk_rewind_clear_gap" })
   setBoardStore("taskSequence", 2)
-  startSSE({ kind: "task", id: "tsk_rewind_clear_gap" }, 2)
+  startSSE({ kind: "task", id: "tsk_rewind_clear_gap" }, 2, { directory: TEST_DIRECTORY })
   pruneCardsAfterCursor(1_779_000_050_000)
   expect(cardTreeStore.rewindCursor).toBe(1_779_000_050_000)
 
+  registerTaskDirectory("tsk_rewind_clear_gap")
   const clear = recoverSelectedTaskAfterRewindClear("task rewind cleared", "tsk_rewind_clear_gap")
   await waitForRequestCount(requests, 1)
 
@@ -406,7 +421,9 @@ test("rewind clear recovery is not superseded by selected sequence-gap recovery"
   await Promise.resolve()
 
   expect(requests).toEqual(["task/tsk_rewind_clear_gap/conversation"])
-  expect(streams).toEqual([{ path: "task/tsk_rewind_clear_gap/events", query: { after: "2", after_live: "0" } }])
+  expect(streams).toEqual([
+    { path: "task/tsk_rewind_clear_gap/events", query: { directory: TEST_DIRECTORY, after: "2", after_live: "0" } },
+  ])
   expect(closeCalls.count).toBe(0)
 
   releaseHydrate({
@@ -421,8 +438,14 @@ test("rewind clear recovery is not superseded by selected sequence-gap recovery"
   expect(cardTreeStore.rewindCursor).toBe(null)
   expect(closeCalls.count).toBe(1)
   expect(streams).toEqual([
-    { path: "task/tsk_rewind_clear_gap/events", query: { after: "2", after_live: "0" } },
-    { path: "task/tsk_rewind_clear_gap/events", query: { after: "5", after_live: "0" } },
+    {
+      path: "task/tsk_rewind_clear_gap/events",
+      query: { directory: TEST_DIRECTORY, after: "2", after_live: "0" },
+    },
+    {
+      path: "task/tsk_rewind_clear_gap/events",
+      query: { directory: TEST_DIRECTORY, after: "5", after_live: "0" },
+    },
   ])
 })
 
@@ -446,16 +469,19 @@ test("selected-task recovery refuses replay-expired full refresh and leaves the 
   setBoardStore("selectedSource", { kind: "task", id: "tsk_expired" })
   setBoardStore("taskSequence", 5)
 
-  startSSE({ kind: "task", id: "tsk_expired" }, 5)
+  startSSE({ kind: "task", id: "tsk_expired" }, 5, { directory: TEST_DIRECTORY })
   const treeEpoch = cardTreeStore.treeEpoch
 
+  registerTaskDirectory("tsk_expired")
   await expect(recoverSelectedTaskConversation("task replay expired", "tsk_expired")).rejects.toThrow(
     /refused full conversation refresh/,
   )
 
   expect(closeCalls.count).toBe(0)
   expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
-  expect(streams).toEqual([{ path: "task/tsk_expired/events", query: { after: "5", after_live: "0" } }])
+  expect(streams).toEqual([
+    { path: "task/tsk_expired/events", query: { directory: TEST_DIRECTORY, after: "5", after_live: "0" } },
+  ])
   expect(diagnostics).toEqual([
     {
       event: "conversation-recovery.started",
@@ -503,12 +529,13 @@ test("selected-task recovery treats live replay expiry as persistent-sequence re
     }),
   ).toBe(true)
 
+  registerTaskDirectory("tsk_live_expired")
   await expect(recoverSelectedTaskConversation("task.live_replay_expired", "tsk_live_expired")).resolves.toBe(5)
   await Promise.resolve()
 
   expect(closeCalls.count).toBe(0)
   expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
-  expect(streams).toEqual([{ path: "task/tsk_live_expired/events", query: { after: "5" } }])
+  expect(streams).toEqual([{ path: "task/tsk_live_expired/events", query: { directory: TEST_DIRECTORY, after: "5" } }])
   expect(requests).toEqual(["task/tsk_live_expired/conversation"])
 })
 
@@ -518,12 +545,14 @@ test("task.messages.changed triggers non-reset tail merge for DB-backed message 
     fakeTransport({
       request(req) {
         requests.push(req.path)
+        expect(req.query?.directory).toBe(TEST_DIRECTORY)
         expect(req.query?.tail_limit).toBe("32")
         return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail") }
       },
     }),
   )
   setBoardStore("selectedSource", { kind: "task", id: "tsk_db_tail" })
+  registerTaskDirectory("tsk_db_tail")
   const treeEpoch = cardTreeStore.treeEpoch
 
   expect(
@@ -584,6 +613,7 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
       handlers,
       request(req) {
         requests.push(req.path)
+        expect(req.query?.directory).toBe(TEST_DIRECTORY)
         expect(req.query?.tail_limit).toBe("32")
         return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail_stream", transcript, view) }
       },
@@ -595,12 +625,13 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
   const treeEpoch = cardTreeStore.treeEpoch
   const visibleVersion = cardTreeStore.visibleVersion
 
-  startSSE({ kind: "task", id: "tsk_db_tail_stream" }, 12)
+  startSSE({ kind: "task", id: "tsk_db_tail_stream" }, 12, { directory: TEST_DIRECTORY })
   expect(streams).toEqual([
     {
       path: "task/tsk_db_tail_stream/events",
       query: {
         after: "12",
+        directory: TEST_DIRECTORY,
         after_live: "0",
         after_message_watermark: "1779000000000",
       },
@@ -644,11 +675,14 @@ test("stale scheduled recovery does not stop the newly selected task stream", as
   )
   setBoardStore("selectedSource", { kind: "task", id: "tsk_new" })
 
-  startSSE({ kind: "task", id: "tsk_new" }, 11)
+  startSSE({ kind: "task", id: "tsk_new" }, 11, { directory: TEST_DIRECTORY })
+  registerTaskDirectory("tsk_old")
   await expect(recoverSelectedTaskConversation("stale delayed recovery", "tsk_old")).rejects.toMatchObject({
     name: "AbortError",
   })
 
   expect(closeCalls.count).toBe(0)
-  expect(streams).toEqual([{ path: "task/tsk_new/events", query: { after: "11", after_live: "0" } }])
+  expect(streams).toEqual([
+    { path: "task/tsk_new/events", query: { directory: TEST_DIRECTORY, after: "11", after_live: "0" } },
+  ])
 })

@@ -225,8 +225,9 @@ function StartNowButton(props: { id: string; busy?: boolean; onStartNow: (id: st
 
 function DownloadProjectButton(props: {
   id: string
+  directory: string
   busy?: boolean
-  onDownload: (id: string) => void
+  onDownload: (id: string, directory: string) => void
   tabIndex?: number
 }) {
   return (
@@ -245,7 +246,7 @@ function DownloadProjectButton(props: {
       tabIndex={props.tabIndex}
       onClick={(e) => {
         e.stopPropagation()
-        props.onDownload(props.id)
+        props.onDownload(props.id, props.directory)
       }}
     >
       <Icon name="download" size={11} />
@@ -274,8 +275,8 @@ function TaskRow(props: {
   onSelectTask: (id: string) => void
   onDeleteTask?: (id: string) => void
   onCancelTask?: (id: string) => void
-  onStartNow?: (id: string) => void
-  onDownloadProject?: (id: string) => void
+  onStartNow?: (id: string, directory: string) => void
+  onDownloadProject?: (id: string, directory: string) => void
   onRenameTask?: (id: string, title: string) => void | Promise<void>
   startNowBusyID?: string
   downloadBusyID?: string
@@ -303,6 +304,7 @@ function TaskRow(props: {
 }) {
   const id = () => props.item?.task?.id || ""
   const pending = () => props.item?._pending === true
+  const directory = () => String(props.item?.task?.directory || "").trim()
   const status = () => (pending() ? "active" : props.item?.task?.status || "idle")
   const rawTitle = () => props.item?.task?.title || props.item?.overview?.headline || id()
   const title = () => taskListTitle(props.item) || id()
@@ -312,7 +314,7 @@ function TaskRow(props: {
   const rowTip = () => taskListFullTip(props.item, props.queuePos)
   const canCancel = () => !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status())
   const canStartNow = () => !pending() && !!id() && !!props.onStartNow && status() === "queued"
-  const canDownload = () => !pending() && !!id() && !!props.onDownloadProject
+  const canDownload = () => !pending() && !!id() && !!directory() && !!props.onDownloadProject
   const canDelete = () => !pending() && !!id() && !!props.onDeleteTask
   const canRename = () => !pending() && !!id() && !!props.onRenameTask
   const hasActions = () => canStartNow() || canDownload() || canCancel() || canDelete() || canRename()
@@ -548,7 +550,7 @@ function TaskRow(props: {
               <StartNowButton
                 id={id()}
                 busy={props.startNowBusyID === id()}
-                onStartNow={props.onStartNow!}
+                onStartNow={(taskID) => props.onStartNow!(taskID, projectDirectoryOf(props.item))}
                 tabIndex={rowActions.actionButtonTabIndex()}
               />
             </Show>
@@ -558,6 +560,7 @@ function TaskRow(props: {
             <Show when={canDownload()}>
               <DownloadProjectButton
                 id={id()}
+                directory={directory()}
                 busy={props.downloadBusyID === id()}
                 onDownload={props.onDownloadProject!}
                 tabIndex={rowActions.actionButtonTabIndex()}
@@ -585,8 +588,8 @@ function TaskSection(props: {
   onSelectTask: (id: string) => void
   onDeleteTask?: (id: string) => void
   onCancelTask?: (id: string) => void
-  onStartNow?: (id: string) => void
-  onDownloadProject?: (id: string) => void
+  onStartNow?: (id: string, directory: string) => void
+  onDownloadProject?: (id: string, directory: string) => void
   onRenameTask?: (id: string, title: string) => void | Promise<void>
   startNowBusyID?: string
   downloadBusyID?: string
@@ -850,12 +853,12 @@ export function TaskList(props: TaskListProps) {
     }
   }
 
-  async function handleStartNow(taskID: string) {
+  async function handleStartNow(taskID: string, directory: string) {
     if (startNowBusyID()) return
     setStartNowBusyID(taskID)
     const noticeID = `task:start-now:${taskID}`
     try {
-      const result = await startQueuedTaskNow(taskID)
+      const result = await startQueuedTaskNow({ taskID, directory })
       if (result.started) {
         notifySuccess({
           id: noticeID,
@@ -883,12 +886,12 @@ export function TaskList(props: TaskListProps) {
     }
   }
 
-  async function handleDownloadProject(taskID: string) {
+  async function handleDownloadProject(taskID: string, directory: string) {
     if (downloadBusyID()) return
     setDownloadBusyID(taskID)
     const noticeID = `task:download-project:${taskID}`
     try {
-      const ok = await downloadTaskProjectArchive(taskID)
+      const ok = await downloadTaskProjectArchive({ taskID, directory })
       if (ok) {
         const taskTitle = allItems().find((item) => item?.task?.id === taskID)?.task?.title || taskID
         notifySuccess({

@@ -23,6 +23,12 @@ export interface ExecutorDescriptor {
   discovered?: boolean
 }
 
+export interface ExecutorModelUpdate {
+  executorID: string
+  model: string
+  directory: string
+}
+
 // ── Label helpers ──
 
 /** Returns a human-readable display label for a known executor ID. */
@@ -144,8 +150,15 @@ export function executorProcessKindTag(kind: string): string {
  * omitted here because they belong to 's DOM world. Callers that need
  * to persist settings after loading should do so explicitly.
  */
-export async function loadExecutors(): Promise<void> {
-  const data = await apiJson("executor")
+function executorPath(directory: string, suffix = ""): string {
+  const trimmed = directory.trim()
+  if (!trimmed) throw new Error("executor service requires a project directory")
+  const params = new URLSearchParams({ directory: trimmed })
+  return `executor${suffix}?${params.toString()}`
+}
+
+export async function loadExecutors(directory: string): Promise<void> {
+  const data = await apiJson(executorPath(directory))
   if (!Array.isArray(data)) {
     AppLog.debug("executor", "loadExecutors received non-array payload", {
       payloadType: typeof data,
@@ -161,19 +174,22 @@ export async function loadExecutors(): Promise<void> {
  * PATCHes the model for the given executor via the API, then reloads the
  * executor list.
  */
-export async function setExecutorModel(executorID: string, model: string): Promise<void> {
+export async function setExecutorModel(input: ExecutorModelUpdate): Promise<void> {
+  const executorID = input.executorID.trim()
+  if (!executorID) throw new Error("setExecutorModel: executorID is required")
   try {
-    await apiJson(`executor/${encodeURIComponent(executorID)}/model`, {
+    await apiJson(executorPath(input.directory, `/${encodeURIComponent(executorID)}/model`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model }),
+      body: JSON.stringify({ model: input.model }),
     })
-    await loadExecutors()
+    await loadExecutors(input.directory)
   } catch (e) {
     AppLog.error("ui", "Failed to set executor model", {
       error: String(e),
       executorID,
-      model,
+      model: input.model,
     })
+    throw e
   }
 }

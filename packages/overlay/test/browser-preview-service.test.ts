@@ -93,7 +93,7 @@ test("browser preview service loads the task-scoped target through HostTransport
     }),
   )
 
-  const target = await loadTaskBrowserPreviewTarget(TASK_ID)
+  const target = await loadTaskBrowserPreviewTarget({ taskID: TASK_ID, directory: SAVED_DIRECTORY })
 
   expect(target.status).toBe("ready")
   expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview`)
@@ -108,7 +108,11 @@ test("browser preview service selects an existing backend target by ID", async (
     }),
   )
 
-  await selectTaskBrowserPreviewTarget({ taskID: TASK_ID, targetID: "art_previewtarget000000000001" })
+  await selectTaskBrowserPreviewTarget({
+    taskID: TASK_ID,
+    directory: SAVED_DIRECTORY,
+    targetID: "art_previewtarget000000000001",
+  })
 
   expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/target`)
   expect(captured?.method).toBe("PUT")
@@ -140,9 +144,13 @@ test("browser preview service rejects failed backend target selection", async ()
   })
 
   await expect(
-    selectTaskBrowserPreviewTarget({ taskID: TASK_ID, targetID: "art_previewtarget_unavailable" }),
+    selectTaskBrowserPreviewTarget({
+      taskID: TASK_ID,
+      directory: SAVED_DIRECTORY,
+      targetID: "art_previewtarget_unavailable",
+    }),
   ).rejects.toThrow(
-    "API 500 task/tsk_browserpreviewservice0001/browser-preview/target: target selection unavailable",
+    "API 500 task/tsk_browserpreviewservice0001/browser-preview/target?directory=D%3A%2Fworkspace%2Fapp: target selection unavailable",
   )
   expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/target`)
   expect(captured?.method).toBe("PUT")
@@ -208,6 +216,7 @@ test("browser preview service asks the backend to persist Playwright evidence", 
 
   const result = await captureTaskBrowserPreviewEvidence({
     taskID: TASK_ID,
+    directory: SAVED_DIRECTORY,
     targetID: "art_previewtarget000000000001",
     viewportIDs: ["mobile"],
   })
@@ -259,6 +268,7 @@ test("browser preview service loads persisted evidence through the task-scoped a
 
   const evidence = await loadTaskBrowserPreviewEvidence({
     taskID: TASK_ID,
+    directory: SAVED_DIRECTORY,
     evidenceID: "art_previewevidence00000001",
   })
 
@@ -287,6 +297,7 @@ test("browser preview service loads persisted evidence screenshot bytes through 
 
   const objectUrl = await loadTaskBrowserPreviewEvidenceCaptureObjectUrl({
     taskID: TASK_ID,
+    directory: SAVED_DIRECTORY,
     evidenceID: "art_previewevidence00000001",
   })
 
@@ -317,6 +328,7 @@ test("browser preview service loads interactive live snapshot bytes through Host
 
   const objectUrl = await loadTaskBrowserPreviewLiveSnapshotObjectUrl({
     taskID: TASK_ID,
+    directory: SAVED_DIRECTORY,
     targetID: "art_previewtarget000000000001",
     viewportID: "desktop",
   })
@@ -356,6 +368,7 @@ test("browser preview service rejects corrupt live snapshot bytes before returni
   await expect(
     loadTaskBrowserPreviewLiveSnapshotObjectUrl({
       taskID: TASK_ID,
+      directory: SAVED_DIRECTORY,
       targetID: "art_previewtarget000000000001",
       viewportID: "desktop",
     }),
@@ -384,11 +397,12 @@ test("browser preview service decodes JSON error bodies from live snapshot binar
   await expect(
     loadTaskBrowserPreviewLiveSnapshotObjectUrl({
       taskID: TASK_ID,
+      directory: SAVED_DIRECTORY,
       targetID: "art_previewtarget_stale",
       viewportID: "desktop",
     }),
   ).rejects.toThrow(
-    "API 404 task/tsk_browserpreviewservice0001/browser-preview/live/snapshot: Browser preview target not found: art_previewtarget_stale",
+    "API 404 task/tsk_browserpreviewservice0001/browser-preview/live/snapshot?directory=D%3A%2Fworkspace%2Fapp: Browser preview target not found: art_previewtarget_stale",
   )
 })
 
@@ -410,10 +424,11 @@ test("browser preview service decodes JSON error bodies from evidence capture bi
   await expect(
     loadTaskBrowserPreviewEvidenceCaptureObjectUrl({
       taskID: TASK_ID,
+      directory: SAVED_DIRECTORY,
       evidenceID: "art_previewevidence_missing",
     }),
   ).rejects.toThrow(
-    "API 404 task/tsk_browserpreviewservice0001/browser-preview/evidence/art_previewevidence_missing/capture.png: Browser preview evidence capture not found: art_previewevidence_missing",
+    "API 404 task/tsk_browserpreviewservice0001/browser-preview/evidence/art_previewevidence_missing/capture.png?directory=D%3A%2Fworkspace%2Fapp: Browser preview evidence capture not found: art_previewevidence_missing",
   )
 })
 
@@ -436,6 +451,7 @@ test("browser preview service sends live input without URL bodies", async () => 
 
   const objectUrl = await sendTaskBrowserPreviewLiveInputObjectUrl({
     taskID: TASK_ID,
+    directory: SAVED_DIRECTORY,
     targetID: "art_previewtarget000000000001",
     viewportID: "desktop",
     input: { kind: "wheel", x: 10, y: 20, deltaX: 0, deltaY: 120 },

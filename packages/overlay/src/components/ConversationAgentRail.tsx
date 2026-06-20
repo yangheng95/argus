@@ -73,9 +73,19 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
     !cardTreeStore.cards[record.renderedCardID] ||
     (!!targetMessageID && !conversationCardContainsMessage(record.renderedCardID, targetMessageID))
   if (needsHistory) {
+    const directory = String(boardStore.board?.task?.directory || "").trim()
+    if (!directory) {
+      notifyWarning({
+        title: t("agent_rail.card_unavailable_title"),
+        message: t("agent_rail.no_rendered_card_target", { agent: record.agentName }),
+        details: describeRecord(record),
+      })
+      return
+    }
     await loadConversationHistoryUntilCard(record.renderedCardID, undefined, {
       messageID: targetMessageID,
       sessionID: record.sessionID,
+      directory,
     })
   }
   const target = cardTreeStore.cards[record.renderedCardID]

@@ -52,6 +52,7 @@ let historyState: HistoryState = {
   limit: CONVERSATION_HISTORY_PAGE_LIMIT,
 }
 let historyLoading = false
+const sourceDirectoryByKey = new Map<string, string>()
 
 export function cancelConversationReplay(options: { preserveAgentView?: boolean } = {}): void {
   replayEpoch += 1
@@ -167,6 +168,24 @@ function sourceKey(source: BoardSource): string {
   return `${source.kind}:${source.id}`
 }
 
+function requireDirectory(directory: string | undefined, label: string): string {
+  const trimmed = String(directory || "").trim()
+  if (!trimmed) throw new Error(`${label} requires a project directory`)
+  return trimmed
+}
+
+export function registerConversationSourceDirectory(source: BoardSource, directory: string): string {
+  const trimmed = requireDirectory(directory, "conversation source")
+  sourceDirectoryByKey.set(sourceKey(source), trimmed)
+  return trimmed
+}
+
+export function conversationSourceDirectory(source: BoardSource): string {
+  const directory = sourceDirectoryByKey.get(sourceKey(source))
+  if (!directory) throw new Error(`conversation source ${sourceKey(source)} has no project directory`)
+  return directory
+}
+
 function activeSourceMatches(source: BoardSource): boolean {
   return source.kind === "task" ? activeTaskID() === source.id : activeSessionID() === source.id
 }
@@ -175,11 +194,10 @@ function sourceMatches(left: BoardSource | null, right: BoardSource | null): boo
   return !!left && !!right && left.kind === right.kind && left.id === right.id
 }
 
-function conversationHydratePath(source: BoardSource, tailLimit: number, directory?: string): string {
+function conversationHydratePath(source: BoardSource, tailLimit: number, directory: string): string {
   const prefix = source.kind === "task" ? "task" : "session"
   const params = new URLSearchParams({ tail_limit: String(tailLimit) })
-  const trimmedDirectory = String(directory || "").trim()
-  if (trimmedDirectory) params.set("directory", trimmedDirectory)
+  params.set("directory", requireDirectory(directory, "conversation hydrate"))
   return `${prefix}/${encodeURIComponent(source.id)}/conversation?${params.toString()}`
 }
 
@@ -248,6 +266,7 @@ function waitForReplayTurn(signal: AbortSignal): Promise<void> {
 
 async function continueConversationReplay(
   taskID: string,
+  directory: string,
   initialReplay: EventReplay,
   epoch: number,
   signal: AbortSignal,
@@ -259,7 +278,7 @@ async function continueConversationReplay(
     const sinceQuery =
       replay.sinceTimestamp === null ? "" : `&since=${encodeURIComponent(String(replay.sinceTimestamp))}`
     const page = await apiJson(
-      `task/${encodeURIComponent(taskID)}/conversation/events?after=${encodeURIComponent(String(replay.cursor))}&until=${encodeURIComponent(String(replay.latestSequence))}&limit=${encodeURIComponent(String(replay.limit))}${sinceQuery}`,
+      `task/${encodeURIComponent(taskID)}/conversation/events?directory=${encodeURIComponent(directory)}&after=${encodeURIComponent(String(replay.cursor))}&until=${encodeURIComponent(String(replay.latestSequence))}&limit=${encodeURIComponent(String(replay.limit))}${sinceQuery}`,
       { signal },
     )
     const events = requireArray(page?.events, "events")
@@ -283,6 +302,7 @@ export async function hydrateTaskConversation(
     scrollIntent?: "preserve" | "bottom"
     resetCause?: string
     tailLimit?: number
+    directory?: string
   } = {},
 ): Promise<number> {
   return hydrateConversation({ kind: "task", id: taskID }, options)
@@ -322,7 +342,8 @@ export async function hydrateConversation(
       1,
       Math.floor(Number(options.tailLimit ?? INITIAL_CONVERSATION_TAIL_LIMIT) || INITIAL_CONVERSATION_TAIL_LIMIT),
     )
-    const data = await apiJson(conversationHydratePath(source, tailLimit, options.directory), { signal })
+    const directory = registerConversationSourceDirectory(source, requireDirectory(options.directory, "hydrateConversation"))
+    const data = await apiJson(conversationHydratePath(source, tailLimit, directory), { signal })
     assertActiveReplay(source, epoch, signal)
     const board = requireObject(data?.board, "board")
     const transcript = requireArray(data?.transcript, "transcript")
@@ -366,7 +387,7 @@ export async function hydrateConversation(
 
     if (source.kind === "task" && history.hasMore && !replay.complete) {
       backgroundReplay = true
-      void continueConversationReplay(source.id, replay, epoch, signal)
+      void continueConversationReplay(source.id, directory, replay, epoch, signal)
         .catch((error) => {
           if (error instanceof DOMException && error.name === "AbortError") return
           console.error("[conversation] background protocol replay failed", error)
@@ -377,7 +398,7 @@ export async function hydrateConversation(
       return Math.max(lastSequence, replay.latestSequence)
     }
     const finalReplay =
-      source.kind === "task" ? await continueConversationReplay(source.id, replay, epoch, signal) : replay
+      source.kind === "task" ? await continueConversationReplay(source.id, directory, replay, epoch, signal) : replay
     return Math.max(lastSequence, finalReplay.latestSequence)
   } finally {
     if (replayAbort === controller && !backgroundReplay) replayAbort = null
@@ -389,10 +410,13 @@ export async function mergeLatestConversationTail(
   options: {
     signal?: AbortSignal
     tailLimit?: number
+    directory?: string
   } = {},
 ): Promise<void> {
   const selectedTaskID = String(taskID || "")
   if (!selectedTaskID) throw new Error("conversation tail merge requires a taskID")
+  const directory =
+    options.directory?.trim() || conversationSourceDirectory({ kind: "task", id: selectedTaskID })
   tailMergeAbort?.abort(new DOMException("Conversation tail merge superseded", "AbortError"))
   const controller = linkedReplayController(options.signal)
   tailMergeAbort = controller
@@ -404,7 +428,7 @@ export async function mergeLatestConversationTail(
       Math.floor(Number(options.tailLimit ?? INITIAL_CONVERSATION_TAIL_LIMIT) || INITIAL_CONVERSATION_TAIL_LIMIT),
     )
     const data = await apiJson(
-      `task/${encodeURIComponent(selectedTaskID)}/conversation?tail_limit=${encodeURIComponent(String(tailLimit))}`,
+      `task/${encodeURIComponent(selectedTaskID)}/conversation?directory=${encodeURIComponent(directory)}&tail_limit=${encodeURIComponent(String(tailLimit))}`,
       { signal },
     )
     assertActiveTailMerge(selectedTaskID, epoch, signal)
@@ -501,6 +525,7 @@ export async function loadOlderConversationHistory(
   if (!source || source.kind !== "task") return false
   const selectedTaskID = String(source.id || "")
   if (!canLoadOlderConversationHistory(source)) return false
+  const directory = conversationSourceDirectory(source)
   const before = historyState.oldestTimestamp
   const beforeID = historyState.oldestMessageID
   if (before === null) return false
@@ -512,7 +537,7 @@ export async function loadOlderConversationHistory(
   try {
     assertActiveHistory(source, epoch, controller.signal)
     const page = await apiJson(
-      `task/${encodeURIComponent(selectedTaskID)}/conversation/history?before=${encodeURIComponent(String(before))}${beforeID ? `&before_id=${encodeURIComponent(beforeID)}` : ""}&limit=${encodeURIComponent(String(CONVERSATION_HISTORY_PAGE_LIMIT))}`,
+      `task/${encodeURIComponent(selectedTaskID)}/conversation/history?directory=${encodeURIComponent(directory)}&before=${encodeURIComponent(String(before))}${beforeID ? `&before_id=${encodeURIComponent(beforeID)}` : ""}&limit=${encodeURIComponent(String(CONVERSATION_HISTORY_PAGE_LIMIT))}`,
       { signal: controller.signal },
     )
     assertActiveHistory(source, epoch, controller.signal)
@@ -540,10 +565,16 @@ export async function loadOlderConversationHistory(
   }
 }
 
-export async function loadConversationSessionHistory(sessionID: string, taskID = activeTaskID()): Promise<boolean> {
+export async function loadConversationSessionHistory(
+  sessionID: string,
+  taskID = activeTaskID(),
+  options: { directory?: string } = {},
+): Promise<boolean> {
   const selectedTaskID = String(taskID || "")
   const targetSessionID = String(sessionID || "")
   if (!selectedTaskID || !targetSessionID) return false
+  const directory =
+    options.directory?.trim() || conversationSourceDirectory({ kind: "task", id: selectedTaskID })
   historyLoading = true
   historyAbort?.abort(new DOMException("Conversation history superseded", "AbortError"))
   const controller = new AbortController()
@@ -553,7 +584,7 @@ export async function loadConversationSessionHistory(sessionID: string, taskID =
   try {
     assertActiveSessionHistory(selectedTaskID, epoch, signal)
     const page = await apiJson(
-      `task/${encodeURIComponent(selectedTaskID)}/conversation/session/${encodeURIComponent(targetSessionID)}`,
+      `task/${encodeURIComponent(selectedTaskID)}/conversation/session/${encodeURIComponent(targetSessionID)}?directory=${encodeURIComponent(directory)}`,
       { signal },
     )
     assertActiveSessionHistory(selectedTaskID, epoch, signal)
@@ -583,6 +614,7 @@ export async function loadConversationHistoryUntilCard(
   options: {
     messageID?: string
     sessionID?: string
+    directory?: string
   } = {},
 ): Promise<boolean> {
   const targetCardID = String(cardID || "")
@@ -594,7 +626,7 @@ export async function loadConversationHistoryUntilCard(
   const targetSessionID = String(options.sessionID || "")
   const selectedSource = boardStore.selectedSource
   if (!loaded() && targetSessionID && selectedSource?.kind !== "session") {
-    await loadConversationSessionHistory(targetSessionID, taskID).catch((error) => {
+    await loadConversationSessionHistory(targetSessionID, taskID, { directory: options.directory }).catch((error) => {
       console.warn("[conversation] session history hydrate failed", error)
       return false
     })

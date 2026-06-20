@@ -17,13 +17,20 @@
 // conflict ourselves.
 
 import { apiJson } from "./api"
-import { projectScopedPath } from "./project-directory"
+import { directoryScopedPath } from "./task-path"
 
 const REPLY_TIMEOUT_MS = 30_000
 
 const inflight = new Map<string, Promise<void>>()
 
 export type InteractionReplyEndpoint = "interaction" | "question"
+export type InteractionReplyTarget = { id: string; directory: string }
+
+function interactionPath(target: InteractionReplyTarget, path: string, label: string): string {
+  const id = String(target.id || "").trim()
+  if (!id) throw new Error(`${label}: interaction id is required`)
+  return directoryScopedPath(path.replace(":id", encodeURIComponent(id)), target.directory, label)
+}
 
 function lockedRequest(id: string, fn: () => Promise<void>): Promise<void> {
   const prev = inflight.get(id)
@@ -36,17 +43,17 @@ function lockedRequest(id: string, fn: () => Promise<void>): Promise<void> {
 }
 
 export async function replyInteraction(
-  id: string,
+  target: InteractionReplyTarget,
   action: "once" | "always" | "answer",
   autoReply: boolean,
   input: { answers?: unknown[]; message?: string } = {},
   endpoint: InteractionReplyEndpoint = "interaction",
 ): Promise<void> {
-  return lockedRequest(id, async () => {
+  return lockedRequest(target.id, async () => {
     if (endpoint === "question") {
       if (action !== "answer") throw new Error(`question reply endpoint does not support ${action}`)
       const answers = Array.isArray(input.answers) ? input.answers : []
-      await apiJson(projectScopedPath(`question/${id}/reply`), {
+      await apiJson(interactionPath(target, "question/:id/reply", "question reply"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers }),
@@ -56,7 +63,7 @@ export async function replyInteraction(
     }
 
     if (action === "once" || action === "always") {
-      await apiJson(projectScopedPath(`interaction/${id}/reply`), {
+      await apiJson(interactionPath(target, "interaction/:id/reply", "interaction reply"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reply: action, autoReply }),
@@ -68,7 +75,7 @@ export async function replyInteraction(
     const answers = Array.isArray(input.answers) ? input.answers : undefined
     const message = typeof input.message === "string" && input.message.trim() ? input.message.trim() : undefined
 
-    await apiJson(projectScopedPath(`interaction/${id}/reply`), {
+    await apiJson(interactionPath(target, "interaction/:id/reply", "interaction reply"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -82,20 +89,20 @@ export async function replyInteraction(
 }
 
 export async function rejectInteraction(
-  id: string,
+  target: InteractionReplyTarget,
   autoReply: boolean,
   endpoint: InteractionReplyEndpoint = "interaction",
 ): Promise<void> {
-  return lockedRequest(id, async () => {
+  return lockedRequest(target.id, async () => {
     if (endpoint === "question") {
-      await apiJson(projectScopedPath(`question/${id}/reject`), {
+      await apiJson(interactionPath(target, "question/:id/reject", "question reject"), {
         method: "POST",
         signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
       })
       return
     }
 
-    await apiJson(projectScopedPath(`interaction/${id}/reject`), {
+    await apiJson(interactionPath(target, "interaction/:id/reject", "interaction reject"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ autoReply }),

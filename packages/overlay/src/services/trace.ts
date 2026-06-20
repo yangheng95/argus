@@ -73,16 +73,32 @@ function normaliseResult(data: unknown): TraceFetchResult {
   return { ok: true, events: obj.events as TraceEvent[], traceDir: obj.traceDir, enabled: obj.enabled }
 }
 
-export async function fetchSessionTrace(sessionID: string, opts?: { force?: boolean }): Promise<TraceFetchResult> {
+function tracePath(kind: "session" | "task", id: string, directory: string): string {
+  const dir = directory.trim()
+  if (!dir) throw new Error("trace service requires a task directory")
+  const query = new URLSearchParams({ directory: dir })
+  return `${kind}/${encodeURIComponent(id)}/trace?${query.toString()}`
+}
+
+function traceCacheKey(directory: string, id: string): string {
+  return `${directory.trim()}:${id}`
+}
+
+export async function fetchSessionTrace(
+  input: { sessionID: string; directory: string },
+  opts?: { force?: boolean },
+): Promise<TraceFetchResult> {
+  const { sessionID, directory } = input
   if (!sessionID) return EMPTY_RESULT
+  const cacheKey = traceCacheKey(directory, sessionID)
   if (!opts?.force) {
-    const cached = sessionCache.get(sessionID)
+    const cached = sessionCache.get(cacheKey)
     if (cached) return cached
   }
   try {
-    const data = await apiJson(`session/${encodeURIComponent(sessionID)}/trace`)
+    const data = await apiJson(tracePath("session", sessionID, directory))
     const result = normaliseResult(data)
-    sessionCache.set(sessionID, result)
+    sessionCache.set(cacheKey, result)
     return result
   } catch (err) {
     console.warn("trace fetch (session) failed", sessionID, err)
@@ -90,16 +106,21 @@ export async function fetchSessionTrace(sessionID: string, opts?: { force?: bool
   }
 }
 
-export async function fetchTaskTrace(taskID: string, opts?: { force?: boolean }): Promise<TraceFetchResult> {
+export async function fetchTaskTrace(
+  input: { taskID: string; directory: string },
+  opts?: { force?: boolean },
+): Promise<TraceFetchResult> {
+  const { taskID, directory } = input
   if (!taskID) return EMPTY_RESULT
+  const cacheKey = traceCacheKey(directory, taskID)
   if (!opts?.force) {
-    const cached = taskCache.get(taskID)
+    const cached = taskCache.get(cacheKey)
     if (cached) return cached
   }
   try {
-    const data = await apiJson(`task/${encodeURIComponent(taskID)}/trace`)
+    const data = await apiJson(tracePath("task", taskID, directory))
     const result = normaliseResult(data)
-    taskCache.set(taskID, result)
+    taskCache.set(cacheKey, result)
     return result
   } catch (err) {
     console.warn("trace fetch (task) failed", taskID, err)
@@ -107,12 +128,15 @@ export async function fetchTaskTrace(taskID: string, opts?: { force?: boolean })
   }
 }
 
-export function invalidateTraceCache(scope?: { sessionID?: string; taskID?: string }) {
+export function invalidateTraceCache(scope?: { directory?: string; sessionID?: string; taskID?: string }) {
   if (!scope) {
     sessionCache.clear()
     taskCache.clear()
     return
   }
-  if (scope.sessionID) sessionCache.delete(scope.sessionID)
-  if (scope.taskID) taskCache.delete(scope.taskID)
+  if ((scope.sessionID || scope.taskID) && !scope.directory?.trim()) {
+    throw new Error("trace cache invalidation requires a task directory")
+  }
+  if (scope.directory && scope.sessionID) sessionCache.delete(traceCacheKey(scope.directory, scope.sessionID))
+  if (scope.directory && scope.taskID) taskCache.delete(traceCacheKey(scope.directory, scope.taskID))
 }

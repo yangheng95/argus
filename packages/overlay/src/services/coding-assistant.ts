@@ -29,7 +29,13 @@ let activationSessionID = ""
 
 export type SelectCodingAssistantSessionOptions = {
   sessionID: string
+  directory: string
   signal?: AbortSignal
+}
+
+export type CodingAssistantSessionActionTarget = {
+  sessionID: string
+  directory: string
 }
 
 function assertNotAborted(signal?: AbortSignal): void {
@@ -93,6 +99,14 @@ function codingAssistantSessionsPath(input: { limit: number; append?: boolean })
   return `coding/sessions?${params.toString()}`
 }
 
+function codingAssistantSessionPath(target: CodingAssistantSessionActionTarget, suffix = ""): string {
+  const sessionID = target.sessionID.trim()
+  const directory = target.directory.trim()
+  if (!sessionID || !directory) throw new Error("codingAssistantSessionPath: sessionID and directory are required")
+  const params = new URLSearchParams({ directory })
+  return `coding/session/${encodeURIComponent(sessionID)}${suffix}?${params.toString()}`
+}
+
 export async function loadCodingAssistantSessions(
   options: { signal?: AbortSignal; append?: boolean } = {},
 ): Promise<void> {
@@ -127,15 +141,22 @@ export function setCodingAssistantSearchQuery(query: string): void {
   setCodingAssistantStore("searchQuery", query)
 }
 
-export async function createCodingAssistantSession(options: { signal?: AbortSignal } = {}): Promise<string> {
+export async function createCodingAssistantSession(options: { directory: string; signal?: AbortSignal }): Promise<string> {
+  const directory = options.directory.trim()
+  if (!directory) throw new Error("createCodingAssistantSession: directory is required")
   assertNotAborted(options.signal)
-  const response = (await apiJson("coding/session", {
+  const params = new URLSearchParams({ directory })
+  const response = (await apiJson(`coding/session?${params.toString()}`, {
     method: "POST",
     signal: options.signal,
   })) as CodingAssistantSessionResponse
   assertNotAborted(options.signal)
   setSessionRow(response.session)
-  return selectCodingAssistantSession({ sessionID: sessionIDFromResponse(response), signal: options.signal })
+  return selectCodingAssistantSession({
+    sessionID: sessionIDFromResponse(response),
+    directory: String(response.session.directory || ""),
+    signal: options.signal,
+  })
 }
 
 export async function selectCodingAssistantSession(options: SelectCodingAssistantSessionOptions): Promise<string> {
@@ -144,11 +165,15 @@ export async function selectCodingAssistantSession(options: SelectCodingAssistan
   const currentActivation = (async () => {
     const sessionID = requestedSessionID
     if (!sessionID) throw new Error("selectCodingAssistantSession: sessionID is required")
+    const inputDirectory = String(options.directory || "").trim()
+    if (!inputDirectory) throw new Error("selectCodingAssistantSession: session directory is required")
     assertNotAborted(options.signal)
-    const claimed = (await apiJson(`coding/session/${encodeURIComponent(sessionID)}`, { signal: options.signal })) as
-      | CodingAssistantSessionResponse
-      | undefined
+    const claimed = (await apiJson(codingAssistantSessionPath({ sessionID, directory: inputDirectory }), {
+      signal: options.signal,
+    })) as CodingAssistantSessionResponse | undefined
     if (claimed?.session) setSessionRow(claimed.session)
+    const directory = String(claimed?.session?.directory || "").trim()
+    if (!directory) throw new Error("selectCodingAssistantSession: session directory is required")
     assertNotAborted(options.signal)
     setCodingAssistantStore("selectedSessionID", sessionID)
     const source: BoardSource = { kind: "session", id: sessionID }
@@ -171,10 +196,11 @@ export async function selectCodingAssistantSession(options: SelectCodingAssistan
         signal: options.signal,
         scrollIntent: "bottom",
         resetCause: "coding-assistant-hydrate",
+        directory,
       })
       assertNotAborted(options.signal)
       if (boardStore.selectEpoch === epoch && isCodingAssistantSource(source)) {
-        startSSE(source)
+        startSSE(source, 0, { directory })
       }
       return sessionID
     } finally {
@@ -195,13 +221,18 @@ export async function selectCodingAssistantSession(options: SelectCodingAssistan
   }
 }
 
-export async function renameCodingAssistantSession(sessionID: string, title: string): Promise<boolean> {
-  const id = sessionID.trim()
+export async function renameCodingAssistantSession(
+  target: CodingAssistantSessionActionTarget,
+  title: string,
+): Promise<boolean> {
+  const id = target.sessionID.trim()
   const trimmed = title.trim()
-  if (!id || !trimmed || trimmed.length > 200) return false
+  if (!id || !target.directory.trim() || !trimmed || trimmed.length > 200) {
+    throw new Error("renameCodingAssistantSession: sessionID, directory, and 1-200 character title are required")
+  }
   setCodingAssistantStore("actionBusyID", id)
   try {
-    const response = (await apiJson(`coding/session/${encodeURIComponent(id)}`, {
+    const response = (await apiJson(codingAssistantSessionPath(target), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: trimmed }),
@@ -213,35 +244,37 @@ export async function renameCodingAssistantSession(sessionID: string, title: str
     return true
   } catch (error) {
     console.error("[coding-assistant] rename failed", { sessionID: id, error })
-    return false
+    throw error
   } finally {
     setCodingAssistantStore("actionBusyID", "")
   }
 }
 
-export async function stopCodingAssistantSession(sessionID: string): Promise<boolean> {
-  const id = sessionID.trim()
-  if (!id) return false
+export async function stopCodingAssistantSession(target: CodingAssistantSessionActionTarget): Promise<boolean> {
+  const id = target.sessionID.trim()
+  if (!id || !target.directory.trim()) throw new Error("stopCodingAssistantSession: sessionID and directory are required")
   setCodingAssistantStore("actionBusyID", id)
   try {
     if (selectedCodingAssistantSessionID() === id) abortChatRequest()
-    await apiJson(`coding/session/${encodeURIComponent(id)}/abort`, { method: "POST" })
+    await apiJson(codingAssistantSessionPath(target, "/abort"), { method: "POST" })
     return true
   } catch (error) {
     console.error("[coding-assistant] stop failed", { sessionID: id, error })
-    return false
+    throw error
   } finally {
     setCodingAssistantStore("actionBusyID", "")
   }
 }
 
-export async function deleteCodingAssistantSession(sessionID: string): Promise<boolean> {
-  const id = sessionID.trim()
-  if (!id) return false
+export async function deleteCodingAssistantSession(target: CodingAssistantSessionActionTarget): Promise<boolean> {
+  const id = target.sessionID.trim()
+  if (!id || !target.directory.trim()) {
+    throw new Error("deleteCodingAssistantSession: sessionID and directory are required")
+  }
   setCodingAssistantStore("actionBusyID", id)
   const wasSelected = selectedCodingAssistantSessionID() === id
   try {
-    await apiJson(`coding/session/${encodeURIComponent(id)}`, { method: "DELETE" })
+    await apiJson(codingAssistantSessionPath(target), { method: "DELETE" })
     if (wasSelected) {
       abortChatRequest()
       cancelConversationReplay()
@@ -261,7 +294,7 @@ export async function deleteCodingAssistantSession(sessionID: string): Promise<b
     return true
   } catch (error) {
     console.error("[coding-assistant] delete failed", { sessionID: id, error })
-    return false
+    throw error
   } finally {
     setCodingAssistantStore("actionBusyID", "")
   }

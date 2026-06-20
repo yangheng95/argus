@@ -16,15 +16,21 @@ const CODING_ASSISTANT_SERVICE = readFileSync(join(import.meta.dir, "../src/serv
 
 test("session source hydrates from session conversation and submits to prompt_async", () => {
   expect(CONVERSATION_SERVICE).toContain('const prefix = source.kind === "task" ? "task" : "session"')
-  expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit, options.directory)")
+  expect(CONVERSATION_SERVICE).toContain(
+    'const directory = registerConversationSourceDirectory(source, requireDirectory(options.directory, "hydrateConversation"))',
+  )
+  expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit, directory)")
   expect(TASK_SERVICE).toContain('selectedSource?.kind === "session"')
   expect(TASK_SERVICE).toContain("`session/${encodeURIComponent(selectedSource.id)}/prompt_async`")
 })
 
 test("Mission session hydrate uses the selected row directory", () => {
   expect(MISSION_TSX).toContain("openMissionSession(mission.sessionID, mission.directory)")
-  expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit, options.directory)")
-  expect(CONVERSATION_SERVICE).toContain('params.set("directory", trimmedDirectory)')
+  expect(CONVERSATION_SERVICE).toContain(
+    'const directory = registerConversationSourceDirectory(source, requireDirectory(options.directory, "hydrateConversation"))',
+  )
+  expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit, directory)")
+  expect(CONVERSATION_SERVICE).toContain('params.set("directory", requireDirectory(directory, "conversation hydrate"))')
 })
 
 test("session source cannot page older task conversation history", () => {
@@ -92,7 +98,7 @@ test("Mission launcher and Coding Assistant reuse the main ChatComposer with sep
   expect(CODING_ASSISTANT_SERVICE).toContain(
     'resetWriter({ scrollIntent: "bottom", cause: "coding-assistant-switch" })',
   )
-  expect(CODING_ASSISTANT_SERVICE).toContain("startSSE(source)")
+  expect(CODING_ASSISTANT_SERVICE).toContain("startSSE(source, 0, { directory })")
   expect(CODING_ASSISTANT_SERVICE).not.toContain("wakeMission")
 })
 
