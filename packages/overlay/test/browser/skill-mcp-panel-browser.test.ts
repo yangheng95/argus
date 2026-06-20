@@ -59,11 +59,13 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     mcp: {
       browser: { type: "remote", url: "https://mcp.example.com/browser" },
       filesystem: { type: "local", command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "D:/repo"] },
+      auth: { type: "remote", url: "https://mcp.example.com/auth" },
     },
   }
   const mcp = {
     browser: { status: "connected" },
-    filesystem: { status: "connected" },
+    filesystem: { status: "disconnected" },
+    auth: { status: "needs_auth" },
   }
 
   const server = await startBrowserFixture(async (req) => {
@@ -207,12 +209,49 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
     await page.waitForSelector("#leftPanelMcp[data-active='true'] #mcpList")
     await page.waitForFunction(() => document.querySelector("#leftPanelMcp")?.textContent?.includes("browser"))
+    const statusScreenshot = await saveElementScreenshot(page, "#leftPanelMcp", "skill-mcp-status-pills.png")
+    const statusRows = await page.$$eval("#leftPanelMcp .extension-settings-row", (rows: HTMLElement[]) =>
+      rows.map((row) => {
+        const title = row.querySelector(".s-row-title") as HTMLElement | null
+        const desc = row.querySelector(".s-row-desc") as HTMLElement | null
+        const pill = row.querySelector(".s-pill") as HTMLElement | null
+        const pillRect = pill?.getBoundingClientRect()
+        const pillStyle = pill ? getComputedStyle(pill) : null
+        return {
+          title: title?.textContent?.trim() ?? "",
+          desc: desc?.textContent?.trim() ?? "",
+          pill: pill?.textContent?.trim() ?? "",
+          tone: pill?.getAttribute("data-tone") ?? "",
+          width: pillRect?.width ?? 0,
+          height: pillRect?.height ?? 0,
+          background: pillStyle?.backgroundColor ?? "",
+          color: pillStyle?.color ?? "",
+          border: pillStyle?.borderTopWidth ?? "",
+        }
+      }),
+    )
+    assert.deepEqual(
+      statusRows.map((row) => ({ title: row.title, desc: row.desc, pill: row.pill, tone: row.tone })),
+      [
+        { title: "browser", desc: "Connected", pill: "Connected", tone: "ok" },
+        { title: "filesystem", desc: "Disconnected", pill: "Disconnected", tone: "neutral" },
+        { title: "auth", desc: "Needs auth", pill: "Needs auth", tone: "warn" },
+      ],
+    )
+    for (const row of statusRows) {
+      assert.ok(row.width > 24 && row.height > 12, `${row.title} status pill should be visible`)
+      assert.match(row.color, /^rgb/)
+      if (row.tone === "ok" || row.tone === "warn") {
+        assert.notEqual(row.background, "rgba(0, 0, 0, 0)")
+      }
+      assert.equal(row.border, "1px")
+    }
     requests.length = 0
 
     const deleteAllButton = '#leftPanelMcp[data-active="true"] [data-ui="tool-panel-action"][aria-label="Delete All"]'
     await page.waitForSelector(deleteAllButton, { visible: true })
     await page.click(deleteAllButton)
-    await page.waitForFunction(() => document.querySelector("#appDialogBody")?.textContent?.includes("Delete all 2 MCP"))
+    await page.waitForFunction(() => document.querySelector("#appDialogBody")?.textContent?.includes("Delete all 3 MCP"))
     const confirmScreenshot = await saveElementScreenshot(page, "#appDialog", "skill-mcp-delete-confirm.png")
 
     await page.click("#btnAppDialogOk")
@@ -250,6 +289,7 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     assert.notEqual(failureNotice.background, "rgba(0, 0, 0, 0)")
     assert.equal(failureNotice.border, "1px")
     assert.equal(failureNotice.buttonInside, true)
+    assert.ok(statusScreenshot.endsWith("skill-mcp-status-pills.png"))
     assert.ok(confirmScreenshot.endsWith("skill-mcp-delete-confirm.png"))
     assert.ok(failureScreenshot.endsWith("skill-mcp-delete-failure.png"))
   } finally {

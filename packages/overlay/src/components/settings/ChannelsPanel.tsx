@@ -13,7 +13,11 @@ import { nativeOpen } from "../../utils/native"
 import { Dialog } from "../primitives/Dialog"
 import { useAsyncAction } from "../../solid/async-action"
 import { Button } from "../ui/Button"
-import { SettingsPill, SettingsRow, type SettingsPillTone } from "./primitives"
+import {
+  channelConfigurationStatusLabelFromString,
+  channelConfigurationStatusToneFromString,
+} from "../../utils/settings-status-labels"
+import { SettingsPill, SettingsRow } from "./primitives"
 
 // ── Tutorial docs (matches pre-Solid OPENCLAW_DOCS constant) ──
 
@@ -54,26 +58,6 @@ interface ChannelEntry {
   summary: string
   status: string
   fields: ChannelField[]
-}
-
-// ── Status helpers ──
-
-function channelStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    configured: t("channel.status.configured"),
-    partial: t("channel.status.partial"),
-    missing: t("channel.status.missing"),
-    disabled: t("channel.status.disabled"),
-  }
-  return map[status] || status
-}
-
-function channelStatusTone(status: string): SettingsPillTone {
-  if (status === "configured") return "ok"
-  if (status === "partial") return "warn"
-  if (status === "missing") return "bad"
-  if (status === "disabled") return "muted"
-  return "neutral"
 }
 
 // ── Component ──
@@ -247,7 +231,9 @@ export default function ChannelsPanel() {
                 interactive
                 actions={
                   <div class="channel-row-actions">
-                    <SettingsPill tone={channelStatusTone(item.status)}>{channelStatusLabel(item.status)}</SettingsPill>
+                    <SettingsPill tone={channelConfigurationStatusToneFromString(item.status)}>
+                      {channelConfigurationStatusLabelFromString(item.status)}
+                    </SettingsPill>
                     <Show when={canOpenTutorialDocs()}>
                       <Button
                         type="button"
