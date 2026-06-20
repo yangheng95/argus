@@ -62,7 +62,7 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     id: taskID,
     title: "Interaction textarea fixture",
     directory: projectRoot,
-    status: "running",
+    status: "active",
     sessionID: "session-interaction-textarea",
     time: { created: now - 30_000, started: now - 25_000, updated: now - 1_000 },
   }

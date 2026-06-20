@@ -475,7 +475,7 @@ test(
     const task = {
       id: taskID,
       directory: projectRoot,
-      status: "running",
+      status: "active",
       sessionID: "ses_preview_visual_stress",
       request: "Build agent started a browser_preview service and the operator is validating the preview panel.",
       title: "Preview visual stress",
@@ -484,7 +484,7 @@ test(
     const otherTask = {
       id: otherTaskID,
       directory: otherProjectRoot,
-      status: "running",
+      status: "active",
       sessionID: "ses_preview_visual_other",
       request: "A second task verifies preview state does not leak across task switches.",
       title: "Preview visual other task",

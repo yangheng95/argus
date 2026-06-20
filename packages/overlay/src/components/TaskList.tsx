@@ -16,6 +16,7 @@ import {
   formatErrorDetails,
 } from "../services/notify"
 import { t } from "../utils/i18n"
+import { taskLifecycleStatusLabel, taskLifecycleStatusLabelFromString } from "../utils/status-labels"
 import { stamp, fullStampWithRelative } from "../utils/time"
 import { projectDirectoryKey } from "../utils/project-directory"
 import { Icon } from "./Icon"
@@ -47,27 +48,15 @@ function taskListTitle(item: any): string {
   return clipText(item?.task?.title || item?.overview?.headline || item?.task?.id || "", 72)
 }
 
-function statusLabel(status: string): string {
-  const map: Record<string, string> = {
-    idle: t("task.status.idle"),
-    queued: t("task.status.queued"),
-    active: t("task.status.active"),
-    completed: t("task.status.completed"),
-    failed: t("task.status.failed"),
-    cancelled: t("task.status.cancelled"),
-  }
-  return map[status] || status
-}
-
 function taskListBadge(item: any, queuePos?: number): string {
-  if (item?._pending) return statusLabel("active")
+  if (item?._pending) return taskLifecycleStatusLabel("active")
   const pending = Number(item?.pending_interactions || 0) > 0
   if (pending) return t("detail.pending_interactions")
-  const status = item?.task?.status || "idle"
+  const status = String(item?.task?.status || "")
   if (status === "queued" && queuePos !== undefined && queuePos > 0) {
-    return `${statusLabel("queued")} #${queuePos}`
+    return `${taskLifecycleStatusLabel("queued")} #${queuePos}`
   }
-  return statusLabel(status)
+  return taskLifecycleStatusLabelFromString(status)
 }
 
 function taskListMeta(item: any): string {

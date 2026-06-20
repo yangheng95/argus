@@ -34,7 +34,7 @@ const boardData = {
   task: {
     id: TASK_ID,
     request: "Implement user authentication and add API endpoints for the new dashboard",
-    status: "running",
+    status: "active",
     sessionID: ROOT_SESSION,
     time: { created: Date.now() - 120_000 },
   },

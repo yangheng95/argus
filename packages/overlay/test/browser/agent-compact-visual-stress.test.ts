@@ -664,7 +664,7 @@ test(
     const task = {
       id: TASK_ID,
       directory: PROJECT_ROOT,
-      status: "running",
+      status: "active",
       sessionID: "ses_root",
       request: "AGC-USER-ANCHOR user asks the goal overlay to survive compaction under long-running agent pressure.",
       title: "Agent compact visual stress",

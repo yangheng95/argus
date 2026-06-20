@@ -894,7 +894,7 @@ test(
     const task = {
       id: TASK_ID,
       directory: PROJECT_ROOT,
-      status: "running",
+      status: "active",
       sessionID: "ses_root",
       request: "RW-T1 user request",
       title: "Rewind visual stress",

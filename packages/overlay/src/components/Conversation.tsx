@@ -8,6 +8,7 @@ import { boardStore, activeTaskID } from "../store/board"
 import { t } from "../utils/i18n"
 import { renderAsBubble } from "../utils/chat-bubble"
 import { setupAutoScroll, type AutoScrollController } from "../utils/dom-utils"
+import { taskLifecycleStatusOrIdleLabel } from "../utils/status-labels"
 import { StoreCardNode } from "./StoreCardNode"
 import { canLoadOlderConversationHistory, loadOlderConversationHistory } from "../services/conversation"
 import { conversationAgentStore } from "../store/conversation-agents"
@@ -36,13 +37,6 @@ function compactPath(value: string): string {
   const parts = normalized.split("/").filter(Boolean)
   if (parts.length <= 4) return normalized
   return `.../${parts.slice(-3).join("/")}`
-}
-
-function taskStatusLabel(status: string): string {
-  const normalized = String(status || "idle").trim() || "idle"
-  const key = `task.status.${normalized}`
-  const translated = t(key)
-  return translated === key ? normalized : translated
 }
 
 function firstVisibleConversationAnchor(container: HTMLElement): { id: string; top: number } | null {
@@ -306,7 +300,7 @@ export function Conversation(props: { container: HTMLElement }) {
     if (isSessionSource()) return String(sessionBoard()?.status || "active")
     const item = selectedTaskItem() || taskContextItem()
     if (item?._pending) return "active"
-    return String(item?.task?.status || selectedBoardTask()?.status || "idle")
+    return String(item?.task?.status || selectedBoardTask()?.status || "")
   }
   const selectedTaskDirectoryText = () => {
     if (isSessionSource()) return compactPath(sessionBoard()?.directory || "")
@@ -440,7 +434,7 @@ export function Conversation(props: { container: HTMLElement }) {
             <strong class="chat-empty-title">{selectedTaskTitle()}</strong>
             <div class="chat-empty-meta">
               <span class="chat-empty-status" data-status={selectedTaskStatus()}>
-                {taskStatusLabel(selectedTaskStatus())}
+                {taskLifecycleStatusOrIdleLabel(selectedTaskStatus())}
               </span>
               <Show when={selectedTaskDirectoryText()}>
                 <span class="chat-empty-path">{selectedTaskDirectoryText()}</span>

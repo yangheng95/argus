@@ -103,7 +103,7 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     id: TASK_ID,
     title: "File changes filter fixture",
     directory: "D:/overlay/workspace/app",
-    status: "running",
+    status: "active",
     time: { created: now - 10_000, updated: now - 1_000 },
   }
   const board = {

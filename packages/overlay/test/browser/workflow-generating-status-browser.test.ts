@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import test from "node:test"
+import { fileURLToPath } from "node:url"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
@@ -9,7 +10,10 @@ import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
-const enUSMessages = JSON.parse(readFileSync(resolve("packages/overlay/src/i18n/en-US.json"), "utf8")) as Record<
+const testDir = dirname(fileURLToPath(import.meta.url))
+const overlayRoot = resolve(testDir, "../..")
+const repoRoot = resolve(overlayRoot, "../..")
+const enUSMessages = JSON.parse(readFileSync(resolve(overlayRoot, "src/i18n/en-US.json"), "utf8")) as Record<
   string,
   string
 >
@@ -38,7 +42,7 @@ function eventStream() {
 }
 
 async function saveElementScreenshot(page: any, selector: string, filename: string) {
-  const screenshotPath = resolve(".scratch", filename)
+  const screenshotPath = resolve(repoRoot, ".scratch", filename)
   mkdirSync(dirname(screenshotPath), { recursive: true })
   const element = await page.$(selector)
   assert.ok(element, `${selector} should exist before screenshot`)
@@ -57,7 +61,7 @@ test("workflow generating panels expose live busy status regions", async () => {
     id: taskID,
     title: "Workflow generating status",
     directory: projectRoot,
-    status: "running",
+    status: "active",
     sessionID: "session-workflow-generating-status",
     time: { created: now - 30_000, started: now - 25_000, updated: now - 1_000 },
   }
@@ -188,6 +192,8 @@ test("workflow generating panels expose live busy status regions", async () => {
     await page.waitForSelector("#frontendResearchSection .req-streaming-indicator", { visible: true, timeout: 15_000 })
     await page.waitForSelector("#requirementsSection .req-streaming-indicator", { visible: true, timeout: 15_000 })
     await page.waitForSelector("#architectSection .arch-generating", { visible: true, timeout: 15_000 })
+    await page.waitForSelector("#frontendResearchBadge", { visible: true, timeout: 15_000 })
+    await page.waitForSelector("#statusLabel", { visible: true, timeout: 15_000 })
 
     const statuses = await page.evaluate(() => {
       const read = (selector: string) => {
@@ -205,6 +211,22 @@ test("workflow generating panels expose live busy status regions", async () => {
         frontendResearch: read("#frontendResearchSection .req-streaming-indicator"),
         requirements: read("#requirementsSection .req-streaming-indicator"),
         architect: read("#architectSection .arch-generating"),
+        frontendResearchBadge: {
+          text: document.querySelector<HTMLElement>("#frontendResearchBadge")?.textContent?.trim() ?? "",
+          tone: document.querySelector<HTMLElement>("#frontendResearchBadge")?.dataset.tone ?? "",
+        },
+        taskHeader: document.querySelector<HTMLElement>("#statusLabel")?.textContent?.trim() ?? "",
+        taskRowBadge: (() => {
+          const row = document.querySelector<HTMLElement>(
+            '.task-row-mini[data-task-row-id="task-workflow-generating-status"]',
+          )
+          const badge = row?.querySelector<HTMLElement>(".task-row-badge")
+          return {
+            text: badge?.querySelector<HTMLElement>(".task-row-badge-text")?.textContent?.trim() ?? "",
+            ariaLabel: badge?.getAttribute("aria-label") ?? "",
+            title: badge?.getAttribute("title") ?? "",
+          }
+        })(),
       }
     })
 
@@ -229,10 +251,36 @@ test("workflow generating panels expose live busy status regions", async () => {
       text: enUSMessages["workflow.architect_generating"],
       spinner: true,
     })
+    assert.equal(statuses.frontendResearchBadge.text, enUSMessages["workflow.status.running"])
+    assert.equal(statuses.frontendResearchBadge.tone, "accent")
+    assert.equal(statuses.taskHeader, enUSMessages["task.status.active"])
+    assert.deepEqual(statuses.taskRowBadge, {
+      text: enUSMessages["task.status.active"],
+      ariaLabel: enUSMessages["task.status.active"],
+      title: enUSMessages["task.status.active"],
+    })
+    assert.notEqual(statuses.frontendResearchBadge.text, "running")
+    assert.notEqual(statuses.frontendResearchBadge.text, "workflow.status.running")
+    assert.notEqual(statuses.taskHeader, "active")
+    assert.notEqual(statuses.taskRowBadge.text, "active")
     assert.deepEqual(errors, [])
 
     const screenshot = await saveElementScreenshot(page, ".workflow-section-stack", "workflow-generating-status-live.png")
     assert.ok(screenshot.endsWith("workflow-generating-status-live.png"))
+    const workflowBadgeScreenshot = await saveElementScreenshot(
+      page,
+      "#frontendResearchSection .oc-section__head",
+      "workflow-running-badge-label.png",
+    )
+    assert.ok(workflowBadgeScreenshot.endsWith("workflow-running-badge-label.png"))
+    const taskRowScreenshot = await saveElementScreenshot(
+      page,
+      `.task-row-mini[data-task-row-id="${taskID}"]`,
+      "workflow-task-row-active-label.png",
+    )
+    assert.ok(taskRowScreenshot.endsWith("workflow-task-row-active-label.png"))
+    const taskHeaderScreenshot = await saveElementScreenshot(page, "#taskStatus", "workflow-task-header-active-label.png")
+    assert.ok(taskHeaderScreenshot.endsWith("workflow-task-header-active-label.png"))
   } finally {
     await browser.close()
     await server.close()
