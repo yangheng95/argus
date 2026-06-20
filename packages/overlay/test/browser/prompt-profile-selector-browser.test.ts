@@ -341,7 +341,19 @@ for (const scenario of promptProfileScenarios) {
       await page.click('[data-ui="prompt-profile-selector"]')
       await page.waitForSelector(".prompt-profile-select-content")
       await page.waitForSelector(".prompt-profile-select-option")
-      await page.hover('.prompt-profile-select-option[data-profile-id="backend"]')
+      await page.mouse.move(2, 2)
+      let keyboardHighlightedBackend = false
+      for (let attempt = 0; attempt < scenario.profiles.length + 1; attempt += 1) {
+        await page.keyboard.press("ArrowDown")
+        keyboardHighlightedBackend = await page.evaluate(
+          () =>
+            !!document.querySelector(
+              '.prompt-profile-select-option[data-profile-id="backend"][data-highlighted][aria-selected="false"]',
+            ),
+        )
+        if (keyboardHighlightedBackend) break
+      }
+      assert.equal(keyboardHighlightedBackend, true)
       await page.waitForFunction(
         () =>
           !!document.querySelector(
