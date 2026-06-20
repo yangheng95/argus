@@ -516,7 +516,7 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("Referenced images, captures, and visual specs are binding source material")
   })
 
-  test("request-path build receives frontend-research investigation plan overlay", () => {
+  test("request-path build receives frontend-research build pointer overlay", () => {
     const prompt = buildUserPrompt(
       {
         kind: "request",
@@ -524,25 +524,27 @@ describe("build agent prompt context", () => {
       },
       {
         frontendResearch:
-          "# Frontend Research Brief (webpage investigation division)\n\n" +
-          "work_packet: verify whether the floating tab bar appears after scroll and switches economic indicators.",
+          "Compact advisory coverage index from frontend_research.\n\n" +
+          "Functional surfaces:\n- surface_tabs: floating tab bar appears after scroll and switches economic indicators.",
         frontendDesign:
           "# Frontend Design Public Report\n\n" + "- key=visual_consistency_contract value=Match the researched page.",
       },
     )
 
-    expect(prompt).toContain("Rendered overlays: frontend-research-investigation-plan, frontend-design-handoff")
-    expect(prompt).toContain("## Frontend Research Investigation Plan")
-    expect(prompt).toContain("Treat it as a coverage checklist and work-packet index")
-    expect(prompt).toContain("do not treat it as completed PRD facts")
-    expect(prompt).toContain("read the named work packets")
+    expect(prompt).toContain("Rendered overlays: frontend-research-build-pointers, frontend-design-handoff")
+    expect(prompt).toContain("## Frontend Research Build Pointers")
+    expect(prompt).toContain("task-specific compact pointer data from frontend_research")
+    expect(prompt).toContain("do not treat it as completed PRD facts or an implementation template")
+    expect(prompt).toContain("use the compact pointers")
     expect(prompt).toContain("Preserve component-kind hypotheses unless deeper evidence disproves them")
     expect(prompt).toContain("do not flatten it into SVG/image markup")
     expect(prompt).toContain(
       "Use requirements, architect contracts, and frontend_design as the binding implementation contract",
     )
+    expect(prompt).not.toContain("webpage_contract")
+    expect(prompt).not.toContain("```json")
     expect(prompt).toContain("floating tab bar appears after scroll")
-    expect(prompt.indexOf("## Frontend Research Investigation Plan")).toBeLessThan(
+    expect(prompt.indexOf("## Frontend Research Build Pointers")).toBeLessThan(
       prompt.indexOf("## Frontend Design Handoff"),
     )
   })

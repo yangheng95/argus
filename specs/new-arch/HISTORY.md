@@ -12,6 +12,12 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [right-sidebar-opencode-tui-upgrade-2026-06-04.md](right-sidebar-opencode-tui-upgrade-2026-06-04.md)                                   | Right Sidebar OpenCode TUI Upgrade                  |
 | [spec-vscode-extension.md](spec-vscode-extension.md)                                                                                   | spec: opencorvus VSCode 扩展                        |
 
+## 2026-06-21
+
+| File | Title |
+| --- | --- |
+| [2026-06-21-frontend-research-context-digest.md](2026-06-21-frontend-research-context-digest.md) | Frontend Research Context Digest |
+
 ## 2026-06-20
 
 | File                                                                                                       | Title                          |
