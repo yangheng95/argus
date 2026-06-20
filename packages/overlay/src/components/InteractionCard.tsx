@@ -12,7 +12,7 @@
 // reusing the same `--card-*` design vars as the agent / goal cards so all
 // system-prompt cards share one look.
 
-import { createMemo, createSignal, For, Show } from "solid-js"
+import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js"
 import { t } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
 import { loadBoard } from "../store/board"
@@ -43,11 +43,15 @@ export function InteractionCard(props: { interaction: InteractionData }) {
   const [error, setError] = createSignal("")
   const [drafts, setDrafts] = createSignal<string[][]>([])
   const [customText, setCustomText] = createSignal<string[]>([])
+  const instanceID = createUniqueId()
+  let cardElement: HTMLDivElement | undefined
+  let errorElement: HTMLDivElement | undefined
 
   const isPermission = () => props.interaction.type === "permission"
   const dataKind = () => (isPermission() ? "interaction-permission" : "interaction-question")
   const iconGlyph = () => (isPermission() ? "\uD83D\uDD12" : "\u2753")
   const iconLabel = () => (isPermission() ? t("interaction.icon.permission") : t("interaction.icon.question"))
+  const domIDPrefix = createMemo(() => `interaction-${domID(instanceID)}-${domID(props.interaction.id)}`)
 
   const questions = createMemo<InteractionQuestion[]>(() => {
     const q = props.interaction?.payload?.questions
@@ -88,11 +92,13 @@ export function InteractionCard(props: { interaction: InteractionData }) {
     if (busy()) return
     setBusy(true)
     setError("")
+    queueMicrotask(() => cardElement?.focus())
     try {
       await fn()
       await loadBoard()
     } catch (err: any) {
       setError(err?.message || String(err))
+      queueMicrotask(() => (errorElement ?? cardElement)?.focus())
     } finally {
       setBusy(false)
     }
@@ -120,7 +126,14 @@ export function InteractionCard(props: { interaction: InteractionData }) {
     })
 
   return (
-    <div class="interaction-card" data-kind={dataKind()} data-id={props.interaction.id}>
+    <div
+      class="interaction-card"
+      data-kind={dataKind()}
+      data-id={props.interaction.id}
+      aria-busy={busy() ? "true" : "false"}
+      tabIndex={-1}
+      ref={cardElement}
+    >
       <Show when={props.interaction.title}>
         <div class="interaction-card__title">
           <span class="interaction-card__icon" role="img" aria-label={iconLabel()}>
@@ -133,7 +146,21 @@ export function InteractionCard(props: { interaction: InteractionData }) {
         <div class="interaction-card__body md-content" innerHTML={renderMarkdown(props.interaction.body || "")} />
       </Show>
       <Show when={error()}>
-        <div class="interaction-card__error">{t("interaction.error", { message: error() })}</div>
+        <div
+          class="interaction-card__error"
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+          tabIndex={-1}
+          ref={errorElement}
+        >
+          {t("interaction.error", { message: error() })}
+        </div>
+      </Show>
+      <Show when={busy()}>
+        <div class="interaction-card__status" role="status" aria-live="polite" aria-busy="true">
+          {t("interaction.submitting")}
+        </div>
       </Show>
       <Show when={!isPermission() && questions().length > 0}>
         <div class="interaction-card__questions">
@@ -142,35 +169,44 @@ export function InteractionCard(props: { interaction: InteractionData }) {
               const multi = q.multiple === true
               const allowCustom = q.custom !== false
               const opts = Array.isArray(q.options) ? q.options : []
+              const questionID = () => `${domIDPrefix()}-question-${qIdx()}`
+              const questionText = () => questionLabel(q)
               return (
-                <div class="interaction-card__question">
-                  <Show when={q.question}>
-                    <div class="interaction-card__question-text">{q.question}</div>
-                  </Show>
+                <fieldset class="interaction-card__question" aria-labelledby={questionID()}>
+                  <legend id={questionID()} class="interaction-card__question-text">
+                    {questionText()}
+                  </legend>
                   <Show when={opts.length > 0}>
                     <div class="interaction-card__options">
                       <For each={opts}>
-                        {(opt) => (
-                          <label class="interaction-card__option">
-                            <input
-                              type={multi ? "checkbox" : "radio"}
-                              name={`iq-${props.interaction.id}-${qIdx()}`}
-                              checked={getSelected(qIdx()).includes(opt.label)}
-                              disabled={busy()}
-                              onChange={() => toggleOption(qIdx(), opt.label, multi)}
-                            />
-                            <span class="interaction-card__option-label">{opt.label}</span>
-                            <Show when={opt.description}>
-                              <span class="interaction-card__option-desc">{opt.description}</span>
-                            </Show>
-                          </label>
-                        )}
+                        {(opt, optIdx) => {
+                          const optionDescID = () => `${questionID()}-option-${optIdx()}-desc`
+                          return (
+                            <label class="interaction-card__option">
+                              <input
+                                type={multi ? "checkbox" : "radio"}
+                                name={`iq-${domIDPrefix()}-${qIdx()}`}
+                                checked={getSelected(qIdx()).includes(opt.label)}
+                                disabled={busy()}
+                                aria-describedby={opt.description ? optionDescID() : undefined}
+                                onChange={() => toggleOption(qIdx(), opt.label, multi)}
+                              />
+                              <span class="interaction-card__option-label">{opt.label}</span>
+                              <Show when={opt.description}>
+                                <span id={optionDescID()} class="interaction-card__option-desc">
+                                  {opt.description}
+                                </span>
+                              </Show>
+                            </label>
+                          )
+                        }}
                       </For>
                     </div>
                   </Show>
                   <Show when={allowCustom}>
                     <AutoGrowTextarea
                       class="composer-textarea interaction-card__custom-input"
+                      aria-labelledby={questionID()}
                       placeholder={t("interaction.custom_placeholder")}
                       rows={opts.length > 0 ? 1 : 3}
                       maxLines={6}
@@ -179,7 +215,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
                       onInput={(event) => setCustomAt(qIdx(), event.currentTarget.value)}
                     />
                   </Show>
-                </div>
+                </fieldset>
               )
             }}
           </For>
@@ -198,7 +234,6 @@ export function InteractionCard(props: { interaction: InteractionData }) {
                 data-action="answer"
                 disabled={busy()}
                 title={t("interaction.answer_title")}
-                aria-label={t("interaction.answer_title")}
                 onClick={submitAnswers}
               >
                 {t("interaction.answer")}
@@ -211,7 +246,6 @@ export function InteractionCard(props: { interaction: InteractionData }) {
                 data-action="skip"
                 disabled={busy()}
                 title={t("interaction.skip_title")}
-                aria-label={t("interaction.skip_title")}
                 onClick={reject}
               >
                 {t("interaction.skip")}
@@ -227,7 +261,6 @@ export function InteractionCard(props: { interaction: InteractionData }) {
             data-action="always"
             disabled={busy()}
             title={t("interaction.always_allow_title")}
-            aria-label={t("interaction.always_allow_title")}
             onClick={() => resolvePermission("always")}
           >
             {t("interaction.always_allow")}
@@ -240,7 +273,6 @@ export function InteractionCard(props: { interaction: InteractionData }) {
             data-action="once"
             disabled={busy()}
             title={t("interaction.allow_once_title")}
-            aria-label={t("interaction.allow_once_title")}
             onClick={() => resolvePermission("once")}
           >
             {t("interaction.allow_once")}
@@ -253,7 +285,6 @@ export function InteractionCard(props: { interaction: InteractionData }) {
             data-action="reject"
             disabled={busy()}
             title={t("interaction.reject_title")}
-            aria-label={t("interaction.reject_title")}
             onClick={reject}
           >
             {t("interaction.reject")}
@@ -262,4 +293,16 @@ export function InteractionCard(props: { interaction: InteractionData }) {
       </div>
     </div>
   )
+}
+
+function domID(value: string): string {
+  return value.trim().replace(/[^A-Za-z0-9_-]+/g, "-")
+}
+
+function questionLabel(question: InteractionQuestion): string {
+  const primary = typeof question.question === "string" ? question.question.trim() : ""
+  const header = typeof question.header === "string" ? question.header.trim() : ""
+  if (header && primary && header !== primary) return `${header}: ${primary}`
+  if (primary) return primary
+  return header
 }

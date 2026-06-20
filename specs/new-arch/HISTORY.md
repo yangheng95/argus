@@ -50,6 +50,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-20-app-dialog-task-decision-keyboard.md](2026-06-20-app-dialog-task-decision-keyboard.md)         | App Dialog Task Decision Keyboard |
 | [2026-06-20-kobalte-trigger-open-state-single-source.md](2026-06-20-kobalte-trigger-open-state-single-source.md) | Kobalte Trigger Open State Single Source |
 | [2026-06-20-expert-squad-zh-select-readability-coverage.md](2026-06-20-expert-squad-zh-select-readability-coverage.md) | Expert Squad Chinese Select Readability Coverage |
+| [2026-06-20-interaction-card-form-accessibility.md](2026-06-20-interaction-card-form-accessibility.md)     | Interaction Card Form Accessibility |
 
 ## 2026-06-19
 
