@@ -3,9 +3,9 @@ import type { MissionRecord, MissionTaskProjection, MissionTaskStatus } from "..
 import { detailStamp, relativeTime } from "../utils/time"
 import { t } from "../utils/i18n"
 import { buildMissionDebugBlob, writeDebugClipboard } from "../utils/debug-info"
-import { useArmedConfirm } from "../solid/armed-confirm"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
+import { ArmedConfirmButton } from "./ui/ArmedConfirmButton"
 import { LedgerList } from "./LedgerList"
 import { LedgerRowMainButton } from "./LedgerRowMainButton"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
@@ -42,65 +42,60 @@ function missionRowTip(mission: MissionRecord): string {
     .join(" / ")
 }
 
-const CONFIRM_WINDOW_MS = 3000
+const CONFIRM_WINDOW_SECONDS = 3
+const CONFIRM_WINDOW_MS = CONFIRM_WINDOW_SECONDS * 1000
 
 function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: MissionRecord) => void; tabIndex?: number }) {
-  const confirmAbort = useArmedConfirm(CONFIRM_WINDOW_MS)
   return (
-    <Button
+    <ArmedConfirmButton
       type="button"
       variant="ghost"
       size="icon"
       tone="neutral"
       data-chrome="icon-action"
       data-ui="task-row-cancel"
-      data-confirm={confirmAbort.armed() ? "true" : undefined}
       tabIndex={props.tabIndex}
-      title={t("mission.ledger.abort_title")}
-      aria-label={t("mission.ledger.abort_title")}
-      onClick={(event) => {
-        event.stopPropagation()
-        confirmAbort.confirm(() => props.onAbort(props.mission))
-      }}
-      onBlur={confirmAbort.disarm}
+      label={t("mission.ledger.abort_title")}
+      armedDescription={t("armed_confirm.mission.abort", { seconds: CONFIRM_WINDOW_SECONDS })}
+      confirmWindowMs={CONFIRM_WINDOW_MS}
+      onConfirm={() => props.onAbort(props.mission)}
+      confirmChildren={
+        <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
+          <Icon name="check" size={11} />
+        </span>
+      }
     >
       <span class="task-row-cancel-icon" data-icon="cancel" aria-hidden="true">
         <Icon name="stop" size={11} />
       </span>
-      <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
-        <Icon name="check" size={11} />
-      </span>
-    </Button>
+    </ArmedConfirmButton>
   )
 }
 
 function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission: MissionRecord) => void; tabIndex?: number }) {
-  const confirmDelete = useArmedConfirm(CONFIRM_WINDOW_MS)
   return (
-    <Button
+    <ArmedConfirmButton
       type="button"
       variant="ghost"
       size="icon"
       tone="danger"
       data-chrome="icon-action"
       data-ui="task-row-delete"
-      data-confirm={confirmDelete.armed() ? "true" : undefined}
       tabIndex={props.tabIndex}
-      title={t("mission.ledger.delete_title")}
-      aria-label={t("mission.ledger.delete_title")}
-      onClick={(event) => {
-        event.stopPropagation()
-        confirmDelete.confirm(() => props.onDelete(props.mission))
-      }}
-      onBlur={confirmDelete.disarm}
+      label={t("mission.ledger.delete_title")}
+      armedDescription={t("armed_confirm.mission.delete", { seconds: CONFIRM_WINDOW_SECONDS })}
+      confirmWindowMs={CONFIRM_WINDOW_MS}
+      onConfirm={() => props.onDelete(props.mission)}
+      confirmChildren={
+        <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
+          <Icon name="check" size={11} />
+        </span>
+      }
     >
       <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
         <Icon name="close" size={11} />
       </span>
-      <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
-        <Icon name="check" size={11} />
-      </span>
-    </Button>
+    </ArmedConfirmButton>
   )
 }
 

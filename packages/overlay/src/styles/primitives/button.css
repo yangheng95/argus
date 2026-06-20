@@ -139,6 +139,18 @@
   flex: 0 0 auto;
 }
 
+.oc-armed-confirm-status {
+  position: absolute;
+  width: calc(1px * var(--ui-scale));
+  height: calc(1px * var(--ui-scale));
+  padding: 0;
+  margin: calc(-1px * var(--ui-scale));
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .oc-button[data-size="icon"][data-chrome="window-control"] > svg {
   width: calc(14px * var(--ui-scale));
   height: calc(14px * var(--ui-scale));
