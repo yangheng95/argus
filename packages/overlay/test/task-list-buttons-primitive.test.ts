@@ -11,6 +11,10 @@ const LEDGER_ROW_MAIN_BUTTON_SOURCE = readFileSync(
   join(import.meta.dir, "../src/components/LedgerRowMainButton.tsx"),
   "utf8",
 )
+const ARMED_CONFIRM_BUTTON_SOURCE = readFileSync(
+  join(import.meta.dir, "../src/components/ui/ArmedConfirmButton.tsx"),
+  "utf8",
+)
 const PROJECT_LEDGER_GROUP_SOURCE = readFileSync(
   join(import.meta.dir, "../src/components/ProjectLedgerGroup.tsx"),
   "utf8",
@@ -19,8 +23,15 @@ const SIDEBAR_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/s
 
 test("TaskList sidebar controls route through the Button primitive", () => {
   expect(TASK_LIST_SOURCE).toMatch(/import \{ Button \} from "\.\/ui\/Button"/)
+  expect(TASK_LIST_SOURCE).toMatch(/import \{ ArmedConfirmButton \} from "\.\/ui\/ArmedConfirmButton"/)
   expect(TASK_LIST_SOURCE).toContain('import { LedgerRowMainButton } from "./LedgerRowMainButton"')
   expect(TASK_LIST_SOURCE).toContain("<LedgerRowMainButton")
+  expect(TASK_LIST_SOURCE).toContain("<ArmedConfirmButton")
+  expect(TASK_LIST_SOURCE).not.toContain("../solid/armed-confirm")
+  expect(TASK_LIST_SOURCE).not.toContain("useArmedConfirm(")
+  expect(ARMED_CONFIRM_BUTTON_SOURCE).toContain('import { Button, type ButtonProps } from "./Button"')
+  expect(ARMED_CONFIRM_BUTTON_SOURCE).toContain('role="status"')
+  expect(ARMED_CONFIRM_BUTTON_SOURCE).toContain('aria-live="polite"')
   expect(TASK_LIST_SOURCE).not.toContain('<button\n            ref={(el) => rowActions.setMainButtonRef(el)}')
   expect(LEDGER_ROW_MAIN_BUTTON_SOURCE).toContain('import { Button } from "./ui/Button"')
   expect(LEDGER_ROW_MAIN_BUTTON_SOURCE).toContain('data-ui="ledger-row-main"')

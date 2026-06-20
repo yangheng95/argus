@@ -23,6 +23,21 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
+async function armedConfirmState(page: any, selector: string) {
+  return page.$eval(selector, (button: HTMLElement) => {
+    const descriptionID = button.getAttribute("aria-describedby") || ""
+    const description = descriptionID ? document.getElementById(descriptionID) : null
+    return {
+      confirm: button.dataset.confirm || "",
+      pressed: button.getAttribute("aria-pressed") || "",
+      describedBy: descriptionID,
+      description: description?.textContent?.trim() || "",
+      role: description?.getAttribute("role") || "",
+      live: description?.getAttribute("aria-live") || "",
+    }
+  })
+}
+
 function conversationPayload(sessionID: string) {
   return {
     lastSequence: 1,
@@ -914,10 +929,24 @@ test(
       )
 
       const missionRowSelector = '.mission-ledger [data-ui="mission-row"][data-session-id="ses_mission_side_activity"]'
+      const missionAbortSelector = `${missionRowSelector} [data-ui="task-row-cancel"]`
       await page.hover(missionRowSelector)
-      await clickButton(`${missionRowSelector} [data-ui="task-row-cancel"]`)
+      await clickButton(missionAbortSelector)
       await page.hover(missionRowSelector)
-      await clickButton(`${missionRowSelector} [data-ui="task-row-cancel"][data-confirm="true"]`)
+      await page.waitForSelector(`${missionAbortSelector}[data-confirm="true"]`, { visible: true })
+      const missionAbortArmed = await armedConfirmState(page, missionAbortSelector)
+      assert.equal(missionAbortArmed.confirm, "true")
+      assert.equal(missionAbortArmed.pressed, "true")
+      assert.ok(missionAbortArmed.describedBy)
+      assert.match(missionAbortArmed.description, /Press again within 3 seconds to stop this mission/)
+      assert.equal(missionAbortArmed.role, "status")
+      assert.equal(missionAbortArmed.live, "polite")
+      const missionLedger = await page.$('[data-ui="mission-ledger"]')
+      assert.ok(missionLedger)
+      const missionAbortScreenshotPath = resolve(".scratch/mission-abort-armed-confirm.png")
+      mkdirSync(dirname(missionAbortScreenshotPath), { recursive: true })
+      writeFileSync(missionAbortScreenshotPath, await missionLedger.screenshot({}))
+      await clickButton(`${missionAbortSelector}[data-confirm="true"]`)
       await waitForState(
         "mission abort button should disappear after accepted abort",
         (state) => state.missionAbortButtons === 0,
@@ -1456,6 +1485,19 @@ test(
       assert.equal(await hitTestDataUi(assistantStopSelector), "task-row-cancel")
       await clickButton(assistantStopSelector)
       await page.hover(assistantRowSelector)
+      await page.waitForSelector(`${assistantStopSelector}[data-confirm="true"]`, { visible: true })
+      const assistantStopArmed = await armedConfirmState(page, assistantStopSelector)
+      assert.equal(assistantStopArmed.confirm, "true")
+      assert.equal(assistantStopArmed.pressed, "true")
+      assert.ok(assistantStopArmed.describedBy)
+      assert.match(assistantStopArmed.description, /Press again within 3 seconds to stop this assistant chat/)
+      assert.equal(assistantStopArmed.role, "status")
+      assert.equal(assistantStopArmed.live, "polite")
+      const assistantLedger = await page.$('[data-ui="coding-assistant-ledger"]')
+      assert.ok(assistantLedger)
+      const assistantStopScreenshotPath = resolve(".scratch/coding-assistant-stop-armed-confirm.png")
+      mkdirSync(dirname(assistantStopScreenshotPath), { recursive: true })
+      writeFileSync(assistantStopScreenshotPath, await assistantLedger.screenshot({}))
       await clickButton(`${assistantStopSelector}[data-confirm="true"]`)
       await waitForState("assistant stop button should call session abort", () =>
         requestLog.some(
@@ -1469,6 +1511,17 @@ test(
       assert.equal(await hitTestDataUi(assistantDeleteSelector), "task-row-delete")
       await clickButton(assistantDeleteSelector)
       await page.hover(assistantDeleteRowSelector)
+      await page.waitForSelector(`${assistantDeleteSelector}[data-confirm="true"]`, { visible: true })
+      const assistantDeleteArmed = await armedConfirmState(page, assistantDeleteSelector)
+      assert.equal(assistantDeleteArmed.confirm, "true")
+      assert.equal(assistantDeleteArmed.pressed, "true")
+      assert.ok(assistantDeleteArmed.describedBy)
+      assert.match(assistantDeleteArmed.description, /Press again within 3 seconds to delete this assistant chat/)
+      assert.equal(assistantDeleteArmed.role, "status")
+      assert.equal(assistantDeleteArmed.live, "polite")
+      const assistantDeleteScreenshotPath = resolve(".scratch/coding-assistant-delete-armed-confirm.png")
+      mkdirSync(dirname(assistantDeleteScreenshotPath), { recursive: true })
+      writeFileSync(assistantDeleteScreenshotPath, await assistantLedger.screenshot({}))
       await clickButton(`${assistantDeleteSelector}[data-confirm="true"]`)
       await waitForState("assistant delete button should call session delete", () =>
         requestLog.some(

@@ -5,6 +5,15 @@ import { createRoot } from "solid-js"
 import { useArmedConfirm } from "../src/solid/armed-confirm"
 
 const TASK_LIST_SOURCE = join(import.meta.dir, "..", "src", "components", "TaskList.tsx")
+const MISSION_LIST_SOURCE = join(import.meta.dir, "..", "src", "components", "MissionList.tsx")
+const CODING_ASSISTANT_SESSION_LIST_SOURCE = join(
+  import.meta.dir,
+  "..",
+  "src",
+  "components",
+  "CodingAssistantSessionList.tsx",
+)
+const ARMED_CONFIRM_BUTTON_SOURCE = join(import.meta.dir, "..", "src", "components", "ui", "ArmedConfirmButton.tsx")
 
 describe("useArmedConfirm — behaviour", () => {
   test("starts disarmed", () => {
@@ -57,12 +66,29 @@ describe("useArmedConfirm — behaviour", () => {
 })
 
 describe("useArmedConfirm — adoption", () => {
-  const source = readFileSync(TASK_LIST_SOURCE, "utf8")
+  const taskListSource = readFileSync(TASK_LIST_SOURCE, "utf8")
+  const missionListSource = readFileSync(MISSION_LIST_SOURCE, "utf8")
+  const codingAssistantSessionListSource = readFileSync(CODING_ASSISTANT_SESSION_LIST_SOURCE, "utf8")
+  const armedConfirmButtonSource = readFileSync(ARMED_CONFIRM_BUTTON_SOURCE, "utf8")
 
-  test("TaskList uses the shared armed confirm hook for destructive row actions", () => {
-    expect(source).toContain('from "../solid/armed-confirm"')
-    expect(source).toContain("const confirmDelete = useArmedConfirm(CONFIRM_WINDOW_MS)")
-    expect(source).toContain("const confirmCancel = useArmedConfirm(CONFIRM_WINDOW_MS)")
-    expect(source).not.toContain("const [armed, setArmed] = createSignal(false)")
+  test("destructive ledger actions route through ArmedConfirmButton", () => {
+    expect(armedConfirmButtonSource).toContain('from "../../solid/armed-confirm"')
+    expect(armedConfirmButtonSource).toContain("useArmedConfirm(local.confirmWindowMs)")
+    expect(armedConfirmButtonSource).toContain('aria-pressed={confirm.armed() ? "true" : "false"}')
+    expect(armedConfirmButtonSource).toContain("aria-describedby={confirm.armed() ? descriptionID() : undefined}")
+    expect(armedConfirmButtonSource).toContain('role="status"')
+    expect(armedConfirmButtonSource).toContain('aria-live="polite"')
+    expect(armedConfirmButtonSource).toContain('data-confirm={confirm.armed() ? "true" : undefined}')
+
+    for (const source of [taskListSource, missionListSource, codingAssistantSessionListSource]) {
+      expect(source).toContain("ArmedConfirmButton")
+      expect(source).not.toContain("../solid/armed-confirm")
+      expect(source).not.toContain("useArmedConfirm(")
+      expect(source).not.toContain("data-confirm={")
+      expect(source).not.toContain("confirmDelete.confirm")
+      expect(source).not.toContain("confirmCancel.confirm")
+      expect(source).not.toContain("confirmAbort.confirm")
+      expect(source).not.toContain("confirmStop.confirm")
+    }
   })
 })

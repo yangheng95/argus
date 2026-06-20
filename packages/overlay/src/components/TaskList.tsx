@@ -15,7 +15,6 @@ import {
   taskHasUnreadNotification,
   formatErrorDetails,
 } from "../services/notify"
-import { useArmedConfirm } from "../solid/armed-confirm"
 import { t } from "../utils/i18n"
 import { stamp, fullStampWithRelative } from "../utils/time"
 import { projectDirectoryKey } from "../utils/project-directory"
@@ -24,6 +23,7 @@ import { LedgerLoadingStatus } from "./LedgerList"
 import { LedgerRowMainButton } from "./LedgerRowMainButton"
 import { createProjectLedgerGroupCollapseState, ProjectLedgerGroup } from "./ProjectLedgerGroup"
 import { Button } from "./ui/Button"
+import { ArmedConfirmButton } from "./ui/ArmedConfirmButton"
 import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"
 
 const COMPACT_GROUP_VISIBLE_LIMIT = 5
@@ -123,13 +123,12 @@ function projectDirectoryOf(item: any): string {
 // auto-resets after the window or when the user clicks elsewhere, so there's
 // no modal round-trip.
 
-const CONFIRM_WINDOW_MS = 3000 // confirm window length in milliseconds.
+const CONFIRM_WINDOW_SECONDS = 3
+const CONFIRM_WINDOW_MS = CONFIRM_WINDOW_SECONDS * 1000 // confirm window length in milliseconds.
 
 function DeleteButton(props: { id: string; onDelete: (id: string) => void; tabIndex?: number }) {
-  const confirmDelete = useArmedConfirm(CONFIRM_WINDOW_MS)
-
   return (
-    <Button
+    <ArmedConfirmButton
       type="button"
       variant="ghost"
       size="icon"
@@ -137,23 +136,21 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void; tabIn
       data-chrome="icon-action"
       data-ui="task-row-delete"
       data-task-delete={props.id}
-      data-confirm={confirmDelete.armed() ? "true" : undefined}
-      title={t("task.delete_button_title")}
-      aria-label={t("task.delete_button_title")}
+      label={t("task.delete_button_title")}
+      armedDescription={t("armed_confirm.task.delete", { seconds: CONFIRM_WINDOW_SECONDS })}
       tabIndex={props.tabIndex}
-      onClick={(e) => {
-        e.stopPropagation()
-        confirmDelete.confirm(() => props.onDelete(props.id))
-      }}
-      onBlur={confirmDelete.disarm}
+      confirmWindowMs={CONFIRM_WINDOW_MS}
+      onConfirm={() => props.onDelete(props.id)}
+      confirmChildren={
+        <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
+          <Icon name="check" size={11} />
+        </span>
+      }
     >
       <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
         <Icon name="close" size={11} />
       </span>
-      <span class="task-row-delete-icon" data-icon="confirm" aria-hidden="true">
-        <Icon name="check" size={11} />
-      </span>
-    </Button>
+    </ArmedConfirmButton>
   )
 }
 
@@ -162,10 +159,8 @@ function DeleteButton(props: { id: string; onDelete: (id: string) => void; tabIn
 // coherent pair. Shown only for interruptable tasks (queued / active).
 
 function CancelButton(props: { id: string; onCancel: (id: string) => void; tabIndex?: number }) {
-  const confirmCancel = useArmedConfirm(CONFIRM_WINDOW_MS)
-
   return (
-    <Button
+    <ArmedConfirmButton
       type="button"
       variant="ghost"
       size="icon"
@@ -173,23 +168,21 @@ function CancelButton(props: { id: string; onCancel: (id: string) => void; tabIn
       data-chrome="icon-action"
       data-ui="task-row-cancel"
       data-task-cancel={props.id}
-      data-confirm={confirmCancel.armed() ? "true" : undefined}
-      title={t("task.cancel_button_title")}
-      aria-label={t("task.cancel_button_title")}
+      label={t("task.cancel_button_title")}
+      armedDescription={t("armed_confirm.task.cancel", { seconds: CONFIRM_WINDOW_SECONDS })}
       tabIndex={props.tabIndex}
-      onClick={(e) => {
-        e.stopPropagation()
-        confirmCancel.confirm(() => props.onCancel(props.id))
-      }}
-      onBlur={confirmCancel.disarm}
+      confirmWindowMs={CONFIRM_WINDOW_MS}
+      onConfirm={() => props.onCancel(props.id)}
+      confirmChildren={
+        <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
+          <Icon name="check" size={11} />
+        </span>
+      }
     >
       <span class="task-row-cancel-icon" data-icon="cancel" aria-hidden="true">
         <Icon name="stop" size={11} />
       </span>
-      <span class="task-row-cancel-icon" data-icon="confirm" aria-hidden="true">
-        <Icon name="check" size={11} />
-      </span>
-    </Button>
+    </ArmedConfirmButton>
   )
 }
 

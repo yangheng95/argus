@@ -410,6 +410,25 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     await page.click(siblingCancelSelector)
     await page.hover('.task-row-mini[data-task-row-id="task-sibling"]')
     await page.waitForSelector(`${siblingCancelSelector}[data-confirm="true"]`, { visible: true })
+    const cancelArmedState = await page.$eval(siblingCancelSelector, (button: HTMLElement) => {
+      const descriptionID = button.getAttribute("aria-describedby") || ""
+      return {
+        confirm: button.dataset.confirm || "",
+        pressed: button.getAttribute("aria-pressed") || "",
+        describedBy: descriptionID,
+        description: descriptionID ? document.getElementById(descriptionID)?.textContent?.trim() || "" : "",
+        role: descriptionID ? document.getElementById(descriptionID)?.getAttribute("role") || "" : "",
+        live: descriptionID ? document.getElementById(descriptionID)?.getAttribute("aria-live") || "" : "",
+      }
+    })
+    assert.equal(cancelArmedState.confirm, "true")
+    assert.equal(cancelArmedState.pressed, "true")
+    assert.ok(cancelArmedState.describedBy)
+    assert.match(cancelArmedState.description, /Press again within 3 seconds to cancel this task/)
+    assert.equal(cancelArmedState.role, "status")
+    assert.equal(cancelArmedState.live, "polite")
+    assert.ok(taskListPanel)
+    writeFileSync(scratchPath("task-row-cancel-armed-confirm.png"), await taskListPanel.screenshot({}))
     await page.click(`${siblingCancelSelector}[data-confirm="true"]`)
     for (let attempt = 0; attempt < 50; attempt += 1) {
       if (requestLog.some((entry) => entry.method === "POST" && entry.path === "/task/task-sibling/cancel")) break
