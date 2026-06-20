@@ -28,6 +28,10 @@ import {
   type SkillImportPackageFile,
 } from "../../services/extensions"
 import { addMcpServer, deleteAllMcp } from "../../services/mcp"
+import {
+  mcpConnectionStatusOrDisabledLabel,
+  mcpConnectionStatusOrDisabledTone,
+} from "../../utils/settings-status-labels"
 import { Button } from "../ui/Button"
 import { Icon, type IconName } from "../Icon"
 import {
@@ -115,28 +119,6 @@ function skillDuplicateLocations(item: SkillItem): string[] {
 
 function skillDuplicateTitle(item: SkillItem): string {
   return t("skill.duplicate_locations_title", { locations: skillDuplicateLocations(item).join("\n") })
-}
-
-function mcpStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    connected: t("mcp.status.connected"),
-    disconnected: t("mcp.status.disconnected"),
-    disabled: t("mcp.status.disabled"),
-    failed: t("mcp.status.failed"),
-    error: t("mcp.status.error"),
-    connecting: t("mcp.status.connecting"),
-    needs_auth: t("mcp.status.needs_auth"),
-    needs_client_registration: t("mcp.status.needs_client_registration"),
-  }
-  return map[status] || status
-}
-
-function mcpStatusTone(status: string): SettingsPillTone {
-  if (status === "connected") return "ok"
-  if (status === "failed" || status === "error") return "bad"
-  if (status === "disabled") return "muted"
-  if (status === "connecting" || status === "needs_auth" || status === "needs_client_registration") return "warn"
-  return "neutral"
 }
 
 function dataTransferEntries(dataTransfer: DataTransfer | null): WebkitFileSystemEntry[] {
@@ -1048,15 +1030,16 @@ function ExtensionSettingsPanel(props: {
               <Show when={mcpEntries().length > 0} fallback={<div class="empty-hint">{t("mcp.none")}</div>}>
                 <For each={mcpEntries()}>
                   {([name, item]) => {
-                    const status = item?.status || "disabled"
+                    const status = item?.status
+                    const label = mcpConnectionStatusOrDisabledLabel(status)
                     const detail = item?.error || ""
                     return (
                       <SettingsRow
                         class="extension-settings-row"
                         title={name}
-                        desc={detail ? detail : mcpStatusLabel(status)}
+                        desc={detail ? detail : label}
                         interactive
-                        actions={<SettingsPill tone={mcpStatusTone(status)}>{mcpStatusLabel(status)}</SettingsPill>}
+                        actions={<SettingsPill tone={mcpConnectionStatusOrDisabledTone(status)}>{label}</SettingsPill>}
                       />
                     )
                   }}

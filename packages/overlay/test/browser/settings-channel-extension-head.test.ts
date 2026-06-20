@@ -77,6 +77,27 @@ test(
               },
             ],
           },
+          {
+            id: "discord",
+            name: "Discord",
+            summary: "Post task updates to a Discord channel.",
+            status: "configured",
+            fields: [{ key: "webhook_url", label: "Webhook URL", type: "text" }],
+          },
+          {
+            id: "telegram",
+            name: "Telegram",
+            summary: "Post task updates to a Telegram chat.",
+            status: "partial",
+            fields: [{ key: "bot_token", label: "Bot Token", type: "secret" }],
+          },
+          {
+            id: "matrix",
+            name: "Matrix",
+            summary: "Post task updates to a Matrix room.",
+            status: "disabled",
+            fields: [{ key: "room_id", label: "Room ID", type: "text" }],
+          },
         ])
       if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
       if (path === "/executor") return send([])
@@ -165,15 +186,50 @@ test(
       const channelListMetrics = await page.$eval('[data-config-panel="channel"] #channelList', (node) => {
         const list = node as HTMLElement
         const rect = list.getBoundingClientRect()
+        const rows = Array.from(list.querySelectorAll<HTMLElement>(".channel-settings-row")).map((row) => {
+          const title = row.querySelector<HTMLElement>(".s-row-title")?.textContent?.trim() ?? ""
+          const pill = row.querySelector<HTMLElement>(".s-pill")
+          const pillRect = pill?.getBoundingClientRect()
+          const pillStyle = pill ? getComputedStyle(pill) : null
+          return {
+            title,
+            pill: pill?.textContent?.trim() ?? "",
+            tone: pill?.getAttribute("data-tone") ?? "",
+            width: pillRect?.width ?? 0,
+            height: pillRect?.height ?? 0,
+            color: pillStyle?.color ?? "",
+            border: pillStyle?.borderTopWidth ?? "",
+          }
+        })
         return {
           width: rect.width,
           height: rect.height,
-          rowCount: list.querySelectorAll(".channel-settings-row").length,
+          rowCount: rows.length,
+          rows,
         }
       })
-      assert.equal(channelListMetrics.rowCount, 1)
+      assert.equal(channelListMetrics.rowCount, 4)
       assert.ok(channelListMetrics.width > 120)
       assert.ok(channelListMetrics.height > 20)
+      assert.deepEqual(
+        channelListMetrics.rows.map((row) => ({ title: row.title, pill: row.pill, tone: row.tone })),
+        [
+          { title: "Slack", pill: "Available", tone: "bad" },
+          { title: "Discord", pill: "Configured", tone: "ok" },
+          { title: "Telegram", pill: "Needs Setup", tone: "warn" },
+          { title: "Matrix", pill: "Disabled", tone: "muted" },
+        ],
+      )
+      for (const row of channelListMetrics.rows) {
+        assert.ok(row.width > 24 && row.height > 12, `${row.title} status pill should be visible`)
+        assert.match(row.color, /^rgb/)
+        assert.equal(row.border, "1px")
+      }
+
+      const channelList = await page.$('[data-config-panel="channel"] #channelList')
+      assert.ok(channelList)
+      const channelListScreenshotPath = resolve(".scratch", "settings-channel-status-pills.png")
+      writeFileSync(channelListScreenshotPath, await channelList.screenshot({}))
 
       await page.evaluate(() => {
         const buttons = Array.from(
