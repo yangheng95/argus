@@ -30,6 +30,8 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **3.** 永远怀疑问题的影响面和问题深度，challenge 你自己的方案，特别是没有证据的回答。如果你发现自己的回复没有任何探索、验证或数据支持，那就说明你可能在胡说八道。不要害怕承认这一点，并且要积极寻找证据来支持你的回答。
 
+**3.1（分析深思熟虑细则 — 2026-06-20）**：分析失败或调度混乱时，禁止把最后一个表层状态（例如 cancelled / aborted / timeout / tool failed）当作根因。必须先分层还原：用户原始要求、调度决策序列、真实 tool call / session / artifact / decision-log 证据、代码职责边界、历史方案约束与矛盾点；再给出“可观察现象 → 直接触发点 → 深层设计/提示词/数据流原因 → 为什么之前路径没有根治”的因果链。证据不足时必须明确标注未知，不得用猜测填补。
+
 **4.** 不要只关注特定的 Agent、LLM 等的问题，由于继承和多态的特性，任何一个问题都可能是系统性的。你需要从整体上分析问题，找到根本原因，而不是只修复表面症状。
 
 的 XML 块时，那是上游 dispatcher 信息丢失的**结构化信号**——查 dispatcher（orchestrator / build wrapper / integrity caller 等）而非 agent 自己。修 dispatcher 的 input 构造或 prompt template，**不要**改 agent prompt 让它"宽容"这种缺失（rule 6.1 — 这是 prompt-over-host 的反向应用，agent 已经在做对的事）。

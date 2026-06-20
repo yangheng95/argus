@@ -1,6 +1,10 @@
-我需要复刻网页：<https://www.tradingview.com/markets/world-economy/>
+我需要复刻网页：<https://www.tradingview.com/markets/world-economy/>，
 
 这是一个多阶段任务。目标是在保留 TradingView 页面信息架构、模块结构、布局密度和交互语义的前提下，像素级复刻 TradingView 的品牌视觉，并严格使用 AInvest 设计系统实现一个生产可合入页面，尤其要优先使用 `ainvest-ui-components` 及项目中已安装的 `@ainvest/*` 组件。
+
+# 警告： 你必修优先使用ui-showcase 展示的组件，除非无法找到合适的组件
+
+## 注意：这是个自适应全宽页面，不要使用固定宽度的布局方案。字体大小要跟页面协调
 
 禁止手写 primitive、禁止用截图/图片冒充真实实现、禁止只做到“形式上使用了组件”。组件复用必须同时满足：
 
@@ -12,8 +16,6 @@
 你需要基于 OpenCorvus 的 Frontend Design 和 Frontend Research 等 Agent 编排两个 task。
 
 ## 阶段 1：目标网页资源抽取 + 设计方案 + 模块实现
-
-`architect > 20 goals`，每个页面主要组件至少 1 个 goal。
 
 ### 1.1 目标网页资源与 PRD 抽取
 
@@ -50,8 +52,6 @@
 
 ## 阶段 2：逐模块检查、修复、二次验收
 
-`architect > 20 goals`，每个页面主要组件至少 1 个 goal。
-
 必须使用 OpenCorvus task-scoped backend browser evidence runner 对每个 region 做 Reference vs Implementation 单独对比。不能只跑 typecheck。
 
 每个 region 必须检查：
@@ -65,7 +65,7 @@
 - 表格密度
 - table/heatmap color 是否符合 AInvest token 与组件规范
 - 图表比例
-- 地图比例
+- 地图比例，地图使用echarts实现时必须检查地图元素尺寸、tooltip 行为、交互热点行为是否符合目标页面
 - tooltip/hover/focus 行为
 - 卡片 hover 状态
 - 卡片内部内容样式，包括标题、描述、作者、时间、标签、统计信息、按钮、图标、缩略图
