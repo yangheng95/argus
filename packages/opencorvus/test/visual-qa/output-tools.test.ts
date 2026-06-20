@@ -229,6 +229,39 @@ describe("visual-qa output tools", () => {
     expect(kit.getCollector().final).toBeUndefined()
   })
 
+  test("reference parity accepted report rejects scroll-slice-only visual diff evidence", async () => {
+    const kit = createVisualQaOutputTools({
+      referenceParityRequired: true,
+      requiredReferenceRegions: ["region_header@desktop"],
+    })
+    const blocked = await callTool(
+      kit.tools,
+      "submit_visual_qa_report",
+      validReport({
+        evidence: [
+          {
+            type: "visual_diff",
+            ref: ".opencorvus/r/t/AA/example/bp/art/side-by-side.png",
+            viewport: { width: 1440, height: 180 },
+            state: "scrollY=300",
+            note: "Fresh browser_preview_compare_scroll_slices side-by-side image.",
+          },
+        ],
+        reference_parity: {
+          required: true,
+          required_regions: ["region_header@desktop"],
+          reference_comparison_evidence_refs: [],
+          missing_regions: [],
+          blocker_ids: [],
+        },
+      }),
+    )
+
+    expect(blocked).toContain("reference_comparison evidence refs")
+    expect(blocked).toContain("screenshots are supporting evidence only")
+    expect(kit.getCollector().final).toBeUndefined()
+  })
+
   test("reference parity accepted report accepts readable reference-comparison evidence", async () => {
     await using tmp = await tmpdir({ git: true })
     const taskID = `tsk_visualqa_ref_${Date.now()}`

@@ -989,10 +989,12 @@ export namespace ProviderTransform {
                 } else if (v?.const !== undefined && (merged[k]?.const !== undefined || merged[k]?.enum)) {
                   // Discriminator field: merge const values into enum
                   const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-                  merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
+                  const { const: _discardedConst, ...base } = merged[k]
+                  merged[k] = { ...base, type: "string", enum: [...new Set([...existing, v.const].map(String))] }
                 } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
                   const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
                   merged[k] = {
+                    ...merged[k],
                     type: merged[k].type ?? v.type ?? "string",
                     enum: [...new Set([...existing, ...v.enum].map(String))],
                   }
@@ -1034,10 +1036,12 @@ export namespace ProviderTransform {
               merged[k] = v
             } else if (v?.const !== undefined && (merged[k]?.const !== undefined || merged[k]?.enum)) {
               const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-              merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
+              const { const: _discardedConst, ...base } = merged[k]
+              merged[k] = { ...base, type: "string", enum: [...new Set([...existing, v.const].map(String))] }
             } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
               const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
               merged[k] = {
+                ...merged[k],
                 type: merged[k].type ?? v.type ?? "string",
                 enum: [...new Set([...existing, ...v.enum].map(String))],
               }

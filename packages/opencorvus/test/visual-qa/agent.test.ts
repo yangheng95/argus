@@ -5,6 +5,7 @@ import { VisualQaTestHooks } from "../../src/visual-qa"
 import { VISUAL_QA_SESSION_TOOL_IDS } from "../../src/visual-qa/static-tools"
 import { BrowserPreviewTool } from "../../src/tool/browser-preview"
 import { BrowserPreviewBindLocalModuleTool } from "../../src/tool/browser-preview-bind-local-module"
+import { BrowserPreviewCompareScrollSlicesTool } from "../../src/tool/browser-preview-compare-scroll-slices"
 import { BrowserPreviewCompareRegionsTool } from "../../src/tool/browser-preview-compare-regions"
 
 describe("visual-qa agent", () => {
@@ -28,12 +29,18 @@ describe("visual-qa agent", () => {
         expect(Object.keys(tools)).toContain("browser_preview")
         expect(Object.keys(tools)).toContain("browser_preview_bind_local_module")
         expect(Object.keys(tools)).toContain("browser_preview_compare_regions")
+        expect(Object.keys(tools)).toContain("browser_preview_compare_scroll_slices")
         expect(Object.keys(tools)).not.toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_evaluate")
         expect(Object.keys(tools)).not.toContain("webpage_vision_judge")
         expect(Object.keys(tools)).not.toContain("webpage_extract")
 
-        for (const info of [BrowserPreviewTool, BrowserPreviewBindLocalModuleTool, BrowserPreviewCompareRegionsTool]) {
+        for (const info of [
+          BrowserPreviewTool,
+          BrowserPreviewBindLocalModuleTool,
+          BrowserPreviewCompareRegionsTool,
+          BrowserPreviewCompareScrollSlicesTool,
+        ]) {
           const initialized = await info.init()
           const runtimeTool = tools[info.id] as unknown as { description?: string; inputSchema?: unknown }
           expect(runtimeTool.description).toBe(initialized.description)
@@ -74,6 +81,8 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("Reference/clone fidelity is enforced only when")
     expect(prompt).toContain("browser_preview_bind_local_module")
     expect(prompt).toContain("browser_preview_compare_regions")
+    expect(prompt).toContain("browser_preview_compare_scroll_slices")
+    expect(prompt).toContain("supporting visual_diff evidence")
     expect(prompt).toContain("task-scoped `reference-comparison` evidence")
     expect(prompt).toContain("Frontend Design Context")
     expect(prompt).not.toContain("Frontend Research Work Packets")
