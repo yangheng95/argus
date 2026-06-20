@@ -17,6 +17,7 @@ import { STREAMING_ACTIVE_TEXT_LIMIT, visibleStreamingText } from "./text-part-m
 import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
 import { PreviewableImage } from "./ImagePreview"
 import { Button } from "./ui/Button"
+import { t, tc } from "../utils/i18n"
 
 // Same tool-kind sets used to drive code rendering below.
 const FILE_WRITE_TOOLS = new Set(["write", "writefile"])
@@ -54,6 +55,11 @@ function BrowserEvidenceImage(props: { url: string; alt: string }) {
       </Show>
     </Show>
   )
+}
+
+function browserEvidenceAlt(evidence: { title: string; url: string; viewport: string }): string {
+  const label = evidence.title || evidence.url || evidence.viewport
+  return label ? t("tool.browser_observation_alt_with_label", { label }) : t("tool.browser_observation_alt")
 }
 const READ_NOTE_RE = /^\((?:Showing|End of file|Output capped at)/
 
@@ -134,7 +140,7 @@ function ToolDiffList(props: { items: ToolFileChange[] }) {
     <section class="msg-tool-diffs">
       <div class="msg-tool-diffs__summary">
         <span class="msg-tool-diffs__count">
-          {props.items.length} {props.items.length === 1 ? "file" : "files"}
+          {tc("files.changed", props.items.length)}
         </span>
         <span class="msg-tool-diffs__meta">
           <span class="diff-dialog-stat" data-tone="add">
@@ -323,7 +329,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
               </Show>
               <Show when={readView()?.reminder}>
                 <section class="msg-read-reminder">
-                  <div class="msg-read-reminder__label">Loaded instructions</div>
+                  <div class="msg-read-reminder__label">{t("tool.loaded_instructions")}</div>
                   <div class="msg-read-reminder__body">
                     <StaticTextPart text={readView()!.reminder!} />
                   </div>
@@ -333,7 +339,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
                 {(evidence) => (
                   <section class="msg-browser-evidence">
                     <Show when={evidence().screenshotUrl}>
-                      <BrowserEvidenceImage url={evidence().screenshotUrl} alt="Browser observation" />
+                      <BrowserEvidenceImage url={evidence().screenshotUrl} alt={browserEvidenceAlt(evidence())} />
                     </Show>
                     <div class="msg-browser-evidence__meta">
                       <Show when={evidence().title || evidence().url}>

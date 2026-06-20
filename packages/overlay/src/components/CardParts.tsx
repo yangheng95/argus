@@ -8,6 +8,7 @@ import { stamp, fullStampWithRelative } from "../utils/time"
 import { shortRelativePath } from "../utils/tool"
 import { selectedTaskDirectory } from "../store/board"
 import { toolToCardNode } from "../utils/tool-card-node"
+import { t } from "../utils/i18n"
 
 /** Render the parts list of a card body. Handles boundary separators,
  *  inline text / reasoning, and nested tool cards. Each part renders as its
@@ -55,7 +56,7 @@ export function CardParts(props: { parts: any[]; depth: number; streaming?: bool
           <Match when={part?.type === "subtask"}>
             <div class="msg-tool">
               <span class="tool-icon">{"\u2192"}</span>
-              <span class="tool-name">Subtask</span>
+              <span class="tool-name">{t("card.subtask")}</span>
               <span class="tool-detail" title={part.description || part.prompt || ""}>
                 {part.description || part.prompt || ""}
               </span>

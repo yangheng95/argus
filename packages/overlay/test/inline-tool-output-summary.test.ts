@@ -25,7 +25,8 @@ describe("inline tool output", () => {
     expect(source).toContain("fetchResourceAsObjectUrl")
     expect(source).toContain("peekResourceObjectUrl")
     expect(source).toContain("function BrowserEvidenceImage")
-    expect(source).toContain('<BrowserEvidenceImage url={evidence().screenshotUrl} alt="Browser observation" />')
+    expect(source).toContain('<BrowserEvidenceImage url={evidence().screenshotUrl} alt={browserEvidenceAlt(evidence())} />')
+    expect(source).not.toContain('alt="Browser observation"')
     expect(source).not.toContain("src={resolveResourceUrl(evidence().screenshotUrl)}")
   })
 
@@ -36,6 +37,8 @@ describe("inline tool output", () => {
     expect(source).toContain('import { Button } from "./ui/Button"')
     expect(source).toContain('data-ui="tool-diff-open-file"')
     expect(source).toContain('data-file-path={item.openPath}')
+    expect(source).toContain('tc("files.changed", props.items.length)')
+    expect(source).not.toContain('props.items.length === 1 ? "file" : "files"')
     expect(source).toContain('variant="ghost"')
     expect(source).toContain('tone="accent"')
     expect(source).not.toContain('class="msg-tool-diff-link"')

@@ -264,7 +264,7 @@ describe("collectTodoSummary", () => {
     ;(cardTreeStore.cards as any)["c1"] = {
       id: "c1",
       kind: "tool",
-      title: "Todos",
+      title: "tool.card.todos",
       time: 200,
       parts: [],
       toolPart: {

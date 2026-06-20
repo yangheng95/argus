@@ -2,11 +2,11 @@ import type { CardNode } from "./card-tree"
 import { selectedTaskDirectory } from "../store/board"
 import { displayToolArguments, toolNameKey } from "./tool"
 
-const TODO_CARD_TITLES: Record<string, string> = {
-  todowrite: "Todos",
-  todoread: "Todos",
-  todoupdate: "Todos",
-  updateplan: "Plan",
+const TODO_CARD_TITLE_KEYS: Record<string, string> = {
+  todowrite: "tool.card.todos",
+  todoread: "tool.card.todos",
+  todoupdate: "tool.card.todos",
+  updateplan: "tool.card.plan",
 }
 
 function positiveFiniteTimestamp(value: unknown): number | undefined {
@@ -26,7 +26,7 @@ export function toolToCardNode(part: any, observationTime: number = Date.now()):
   const state = part?.state || {}
   const key = toolNameKey(toolName)
   const args = displayToolArguments(toolName, state.input, state, selectedTaskDirectory())
-  const title = TODO_CARD_TITLES[key] || toolName
+  const title = TODO_CARD_TITLE_KEYS[key] || toolName
   const time = positiveFiniteTimestamp(state?.time?.start) ?? observationTime
   const timeCompleted = positiveFiniteTimestamp(state?.time?.end)
   return {

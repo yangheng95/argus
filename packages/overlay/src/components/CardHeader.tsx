@@ -22,6 +22,8 @@ function isStageCard(node: CardNode): boolean {
 }
 
 function cardTitleText(title: string): string {
+  if (title === "tool.card.todos") return t("tool.card.todos")
+  if (title === "tool.card.plan") return t("tool.card.plan")
   return /^[\w-]+(?:\.[\w-]+)+$/.test(title) ? t(title) : title
 }
 

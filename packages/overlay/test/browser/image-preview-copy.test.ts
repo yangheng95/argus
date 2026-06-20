@@ -384,6 +384,17 @@ test(
       })
       assert.equal(evidenceTypography.fontWeight, evidenceTypography.strongToken)
       assert.ok(evidenceTypography.text.length > 0)
+      const evidenceImageState = await page.$eval(".msg-browser-evidence__image", (image) => {
+        const img = image as HTMLImageElement
+        const trigger = img.closest<HTMLElement>(".msg-browser-evidence__trigger")
+        return {
+          alt: img.alt,
+          triggerLabel: trigger?.getAttribute("aria-label") || "",
+        }
+      })
+      assert.equal(evidenceImageState.alt, "浏览器观察截图：Example")
+      assert.notEqual(evidenceImageState.alt, "Browser observation")
+      assert.match(evidenceImageState.triggerLabel, /浏览器观察截图：Example/)
       const expandedToolHeader = await page.$eval('.card[data-kind="tool"] > .card__head .card__head-main', (main) =>
         main.getAttribute("aria-expanded"),
       )
