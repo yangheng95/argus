@@ -7,7 +7,7 @@ import {
   clampImagePreviewScale,
   type ImagePreviewSize,
 } from "../utils/image-preview-scale"
-import { imagePreviewTriggerLabel } from "../utils/image-preview-label"
+import { imagePreviewTriggerClass, imagePreviewTriggerContract } from "../utils/image-preview-trigger"
 import { t } from "../utils/i18n"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
@@ -42,21 +42,23 @@ class ImageCopyError extends Error {
 
 export function PreviewableImage(props: { src: string; alt?: string; triggerClass?: string; imageClass?: string }) {
   const alt = () => props.alt || ""
-  const triggerLabel = () => imagePreviewTriggerLabel(alt())
-  const triggerClass = () => ["msg-image-trigger", props.triggerClass].filter(Boolean).join(" ")
+  const trigger = createMemo(() => imagePreviewTriggerContract({ src: props.src, alt: alt() }))
+  const triggerClass = () => imagePreviewTriggerClass(props.triggerClass)
   const imageClass = () => ["md-img", props.imageClass].filter(Boolean).join(" ")
 
   return (
     <Button
       type="button"
-      variant="ghost"
-      size="md"
-      tone="neutral"
+      variant={trigger().variant}
+      size={trigger().size}
+      tone={trigger().tone}
       class={triggerClass()}
-      data-ui="image-preview-trigger"
-      data-image-preview-trigger="true"
-      title={triggerLabel()}
-      aria-label={triggerLabel()}
+      data-ui={trigger().dataUi}
+      data-image-preview-trigger={trigger().triggerFlag}
+      data-image-preview-src={trigger().src}
+      data-image-preview-alt={trigger().alt}
+      title={trigger().label}
+      aria-label={trigger().label}
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
