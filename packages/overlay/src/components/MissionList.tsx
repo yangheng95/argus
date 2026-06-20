@@ -1,7 +1,8 @@
 import { createMemo, createSignal, For, Show } from "solid-js"
-import type { MissionRecord, MissionTaskProjection, MissionTaskStatus } from "../services/mission"
+import type { MissionRecord, MissionTaskProjection } from "../services/mission"
 import { detailStamp, relativeTime } from "../utils/time"
 import { t } from "../utils/i18n"
+import { taskLifecycleStatusLabel } from "../utils/status-labels"
 import { buildMissionDebugBlob, writeDebugClipboard } from "../utils/debug-info"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -121,11 +122,6 @@ function MissionRenameButton(props: { onClick: () => void; tabIndex?: number }) 
   )
 }
 
-function missionTaskStatusLabel(status: MissionTaskStatus): string {
-  const value = t(`task.status.${status}`)
-  return value === `task.status.${status}` ? status : value
-}
-
 function missionTaskProjectionTip(task: MissionTaskProjection): string {
   return [task.title || task.id, task.id ? `ID: ${task.id}` : "", task.directory].filter(Boolean).join(" / ")
 }
@@ -157,7 +153,7 @@ function MissionTaskProjectionRow(props: {
           <span class="mission-task-projection-title">{props.task.title || props.task.id}</span>
         </span>
         <span class="mission-task-projection-status" data-status={props.task.status}>
-          {missionTaskStatusLabel(props.task.status)}
+          {taskLifecycleStatusLabel(props.task.status)}
         </span>
       </Button>
     </li>

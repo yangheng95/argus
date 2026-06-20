@@ -28,7 +28,7 @@ test(
     const task = {
       id: "task-1",
       directory: "D:/overlay/workspace/app",
-      status: "running",
+      status: "active",
       sessionID: "session-1",
       budget: {
         maxExecutorGroups: 3,

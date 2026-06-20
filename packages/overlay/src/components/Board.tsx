@@ -1,7 +1,7 @@
 // ── Board Panel Components ──
 // Solid.js components that mirror the board rendering logic
 // renderBoard, renderSpec, renderPlan, renderGoals, renderBudget,
-// renderAcceptanceSection, renderTaskActions, statusIcon, statusLabel.
+// renderAcceptanceSection, renderTaskActions, statusIcon.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
 import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js"
@@ -12,6 +12,7 @@ import { t, tc } from "../utils/i18n"
 import { renderMarkdown } from "../utils/markdown"
 import { orderedReachableCardIDs, cardMessageSegments } from "../utils/card-tree"
 import { statusIconName } from "../utils/status-mapping"
+import { taskLifecycleStatusOrIdleLabel, workflowStepStatusLabelFromString } from "../utils/status-labels"
 import { activeTone, verdictTone } from "../utils/verdict-tone"
 import { GoalWorkflowList } from "./GoalWorkflowGroup"
 import { RequirementsPanel } from "./RequirementsPanel"
@@ -21,20 +22,6 @@ import { taskScopeSectionVisibility, taskScopeWorkflowSectionID } from "../utils
 import { Button } from "./ui/Button"
 import { Icon, type IconName } from "./Icon"
 import { Section } from "./primitives/Section"
-
-// ── Status utilities ──
-
-export function statusLabel(status: string): string {
-  const map: Record<string, string> = {
-    idle: t("task.status.idle"),
-    queued: t("task.status.queued"),
-    active: t("task.status.active"),
-    completed: t("task.status.completed"),
-    failed: t("task.status.failed"),
-    cancelled: t("task.status.cancelled"),
-  }
-  return map[status] || status
-}
 
 // ── StatusBadge ──
 // General-purpose status badge with an icon + label.
@@ -50,7 +37,7 @@ export function StatusBadge(props: StatusBadgeProps) {
       <span class="status-icon" data-status={props.status}>
         <Icon name={statusIconName(props.status)} />
       </span>
-      <span class="status-label">{statusLabel(props.status)}</span>
+      <span class="status-label">{taskLifecycleStatusOrIdleLabel(props.status)}</span>
     </span>
   )
 }
@@ -629,7 +616,7 @@ export function Board(props: BoardProps) {
             bodyId="frontendResearchBody"
             badgeId="frontendResearchBadge"
             phaseState={phaseFor("frontendResearch")}
-            badgeText={frontendResearchStatus() ? statusLabel(frontendResearchStatus()) : ""}
+            badgeText={frontendResearchStatus() ? workflowStepStatusLabelFromString(frontendResearchStatus()) : ""}
             badgeTone={workflowStatusTone(frontendResearchStatus())}
           >
             <FrontendResearchPanel status={frontendResearchStatus()} streamingMessages={frontendResearchMessages()} />

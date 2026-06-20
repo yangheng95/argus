@@ -162,7 +162,7 @@ test(
     const task = {
       id: taskID,
       directory: projectRoot,
-      status: "running",
+      status: "active",
       sessionID: "ses_preview_e2e",
       request: "Verify preview evidence",
       title: "Verify preview evidence",
@@ -725,7 +725,7 @@ test(
     const task = {
       id: taskID,
       directory: projectRoot,
-      status: "running",
+      status: "active",
       sessionID: "ses_preview_persisted_viewport",
       request: "Verify persisted preview evidence",
       title: "Verify persisted preview evidence",

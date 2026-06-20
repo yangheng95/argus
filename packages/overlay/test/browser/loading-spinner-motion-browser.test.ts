@@ -58,7 +58,7 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     id: taskID,
     title: "Spinner motion",
     directory: projectRoot,
-    status: "running",
+    status: "active",
     sessionID: "session-spinner-motion",
     time: { created: now - 30_000, started: now - 25_000, updated: now - 1_000 },
   }

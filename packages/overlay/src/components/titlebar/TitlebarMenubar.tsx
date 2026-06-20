@@ -26,6 +26,7 @@ import {
 } from "../../services/workspace"
 import { getHostTransport } from "../../services/host-transport"
 import { t } from "../../utils/i18n"
+import { taskLifecycleStatusOrIdleLabel } from "../../utils/status-labels"
 import { Button } from "../ui/Button"
 
 type MenuID = "workspace" | "provider" | "run" | "view" | "settings" | "help"
@@ -78,7 +79,7 @@ function providerLabel(): string {
 function activeTaskLabel(): string {
   const task = (boardStore.board as any)?.task
   const status = String(task?.status || "").trim()
-  return status || t("task.status.idle")
+  return taskLifecycleStatusOrIdleLabel(status)
 }
 
 function MenuItem(props: {
@@ -533,7 +534,7 @@ export function TitlebarMenubar() {
                       {t("executor.group")}
                     </MenuItem>
                     <MenuItem onClick={() => undefined} meta={activeTaskLabel()} disabled>
-                      {t("task.status.running")}
+                      {t("titlebar.current_task_status")}
                     </MenuItem>
                     <MenuCheckboxItem
                       label={t("titlebar.auto_question")}

@@ -4,25 +4,13 @@
  *
  * These are pure logic tests that do not require a browser or running server.
  */
-import { describe, test, expect, beforeEach } from "bun:test"
-import { createRoot } from "solid-js"
-import { createStore } from "solid-js/store"
+import { describe, test, expect } from "bun:test"
 
 // ── Inline board store classifiers (mirrors store/board.ts) ──
 // We duplicate the logic here to test it in isolation without importing
 // the full overlay module graph (which depends on DOM, Tauri, etc.).
 
-const INTERRUPTABLE_STATUSES = new Set([
-  "queued",
-  "spec_generating",
-  "goal_decomposing",
-  "planning",
-  "planned",
-  "running",
-  "blocked",
-  "evaluating",
-  "delivering",
-])
+const INTERRUPTABLE_STATUSES = new Set(["queued", "active"])
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
 
@@ -37,22 +25,9 @@ function isTaskTerminal(status: string | undefined): boolean {
 // ── Stop button availability ──
 
 describe("stop button availability (isTaskInterruptable)", () => {
-  test("available during all pipeline stages", () => {
+  test("available during non-terminal task lifecycle states", () => {
     expect(isTaskInterruptable("queued")).toBe(true)
-    expect(isTaskInterruptable("spec_generating")).toBe(true)
-    expect(isTaskInterruptable("goal_decomposing")).toBe(true)
-    expect(isTaskInterruptable("planning")).toBe(true)
-    expect(isTaskInterruptable("planned")).toBe(true)
-  })
-
-  test("available during execution stages", () => {
-    expect(isTaskInterruptable("running")).toBe(true)
-    expect(isTaskInterruptable("evaluating")).toBe(true)
-    expect(isTaskInterruptable("delivering")).toBe(true)
-  })
-
-  test("available when blocked", () => {
-    expect(isTaskInterruptable("blocked")).toBe(true)
+    expect(isTaskInterruptable("active")).toBe(true)
   })
 
   test("not available in terminal states", () => {
@@ -64,6 +39,21 @@ describe("stop button availability (isTaskInterruptable)", () => {
   test("not available when status is undefined or empty", () => {
     expect(isTaskInterruptable(undefined)).toBe(false)
     expect(isTaskInterruptable("")).toBe(false)
+  })
+
+  test("old pipeline phase names are not task lifecycle statuses", () => {
+    for (const status of [
+      "spec_generating",
+      "goal_decomposing",
+      "planning",
+      "planned",
+      "running",
+      "blocked",
+      "evaluating",
+      "delivering",
+    ]) {
+      expect(isTaskInterruptable(status)).toBe(false)
+    }
   })
 })
 
@@ -78,8 +68,7 @@ describe("terminal state classification (isTaskTerminal)", () => {
 
   test("active states are not terminal", () => {
     expect(isTaskTerminal("queued")).toBe(false)
-    expect(isTaskTerminal("running")).toBe(false)
-    expect(isTaskTerminal("blocked")).toBe(false)
+    expect(isTaskTerminal("active")).toBe(false)
   })
 
   test("undefined/empty are not terminal", () => {
@@ -98,9 +87,9 @@ describe("busy signal (chatRequest || isTaskInterruptable)", () => {
     expect(busy).toBe(true)
   })
 
-  test("busy when task is running even without chat request", () => {
+  test("busy when task is active even without chat request", () => {
     const chatRequest = null
-    const taskStatus = "running"
+    const taskStatus = "active"
     const busy = !!chatRequest || isTaskInterruptable(taskStatus)
     expect(busy).toBe(true)
   })
@@ -130,7 +119,7 @@ describe("busy signal (chatRequest || isTaskInterruptable)", () => {
     // This is the critical scenario that was broken before the refactor:
     // 1. User submits message → chatRequest set → busy=true (stop visible)
     // 2. Direct API creates task → chatRequest cleared
-    // 3. Task status = "queued" → isTaskInterruptable = true → busy=true
+    // 3. Task status = "queued" -> isTaskInterruptable = true -> busy=true
     // No gap! The stop button remains visible.
     const chatRequest = null // cleared after create
     const taskStatus = "queued" // task just created
@@ -196,7 +185,7 @@ describe("direct API call contracts", () => {
 
 // ── Board controls derivation ──
 
-describe("board controls derivation from state machine", () => {
+describe("board controls derivation from task lifecycle", () => {
   // Mirrors the logic in board-builder.ts boardOverview()
 
   function deriveControls(taskStatus: string, hasPlan: boolean, pendingInteractions: number) {
@@ -207,8 +196,8 @@ describe("board controls derivation from state machine", () => {
     }
   }
 
-  test("running task: can cancel, cannot retry/replan", () => {
-    const c = deriveControls("running", true, 0)
+  test("active task: can cancel, cannot retry/replan", () => {
+    const c = deriveControls("active", true, 0)
     expect(c.canCancel).toBe(true)
     expect(c.canRetry).toBe(false)
     expect(c.canReplan).toBe(false)
@@ -243,38 +232,19 @@ describe("board controls derivation from state machine", () => {
     expect(c.canReplan).toBe(true)
   })
 
-  test("blocked task with pending interactions: can cancel but cannot retry", () => {
-    const c = deriveControls("blocked", true, 2)
-    expect(c.canCancel).toBe(true)
-    expect(c.canRetry).toBe(false)
-  })
-
   test("queued task: can cancel immediately (no need to wait for run)", () => {
     const c = deriveControls("queued", false, 0)
     expect(c.canCancel).toBe(true)
     expect(c.canRetry).toBe(false)
   })
 
-  test("spec_generating task: can cancel", () => {
-    const c = deriveControls("spec_generating", false, 0)
-    expect(c.canCancel).toBe(true)
-  })
-
-  test("planning task: can cancel", () => {
-    const c = deriveControls("planning", false, 0)
-    expect(c.canCancel).toBe(true)
-  })
-
-  test("evaluating task: can cancel", () => {
-    const c = deriveControls("evaluating", true, 0)
-    expect(c.canCancel).toBe(true)
-    expect(c.canRetry).toBe(false)
-  })
-
-  test("delivering task: can cancel", () => {
-    const c = deriveControls("delivering", true, 0)
-    expect(c.canCancel).toBe(true)
-    expect(c.canRetry).toBe(false)
+  test("old pipeline phase names do not enable task controls", () => {
+    for (const status of ["running", "blocked", "planning", "evaluating", "delivering"]) {
+      const c = deriveControls(status, true, 0)
+      expect(c.canCancel).toBe(false)
+      expect(c.canRetry).toBe(false)
+      expect(c.canReplan).toBe(false)
+    }
   })
 })
 

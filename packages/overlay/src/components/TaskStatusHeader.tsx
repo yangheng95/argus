@@ -8,8 +8,8 @@
 import { createMemo, Show } from "solid-js"
 import { boardStore, activeTaskID } from "../store/board"
 import { statusIconName } from "../utils/status-mapping"
+import { taskLifecycleStatusOrIdleLabel } from "../utils/status-labels"
 import { Icon } from "./Icon"
-import { t } from "../utils/i18n"
 import { formatDuration } from "../utils/time"
 import { useNowTick } from "../services/clock"
 
@@ -17,7 +17,8 @@ const LIVE_STATUSES = new Set(["active", "queued"])
 
 export function TaskStatusHeader() {
   const task = createMemo(() => (boardStore.board as any)?.task)
-  const status = createMemo<string>(() => task()?.status || "idle")
+  const status = createMemo<string>(() => task()?.status || "")
+  const iconStatus = createMemo<string>(() => status() || "idle")
   const startTime = createMemo<number>(() => task()?.time?.created || 0)
   const completedTime = createMemo<number>(() => task()?.time?.completed || 0)
   const isLive = createMemo(() => LIVE_STATUSES.has(status()))
@@ -35,13 +36,13 @@ export function TaskStatusHeader() {
     return formatDuration(now() - start)
   })
 
-  const labelText = createMemo(() => (visible() ? t(`task.status.${status()}`) : t("task.status.idle")))
+  const labelText = createMemo(() => (visible() ? taskLifecycleStatusOrIdleLabel(status()) : ""))
 
   return (
     <Show when={visible()}>
       <div class="task-status chat-task-status" id="taskStatus">
-        <span class="status-icon" id="statusIcon" data-status={status()} aria-hidden="true">
-          <Icon name={statusIconName(status())} />
+        <span class="status-icon" id="statusIcon" data-status={iconStatus()} aria-hidden="true">
+          <Icon name={statusIconName(iconStatus())} />
         </span>
         <span class="status-copy">
           <span class="status-label" id="statusLabel">
