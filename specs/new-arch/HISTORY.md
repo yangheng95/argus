@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                       | Title                          |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| [2026-06-20-conversation-rendering-i18n-source.md](2026-06-20-conversation-rendering-i18n-source.md) | Conversation Rendering i18n Source |
 | [2026-06-20-memory-panel-owner-browser-coverage.md](2026-06-20-memory-panel-owner-browser-coverage.md) | Memory Panel Owner And Browser Coverage |
 | [2026-06-20-file-explorer-row-button-size-source.md](2026-06-20-file-explorer-row-button-size-source.md) | File Explorer Row Button Size Source |
 | [2026-06-20-trace-event-head-button-primitive.md](2026-06-20-trace-event-head-button-primitive.md) | Trace Event Head Button Primitive |

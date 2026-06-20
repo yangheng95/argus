@@ -6,16 +6,30 @@ import { setCardExpanded } from "../store/conversation-ui"
 import { conversationCardContainsMessage, loadConversationHistoryUntilCard } from "../services/conversation"
 import { requestConversationCardScroll } from "../services/conversation-scroll"
 import { notifyWarning } from "../services/notify"
-import { buildAgentWorkflow, type AgentWorkflowRecord } from "../utils/agent-workflow"
+import { buildAgentWorkflow, type AgentWorkflowRecord, type AgentWorkflowStatus } from "../utils/agent-workflow"
 import { mergeAgentRecords } from "../utils/agent-workflow-records"
 import { orderedReachableCardIDs } from "../utils/card-tree"
 import { stageAccent } from "../utils/card-color"
 import { Avatar, avatarRole } from "./Avatar"
 import { Button } from "./ui/Button"
+import { t } from "../utils/i18n"
+
+const AGENT_RAIL_STATUS_LABELS: Record<AgentWorkflowStatus, () => string> = {
+  pending: () => t("agent_rail.status.pending"),
+  running: () => t("agent_rail.status.running"),
+  idle: () => t("agent_rail.status.idle"),
+  completed: () => t("agent_rail.status.completed"),
+  error: () => t("agent_rail.status.error"),
+  skipped: () => t("agent_rail.status.skipped"),
+}
+
+function agentRailStatusLabel(status: AgentWorkflowStatus): string {
+  return AGENT_RAIL_STATUS_LABELS[status]()
+}
 
 function compactLabel(record: AgentWorkflowRecord): string {
-  const parts = [record.agentName, record.status]
-  if (record.attempt) parts.push(`V${record.attempt}`)
+  const parts = [record.agentName, agentRailStatusLabel(record.status)]
+  if (record.attempt) parts.push(t("agent_rail.attempt", { value: record.attempt }))
   return parts.filter(Boolean).join(" · ")
 }
 
@@ -33,18 +47,23 @@ function parentIDsForCard(cardID: string): string[] {
   return parents
 }
 
-function describeRecord(record: AgentWorkflowRecord): string {
-  const lines = [`agent: ${record.agentName}`, `sessionID: ${record.sessionID}`, `status: ${record.status}`]
-  if (record.attempt) lines.push(`attempt: V${record.attempt}`)
-  if (record.renderedCardID) lines.push(`renderedCardID: ${record.renderedCardID}`)
+function describeRecord(record: AgentWorkflowRecord, selector?: string): string {
+  const lines = [
+    t("agent_rail.detail.agent", { value: record.agentName }),
+    t("agent_rail.detail.session_id", { value: record.sessionID }),
+    t("agent_rail.detail.status", { value: agentRailStatusLabel(record.status) }),
+  ]
+  if (record.attempt) lines.push(t("agent_rail.detail.attempt", { value: record.attempt }))
+  if (record.renderedCardID) lines.push(t("agent_rail.detail.rendered_card_id", { value: record.renderedCardID }))
+  if (selector) lines.push(t("agent_rail.detail.selector", { value: selector }))
   return lines.join("\n")
 }
 
 async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
   if (!record.renderedCardID) {
     notifyWarning({
-      title: "Agent card unavailable",
-      message: `${record.agentName} has no rendered conversation card target.`,
+      title: t("agent_rail.card_unavailable_title"),
+      message: t("agent_rail.no_rendered_card_target", { agent: record.agentName }),
       details: describeRecord(record),
     })
     return
@@ -77,9 +96,9 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
         if (found) return
         const selector = `[data-card-id="${CSS.escape(record.renderedCardID!)}"]`
         notifyWarning({
-          title: "Agent card unavailable",
-          message: `Rendered card ${record.renderedCardID} could not be located in the conversation.`,
-          details: `${describeRecord(record)}\n\nselector: ${selector}`,
+          title: t("agent_rail.card_unavailable_title"),
+          message: t("agent_rail.rendered_card_missing", { id: record.renderedCardID }),
+          details: describeRecord(record, selector),
         })
       })
     })
@@ -211,7 +230,7 @@ export function ConversationAgentRail() {
 
   return (
     <Show when={hasRecords()}>
-      <aside class="conversation-agent-rail" aria-label="Agent workflow">
+      <aside class="conversation-agent-rail" aria-label={t("agent_rail.workflow_label")}>
         <div
           class="conversation-agent-rail__lanes"
           role="list"
