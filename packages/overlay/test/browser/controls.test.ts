@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -6,6 +8,15 @@ import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
+
+async function saveElementScreenshot(page: any, selector: string, filename: string): Promise<string> {
+  const element = await page.$(selector)
+  assert.ok(element, `${selector} should exist before screenshot`)
+  const target = resolve(".scratch", filename)
+  mkdirSync(dirname(target), { recursive: true })
+  writeFileSync(target, await element.screenshot({}))
+  return target
+}
 
 test(
   "overlay controls trigger without runtime failures",
@@ -458,6 +469,9 @@ test(
       ],
       counters: {
         restart: 0,
+        retry: 0,
+        replan: 0,
+        cancel: 0,
         nextSession: 3,
         nextGoal: 2,
         nextPreference: 2,
@@ -826,6 +840,18 @@ test(
       if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
       if (path === "/task/task-1/trace")
         return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace", enabled: true })
+      if (path === "/task/task-1/retry" && req.method === "POST") {
+        data.counters.retry += 1
+        return send({ ok: true })
+      }
+      if (path === "/task/task-1/replan" && req.method === "POST") {
+        data.counters.replan += 1
+        return send({ ok: true })
+      }
+      if (path === "/task/task-1/cancel" && req.method === "POST") {
+        data.counters.cancel += 1
+        return send({ ok: true })
+      }
       if (path === "/task/events" || path === "/task/task-1/events") {
         const stream = new ReadableStream({
           start(controller) {
@@ -1191,6 +1217,80 @@ test(
           )}`,
         )
       }
+      await page.waitForSelector('[data-task-action="cancel"]')
+      const taskActions = await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-actions-buttons .oc-button"))
+        return buttons.map((button) => {
+          const rect = button.getBoundingClientRect()
+          return {
+            action: button.dataset.taskAction || "",
+            text: button.textContent?.trim() || "",
+            ariaLabel: button.getAttribute("aria-label") || "",
+            title: button.getAttribute("title") || "",
+            variant: button.dataset.variant || "",
+            size: button.dataset.size || "",
+            tone: button.dataset.tone || "",
+            height: rect.height,
+            width: rect.width,
+            className: button.className,
+          }
+        })
+      })
+      assert.deepEqual(
+        taskActions.map((button) => button.action),
+        ["retry", "replan", "cancel"],
+      )
+      for (const button of taskActions) {
+        assert.match(button.className, /oc-button/)
+        assert.equal(button.size, "md")
+        assert.ok(button.height >= 24, `${button.action} should keep Button target height: ${button.height}`)
+      }
+      const cancelAction = taskActions.find((button) => button.action === "cancel")
+      assert.ok(cancelAction)
+      assert.equal(cancelAction.text, "Cancel")
+      assert.equal(cancelAction.ariaLabel, "Cancel this task.")
+      assert.equal(cancelAction.title, "Cancel this task.")
+      assert.equal(cancelAction.variant, "outline")
+      assert.equal(cancelAction.tone, "danger")
+      await page.focus('[data-task-action="replan"]')
+      await page.keyboard.press("Tab")
+      await page.waitForFunction(
+        () => document.activeElement?.getAttribute("data-task-action") === "cancel",
+      )
+      const cancelFocus = await page.evaluate(() => {
+        const button = document.querySelector<HTMLButtonElement>('[data-task-action="cancel"]')
+        if (!button) return { active: false, outlineStyle: "", outlineWidth: "", matchesFocusVisible: false }
+        const style = getComputedStyle(button)
+        return {
+          active: document.activeElement === button,
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+          matchesFocusVisible: button.matches(":focus-visible"),
+        }
+      })
+      assert.equal(cancelFocus.active, true)
+      assert.equal(cancelFocus.matchesFocusVisible, true)
+      assert.notEqual(cancelFocus.outlineStyle, "none")
+      assert.notEqual(cancelFocus.outlineWidth, "0px")
+      const taskActionsScreenshot = await saveElementScreenshot(
+        page,
+        ".task-actions-buttons",
+        "task-actions-cancel-focus.png",
+      )
+      assert.ok(taskActionsScreenshot.endsWith("task-actions-cancel-focus.png"))
+      for (const action of ["retry", "replan", "cancel"] as const) {
+        const path = `/task/task-1/${action}`
+        const before = requests.filter((entry) => entry.startsWith(`POST ${path}`)).length
+        await tap(`[data-task-action="${action}"]`)
+        for (let i = 0; i < 30; i += 1) {
+          if (requests.filter((entry) => entry.startsWith(`POST ${path}`)).length > before) break
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        assert.equal(requests.filter((entry) => entry.startsWith(`POST ${path}`)).length, before + 1)
+      }
+      assert.equal(data.counters.retry, 1)
+      assert.equal(data.counters.replan, 1)
+      assert.equal(data.counters.cancel, 1)
       const workflowPanels = await page.evaluate(() => {
         const req = document.querySelector<HTMLElement>(".req-item")
         const reqDesc = document.querySelector<HTMLElement>(".req-desc")

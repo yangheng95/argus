@@ -883,6 +883,8 @@
   "skill.value_placeholder": "C:\\skills 或 https://example.com/.well-known/skills/",
   "task.action.replan": "重新规划",
   "task.action.replan_title": "生成新方案后再继续执行。",
+  "task.action.cancel": "取消",
+  "task.action.cancel_title": "取消此任务。",
   "task.action.retry": "重试",
   "task.action.retry_title": "沿用当前方案重新执行一轮。",
   "task.cancel_button_title": "取消此运行中的任务（点两次确认）。",

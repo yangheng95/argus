@@ -883,6 +883,8 @@
   "skill.value_placeholder": "C:\\skills or https://example.com/.well-known/skills/",
   "task.action.replan": "Replan",
   "task.action.replan_title": "Generate a fresh plan before continuing.",
+  "task.action.cancel": "Cancel",
+  "task.action.cancel_title": "Cancel this task.",
   "task.action.retry": "Retry",
   "task.action.retry_title": "Re-run with the existing plan.",
   "task.cancel_button_title": "Cancel this running task (click twice to confirm).",
