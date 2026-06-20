@@ -36,6 +36,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-20-log-viewer-refresh-entry-single-source.md](2026-06-20-log-viewer-refresh-entry-single-source.md) | Log Viewer Refresh Entry Single Source |
 | [2026-06-20-settings-textarea-primitive.md](2026-06-20-settings-textarea-primitive.md)                     | Settings Textarea Primitive    |
 | [2026-06-20-image-preview-trigger-i18n-button.md](2026-06-20-image-preview-trigger-i18n-button.md)         | Image Preview Trigger i18n Button |
+| [2026-06-20-image-preview-trigger-contract-single-source.md](2026-06-20-image-preview-trigger-contract-single-source.md) | Image Preview Trigger Contract Single Source |
 | [2026-06-20-mission-rename-input-single-source.md](2026-06-20-mission-rename-input-single-source.md)       | Mission Rename Input Single Source |
 | [2026-06-20-titlebar-run-checkbox-menubar-primitive.md](2026-06-20-titlebar-run-checkbox-menubar-primitive.md) | Titlebar Run Checkbox Menubar Primitive |
 | [2026-06-20-task-dirbar-breadcrumb-focus-visible.md](2026-06-20-task-dirbar-breadcrumb-focus-visible.md)   | TaskDirBar Breadcrumb Focus Visible |

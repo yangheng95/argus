@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { calculateImagePreviewFitScale, calculateImagePreviewOpenScale } from "../src/utils/image-preview-scale"
 import { imagePreviewTriggerLabel } from "../src/utils/image-preview-label"
+import { imagePreviewTriggerHtmlAttributes } from "../src/utils/image-preview-trigger"
 import { setLocale, setLocaleData } from "../src/utils/i18n"
 import { renderMarkdown } from "../src/utils/markdown"
 
@@ -64,11 +65,20 @@ function block(css: string, selector: string): string {
   return css.match(new RegExp(`${escaped}\\s*\\{[^}]*\\}`, "s"))?.[0] ?? ""
 }
 
+function escapeTestAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+}
+
 describe("message image preview", () => {
   test("markdown images emit preview trigger metadata", async () => {
     await setLocale("en-US")
     const html = renderMarkdown("![tiny](https://example.com/tiny.png)")
+    const expectedAttrs = imagePreviewTriggerHtmlAttributes(
+      { src: "https://example.com/tiny.png", alt: "tiny" },
+      escapeTestAttr,
+    )
 
+    expect(html).toContain(`<button ${expectedAttrs}>`)
     expect(html).toContain('data-image-preview-trigger="true"')
     expect(html).toContain('class="oc-button msg-image-trigger"')
     expect(html).toContain('data-ui="image-preview-trigger"')
@@ -103,13 +113,19 @@ describe("message image preview", () => {
 
     const component = read("src/components/ImagePreview.tsx")
     const labelHelper = read("src/utils/image-preview-label.ts")
+    const triggerHelper = read("src/utils/image-preview-trigger.ts")
     const markdown = read("src/utils/markdown.ts")
-    expect(component).toContain("imagePreviewTriggerLabel(alt())")
+    expect(component).toContain("imagePreviewTriggerContract({ src: props.src, alt: alt() })")
     expect(component).toContain("<Button")
-    expect(component).toContain('data-ui="image-preview-trigger"')
-    expect(markdown).toContain("imagePreviewTriggerLabel(text || \"\")")
-    expect(markdown).toContain('class="oc-button msg-image-trigger"')
-    expect(markdown).toContain('data-ui="image-preview-trigger"')
+    expect(component).toContain("data-ui={trigger().dataUi}")
+    expect(markdown).toContain("imagePreviewTriggerHtmlAttributes({ src, alt: text || \"\" }, escapeAttr)")
+    expect(markdown).not.toContain('class="oc-button msg-image-trigger"')
+    expect(markdown).not.toContain('data-ui="image-preview-trigger"')
+    expect(markdown).not.toContain('data-image-preview-trigger="true"')
+    expect(markdown).not.toContain('data-image-preview-src="')
+    expect(triggerHelper).toContain('IMAGE_PREVIEW_TRIGGER_DATA_UI = "image-preview-trigger"')
+    expect(triggerHelper).toContain('IMAGE_PREVIEW_TRIGGER_VARIANT = "ghost"')
+    expect(triggerHelper).toContain("imagePreviewTriggerHtmlAttributes")
     expect(labelHelper).toContain('t("image_preview.open_trigger_with_alt"')
     expect(labelHelper).toContain('t("image_preview.open_trigger")')
     expect(labelHelper).not.toContain('"Open image preview"')
