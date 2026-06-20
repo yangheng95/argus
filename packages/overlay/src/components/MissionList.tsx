@@ -22,6 +22,7 @@ export interface MissionListProps {
   onSelectMission: (mission: MissionRecord) => void
   onSelectTask: (task: MissionTaskProjection) => void
   onAbortMission: (mission: MissionRecord) => void
+  onDownloadMission: (mission: MissionRecord) => void
   onDeleteMission: (mission: MissionRecord) => void
   onRenameMission: (mission: MissionRecord, title: string) => void | Promise<void>
   onRetry: () => void
@@ -46,7 +47,13 @@ function missionRowTip(mission: MissionRecord): string {
 const CONFIRM_WINDOW_SECONDS = 3
 const CONFIRM_WINDOW_MS = CONFIRM_WINDOW_SECONDS * 1000
 
-function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: MissionRecord) => void; tabIndex?: number }) {
+function MissionAbortButton(props: {
+  mission: MissionRecord
+  disabled?: boolean
+  busy?: boolean
+  onAbort: (mission: MissionRecord) => void
+  tabIndex?: number
+}) {
   return (
     <ArmedConfirmButton
       type="button"
@@ -55,6 +62,8 @@ function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: 
       tone="neutral"
       data-chrome="icon-action"
       data-ui="task-row-cancel"
+      data-busy={props.busy ? "true" : undefined}
+      disabled={props.disabled}
       tabIndex={props.tabIndex}
       label={t("mission.ledger.abort_title")}
       armedDescription={t("armed_confirm.mission.abort", { seconds: CONFIRM_WINDOW_SECONDS })}
@@ -73,7 +82,13 @@ function MissionAbortButton(props: { mission: MissionRecord; onAbort: (mission: 
   )
 }
 
-function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission: MissionRecord) => void; tabIndex?: number }) {
+function MissionDeleteButton(props: {
+  mission: MissionRecord
+  disabled?: boolean
+  busy?: boolean
+  onDelete: (mission: MissionRecord) => void
+  tabIndex?: number
+}) {
   return (
     <ArmedConfirmButton
       type="button"
@@ -82,6 +97,8 @@ function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission
       tone="danger"
       data-chrome="icon-action"
       data-ui="task-row-delete"
+      data-busy={props.busy ? "true" : undefined}
+      disabled={props.disabled}
       tabIndex={props.tabIndex}
       label={t("mission.ledger.delete_title")}
       armedDescription={t("armed_confirm.mission.delete", { seconds: CONFIRM_WINDOW_SECONDS })}
@@ -100,7 +117,7 @@ function MissionDeleteButton(props: { mission: MissionRecord; onDelete: (mission
   )
 }
 
-function MissionRenameButton(props: { onClick: () => void; tabIndex?: number }) {
+function MissionRenameButton(props: { disabled?: boolean; busy?: boolean; onClick: () => void; tabIndex?: number }) {
   return (
     <Button
       type="button"
@@ -109,6 +126,8 @@ function MissionRenameButton(props: { onClick: () => void; tabIndex?: number }) 
       tone="neutral"
       data-chrome="icon-action"
       data-ui="task-row-rename"
+      data-busy={props.busy ? "true" : undefined}
+      disabled={props.disabled}
       tabIndex={props.tabIndex}
       title={t("mission.ledger.rename_title")}
       aria-label={t("mission.ledger.rename_title")}
@@ -118,6 +137,37 @@ function MissionRenameButton(props: { onClick: () => void; tabIndex?: number }) 
       }}
     >
       <Icon name="edit" size={11} />
+    </Button>
+  )
+}
+
+function MissionDownloadButton(props: {
+  mission: MissionRecord
+  disabled?: boolean
+  busy?: boolean
+  onDownload: (mission: MissionRecord) => void
+  tabIndex?: number
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      tone="neutral"
+      data-chrome="icon-action"
+      data-ui="task-row-download"
+      data-mission-download={props.mission.missionID}
+      data-busy={props.busy ? "true" : undefined}
+      disabled={props.disabled}
+      tabIndex={props.tabIndex}
+      title={t("mission.ledger.download_project_title")}
+      aria-label={t("mission.ledger.download_project_title")}
+      onClick={(event) => {
+        event.stopPropagation()
+        props.onDownload(props.mission)
+      }}
+    >
+      <Icon name="download" size={11} />
     </Button>
   )
 }
@@ -166,8 +216,10 @@ function MissionRow(props: {
   onSelectMission: (mission: MissionRecord) => void
   onSelectTask: (task: MissionTaskProjection) => void
   onAbortMission: (mission: MissionRecord) => void
+  onDownloadMission: (mission: MissionRecord) => void
   onDeleteMission: (mission: MissionRecord) => void
   onRenameMission: (mission: MissionRecord, title: string) => void | Promise<void>
+  actionBusy?: string
 }) {
   const [editing, setEditing] = createSignal(false)
   const [draftTitle, setDraftTitle] = createSignal("")
@@ -175,6 +227,9 @@ function MissionRow(props: {
   let inputRef: HTMLInputElement | undefined
   const title = () => props.mission.title || props.mission.missionID
   const canAbort = () => props.mission.interruptible
+  const missionActionDisabled = () => Boolean(props.actionBusy)
+  const missionActionBusy = (action: "abort" | "delete" | "download" | "rename") =>
+    props.actionBusy === `${action}:${props.mission.missionID}`
   const hasActions = () => true
   const rowActions = useTaskRowActionsKeyboard(hasActions)
 
@@ -193,6 +248,7 @@ function MissionRow(props: {
   }
 
   function commitRename(): void {
+    if (missionActionDisabled()) return
     const next = draftTitle().trim()
     setEditing(false)
     setDraftTitle("")
@@ -247,6 +303,7 @@ function MissionRow(props: {
                     data-ui="mission-row-rename-input"
                     type="text"
                     maxLength={200}
+                    disabled={missionActionDisabled()}
                     value={draftTitle()}
                     aria-label={t("mission.ledger.rename_placeholder")}
                     placeholder={t("mission.ledger.rename_placeholder")}
@@ -304,13 +361,29 @@ function MissionRow(props: {
             <Show when={canAbort()}>
               <MissionAbortButton
                 mission={props.mission}
+                disabled={missionActionDisabled()}
+                busy={missionActionBusy("abort")}
                 onAbort={props.onAbortMission}
                 tabIndex={rowActions.actionButtonTabIndex()}
               />
             </Show>
-            <MissionRenameButton onClick={beginRename} tabIndex={rowActions.actionButtonTabIndex()} />
+            <MissionDownloadButton
+              mission={props.mission}
+              disabled={missionActionDisabled()}
+              busy={missionActionBusy("download")}
+              onDownload={props.onDownloadMission}
+              tabIndex={rowActions.actionButtonTabIndex()}
+            />
+            <MissionRenameButton
+              disabled={missionActionDisabled()}
+              busy={missionActionBusy("rename")}
+              onClick={beginRename}
+              tabIndex={rowActions.actionButtonTabIndex()}
+            />
             <MissionDeleteButton
               mission={props.mission}
+              disabled={missionActionDisabled()}
+              busy={missionActionBusy("delete")}
               onDelete={props.onDeleteMission}
               tabIndex={rowActions.actionButtonTabIndex()}
             />
@@ -411,8 +484,10 @@ export function MissionList(props: MissionListProps) {
                       onSelectMission={props.onSelectMission}
                       onSelectTask={props.onSelectTask}
                       onAbortMission={props.onAbortMission}
+                      onDownloadMission={props.onDownloadMission}
                       onDeleteMission={props.onDeleteMission}
                       onRenameMission={props.onRenameMission}
+                      actionBusy={props.actionBusy}
                     />
                   )}
                 </For>

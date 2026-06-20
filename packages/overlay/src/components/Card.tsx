@@ -13,6 +13,7 @@ import { boardStore, rootTaskSessionID, activeTaskID } from "../store/board"
 import { loadConversationSessionHistory } from "../services/conversation"
 import { cancelAgentSession, replyToAgentSession, sendTaskOperatorMessage } from "../services/task"
 import { submitTaskRewind } from "../services/rewind"
+import { currentTraceDirectory } from "../services/trace-directory"
 import { normalizeAgentRole } from "../utils/message"
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox"
 import { CardHeader } from "./CardHeader"
@@ -257,13 +258,14 @@ export function Card(props: { node: CardNode; depth: number }) {
     if (!expanded()) return
     const sessionID = String(buildHistorySessionID() || "")
     const taskID = activeTaskID()
-    if (!sessionID || !taskID) return
+    const directory = String(boardStore.board?.task?.directory || "").trim()
+    if (!sessionID || !taskID || !directory) return
     const phase = props.node.kind === "phase" ? props.node : promotedBuildPhase()
     if ((phase?.parts?.length || 0) > 0) return
     const key = `${taskID}:${sessionID}`
     if (inFlightBuildHistorySessions.has(key)) return
     inFlightBuildHistorySessions.add(key)
-    void loadConversationSessionHistory(sessionID, taskID)
+    void loadConversationSessionHistory(sessionID, taskID, { directory })
       .catch((error) => {
         console.warn("[conversation] build session history hydrate failed", error)
       })
@@ -306,7 +308,11 @@ export function Card(props: { node: CardNode; depth: number }) {
       <Show when={expanded()}>
         <div class="card__body">
           <Show when={traceOpen() && traceSessionID()}>
-            <TracePanel sessionID={traceSessionID()!} onClose={() => setTraceOpen(false)} />
+            <TracePanel
+              sessionID={traceSessionID()!}
+              directory={currentTraceDirectory()}
+              onClose={() => setTraceOpen(false)}
+            />
           </Show>
           <Show when={props.node.kind === "step" && props.node.goalDescription}>
             <section class="card__goal-desc" aria-label={t("goal.field.objective")}>

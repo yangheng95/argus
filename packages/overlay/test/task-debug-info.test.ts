@@ -54,7 +54,8 @@ test("mission debug info is copyable from mission rows without using rename doub
   expect(debugInfo).toContain("Tasks (${tasks.length}):")
   expect(missionList).toContain("buildMissionDebugBlob(props.mission)")
   expect(missionList).toContain("[mission-row dblclick] clipboard write failed")
-  expect(missionList).toContain("<MissionRenameButton onClick={beginRename} />")
+  expect(missionList).toContain("<MissionRenameButton")
+  expect(missionList).toContain("onClick={beginRename}")
 })
 
 test("chat debug info is copyable from the conversation title for standalone sessions", () => {

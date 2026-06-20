@@ -23,7 +23,8 @@ describe("build phase promotion render policy", () => {
     const source = readFileSync(join(import.meta.dir, "../src/components/Card.tsx"), "utf8")
     expect(source).toContain('import { loadConversationSessionHistory } from "../services/conversation"')
     expect(source).toContain("props.node.stepPayload?.buildSessionID")
-    expect(source).toContain("loadConversationSessionHistory(sessionID, taskID)")
+    expect(source).toContain("const directory = String(boardStore.board?.task?.directory || \"\").trim()")
+    expect(source).toContain("loadConversationSessionHistory(sessionID, taskID, { directory })")
   })
 
   test("filters the build phase from visible step children", () => {

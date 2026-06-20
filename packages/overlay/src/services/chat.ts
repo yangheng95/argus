@@ -22,6 +22,9 @@ import { workspaceMode } from "./workspace"
 import { selectTask, createTask } from "./task"
 import { patchSessionConfig } from "./config"
 import { ingestPersistedConversationMessage } from "./tree-writer"
+import { conversationSourceDirectory } from "./conversation"
+import { taskOwningDirectory } from "./task-directory"
+import { directoryScopedPath, taskScopedPath } from "./task-path"
 
 // ── Types ──
 
@@ -30,6 +33,7 @@ export interface ChatAbortTarget {
   runID?: string
   sessionID?: string
   taskID?: string
+  directory?: string
 }
 
 export interface ConversationTarget {
@@ -58,6 +62,10 @@ function currentTaskSessionID(): string {
     boardStore.tasks.find((item: any) => item?.task?.id === activeTaskID())?.task?.sessionID ||
     ""
   )
+}
+
+function taskPath(taskID: string, suffix = ""): string {
+  return taskScopedPath(taskID, taskOwningDirectory(taskID), suffix)
 }
 
 export function classifyPanelMessageTarget(input: {
@@ -184,17 +192,19 @@ export function chatAbortTargets(seed?: ChatAbortTarget): ChatAbortTarget[] {
   }
 
   push(seed)
-  if (!activeTaskID()) return items
+  const taskID = activeTaskID()
+  if (!taskID) return items
+  const directory = taskOwningDirectory(taskID)
 
   const runID = boardStore.board?.task?.activeRunID || ""
   if (runID) {
-    push({ kind: "run", runID })
+    push({ kind: "run", runID, directory })
   }
   const sessionID = currentTaskSessionID()
   if (sessionID) {
-    push({ kind: "session", sessionID })
+    push({ kind: "session", sessionID, directory })
   }
-  push({ kind: "task", taskID: activeTaskID() })
+  push({ kind: "task", taskID, directory })
 
   return items
 }
@@ -216,21 +226,24 @@ export function chatAbortTarget(seed?: ChatAbortTarget): ChatAbortTarget | null 
 async function abortChatTargetRemote(target: ChatAbortTarget): Promise<boolean> {
   if (!target) return false
   if (target.kind === "run" && target.runID) {
-    await apiJson(`run/${encodeURIComponent(target.runID)}/abort`, {
+    await apiJson(directoryScopedPath(`run/${encodeURIComponent(target.runID)}/abort`, target.directory || "", "abort run"), {
       method: "POST",
     })
     return true
   }
   if (target.kind === "task" && target.taskID) {
-    await apiJson(`task/${encodeURIComponent(target.taskID)}/cancel`, {
+    await apiJson(taskScopedPath(target.taskID, target.directory || taskOwningDirectory(target.taskID), "/cancel"), {
       method: "POST",
     })
     return true
   }
   if (target.kind === "session" && target.sessionID) {
-    await apiJson(`session/${encodeURIComponent(target.sessionID)}/abort`, {
-      method: "POST",
-    })
+    await apiJson(
+      directoryScopedPath(`session/${encodeURIComponent(target.sessionID)}/abort`, target.directory || "", "abort session"),
+      {
+        method: "POST",
+      },
+    )
     return true
   }
   return false
@@ -425,13 +438,18 @@ export async function panelMessage(
   try {
     const sessionID = activeSessionID()
     if (sessionID) {
+      const directory = conversationSourceDirectory({ kind: "session", id: sessionID })
       setConnectionStatus("online")
-      request.target = { kind: "session", sessionID }
+      request.target = { kind: "session", sessionID, directory }
       setChatRequest(request as any)
       if (promptProfile) {
-        await patchSessionConfig(sessionID, { prompt_profile: { active: promptProfile } })
+        await patchSessionConfig({
+          sessionID,
+          directory,
+          diff: { prompt_profile: { active: promptProfile } },
+        })
       }
-      const result = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async`, {
+      const result = await apiJson(directoryScopedPath(`session/${encodeURIComponent(sessionID)}/prompt_async`, directory, "session prompt"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -464,7 +482,9 @@ export async function panelMessage(
     // send message directly to the task. Status is display/audit context, not
     // a routing gate; users sending a follow-up to any task expect the same
     // conversation to continue, not a brand-new task.
-    const result = await apiJson(`task/${encodeURIComponent(taskID)}/message`, {
+    const directory = taskOwningDirectory(taskID)
+    request.target = { kind: "task", taskID, directory }
+    const result = await apiJson(taskPath(taskID, "/message"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

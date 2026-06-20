@@ -599,13 +599,13 @@ export function Board(props: BoardProps) {
       {/* ── Data-driven unified layout ── */}
       {/* Sections appear based on their data availability, not a mode flag. */}
 
-      {/* Trace surface 2026-04-26: only the per-card 🔍 button (Card.tsx)
-          mounts <TracePanel sessionID={...}>. Both the right-panel and the
-          conversation-level "Show all session trace" toggle were removed —
-          task-trace was a slow whole-task disk read with frequent
-          path-mismatch failure modes. Operators wanting cross-session
-          context now use the per-session 📋 Copy button on each TracePanel
-          to dump the JSON dump into a log viewer or LLM. */}
+      {/* Trace surface 2026-04-26: only the per-card trace button (Card.tsx)
+          mounts <TracePanel sessionID={...} directory={...}>. Both the
+          right-panel and the conversation-level "Show all session trace"
+          toggle were removed because task-trace was a slow whole-task disk
+          read with frequent path-mismatch failure modes. Operators wanting
+          cross-session context now use the per-session Copy button on each
+          TracePanel to dump the JSON into a log viewer or LLM. */}
 
       <div class="workflow-section-stack" data-ui="workflow-section-stack">
         <Show when={taskScopeSections().frontendResearch}>

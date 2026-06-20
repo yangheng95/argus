@@ -92,6 +92,8 @@ import { startSSE, stopSSE } from "./services/sse"
 import { resetWriter } from "./services/tree-writer"
 import { openImagePreview } from "./services/image-preview"
 import { buildChatDebugBlob, buildTaskDebugBlob, writeDebugClipboard } from "./utils/debug-info"
+import { taskOwningDirectory } from "./services/task-directory"
+import { taskScopedPath } from "./services/task-path"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -316,13 +318,16 @@ function activateCodingAssistantSessionList(): void {
     await loadCodingAssistantSessions({ signal: controller.signal })
     if (controller.signal.aborted) throw controller.signal.reason
     const selectedID = codingAssistantStore.selectedSessionID
-    const sessionID =
-      selectedID && codingAssistantStore.sessions.some((session) => session.id === selectedID)
-        ? selectedID
-        : (codingAssistantStore.sessions[0]?.id ?? "")
-    if (sessionID) {
+    const session =
+      (selectedID ? codingAssistantStore.sessions.find((item) => item.id === selectedID) : undefined) ??
+      codingAssistantStore.sessions[0]
+    if (session?.id) {
       setAssistantLauncherActive(false)
-      await selectCodingAssistantSession({ sessionID, signal: controller.signal })
+      await selectCodingAssistantSession({
+        sessionID: session.id,
+        directory: String(session.directory || ""),
+        signal: controller.signal,
+      })
     } else {
       setAssistantLauncherActive(true)
     }
@@ -518,7 +523,7 @@ async function openMissionSession(result: MissionWakeResult): Promise<void> {
     resetCause: "mission-session-hydrate",
     directory: activeDirectory(),
   })
-  startSSE(source, 0)
+  startSSE(source, 0, { directory: activeDirectory() })
   setMissionSharedRefreshToken((value) => value + 1)
 }
 
@@ -1068,12 +1073,12 @@ if (codingAssistantListEl) {
         onSelectSession={(session) => {
           setAssistantLauncherActive(false)
           resetCenterWorkbenchToFocusedPanel("assistant")
-          void selectCodingAssistantSession({ sessionID: session.id }).catch((error) => {
+          void selectCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") }).catch((error) => {
             reportOverlayRuntimeError("coding-assistant.select", error)
           })
         }}
         onRenameSession={(session, title) =>
-          void renameCodingAssistantSession(session.id, title)
+          void renameCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") }, title)
             .then((ok) => {
               if (!ok) throw new Error("Coding assistant rename failed")
             })
@@ -1082,7 +1087,7 @@ if (codingAssistantListEl) {
             })
         }
         onDeleteSession={(session) =>
-          void deleteCodingAssistantSession(session.id)
+          void deleteCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") })
             .then((ok) => {
               if (!ok) throw new Error("Coding assistant delete failed")
             })
@@ -1091,7 +1096,7 @@ if (codingAssistantListEl) {
             })
         }
         onStopSession={(session) =>
-          void stopCodingAssistantSession(session.id)
+          void stopCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") })
             .then((ok) => {
               if (!ok) throw new Error("Coding assistant stop failed")
             })
@@ -1307,7 +1312,7 @@ if (composerEl) {
           if (assistantSubmitActive()) {
             setAssistantLauncherSubmitting(true)
             try {
-              await createCodingAssistantSession()
+              await createCodingAssistantSession({ directory: activeDirectory() })
               setAssistantLauncherActive(false)
               return await panelMessage(text, attachments, metadata)
             } finally {
@@ -1443,7 +1448,7 @@ disposers.push(
       if (!taskID) return
       if (lastSuggestionTaskID === taskID) return
       lastSuggestionTaskID = taskID
-      void apiJson(`task/${encodeURIComponent(taskID)}/followup`, {
+      void apiJson(taskScopedPath(taskID, taskOwningDirectory(taskID), "/followup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",

@@ -263,15 +263,17 @@ export function ExecutorSelector() {
   const externalActiveID = createMemo(() => (isExternalActive() ? activeID() : ""))
   const taskID = createMemo(() => activeTaskID().trim())
 
-  const taskOperatorContextKey = createMemo((): { taskID: string; refresh: number } | null => {
+  const taskOperatorContextKey = createMemo((): { taskID: string; directory: string; refresh: number } | null => {
     if (!appStore.connected) return null
     const id = taskID()
     if (!id) return null
-    return { taskID: id, refresh: sessionConfigRefreshToken() }
+    const directory = activeDirectory().trim()
+    if (!directory) return null
+    return { taskID: id, directory, refresh: sessionConfigRefreshToken() }
   })
   const [taskOperatorContext, { mutate: mutateTaskOperatorContext, refetch: refetchTaskOperatorContext }] =
     createResource(taskOperatorContextKey, async (key): Promise<TaskOperatorModelContext> => {
-      return await getTaskOperatorModelContext(key.taskID)
+      return await getTaskOperatorModelContext({ taskID: key.taskID, directory: key.directory })
     })
 
   const currentTaskOperatorContext = createMemo(() => {
@@ -293,8 +295,10 @@ export function ExecutorSelector() {
     if (!appStore.connected) return null
     const parts = splitModelID(openCorvusModel())
     if (parts.provider !== "hexin" || !parts.name) return null
+    const directory = activeDirectory().trim()
+    if (!directory) return null
     return {
-      directory: activeDirectory().trim(),
+      directory,
       model: parts.name,
       providerAuthRefresh: appStore.providerAuthRefreshRevision,
       refresh: sessionConfigRefreshToken(),
@@ -310,8 +314,8 @@ export function ExecutorSelector() {
     const key = hexinBudgetBaseKey()
     return key ? { ...key, tick: hexinBudgetRefreshTick() } : null
   })
-  const [hexinBudget] = createResource(hexinBudgetKey, async () => {
-    return await getHexinBudget()
+  const [hexinBudget] = createResource(hexinBudgetKey, async (key) => {
+    return await getHexinBudget({ directory: key.directory })
   })
   const openCorvusModelPlaceholder = createMemo(() => {
     if (!hasSelectedTask()) return t("agent_models.option_not_set")
@@ -404,10 +408,19 @@ export function ExecutorSelector() {
         mirror.close()
         return
       }
-      await patchSessionConfig(ctx.sessionID, {
-        agent: {
-          [ctx.agent]: {
-            model: value ? value : null,
+      const directory = activeDirectory().trim()
+      if (!directory) {
+        mirror.close()
+        return
+      }
+      await patchSessionConfig({
+        sessionID: ctx.sessionID,
+        directory,
+        diff: {
+          agent: {
+            [ctx.agent]: {
+              model: value ? value : null,
+            },
           },
         },
       })
@@ -445,7 +458,7 @@ export function ExecutorSelector() {
       saveSettings()
     }
     setFocusedExternalID(executorID)
-    await setExecutorModel(executorID, model)
+    await setExecutorModel({ executorID, model, directory: activeDirectory().trim() })
     external.close()
   }
 

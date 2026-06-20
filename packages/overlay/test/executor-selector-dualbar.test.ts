@@ -119,7 +119,7 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(
       /modelIDFormat === "qualified" \? modelIDs\.map\(\(modelID\) => `\$\{id\}\/\$\{modelID\}`\) : modelIDs/,
     )
-    expect(SRC).toMatch(/await setExecutorModel\(executorID, model\)/)
+    expect(SRC).toMatch(/await setExecutorModel\(\{ executorID, model, directory: activeDirectory\(\)\.trim\(\) \}\)/)
   })
 
   test("model picker delegates selection semantics to Kobalte listbox", () => {
@@ -141,15 +141,15 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toMatch(/import \{[\s\S]*?getTaskOperatorModelContext,[\s\S]*?patchConfig,[\s\S]*?patchSessionConfig/)
     expect(SRC).toMatch(/const \[taskOperatorContext/)
     expect(SRC).toMatch(
-      /const taskOperatorContextKey = createMemo\([\s\S]*?if \(!appStore\.connected\) return null[\s\S]*?return \{ taskID: id, refresh: sessionConfigRefreshToken\(\) \}/,
+      /const taskOperatorContextKey = createMemo\([\s\S]*?if \(!appStore\.connected\) return null[\s\S]*?const directory = activeDirectory\(\)\.trim\(\)[\s\S]*?return \{ taskID: id, directory, refresh: sessionConfigRefreshToken\(\) \}/,
     )
-    expect(SRC).toMatch(/return await getTaskOperatorModelContext\(key\.taskID\)/)
+    expect(SRC).toMatch(/return await getTaskOperatorModelContext\(\{ taskID: key\.taskID, directory: key\.directory \}\)/)
     expect(SRC).toMatch(
-      /await patchSessionConfig\(ctx\.sessionID, \{[\s\S]*?agent: \{[\s\S]*?\[ctx\.agent\]: \{[\s\S]*?model: value \? value : null/,
+      /await patchSessionConfig\(\{[\s\S]*?sessionID: ctx\.sessionID,[\s\S]*?directory,[\s\S]*?diff: \{[\s\S]*?agent: \{[\s\S]*?\[ctx\.agent\]: \{[\s\S]*?model: value \? value : null/,
     )
     expect(SRC).toMatch(/mutateTaskOperatorContext\(/)
     expect(SRC).toMatch(/await patchConfig\(\{ model: value \? value : null \}\)/)
-    expect(SRC.indexOf("patchSessionConfig(ctx.sessionID")).toBeLessThan(SRC.indexOf("patchConfig({ model"))
+    expect(SRC.indexOf("patchSessionConfig({")).toBeLessThan(SRC.indexOf("patchConfig({ model"))
   })
 
   test("selected task without resolved root session disables mirror writes without disabling the chip", () => {
@@ -167,7 +167,7 @@ describe("ExecutorSelector dual chip bar", () => {
 
   test("external selection switches settingsStore.executor and calls setExecutorModel", () => {
     expect(SRC).toMatch(/setSettingsStore\("executor", sanitizeExecutor\(executorID\)\)/)
-    expect(SRC).toMatch(/await setExecutorModel\(executorID, model\)/)
+    expect(SRC).toMatch(/await setExecutorModel\(\{ executorID, model, directory: activeDirectory\(\)\.trim\(\) \}\)/)
   })
 
   test("none-tab in external popover disables external by switching back to opencorvus", () => {

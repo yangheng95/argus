@@ -25,7 +25,7 @@ import {
 } from "./refresh-diagnostics"
 import { settingsStore } from "../store/settings"
 import { createVisibilityInterval, type VisibilityInterval } from "../utils/visibility-interval"
-import { mergeLatestConversationTail } from "./conversation"
+import { conversationSourceDirectory, mergeLatestConversationTail, registerConversationSourceDirectory } from "./conversation"
 import { resetSelectedLiveCursor, selectedLiveReplayQuery } from "./selected-stream-cursor"
 import { AppLog } from "../utils/log"
 
@@ -41,6 +41,7 @@ let sseSource: BoardSource | null = null
 // sets a 3 s timer that calls this with the live deps below.
 export interface SseReconnectDeps {
   taskID: string
+  directory: string
   after: number
   currentTaskID: () => string
   resumeAfter: () => number
@@ -53,6 +54,7 @@ export interface SseReconnectDeps {
 
 export interface SseStartOptions {
   replayLive?: boolean
+  directory?: string
 }
 
 export async function performSseReconnect(deps: SseReconnectDeps): Promise<void> {
@@ -77,10 +79,12 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     return
   }
   try {
+    const directory = deps.directory.trim()
+    if (!directory) throw new Error("SSE reconnect requires a project directory")
     deps.restart(
       { kind: "task", id: deps.taskID },
       nextSequence,
-      deps.replayLive === false ? { replayLive: false } : undefined,
+      deps.replayLive === false ? { replayLive: false, directory } : { directory },
     )
     deps.afterRestart?.(deps.taskID, nextSequence)
   } catch (err) {
@@ -141,6 +145,9 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
   const taskID = source.kind === "task" ? source.id : ""
   sseTaskID = taskID
   const replayLive = options.replayLive !== false
+  const directory = options.directory?.trim()
+    ? registerConversationSourceDirectory(source, options.directory)
+    : conversationSourceDirectory(source)
 
   // Initial task restore now hydrates board + messages + persisted task events
   // through /task/:id/conversation before opening SSE. That means this stream
@@ -177,6 +184,7 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
       sseRetryTimer = null
       void performSseReconnect({
         taskID: source.id,
+        directory,
         after,
         currentTaskID: () => activeTaskID(),
         resumeAfter: () => boardStore.taskSequence,
@@ -184,7 +192,7 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
         replayLive: liveReplayExpiredClose ? false : replayLive,
         afterRestart: liveReplayExpiredClose
           ? (restartedTaskID) => {
-              void mergeLatestConversationTail(restartedTaskID).catch((error) => {
+              void mergeLatestConversationTail(restartedTaskID, { directory }).catch((error) => {
                 if (error instanceof DOMException && error.name === "AbortError") return
                 console.error("[sse] live replay gap tail merge failed", error)
               })
@@ -204,6 +212,7 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
     {
       path: `${source.kind}/${encodeURIComponent(source.id)}/events`,
       query: {
+        directory,
         ...(source.kind === "task" && after > 0 ? { after: String(after) } : {}),
         ...(source.kind === "task" ? selectedLiveReplayQuery({ include: replayLive }) : {}),
       },

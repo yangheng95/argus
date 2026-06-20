@@ -8,9 +8,8 @@
 // This module owns no render-side effects. Callers are responsible for
 // driving UI updates through reactive Solid stores.
 
-import { apiJson, apiRequest, ApiError } from "./api"
+import { apiJson, ApiError } from "./api"
 import { getHostTransport } from "./host-transport"
-import { bytesToArrayBuffer } from "../utils/binary"
 import { isSelectedTaskSSEConnected, startSSE, stopSSE } from "./sse"
 import { showAppDialog } from "./app-dialog"
 import { initGitCurrent } from "../utils/git"
@@ -34,11 +33,13 @@ import {
   workspaceRestoreDirectory,
 } from "../store/settings"
 import { appStore, setAppStore } from "../store/app"
-import { taskScopedPath } from "./task-path"
+import { directoryScopedPath, taskScopedPath } from "./task-path"
+import { taskOwningDirectory } from "./task-directory"
+import { downloadProjectArchive } from "./project-archive"
 import { activeProjectDirectory } from "./project-directory"
 import { applyDirectory } from "./workspace"
 import { ingestPersistedConversationMessage, resetWriter } from "./tree-writer"
-import { cancelConversationReplay, hydrateTaskConversation } from "./conversation"
+import { cancelConversationReplay, conversationSourceDirectory, hydrateTaskConversation } from "./conversation"
 import { resetSelectedLiveCursor } from "./selected-stream-cursor"
 import { ackTaskNotificationIfPresent } from "./notify"
 
@@ -94,10 +95,7 @@ export interface SelectTaskOptions {
 // ── Helpers ──
 
 function taskPath(taskID: string, suffix = ""): string {
-  const item = taskByID(taskID)
-  const directory =
-    typeof item?.task?.directory === "string" && item.task.directory.trim() ? item.task.directory : activeDirectory()
-  return taskScopedPath(taskID, directory, suffix)
+  return taskScopedPath(taskID, taskOwningDirectory(taskID), suffix)
 }
 
 /**
@@ -218,7 +216,9 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     (boardStore.board || boardStore.taskSwitching)
   ) {
     if (nextTaskID && boardStore.board && !boardStore.taskSwitching && !isSelectedTaskSSEConnected(nextTaskID)) {
-      startSSE({ kind: "task", id: nextTaskID }, boardStore.taskSequence)
+      const directory = String(boardStore.board?.task?.directory || settingsStore.directory || "").trim()
+      if (!directory) throw new Error("selectTask: selected task has no project directory")
+      startSSE({ kind: "task", id: nextTaskID }, boardStore.taskSequence, { directory })
     }
     if (nextTaskID && boardStore.board && !boardStore.taskSwitching) {
       ackTaskNotificationIfPresent(nextTaskID)
@@ -283,14 +283,17 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
       if (stale()) return
     }
 
+    const conversationDirectory = (taskDirectory || settingsStore.directory || "").trim()
+    if (!conversationDirectory) throw new Error("selectTask: task conversation requires a project directory")
     const lastSequence = await hydrateTaskConversation(nextTaskID, {
       scrollIntent: "bottom",
       resetCause: "task-switch-hydrate",
       tailLimit: TASK_SELECTION_INITIAL_TAIL_LIMIT,
+      directory: conversationDirectory,
     })
     if (stale()) return
 
-    startSSE({ kind: "task", id: nextTaskID }, lastSequence)
+    startSSE({ kind: "task", id: nextTaskID }, lastSequence, { directory: conversationDirectory })
 
     // Persist the active task so initApp -> restoreInitialWorkspace() can
     // resume it on the next launch. Without this write the localStorage key
@@ -369,62 +372,18 @@ export async function renameTask(taskID: string, title: string): Promise<boolean
   }
 }
 
-function contentDispositionFilename(header: string | undefined): string | undefined {
-  if (!header) return undefined
-  const match = /filename="([^"]+)"/i.exec(header) || /filename=([^;]+)/i.exec(header)
-  const raw = match?.[1]?.trim()
-  if (!raw) return undefined
-  return raw.replace(/[\\/:*?"<>|]+/g, "-") || undefined
-}
-
-function defaultArchiveFilename(taskID: string): string {
-  const safe = taskID.replace(/[^A-Za-z0-9._-]+/g, "-") || "task"
-  return `${safe}-project.zip`
-}
-
-function saveBytesAsDownload(bytes: Uint8Array, filename: string): void {
-  const blob = new Blob([bytesToArrayBuffer(bytes)], { type: "application/zip" })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement("a")
-  anchor.href = url
-  anchor.download = filename
-  anchor.rel = "noopener"
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-function decodeBinaryErrorBody(body: Uint8Array): unknown {
-  const text = new TextDecoder().decode(body).trim()
-  if (!text) return body
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
-  }
-}
-
 // ── Public: downloadTaskProjectArchive ──
 
 /**
  * Download a ZIP containing the task's project files plus its persisted
  * execution-flow projections.
  */
-export async function downloadTaskProjectArchive(taskID: string): Promise<boolean> {
+export async function downloadTaskProjectArchive(input: { taskID: string; directory: string }): Promise<boolean> {
+  const taskID = String(input.taskID || "").trim()
   if (!taskID) return false
-  const archivePath = taskPath(taskID, "/project-archive")
-  const response = await apiRequest<Uint8Array>(archivePath, {
-    responseKind: "binary",
+  return downloadProjectArchive({
+    path: taskScopedPath(taskID, input.directory, "/project-archive"),
   })
-  if (!response.ok) {
-    throw new ApiError(response.status, archivePath, decodeBinaryErrorBody(response.body))
-  }
-  const filename =
-    contentDispositionFilename(response.headers["content-disposition"] || response.headers["Content-Disposition"]) ||
-    defaultArchiveFilename(taskID)
-  saveBytesAsDownload(response.body, filename)
-  return true
 }
 
 // ── Public: submitMessage ──
@@ -461,22 +420,26 @@ export async function submitMessage(
 
   const selectedSource = boardStore.selectedSource
   if (selectedSource?.kind === "session") {
+    const directory = conversationSourceDirectory(selectedSource)
     try {
-      const result = await apiJson(`session/${encodeURIComponent(selectedSource.id)}/prompt_async`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parts: [
-            {
-              type: "text",
-              text,
-              ...(options.metadata ? { metadata: options.metadata } : {}),
-            },
-          ],
-          ...(attachments.length > 0 ? { attachments } : {}),
-        }),
-        signal: controller.signal,
-      })
+      const result = await apiJson(
+        directoryScopedPath(`session/${encodeURIComponent(selectedSource.id)}/prompt_async`, directory, "submitMessage"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            parts: [
+              {
+                type: "text",
+                text,
+                ...(options.metadata ? { metadata: options.metadata } : {}),
+              },
+            ],
+            ...(attachments.length > 0 ? { attachments } : {}),
+          }),
+          signal: controller.signal,
+        },
+      )
       ingestPersistedConversationMessage(result.user_message)
       return result
     } finally {

@@ -5,6 +5,7 @@
 import { createStore } from "solid-js/store"
 import { batch } from "solid-js"
 import { apiJson, apiRequest } from "../services/api"
+import { directoryScopedPath } from "../services/task-path"
 import { t } from "../utils/i18n"
 
 // ── Store ──
@@ -150,6 +151,20 @@ function requireBoardSnapshotVersion(board: any): string {
   return version
 }
 
+function selectedTaskOwningDirectory(taskID: string): string {
+  const boardTask = boardStore.board?.task
+  const boardDirectory =
+    boardTask?.id === taskID && typeof boardTask.directory === "string" ? boardTask.directory.trim() : ""
+  const row = boardStore.tasks.find((item: any) => item?.task?.id === taskID)
+  const rowDirectory = typeof row?.task?.directory === "string" ? row.task.directory.trim() : ""
+  if (boardDirectory && rowDirectory && boardDirectory !== rowDirectory) {
+    throw new Error(`selected task ${taskID} has inconsistent project directories`)
+  }
+  const directory = boardDirectory || rowDirectory
+  if (!directory) throw new Error(`selected task ${taskID} has no owning project directory`)
+  return directory
+}
+
 // ── Fine-grained board update ──
 //
 // The server returns the entire board object on every refresh; replacing
@@ -284,10 +299,14 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
     try {
       const headers: Record<string, string> = {}
       if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag
-      const res = await apiRequest<any>(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`, {
+      const directory = selectedTaskOwningDirectory(taskID)
+      const res = await apiRequest<any>(
+        directoryScopedPath(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`, directory, "loadBoard"),
+        {
         headers,
         signal: AbortSignal.timeout(10000),
-      })
+        },
+      )
       if (taskID !== activeTaskID()) return
       setBoardSyncPending(false)
       if (res.status === 304) {

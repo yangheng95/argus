@@ -54,6 +54,7 @@ interface Spy {
 const ROOT = path.resolve(import.meta.dir, "..")
 const REAL_EN_US = JSON.parse(readFileSync(path.join(ROOT, "src/i18n/en-US.json"), "utf8")) as Record<string, unknown>
 const REAL_ZH_CN = JSON.parse(readFileSync(path.join(ROOT, "src/i18n/zh-CN.json"), "utf8")) as Record<string, unknown>
+const TEST_DIRECTORY = "D:/sse-reconnect"
 
 beforeAll(async () => {
   setLocaleData("en-US", REAL_EN_US)
@@ -86,6 +87,7 @@ function makeDeps(opts: {
   }
   const deps: SseReconnectDeps = {
     taskID: opts.taskID,
+    directory: TEST_DIRECTORY,
     after: opts.after,
     currentTaskID: opts.currentTaskID,
     resumeAfter: () => {
@@ -184,7 +186,7 @@ describe("performSseReconnect (audit W2-V10)", () => {
     })
     await performSseReconnect(deps)
     expect(spy.resumeAfterCalls).toBe(1)
-    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_a" }, 42, undefined]])
+    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_a" }, 42, { directory: TEST_DIRECTORY }]])
     expect(spy.retryCalls).toBe(0)
     expect(spy.consoleErrors.length).toBe(0)
   })
@@ -207,7 +209,7 @@ describe("performSseReconnect (audit W2-V10)", () => {
     expect(spy.retryCalls).toBe(1)
     await new Promise((r) => setTimeout(r, 0))
     await waitForUploadedLogs(logs)
-    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_b" }, 100, undefined]])
+    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_b" }, 100, { directory: TEST_DIRECTORY }]])
     expect(logs).toContainEqual(
       expect.objectContaining({
         service: "overlay:sse",
@@ -242,8 +244,8 @@ describe("performSseReconnect (audit W2-V10)", () => {
     expect(spy.resumeAfterCalls).toBe(2)
     expect(spy.retryCalls).toBe(1)
     expect(spy.restartCalls).toEqual([
-      [{ kind: "task", id: "tsk_retry" }, 100, undefined],
-      [{ kind: "task", id: "tsk_retry" }, 123, undefined],
+      [{ kind: "task", id: "tsk_retry" }, 100, { directory: TEST_DIRECTORY }],
+      [{ kind: "task", id: "tsk_retry" }, 123, { directory: TEST_DIRECTORY }],
     ])
   })
 
@@ -297,7 +299,7 @@ describe("performSseReconnect (audit W2-V10)", () => {
     // and returns without scheduling. No restart, no retry.
     expect(spy.resumeAfterCalls).toBe(1)
     expect(spy.retryCalls).toBe(0)
-    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_f" }, 8, undefined]])
+    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_f" }, 8, { directory: TEST_DIRECTORY }]])
   })
 })
 
@@ -338,7 +340,7 @@ describe("startSSE stream error handling", () => {
       __setHostTransportForTest(transport)
       setBoardStore("selectedSource", { kind: "task", id: "tsk_error" })
 
-      startSSE({ kind: "task", id: "tsk_error" })
+      startSSE({ kind: "task", id: "tsk_error" }, 0, { directory: TEST_DIRECTORY })
       handlers!.onOpen?.()
       expect(messageStore.sseConnected).toBe(true)
 
@@ -387,7 +389,7 @@ describe("startSSE stream error handling", () => {
         setBoardStore("selectedSource", { kind: "task", id: "tsk_expired" })
         setBoardStore("taskSequence", 6)
 
-        startSSE({ kind: "task", id: "tsk_expired" }, 5)
+        startSSE({ kind: "task", id: "tsk_expired" }, 5, { directory: TEST_DIRECTORY })
         handlers!.onEvent(
           JSON.stringify({
             type: "task.live_replay_expired",
@@ -403,8 +405,8 @@ describe("startSSE stream error handling", () => {
         reconnect!.fn()
 
         expect(streams).toEqual([
-          { path: "task/tsk_expired/events", query: { after: "5", after_live: "0" } },
-          { path: "task/tsk_expired/events", query: { after: "6" } },
+          { path: "task/tsk_expired/events", query: { directory: TEST_DIRECTORY, after: "5", after_live: "0" } },
+          { path: "task/tsk_expired/events", query: { directory: TEST_DIRECTORY, after: "6" } },
         ])
         expect(requests).toEqual(["task/tsk_expired/conversation"])
       } finally {
@@ -486,7 +488,7 @@ describe("startSSE stream error handling", () => {
         setBoardStore("selectedSource", { kind: "task", id: "tsk_watchdog" })
         setBoardStore("taskSequence", 41)
 
-        startSSE({ kind: "task", id: "tsk_watchdog" }, 40)
+        startSSE({ kind: "task", id: "tsk_watchdog" }, 40, { directory: TEST_DIRECTORY })
         handlers!.onOpen?.()
         expect(messageStore.sseConnected).toBe(true)
 
@@ -533,6 +535,7 @@ describe("startSSE stream error handling", () => {
       snapshotVersion: "board:same",
       task: {
         id: "tsk_same",
+        directory: TEST_DIRECTORY,
         status: "active",
         request: "same",
         sessionID: "ses_same",
@@ -545,7 +548,9 @@ describe("startSSE stream error handling", () => {
 
     await selectTask("tsk_same")
 
-    expect(streams).toEqual([{ path: "task/tsk_same/events", query: { after: "77", after_live: "0" } }])
+    expect(streams).toEqual([
+      { path: "task/tsk_same/events", query: { directory: TEST_DIRECTORY, after: "77", after_live: "0" } },
+    ])
   })
 
   test("task-list periodic refresh reloads the global list even without stream events", async () => {

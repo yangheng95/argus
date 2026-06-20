@@ -26,8 +26,14 @@ export interface StartQueuedTaskNowResult {
   queuedTaskIDs: string[]
 }
 
-export async function startQueuedTaskNow(taskID: string): Promise<StartQueuedTaskNowResult> {
-  return apiJson(`task/${encodeURIComponent(taskID)}/start-now`, {
+export async function startQueuedTaskNow(input: {
+  taskID: string
+  directory: string
+}): Promise<StartQueuedTaskNowResult> {
+  const directory = input.directory.trim()
+  if (!directory) throw new Error("startQueuedTaskNow requires a task directory")
+  const query = new URLSearchParams({ directory })
+  return apiJson(`task/${encodeURIComponent(input.taskID)}/start-now?${query.toString()}`, {
     method: "POST",
   })
 }

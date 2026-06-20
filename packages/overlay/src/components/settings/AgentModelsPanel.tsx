@@ -27,6 +27,7 @@ import {
 } from "../../services/config"
 import { appStore } from "../../store/app"
 import { settingsStore } from "../../store/settings"
+import { activeDirectory } from "../../services/workspace"
 import { t } from "../../utils/i18n"
 import { loadAgentModelsData, type AgentInfo, type ProvidersPayload } from "./agent-models-data"
 import { Button } from "../ui/Button"
@@ -75,13 +76,19 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
   const [refreshToken, setRefreshToken] = createSignal(0)
 
   const [sessionConfig, { mutate: mutateSessionConfig }] = createResource(
-    () =>
-      scope() === "session" && sessionID()
-        ? `${sessionID()}:${sessionRefreshToken()}:${sessionConfigRefreshToken()}`
-        : null,
+    () => {
+      if (scope() !== "session" || !sessionID()) return null
+      const directory = activeDirectory().trim()
+      if (!directory) return null
+      return {
+        sessionID: sessionID(),
+        directory,
+        localRefresh: sessionRefreshToken(),
+        sharedRefresh: sessionConfigRefreshToken(),
+      }
+    },
     async (key): Promise<SessionConfigResponse> => {
-      const sid = String(key).split(":")[0]
-      return await getSessionConfig(sid)
+      return await getSessionConfig({ sessionID: key.sessionID, directory: key.directory })
     },
   )
 
@@ -117,8 +124,10 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
   async function patchActiveConfig(diff: Record<string, any>) {
     if (scope() === "session") {
       const sid = sessionID()
+      const directory = activeDirectory().trim()
       if (!sid) throw new Error("Session model settings require a sessionID")
-      const saved = await patchSessionConfig(sid, diff)
+      if (!directory) throw new Error("Session model settings require a project directory")
+      const saved = await patchSessionConfig({ sessionID: sid, directory, diff })
       mutateSessionConfig(saved)
       return saved.config
     }

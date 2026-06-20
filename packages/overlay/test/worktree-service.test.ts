@@ -5,6 +5,8 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 import { deleteProjectWorktree, loadProjectWorktrees } from "../src/services/worktree"
 
 const SAVED_DIRECTORY = "D:/workspace/app"
+const WORKTREE_DIRECTORY = "D:/workspace/app/.opencorvus/r/w/goal-a/worktree"
+const OLD_WORKTREE_DIRECTORY = "D:/workspace/app/.opencorvus/r/w/old/worktree"
 
 function transport(body: unknown, capture: (req: TransportRequest) => void): HostTransport {
   return {
@@ -47,7 +49,7 @@ test("loadProjectWorktrees reads the project worktree route with directory conte
         {
           name: "goal-a",
           branch: "opencorvus/goal-a",
-          directory: "D:/workspace/app/.opencorvus/runtime/worktrees/goal-a",
+          directory: WORKTREE_DIRECTORY,
           goalID: "gol_a",
           status: "active",
           removable: true,
@@ -68,7 +70,7 @@ test("loadProjectWorktrees reads the project worktree route with directory conte
     {
       name: "goal-a",
       branch: "opencorvus/goal-a",
-      directory: "D:/workspace/app/.opencorvus/runtime/worktrees/goal-a",
+      directory: WORKTREE_DIRECTORY,
       goalID: "gol_a",
       status: "active",
       removable: true,
@@ -84,7 +86,7 @@ test("deleteProjectWorktree sends the target directory in the DELETE JSON body",
     }),
   )
 
-  const ok = await deleteProjectWorktree(SAVED_DIRECTORY, "D:/workspace/app/.opencorvus/runtime/worktrees/old")
+  const ok = await deleteProjectWorktree(SAVED_DIRECTORY, OLD_WORKTREE_DIRECTORY)
 
   expect(ok).toBe(true)
   expect(captured?.path).toBe("project/current/worktrees")
@@ -93,7 +95,7 @@ test("deleteProjectWorktree sends the target directory in the DELETE JSON body",
   expect(captured?.body).toEqual({
     kind: "json",
     value: {
-      directory: "D:/workspace/app/.opencorvus/runtime/worktrees/old",
+      directory: OLD_WORKTREE_DIRECTORY,
     },
   })
 })
@@ -104,7 +106,7 @@ test("loadProjectWorktrees rejects malformed project worktree payloads", async (
       [
         {
           name: "broken",
-          directory: "D:/workspace/app/.opencorvus/runtime/worktrees/broken",
+          directory: "D:/workspace/app/.opencorvus/r/w/broken/worktree",
           status: "unknown",
           removable: true,
         },

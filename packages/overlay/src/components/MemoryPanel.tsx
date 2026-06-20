@@ -7,7 +7,7 @@
 
 import { createSignal, createMemo, createEffect, For, Show } from "solid-js"
 import { t } from "../utils/i18n"
-import { apiJson, configure as configureApi } from "../services/api"
+import { apiJson } from "../services/api"
 import { nativeMessage } from "../services/app-dialog"
 import { syncActiveDirectoryApiContext } from "../services/workspace"
 import { Button } from "./ui/Button"
@@ -82,7 +82,6 @@ export function MemoryPanel(props: MemoryPanelProps) {
     if (props.directory !== undefined) {
       const value = typeof props.directory === "function" ? props.directory() : props.directory
       const directory = String(value || "").trim()
-      configureApi({ directory })
       return directory
     }
     return syncActiveDirectoryApiContext().trim()

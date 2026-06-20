@@ -89,19 +89,28 @@ export function __setBrowserPreviewLiveFrameDecoderForTest(decoder: BrowserPrevi
   browserPreviewLiveFrameDecoder = decoder ?? decodeBrowserPreviewLiveFrame
 }
 
-export async function loadTaskBrowserPreviewTarget(
-  taskID: string,
-  signal?: AbortSignal,
-): Promise<BrowserPreviewTarget> {
-  return (await apiJson(`task/${encodeURIComponent(taskID)}/browser-preview`, { signal })) as BrowserPreviewTarget
+function taskBrowserPreviewPath(taskID: string, directory: string, suffix = ""): string {
+  const dir = directory.trim()
+  if (!dir) throw new Error("browser preview service requires a task directory")
+  const query = new URLSearchParams({ directory: dir })
+  return `task/${encodeURIComponent(taskID)}/browser-preview${suffix}?${query.toString()}`
+}
+
+export async function loadTaskBrowserPreviewTarget(input: {
+  taskID: string
+  directory: string
+  signal?: AbortSignal
+}): Promise<BrowserPreviewTarget> {
+  return (await apiJson(taskBrowserPreviewPath(input.taskID, input.directory), { signal: input.signal })) as BrowserPreviewTarget
 }
 
 export async function selectTaskBrowserPreviewTarget(input: {
   taskID: string
+  directory: string
   targetID: string
   signal?: AbortSignal
 }): Promise<BrowserPreviewTarget> {
-  return (await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/target`, {
+  return (await apiJson(taskBrowserPreviewPath(input.taskID, input.directory, "/target"), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ targetID: input.targetID }),
@@ -111,11 +120,12 @@ export async function selectTaskBrowserPreviewTarget(input: {
 
 export async function captureTaskBrowserPreviewEvidence(input: {
   taskID: string
+  directory: string
   targetID: string
   viewportIDs: BrowserPreviewViewportID[]
   signal?: AbortSignal
 }): Promise<BrowserPreviewVerification> {
-  return (await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/capture`, {
+  return (await apiJson(taskBrowserPreviewPath(input.taskID, input.directory, "/capture"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -128,21 +138,27 @@ export async function captureTaskBrowserPreviewEvidence(input: {
 
 export async function loadTaskBrowserPreviewEvidence(input: {
   taskID: string
+  directory: string
   evidenceID: string
   signal?: AbortSignal
 }): Promise<BrowserPreviewEvidence> {
   return (await apiJson(
-    `task/${encodeURIComponent(input.taskID)}/browser-preview/evidence/${encodeURIComponent(input.evidenceID)}`,
+    taskBrowserPreviewPath(input.taskID, input.directory, `/evidence/${encodeURIComponent(input.evidenceID)}`),
     { signal: input.signal },
   )) as BrowserPreviewEvidence
 }
 
 export async function loadTaskBrowserPreviewEvidenceCaptureObjectUrl(input: {
   taskID: string
+  directory: string
   evidenceID: string
   signal?: AbortSignal
 }): Promise<string> {
-  const path = `task/${encodeURIComponent(input.taskID)}/browser-preview/evidence/${encodeURIComponent(input.evidenceID)}/capture.png`
+  const path = taskBrowserPreviewPath(
+    input.taskID,
+    input.directory,
+    `/evidence/${encodeURIComponent(input.evidenceID)}/capture.png`,
+  )
   const response = await apiRequest<Uint8Array>(path, {
     responseKind: "binary",
     signal: input.signal,
@@ -154,12 +170,13 @@ export async function loadTaskBrowserPreviewEvidenceCaptureObjectUrl(input: {
 
 export async function loadTaskBrowserPreviewLiveSnapshotObjectUrl(input: {
   taskID: string
+  directory: string
   targetID: string
   viewportID: BrowserPreviewViewportID
   signal?: AbortSignal
 }): Promise<string> {
   return browserPreviewLiveFrameObjectUrl(
-    `task/${encodeURIComponent(input.taskID)}/browser-preview/live/snapshot`,
+    taskBrowserPreviewPath(input.taskID, input.directory, "/live/snapshot"),
     {
       targetID: input.targetID,
       viewportID: input.viewportID,
@@ -170,13 +187,14 @@ export async function loadTaskBrowserPreviewLiveSnapshotObjectUrl(input: {
 
 export async function sendTaskBrowserPreviewLiveInputObjectUrl(input: {
   taskID: string
+  directory: string
   targetID: string
   viewportID: BrowserPreviewViewportID
   input: BrowserPreviewLiveInput
   signal?: AbortSignal
 }): Promise<string> {
   return browserPreviewLiveFrameObjectUrl(
-    `task/${encodeURIComponent(input.taskID)}/browser-preview/live/input`,
+    taskBrowserPreviewPath(input.taskID, input.directory, "/live/input"),
     {
       targetID: input.targetID,
       viewportID: input.viewportID,

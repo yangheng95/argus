@@ -8,6 +8,7 @@ import { boardStore } from "../store/board"
 import { deriveChanges, normalizeDiffs } from "./meta"
 import type { FileChange } from "../components/DiffView"
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label"
+import { directoryScopedPath } from "./task-path"
 
 export interface DiffTarget {
   filePath: string
@@ -100,9 +101,15 @@ function sumDeletions(changes: FileChange[]): number {
   return changes.reduce((sum, item) => sum + (item.deletions ?? 0), 0)
 }
 
-function scopeCacheKey(scope: { goalRunID?: string; runID?: string }): string {
-  if (scope.goalRunID) return `goal-run:${scope.goalRunID}`
-  if (scope.runID) return `run:${scope.runID}`
+function acceptanceDirectory(): string {
+  const directory = String((boardStore.board as any)?.task?.directory || "").trim()
+  if (!directory) throw new Error("acceptance diff requires the selected task directory")
+  return directory
+}
+
+function scopeCacheKey(scope: { goalRunID?: string; runID?: string; directory: string }): string {
+  if (scope.goalRunID) return `${scope.directory}:goal-run:${scope.goalRunID}`
+  if (scope.runID) return `${scope.directory}:run:${scope.runID}`
   return ""
 }
 
@@ -228,7 +235,8 @@ export function currentChangeGroups(): ChangeGroup[] {
 }
 
 async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): Promise<FileChange[]> {
-  const key = scopeCacheKey(scope)
+  const directory = acceptanceDirectory()
+  const key = scopeCacheKey({ ...scope, directory })
   if (!key) return []
   const cached = diffCache.get(key)
   if (cached) return cached
@@ -236,8 +244,10 @@ async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): 
   if (active) return active
   const pending = (async () => {
     const data = scope.goalRunID
-      ? await apiJson(`goal-run/${encodeURIComponent(scope.goalRunID)}/acceptance`)
-      : await apiJson(`run/${encodeURIComponent(String(scope.runID))}/acceptance`)
+      ? await apiJson(
+          directoryScopedPath(`goal-run/${encodeURIComponent(scope.goalRunID)}/acceptance`, directory, "goal-run diff"),
+        )
+      : await apiJson(directoryScopedPath(`run/${encodeURIComponent(String(scope.runID))}/acceptance`, directory, "run diff"))
     const diffs = normalizeAcceptanceDiffs((data as any)?.result?.diffs)
     if (diffs.length > 0) diffCache.set(key, diffs)
     return diffs
