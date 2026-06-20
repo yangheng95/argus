@@ -10,6 +10,7 @@ import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { BashTool } from "@/tool/bash"
 import { BrowserPreviewBindLocalModuleTool } from "@/tool/browser-preview-bind-local-module"
+import { BrowserPreviewCompareScrollSlicesTool } from "@/tool/browser-preview-compare-scroll-slices"
 import { BrowserPreviewCompareRegionsTool } from "@/tool/browser-preview-compare-regions"
 import { BrowserPreviewTool } from "@/tool/browser-preview"
 import { EditTool } from "@/tool/edit"
@@ -132,7 +133,7 @@ export namespace VisualQaAgent {
 
 function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
   const sections = [
-    "# Delegation\n\nOrchestrator is asking visual-qa to run the final frontend visual GUI and functional product review for the task. GUI means Graphical User Interface: the visible application screen and controls. Visual QA and integrity are peer post-build review agents: visual-qa owns focused frontend visual/product-design evidence, while integrity owns system-completeness final acceptance. Consume task-scoped frontend_design/build evidence plus any prior integrity evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Review like a picky professional product designer and design QA reviewer: decide whether the product is fit to generate or ship, and list concrete production blockers when it is not. Do not give draft-quality, visibly incomplete, clipped, fake, or misleading UI the benefit of the doubt. Visual QA is not a style-only pass: if the component family, visualization type, layout structure, information architecture, or interaction model is fundamentally wrong, block delivery and require removing/replacing/rebuilding that component instead of CSS tweaking. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. Do not chase visual scores or external judge verdicts; Visual QA acceptance is the blocker-free structured report. Reference/clone fidelity is enforced only when the current task, current goal, or acceptance evidence explicitly requires reference parity. For explicitly required reference/clone regions with source evidence and local implementation regions, call `browser_preview_bind_local_module` for missing or questionable bindings and then pass the binding to `browser_preview_compare_regions`. Treat `browser_preview_bind_local_module` evidence as `source-binding`: it proves a local/source binding candidate only and cannot be cited as final Reference vs Implementation proof. If the task or latest user instruction scopes a clone/parity task to desktop only, request only `desktop` viewport region comparison evidence and do not block on mobile or tablet reference evidence.",
+    "# Delegation\n\nOrchestrator is asking visual-qa to run the final frontend visual GUI and functional product review for the task. GUI means Graphical User Interface: the visible application screen and controls. Visual QA and integrity are peer post-build review agents: visual-qa owns focused frontend visual/product-design evidence, while integrity owns system-completeness final acceptance. Consume task-scoped frontend_design/build evidence plus any prior integrity evidence as the source of truth, test the real rendered product, repair in-scope visual or functional defects when safe, and submit one structured visual QA report. Review like a picky professional product designer and design QA reviewer: decide whether the product is fit to generate or ship, and list concrete production blockers when it is not. Do not give draft-quality, visibly incomplete, clipped, fake, or misleading UI the benefit of the doubt. Visual QA is not a style-only pass: if the component family, visualization type, layout structure, information architecture, or interaction model is fundamentally wrong, block delivery and require removing/replacing/rebuilding that component instead of CSS tweaking. Repair coarse-to-fine: component truth and visible functionality first, layout/composition second, spacing/typography/color/state-style polish last. Do not chase visual scores or external judge verdicts; Visual QA acceptance is the blocker-free structured report. Reference/clone fidelity is enforced only when the current task, current goal, or acceptance evidence explicitly requires reference parity. For explicitly required reference/clone regions with source evidence and local implementation regions, call `browser_preview_bind_local_module` for missing or questionable bindings and then pass the binding to `browser_preview_compare_regions`. Treat `browser_preview_bind_local_module` evidence as `source-binding`: it proves a local/source binding candidate only and cannot be cited as final Reference vs Implementation proof. For final completed-page visual sweeps, `browser_preview_compare_scroll_slices` may compare a prepared reference screenshot slice with the implementation at the same absolute scrollY; cite it only as supporting visual_diff evidence, never as reference_comparison proof. If the task or latest user instruction scopes a clone/parity task to desktop only, request only `desktop` viewport region comparison evidence and do not block on mobile or tablet reference evidence.",
     renderUserRequestSection({
       heading: "# Task",
       title: input.taskTitle,
@@ -156,8 +157,8 @@ function buildVisualQaUserPrompt(input: VisualQaAgent.AnalyzeInput): string {
       "# Reference Parity Evidence Contract\n\n" +
         "This task has structured visual/reference parity acceptance. A passing report must include " +
         "`reference_parity.required=true` and cite fresh `browser_preview_compare_regions` reference-comparison " +
-        "artifact IDs for the required regions. Standalone screenshots may support the review but do not satisfy " +
-        "Reference vs Implementation proof.",
+        "artifact IDs for the required regions. Standalone screenshots and `browser_preview_compare_scroll_slices` " +
+        "may support the review but do not satisfy Reference vs Implementation proof.",
     )
   }
   pushContextSection(sections, "Frontend Design Context", input.frontendDesign)
@@ -191,6 +192,7 @@ async function createVisualQaImplementationTools(input: { taskID?: string; signa
     browser_preview: await createVisualQaTool(BrowserPreviewTool, input),
     browser_preview_bind_local_module: await createVisualQaTool(BrowserPreviewBindLocalModuleTool, input),
     browser_preview_compare_regions: await createVisualQaTool(BrowserPreviewCompareRegionsTool, input),
+    browser_preview_compare_scroll_slices: await createVisualQaTool(BrowserPreviewCompareScrollSlicesTool, input),
     bash: await createVisualQaTool(BashTool, input),
     edit: await createVisualQaTool(EditTool, input),
     write: await createVisualQaTool(WriteTool, input),

@@ -4503,10 +4503,16 @@ export class Control2 extends HeyApiClient {
       body?:
         | {
             action: "view_plan"
+            /**
+             * Task ID whose plan should be inspected.
+             */
             taskID: string
           }
         | {
             action: "view_board"
+            /**
+             * Task ID whose board should be inspected; omit to list recent tasks.
+             */
             taskID?: string
           }
         | {
@@ -4514,18 +4520,48 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "query_task"
+            /**
+             * Task IDs to query in one request.
+             */
             taskIDs: Array<string>
+            /**
+             * Include direct child task summaries for each requested task.
+             */
             includeChildren?: boolean
+            /**
+             * Include pending interaction counts for each requested task.
+             */
             includeInteractions?: boolean
           }
         | {
             action: "create_task"
+            /**
+             * Short task title shown in the project board.
+             */
             title?: string
+            /**
+             * Full user request to execute in the new task.
+             */
             request: string
+            /**
+             * External request ID used for idempotent task creation.
+             */
             request_id?: string
+            /**
+             * Executor backend to use for the new task.
+             */
             executor?: "opencorvus" | "codex" | "claude-code"
+            /**
+             * Model reference in provider/model format for the new task.
+             */
             model?: string
+            /**
+             * Whether to queue this task behind other work in the same directory.
+             */
             queue?: boolean
+            /**
+             * Evaluation check configuration for the new task.
+             */
             checks?: {
               build?: Array<string> | false
               test?: Array<string> | false
@@ -4624,13 +4660,25 @@ export class Control2 extends HeyApiClient {
               }
               timeout_ms?: number
             }
+            /**
+             * Stage routing overrides for the new task.
+             */
             routing?: {
               spec?: "opencorvus" | "executor"
               plan?: "opencorvus" | "executor"
               evaluation?: "opencorvus" | "hybrid"
             }
+            /**
+             * External channel identifier to bind to the new task.
+             */
             channel?: string
+            /**
+             * External thread identifier to bind to the new task.
+             */
             thread?: string
+            /**
+             * Channel platform for an external task binding.
+             */
             platform?:
               | "slack"
               | "telegram"
@@ -4646,48 +4694,102 @@ export class Control2 extends HeyApiClient {
               | "wecom"
               | "dingtalk"
               | "qq"
+            /**
+             * Structured metadata to attach to the new task.
+             */
             metadata?: {
               [key: string]: unknown
             }
+            /**
+             * Business source label for the new task.
+             */
             source?: string
+            /**
+             * Set false to return without creating a task.
+             */
             allow_create?: boolean
           }
         | {
             action: "send_task_message"
+            /**
+             * Task ID that should receive the follow-up message.
+             */
             taskID: string
+            /**
+             * Follow-up message text to append to the task.
+             */
             text: string
+            /**
+             * Business source label for the follow-up message.
+             */
             source: string
+            /**
+             * External user ID associated with the follow-up message.
+             */
             user_id?: string
           }
         | {
             action: "reply_interaction"
+            /**
+             * Pending interaction ID to answer.
+             */
             interactionID: string
+            /**
+             * Preset reply behavior for the interaction.
+             */
             reply?: "once" | "always"
+            /**
+             * Custom answer text for the pending interaction.
+             */
             message?: string
           }
         | {
             action: "reject_interaction"
+            /**
+             * Pending interaction ID to reject.
+             */
             interactionID: string
+            /**
+             * Reason shown when rejecting the pending interaction.
+             */
             message?: string
           }
         | {
             action: "retry_task"
+            /**
+             * Task ID to queue for retry.
+             */
             taskID: string
           }
         | {
             action: "replan_task"
+            /**
+             * Task ID to queue for replanning.
+             */
             taskID: string
           }
         | {
             action: "cancel_task"
+            /**
+             * Task ID to cancel.
+             */
             taskID: string
           }
         | {
             action: "update_checks"
+            /**
+             * Task ID whose verification checks should change.
+             */
             taskID: string
+            /**
+             * Named check selection updates to apply.
+             */
             selection?: {
               [key: string]: boolean
             }
+            /**
+             * Complete replacement evaluation check configuration.
+             */
             checks?: {
               build?: Array<string> | false
               test?: Array<string> | false
@@ -4789,18 +4891,30 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "capture_overlay_screenshot"
+            /**
+             * Optional window title or process match hint for the screenshot.
+             */
             match?: string
           }
         | {
             action: "set_executor"
+            /**
+             * Executor backend to select locally.
+             */
             executor: "opencorvus" | "codex" | "claude-code"
           }
         | {
             action: "select_task"
+            /**
+             * Task ID to focus in the local project assistant surface.
+             */
             taskID: string
           }
         | {
             action: "select_session"
+            /**
+             * Session ID to focus in the local project assistant surface.
+             */
             sessionID: string
           }
         | {
@@ -4808,20 +4922,183 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "fork_session"
+            /**
+             * Session ID to fork.
+             */
             sessionID: string
           }
         | {
             action: "delete_session"
+            /**
+             * Session ID to delete.
+             */
             sessionID: string
           }
         | {
             action: "update_goal"
+            /**
+             * Goal ID to update.
+             */
             goalID: string
+            /**
+             * Replacement goal description.
+             */
             description: string
-            acceptance_specs: Array<unknown>
+            /**
+             * Complete replacement acceptance specs for the goal.
+             */
+            acceptance_specs: Array<{
+              /**
+               * Stable spec ID, e.g. 'acc-login-3s'.
+               */
+              id: string
+              /**
+               * Requirement ID this spec was derived from (REQ-N).
+               */
+              source_requirement_id: string
+              /**
+               * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+               */
+              goal_id: string
+              title: string
+              /**
+               * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
+               */
+              scenario?: {
+                given: Array<string>
+                when: Array<string>
+                then: Array<string>
+              }
+              /**
+               * At least one scorer — a spec without a scorer is untestable.
+               */
+              scorers: Array<
+                | {
+                    /**
+                     * heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.
+                     */
+                    type: "heuristic"
+                    name: string
+                    spec:
+                      | {
+                          /**
+                           * shell — run an inline command. Requires: cmd; optional cwd.
+                           */
+                          kind: "shell"
+                          /**
+                           * Shell command. Exit 0 = pass unless expect.exit_code set.
+                           */
+                          cmd: string
+                          cwd?: string
+                        }
+                      | {
+                          /**
+                           * script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.
+                           */
+                          kind: "script_ref"
+                          /**
+                           * Repo-relative script path that already exists at registration time.
+                           */
+                          path: string
+                          args?: Array<string>
+                        }
+                    expect?: {
+                      exit_code?: number
+                    }
+                  }
+                | {
+                    /**
+                     * llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.
+                     */
+                    type: "llm_judge"
+                    name: string
+                    /**
+                     * Single-criterion evaluation question in natural language.
+                     */
+                    criteria: string
+                    /**
+                     * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
+                     */
+                    rubric?: Array<{
+                      /**
+                       * Integer score for this level.
+                       */
+                      score: number
+                      /**
+                       * Short level label, e.g. 'fully met'.
+                       */
+                      label: string
+                      /**
+                       * Behavioral description: what earns this score.
+                       */
+                      anchor: string
+                      /**
+                       * Does this level count as pass for binary verdict?
+                       */
+                      passes: boolean
+                    }>
+                    /**
+                     * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
+                     */
+                    inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+                  }
+                | {
+                    /**
+                     * prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.
+                     */
+                    type: "prebuilt"
+                    name:
+                      | "factuality"
+                      | "relevance"
+                      | "contains"
+                      | "exact_match"
+                      | "length_within"
+                      | "json_schema"
+                      | "visual-evidence-bundle"
+                    config?: {
+                      [key: string]: unknown
+                    }
+                    /**
+                     * For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.
+                     */
+                    spec?: {
+                      kind: "visual_evidence_bundle"
+                      viewport?: string
+                    }
+                    /**
+                     * For name=visual-evidence-bundle, requires a passing current bundle.
+                     */
+                    expect?: {
+                      status: "passed"
+                    }
+                  }
+                | {
+                    /**
+                     * contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.
+                     */
+                    type: "contract_audit"
+                    name: string
+                    spec: {
+                      kind: "contract_graph"
+                      contract_ids: Array<string>
+                    }
+                    expect: {
+                      status: "passed"
+                    }
+                  }
+              >
+              severity: "essential" | "important" | "optional" | "pitfall"
+              /**
+               * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.
+               */
+              trigger?: "on_goal" | "on_integrity"
+            }>
           }
         | {
             action: "delete_goal"
+            /**
+             * Goal ID to delete.
+             */
             goalID: string
           }
     },

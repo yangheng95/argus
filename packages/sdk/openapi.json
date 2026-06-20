@@ -12176,6 +12176,7 @@
                         "const": "view_plan"
                       },
                       "taskID": {
+                        "description": "Task ID whose plan should be inspected.",
                         "type": "string"
                       }
                     },
@@ -12192,6 +12193,7 @@
                         "const": "view_board"
                       },
                       "taskID": {
+                        "description": "Task ID whose board should be inspected; omit to list recent tasks.",
                         "type": "string"
                       }
                     },
@@ -12219,6 +12221,7 @@
                         "const": "query_task"
                       },
                       "taskIDs": {
+                        "description": "Task IDs to query in one request.",
                         "minItems": 1,
                         "maxItems": 50,
                         "type": "array",
@@ -12228,9 +12231,11 @@
                         }
                       },
                       "includeChildren": {
+                        "description": "Include direct child task summaries for each requested task.",
                         "type": "boolean"
                       },
                       "includeInteractions": {
+                        "description": "Include pending interaction counts for each requested task.",
                         "type": "boolean"
                       }
                     },
@@ -12247,17 +12252,21 @@
                         "const": "create_task"
                       },
                       "title": {
+                        "description": "Short task title shown in the project board.",
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 80
                       },
                       "request": {
+                        "description": "Full user request to execute in the new task.",
                         "type": "string"
                       },
                       "request_id": {
+                        "description": "External request ID used for idempotent task creation.",
                         "type": "string"
                       },
                       "executor": {
+                        "description": "Executor backend to use for the new task.",
                         "type": "string",
                         "enum": [
                           "opencorvus",
@@ -12266,12 +12275,15 @@
                         ]
                       },
                       "model": {
+                        "description": "Model reference in provider/model format for the new task.",
                         "type": "string"
                       },
                       "queue": {
+                        "description": "Whether to queue this task behind other work in the same directory.",
                         "type": "boolean"
                       },
                       "checks": {
+                        "description": "Evaluation check configuration for the new task.",
                         "type": "object",
                         "properties": {
                           "build": {
@@ -12719,6 +12731,7 @@
                         }
                       },
                       "routing": {
+                        "description": "Stage routing overrides for the new task.",
                         "type": "object",
                         "properties": {
                           "spec": {
@@ -12745,12 +12758,15 @@
                         }
                       },
                       "channel": {
+                        "description": "External channel identifier to bind to the new task.",
                         "type": "string"
                       },
                       "thread": {
+                        "description": "External thread identifier to bind to the new task.",
                         "type": "string"
                       },
                       "platform": {
+                        "description": "Channel platform for an external task binding.",
                         "type": "string",
                         "enum": [
                           "slack",
@@ -12770,6 +12786,7 @@
                         ]
                       },
                       "metadata": {
+                        "description": "Structured metadata to attach to the new task.",
                         "type": "object",
                         "propertyNames": {
                           "type": "string"
@@ -12777,9 +12794,11 @@
                         "additionalProperties": {}
                       },
                       "source": {
+                        "description": "Business source label for the new task.",
                         "type": "string"
                       },
                       "allow_create": {
+                        "description": "Set false to return without creating a task.",
                         "type": "boolean"
                       }
                     },
@@ -12796,16 +12815,20 @@
                         "const": "send_task_message"
                       },
                       "taskID": {
+                        "description": "Task ID that should receive the follow-up message.",
                         "type": "string"
                       },
                       "text": {
+                        "description": "Follow-up message text to append to the task.",
                         "type": "string"
                       },
                       "source": {
+                        "description": "Business source label for the follow-up message.",
                         "type": "string",
                         "minLength": 1
                       },
                       "user_id": {
+                        "description": "External user ID associated with the follow-up message.",
                         "type": "string"
                       }
                     },
@@ -12824,9 +12847,11 @@
                         "const": "reply_interaction"
                       },
                       "interactionID": {
+                        "description": "Pending interaction ID to answer.",
                         "type": "string"
                       },
                       "reply": {
+                        "description": "Preset reply behavior for the interaction.",
                         "type": "string",
                         "enum": [
                           "once",
@@ -12834,6 +12859,7 @@
                         ]
                       },
                       "message": {
+                        "description": "Custom answer text for the pending interaction.",
                         "type": "string"
                       }
                     },
@@ -12850,9 +12876,11 @@
                         "const": "reject_interaction"
                       },
                       "interactionID": {
+                        "description": "Pending interaction ID to reject.",
                         "type": "string"
                       },
                       "message": {
+                        "description": "Reason shown when rejecting the pending interaction.",
                         "type": "string"
                       }
                     },
@@ -12869,6 +12897,7 @@
                         "const": "retry_task"
                       },
                       "taskID": {
+                        "description": "Task ID to queue for retry.",
                         "type": "string"
                       }
                     },
@@ -12885,6 +12914,7 @@
                         "const": "replan_task"
                       },
                       "taskID": {
+                        "description": "Task ID to queue for replanning.",
                         "type": "string"
                       }
                     },
@@ -12901,6 +12931,7 @@
                         "const": "cancel_task"
                       },
                       "taskID": {
+                        "description": "Task ID to cancel.",
                         "type": "string"
                       }
                     },
@@ -12917,9 +12948,11 @@
                         "const": "update_checks"
                       },
                       "taskID": {
+                        "description": "Task ID whose verification checks should change.",
                         "type": "string"
                       },
                       "selection": {
+                        "description": "Named check selection updates to apply.",
                         "type": "object",
                         "propertyNames": {
                           "type": "string"
@@ -12929,6 +12962,7 @@
                         }
                       },
                       "checks": {
+                        "description": "Complete replacement evaluation check configuration.",
                         "type": "object",
                         "properties": {
                           "build": {
@@ -13389,6 +13423,7 @@
                         "const": "capture_overlay_screenshot"
                       },
                       "match": {
+                        "description": "Optional window title or process match hint for the screenshot.",
                         "type": "string"
                       }
                     },
@@ -13404,6 +13439,7 @@
                         "const": "set_executor"
                       },
                       "executor": {
+                        "description": "Executor backend to select locally.",
                         "type": "string",
                         "enum": [
                           "opencorvus",
@@ -13425,6 +13461,7 @@
                         "const": "select_task"
                       },
                       "taskID": {
+                        "description": "Task ID to focus in the local project assistant surface.",
                         "type": "string"
                       }
                     },
@@ -13441,6 +13478,7 @@
                         "const": "select_session"
                       },
                       "sessionID": {
+                        "description": "Session ID to focus in the local project assistant surface.",
                         "type": "string"
                       }
                     },
@@ -13469,6 +13507,7 @@
                         "const": "fork_session"
                       },
                       "sessionID": {
+                        "description": "Session ID to fork.",
                         "type": "string"
                       }
                     },
@@ -13485,6 +13524,7 @@
                         "const": "delete_session"
                       },
                       "sessionID": {
+                        "description": "Session ID to delete.",
                         "type": "string"
                       }
                     },
@@ -13501,15 +13541,381 @@
                         "const": "update_goal"
                       },
                       "goalID": {
+                        "description": "Goal ID to update.",
                         "type": "string"
                       },
                       "description": {
+                        "description": "Replacement goal description.",
                         "type": "string"
                       },
                       "acceptance_specs": {
+                        "description": "Complete replacement acceptance specs for the goal.",
                         "minItems": 1,
                         "type": "array",
-                        "items": {}
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "description": "Stable spec ID, e.g. 'acc-login-3s'.",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "source_requirement_id": {
+                              "description": "Requirement ID this spec was derived from (REQ-N).",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "goal_id": {
+                              "description": "Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.",
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "scenario": {
+                              "description": "Gherkin Given/When/Then scenario. Optional — omit for pure code checks.",
+                              "type": "object",
+                              "properties": {
+                                "given": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "when": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "then": {
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              "required": [
+                                "given",
+                                "when",
+                                "then"
+                              ]
+                            },
+                            "scorers": {
+                              "description": "At least one scorer — a spec without a scorer is untestable.",
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "description": "heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.",
+                                        "type": "string",
+                                        "const": "heuristic"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "spec": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "description": "shell — run an inline command. Requires: cmd; optional cwd.",
+                                                "type": "string",
+                                                "const": "shell"
+                                              },
+                                              "cmd": {
+                                                "description": "Shell command. Exit 0 = pass unless expect.exit_code set.",
+                                                "type": "string",
+                                                "minLength": 1
+                                              },
+                                              "cwd": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "cmd"
+                                            ]
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "kind": {
+                                                "description": "script_ref — run an existing repo script. Requires: path; optional args. Not for contract_audit; contract_audit is its own scorer type.",
+                                                "type": "string",
+                                                "const": "script_ref"
+                                              },
+                                              "path": {
+                                                "description": "Repo-relative script path that already exists at registration time.",
+                                                "type": "string",
+                                                "minLength": 1
+                                              },
+                                              "args": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "string"
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "kind",
+                                              "path"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "expect": {
+                                        "type": "object",
+                                        "properties": {
+                                          "exit_code": {
+                                            "type": "integer",
+                                            "minimum": -9007199254740991,
+                                            "maximum": 9007199254740991
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "name",
+                                      "spec"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "description": "llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.",
+                                        "type": "string",
+                                        "const": "llm_judge"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "criteria": {
+                                        "description": "Single-criterion evaluation question in natural language.",
+                                        "type": "string",
+                                        "minLength": 10
+                                      },
+                                      "rubric": {
+                                        "description": "Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.",
+                                        "minItems": 2,
+                                        "maxItems": 5,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "score": {
+                                              "description": "Integer score for this level.",
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "label": {
+                                              "description": "Short level label, e.g. 'fully met'.",
+                                              "type": "string",
+                                              "minLength": 1
+                                            },
+                                            "anchor": {
+                                              "description": "Behavioral description: what earns this score.",
+                                              "type": "string",
+                                              "minLength": 1
+                                            },
+                                            "passes": {
+                                              "description": "Does this level count as pass for binary verdict?",
+                                              "type": "boolean"
+                                            }
+                                          },
+                                          "required": [
+                                            "score",
+                                            "label",
+                                            "anchor",
+                                            "passes"
+                                          ]
+                                        }
+                                      },
+                                      "inputs": {
+                                        "description": "Which parts of the acceptance to feed the judge. Default: acceptance_summary.",
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "enum": [
+                                            "acceptance_summary",
+                                            "changed_files",
+                                            "requirement_text",
+                                            "visual_evidence"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "name",
+                                      "criteria"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "description": "prebuilt — a named library metric. Requires: name from the fixed PREBUILT_SCORER_NAMES set; optional config.",
+                                        "type": "string",
+                                        "const": "prebuilt"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "enum": [
+                                          "factuality",
+                                          "relevance",
+                                          "contains",
+                                          "exact_match",
+                                          "length_within",
+                                          "json_schema",
+                                          "visual-evidence-bundle"
+                                        ]
+                                      },
+                                      "config": {
+                                        "default": {},
+                                        "type": "object",
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "additionalProperties": {}
+                                      },
+                                      "spec": {
+                                        "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "visual_evidence_bundle"
+                                          },
+                                          "viewport": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          }
+                                        },
+                                        "required": [
+                                          "kind"
+                                        ]
+                                      },
+                                      "expect": {
+                                        "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                        "type": "object",
+                                        "properties": {
+                                          "status": {
+                                            "type": "string",
+                                            "const": "passed"
+                                          }
+                                        },
+                                        "required": [
+                                          "status"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "name"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "description": "contract_audit — static audit of typed-contract field literals against registered graph contract_ids. This is a scorer type, not a script_ref path. Requires: name, spec.contract_ids, expect.status='passed'.",
+                                        "type": "string",
+                                        "const": "contract_audit"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "spec": {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "type": "string",
+                                            "const": "contract_graph"
+                                          },
+                                          "contract_ids": {
+                                            "minItems": 1,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string",
+                                              "minLength": 1
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "contract_ids"
+                                        ]
+                                      },
+                                      "expect": {
+                                        "type": "object",
+                                        "properties": {
+                                          "status": {
+                                            "type": "string",
+                                            "const": "passed"
+                                          }
+                                        },
+                                        "required": [
+                                          "status"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "name",
+                                      "spec",
+                                      "expect"
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "severity": {
+                              "type": "string",
+                              "enum": [
+                                "essential",
+                                "important",
+                                "optional",
+                                "pitfall"
+                              ]
+                            },
+                            "trigger": {
+                              "description": "Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity.",
+                              "type": "string",
+                              "enum": [
+                                "on_goal",
+                                "on_integrity"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "source_requirement_id",
+                            "goal_id",
+                            "title",
+                            "scorers",
+                            "severity"
+                          ]
+                        }
                       }
                     },
                     "required": [
@@ -13527,6 +13933,7 @@
                         "const": "delete_goal"
                       },
                       "goalID": {
+                        "description": "Goal ID to delete.",
                         "type": "string"
                       }
                     },

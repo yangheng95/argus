@@ -1,7 +1,9 @@
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { BrowserPreviewBindLocalModuleTool } from "./browser-preview-bind-local-module"
+import { BrowserPreviewCompareScrollSlicesTool } from "./browser-preview-compare-scroll-slices"
 import { BrowserPreviewCompareRegionsTool } from "./browser-preview-compare-regions"
+import { BrowserPreviewCompareScrollSlicesToolID } from "./browser-preview-tool-ids"
 import { BrowserPreviewTool } from "./browser-preview"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
@@ -130,6 +132,7 @@ export namespace ToolRegistry {
       BrowserPreviewTool,
       BrowserPreviewBindLocalModuleTool,
       BrowserPreviewCompareRegionsTool,
+      BrowserPreviewCompareScrollSlicesTool,
       ReadTool,
       GlobTool,
       SearchCodeTool,
@@ -186,6 +189,9 @@ export namespace ToolRegistry {
       items = items.filter((t) => !isWebpageEvidenceAnalysisToolId(t.id))
     } else if (agent?.name !== "frontend-design") {
       items = items.filter((t) => !isWebpageEvidenceToolId(t.id))
+    }
+    if (agent?.name !== "visual-qa") {
+      items = items.filter((t) => t.id !== BrowserPreviewCompareScrollSlicesToolID)
     }
 
     if (agent?.tools?.include) {

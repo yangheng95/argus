@@ -31,6 +31,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-20-settings-status-label-single-source.md](2026-06-20-settings-status-label-single-source.md) | Settings Status Label Single Source |
 | [2026-06-20-status-label-single-source.md](2026-06-20-status-label-single-source.md) | Status Label Single Source |
 | [2026-06-20-task-actions-cancel-button-owner.md](2026-06-20-task-actions-cancel-button-owner.md) | Task Actions Cancel Button Owner |
+| [2026-06-20-visual-qa-scroll-slice-comparison.md](2026-06-20-visual-qa-scroll-slice-comparison.md) | Visual QA Scroll Slice Comparison |
 | [2026-06-20-world-economy-architect-algorithm-fix.md](2026-06-20-world-economy-architect-algorithm-fix.md) | World Economy Architect Algorithm Fix |
 | [2026-06-20-conversation-rendering-i18n-source.md](2026-06-20-conversation-rendering-i18n-source.md) | Conversation Rendering i18n Source |
 | [2026-06-20-memory-panel-owner-browser-coverage.md](2026-06-20-memory-panel-owner-browser-coverage.md) | Memory Panel Owner And Browser Coverage |
