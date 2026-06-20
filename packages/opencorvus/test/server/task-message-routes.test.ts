@@ -102,6 +102,71 @@ async function seedActiveAndCompletedSameCwdTasks() {
   return { activeTaskID, completedTaskID }
 }
 
+async function seedLiveBuildOwner(input: {
+  taskID: string
+  rootSessionID: string
+  suffix: string
+  now: number
+  orderIndex: number
+}) {
+  const goalID = Identifier.ascending("goal")
+  const childSession = await Session.createNext({
+    kind: "build",
+    parentID: input.rootSessionID,
+    goalID,
+    title: `live build ${input.suffix}`,
+    directory: Instance.directory,
+  })
+  Database.use((db) =>
+    db
+      .insert(EngineGoalTable)
+      .values({
+        id: goalID,
+        task_id: input.taskID,
+        title: `Live build goal ${input.suffix}`,
+        slug: `live-build-goal-${input.suffix}`,
+        objective: `Keep live build goal ${input.suffix} running while the task is messaged.`,
+        acceptance_specs: [],
+        owned_paths: [],
+        depends_on: [],
+        kind: "feature",
+        requirement_ids: [],
+        priority: "blocking",
+        source: "test",
+        order_index: input.orderIndex,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run(),
+  )
+  const goalRunID = beginBuildAttempt({
+    taskID: input.taskID,
+    goalID,
+    sessionID: childSession.id,
+    now: input.now,
+  })
+  const ownershipPayload = createOrchestratorToolOwnershipPayload({
+    taskID: input.taskID,
+    orchestratorSessionID: `ses_orchestrator_${input.suffix}_${input.now}`,
+    orchestratorMessageID: `msg_orchestrator_${input.suffix}_${input.now}`,
+    toolCallID: `cal_build_${input.suffix}_${input.now}`,
+    toolPartID: `prt_build_${input.suffix}_${input.now}`,
+    childSessionID: childSession.id,
+    scope: "goal",
+    goalID,
+    goalRunID,
+    now: input.now,
+  })
+  insertOrchestratorToolOwnershipArtifact({
+    taskID: input.taskID,
+    goalRunID,
+    label: "tool-ownership-start",
+    payload: ownershipPayload,
+    now: input.now,
+  })
+  return { goalID, goalRunID, sessionID: childSession.id, ownershipID: ownershipPayload.ownership_id }
+}
+
 describe("task message routes", () => {
   afterEach(async () => {
     mock.restore()
@@ -333,8 +398,8 @@ describe("task message routes", () => {
               messageID: body.user_message?.info.id,
             },
           },
-          interrupt: true,
         })
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]).not.toHaveProperty("interrupt")
 
         // V35: row state is no longer "failed" (we seeded an active
         // task) — assertion on "row stays failed" is dropped.
@@ -1139,7 +1204,7 @@ describe("task message routes", () => {
         expect(event.operatorMessage.attachmentSummary).toContain("Attachments:")
         expect(event.operatorMessage.attachmentSummary).toContain("spec.txt")
         expect(event.operatorMessage.attachmentSummary).toContain("text/plain")
-        expect((dispatchTaskLoop.mock.calls[0]?.[0] as { interrupt?: boolean }).interrupt).toBe(true)
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]).not.toHaveProperty("interrupt")
         const task = Database.use((db) =>
           db
             .select({ attachments: EngineTaskTable.attachments })
@@ -1279,6 +1344,183 @@ describe("task message routes", () => {
           outcome: "completed",
           now: now + 1,
         })
+        release!()
+        await holdLoop
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message queues behind multiple live build owners without aborting them", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
+          await holdLoop
+        })
+        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop")
+        const root = await Session.create({ kind: "root", title: "message live owners" })
+        await seedRootSession(root.id)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "message live owners",
+              request: "message live owners",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        await Queue.dispatchTaskLoop({ taskID })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        const owners = [
+          await seedLiveBuildOwner({ taskID, rootSessionID: root.id, suffix: "a", now, orderIndex: 0 }),
+          await seedLiveBuildOwner({ taskID, rootSessionID: root.id, suffix: "b", now, orderIndex: 1 }),
+        ]
+
+        const target = {
+          kind: "build_session" as const,
+          sessionID: owners[0]!.sessionID,
+          goalID: owners[0]!.goalID,
+        }
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "补充一条调度器消息，但不能中断正在跑的 goal。",
+            source: "panel",
+            target,
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          user_message?: { info: { id: string; extra?: Record<string, unknown> } }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(interruptTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(2)
+        for (const owner of owners) {
+          expect(findGoalRun(owner.goalRunID)?.status).toBe("running")
+        }
+        expect(body.user_message?.info.extra).toEqual({
+          operator_message: {
+            source: "panel",
+            target,
+          },
+        })
+
+        for (const owner of owners) {
+          completeOrchestratorToolOwnership({
+            taskID,
+            ownershipID: owner.ownershipID,
+            outcome: "completed",
+            now: now + 1,
+          })
+        }
+        release!()
+        await holdLoop
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message does not interrupt async goal after ownership closes", async () => {
+    await using tmp = await tmpdir({ git: true, config: routeTestConfig })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
+          await holdLoop
+        })
+        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop")
+        const root = await Session.create({ kind: "root", title: "message async build" })
+        await seedRootSession(root.id)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "message async build",
+              request: "message async build",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        await Queue.dispatchTaskLoop({ taskID })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        const owner = await seedLiveBuildOwner({ taskID, rootSessionID: root.id, suffix: "async", now, orderIndex: 0 })
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: owner.ownershipID,
+          outcome: "completed",
+          now: now + 1,
+        })
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "补充信息，但后台 build 不能被取消。",
+            source: "panel",
+            target: {
+              kind: "build_session",
+              sessionID: owner.sessionID,
+              goalID: owner.goalID,
+            },
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(interruptTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(findGoalRun(owner.goalRunID)?.status).toBe("running")
+
         release!()
         await holdLoop
       },
@@ -1475,10 +1717,9 @@ describe("task message routes", () => {
               text: string
             }
           }
-          interrupt?: boolean
         }
         expect(event.event.operatorMessage.text).toBe("继续完成G3")
-        expect(event.interrupt).toBe(true)
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]).not.toHaveProperty("interrupt")
 
         const messages = await Session.messages({ sessionID: root.id })
         expect(messages.filter((message) => message.info.role === "assistant")).toHaveLength(0)

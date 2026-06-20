@@ -974,10 +974,10 @@ export namespace Orchestrator {
             !recordResult.fuse.tripped
         } else if (wasCtrlAborted) {
           // Abort path: synthesize an envelope from the ctrl reason so the
-          // artifact reads "OrchestratorAborted: task loop dispatch interrupt"
-          // (or similar) — the next wake's describe needs to know WHY the
-          // prior turn was interrupted, not just that it threw an opaque
-          // "session cancelled" Error from SessionPromptState.cancel.
+          // artifact records the explicit cancellation reason — the next wake's
+          // describe needs to know WHY the prior turn was interrupted, not just
+          // that it threw an opaque "session cancelled" Error from
+          // SessionPromptState.cancel.
           await recordOrchestratorSessionErrorEnvelope({
             taskID,
             sessionID: agentSessionID,

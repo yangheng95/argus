@@ -168,9 +168,8 @@ export function reorderQueuedTasksForCwd(input: {
   })
 }
 
-async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefined, interrupt = false): Promise<void> {
-  const { runTaskLoop, interruptTaskLoop } = await import("@/orchestrator/loop")
-  if (interrupt) interruptTaskLoop(taskID, "task loop dispatch interrupt")
+async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefined): Promise<void> {
+  const { runTaskLoop } = await import("@/orchestrator/loop")
   // Return the loop's own promise (absorbing errors). Callers that want to
   // observe actual loop exit (queue-advance hook) attach `.finally` to the
   // returned promise; callers that only want fire-and-forget ignore it.
@@ -505,7 +504,6 @@ export type DispatchTaskLoopResult = "started" | "queued" | "ignored"
 export async function dispatchTaskLoop(input: {
   taskID: string
   event?: OrchestratorEvent
-  interrupt?: boolean
 }): Promise<DispatchTaskLoopResult> {
   let task = findTask(input.taskID)
   if (!task) return "ignored"
@@ -521,12 +519,11 @@ export async function dispatchTaskLoop(input: {
   }
 
   const liveOwners = listLiveOrchestratorToolOwnership(task.id)
-  if (liveOwners.length > 0 && loopInFlightFor(task.id)) {
+  if (liveOwners.length > 0) {
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     log.info("dispatchTaskLoop: queued wake behind live orchestrator tool ownership", {
       taskID: task.id,
       liveOwners: liveOwners.map((owner) => owner.ownershipID),
-      interrupt: Boolean(input.interrupt),
     })
     return "queued"
   }
@@ -536,7 +533,7 @@ export async function dispatchTaskLoop(input: {
   // invocation might be the one that drives the task to terminal, so its
   // completion must also advance the cwd queue. Fire-and-forget: callers
   // don't want to block on task completion.
-  attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event, input.interrupt === true))
+  attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event))
   return "started"
 }
 
