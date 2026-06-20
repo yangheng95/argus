@@ -280,9 +280,9 @@ export namespace BuildAgent {
      * required, a passed terminal report must cite readable
      * browser_preview_compare_regions reference-comparison evidence. */
     referenceParity?: BuildReferenceParityContext
-    /** Compact frontend_research webpage investigation plan rendered from the latest
+    /** Compact frontend_research pointer digest rendered from the latest
      *  non-stale frontend_research_brief artifact. Build consumes it as coverage
-     *  work packets before implementing webpage/UI replica surfaces. */
+     *  and drilldown pointers before implementing webpage/UI replica surfaces. */
     frontendResearch?: string
     /** Full frontend-design frontend template and source manifest from the decision log.
      *  This names frontend_template, fillable_modules, visual_consistency_contract,

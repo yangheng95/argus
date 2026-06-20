@@ -10,7 +10,9 @@ import { researchBriefIsStale } from "../../src/research/staleness"
 import {
   allResearchEvidenceIDsForTask,
   frontendResearchEvidenceIDsForTask,
+  renderFrontendResearchArchitectPromptSection,
   renderFrontendResearchBriefPromptSection,
+  renderFrontendResearchBuildPromptSection,
   renderResearchBriefPromptSection,
 } from "../../src/research/prompt-section"
 import { validateResearchBriefTaskBoundary } from "../../src/research/schema"
@@ -207,6 +209,34 @@ describe("research brief persistence and describe projection", () => {
               taskID,
               {
                 summary: "Frontend research source-backed summary.",
+                facts: [
+                  {
+                    id: "fact_1",
+                    statement: "SHOULD_NOT_APPEAR_IN_BUILD_FACT",
+                    evidence_ids: ["ev_1"],
+                  },
+                ],
+                problem_statements: [
+                  {
+                    id: "prob_1",
+                    statement: "SHOULD_NOT_APPEAR_IN_BUILD_PROBLEM",
+                    fact_ids: ["fact_1"],
+                  },
+                ],
+                user_needs: [
+                  {
+                    id: "need_1",
+                    need: "SHOULD_NOT_APPEAR_IN_BUILD_NEED",
+                    fact_ids: ["fact_1"],
+                  },
+                ],
+                constraints: [
+                  {
+                    id: "con_1",
+                    constraint: "SHOULD_NOT_APPEAR_IN_BUILD_CONSTRAINT",
+                    fact_ids: ["fact_1"],
+                  },
+                ],
                 webpage_contract: validWebpageContract(),
               },
               "frontend-research",
@@ -221,8 +251,36 @@ describe("research brief persistence and describe projection", () => {
           expect(allResearchEvidenceIDsForTask({ taskID, request })).toEqual(["ev_1"])
 
           const prompt = renderFrontendResearchBriefPromptSection({ taskID, request })
-          expect(prompt).toContain("Frontend Research Brief")
-          expect(prompt).toContain('"webpage_contract"')
+          expect(prompt).toContain("Frontend Research Requirements Digest")
+          expect(prompt).toContain('"webpage_contract_requirement_index"')
+          expect(prompt).toContain('"bundle_paths"')
+          expect(prompt).toContain("SHOULD_NOT_APPEAR_IN_BUILD_FACT")
+          expect(prompt).not.toContain('"webpage_contract"')
+          expect(prompt).not.toContain("Example documentation excerpt.")
+
+          const architectPrompt = renderFrontendResearchArchitectPromptSection({ taskID, request })
+          expect(architectPrompt).toContain("Frontend Research Architect Digest")
+          expect(architectPrompt).toContain('"webpage_contract_work_packets"')
+          expect(architectPrompt).toContain('"style_requirements"')
+          expect(architectPrompt).toContain('"fidelity_risks"')
+          expect(architectPrompt).toContain('"bundle_paths"')
+          expect(architectPrompt).not.toContain('"webpage_contract"')
+          expect(architectPrompt).not.toContain("Example documentation excerpt.")
+
+          const buildPrompt = renderFrontendResearchBuildPromptSection({ taskID, request })
+          expect(buildPrompt).toContain("Compact advisory coverage index from frontend_research")
+          expect(buildPrompt).toContain("bundle_paths")
+          expect(buildPrompt).toContain("reference_image_evidence_ids: ev_1")
+          expect(buildPrompt).toContain("Functional surfaces")
+          expect(buildPrompt).toContain("Visual layout")
+          expect(buildPrompt).toContain("Fidelity risks")
+          expect(buildPrompt).not.toContain("```json")
+          expect(buildPrompt).not.toContain('"webpage_contract"')
+          expect(buildPrompt).not.toContain("SHOULD_NOT_APPEAR_IN_BUILD_FACT")
+          expect(buildPrompt).not.toContain("SHOULD_NOT_APPEAR_IN_BUILD_PROBLEM")
+          expect(buildPrompt).not.toContain("SHOULD_NOT_APPEAR_IN_BUILD_NEED")
+          expect(buildPrompt).not.toContain("SHOULD_NOT_APPEAR_IN_BUILD_CONSTRAINT")
+          expect(buildPrompt).not.toContain("Example documentation excerpt.")
           expect(renderResearchBriefPromptSection({ taskID, request })).toBe("")
 
           const desc = await describeTask(taskID)

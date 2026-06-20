@@ -41,10 +41,10 @@ function renderFrontendDesignOverlay(frontendDesign: string): string {
 
 function renderFrontendResearchOverlay(frontendResearch: string): string {
   const sections = [
-    "## Frontend Research Investigation Plan",
+    "## Frontend Research Build Pointers",
     "",
-    "The section below is task-specific webpage investigation division from frontend_research. Treat it as a coverage checklist and work-packet index, mediated by the active REQ-N list, Architect Contract Graph, and frontend_design handoff; do not treat it as completed PRD facts.",
-    "Before editing UI code, read the named work packets and verify the referenced evidence through the frontend_design handoff or task runtime artifacts. Preserve component-kind hypotheses unless deeper evidence disproves them. If a packet names a chart, map, heatmap, table/grid, tabs, menu, modal, form, carousel, or other mature component, investigate and implement the real component/content contract with existing project primitives or a mature library; do not flatten it into SVG/image markup unless verified evidence identifies it as static decoration.",
+    "The section below is task-specific compact pointer data from frontend_research. Treat it as a coverage index for evidence IDs, bundle paths, component questions, interaction states, data questions, and fidelity risks; do not treat it as completed PRD facts or an implementation template.",
+    "Before editing UI code, use the compact pointers to decide which frontend_design handoff entries, task runtime artifacts, and bundle paths need drilldown for this goal. Preserve component-kind hypotheses unless deeper evidence disproves them. If a pointer names a chart, map, heatmap, table/grid, tabs, menu, modal, form, carousel, or other mature component, investigate and implement the real component/content contract with existing project primitives or a mature library; do not flatten it into SVG/image markup unless verified evidence identifies it as static decoration.",
     "Use requirements, architect contracts, and frontend_design as the binding implementation contract. Use frontend_research to make sure no assigned surface, evidence path, interaction state, data question, or fidelity risk is skipped.",
     "",
     frontendResearch.trim(),
@@ -142,7 +142,7 @@ export function renderBuildPromptOverlays(context: BuildPromptOverlayContext | u
   const frontendDesign = context?.frontendDesign
 
   if (hasText(frontendResearch)) {
-    ids.push("frontend-research-investigation-plan")
+    ids.push("frontend-research-build-pointers")
     sections.push(renderFrontendResearchOverlay(frontendResearch))
   }
 

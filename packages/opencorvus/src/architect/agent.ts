@@ -34,7 +34,7 @@ import type { VisualSpec } from "@/frontend-design/types"
 import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
 import {
   allResearchEvidenceIDsForTask,
-  renderFrontendResearchBriefPromptSection,
+  renderFrontendResearchArchitectPromptSection,
   renderResearchBriefPromptSection,
 } from "@/research/prompt-section"
 import type { GoalContractFields } from "@/pipeline/types"
@@ -298,7 +298,7 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
     request: input.taskRequest,
   })
   if (researchBrief) sections.push(researchBrief)
-  const frontendResearchBrief = renderFrontendResearchBriefPromptSection({
+  const frontendResearchBrief = renderFrontendResearchArchitectPromptSection({
     taskID: input.taskID,
     request: input.taskRequest,
   })

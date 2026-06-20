@@ -202,11 +202,14 @@ describe("core prompt hygiene", () => {
   test("build core keeps webpage clone policy in conditional overlays", async () => {
     const build = await readPrompt("build")
     const overlays = await readSource("build/prompt-context.ts")
+    const orchestratorTools = await readSource("orchestrator/tools.ts")
 
     expect(build).not.toContain("web-clone-source")
     expect(build).not.toContain("frontend-design")
     expect(build).not.toContain("mirror/")
     expect(build).not.toContain("baseline_replacement_plan")
+    expect(orchestratorTools).toContain("renderFrontendResearchBuildPromptSection")
+    expect(orchestratorTools).not.toContain("renderFrontendResearchBriefPromptSection")
 
     expect(overlays).toContain("## Webpage Clone Source-Baseline Overlay")
     expect(overlays).toContain("web-clone-source/")
@@ -809,10 +812,10 @@ describe("core prompt hygiene", () => {
     expect(build).not.toContain("frontend-design")
     expect(build).not.toContain("baseline_replacement_plan")
     expect(buildOverlays).toContain("## Webpage Clone Source-Baseline Overlay")
-    expect(buildOverlays).toContain("## Frontend Research Investigation Plan")
-    expect(buildOverlays).toContain("coverage checklist and work-packet index")
-    expect(buildOverlays).toContain("do not treat it as completed PRD facts")
-    expect(buildOverlays).toContain("read the named work packets")
+    expect(buildOverlays).toContain("## Frontend Research Build Pointers")
+    expect(buildOverlays).toContain("compact pointer data from frontend_research")
+    expect(buildOverlays).toContain("do not treat it as completed PRD facts or an implementation template")
+    expect(buildOverlays).toContain("use the compact pointers")
     expect(buildOverlays).toContain("chart, map, heatmap, table/grid")
     expect(buildOverlays).toContain("do not flatten it into SVG/image markup")
     expect(buildOverlays).toContain(

@@ -52,7 +52,7 @@ import { EngineProtocol } from "@/engine/protocol"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
 import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
-import { findNonStaleFrontendResearchBrief, renderFrontendResearchBriefPromptSection } from "@/research/prompt-section"
+import { findNonStaleFrontendResearchBrief, renderFrontendResearchBuildPromptSection } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { readLatestTaskVisualEvidenceBundleSync } from "@/acceptance/visual-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -6480,7 +6480,7 @@ export function createOrchestratorTools(input: {
               pathMode: "absolute",
               projectDir,
             })
-            const frontendResearch = renderFrontendResearchBriefPromptSection({
+            const frontendResearch = renderFrontendResearchBuildPromptSection({
               taskID,
               request: task.request,
             })
@@ -6596,7 +6596,7 @@ export function createOrchestratorTools(input: {
               pathMode: "absolute",
               projectDir,
             })
-            const frontendResearch = renderFrontendResearchBriefPromptSection({
+            const frontendResearch = renderFrontendResearchBuildPromptSection({
               taskID,
               request: task.request,
             })
