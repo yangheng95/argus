@@ -114,7 +114,7 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"mobile-review"')
         expect(sourceDomIterationState).toContain('"referenceImage": "web-clone-source/reference-mobile.png"')
         expect(sourceDomIterationState).toContain('"wide-review"')
-        expect(sourceProjectManifest.visualIteration.comparisonTool).toBe("webpage_evaluate")
+        expect(sourceProjectManifest.visualIteration.evidenceMethod).toBe("task_scoped_preview_screenshots")
         expect(sourceProjectManifest.generatedFrom).toContain("source-ir/style-profile.json")
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0]).toMatchObject({
           name: "desktop-reference",
@@ -171,7 +171,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceFullCss).not.toContain(":after:dir")
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({ projectDir: outputDir, sourcePackageDir: webpageEvidenceDir }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.passed).toBe(true)
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)

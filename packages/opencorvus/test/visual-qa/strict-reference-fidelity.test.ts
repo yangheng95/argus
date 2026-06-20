@@ -4,15 +4,15 @@ import { VisualQaTestHooks } from "../../src/visual-qa"
 import { renderVisualQaFrontendDesignContext, renderVisualQaFrontendResearchContext } from "../../src/visual-qa/context"
 import type { ResearchBrief } from "../../src/research/schema"
 
-describe("visual-qa strict reference image fidelity", () => {
-  test("core prompt forbids relaxed reference-image fidelity", () => {
+describe("visual-qa final blocker-based acceptance", () => {
+  test("core prompt scopes reference parity to explicit task evidence", () => {
     const normalized = VISUAL_QA_CORE.replace(/\s+/g, " ")
 
-    expect(normalized).toContain("strict reference-image fidelity mode")
-    expect(normalized).toContain("authoritative visual truth")
-    expect(normalized).toContain("copy its layout and style 1:1")
-    expect(normalized).toContain("one-to-one visible geometry and styling")
-    expect(normalized).toContain("not a loose similarity target")
+    expect(normalized).toContain("final visual GUI and functional product-review agent")
+    expect(normalized).toContain("Run once near task completion")
+    expect(normalized).toContain("Reference parity is in scope only when the task, goal, or acceptance evidence explicitly requires it")
+    expect(normalized).toContain("When explicit reference fidelity is in scope")
+    expect(normalized).not.toContain("strict reference-image fidelity mode")
   })
 
   test("core prompt requires professional design production blockers instead of fixed score verdicts", () => {
@@ -20,8 +20,8 @@ describe("visual-qa strict reference image fidelity", () => {
 
     expect(normalized).toContain("professional product designer and design QA reviewer")
     expect(normalized).toContain("production blockers")
-    expect(normalized).toContain("Numeric similarity or visual-diff scores are evidence, not the verdict")
-    expect(normalized).toContain("Do not use a fixed similarity score as the only pass/fail rule")
+    expect(normalized).toContain("Numeric similarity scores, legacy visual metrics, and external judge verdicts are not Visual QA completion signals")
+    expect(normalized).toContain("Do not chase, cite, or optimize for a score threshold")
     expect(normalized).toContain("low-fidelity charts/maps/tables")
   })
 
@@ -46,10 +46,8 @@ describe("visual-qa strict reference image fidelity", () => {
     expect(normalized).toContain("do not hand-normalize source bounding boxes")
     expect(normalized).toContain("request only `desktop` viewport region comparison evidence")
     expect(normalized).toContain("do not block on mobile or tablet reference evidence")
-    expect(normalized).toContain(
-      "Do not substitute `webpage_render`, `webpage_evaluate`, `webpage_vision_judge`, or standalone screenshots as the final region-parity evidence",
-    )
-    expect(normalized).toContain("task-scoped `reference-comparison` artifacts")
+    expect(normalized).toContain("Do not substitute standalone screenshots as the final region-parity evidence")
+    expect(normalized).toContain("A passed visual QA report for a bound reference region needs fresh")
     expect(normalized).toContain("fail the visual QA report with the exact blocker")
   })
 
@@ -60,11 +58,10 @@ describe("visual-qa strict reference image fidelity", () => {
       reason: "Need strict reference comparison.",
     })
 
-    expect(prompt).toContain("If any reference image is present")
-    expect(prompt).toContain("require 1:1 layout and style fidelity")
-    expect(prompt).toContain("not a relaxed similarity standard")
+    expect(prompt).toContain("final frontend visual GUI and functional product review")
+    expect(prompt).toContain("Reference/clone fidelity is enforced only when")
     expect(prompt).toContain("professional product designer and design QA reviewer")
-    expect(prompt).toContain("Numeric similarity scores are evidence, not the verdict")
+    expect(prompt).toContain("Do not chase visual scores or external judge verdicts")
     expect(prompt).toContain("call `browser_preview_bind_local_module`")
     expect(prompt).toContain("pass the binding to `browser_preview_compare_regions`")
     expect(prompt).toContain("Treat `browser_preview_bind_local_module` evidence as `source-binding`")
@@ -72,7 +69,7 @@ describe("visual-qa strict reference image fidelity", () => {
     expect(prompt).toContain("request only `desktop` viewport region comparison evidence")
     expect(prompt).toContain("do not block on mobile or tablet reference evidence")
     expect(prompt).toContain("task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`")
-    expect(prompt).toContain("screenshot-only evidence as the final region-parity proof")
+    expect(prompt).toContain("requires task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`")
     expect(prompt).toContain("no production_blockers")
     expect(prompt).toContain("Product Design QA Principles")
     expect(prompt).toContain("component-truth")
@@ -96,18 +93,18 @@ describe("visual-qa strict reference image fidelity", () => {
       },
     ])
 
-    expect(withoutReference).not.toContain("Strict Reference Image Fidelity")
-    expect(withReference).toContain("Strict Reference Image Fidelity")
-    expect(withReference).toContain("authoritative visual truth")
-    expect(withReference).toContain("Require 1:1 layout and style fidelity")
+    expect(withoutReference).not.toContain("Reference Evidence Scope")
+    expect(withReference).toContain("Reference Evidence Scope")
+    expect(withReference).toContain("Reference artifacts are evidence, not an automatic universal clone requirement")
+    expect(withReference).toContain("Enforce reference/parity fidelity only when")
   })
 
   test("frontend research reference image ids trigger strict context", () => {
     const context = renderVisualQaFrontendResearchContext(researchBriefWithReference())
 
     expect(context).toContain("reference_image_evidence_ids: ev_ref")
-    expect(context).toContain("Strict Reference Image Fidelity")
-    expect(context).toContain("not a relaxed similarity standard")
+    expect(context).toContain("Reference Evidence Scope")
+    expect(context).toContain("not an automatic universal clone requirement")
   })
 })
 

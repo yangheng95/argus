@@ -5,6 +5,7 @@ import z from "zod"
 
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { requireRuntimePackage } from "@/runtime/package-require"
 import { buildMultimodalToolResult } from "@/tool/multimodal-result"
 
@@ -197,8 +198,20 @@ export function createVisualRegionBindingPackageTool(input: {
               "The overlay and contact sheet are attached to this tool result. Inspect them before final submit; if any crop boundary is wrong, rerun this tool with corrected bboxes.",
             ].join("\n"),
             images: [
-              { path: resolveProjectPath(result.bboxOverlayArtifact, "bboxOverlayArtifact") },
-              { path: resolveProjectPath(result.contactSheetArtifact, "contactSheetArtifact") },
+              {
+                path: resolveProjectPath(
+                  result.bboxOverlayArtifact,
+                  "bboxOverlayArtifact",
+                  frontendDesignTaskProjectRoot(input.taskID),
+                ),
+              },
+              {
+                path: resolveProjectPath(
+                  result.contactSheetArtifact,
+                  "contactSheetArtifact",
+                  frontendDesignTaskProjectRoot(input.taskID),
+                ),
+              },
             ],
           })
           return {
@@ -234,7 +247,8 @@ export async function materializeVisualRegionCoordinateAtlas(
   if (!input.taskID)
     throw new Error("create_visual_region_coordinate_atlas requires a task-scoped frontend_design taskID")
 
-  const sourceImagePath = resolveProjectPath(input.sourceImagePath, "sourceImagePath")
+  const runtime = frontendDesignRuntimeContext(input.taskID)
+  const sourceImagePath = resolveProjectPath(input.sourceImagePath, "sourceImagePath", runtime.projectRoot)
   if (path.extname(sourceImagePath).toLowerCase() !== ".png") {
     throw new Error(`VisualRegionBinding source image must be a PNG: ${input.sourceImagePath}`)
   }
@@ -246,10 +260,9 @@ export async function materializeVisualRegionCoordinateAtlas(
 
   const bandHeight = input.bandHeight ?? 900
   const gridStep = input.gridStep ?? 100
-  const runtimePaths = ProjectRuntimePaths.frontendDesignPaths(Instance.directory, input.taskID)
   const atlasName = safePathSegment(input.atlasName ?? "visual-region-coordinate-atlas")
-  const atlasDirectory = path.join(runtimePaths.absoluteDir, "visual-region-atlases", atlasName)
-  assertInsideProject(atlasDirectory, "atlasDirectory")
+  const atlasDirectory = path.join(runtime.paths.absoluteDir, "visual-region-atlases", atlasName)
+  assertInsideProject(atlasDirectory, "atlasDirectory", runtime.projectRoot)
   await fs.mkdir(atlasDirectory, { recursive: true })
 
   const atlasImages: MaterializedVisualRegionAtlasImage[] = []
@@ -263,7 +276,7 @@ export async function materializeVisualRegionCoordinateAtlas(
   atlasImages.push({
     kind: "overview",
     filename: path.basename(overviewPath),
-    artifact: publicPath(overviewPath),
+    artifact: publicPath(overviewPath, runtime.projectRoot),
     absolutePath: overviewPath,
   })
 
@@ -284,7 +297,7 @@ export async function materializeVisualRegionCoordinateAtlas(
     atlasImages.push({
       kind: "band",
       filename: path.basename(bandPath),
-      artifact: publicPath(bandPath),
+      artifact: publicPath(bandPath, runtime.projectRoot),
       absolutePath: bandPath,
       y,
       height,
@@ -296,20 +309,20 @@ export async function materializeVisualRegionCoordinateAtlas(
     version: 1,
     purpose: "visual-region-coordinate-atlas",
     generated_at: new Date().toISOString(),
-    source_image: publicPath(sourceImagePath),
+    source_image: publicPath(sourceImagePath, runtime.projectRoot),
     source_image_dimensions: { width: sourceMeta.width, height: sourceMeta.height },
     band_height: bandHeight,
     grid_step: gridStep,
-    atlas_directory: publicPath(atlasDirectory),
+    atlas_directory: publicPath(atlasDirectory, runtime.projectRoot),
     atlas_images: atlasImages.map(({ absolutePath: _absolutePath, ...artifact }) => artifact),
   }
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8")
 
   return {
-    manifestPath: publicPath(manifestPath),
-    sourceImagePath: publicPath(sourceImagePath),
+    manifestPath: publicPath(manifestPath, runtime.projectRoot),
+    sourceImagePath: publicPath(sourceImagePath, runtime.projectRoot),
     sourceImageDimensions: { width: sourceMeta.width, height: sourceMeta.height },
-    atlasDirectory: publicPath(atlasDirectory),
+    atlasDirectory: publicPath(atlasDirectory, runtime.projectRoot),
     bandHeight,
     gridStep,
     atlasImages,
@@ -330,7 +343,8 @@ export async function materializeVisualRegionBindingPackage(
   if (!input.taskID)
     throw new Error("create_visual_region_binding_package requires a task-scoped frontend_design taskID")
 
-  const sourceImagePath = resolveProjectPath(input.sourceImagePath, "sourceImagePath")
+  const runtime = frontendDesignRuntimeContext(input.taskID)
+  const sourceImagePath = resolveProjectPath(input.sourceImagePath, "sourceImagePath", runtime.projectRoot)
   if (path.extname(sourceImagePath).toLowerCase() !== ".png") {
     throw new Error(`VisualRegionBinding source image must be a PNG: ${input.sourceImagePath}`)
   }
@@ -340,10 +354,9 @@ export async function materializeVisualRegionBindingPackage(
   if (sourceMeta.format !== "png")
     throw new Error(`VisualRegionBinding source image must decode as PNG: ${sourceImagePath}`)
 
-  const runtimePaths = ProjectRuntimePaths.frontendDesignPaths(Instance.directory, input.taskID)
   const packageName = safePathSegment(input.packageName ?? manifestStem(input.manifestPath ?? "visual-region-binding"))
-  const cropDirectory = path.join(runtimePaths.absoluteDir, "visual-region-bindings", packageName)
-  assertInsideProject(cropDirectory, "cropDirectory")
+  const cropDirectory = path.join(runtime.paths.absoluteDir, "visual-region-bindings", packageName)
+  assertInsideProject(cropDirectory, "cropDirectory", runtime.projectRoot)
   await fs.mkdir(cropDirectory, { recursive: true })
 
   const regions: MaterializedVisualRegionBinding[] = []
@@ -370,7 +383,7 @@ export async function materializeVisualRegionBindingPackage(
     const materialized = {
       ...region,
       source_crop_filename: cropFileName,
-      source_reference_artifact: publicPath(cropPath),
+      source_reference_artifact: publicPath(cropPath, runtime.projectRoot),
     }
     regions.push(materialized)
     cropArtifacts.push({ region: materialized, cropPath })
@@ -389,7 +402,7 @@ export async function materializeVisualRegionBindingPackage(
   )
   await writeContactSheet({ outputPath: contactSheetPath, cropArtifacts })
 
-  const manifestPath = resolveManifestPath(input.manifestPath)
+  const manifestPath = resolveManifestPath(input.manifestPath, runtime.projectRoot)
   if (path.extname(manifestPath).toLowerCase() !== ".json") {
     throw new Error(`VisualRegionBinding manifestPath must be a JSON file: ${input.manifestPath}`)
   }
@@ -398,34 +411,34 @@ export async function materializeVisualRegionBindingPackage(
     version: 1,
     purpose: "visual-region-binding-package",
     generated_at: new Date().toISOString(),
-    source_image: publicPath(sourceImagePath),
+    source_image: publicPath(sourceImagePath, runtime.projectRoot),
     source_image_dimensions: { width: sourceMeta.width, height: sourceMeta.height },
-    crop_directory: publicPath(cropDirectory),
-    bbox_overlay_artifact: publicPath(bboxOverlayPath),
-    contact_sheet_artifact: publicPath(contactSheetPath),
+    crop_directory: publicPath(cropDirectory, runtime.projectRoot),
+    bbox_overlay_artifact: publicPath(bboxOverlayPath, runtime.projectRoot),
+    contact_sheet_artifact: publicPath(contactSheetPath, runtime.projectRoot),
     regions,
   }
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8")
 
   return {
-    manifestPath: publicPath(manifestPath),
-    sourceImagePath: publicPath(sourceImagePath),
+    manifestPath: publicPath(manifestPath, runtime.projectRoot),
+    sourceImagePath: publicPath(sourceImagePath, runtime.projectRoot),
     sourceImageDimensions: { width: sourceMeta.width, height: sourceMeta.height },
-    cropDirectory: publicPath(cropDirectory),
-    bboxOverlayArtifact: publicPath(bboxOverlayPath),
-    contactSheetArtifact: publicPath(contactSheetPath),
+    cropDirectory: publicPath(cropDirectory, runtime.projectRoot),
+    bboxOverlayArtifact: publicPath(bboxOverlayPath, runtime.projectRoot),
+    contactSheetArtifact: publicPath(contactSheetPath, runtime.projectRoot),
     regions,
   }
 }
 
-function resolveProjectPath(input: string, label: string): string {
-  const resolved = path.isAbsolute(input) ? path.resolve(input) : path.resolve(Instance.directory, input)
-  assertInsideProject(resolved, label)
+function resolveProjectPath(input: string, label: string, projectRoot: string): string {
+  const resolved = path.isAbsolute(input) ? path.resolve(input) : path.resolve(projectRoot, input)
+  assertInsideProject(resolved, label, projectRoot)
   return resolved
 }
 
-function resolveManifestPath(input: string | undefined): string {
-  return resolveProjectPath(input ?? path.join("docs", "visual-region-binding.json"), "manifestPath")
+function resolveManifestPath(input: string | undefined, projectRoot: string): string {
+  return resolveProjectPath(input ?? path.join("docs", "visual-region-binding.json"), "manifestPath", projectRoot)
 }
 
 function manifestStem(input: string): string {
@@ -629,17 +642,33 @@ async function buildFrontendDesignImageResult(input: {
   })
 }
 
-function publicPath(input: string): string {
-  const relative = path.relative(Instance.directory, input)
+function publicPath(input: string, projectRoot: string): string {
+  const relative = path.relative(projectRoot, input)
   const value = relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? relative : input
   return value.replaceAll("\\", "/")
 }
 
-function assertInsideProject(targetPath: string, label: string): void {
-  const root = path.resolve(Instance.directory)
+function assertInsideProject(targetPath: string, label: string, projectRoot: string): void {
+  const root = path.resolve(projectRoot)
   const target = path.resolve(targetPath)
   const relative = path.relative(root, target)
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`${label} must stay inside the current project directory: ${target}`)
+    throw new Error(`${label} must stay inside the task primary project directory: ${target}`)
+  }
+}
+
+function frontendDesignTaskProjectRoot(taskID: string | undefined): string {
+  if (!taskID) throw new Error("VisualRegionBinding tools require a task-scoped frontend_design taskID")
+  return taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
+}
+
+function frontendDesignRuntimeContext(taskID: string): {
+  projectRoot: string
+  paths: ReturnType<typeof ProjectRuntimePaths.frontendDesignPaths>
+} {
+  const projectRoot = frontendDesignTaskProjectRoot(taskID)
+  return {
+    projectRoot,
+    paths: ProjectRuntimePaths.frontendDesignPaths(projectRoot, taskID),
   }
 }

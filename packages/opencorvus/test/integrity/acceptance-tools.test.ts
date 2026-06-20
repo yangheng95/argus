@@ -1,9 +1,16 @@
-import { expect, test } from "bun:test"
+import { afterEach, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { Database } from "../../src/storage/db"
+import { persistBrowserPreviewEvidence, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { tmpdir } from "../fixture/fixture"
+import { resetDatabase } from "../fixture/db"
 import type { VisualEvidenceBundle } from "../../src/acceptance/visual-evidence"
 
-function visualBundle(taskID: string, projectDirectory: string): VisualEvidenceBundle {
+function visualBundle(taskID: string, projectDirectory: string, evidenceRefs: string[]): VisualEvidenceBundle {
   return {
     id: "veb_integrity_desktop",
     taskID,
@@ -25,22 +32,12 @@ function visualBundle(taskID: string, projectDirectory: string): VisualEvidenceB
       projectDirectory,
       commitRef: "abc123",
     },
-    evaluation: {
-      path: "webpage-evidence/eval-result.json",
-      overallScore: 98,
-      passThreshold: 96,
-      passed: true,
-      ssimScore: 0.99,
-      pixelDiffPercent: 0.2,
-      dimensionsMatch: true,
-    },
-    vision: {
-      path: "webpage-evidence/vision-judge.json",
-      accepted: true,
-      differenceCount: 0,
-      criticalCount: 0,
-      majorCount: 0,
-      minorCount: 0,
+    inspection: {
+      path: "visual-qa-report.json",
+      reviewedAt: "2026-06-08T00:00:00.000Z",
+      status: "passing",
+      blockerCount: 0,
+      notes: "No production blockers remain.",
     },
     regions: [
       {
@@ -49,14 +46,79 @@ function visualBundle(taskID: string, projectDirectory: string): VisualEvidenceB
         requirementIDs: ["REQ-visual"],
         acceptanceSpecIDs: ["acc-final-visual"],
         sourceRefs: ["webpage-evidence/reference.png"],
-        viewport: "desktop-primary",
+        viewport: "desktop",
         required: true,
         status: "passing",
-        evidenceRefs: ["webpage-evidence/rendered.png", "webpage-evidence/eval-result.json"],
+        evidenceRefs,
         notes: "Header matches.",
       },
     ],
   }
+}
+
+function visualBundleWithoutRequiredRegions(taskID: string, projectDirectory: string): VisualEvidenceBundle {
+  const bundle = visualBundle(taskID, projectDirectory, [])
+  return {
+    ...bundle,
+    regions: bundle.regions.map((region) => ({ ...region, required: false, evidenceRefs: [] })),
+  }
+}
+
+afterEach(async () => {
+  await resetDatabase()
+})
+
+async function seedTaskWithReferenceComparison(input: {
+  taskID: string
+  projectDirectory: string
+  regionID?: string
+  viewportID?: string
+  operationKind?: "preview-capture" | "reference-comparison" | "source-binding"
+  status?: "passed" | "failed"
+  artifactNames?: Array<"source.png" | "implementation.png" | "side-by-side.png">
+}): Promise<string> {
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: Instance.project.id,
+        title: "Integrity visual evidence task",
+        request: "Inspect visual evidence",
+        source: "test",
+        time_created: Date.now(),
+        time_updated: Date.now(),
+      })
+      .run(),
+  )
+  const artifactDir = ProjectRuntimePaths.taskAbsolute(input.projectDirectory, input.taskID, "bp", "integrity-visual")
+  await fs.mkdir(artifactDir, { recursive: true })
+  const artifactNames = input.artifactNames ?? ["source.png", "implementation.png", "side-by-side.png"]
+  for (const file of artifactNames) {
+    await fs.writeFile(path.join(artifactDir, file), `png:${file}`)
+  }
+  const target = await persistBrowserPreviewTarget({
+    taskID: input.taskID,
+    url: "http://127.0.0.1:4173/",
+  })
+  return persistBrowserPreviewEvidence({
+    projectRoot: input.projectDirectory,
+    taskID: input.taskID,
+    targetID: target.id,
+    viewportID: input.viewportID ?? "desktop",
+    operationKind: input.operationKind ?? "reference-comparison",
+    regionID: input.regionID ?? "region_header",
+    status: input.status ?? "passed",
+    summary: input.status === "failed" ? "Reference comparison failed." : "Reference comparison passed.",
+    artifactPaths: {
+      ...(artifactNames.includes("source.png") ? { source_crop: path.join(artifactDir, "source.png") } : {}),
+      ...(artifactNames.includes("implementation.png")
+        ? { implementation_crop: path.join(artifactDir, "implementation.png") }
+        : {}),
+      ...(artifactNames.includes("side-by-side.png") ? { side_by_side: path.join(artifactDir, "side-by-side.png") } : {}),
+    },
+    diagnostics: [],
+  })
 }
 
 test("provider-bound integrity run_command applies the default foreground timeout", async () => {
@@ -147,7 +209,18 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
         },
         frontendDesign:
           "## visual_consistency_contract\nMatch web-clone-source/reference.png with measured overlay evidence.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md",
-        visualEvidence: [visualBundle("tsk_integrity_tools", dir.path)],
+        visualEvidence: [
+          visualBundle(
+            "tsk_integrity_tools",
+            dir.path,
+            [
+              await seedTaskWithReferenceComparison({
+                taskID: "tsk_integrity_tools",
+                projectDirectory: dir.path,
+              }),
+            ],
+          ),
+        ],
         attachments: [],
       })
 
@@ -200,7 +273,8 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
       expect(String(visual)).toContain("status=passing")
       expect(String(visual)).toContain("reference=webpage-evidence/reference.png")
       expect(String(visual)).toContain("rendered=webpage-evidence/rendered.png")
-      expect(String(visual)).toContain("score=98/96")
+      expect(String(visual)).toContain("inspection_status=passing")
+      expect(String(visual)).toContain("production_blockers=0")
       expect(String(visual)).toContain("project_directory=" + dir.path)
       expect(String(visual)).toContain("region_header")
 
@@ -212,7 +286,228 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
       expect(String(command)).toContain("integrity-mutation.txt")
     },
   })
-})
+}, 20_000)
+
+test("integrity visual evidence reports missing reference-comparison refs as not passing", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const tools = createIntegrityAcceptanceTools({
+        taskID: "tsk_integrity_visual_missing_ref",
+        visualEvidence: [
+          visualBundle("tsk_integrity_visual_missing_ref", dir.path, [
+            "webpage-evidence/rendered.png",
+            "visual-qa-report.json",
+          ]),
+        ],
+      })
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=not_passing")
+      expect(String(visual)).toContain("missing browser_preview_evidence reference-comparison evidence ref")
+    },
+  })
+}, 20_000)
+
+test("integrity visual evidence reports zero required regions as not passing", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const tools = createIntegrityAcceptanceTools({
+        taskID: "tsk_integrity_visual_zero_regions",
+        visualEvidence: [visualBundleWithoutRequiredRegions("tsk_integrity_visual_zero_regions", dir.path)],
+      })
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=not_passing")
+      expect(String(visual)).toContain("no required visual regions declared")
+    },
+  })
+}, 20_000)
+
+test("integrity visual evidence rejects mismatched comparison task, region, viewport, operation, and status", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const cases: Array<{
+        name: string
+        toolTaskID: string
+        bundleTaskID: string
+        evidenceID: string
+        expected: string
+      }> = []
+      {
+        const taskID = "tsk_integrity_visual_wrong_task_source"
+        cases.push({
+          name: "wrong task",
+          toolTaskID: "tsk_integrity_visual_wrong_task_expected",
+          bundleTaskID: taskID,
+          evidenceID: await seedTaskWithReferenceComparison({ taskID, projectDirectory: dir.path }),
+          expected: "does not match expected task",
+        })
+      }
+      {
+        const taskID = "tsk_integrity_visual_wrong_region"
+        cases.push({
+          name: "wrong region",
+          toolTaskID: taskID,
+          bundleTaskID: taskID,
+          evidenceID: await seedTaskWithReferenceComparison({
+            taskID,
+            projectDirectory: dir.path,
+            regionID: "region_footer",
+          }),
+          expected: "belongs to region region_footer",
+        })
+      }
+      {
+        const taskID = "tsk_integrity_visual_wrong_viewport"
+        cases.push({
+          name: "wrong viewport",
+          toolTaskID: taskID,
+          bundleTaskID: taskID,
+          evidenceID: await seedTaskWithReferenceComparison({
+            taskID,
+            projectDirectory: dir.path,
+            viewportID: "mobile",
+          }),
+          expected: "viewport is mobile, not desktop",
+        })
+      }
+      {
+        const taskID = "tsk_integrity_visual_preview_capture"
+        cases.push({
+          name: "preview capture",
+          toolTaskID: taskID,
+          bundleTaskID: taskID,
+          evidenceID: await seedTaskWithReferenceComparison({
+            taskID,
+            projectDirectory: dir.path,
+            operationKind: "preview-capture",
+          }),
+          expected: "is preview-capture, not reference-comparison",
+        })
+      }
+      {
+        const taskID = "tsk_integrity_visual_failed_status"
+        cases.push({
+          name: "failed status",
+          toolTaskID: taskID,
+          bundleTaskID: taskID,
+          evidenceID: await seedTaskWithReferenceComparison({
+            taskID,
+            projectDirectory: dir.path,
+            status: "failed",
+          }),
+          expected: "status is failed",
+        })
+      }
+
+      for (const item of cases) {
+        const tools = createIntegrityAcceptanceTools({
+          taskID: item.toolTaskID,
+          visualEvidence: [visualBundle(item.bundleTaskID, dir.path, [item.evidenceID])],
+        })
+        const visual = await tools.inspect_visual_evidence.execute!(
+          { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+          {} as any,
+        )
+        expect(String(visual), item.name).toContain("status=not_passing")
+        expect(String(visual), item.name).toContain(item.expected)
+      }
+    },
+  })
+}, 20_000)
+
+test("integrity visual evidence rejects incomplete reference-comparison artifact sets", async () => {
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const dir = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      const taskID = "tsk_integrity_visual_incomplete_artifacts"
+      Database.use((db) =>
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "Integrity visual evidence task",
+            request: "Inspect malformed visual evidence",
+            source: "test",
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .run(),
+      )
+      const artifactDir = ProjectRuntimePaths.taskAbsolute(dir.path, taskID, "bp", "integrity-incomplete")
+      await fs.mkdir(artifactDir, { recursive: true })
+      await fs.writeFile(path.join(artifactDir, "side-by-side.png"), "side-by-side")
+      const target = await persistBrowserPreviewTarget({
+        taskID,
+        url: "http://127.0.0.1:4173/",
+      })
+      const evidenceID = "art_integrity_incomplete_reference_comparison"
+      Database.use((db) =>
+        db
+          .insert(EngineArtifactTable)
+          .values({
+            id: evidenceID,
+            task_id: taskID,
+            run_id: null,
+            goal_run_id: null,
+            acceptance_id: null,
+            kind: "browser_preview_evidence",
+            label: "capture",
+            payload: {
+              target_id: target.id,
+              viewport_id: "desktop",
+              operation_kind: "reference-comparison",
+              region_id: "region_header",
+              artifact_paths: {
+                side_by_side: ProjectRuntimePaths.taskRelative(
+                  taskID,
+                  "bp",
+                  "integrity-incomplete",
+                  "side-by-side.png",
+                ),
+              },
+              status: "passed",
+              summary: "Incomplete reference comparison should be unreadable.",
+              diagnostics: [],
+              time_completed: Date.now(),
+            },
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .run(),
+      )
+      const tools = createIntegrityAcceptanceTools({
+        taskID,
+        visualEvidence: [visualBundle(taskID, dir.path, [evidenceID])],
+      })
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=not_passing")
+      expect(String(visual)).toContain("was not found or has unreadable artifacts")
+    },
+  })
+}, 20_000)
 
 test("integrity run_command filters evidence input views from readonly guard but keeps implementation mutations", async () => {
   const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
@@ -243,7 +538,7 @@ test("integrity run_command filters evidence input views from readonly guard but
       expect(String(implementationMutation)).not.toContain("web-clone-source/reference.txt")
     },
   })
-})
+}, 20_000)
 
 test("integrity run_command can launch a background preview command with a lease", async () => {
   const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
@@ -266,4 +561,4 @@ test("integrity run_command can launch a background preview command with a lease
       expect(String(output)).toContain("lease_timeout_ms: 3000")
     },
   })
-}, 10_000)
+}, 30_000)

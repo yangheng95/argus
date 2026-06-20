@@ -46,10 +46,6 @@ import {
   WebpageCompileTool,
   WebpageAnalyzeTool,
   WebpageRuntimeStateTool,
-  WebpageRenderTool,
-  WebpageEvaluateTool,
-  WebpageTextDiffTool,
-  WebpageVisionJudgeTool,
 } from "@/frontend-design/tools"
 import { isWebpageEvidenceAnalysisToolId, isWebpageEvidenceToolId } from "@/frontend-design/tools/ids"
 import { Glob } from "../util/glob"
@@ -163,10 +159,6 @@ export namespace ToolRegistry {
       WebpageCompileTool,
       WebpageAnalyzeTool,
       WebpageRuntimeStateTool,
-      WebpageRenderTool,
-      WebpageEvaluateTool,
-      WebpageTextDiffTool,
-      WebpageVisionJudgeTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...custom,
     ]

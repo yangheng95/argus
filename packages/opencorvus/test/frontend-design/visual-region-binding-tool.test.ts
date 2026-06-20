@@ -8,8 +8,12 @@ import {
   materializeVisualRegionBindingPackage,
   materializeVisualRegionCoordinateAtlas,
 } from "../../src/frontend-design/visual-region-binding-tool"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { Database } from "../../src/storage/db"
+import { Filesystem } from "../../src/util/filesystem"
+import { Worktree } from "../../src/worktree"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -19,6 +23,25 @@ describe("frontend-design VisualRegionBinding materializer", () => {
     await Instance.disposeAll()
   })
 
+  function seedFrontendTask(taskID: string): void {
+    const now = Date.now()
+    Database.use((db) =>
+      db
+        .insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: Instance.project.id,
+          source: "test",
+          title: "visual region binding task",
+          request: "visual region binding task",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+  }
+
   test("writes visible coordinate atlas bands before bbox authoring", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_visualregionatlas"
@@ -26,6 +49,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        seedFrontendTask(taskID)
         const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
         await fs.mkdir(paths.webpageEvidenceAbsolute, { recursive: true })
         const sourcePng = path.join(paths.webpageEvidenceAbsolute, "desktop-reference-full.png")
@@ -106,6 +130,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        seedFrontendTask(taskID)
         const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
         await fs.mkdir(paths.webpageEvidenceAbsolute, { recursive: true })
         const sourcePng = path.join(paths.webpageEvidenceAbsolute, "desktop-reference-full.png")
@@ -216,6 +241,80 @@ describe("frontend-design VisualRegionBinding materializer", () => {
     })
   })
 
+  test("writes visual-region artifacts to the task primary runtime when called from a managed worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_visualregion_worktree"
+    let worktreeDir = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedFrontendTask(taskID)
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        await fs.mkdir(paths.webpageEvidenceAbsolute, { recursive: true })
+        const sourcePng = path.join(paths.webpageEvidenceAbsolute, "desktop-reference-full.png")
+        await sharp({
+          create: { width: 120, height: 90, channels: 4, background: "#ffffff" },
+        })
+          .composite([
+            {
+              input: Buffer.from(
+                `<svg width="80" height="40" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="80" height="40" fill="#d7f1e5"/>
+                  <text x="8" y="26" font-family="Arial" font-size="18" fill="#0b4d35">Hero</text>
+                </svg>`,
+              ),
+              left: 20,
+              top: 20,
+            },
+          ])
+          .png()
+          .toFile(sourcePng)
+
+        const worktree = await Worktree.create({
+          name: `visual-region-${Date.now().toString(36)}`,
+          taskID,
+          goalID: "gol_visual_region",
+          runID: "run_visual_region",
+        })
+        worktreeDir = worktree.directory
+      },
+    })
+
+    await Instance.provide({
+      directory: worktreeDir,
+      fn: async () => {
+        const result = await materializeVisualRegionBindingPackage({
+          taskID,
+          sourceImagePath: `${ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative}/desktop-reference-full.png`,
+          manifestPath: "docs/visual-region-binding.json",
+          regions: [
+            {
+              region_id: "hero",
+              source_bbox: { x: 20, y: 20, width: 80, height: 40 },
+              viewport: "desktop",
+              region_scope: "hero",
+              target_route: "/",
+              implementation_locator: "[data-region='hero']",
+              component_files: ["src/components/Hero.tsx"],
+            },
+          ],
+        })
+
+        const primaryPaths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        expect(result.manifestPath).toBe("docs/visual-region-binding.json")
+        expect(await Filesystem.exists(path.join(tmp.path, result.manifestPath))).toBe(true)
+        expect(await Filesystem.exists(path.join(primaryPaths.absoluteDir, "visual-region-bindings"))).toBe(true)
+        expect(await Filesystem.exists(path.join(worktreeDir, result.manifestPath))).toBe(false)
+        expect(
+          await Filesystem.exists(
+            path.join(ProjectRuntimePaths.frontendDesignPaths(worktreeDir, taskID).absoluteDir, "visual-region-bindings"),
+          ),
+        ).toBe(false)
+      },
+    })
+  }, 30_000)
+
   test("rejects missing task scope and out-of-bounds boxes", async () => {
     await using tmp = await tmpdir()
 
@@ -245,6 +344,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
         }
 
         await expect(materializeVisualRegionBindingPackage(input)).rejects.toThrow("requires a task-scoped")
+        seedFrontendTask("tsk_badbox")
         await expect(materializeVisualRegionBindingPackage({ ...input, taskID: "tsk_badbox" })).rejects.toThrow(
           "exceeds source image bounds",
         )
@@ -286,6 +386,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
           },
         ]
 
+        seedFrontendTask("tsk_duplicate")
         await expect(
           materializeVisualRegionBindingPackage({
             taskID: "tsk_duplicate",
@@ -294,6 +395,7 @@ describe("frontend-design VisualRegionBinding materializer", () => {
           }),
         ).rejects.toThrow("Duplicate VisualRegionBinding region")
 
+        seedFrontendTask("tsk_badmanifest")
         await expect(
           materializeVisualRegionBindingPackage({
             taskID: "tsk_badmanifest",
@@ -306,13 +408,14 @@ describe("frontend-design VisualRegionBinding materializer", () => {
         const outsidePath = path.join(os.tmpdir(), `opencorvus-outside-${Date.now()}.png`)
         await fs.copyFile(sourcePng, outsidePath)
         try {
+          seedFrontendTask("tsk_external")
           await expect(
             materializeVisualRegionBindingPackage({
               taskID: "tsk_external",
               sourceImagePath: outsidePath,
               regions: regions.slice(0, 1),
             }),
-          ).rejects.toThrow("sourceImagePath must stay inside the current project directory")
+          ).rejects.toThrow("sourceImagePath must stay inside the task primary project directory")
         } finally {
           await fs.rm(outsidePath, { force: true })
         }

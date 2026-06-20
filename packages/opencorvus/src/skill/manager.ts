@@ -56,6 +56,7 @@ const SkillInfo = z.object({
     .optional(),
   priority: z.number().optional().default(0),
   required_tools: z.array(z.string()).optional().default([]),
+  agents: z.array(z.string()).optional().default([]),
   expires_at: ExpirationTimestamp,
   duplicate_locations: z.array(z.string()).optional().default([]),
 })

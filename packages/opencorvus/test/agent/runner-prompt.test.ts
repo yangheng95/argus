@@ -13,6 +13,13 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { AgentRuntimeMetadata } from "../../src/session/agent-runtime-metadata"
 import type { SessionKind } from "../../src/session/session.sql"
+import {
+  claimStageContinuationRequest,
+  createStageContinuationRequest,
+  findStageContinuationRequest,
+} from "../../src/engine/stage-continuation"
+
+const RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS = 30_000
 
 afterEach(async () => {
   mock.restore()
@@ -110,7 +117,7 @@ test("runAgentSession appends config.agent.build.prompt_append after build core"
     goal_report: false,
   })
   expect((promptCalls[0].extra?.workerTurnDescriptor as { id: string }).id).toBe(descriptor?.id)
-})
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
 
 test("runAgentSession passes taskID to registry tool execution context", async () => {
   mock.module("@/agent/model", () => ({
@@ -200,7 +207,7 @@ test("runAgentSession passes taskID to registry tool execution context", async (
       expect(promptCalls[0].extra?.workerTurnDescriptor).toBeDefined()
     },
   })
-})
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
 
 test("runAgentSession installs live runtime contracts for every migrated worker agent", async () => {
   mock.module("@/agent/model", () => ({
@@ -281,7 +288,144 @@ test("runAgentSession installs live runtime contracts for every migrated worker 
   expect(promptCalls.map((call) => call.agent)).toEqual([
     ...AgentRuntimeMetadata.LIVE_RUNTIME_CONTINUATION_SESSION_KINDS,
   ])
-})
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
+
+test("runAgentSession continuation appends a visible recovery message to the same session and consumes the artifact once", async () => {
+  mock.module("@/agent/model", () => ({
+    resolveAgentModel: async () => ({
+      providerID: "test",
+      api: { id: "mock" },
+    }),
+  }))
+  const { runAgentSession } = await import("../../src/agent/runner")
+  const { Session } = await import("../../src/session")
+
+  await using tmp = await tmpdir({ git: true })
+
+  const loopCalls: Array<Parameters<typeof SessionPrompt.loop>[0]> = []
+  spyOn(SessionPrompt, "loop").mockImplementation(async (input) => {
+    loopCalls.push(input)
+    return {
+      info: {
+        id: "msg_runner_continuation_assistant",
+        sessionID: input.sessionID,
+        role: "assistant",
+        parentID: undefined,
+        time: { created: Date.now() },
+        agent: "architect",
+        providerID: "test",
+        modelID: "mock",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { cwd: tmp.path, root: tmp.path },
+      },
+      parts: [
+        {
+          id: "prt_runner_continuation_assistant",
+          sessionID: input.sessionID,
+          messageID: "msg_runner_continuation_assistant",
+          type: "text",
+          text: "submitted",
+        },
+      ],
+    } as Awaited<ReturnType<typeof SessionPrompt.loop>>
+  })
+
+  const toolKit: AgentToolKit<Record<string, never>> = {
+    tools: {},
+    getCollector: () => ({}),
+    buildReport: () => ({ summary: "ok", detail: "ok" }),
+  }
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const parent = await Session.createNext({
+        kind: "orchestrator",
+        title: "runner continuation root",
+        directory: tmp.path,
+      })
+      const child = await Session.createNext({
+        kind: "architect",
+        parentID: parent.id,
+        title: "architect child",
+        directory: tmp.path,
+      })
+      const taskID = "tsk_runner_stage_continuation"
+      const now = Date.now()
+      Database.use((db) =>
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: parent.id,
+            source: "test",
+            title: "runner continuation",
+            request: "continue architect finalizer",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          })
+          .run(),
+      )
+      const request = createStageContinuationRequest({
+        taskID,
+        stage: "architect",
+        sessionID: child.id,
+        parentSessionID: parent.id,
+        inputDigest: "digest-runner-continuation",
+        failureName: "TerminalToolMissingError",
+        failureMessage: "Model did not call terminal tool submit_architect",
+        finalizerName: "submit_architect",
+        now,
+      })
+
+      const out = await runAgentSession({
+        kind: "architect",
+        core: "architect core",
+        sessionTitle: "architect child",
+        taskID,
+        parentSessionID: parent.id,
+        continuation: {
+          sessionID: child.id,
+          artifactID: request.artifactID,
+          kind: "protocol-finalizer-miss",
+          reason: request.payload.reason,
+          finalizerName: "submit_architect",
+        },
+        toolKit,
+        buildUserPrompt: () => "fresh prompt must not be used for continuation",
+      })
+
+      expect(out.session.id).toBe(child.id)
+      expect(loopCalls).toEqual([{ sessionID: child.id }])
+      const consumed = findStageContinuationRequest({ taskID, artifactID: request.artifactID })
+      expect(consumed?.payload.claimed_at).toBeGreaterThanOrEqual(now)
+      expect(consumed?.payload.consumed_at).toBeGreaterThanOrEqual(now)
+      const continuationMessageID = consumed?.payload.continuation_message_id
+      expect(continuationMessageID).toBeTruthy()
+      const continuationMessage = await Message.get({
+        sessionID: child.id,
+        messageID: continuationMessageID!,
+      })
+      expect(continuationMessage.info.role).toBe("user")
+      const text = continuationMessage.parts.map((part) => (part.type === "text" ? part.text : "")).join("\n")
+      expect(text).toContain(`continuation_artifact_id: ${request.artifactID}`)
+      expect(text).toContain("required_finalizer: submit_architect")
+      expect(text).not.toContain("fresh prompt must not be used")
+      expect(() =>
+        claimStageContinuationRequest({
+          taskID,
+          artifactID: request.artifactID,
+          sessionID: child.id,
+          finalizerName: "submit_architect",
+        }),
+      ).toThrow("already consumed")
+    },
+  })
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
 
 test("runAgentSession does not hide-recover when terminal collector is still unsatisfied", async () => {
   mock.module("@/agent/model", () => ({
@@ -365,7 +509,7 @@ test("runAgentSession does not hide-recover when terminal collector is still uns
       expect(Message.TerminalToolMissingError.isInstance((thrown as Error).cause as Error)).toBe(true)
     },
   })
-})
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
 
 test("runAgentSession does not retry terminal protocol misses inside the runner", async () => {
   mock.module("@/agent/model", () => ({
@@ -449,7 +593,7 @@ test("runAgentSession does not retry terminal protocol misses inside the runner"
       expect(Message.TerminalToolMissingError.isInstance((thrown as Error).cause as Error)).toBe(true)
     },
   })
-})
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
 
 test("runAgentSession does not hide-recover when structured output is missing", async () => {
   mock.module("@/agent/model", () => ({
@@ -529,7 +673,7 @@ test("runAgentSession does not hide-recover when structured output is missing", 
       expect((thrown as Error).message).toContain("StructuredOutputError")
     },
   })
-})
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
 
 test("runAgentSession does not recover non-finalizer provider errors", async () => {
   mock.module("@/agent/model", () => ({
@@ -620,7 +764,7 @@ test("runAgentSession does not recover non-finalizer provider errors", async () 
       expect((thrown as Error).message).toContain("provider rejected tool_choice")
     },
   })
-})
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
 
 test("runAgentSession writes child agent report while called from parent session context", async () => {
   mock.module("@/agent/model", () => ({
@@ -710,9 +854,11 @@ test("runAgentSession writes child agent report while called from parent session
         childSessionID = out.session.id
       })
 
-      const childEvents = AgentTrace.readSessionEvents(childSessionID)
+      const childEvents = AgentTrace.readSessionEvents(childSessionID, "tsk_runner_context")
       expect(childEvents.some((event) => event.kind === "agent_report")).toBe(true)
-      expect(AgentTrace.readSessionEvents(parent.id).some((event) => event.kind === "agent_report")).toBe(false)
+      expect(
+        AgentTrace.readSessionEvents(parent.id, "tsk_runner_context").some((event) => event.kind === "agent_report"),
+      ).toBe(false)
     },
   })
-})
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })

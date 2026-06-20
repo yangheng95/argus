@@ -290,7 +290,7 @@ describe("Gateway e2e — task lifecycle through EngineService (template §9)", 
       fn: async () => {
         spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
 
-        // First task starts because queue:false bypasses the directory queue.
+        // First task starts because queue:false starts immediately.
         const firstID = await EngineService.createTask({
           request: "first",
           executor: "opencorvus",

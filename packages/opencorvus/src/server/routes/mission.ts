@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { randomBytes } from "node:crypto"
+import { conversationMessageHasDisplay } from "@/conversation/view"
 import { Instance } from "@/project/instance"
 import {
   ensureMissionSession,
@@ -23,9 +24,11 @@ import {
 import { compileBoard } from "@/workbench/board"
 import { Session, SessionStatus } from "@/session"
 import { SessionWake } from "@/session/wake"
+import { enrichStandaloneSessionTranscript } from "@/protocol/session-mirror"
 import { Provider } from "@/provider/provider"
 import { isModelReference } from "@/provider/model-ref"
 import { Config } from "@/config/config"
+import { buildMissionProjectArchive, ProjectArchiveUnsupportedProjectError } from "@/engine/task-project-archive"
 import { EngineService } from "@/task-api"
 import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
@@ -114,6 +117,10 @@ const MissionTitleInput = z.object({
   title: z.string().trim().min(1).max(200),
 })
 
+const ProjectArchiveUnsupportedProjectResponse = z.object({
+  message: z.string(),
+})
+
 type MissionSessionRecord = Awaited<ReturnType<typeof getMissionSessionByDirectory>>
 type MissionTaskProjectionValue = z.infer<typeof MissionTaskProjection>
 
@@ -183,6 +190,10 @@ function missionStatusRecord(session: MissionSessionRecord): z.infer<typeof Miss
   })
 }
 
+async function missionTranscript(sessionID: string) {
+  return enrichStandaloneSessionTranscript(await Session.messages({ sessionID })).filter(conversationMessageHasDisplay)
+}
+
 export function MissionRoutes() {
   return new Hono()
     .get(
@@ -238,6 +249,66 @@ export function MissionRoutes() {
       async (c) => {
         const session = await missionRouteSession(c.req.valid("param").missionID)
         return c.json(missionStatusRecord(session))
+      },
+    )
+    .get(
+      "/:missionID/project-archive",
+      describeRoute({
+        summary: "Download Mission project archive",
+        description:
+          "Return a ZIP containing the Mission project's Git-included files plus Mission execution evidence exported from Mission projections.",
+        operationId: "mission.projectArchive",
+        responses: {
+          200: {
+            description: "ZIP archive",
+            content: {
+              "application/zip": {
+                schema: resolver(z.string()),
+              },
+            },
+          },
+          422: {
+            description: "Mission project is not a Git worktree",
+            content: {
+              "application/json": {
+                schema: resolver(ProjectArchiveUnsupportedProjectResponse),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", MissionParam),
+      async (c) => {
+        const session = await missionRouteSession(c.req.valid("param").missionID)
+        const record = missionRecord(session)
+        const archiveStatus = missionStatusRecord(session)
+        try {
+          const archive = await buildMissionProjectArchive({
+            missionID: session.missionID,
+            sessionID: session.id,
+            projectID: session.projectID,
+            title: session.title,
+            directory: session.directory,
+            record,
+            status: archiveStatus,
+            tasks: record.tasks,
+            transcript: await missionTranscript(session.id),
+          })
+          return new Response(archive.bytes, {
+            status: 200,
+            headers: {
+              "content-type": "application/zip",
+              "content-disposition": `attachment; filename="${archive.filename}"`,
+              "content-length": String(archive.bytes.byteLength),
+              "x-opencorvus-archive-file-count": String(archive.fileCount),
+            },
+          })
+        } catch (error) {
+          if (error instanceof ProjectArchiveUnsupportedProjectError) {
+            return c.json({ message: error.message }, 422)
+          }
+          throw error
+        }
       },
     )
     .patch(

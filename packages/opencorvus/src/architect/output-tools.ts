@@ -575,7 +575,7 @@ export function architectValidationFindings(
     } else {
       const missingRegionOwnership = visualAcceptanceRegionOwnershipFindings(collector, visualAcceptanceOwners)
       for (const missing of missingRegionOwnership) {
-        blocker("missing_visual_region_acceptance_ownership", missing.message, { goal_ids: missing.goalIDs }, [
+        concern("missing_visual_region_acceptance_ownership", missing.message, { goal_ids: missing.goalIDs }, [
           "register_goal",
           "modify_goal",
           "register_reference_coverage",
@@ -638,18 +638,30 @@ function limitInline(value: string, max: number): string {
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact
 }
 
-function missingScriptRefPaths(goal: RegisteredGoal, workDir: string): string[] {
-  const missing: string[] = []
+type ScriptRefValidationIssue = {
+  label: string
+  reason: "missing" | "not_repo_script"
+}
+
+function scriptRefValidationIssues(goal: RegisteredGoal, workDir: string): ScriptRefValidationIssue[] {
+  const issues: ScriptRefValidationIssue[] = []
   for (const spec of goal.acceptance_specs) {
     for (const scorer of spec.scorers) {
       if (scorer.type !== "heuristic" || scorer.spec.kind !== "script_ref") continue
       const resolved = path.resolve(workDir, scorer.spec.path)
       if (!isExistingFile(resolved)) {
-        missing.push(`${spec.id}/${scorer.name}: ${scorer.spec.path}`)
+        issues.push({ label: `${spec.id}/${scorer.name}: ${scorer.spec.path}`, reason: "missing" })
+        continue
+      }
+      if (isPackageManifestPath(scorer.spec.path)) {
+        issues.push({
+          label: `${spec.id}/${scorer.name}: ${scorer.spec.path} (package manifests are not executable repo scripts)`,
+          reason: "not_repo_script",
+        })
       }
     }
   }
-  return missing
+  return issues
 }
 
 function isExistingFile(resolvedPath: string): boolean {
@@ -660,11 +672,18 @@ function isExistingFile(resolvedPath: string): boolean {
   }
 }
 
-function scriptRefError(goalID: string, missing: readonly string[]): string {
+function isPackageManifestPath(scriptPath: string): boolean {
+  return path.basename(scriptPath.replaceAll("\\", "/")).toLowerCase() === "package.json"
+}
+
+function scriptRefError(goalID: string, issues: readonly ScriptRefValidationIssue[]): string {
+  const allMissing = issues.every((issue) => issue.reason === "missing")
+  const issueKind = allMissing ? "missing" : "invalid or missing"
+  const detail = issues.map((issue) => issue.label).join(", ")
   return (
-    `Error: goal "${goalID}" references missing script_ref acceptance scorer path(s): ${missing.join(", ")}. ` +
-    "script_ref is only for existing repo scripts. contract_audit is a scorer type, not a script_ref path; never use .opencorvus/scripts/contract-audit. " +
-    `Use spec.kind="shell" with cmd for inline page checks, or type="contract_audit" with registered contract_ids for graph-contract checks; collector unchanged.`
+    `Error: goal "${goalID}" references ${issueKind} script_ref acceptance scorer path(s): ${detail}. ` +
+    "script_ref is only for existing repo scripts: existing executable script files, not package manifests. contract_audit is a scorer type, not a script_ref path; never use .opencorvus/scripts/contract-audit. " +
+    `Use spec.kind="shell" with cmd for inline page checks or package-manager commands, or type="contract_audit" with registered contract_ids for graph-contract checks; collector unchanged.`
   )
 }
 
@@ -824,9 +843,9 @@ export function createArchitectOutputTools(input: {
         if (unknownContractIDs.length > 0) {
           return `Error: goal "${parsedGoal.id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
         }
-        const missingScriptRefs = missingScriptRefPaths(parsedGoal, dir)
-        if (missingScriptRefs.length > 0) {
-          return scriptRefError(parsedGoal.id, missingScriptRefs)
+        const scriptRefIssues = scriptRefValidationIssues(parsedGoal, dir)
+        if (scriptRefIssues.length > 0) {
+          return scriptRefError(parsedGoal.id, scriptRefIssues)
         }
         const warnings: string[] = []
         for (const p of parsedGoal.owned_paths) {
@@ -899,9 +918,9 @@ export function createArchitectOutputTools(input: {
             return `Error: goal "${id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
           }
         }
-        const missingScriptRefs = missingScriptRefPaths(next, dir)
-        if (missingScriptRefs.length > 0) {
-          return scriptRefError(id, missingScriptRefs)
+        const scriptRefIssues = scriptRefValidationIssues(next, dir)
+        if (scriptRefIssues.length > 0) {
+          return scriptRefError(id, scriptRefIssues)
         }
         const changedFields = Object.keys(normalizedUpdates).filter(
           (key) =>

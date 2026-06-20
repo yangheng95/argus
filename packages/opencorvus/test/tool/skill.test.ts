@@ -182,12 +182,30 @@ Use this skill.
 name: visual-acceptance
 description: Visual QA acceptance workflow. QA means Quality Assurance.
 required_tools:
-  - webpage_render
+  - browser_preview_bind_local_module
+agents:
+  - visual-qa
 ---
 
 # Visual Acceptance
 
 Use rendered evidence to inspect the implemented interface.
+`,
+        )
+
+        const retiredSkillDir = path.join(dir, ".opencorvus", "skill", "visual-retired")
+        await Bun.write(
+          path.join(retiredSkillDir, "SKILL.md"),
+          `---
+name: visual-retired
+description: Retired visual gate workflow.
+required_tools:
+  - webpage_render
+---
+
+# Retired Visual Gate
+
+This skill should not be exposed because it depends on a retired visual tool.
 `,
         )
 
@@ -231,20 +249,26 @@ Collect source webpage evidence.
           const visualQaResult = await visualQaSkill.execute({ query: "visual" }, ctx)
           expect(visualQaResult.output).toContain("<name>visual-acceptance</name>")
           expect(visualQaResult.output).not.toContain("<name>visual-extraction</name>")
+          expect(visualQaResult.output).not.toContain("<name>visual-retired</name>")
           await expect(visualQaSkill.execute({ name: "visual-extraction" }, ctx)).rejects.toThrow(
             'Skill "visual-extraction" not found or not allowed',
+          )
+          await expect(visualQaSkill.execute({ name: "visual-retired" }, ctx)).rejects.toThrow(
+            'Skill "visual-retired" not found or not allowed',
           )
           expect((await visualQaSkill.execute({ name: "visual-acceptance" }, ctx)).output).toContain(
             '<skill_content name="visual-acceptance">',
           )
 
           const frontendDesignResult = await frontendDesignSkill.execute({ query: "visual" }, ctx)
-          expect(frontendDesignResult.output).toContain("<name>visual-acceptance</name>")
+          expect(frontendDesignResult.output).not.toContain("<name>visual-acceptance</name>")
           expect(frontendDesignResult.output).toContain("<name>visual-extraction</name>")
+          expect(frontendDesignResult.output).not.toContain("<name>visual-retired</name>")
 
           const buildResult = await buildSkill.execute({ query: "visual" }, ctx)
           expect(buildResult.output).not.toContain("<name>visual-acceptance</name>")
           expect(buildResult.output).not.toContain("<name>visual-extraction</name>")
+          expect(buildResult.output).not.toContain("<name>visual-retired</name>")
         },
       })
     } finally {

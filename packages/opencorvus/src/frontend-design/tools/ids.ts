@@ -5,7 +5,9 @@ export const WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS = [
   "webpage_runtime_state",
 ] as const
 
-export const WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS = [
+export const WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS = [] as const
+
+export const WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS = [
   "webpage_render",
   "webpage_evaluate",
   "webpage_text_diff",
@@ -17,9 +19,16 @@ export const WEBPAGE_EVIDENCE_TOOL_IDS = [
   ...WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS,
 ] as const
 
+export const WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS = [
+  ...WEBPAGE_EVIDENCE_TOOL_IDS,
+  ...WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS,
+] as const
+
 export type WebpageEvidenceToolId = (typeof WEBPAGE_EVIDENCE_TOOL_IDS)[number]
 export type WebpageEvidenceAnalysisToolId = (typeof WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS)[number]
 export type WebpageEvidenceAcceptanceToolId = (typeof WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS)[number]
+export type WebpageEvidenceBlockedToolId = (typeof WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS)[number]
+export type WebpageEvidenceRetiredVisualToolId = (typeof WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS)[number]
 
 export function isWebpageEvidenceToolId(id: string): id is WebpageEvidenceToolId {
   return (WEBPAGE_EVIDENCE_TOOL_IDS as readonly string[]).includes(id)
@@ -31,4 +40,8 @@ export function isWebpageEvidenceAnalysisToolId(id: string): id is WebpageEviden
 
 export function isWebpageEvidenceAcceptanceToolId(id: string): id is WebpageEvidenceAcceptanceToolId {
   return (WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS as readonly string[]).includes(id)
+}
+
+export function isWebpageEvidenceRetiredVisualToolId(id: string): id is WebpageEvidenceRetiredVisualToolId {
+  return (WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS as readonly string[]).includes(id)
 }

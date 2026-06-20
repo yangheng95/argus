@@ -1,0 +1,320 @@
+import { EngineArtifactTable, type EngineArtifactKind, type EngineMetadata } from "@/engine/engine.sql"
+import { Database, and, desc, eq } from "@/storage/db"
+import { Identifier } from "@/id/id"
+
+export type StageContinuationFailureName = "TerminalToolMissingError" | "StructuredOutputError"
+export type StageContinuationKind = "protocol-finalizer-miss"
+export type StageContinuationStage =
+  | "requirements"
+  | "architect"
+  | "frontend-design"
+  | "goal-workload-analyst"
+  | "frontend-research"
+  | "deep-research"
+  | "visual-qa"
+  | "intent-analysis"
+  | "fact-check"
+  | "integrity"
+
+export interface StageContinuationRequestPayload extends EngineMetadata {
+  continuation_id: string
+  task_id: string
+  stage: StageContinuationStage
+  session_id: string
+  parent_session_id?: string
+  normalized_stage_input?: unknown
+  input_digest: string
+  kind: StageContinuationKind
+  reason: string
+  failure_name: StageContinuationFailureName
+  failure_message: string
+  finalizer_name: string
+  failed_assistant_message_id?: string
+  created_at: number
+  claimed_at?: number
+  claim_id?: string
+  claim_failed_at?: number
+  claim_error?: string
+  consumed_at?: number
+  continuation_message_id?: string
+}
+
+export interface StageContinuationRequestRow {
+  artifactID: string
+  taskID: string
+  payload: StageContinuationRequestPayload
+  timeCreated: number
+  timeUpdated: number
+}
+
+export interface AgentSessionContinuation {
+  sessionID: string
+  artifactID: string
+  reason: string
+  kind: StageContinuationKind
+  finalizerName: string
+  failedAssistantMessageID?: string
+}
+
+export interface ClaimedStageContinuation extends AgentSessionContinuation {
+  claimID: string
+  messageID: string
+}
+
+export function createStageContinuationRequest(input: {
+  taskID: string
+  stage: StageContinuationStage
+  sessionID: string
+  parentSessionID?: string
+  normalizedStageInput?: unknown
+  inputDigest: string
+  failureName: StageContinuationFailureName
+  failureMessage: string
+  finalizerName: string
+  failedAssistantMessageID?: string
+  reason?: string
+  now?: number
+}): StageContinuationRequestRow {
+  const now = input.now ?? Date.now()
+  const artifactID = Identifier.ascending("artifact")
+  const payload: StageContinuationRequestPayload = {
+    continuation_id: artifactID,
+    task_id: input.taskID,
+    stage: input.stage,
+    session_id: input.sessionID,
+    ...(input.parentSessionID ? { parent_session_id: input.parentSessionID } : {}),
+    ...(input.normalizedStageInput !== undefined ? { normalized_stage_input: input.normalizedStageInput } : {}),
+    input_digest: input.inputDigest,
+    kind: "protocol-finalizer-miss",
+    reason:
+      input.reason ??
+      `${input.stage} ended with ${input.failureName} before ${input.finalizerName}; continue the same child session.`,
+    failure_name: input.failureName,
+    failure_message: input.failureMessage,
+    finalizer_name: input.finalizerName,
+    ...(input.failedAssistantMessageID ? { failed_assistant_message_id: input.failedAssistantMessageID } : {}),
+    created_at: now,
+  }
+  Database.use((db) => {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: artifactID,
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: null,
+        acceptance_id: null,
+        kind: "stage_continuation_request" as EngineArtifactKind,
+        label: "pending",
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+  return { artifactID, taskID: input.taskID, payload, timeCreated: now, timeUpdated: now }
+}
+
+export function findStageContinuationRequest(input: {
+  taskID: string
+  artifactID: string
+}): StageContinuationRequestRow | undefined {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.id, input.artifactID),
+          eq(EngineArtifactTable.kind, "stage_continuation_request" as EngineArtifactKind),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_updated), desc(EngineArtifactTable.id))
+      .limit(1)
+      .get(),
+  )
+  if (!row) return undefined
+  const payload = normalizeStageContinuationPayload(row.payload)
+  if (!payload) return undefined
+  return {
+    artifactID: row.id,
+    taskID: row.task_id,
+    payload,
+    timeCreated: row.time_created,
+    timeUpdated: row.time_updated,
+  }
+}
+
+export function claimStageContinuationRequest(input: {
+  taskID: string
+  artifactID: string
+  sessionID: string
+  finalizerName: string
+  now?: number
+}): ClaimedStageContinuation {
+  const current = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!current) throw new Error(`stage continuation request not found: ${input.artifactID}`)
+  const payload = current.payload
+  if (payload.session_id !== input.sessionID) {
+    throw new Error(
+      `stage continuation ${input.artifactID} targets session ${payload.session_id}, not ${input.sessionID}`,
+    )
+  }
+  if (payload.finalizer_name !== input.finalizerName) {
+    throw new Error(
+      `stage continuation ${input.artifactID} targets finalizer ${payload.finalizer_name}, not ${input.finalizerName}`,
+    )
+  }
+  if (payload.consumed_at) {
+    throw new Error(
+      `stage continuation ${input.artifactID} already consumed by message ${payload.continuation_message_id ?? "n/a"}`,
+    )
+  }
+  if (payload.claim_failed_at) {
+    throw new Error(`stage continuation ${input.artifactID} has failed claim state: ${payload.claim_error ?? "n/a"}`)
+  }
+  if (payload.claimed_at) {
+    throw new Error(`stage continuation ${input.artifactID} already claimed by ${payload.claim_id ?? "unknown"}`)
+  }
+  const now = input.now ?? Date.now()
+  const claimID = Identifier.ascending("artifact")
+  const messageID = Identifier.ascending("message")
+  const next: StageContinuationRequestPayload = {
+    ...payload,
+    claimed_at: now,
+    claim_id: claimID,
+  }
+  updateStageContinuationPayload({
+    taskID: input.taskID,
+    artifactID: input.artifactID,
+    payload: next,
+    label: "claimed",
+    now,
+  })
+  return {
+    sessionID: payload.session_id,
+    artifactID: input.artifactID,
+    reason: payload.reason,
+    kind: payload.kind,
+    finalizerName: payload.finalizer_name,
+    failedAssistantMessageID: payload.failed_assistant_message_id,
+    claimID,
+    messageID,
+  }
+}
+
+export function markStageContinuationClaimFailed(input: {
+  taskID: string
+  artifactID: string
+  claimID: string
+  error: string
+  now?: number
+}): void {
+  const current = requireStageContinuationRequest(input.taskID, input.artifactID)
+  if (current.payload.claim_id !== input.claimID) return
+  const now = input.now ?? Date.now()
+  updateStageContinuationPayload({
+    taskID: input.taskID,
+    artifactID: input.artifactID,
+    label: "claim-failed",
+    now,
+    payload: {
+      ...current.payload,
+      claim_failed_at: now,
+      claim_error: input.error,
+    },
+  })
+}
+
+export function markStageContinuationConsumed(input: {
+  taskID: string
+  artifactID: string
+  claimID: string
+  messageID: string
+  now?: number
+}): void {
+  const current = requireStageContinuationRequest(input.taskID, input.artifactID)
+  if (current.payload.claim_id !== input.claimID) {
+    throw new Error(
+      `stage continuation ${input.artifactID} claim mismatch: ${current.payload.claim_id ?? "n/a"} != ${input.claimID}`,
+    )
+  }
+  if (current.payload.consumed_at) return
+  const now = input.now ?? Date.now()
+  updateStageContinuationPayload({
+    taskID: input.taskID,
+    artifactID: input.artifactID,
+    label: "consumed",
+    now,
+    payload: {
+      ...current.payload,
+      consumed_at: now,
+      continuation_message_id: input.messageID,
+    },
+  })
+}
+
+function requireStageContinuationRequest(taskID: string, artifactID: string): StageContinuationRequestRow {
+  const row = findStageContinuationRequest({ taskID, artifactID })
+  if (!row) throw new Error(`stage continuation request not found: ${artifactID}`)
+  return row
+}
+
+function updateStageContinuationPayload(input: {
+  taskID: string
+  artifactID: string
+  payload: StageContinuationRequestPayload
+  label: string
+  now: number
+}): void {
+  Database.use((db) => {
+    db.update(EngineArtifactTable)
+      .set({
+        payload: input.payload,
+        label: input.label,
+        time_updated: input.now,
+      })
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.id, input.artifactID),
+          eq(EngineArtifactTable.kind, "stage_continuation_request" as EngineArtifactKind),
+        ),
+      )
+      .run()
+  })
+}
+
+function normalizeStageContinuationPayload(payload: unknown): StageContinuationRequestPayload | undefined {
+  if (!payload || typeof payload !== "object") return undefined
+  const value = payload as Record<string, unknown>
+  if (typeof value.continuation_id !== "string" || value.continuation_id.length === 0) return undefined
+  if (typeof value.task_id !== "string" || value.task_id.length === 0) return undefined
+  if (!isStageContinuationStage(value.stage)) return undefined
+  if (typeof value.session_id !== "string" || value.session_id.length === 0) return undefined
+  if (value.kind !== "protocol-finalizer-miss") return undefined
+  if (value.failure_name !== "TerminalToolMissingError" && value.failure_name !== "StructuredOutputError") {
+    return undefined
+  }
+  if (typeof value.failure_message !== "string" || value.failure_message.length === 0) return undefined
+  if (typeof value.finalizer_name !== "string" || value.finalizer_name.length === 0) return undefined
+  if (typeof value.input_digest !== "string" || value.input_digest.length === 0) return undefined
+  if (typeof value.reason !== "string" || value.reason.length === 0) return undefined
+  if (typeof value.created_at !== "number" || !(value.created_at > 0)) return undefined
+  return value as unknown as StageContinuationRequestPayload
+}
+
+function isStageContinuationStage(value: unknown): value is StageContinuationStage {
+  return (
+    value === "requirements" ||
+    value === "architect" ||
+    value === "frontend-design" ||
+    value === "goal-workload-analyst" ||
+    value === "frontend-research" ||
+    value === "deep-research" ||
+    value === "visual-qa" ||
+    value === "intent-analysis" ||
+    value === "fact-check" ||
+    value === "integrity"
+  )
+}

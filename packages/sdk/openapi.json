@@ -8910,6 +8910,13 @@
                           "type": "string"
                         }
                       },
+                      "agents": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "expires_at": {
                         "type": "string"
                       },
@@ -9043,6 +9050,13 @@
                         "type": "number"
                       },
                       "required_tools": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "agents": {
                         "default": [],
                         "type": "array",
                         "items": {
@@ -14573,6 +14587,71 @@
         ]
       }
     },
+    "/mission/{missionID}/project-archive": {
+      "get": {
+        "operationId": "mission.projectArchive",
+        "summary": "Download Mission project archive",
+        "description": "Return a ZIP containing the Mission project's Git-included files plus Mission execution evidence exported from Mission projections.",
+        "responses": {
+          "200": {
+            "description": "ZIP archive",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Mission project is not a Git worktree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "missionID",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.mission.projectArchive({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/mission/{missionID}/title": {
       "patch": {
         "operationId": "mission.rename",
@@ -15277,7 +15356,6 @@
                       "type": "string"
                     },
                     "operationKind": {
-                      "default": "preview-capture",
                       "type": "string",
                       "enum": [
                         "preview-capture",
@@ -15332,6 +15410,7 @@
                     "taskID",
                     "targetID",
                     "viewportID",
+                    "operationKind",
                     "status",
                     "summary",
                     "diagnostics",

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import {
   EngineArtifactTable,
+  EngineGoalTable,
   EngineInteractionRequestTable,
+  EngineSpecSnapshotTable,
   EngineTaskTable,
   type EngineArtifactKind,
 } from "../../src/engine/engine.sql"
@@ -24,7 +26,7 @@ describe("EngineRuntime goal-run convergence", () => {
     await resetDatabase()
   })
 
-  test("all terminal goal runs wake the task loop without rewriting the parent run", async () => {
+  test("terminal goal runs wake the task loop without waiting for sibling terminal settlement", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -48,12 +50,12 @@ describe("EngineRuntime goal-run convergence", () => {
         expect(run?.status).toBe("blocked")
         expect(run?.blocking_reason).toBe("integrity verdict needs_correction")
         expect(run?.error).toBe("Integrity needs correction")
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
         expect(runTaskLoop.mock.calls[0]?.[0].event).toBeUndefined()
-        const facts = goalBatchNotificationsForTask(taskID)
-        expect(facts).toHaveLength(1)
-        expect(facts[0]?.label).toBe("goal-batch-wake-dispatched")
+        const facts = goalRefillNotificationsForTask(taskID)
+        expect(facts).toHaveLength(2)
+        expect(facts.map((fact) => fact.label)).toEqual(["goal-refill-wake-dispatched", "goal-refill-wake-dispatched"])
         expect((facts[0]?.payload as Record<string, unknown> | null)?.time_dispatched).toBeNumber()
       },
     })
@@ -84,7 +86,7 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
-  test("active run with no goal runs wakes the task loop once", async () => {
+  test("active run with no goal runs does not create a goal refill wake", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -103,16 +105,8 @@ describe("EngineRuntime goal-run convergence", () => {
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
-        expect(runTaskLoop.mock.calls[0]?.[0].event).toBeUndefined()
-        const facts = goalBatchNotificationsForTask(taskID)
-        expect(facts).toHaveLength(1)
-        expect(facts[0]?.label).toBe("no-live-goal-wake-dispatched")
-        const payload = facts[0]?.payload as Record<string, unknown> | null
-        expect(payload?.fingerprint).toBe("no-goal-runs")
-        expect(payload?.goal_runs).toEqual([])
-        expect(payload?.time_dispatched).toBeNumber()
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(0)
       },
     })
   })
@@ -144,7 +138,7 @@ describe("EngineRuntime goal-run convergence", () => {
 
         expect(result.observedRuns).toBe(0)
         expect(runTaskLoop).not.toHaveBeenCalled()
-        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(0)
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(0)
       },
     })
   })
@@ -175,36 +169,34 @@ describe("EngineRuntime goal-run convergence", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(result.observedRuns).toBe(1)
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        const facts = goalBatchNotificationsForTask(taskID)
-        expect(facts).toHaveLength(1)
-        expect(facts[0]?.run_id).toBe(activeRunID)
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(0)
       },
     })
   })
 
-  test("a later terminal goal batch under the same parent run wakes again", async () => {
+  test("a later terminal goal under the same parent run wakes again", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const taskID = `task_goal_second_batch_${Date.now()}`
-        const runID = `run_goal_second_batch_${Date.now()}`
+        const taskID = `task_goal_second_refill_${Date.now()}`
+        const runID = `run_goal_second_refill_${Date.now()}`
         const now = Date.now()
         seedTaskRun(taskID, runID, now, {
           status: "running",
           blocking_reason: null,
           error: null,
         })
-        seedGoalRun(taskID, runID, "grun_batch_one", "completed", now + 1)
+        seedGoalRun(taskID, runID, "grun_refill_one", "completed", now + 1)
 
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(1)
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(1)
 
-        seedGoalRun(taskID, runID, "grun_batch_two", "completed", now + 2)
+        seedGoalRun(taskID, runID, "grun_refill_two", "completed", now + 2)
 
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -212,19 +204,19 @@ describe("EngineRuntime goal-run convergence", () => {
         expect(runTaskLoop).toHaveBeenCalledTimes(2)
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({ taskID })
         expect(runTaskLoop.mock.calls[1]?.[0].event).toBeUndefined()
-        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(2)
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(2)
       },
     })
   })
 
-  test("same logical terminal goal batch append does not wake again", async () => {
+  test("same logical terminal goal append does not wake again", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const taskID = `task_goal_same_batch_${Date.now()}`
-        const runID = `run_goal_same_batch_${Date.now()}`
+        const taskID = `task_goal_same_refill_${Date.now()}`
+        const runID = `run_goal_same_refill_${Date.now()}`
         const now = Date.now()
         seedTaskRun(taskID, runID, now, {
           status: "running",
@@ -236,7 +228,7 @@ describe("EngineRuntime goal-run convergence", () => {
 
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
 
         seedGoalRun(taskID, runID, "grun_one", "completed", now + 10)
         seedGoalRun(taskID, runID, "grun_two", "completed", now + 11)
@@ -244,56 +236,54 @@ describe("EngineRuntime goal-run convergence", () => {
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(1)
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(2)
       },
     })
   })
 
-  test("terminal goal batch notification is visible in task description", async () => {
+  test("terminal goal refill notification is visible in task description with live siblings", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const taskID = `task_goal_batch_describe_${Date.now()}`
-        const runID = `run_goal_batch_describe_${Date.now()}`
+        const taskID = `task_goal_refill_describe_${Date.now()}`
+        const runID = `run_goal_refill_describe_${Date.now()}`
         const now = Date.now()
         seedTaskRun(taskID, runID, now, {
           status: "running",
           blocking_reason: null,
           error: null,
         })
-        seedGoalRun(taskID, runID, "grun_batch_visible_one", "completed", now + 1)
-        seedGoalRun(taskID, runID, "grun_batch_visible_two", "failed", now + 2)
+        seedGoalRun(taskID, runID, "grun_refill_visible_one", "completed", now + 1)
+        seedGoalRun(taskID, runID, "grun_refill_visible_two", "running", now + 2)
 
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        const notifications = goalBatchNotificationsForTask(taskID)
+        const notifications = goalRefillNotificationsForTask(taskID)
         expect(notifications).toHaveLength(1)
 
         const desc = await describeTask(taskID)
-        expect(desc.recent_terminal_goal_batches).toHaveLength(1)
-        expect(desc.recent_terminal_goal_batches![0]).toMatchObject({
+        expect(desc.recent_terminal_goal_refills).toHaveLength(1)
+        expect(desc.recent_terminal_goal_refills![0]).toMatchObject({
           run_id: runID,
-          goal_runs: [
-            { id: "grun_batch_visible_one", status: "completed" },
-            { id: "grun_batch_visible_two", status: "failed" },
-          ],
+          terminal_goal_run: { id: "grun_refill_visible_one", status: "completed" },
+          live_sibling_goal_runs: [{ id: "grun_refill_visible_two", status: "running" }],
         })
 
         const md = renderTaskDescription(desc)
-        expect(md).toContain("Terminal goal batch wake facts")
+        expect(md).toContain("Terminal goal refill wake facts")
         expect(md).toContain(`run=${runID}`)
-        expect(md).toContain("grun_batch_visible_one:completed")
-        expect(md).toContain("grun_batch_visible_two:failed")
+        expect(md).toContain("grun_refill_visible_one:completed")
+        expect(md).toContain("grun_refill_visible_two:running")
       },
     })
   })
 
-  test("notified terminal batch does not clear orchestrator stream-error blocker", async () => {
+  test("notified terminal refill does not clear orchestrator stream-error blocker", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -309,13 +299,11 @@ describe("EngineRuntime goal-run convergence", () => {
         })
         seedGoalRun(taskID, runID, "grun_aborted_one", "aborted", now + 1)
         seedGoalRun(taskID, runID, "grun_aborted_two", "aborted", now + 2)
-        seedGoalBatchNotification(
+        seedGoalRefillNotification(
           taskID,
           runID,
-          [
-            { id: "grun_aborted_one", status: "aborted" },
-            { id: "grun_aborted_two", status: "aborted" },
-          ],
+          { id: "grun_aborted_one", goal_id: "goal_grun_aborted_one", status: "aborted" },
+          [{ id: "grun_aborted_two", goal_id: "goal_grun_aborted_two", status: "aborted" }],
           now + 3,
         )
 
@@ -355,12 +343,12 @@ describe("EngineRuntime goal-run convergence", () => {
         expect(run?.blocking_reason).toBe("orchestrator_stream_error")
         expect(run?.error).toBe("OrchestratorAborted: task loop dispatch interrupt")
         expect(runTaskLoop).not.toHaveBeenCalled()
-        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(0)
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(0)
       },
     })
   })
 
-  test("terminal batch liveness dispatch records a fact after starting a wake", async () => {
+  test("terminal refill dispatch records a fact after starting a wake", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -375,13 +363,92 @@ describe("EngineRuntime goal-run convergence", () => {
           error: null,
         })
         seedGoalRun(taskID, runID, "grun_one", "completed", now + 1)
-        seedGoalRun(taskID, runID, "grun_two", "completed", now + 2)
 
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(1)
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(1)
+      },
+    })
+  })
+
+  test("terminal success refill exposes newly dispatchable dependent goals in FIFO order while siblings live", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_fifo_refill_${Date.now()}`
+        const runID = `run_goal_fifo_refill_${Date.now()}`
+        const specID = `spec_goal_fifo_refill_${Date.now()}`
+        const now = Date.now()
+        const goalA = `gol_fifo_a_${now}`
+        const goalB = `gol_fifo_b_${now}`
+        const goalC = `gol_fifo_c_${now}`
+        const goalD = `gol_fifo_d_${now}`
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedGoalGraph(taskID, specID, now, [
+          { id: goalA, title: "A", order: 0, dependsOn: [] },
+          { id: goalB, title: "B", order: 1, dependsOn: [] },
+          { id: goalC, title: "C", order: 2, dependsOn: [goalA] },
+          { id: goalD, title: "D", order: 3, dependsOn: [goalA] },
+        ])
+        seedGoalRun(taskID, runID, "grun_fifo_a", "completed", now + 1, goalA)
+        seedGoalRun(taskID, runID, "grun_fifo_b", "running", now + 2, goalB)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(1)
+        const desc = await describeTask(taskID)
+        expect(desc.collaboration_closure?.dispatchable_goal_ids).toEqual([goalC, goalD])
+      },
+    })
+  })
+
+  test("terminal failure refill wakes diagnosis without dispatching dependents or retrying the failed goal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_failed_refill_${Date.now()}`
+        const runID = `run_goal_failed_refill_${Date.now()}`
+        const specID = `spec_goal_failed_refill_${Date.now()}`
+        const now = Date.now()
+        const goalA = `gol_failed_a_${now}`
+        const goalB = `gol_failed_b_${now}`
+        const goalC = `gol_failed_c_${now}`
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedGoalGraph(taskID, specID, now, [
+          { id: goalA, title: "A", order: 0, dependsOn: [] },
+          { id: goalB, title: "B", order: 1, dependsOn: [] },
+          { id: goalC, title: "C", order: 2, dependsOn: [goalA] },
+        ])
+        seedGoalRun(taskID, runID, "grun_failed_a", "failed", now + 1, goalA)
+        seedGoalRun(taskID, runID, "grun_failed_b", "running", now + 2, goalB)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(goalRefillNotificationsForTask(taskID)).toHaveLength(1)
+        const desc = await describeTask(taskID)
+        expect(desc.collaboration_closure?.failed_goal_ids).toContain(goalA)
+        expect(desc.collaboration_closure?.dispatchable_goal_ids).not.toContain(goalC)
+        expect(goalRefillNotificationsForTask(taskID)[0]?.payload).toMatchObject({
+          terminal_goal_run: { id: "grun_failed_a", goal_id: goalA, status: "failed" },
+        })
       },
     })
   })
@@ -496,7 +563,7 @@ function seedRunArtifact(
   )
 }
 
-function goalBatchNotificationsForTask(taskID: string) {
+function goalRefillNotificationsForTask(taskID: string) {
   return Database.use((db) =>
     db
       .select()
@@ -504,14 +571,14 @@ function goalBatchNotificationsForTask(taskID: string) {
       .where(
         and(
           eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "goal_batch_notification" as EngineArtifactKind),
+          eq(EngineArtifactTable.kind, "goal_refill_notification" as EngineArtifactKind),
         ),
       )
       .all(),
   )
 }
 
-function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: string, now: number) {
+function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: string, now: number, goalID?: string) {
   Database.use((db) =>
     db
       .insert(EngineArtifactTable)
@@ -523,7 +590,7 @@ function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: s
         kind: "goal_run_attempt",
         label: `goal-run-${status}`,
         payload: {
-          goal_id: `goal_${goalRunID}`,
+          goal_id: goalID ?? `goal_${goalRunID}`,
           session_id: null,
           status,
           retry_count: 0,
@@ -544,31 +611,79 @@ function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: s
   )
 }
 
-function seedGoalBatchNotification(
+function seedGoalGraph(
+  taskID: string,
+  specID: string,
+  now: number,
+  goals: Array<{ id: string; title: string; order: number; dependsOn: string[] }>,
+) {
+  Database.use((db) => {
+    db.insert(EngineSpecSnapshotTable)
+      .values({
+        id: specID,
+        task_id: taskID,
+        version: 1,
+        status: "ready",
+        summary: "Goal refill graph",
+        content: "Goal refill graph",
+        scope: "Goal refill graph",
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
+    for (const goal of goals) {
+      db.insert(EngineGoalTable)
+        .values({
+          id: goal.id,
+          task_id: taskID,
+          spec_snapshot_id: specID,
+          title: goal.title,
+          slug: goal.id,
+          objective: `Complete goal ${goal.title}`,
+          acceptance_specs: [],
+          owned_paths: [],
+          depends_on: goal.dependsOn,
+          exports: [],
+          imports: [],
+          kind: "feature",
+          requirement_ids: [],
+          priority: "blocking",
+          source: "test",
+          status: "pending",
+          order_index: goal.order,
+          time_created: now + goal.order,
+          time_updated: now + goal.order,
+        } as any)
+        .run()
+    }
+  })
+}
+
+function seedGoalRefillNotification(
   taskID: string,
   runID: string,
-  goalRuns: Array<{ id: string; status: string }>,
+  terminalGoalRun: { id: string; goal_id: string; status: string },
+  liveSiblingGoalRuns: Array<{ id: string; goal_id: string; status: string }>,
   now: number,
 ) {
-  const fingerprint = goalRuns
-    .map((goalRun) => `${goalRun.id}:${goalRun.status}`)
-    .sort()
-    .join("|")
+  const fingerprint = `${terminalGoalRun.id}:${terminalGoalRun.status}`
   Database.use((db) =>
     db
       .insert(EngineArtifactTable)
       .values({
-        id: `art_goal_batch_notification_${now}`,
+        id: `art_goal_refill_notification_${now}`,
         task_id: taskID,
         run_id: runID,
-        goal_run_id: null,
-        kind: "goal_batch_notification" as EngineArtifactKind,
-        label: "goal-batch-wake-dispatched",
+        goal_run_id: terminalGoalRun.id,
+        kind: "goal_refill_notification" as EngineArtifactKind,
+        label: "goal-refill-wake-dispatched",
         payload: {
           task_id: taskID,
           run_id: runID,
           fingerprint,
-          goal_runs: goalRuns.sort((a, b) => a.id.localeCompare(b.id)),
+          terminal_goal_run: terminalGoalRun,
+          live_sibling_goal_runs: liveSiblingGoalRuns.sort((a, b) => a.id.localeCompare(b.id)),
+          dispatch_result: "started",
           time_dispatched: now,
         },
         time_created: now,

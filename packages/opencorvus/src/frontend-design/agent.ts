@@ -33,8 +33,10 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { deriveUrlSignals } from "@/engine/task-signals"
 import { EngineConfig } from "@/engine/config"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { BashTool } from "@/tool/bash"
@@ -47,12 +49,8 @@ import type { AgentReport } from "@/agent/report"
 import {
   WebpageAnalyzeTool,
   WebpageCompileTool,
-  WebpageEvaluateTool,
   WebpageExtractTool,
-  WebpageRenderTool,
   WebpageRuntimeStateTool,
-  WebpageTextDiffTool,
-  WebpageVisionJudgeTool,
 } from "@/frontend-design/tools"
 import type { VisualSpec } from "./types"
 import {
@@ -175,6 +173,7 @@ export namespace FrontendDesignAgent {
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
+    continuation?: AgentSessionContinuation
     onSessionCreated?: (sessionID: string) => void
   }
 
@@ -240,6 +239,7 @@ export namespace FrontendDesignAgent {
       taskID: input.taskID,
       model: input.model,
       signal: input.signal,
+      continuation: input.continuation,
       onStatus: input.onStatus,
       onSessionCreated: input.onSessionCreated
         ? (session) => {
@@ -513,7 +513,7 @@ function buildUserPrompt(
       "If the workspace already contains a real frontend app, inspect it only to understand later transcription constraints; do not convert the current workflow into app-source completion. Root files alone are not a real frontend app: benchmark workspaces often contain minimal `package.json`, `tsconfig.json`, `data/`, `.git/`, and `.opencorvus/` shell files without app source, and those shell files should not become the skeleton deliverable. " +
       "Populate the visual HTML skeleton directly with file-edit tools by copying/adapting the visual structure, CSS, assets, and visible content from `frontend-design-skeleton` and `web-clone-source`, then refining selected visual regions. " +
       "After the source evidence skeleton exists, the first editing pass is visual skeleton adoption: create/adapt bounded static `index.html`, external CSS files, asset references, representative-state markup, screenshots/diff artifacts when available, and a README/source note that names the source evidence. This is not freehand scaffolding, not app-source bootstrap, and not mechanical replay of raw source DOM. Do not submit `dist/`, `build/`, `out/`, `/src/main.tsx`, Vite/React bootstraps, capture/source replay, `source-skeleton/index.html` copied wholesale, `SourceDomPage`/`src/components/source-dom/*` dumps, giant inline CSS/HTML payloads, iframe previews, `reference.png` screenshot wrappers, or unresolved `__WEB_CLONE_DATA_URI_ASSET__` placeholders as the skeleton. Render that HTML skeleton through a real static harness or browser path, compare it with `reference.png`, and refine visual regions from source evidence until the first workflow can pass HTML-design fidelity review. " +
-      "For high-fidelity acceptance, call `webpage_evaluate` as diagnostic evidence, then inspect the rendered screenshot, reference screenshot, and `webpage_vision_judge` findings. Do not use a fixed numeric score as the completion condition. If visual evidence or screenshot review shows mismatches, repair the same HTML skeleton from source evidence or submit an explicitly incomplete/blocked handoff that names the blocking regions and next repair step; do not call the skeleton accepted, ready, complete, usable, or good enough for downstream transcription. " +
+      "For high-fidelity acceptance, render the current skeleton and inspect the rendered screenshot against the reference evidence. Do not use a fixed numeric score or external judge verdict as the completion condition. If visual evidence or screenshot review shows mismatches, repair the same HTML skeleton from source evidence or submit an explicitly incomplete/blocked handoff that names the blocking regions and next repair step; do not call the skeleton accepted, ready, complete, usable, or good enough for downstream transcription. " +
       "If the task requires VisualRegionBinding or per-region source bbox bindings, first call `create_visual_region_coordinate_atlas` with the source full-page PNG, read the returned atlas image attachments, author bbox JSON from visible screenshot region boundaries, then call `create_visual_region_binding_package` with every required region before `submit_frontend_template`; inspect its returned bbox overlay/contact sheet image attachments, rerun it when any crop boundary is too broad, duplicated, missing, or visually off-boundary, and cite the atlas manifest plus binding manifest plus overlay/contact sheet in `reference_artifacts` and `visual_consistency_contract`. Do not satisfy VisualRegionBinding with handwritten SVG crop wrappers, full-page screenshot aliases, CSS cropping, prose-only rows, DOM parent-container crops, misleading viewport-based crop filenames, or missing component_files. " +
       "Before broad styling, extract visual tokens into `visual-html-skeleton/styles/tokens.css` from `web-clone-source/source-ir/style-tokens.json`, `source-ir/style-profile.json`, selected `layout-map.json` regions, `source-skeleton/critical.css`, and visible reference pixels. Use role-based CSS variables for color roles, typography, spacing/density, radii, borders, shadows/elevation, icon/media sizes, chart/map/table range colors, and responsive widths. Put layout and region rules in external CSS files that consume these variables. Do not invent tokens from brand memory, paste a giant original CSS bundle, or hide everything in inline styles; when tokens conflict with visible pixels, visible pixels plus region style-profile win and the report must name the mismatch. " +
       "Use `record_frontend_region_selection` and `record_frontend_replacement_result` to make region work observable when you refine major source regions, but the selected vertical slice is the HTML/CSS/assets/content for that visual region plus later transcription notes, not React/Vue app modules. Do not create future app components, package manifests, mock API modules, or framework routes in this workflow unless the current task explicitly asks to combine the HTML skeleton workflow and the project-transcription workflow. " +
@@ -541,7 +541,7 @@ function buildUserPrompt(
       renderFinalAcceptanceModeInstruction(Boolean(hostPreparedFrontendProject)) +
       " " +
       "For webpage replicas, set `final_acceptance_mode=visual_baseline_allowed` and `frontend_project.role=visual_baseline_input` for the first workflow, then put the future skeleton-to-project transcription contract into `quality_project_contract`, `visual_consistency_contract`, `reference_artifacts`, and `frontend_project.notes`; do not describe the HTML skeleton as Build's implementation target. " +
-      "After the source project tool returns, record the skeleton evidence paths, replacement-plan sidecars, and warnings in `reference_artifacts` and `frontend_project.notes`, then read `sourceProjectManifest.json`, `sourceDomIterationState.ts`, bounded source-region evidence, `source-ir/*`, `source-skeleton/critical.css`, source assets, and `reference.png` only as needed to restore the static HTML/CSS skeleton. Treat `nextSourceDomReplacement` as the first visual-region queue item, not as a target-project extraction command. Before selecting a large region, create or adapt the visual skeleton's static `index.html`, CSS, assets, representative-state markup, screenshots/diff artifacts, and README/source note so the current workflow has a renderable HTML-design artifact. For every major in-scope visual region, call `record_frontend_region_selection` before editing that region's HTML/CSS/assets/content, then call `record_frontend_replacement_result` with completed/blocked/deferred status, changed skeleton files, evidence artifacts, remaining visual debt, and the next region. Additional reads after selection must be direct imports or explicitly named data/style/asset sidecars for that same visual region, not unrelated wrappers, whole manifests, broad source data, exhaustive asset scans, raw HTML dumps, or generated CSS wholesale. Do not implement by freehand redrawing; copy/transcribe observed labels, numeric data, source IDs, class responsibilities, SVG paths/assets, interaction-state visuals, wrapper nesting, ARIA/data attributes, and responsive rules from selected source evidence. For charts, maps, calendars, tables, or other complex controls, restore the observed component kind and visual/data surface from source evidence; if the real control cannot be restored in static HTML in this pass, record blocked/deferred visual debt instead of rendering a labeled placeholder box. Render the HTML skeleton through one explicit static URL or file path, compare it against `reference.png` with `webpage_render`, `webpage_evaluate` diagnostic output, and `webpage_vision_judge` evidence when available, then repair the same region before selecting another region when screenshot review or the visual judge names mismatches. Do not use shell listings or build success as visual evidence. Do not alter evaluators, other agent prompts, communication paths, raw webpage evidence/source packages, or generated evidence outputs to satisfy the report. " +
+      "After the source project tool returns, record the skeleton evidence paths, replacement-plan sidecars, and warnings in `reference_artifacts` and `frontend_project.notes`, then read `sourceProjectManifest.json`, `sourceDomIterationState.ts`, bounded source-region evidence, `source-ir/*`, `source-skeleton/critical.css`, source assets, and `reference.png` only as needed to restore the static HTML/CSS skeleton. Treat `nextSourceDomReplacement` as the first visual-region queue item, not as a target-project extraction command. Before selecting a large region, create or adapt the visual skeleton's static `index.html`, CSS, assets, representative-state markup, screenshots/diff artifacts, and README/source note so the current workflow has a renderable HTML-design artifact. For every major in-scope visual region, call `record_frontend_region_selection` before editing that region's HTML/CSS/assets/content, then call `record_frontend_replacement_result` with completed/blocked/deferred status, changed skeleton files, evidence artifacts, remaining visual debt, and the next region. Additional reads after selection must be direct imports or explicitly named data/style/asset sidecars for that same visual region, not unrelated wrappers, whole manifests, broad source data, exhaustive asset scans, raw HTML dumps, or generated CSS wholesale. Do not implement by freehand redrawing; copy/transcribe observed labels, numeric data, source IDs, class responsibilities, SVG paths/assets, interaction-state visuals, wrapper nesting, ARIA/data attributes, and responsive rules from selected source evidence. For charts, maps, calendars, tables, or other complex controls, restore the observed component kind and visual/data surface from source evidence; if the real control cannot be restored in static HTML in this pass, record blocked/deferred visual debt instead of rendering a labeled placeholder box. Inspect task-scoped preview or screenshot evidence against the reference evidence, then repair the same region before selecting another region when screenshot review names mismatches. Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence. Do not alter evaluators, other agent prompts, communication paths, raw webpage evidence/source packages, or generated evidence outputs to satisfy the report. " +
       "The final `submit_frontend_template.frontend_project` field should name the visual HTML skeleton root and entrypoints, mark role=visual_baseline_input, and explicitly say the skeleton is source-editable static HTML/CSS, not compiled output, not raw source DOM replay, not the implementation target, not an acceptance app root, and not an independent design source. " +
       "Do not use todo or scratchpad tools for template review; write the review-pass findings directly into the final frontend template fields.",
   )
@@ -598,7 +598,7 @@ async function writeFrontendProcessTraceArtifact(
   trace: FrontendDesignAgent.ProcessTrace,
 ): Promise<string | undefined> {
   if (!taskID) return undefined
-  const root = path.dirname(ProjectRuntimePaths.frontendDesignPaths(Instance.directory, taskID).templateAbsolute)
+  const root = path.dirname(frontendDesignPathsForTask(taskID).templateAbsolute)
   const file = path.join(root, "frontend-design-process-trace.json")
   await fs.mkdir(path.dirname(file), { recursive: true })
   await fs.writeFile(file, JSON.stringify(trace, null, 2), "utf8")
@@ -610,7 +610,7 @@ async function configureFrontendProcessTracePersistence(
   trace: FrontendDesignAgent.ProcessTrace,
 ): Promise<{ processTraceArtifact?: string; iterationStateArtifact?: string }> {
   if (!taskID) return {}
-  const absoluteDir = ProjectRuntimePaths.frontendDesignPaths(Instance.directory, taskID).templateAbsolute
+  const absoluteDir = frontendDesignPathsForTask(taskID).templateAbsolute
   const root = path.dirname(absoluteDir)
   const persistence: FrontendProcessTracePersistence = {
     processTraceFile: path.join(root, "frontend-design-process-trace.json"),
@@ -705,7 +705,7 @@ async function writeFrontendIterationStateArtifact(
 ): Promise<string | undefined> {
   if (!taskID) return undefined
   const file = path.join(
-    path.dirname(ProjectRuntimePaths.frontendDesignPaths(Instance.directory, taskID).templateAbsolute),
+    path.dirname(frontendDesignPathsForTask(taskID).templateAbsolute),
     "frontend-design-iteration-state.json",
   )
   await fs.mkdir(path.dirname(file), { recursive: true })
@@ -785,7 +785,7 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
             "If this selected file is already a semantic skeleton component, use it as source evidence for faithful HTML/CSS restoration: preserve its data object shape in notes, root source IDs, `data-*`/ARIA attributes, exact class names when needed for CSS reachability, wrapper nesting, `target`/`rel`, menu/dropdown/offer visual states, `AssetPath` or asset resolver usage, asset path references, circles, fills, viewBox/width/height, and helper responsibilities. Do not replace asset references with guessed inline SVG paths or simplify nested structure until skeleton render/evaluation evidence proves parity.",
             "Data/content snippets are region-owned during restoration; do not put records from another source region into them until that other region has its own selection and replacement result.",
             "Do not select another region until you record this region's replacement result. Skeleton root wiring may include only this region and previously completed region visuals.",
-            "Before writing files for another region, render this region through one explicit static URL or file path, feed its screenshot into webpage_evaluate for diagnostics, call webpage_vision_judge for visible mismatches, repair this same region when screenshot review or the visual judge names mismatches, then record this region's replacement result and call record_frontend_region_selection for the next region.",
+            "Before writing files for another region, inspect task-scoped preview or screenshot evidence for this region against reference evidence, repair this same region when screenshot review names mismatches, then record this region's replacement result and call record_frontend_region_selection for the next region.",
             "If this region is a chart, map, table, calendar, or other complex control, restore the observed component kind and source-backed visual/data surface; a labeled placeholder box is blocked/deferred visual debt, not a completed replacement.",
           ]
             .filter(Boolean)
@@ -825,7 +825,7 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
           .array(z.string())
           .default([])
           .describe(
-            "Rendered screenshots, webpage_render artifacts, webpage_evaluate reports, webpage_vision_judge notes, or visual-diff artifacts used for this replacement.",
+            "Task-scoped preview evidence, rendered screenshots, source/reference screenshots, or visual artifacts used for this replacement.",
           ),
         auditEvidence: z
           .array(z.string())
@@ -862,7 +862,7 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
             params.remainingSourceDebt.length > 0
               ? "- Do not describe the HTML skeleton as final while visual/source debt remains; continue source-region restoration or mark the final handoff incomplete/blocked."
               : undefined,
-            "- Completed means source-backed HTML/CSS/assets/content with render/evaluate evidence and screenshot review showing the region matches the reference; numeric scores are diagnostic evidence, not the completion condition. Placeholder UI/text/classes, fake spacers, or rendered future-region filler remain visual debt.",
+            "- Completed means source-backed HTML/CSS/assets/content with rendered screenshot evidence and screenshot review showing the region matches the reference; score or judge verdicts are not completion conditions. Placeholder UI/text/classes, fake spacers, or rendered future-region filler remain visual debt.",
           ]
             .filter(Boolean)
             .join("\n"),
@@ -1061,10 +1061,6 @@ async function createFrontendImplementationTools(
     write: await createFrontendTool(WriteTool, input, trace),
     apply_patch: await createFrontendTool(ApplyPatchTool, input, trace),
     web_clone_source_audit: await createFrontendTool(WebCloneSourceAuditTool, input, trace),
-    webpage_render: await createFrontendTool(WebpageRenderTool, input, trace),
-    webpage_evaluate: await createFrontendTool(WebpageEvaluateTool, input, trace),
-    webpage_text_diff: await createFrontendTool(WebpageTextDiffTool, input, trace),
-    webpage_vision_judge: await createFrontendTool(WebpageVisionJudgeTool, input, trace),
   }
   return selectFrontendStaticTools(tools, FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS, "frontend-design implementation")
 }
@@ -1083,7 +1079,7 @@ async function createFrontendUtilityTools(
 
 async function resolveHostPreparedFrontendProject(taskID?: string): Promise<HostPreparedFrontendProject | undefined> {
   if (!taskID) return undefined
-  const paths = ProjectRuntimePaths.frontendDesignPaths(Instance.directory, taskID)
+  const paths = frontendDesignPathsForTask(taskID)
   const [sourcePackageExists, skeletonProjectExists] = await Promise.all([
     pathExists(paths.sourcePackageAbsolute),
     pathExists(paths.skeletonProjectAbsolute),
@@ -1117,6 +1113,13 @@ async function resolveHostPreparedFrontendProject(taskID?: string): Promise<Host
     sourceReplacementPlan: [],
     sourceAuditEvidence,
   }
+}
+
+function frontendDesignPathsForTask(taskID: string): ReturnType<typeof ProjectRuntimePaths.frontendDesignPaths> {
+  return ProjectRuntimePaths.frontendDesignPaths(
+    taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id }),
+    taskID,
+  )
 }
 
 async function pathExists(file: string): Promise<boolean> {

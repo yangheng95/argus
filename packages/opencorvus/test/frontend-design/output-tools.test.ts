@@ -461,7 +461,7 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
   expect(report).not.toContain("maintainable_status: incomplete_source_baseline")
 })
 
-test("visual baseline report marks below-threshold measured skeleton as incomplete fidelity", async () => {
+test("visual baseline report marks screenshot-reviewed skeleton with remaining debt as incomplete fidelity", async () => {
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
 
@@ -484,14 +484,15 @@ test("visual baseline report marks below-threshold measured skeleton as incomple
           mature_library_candidates: [],
           props_states: "static representative visual states only",
           replacement_boundary: "visual skeleton root",
-          parity_guard: "webpage_evaluate against reference.png",
+          parity_guard: "task-scoped preview screenshot inspection against reference.png",
           project_specific_reason: "not applicable",
         },
       ],
       baseline_replacement_plan: [],
       material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
       material_inventory_items: materialInventoryItems,
-      visual_consistency_contract: "Current score: 81/100 (SSIM 0.8263, pixel diff 10.69%) against reference.png.",
+      visual_consistency_contract:
+        "Rendered screenshot review against reference.png reports map, table, legend, logo, and social icon visual debt.",
       ui_data_contract: "Static visible source content only.",
       frontend_project: {
         status: "created",
@@ -501,13 +502,13 @@ test("visual baseline report marks below-threshold measured skeleton as incomple
         entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
         generation_tool: "source-ir-static-html-skeleton",
         notes: [
-          "Diagnostic visual score reported as 81/100.",
+          "Rendered screenshot review recorded remaining visual debt.",
           "Remaining visual debt: canvas map, table heat colors, simplified legend SVG, logo path, and social icons.",
           "The skeleton is a usable visual baseline for downstream transcription work.",
         ],
       },
-      template_iteration_notes: ["checked visual score and remaining debt"],
-      completeness_review: "Visual evidence is below the requested threshold.",
+      template_iteration_notes: ["checked rendered screenshot evidence and remaining debt"],
+      completeness_review: "Rendered screenshot evidence still shows blocking visual debt.",
       reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
       open_questions: [],
     },
@@ -516,7 +517,6 @@ test("visual baseline report marks below-threshold measured skeleton as incomple
 
   const report = buildFrontendTemplateReport(kit.getCollector()).detail
   expect(report).toContain("visual_quality_status: incomplete_visual_fidelity")
-  expect(report).toContain("Last reported diagnostic score: 81/100")
   expect(report).toContain("Remaining visual debt is present")
   expect(report).toContain("must not be treated as ready for downstream transcription")
 })

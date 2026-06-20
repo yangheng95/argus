@@ -12,6 +12,7 @@ let startedEvents: any[] = []
 let completedEvents: any[] = []
 let createdSessions: any[] = []
 let userPrompts: string[] = []
+let terminalResults: string[] = []
 let slowReviewerReports = false
 let activeReviewerAgents = 0
 let maxActiveReviewerAgents = 0
@@ -83,38 +84,8 @@ mock.module("@/agent/runner", () => ({
         openQuestions: [],
       }
     } else if (input.terminalTool.toolName === "submit_integrity_consensus") {
-      collector.report = {
-        verdict: "pass",
-        summary: "Team passed",
-        teamReportMarkdown: "Team passed",
-        reviewers: [
-          {
-            reviewerID: "rev_a",
-            scope: "Surface A",
-            verdict: "pass",
-            summary: "rev_a passed",
-            investigationPlan,
-            evidence: [],
-            findings: [],
-            openQuestions: [],
-          },
-          {
-            reviewerID: "rev_b",
-            scope: "Surface B",
-            verdict: "pass",
-            summary: "rev_b passed",
-            investigationPlan,
-            evidence: [],
-            findings: [],
-            openQuestions: [],
-          },
-        ],
-        findings: [],
-        rounds: [],
-        requiredRepairs: [],
-        unresolvedDisagreements: [],
-        fact_check_items: [],
-      }
+      const result = await input.toolKit.tools.submit_integrity_consensus.execute(passTeamReport(), {})
+      terminalResults.push(String(result))
     }
     lifecycle?.dispose?.()
     return { collector, session }
@@ -176,6 +147,42 @@ function replayContext(attemptNumber: number): IntegrityReplayContext {
       priorBlockingFindings: 0,
       phase: "post_build",
     },
+  }
+}
+
+function passTeamReport() {
+  return {
+    verdict: "pass",
+    summary: "Team passed",
+    teamReportMarkdown: "Team passed",
+    reviewers: [
+      {
+        reviewerID: "rev_a",
+        scope: "Surface A",
+        verdict: "pass",
+        summary: "rev_a passed",
+        investigationPlan,
+        evidence: [],
+        findings: [],
+        openQuestions: [],
+      },
+      {
+        reviewerID: "rev_b",
+        scope: "Surface B",
+        verdict: "pass",
+        summary: "rev_b passed",
+        investigationPlan,
+        evidence: [],
+        findings: [],
+        openQuestions: [],
+      },
+    ],
+    findings: [],
+    coverageAudit: [],
+    rounds: [],
+    requiredRepairs: [],
+    unresolvedDisagreements: [],
+    fact_check_items: [],
   }
 }
 
@@ -265,6 +272,7 @@ describe("integrity team-agent replay attempts", () => {
     completedEvents = []
     createdSessions = []
     userPrompts = []
+    terminalResults = []
     slowReviewerReports = false
     activeReviewerAgents = 0
     maxActiveReviewerAgents = 0
@@ -406,6 +414,44 @@ describe("integrity team-agent replay attempts", () => {
     expect(runnerCalls.filter((call) => call.terminalTool.toolName === "submit_reviewer_report")).toHaveLength(0)
     expect(maxActiveReviewerAgents).toBe(0)
     expect(completedEvents[0].payload.reviewers).toHaveLength(2)
+  }, 20_000)
+
+  test("reviewIntegrity blocks pass verdict when required visual evidence is missing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { reviewIntegrity } = await import("../../src/integrity/team-agent")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          reviewIntegrity({
+            userRequest: "Clone a reference page",
+            taskTitle: "Reference visual parity",
+            goals: [
+              {
+                id: "goal_visual",
+                title: "Visual parity",
+                objective: "Verify reference parity",
+                acceptance_specs: [],
+                owned_paths: ["src/page.tsx"],
+                depends_on: [],
+                priority: "blocking",
+                kind: "verification",
+                requirement_ids: [],
+              },
+            ],
+            replayContext: replayContext(1),
+            taskID: "tsk_team_visual_required",
+            parentSessionID: "ses_parent",
+            projectRoot: tmp.path,
+            visualEvidenceRequired: true,
+          }),
+        ).rejects.toThrow("integrity review did not submit consensus report")
+      },
+    })
+
+    expect(terminalResults.join("\n")).toContain("BLOCKERS")
+    expect(terminalResults.join("\n")).toContain("VisualEvidenceBundle")
+    expect(completedEvents).toHaveLength(0)
   }, 20_000)
 
   test("consensus prompt separates coverage audit status from verdict enums", async () => {

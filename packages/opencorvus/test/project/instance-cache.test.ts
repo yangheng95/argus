@@ -46,3 +46,34 @@ test("refreshes a cached directory project when the directory becomes a git repo
     },
   })
 })
+
+test("runs a late init once for an already cached directory instance", async () => {
+  await using tmp = await tmpdir({ git: true })
+  let initCalls = 0
+  const init = async () => {
+    initCalls += 1
+  }
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: () => {
+      expect(Instance.directory).toBe(tmp.path)
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    init,
+    fn: () => {
+      expect(initCalls).toBe(1)
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    init,
+    fn: () => {
+      expect(initCalls).toBe(1)
+    },
+  })
+})

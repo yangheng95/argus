@@ -66,7 +66,7 @@ function renderPrdEvidenceSummary(input: {
     "## Source Handoff Rules",
     "- Treat `web-clone-source/implementation-blueprint.md`, `source-ir/*`, `source-skeleton/critical.css`, and reusable assets as the downstream build source.",
     "- Use `source-skeleton/index.html` only for hierarchy/source ids and missing text; do not mechanically convert it into a single framework component.",
-    "- Use `reference.png` and `reference-mobile.png` as visual truth and measure target screenshots with `webpage_evaluate`.",
+    "- Use `reference.png` and `reference-mobile.png` as visual truth and inspect target screenshots from task-scoped preview evidence.",
     `- Sidecar asset count: ${input.assetCount}`,
   ].join("\n")
 }

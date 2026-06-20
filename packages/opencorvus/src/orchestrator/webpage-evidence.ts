@@ -66,8 +66,8 @@ const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
   "interaction-states/scroll-75.png",
 ] as const
 
-export function primaryWebpageEvidenceArtifacts(taskID?: string): string[] {
-  const root = taskID ? ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative : "webpage-evidence"
+export function primaryWebpageEvidenceArtifacts(taskID: string): string[] {
+  const root = ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative
   return PRIMARY_WEBPAGE_EVIDENCE_FILES.map((file) => path.posix.join(root, file))
 }
 
@@ -101,8 +101,8 @@ const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
   "interaction-states/scroll-75.png",
 ] as const
 
-export function primaryWebpageSourcePackageArtifacts(taskID?: string): string[] {
-  const root = taskID ? ProjectRuntimePaths.frontendDesignPaths("", taskID).sourcePackageRelative : "web-clone-source"
+export function primaryWebpageSourcePackageArtifacts(taskID: string): string[] {
+  const root = ProjectRuntimePaths.frontendDesignPaths("", taskID).sourcePackageRelative
   return PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES.map((file) => path.posix.join(root, file))
 }
 

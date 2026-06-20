@@ -36,8 +36,8 @@ export const WebpageExtractTool = Tool.define("webpage_extract", {
   description: `Extract a live webpage via headless Chrome. Captures the DOM tree, ~33 computed CSS properties per element, and a full-page PNG screenshot.
 
 Writes to the output directory (defaults to the worktree):
-  - reference.png                the reference screenshot — visual target for later scoring
-  - reference-mobile.png         the mobile viewport reference screenshot for responsive scoring
+  - reference.png                the reference screenshot — visual validation evidence
+  - reference-mobile.png         the mobile viewport reference screenshot for responsive validation
   - capture.html                 post-load archive HTML snapshot for canonical structure IR + asset graph compilation
   - extracted-page.json          the full ExtractedPage object (DOM + tokens + assets)
   - images/*                     downloaded image assets (so the clone can reference local paths)

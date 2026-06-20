@@ -119,11 +119,15 @@ describe("BuildResultSchema", () => {
   test("explains passed plus error as a mutually exclusive terminal shape", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
-      summary: "functional tests passed but visual score is below threshold",
+      summary: "functional tests passed but preview screenshot still has blocking visual debt",
       files_changed: [
-        { path: "webpage-evidence/eval-result.json", summary: "Recorded visual score", reason: "Visual evidence" },
+        {
+          path: "preview-evidence/screenshot-review.json",
+          summary: "Recorded preview screenshot review",
+          reason: "Visual evidence",
+        },
       ],
-      error: "Visual score 84/100 is below the 85 threshold",
+      error: "Preview screenshot review still has blocking visual debt",
     })
     expect(parsed.success).toBe(false)
     if (!parsed.success) {
@@ -318,6 +322,7 @@ describe("BuildTarget discriminated union", () => {
     })
     expect(parsed.success).toBe(true)
     if (parsed.success && parsed.data.kind === "goal") {
+      expect(parsed.data.requirement_ids).toEqual([])
       expect(parsed.data.acceptance_specs).toEqual([])
       expect(parsed.data.owned_paths).toEqual([])
       expect(parsed.data.depends_on).toEqual([])

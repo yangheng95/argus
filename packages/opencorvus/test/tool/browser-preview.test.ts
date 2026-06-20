@@ -17,10 +17,11 @@ import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { ProtocolStore } from "../../src/protocol/store"
 import { Database } from "../../src/storage/db"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import {
   findLatestBrowserPreviewTarget,
   findReadableBrowserPreviewEvidenceByID,
+  persistBrowserPreviewEvidence,
   persistBrowserPreviewTarget,
   resolveRuntimeRelativePath,
 } from "../../src/browser-preview/persist"
@@ -46,6 +47,31 @@ afterEach(async () => {
 async function startReachablePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((_, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end("<!doctype html><title>preview</title><main>ready</main>")
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
+
+async function startDelayedReadyPreviewServer(delayMs: number): Promise<{ url: string; close: () => Promise<void> }> {
+  const readyAt = Date.now() + delayMs
+  let server: Server | undefined
+  server = createServer((_, res) => {
+    if (Date.now() < readyAt) {
+      res.writeHead(503, { "content-type": "text/plain; charset=utf-8" })
+      res.end("compiling")
+      return
+    }
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
     res.end("<!doctype html><title>preview</title><main>ready</main>")
   })
@@ -162,6 +188,109 @@ describe("tool.browser_preview", () => {
   )
 
   test(
+    "persists a process-output URL printed after bash background readiness returns",
+    async () => {
+      const preview = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const restore = ProcessSupervisor.setFactoryForTest(async () => {
+              const stdout = new PassThrough()
+              setTimeout(() => {
+                stdout.write(`Local: ${preview.url}\n`)
+              }, 1_600)
+              return {
+                pid: 9105,
+                stdin: null,
+                stdout,
+                stderr: new PassThrough(),
+                exited: new Promise<number>(() => {}),
+                terminate: async () => {},
+                dispose: async () => {},
+                unref: () => {},
+              }
+            })
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: "npm run dev",
+                  timeout: 1_500,
+                  leaseTimeout: 2_000,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.targetStatus).toBe("ready")
+              expect(result.metadata.targetUrl).toBe(preview.url)
+              expect(payload.startupTargets).toHaveLength(1)
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "persists an explicit URL that becomes HTTP-ready after the initial background window",
+    async () => {
+      const preview = await startDelayedReadyPreviewServer(800)
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const restore = ProcessSupervisor.setFactoryForTest(async () => ({
+              pid: 9106,
+              stdin: null,
+              stdout: new PassThrough(),
+              stderr: new PassThrough(),
+              exited: new Promise<number>(() => {}),
+              terminate: async () => {},
+              dispose: async () => {},
+              unref: () => {},
+            }))
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: "npm run dev",
+                  url: preview.url,
+                  timeout: 2_500,
+                  leaseTimeout: 3_000,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.explicitUrlPersisted).toBe(true)
+              expect(result.metadata.targetStatus).toBe("ready")
+              expect(payload.target.url).toBe(preview.url)
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
     "starts a background service and keeps explicit URL ahead of printed URLs",
     async () => {
       const preview = await startReachablePreviewServer()
@@ -217,6 +346,173 @@ describe("tool.browser_preview", () => {
         })
       } finally {
         await preview.close()
+        await printed.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "waits through silent startup before persisting a later process-output URL",
+    async () => {
+      const preview = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const restore = ProcessSupervisor.setFactoryForTest(async () => {
+              const stdout = new PassThrough()
+              setTimeout(() => {
+                stdout.write(`Local: ${preview.url}\n`)
+              }, 6_100)
+              return {
+                pid: 9108,
+                stdin: null,
+                stdout,
+                stderr: new PassThrough(),
+                exited: new Promise<number>(() => {}),
+                terminate: async () => {},
+                dispose: async () => {},
+                unref: () => {},
+              }
+            })
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: "npm run dev",
+                  timeout: 7_000,
+                  leaseTimeout: 8_000,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.targetStatus).toBe("ready")
+              expect(result.metadata.targetUrl).toBe(preview.url)
+              expect(payload.startupTargets).toHaveLength(1)
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "resets process-output discovery timeout on startup activity before the URL appears",
+    async () => {
+      const preview = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const restore = ProcessSupervisor.setFactoryForTest(async () => {
+              const stdout = new PassThrough()
+              setTimeout(() => stdout.write("compiling chunk 1\n"), 800)
+              setTimeout(() => stdout.write("compiling chunk 2\n"), 1_600)
+              setTimeout(() => stdout.write(`Local: ${preview.url}\n`), 2_400)
+              return {
+                pid: 9109,
+                stdin: null,
+                stdout,
+                stderr: new PassThrough(),
+                exited: new Promise<number>(() => {}),
+                terminate: async () => {},
+                dispose: async () => {},
+                unref: () => {},
+              }
+            })
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: "npm run dev",
+                  timeout: 1_000,
+                  leaseTimeout: 4_000,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.targetStatus).toBe("ready")
+              expect(result.metadata.targetUrl).toBe(preview.url)
+              expect(payload.startupTargets).toHaveLength(1)
+              expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
+        await preview.close()
+      }
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "does not persist a printed URL when an explicit URL owns target selection but is unreachable",
+    async () => {
+      const printed = await startReachablePreviewServer()
+      try {
+        await using tmp = await tmpdir({ git: true })
+        const taskID = await seedTask(tmp.path)
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const restore = ProcessSupervisor.setFactoryForTest(async () => {
+              const stdout = new PassThrough()
+              queueMicrotask(() => {
+                stdout.write(`Local: ${printed.url}\n`)
+              })
+              return {
+                pid: 9107,
+                stdin: null,
+                stdout,
+                stderr: new PassThrough(),
+                exited: new Promise<number>(() => {}),
+                terminate: async () => {},
+                dispose: async () => {},
+                unref: () => {},
+              }
+            })
+            try {
+              const tool = await BrowserPreviewTool.init()
+              const result = await tool.execute(
+                {
+                  command: "npm run dev",
+                  url: "http://127.0.0.1:9/",
+                  timeout: 500,
+                  leaseTimeout: 1_500,
+                },
+                { ...baseCtx, extra: { taskID } },
+              )
+              const payload = JSON.parse(result.output)
+
+              expect(result.metadata.targetStatus).toBe("missing")
+              expect(payload.startupTargets).toEqual([])
+              expect(payload.startupCandidates).toContainEqual({
+                source: "process-output",
+                url: printed.url,
+                skipReason: "explicit preview URL owns target selection",
+              })
+              expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
+            } finally {
+              restore()
+            }
+          },
+        })
+      } finally {
         await printed.close()
       }
     },
@@ -449,6 +745,123 @@ describe("tool.browser_preview", () => {
               { ...baseCtx, extra: { taskID } },
             ),
           ).rejects.toThrow("Browser preview target not found: art_previewtarget_missing")
+        },
+      })
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "browser preview evidence without operation kind is not readable",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const artifactDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "missing-operation-kind")
+          await fs.mkdir(artifactDir, { recursive: true })
+          await fs.writeFile(path.join(artifactDir, "side-by-side.png"), "png")
+          Database.use((db) =>
+            db
+              .insert(EngineArtifactTable)
+              .values({
+                id: "art_missing_operation_kind",
+                task_id: taskID,
+                run_id: null,
+                goal_run_id: null,
+                acceptance_id: null,
+                kind: "browser_preview_evidence",
+                label: "capture",
+                payload: {
+                  target_id: "art_target",
+                  viewport_id: "desktop",
+                  region_id: "region_header",
+                  artifact_paths: {
+                    side_by_side: ProjectRuntimePaths.taskRelative(
+                      taskID,
+                      "bp",
+                      "missing-operation-kind",
+                      "side-by-side.png",
+                    ),
+                  },
+                  status: "passed",
+                  summary: "Missing operation kind should be unreadable.",
+                  diagnostics: [],
+                  time_completed: Date.now(),
+                },
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
+          )
+          const evidence = await findReadableBrowserPreviewEvidenceByID({
+            projectRoot: tmp.path,
+            taskID,
+            evidenceID: "art_missing_operation_kind",
+          })
+          expect(evidence).toBeUndefined()
+        },
+      })
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "browser preview evidence writer rejects missing operation kind",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
+          expect(() =>
+            persistBrowserPreviewEvidence({
+              projectRoot: tmp.path,
+              taskID,
+              targetID: target.id,
+              viewportID: "desktop",
+              operationKind: undefined as any,
+              status: "passed",
+              summary: "Missing operation kind should throw.",
+              capture: null,
+              diagnostics: [],
+            }),
+          ).toThrow()
+        },
+      })
+    },
+    { timeout: BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "browser preview evidence writer rejects passed reference comparisons without required artifacts",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = await seedTask(tmp.path)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const artifactDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "incomplete-comparison")
+          await fs.mkdir(artifactDir, { recursive: true })
+          const sideBySidePath = path.join(artifactDir, "side-by-side.png")
+          await fs.writeFile(sideBySidePath, "side-by-side")
+          const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
+          expect(() =>
+            persistBrowserPreviewEvidence({
+              projectRoot: tmp.path,
+              taskID,
+              targetID: target.id,
+              viewportID: "desktop",
+              operationKind: "reference-comparison",
+              regionID: "region_header",
+              status: "passed",
+              summary: "Incomplete comparison should throw.",
+              artifactPaths: { side_by_side: sideBySidePath },
+              diagnostics: [],
+            }),
+          ).toThrow("source_crop")
         },
       })
     },

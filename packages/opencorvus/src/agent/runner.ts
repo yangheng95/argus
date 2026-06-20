@@ -90,6 +90,12 @@ import type { AgentReport, AgentReportContext } from "@/agent/report"
 import { SessionContext } from "@/session/context"
 import { recordToolExecuteError } from "@/engine/persist"
 import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import {
+  claimStageContinuationRequest,
+  markStageContinuationClaimFailed,
+  markStageContinuationConsumed,
+  type AgentSessionContinuation,
+} from "@/engine/stage-continuation"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -143,6 +149,11 @@ export interface RunAgentSessionInput<C> {
    *  of creating a replacement child session. When set, the runner validates
    *  the row's kind/goal/directory against this invocation before prompting. */
   existingSessionID?: string
+  /** Explicit visible continuation of a worker session after a protocol-level
+   *  finalizer miss. The runner reopens this session, claims the matching
+   *  continuation artifact, appends one visible recovery user message, and
+   *  installs the fresh runtime contract for the same finalizer. */
+  continuation?: AgentSessionContinuation
   /** Parent session id (orchestrator wake child / pipeline parent). */
   parentSessionID?: string
   /** Goal this session belongs to (per-goal build / planner / evaluator).
@@ -570,6 +581,25 @@ async function recordAgentErrorForOrchestrator(input: {
   })
 }
 
+function buildContinuationUserPrompt(input: AgentSessionContinuation): string {
+  return [
+    "Continue the existing worker session for a protocol-level finalizer miss.",
+    "",
+    `continuation_artifact_id: ${input.artifactID}`,
+    `continuation_kind: ${input.kind}`,
+    `required_finalizer: ${input.finalizerName}`,
+    input.failedAssistantMessageID ? `failed_assistant_message_id: ${input.failedAssistantMessageID}` : undefined,
+    "",
+    `Reason: ${input.reason}`,
+    "",
+    "Use the visible transcript and the current runtime tools for this same worker contract.",
+    `Complete any missing structured collector work, then call ${input.finalizerName} exactly once.`,
+    "Do not restart scope, invent a new task, or summarize in prose instead of the required finalizer.",
+  ]
+    .filter((line): line is string => typeof line === "string")
+    .join("\n")
+}
+
 // ---------------------------------------------------------------------------
 // Core runner
 // ---------------------------------------------------------------------------
@@ -577,10 +607,17 @@ async function recordAgentErrorForOrchestrator(input: {
 export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promise<RunAgentSessionOutput<C>> {
   const { kind } = input
   const agentName = input.agentName ?? kind
+  if (input.continuation && input.existingSessionID && input.continuation.sessionID !== input.existingSessionID) {
+    throw new AgentRunError(
+      kind,
+      `continuation session ${input.continuation.sessionID} does not match existingSessionID ${input.existingSessionID}`,
+    )
+  }
+  const existingSessionID = input.continuation?.sessionID ?? input.existingSessionID
   const configScope = input.taskID
     ? { taskID: input.taskID }
-    : input.existingSessionID
-      ? { sessionID: input.existingSessionID }
+    : existingSessionID
+      ? { sessionID: existingSessionID }
       : input.parentSessionID
         ? { sessionID: input.parentSessionID }
         : undefined
@@ -648,9 +685,11 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     : baseSystemPrompt
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
-  const userText = await input.buildUserPrompt()
+  const userText = input.continuation
+    ? buildContinuationUserPrompt(input.continuation)
+    : await input.buildUserPrompt()
   let parts: SessionPrompt.PromptInput["parts"]
-  if (input.buildUserParts) {
+  if (!input.continuation && input.buildUserParts) {
     parts = await input.buildUserParts()
   } else {
     parts = [{ type: "text", text: userText }]
@@ -727,8 +766,8 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
 
   // ── 4. Create or reopen child session ────────────────────────────────
   await input.onStatus?.(`${kind} starting`)
-  const session = input.existingSessionID
-    ? await Session.get(input.existingSessionID)
+  const session = existingSessionID
+    ? await Session.get(existingSessionID)
     : await Session.createNext({
         kind,
         parentID: input.parentSessionID,
@@ -736,7 +775,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
         title: input.sessionTitle,
         directory: input.sessionDirectory ?? Instance.directory,
       })
-  if (input.existingSessionID) {
+  if (existingSessionID) {
     if (session.kind !== kind) {
       throw new AgentRunError(kind, `existing session ${session.id} has kind=${session.kind}, expected ${kind}`)
     }
@@ -792,6 +831,17 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
       `terminal tool ${input.terminalTool.toolName} is not registered in the agent tool kit`,
     )
   }
+  if (input.continuation && !input.taskID) {
+    throw new AgentRunError(kind, `continuation ${input.continuation.artifactID} requires taskID`)
+  }
+  const continuationClaim = input.continuation
+    ? claimStageContinuationRequest({
+        taskID: input.taskID!,
+        artifactID: input.continuation.artifactID,
+        sessionID: session.id,
+        finalizerName: input.continuation.finalizerName,
+      })
+    : undefined
 
   log.info(`${agentName} agent starting`, {
     kind,
@@ -803,7 +853,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
   })
 
   const lifecycleDisposable =
-    !input.existingSessionID && input.onSessionCreated ? await input.onSessionCreated(session) : undefined
+    !existingSessionID && input.onSessionCreated ? await input.onSessionCreated(session) : undefined
 
   let finalMessage: Message.WithParts | undefined
   let collector: C | undefined
@@ -876,6 +926,16 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
           tools: enableMap,
           extra: {
             taskID: input.taskID,
+            ...(continuationClaim
+              ? {
+                  continuation: {
+                    artifactID: continuationClaim.artifactID,
+                    claimID: continuationClaim.claimID,
+                    finalizerName: continuationClaim.finalizerName,
+                    kind: continuationClaim.kind,
+                  },
+                }
+              : {}),
             workerTurnDescriptor: {
               id: descriptor.id,
               hash: descriptor.hash,
@@ -889,6 +949,35 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
             schema: input.format.schema,
             retryCount: input.format.retryCount ?? 2,
           }
+        }
+        if (continuationClaim) {
+          let appended = false
+          try {
+            const userMessage = (await SessionPrompt.prompt({
+              ...promptArgs,
+              messageID: continuationClaim.messageID,
+              noReply: true,
+            })) as Message.WithParts
+            appended = true
+            markStageContinuationConsumed({
+              taskID: input.taskID!,
+              artifactID: continuationClaim.artifactID,
+              claimID: continuationClaim.claimID,
+              messageID: userMessage.info.id,
+            })
+          } catch (err) {
+            if (!appended) {
+              markStageContinuationClaimFailed({
+                taskID: input.taskID!,
+                artifactID: continuationClaim.artifactID,
+                claimID: continuationClaim.claimID,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+            throw err
+          }
+          finalMessage = (await SessionPrompt.loop({ sessionID: session.id })) as Message.WithParts
+          return
         }
         finalMessage = (await SessionPrompt.prompt(promptArgs)) as Message.WithParts
       }

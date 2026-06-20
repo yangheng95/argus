@@ -64,8 +64,16 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
       })
 
       const { FrontendDesignAgent } = await import("../../src/frontend-design/agent")
+      const continuation = {
+        sessionID: "ses_frontend_design_existing",
+        artifactID: "artifact_frontend_design_continuation",
+        reason: "continue frontend-design finalizer miss",
+        kind: "protocol-finalizer-miss" as const,
+        finalizerName: "submit_frontend_template",
+      }
 
       runnerImpl = async (input: any) => {
+        expect(input.continuation).toEqual(continuation)
         expect(input.terminalTool?.toolName).toBe("submit_frontend_template")
         expect(input.toolKit.tools.record_frontend_region_selection).toBeDefined()
         expect(input.toolKit.tools.record_frontend_replacement_result).toBeDefined()
@@ -89,7 +97,7 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
           dataModules: ["src/data/heroData.ts"],
           styleModules: ["src/styles.css"],
           removedGeneratedBoundaries: ["src/components/source-dom/HeroRegion.tsx"],
-          visualEvidence: ["acceptance/hero-webpage-evaluate.json"],
+          visualEvidence: ["acceptance/hero-preview-screenshot.json"],
           auditEvidence: ["acceptance/web-clone-source-maintainable-audit.json"],
           remainingSourceDebt: [],
           nextRegionComponentName: "FooterRegion",
@@ -112,7 +120,7 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
               mature_library_candidates: [],
               props_states: "hero data fixture",
               replacement_boundary: "src/components/source-dom/HeroRegion.tsx",
-              parity_guard: "webpage_evaluate plus source audit",
+              parity_guard: "task-scoped preview screenshot inspection plus source audit",
               project_specific_reason: "Simple page-specific layout; no mature library domain.",
             },
           ],
@@ -127,7 +135,7 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
               mature_library_candidates: [],
               deletion_rule: "Remove source-dom HeroRegion after parity evidence.",
               source_refs: ["src/data/sourceDomReplacementPlan.ts"],
-              parity_guard: "webpage_evaluate plus source audit",
+              parity_guard: "task-scoped preview screenshot inspection plus source audit",
               project_specific_reason: "Simple page-specific layout.",
             },
           ],
@@ -166,6 +174,7 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
         title: "Analyze process trace",
         request: "Refine the captured web-clone-source into maintainable source.",
         taskID: "tsk_analyze_process",
+        continuation,
       })
 
       expect(result.processTrace.events.map((event) => event.name)).toContain("frontend_design_region_selection")
@@ -228,7 +237,7 @@ test("FrontendDesignAgent.analyze persists process artifacts before failed final
           dataModules: ["src/data/footerData.ts"],
           styleModules: ["src/styles.css"],
           removedGeneratedBoundaries: ["src/components/source-dom/FooterRegion.tsx"],
-          visualEvidence: ["acceptance/footer-webpage-evaluate.json"],
+          visualEvidence: ["acceptance/footer-preview-screenshot.json"],
           auditEvidence: ["acceptance/web-clone-source-maintainable-audit.json"],
           remainingSourceDebt: [],
         })

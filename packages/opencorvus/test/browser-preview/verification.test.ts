@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { findReadableBrowserPreviewEvidenceByID, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { verifyBrowserPreview } from "../../src/browser-preview/verification"
@@ -267,10 +268,13 @@ describe("browser preview verification", () => {
       const server = await startEastAsianGlyphServer()
       try {
         const target = await persistBrowserPreviewTarget({ taskID, url: server.url })
+        const jobID = "art_preview_cjk_job"
         const result = await runBrowserPreviewEvidenceJob({
           projectRoot: tmp.path,
+          jobID,
           taskID,
           targetID: target.id,
+          outDir: ProjectRuntimePaths.browserPreviewJobRoot(tmp.path, taskID, jobID),
           viewportIDs: ["desktop"],
         })
         const capture = result.captures.desktop

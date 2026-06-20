@@ -983,7 +983,7 @@ export function listToolExecuteErrorArtifacts(taskID: string, sinceMs: number, l
   )
 }
 
-export function listGoalBatchNotificationArtifacts(taskID: string, limit: number) {
+export function listGoalRefillNotificationArtifacts(taskID: string, limit: number) {
   return Database.use((db) =>
     db
       .select()
@@ -991,7 +991,7 @@ export function listGoalBatchNotificationArtifacts(taskID: string, limit: number
       .where(
         and(
           eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "goal_batch_notification" as EngineArtifactKind),
+          eq(EngineArtifactTable.kind, "goal_refill_notification" as EngineArtifactKind),
         ),
       )
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))

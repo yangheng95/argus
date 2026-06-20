@@ -105,8 +105,16 @@ describe("RequirementsAgent prompt precedence", () => {
 
         let runnerCalls = 0
         const decisionLog = createDecisionLog(taskID)
+        const continuation = {
+          sessionID: "ses_requirements_existing",
+          artifactID: "artifact_requirements_continuation",
+          reason: "continue requirements finalizer miss",
+          kind: "protocol-finalizer-miss" as const,
+          finalizerName: "submit_requirements",
+        }
         runnerImpl = async (input: any) => {
           runnerCalls += 1
+          expect(input.continuation).toEqual(continuation)
           expect(input.format).toBeUndefined()
           expect(input.terminalTool?.toolName).toBe("submit_requirements")
           expect(input.terminalTool?.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
@@ -213,6 +221,7 @@ describe("RequirementsAgent prompt precedence", () => {
               severity: "must",
             },
           ],
+          continuation,
         })
 
         expect(runnerCalls).toBe(1)

@@ -11,7 +11,10 @@ import {
 } from "../../src/engine/engine.sql"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { Session } from "../../src/session"
+import { goalStatusByID } from "../../src/engine/describe"
 import { listGoalRunsByGoal } from "../../src/engine/store"
+import { createDecisionLog } from "../../src/decision-log"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -30,6 +33,47 @@ function buildToolOptions(label = "goal_reference") {
   } as any
 }
 
+function toolText(result: unknown): string {
+  if (typeof result === "string") return result
+  if (
+    result &&
+    typeof result === "object" &&
+    (result as { type?: unknown }).type === "final" &&
+    typeof (result as { output?: unknown }).output === "string"
+  ) {
+    return (result as { output: string }).output
+  }
+  if (result && typeof result === "object" && "content" in result) {
+    const content = (result as { content?: Array<{ text?: string }> }).content
+    const text = content?.map((part) => part.text).filter(Boolean).join("\n")
+    if (text) return text
+  }
+  if (
+    result &&
+    typeof result === "object" &&
+    typeof (result as { output?: unknown }).output === "string" &&
+    typeof (result as { title?: unknown }).title === "string" &&
+    typeof (result as { metadata?: unknown }).metadata === "object"
+  ) {
+    return (result as { output: string }).output
+  }
+  return String(result)
+}
+
+function expectGoalBuildStarted(result: unknown): string {
+  const text = toolText(result)
+  expect(text).toContain("Build agent started (status=running")
+  return text
+}
+
+async function waitForGoalStatus(goalID: string, status: "passed" | "failed" | "running") {
+  for (let i = 0; i < 200; i += 1) {
+    if (goalStatusByID(goalID) === status) return
+    await Bun.sleep(25)
+  }
+  throw new Error(`Timed out waiting for goal ${goalID} to reach ${status}`)
+}
+
 mock.module("@/build/agent", () => ({
   BuildAgent: {
     run: (input: any) => {
@@ -43,7 +87,7 @@ describe("orchestrator build goal references", () => {
   afterEach(async () => {
     buildAgentRunImpl = undefined
     await resetDatabase()
-  })
+  }, 30_000)
 
   test("resolves active-plan display labels like G12 before dispatching build", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -59,6 +103,7 @@ describe("orchestrator build goal references", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal reference root" })
         attachTaskSession(ids.taskID, parent.id)
+        bindTaskToCurrentProject(ids.taskID)
 
         let observedGoalID = ""
         buildAgentRunImpl = async (input: any) => {
@@ -104,12 +149,92 @@ describe("orchestrator build goal references", () => {
           buildToolOptions("goal_ref_g12"),
         )
 
-        expect(result).toContain("status=passed")
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(ids.goalIDs[11]!, "passed")
         expect(observedGoalID).toBe(ids.goalIDs[11])
         expect(listGoalRunsByGoal(ids.goalIDs[11]!)).toHaveLength(1)
       },
     })
-  })
+  }, 30_000)
+
+  test("passes primary-runtime frontend-design paths to goal build context", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const now = Date.now()
+    const ids = seedWorkflowTaskWithGoals({
+      directory: tmp.path,
+      now,
+      goalCount: 1,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal build context root" })
+        attachTaskSession(ids.taskID, parent.id)
+        bindTaskToCurrentProject(ids.taskID)
+        const decisionLog = createDecisionLog(ids.taskID)
+        decisionLog.append({
+          phase: "frontend_design",
+          key: "frontend_project",
+          value: "status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton",
+          reason: "goal build context path regression",
+        })
+        decisionLog.append({
+          phase: "frontend_design",
+          key: "evidence_source_manifest",
+          value: "web-clone-source/reference.png\nweb-clone-source/source-ir/component-tree.json",
+          reason: "goal build context path regression",
+        })
+
+        let observedContext: any
+        buildAgentRunImpl = async (input: any) => {
+          observedContext = input.context
+          await input.onSessionCreated?.("ses_goal_context_build", {
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          })
+          return {
+            result: {
+              status: "passed",
+              summary: "Observed goal build context.",
+              files_changed: [],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_context_build",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: ids.taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID: ids.goalIDs[0]!,
+            request: "Implement the frontend-design surface.",
+            reason: "Regression coverage for primary-runtime build context paths.",
+          },
+          buildToolOptions("goal_context_paths"),
+        )
+
+        expectGoalBuildStarted(result)
+        await waitForGoalStatus(ids.goalIDs[0]!, "passed")
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, ids.taskID)
+        expect(observedContext?.projectDir).toBe(tmp.path)
+        expect(observedContext?.frontendDesign).toContain(paths.templateAbsolute)
+        expect(observedContext?.frontendDesign).toContain(paths.manifestAbsolute)
+        expect(observedContext?.frontendDesign).toContain("web-clone-source/reference.png")
+        expect(observedContext?.frontendDesign).not.toContain(`Materialized frontend_design public report (read this): ${paths.templateRelative}`)
+      },
+    })
+  }, 30_000)
 
   test("rejects out-of-range display labels without telling the model to re-run Architect", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -125,6 +250,7 @@ describe("orchestrator build goal references", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal reference invalid root" })
         attachTaskSession(ids.taskID, parent.id)
+        bindTaskToCurrentProject(ids.taskID)
         let buildCalls = 0
         buildAgentRunImpl = async () => {
           buildCalls++
@@ -147,12 +273,13 @@ describe("orchestrator build goal references", () => {
         )
 
         expect(buildCalls).toBe(0)
-        expect(result).toContain("outside the active plan range")
-        expect(result).not.toContain("register")
-        expect(result).not.toContain("architect")
+        const resultText = toolText(result)
+        expect(resultText).toContain("outside the active plan range")
+        expect(resultText).not.toContain("register")
+        expect(resultText).not.toContain("architect")
       },
     })
-  })
+  }, 30_000)
 
   test("resolves hash and bare numeric active-plan labels", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -168,6 +295,7 @@ describe("orchestrator build goal references", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal reference numeric root" })
         attachTaskSession(ids.taskID, parent.id)
+        bindTaskToCurrentProject(ids.taskID)
 
         const observedGoalIDs: string[] = []
         buildAgentRunImpl = async (input: any) => {
@@ -204,7 +332,7 @@ describe("orchestrator build goal references", () => {
           signal: new AbortController().signal,
         })
 
-        await tools.build.execute(
+        const firstResult = await tools.build.execute(
           {
             goalID: "#1",
             request: "Implement first goal.",
@@ -212,7 +340,7 @@ describe("orchestrator build goal references", () => {
           },
           buildToolOptions("goal_ref_hash"),
         )
-        await tools.build.execute(
+        const secondResult = await tools.build.execute(
           {
             goalID: "2",
             request: "Implement second goal.",
@@ -221,6 +349,10 @@ describe("orchestrator build goal references", () => {
           buildToolOptions("goal_ref_numeric"),
         )
 
+        expectGoalBuildStarted(firstResult)
+        expectGoalBuildStarted(secondResult)
+        await waitForGoalStatus(ids.goalIDs[0]!, "passed")
+        await waitForGoalStatus(ids.goalIDs[1]!, "passed")
         expect(observedGoalIDs).toEqual([ids.goalIDs[0], ids.goalIDs[1]])
       },
     })
@@ -348,6 +480,15 @@ function attachTaskSession(taskID: string, sessionID: string) {
   Database.use((db) => {
     db.update(EngineTaskTable)
       .set({ session_id: sessionID, time_updated: Date.now() })
+      .where(eq(EngineTaskTable.id, taskID))
+      .run()
+  })
+}
+
+function bindTaskToCurrentProject(taskID: string) {
+  Database.use((db) => {
+    db.update(EngineTaskTable)
+      .set({ project_id: Instance.project.id, time_updated: Date.now() })
       .where(eq(EngineTaskTable.id, taskID))
       .run()
   })

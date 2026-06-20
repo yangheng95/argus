@@ -31,6 +31,7 @@ import {
   renderFrontendResearchBriefPromptSection,
   renderResearchBriefPromptSection,
 } from "@/research/prompt-section"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import type { ParsedRequirement, RequirementsDecision, RequirementsOutput } from "./types"
 import { createRequirementsOutputTools, summarizeRequirements, type RequirementsCollector } from "./output-tools"
 import type { DecisionLog } from "@/decision-log"
@@ -70,6 +71,7 @@ export namespace RequirementsAgent {
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
+    continuation?: AgentSessionContinuation
     /** Fires once the runner session is created so callers (orchestrator
      *  dispatch tools) can capture the id for SSE event emission without
      *  needing a wrapper session. Rule 22 — single session per sub-agent. */
@@ -109,6 +111,7 @@ export namespace RequirementsAgent {
       taskID: input.taskID,
       model: input.model,
       signal: input.signal,
+      continuation: input.continuation,
       onStatus: input.onStatus,
       onSessionCreated: input.onSessionCreated
         ? (session) => {

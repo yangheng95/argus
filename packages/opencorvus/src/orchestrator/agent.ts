@@ -2,8 +2,8 @@
  * Orchestrator — master agent in the Agent Team architecture.
  *
  * Per spec/new-arch/16-unified-teardown.md §3, the orchestrator has no typed
- * trigger enum — it is woken by *events* (task creation, goal batch finish,
- * acceptance verdict, operator message) carried as a free-form note. On every
+ * trigger enum — it is woken by *events* (task creation, goal refill wake,
+ * goal-run update, acceptance verdict, operator message) carried as a free-form note. On every
  * wake it reads its full state from the describe layer + the artifact stream
  * and decides what to do next. Callers may pass an optional `event.note`
  * string to hint WHY they just woke the orchestrator; every decision derives
@@ -1295,7 +1295,7 @@ async function buildSystemParts(
   // ── Workflow guidance (injected as recommended path, not enforced) ──
   if (workflow && workflowState) {
     ctx.push("")
-    ctx.push(renderWorkflowPrompt(workflow, workflowState))
+    ctx.push(renderWorkflowPrompt(workflow, workflowState, task.id))
   }
 
   // Run context — acceptance + eval results for the current active run (if

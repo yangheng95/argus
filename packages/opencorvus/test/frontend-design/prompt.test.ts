@@ -4,8 +4,12 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { PNG } from "pngjs"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { Database } from "../../src/storage/db"
+import { Filesystem } from "../../src/util/filesystem"
+import { Worktree } from "../../src/worktree"
 import { FrontendDesignTestHooks } from "../../src/frontend-design/agent"
 import { createFrontendSkeletonProjectTool } from "../../src/frontend-design/skeleton-project-tool"
 import { createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
@@ -18,6 +22,7 @@ import {
 } from "../../src/frontend-design/static-tools"
 import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS } from "../../src/frontend-design/tools/ids"
 import { generateWebCloneSkeletonProject } from "../../src/web-clone"
+import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 describe("frontend-design prompt assembly", () => {
@@ -85,7 +90,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "wrong theme, wrong header color, wrong density, or wrong first-viewport background means the region is not ready",
     )
-    expect(prompt).toContain("Completed/deferred status must cite visual skeleton render evidence")
+    expect(prompt).toContain("Completed/deferred status must cite task-scoped preview or screenshot evidence")
     expect(prompt).toContain("Do not record a region as completed from source inspection alone")
     expect(prompt).toContain("Do not record a region as completed if the skeleton contains placeholder UI")
     expect(prompt).toContain("completion requires a faithful static representation from source data/assets")
@@ -93,8 +98,10 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Preserve the source data object shape")
     expect(prompt).toContain("AssetPath`/asset resolver usage")
     expect(prompt).toContain("replace `AssetPath` with inline guessed SVG paths")
-    expect(prompt).toContain("For render evidence, use one explicit static URL or file path")
-    expect(prompt).toContain("do not use `skill`, research reports, shell listing, or build success as a substitute")
+    expect(prompt).toContain("For render evidence, use task-scoped preview or screenshot evidence for the HTML skeleton")
+    expect(prompt).toContain(
+      "do not use `skill`, research reports, shell listing, build success, legacy webpage visual tool output, or external judge verdicts as a substitute",
+    )
     expect(prompt).toContain("## Agent-Owned Rawproject Refinement")
     expect(prompt).toContain("frontend_design is not a report writer")
     expect(prompt).toContain("high-fidelity visual HTML skeleton")
@@ -114,8 +121,10 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Baseline-first rule")
     expect(prompt).toContain("Region iteration algorithm")
     expect(prompt).toContain("inspected visual parity")
-    expect(prompt).toContain("Do not use a fixed numeric score as the completion condition")
-    expect(prompt).toContain("the score is only diagnostic")
+    expect(prompt).toContain(
+      "Do not use a fixed numeric score, legacy webpage visual tool output, or external judge verdict as the completion condition",
+    )
+    expect(prompt).toContain("screenshot review shows mismatches")
     expect(prompt).toContain("VisualRegionBinding package rule")
     expect(prompt).toContain("first call `create_visual_region_coordinate_atlas`")
     expect(prompt).toContain("read the returned atlas image attachments")
@@ -235,8 +244,8 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("capture/source replay")
     expect(prompt).toContain("`SourceDomPage`/`src/components/source-dom/*` dumps")
     expect(prompt).toContain("Render that HTML skeleton through a real static harness or browser path")
-    expect(prompt).toContain("For high-fidelity acceptance, call `webpage_evaluate` as diagnostic evidence")
-    expect(prompt).toContain("Do not use a fixed numeric score as the completion condition")
+    expect(prompt).toContain("For high-fidelity acceptance, render the current skeleton and inspect the rendered screenshot")
+    expect(prompt).toContain("Do not use a fixed numeric score or external judge verdict as the completion condition")
     expect(prompt).toContain("If the task requires VisualRegionBinding or per-region source bbox bindings")
     expect(prompt).toContain("first call `create_visual_region_coordinate_atlas`")
     expect(prompt).toContain("author bbox JSON from visible screenshot region boundaries")
@@ -257,14 +266,14 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "copy/transcribe observed labels, numeric data, source IDs, class responsibilities, SVG paths/assets",
     )
-    expect(prompt).toContain("Render the HTML skeleton through one explicit static URL or file path")
+    expect(prompt).toContain("Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence")
     expect(prompt).toContain(
-      "compare it against `reference.png` with `webpage_render`, `webpage_evaluate` diagnostic output, and `webpage_vision_judge` evidence when available",
+      "Inspect task-scoped preview or screenshot evidence against the reference evidence",
     )
     expect(prompt).toContain(
-      "repair the same region before selecting another region when screenshot review or the visual judge names mismatches",
+      "repair the same region before selecting another region when screenshot review names mismatches",
     )
-    expect(prompt).toContain("Do not use shell listings or build success as visual evidence")
+    expect(prompt).toContain("Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence")
     expect(prompt).toContain(
       "the skeleton is source-editable static HTML/CSS, not compiled output, not raw source DOM replay",
     )
@@ -399,9 +408,9 @@ describe("frontend-design prompt assembly", () => {
         expect(result.output).not.toContain(
           "Treat root config files (`package.json`, `tsconfig.json`, bundler config) as late integration edits",
         )
-        expect(result.output).toContain("use one explicit static URL or file path, call `webpage_render`")
+        expect(result.output).toContain("render it through one explicit static URL or file path")
         expect(result.output).toContain(
-          "call `webpage_vision_judge` for visible theme/layout/density/control mismatches, placeholder UI, or fake spacers",
+          "inspect task-scoped preview or screenshot evidence against the visual skeleton and `reference.png`",
         )
         expect(result.output).toContain(
           "Do not record completed for charts, maps, tables, calendars, or other complex controls that are only labeled placeholder boxes",
@@ -425,15 +434,56 @@ describe("frontend-design prompt assembly", () => {
             "write",
             "apply_patch",
             "web_clone_source_audit",
-            "webpage_render",
-            "webpage_evaluate",
-            "webpage_text_diff",
-            "webpage_vision_judge",
           ]),
         )
+        expect(Object.keys(tools)).not.toContain("webpage_render")
+        expect(Object.keys(tools)).not.toContain("webpage_evaluate")
+        expect(Object.keys(tools)).not.toContain("webpage_text_diff")
+        expect(Object.keys(tools)).not.toContain("webpage_vision_judge")
       },
     })
   })
+
+  test("skeleton project tool uses the task primary runtime defaults from a managed worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_frontend_skeleton_worktree"
+    let worktreeDir = ""
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          seedFrontendPromptTask(taskID)
+          const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+          await writeAuditFixtureSourcePackage(path.dirname(paths.sourcePackageAbsolute))
+          const worktree = await Worktree.create({
+            name: `frontend-skeleton-${Date.now().toString(36)}`,
+            taskID,
+            goalID: "gol_frontend_skeleton",
+            runID: "run_frontend_skeleton",
+          })
+          worktreeDir = worktree.directory
+        },
+      })
+
+      await Instance.provide({
+        directory: worktreeDir,
+        fn: async () => {
+          const tools = createFrontendSkeletonProjectTool({ taskID })
+          const result = await (tools.create_frontend_skeleton_project as any).execute({ overwrite: true }, {})
+          const primaryPaths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+          const worktreePaths = ProjectRuntimePaths.frontendDesignPaths(worktreeDir, taskID)
+
+          expect(result.metadata.outputDir).toBe(primaryPaths.skeletonProjectAbsolute)
+          expect(result.metadata.webpageEvidenceDir).toBe(primaryPaths.sourcePackageAbsolute)
+          expect(await Filesystem.exists(path.join(primaryPaths.skeletonProjectAbsolute, "README.md"))).toBe(true)
+          expect(await Filesystem.exists(worktreePaths.skeletonProjectAbsolute)).toBe(false)
+        },
+      })
+    } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+    }
+  }, 30_000)
 
   test("frontend_design runtime tool groups are static and complete", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-static-tools-"))
@@ -497,19 +547,21 @@ describe("frontend-design prompt assembly", () => {
     await Instance.provide({
       directory: tmp,
       fn: async () => {
+        const taskID = "tsk_frontend_trace"
+        seedFrontendPromptTask(taskID)
         const trace = FrontendDesignTestHooks.createFrontendProcessTrace()
         FrontendDesignTestHooks.recordFrontendProcessEvent(trace, {
           name: "frontend_design_static_tool_surface",
           status: "passed",
         })
 
-        const artifact = await FrontendDesignTestHooks.writeFrontendProcessTraceArtifact("tsk_frontend_trace", trace)
+        const artifact = await FrontendDesignTestHooks.writeFrontendProcessTraceArtifact(taskID, trace)
         expect(artifact).toContain("frontend-design-process-trace.json")
         const persisted = JSON.parse(await fs.readFile(artifact!, "utf8"))
         expect(persisted.purpose).toBe("frontend-design-process-trace")
         expect(persisted.events[0].name).toBe("frontend_design_static_tool_surface")
         const iterationArtifact = await FrontendDesignTestHooks.writeFrontendIterationStateArtifact(
-          "tsk_frontend_trace",
+          taskID,
           trace,
         )
         expect(iterationArtifact).toContain("frontend-design-iteration-state.json")
@@ -573,10 +625,10 @@ describe("frontend-design prompt assembly", () => {
       "Skeleton root wiring may include only this region and previously completed region visuals",
     )
     expect(selectionResult.output).toContain(
-      "Before writing files for another region, render this region through one explicit static URL or file path",
+      "Before writing files for another region, inspect task-scoped preview or screenshot evidence",
     )
-    expect(selectionResult.output).toContain("feed its screenshot into webpage_evaluate")
-    expect(selectionResult.output).toContain("call webpage_vision_judge")
+    expect(selectionResult.output).toContain("inspect task-scoped preview or screenshot evidence")
+    expect(selectionResult.output).toContain("repair this same region when screenshot review names mismatches")
     FrontendDesignTestHooks.recordFrontendToolResultEvents(
       trace,
       "edit",
@@ -606,7 +658,7 @@ describe("frontend-design prompt assembly", () => {
       dataModules: ["src/data/sourceData.ts"],
       styleModules: ["src/styles.css"],
       removedGeneratedBoundaries: ["src/components/source-dom/HeroRegion.tsx"],
-      visualEvidence: ["acceptance/hero-webpage-evaluate.json"],
+      visualEvidence: ["acceptance/hero-preview-screenshot.json"],
       auditEvidence: ["acceptance/web-clone-source-maintainable-audit.json"],
       remainingSourceDebt: ["FooterRegion"],
       nextRegionComponentName: "FooterRegion",
@@ -776,7 +828,7 @@ describe("frontend-design prompt assembly", () => {
         generationTool: "host-prepared:create_frontend_skeleton_project",
         warnings: [],
         visualIterationMatrix:
-          "desktop-reference 1366x768 (primary_reference, capture_viewport): Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, matching_reference, web-clone-source/reference-mobile.png): Run measured webpage_evaluate against web-clone-source/reference-mobile.png for the mobile viewport before claiming responsive parity. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use measured comparison when matching reference evidence exists, otherwise record the evidence gap.",
+          "desktop-reference 1366x768 (primary_reference, capture_viewport): Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, matching_reference, web-clone-source/reference-mobile.png): Capture and inspect a task-scoped mobile preview screenshot against web-clone-source/reference-mobile.png before claiming responsive parity. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use matching reference evidence when it exists, otherwise record the evidence gap.",
         compactEvidence: [
           "## source-ir/component-tree.json",
           '{"components":[{"name":"ProductPage"}]}',
@@ -820,7 +872,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("source-region traceable visual restoration")
     expect(prompt).toContain("rawproject source nodes/regions/assets/reference screenshots")
     expect(prompt).toContain("A region replacement is complete only after source content/data extraction")
-    expect(prompt).toContain("measured webpage_evaluate evidence")
+    expect(prompt).toContain("rendered screenshot inspection")
     expect(prompt).toContain(
       "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
     )
@@ -884,7 +936,7 @@ describe("frontend-design prompt assembly", () => {
               },
               visualIteration: {
                 referenceImage: "reference.png",
-                comparisonTool: "webpage_evaluate",
+                evidenceMethod: "task_scoped_preview_screenshots",
                 viewportMatrix: [
                   { name: "desktop-reference", width: 1366, height: 768, evidenceRole: "primary_reference" },
                 ],
@@ -1001,7 +1053,7 @@ describe("frontend-design prompt assembly", () => {
             },
             visualIteration: {
               referenceImage: "reference.png",
-              comparisonTool: "webpage_evaluate",
+              evidenceMethod: "task_scoped_preview_screenshots",
               viewportMatrix: [
                 {
                   name: "desktop-reference",
@@ -1009,7 +1061,7 @@ describe("frontend-design prompt assembly", () => {
                   height: 900,
                   evidenceRole: "primary_reference",
                   comparison:
-                    "Run measured webpage_evaluate against web-clone-source/reference.png after each region replacement.",
+                    "Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement.",
                 },
               ],
               rule: "Use desktop-reference before claiming final parity.",
@@ -1075,7 +1127,7 @@ describe("frontend-design prompt assembly", () => {
       expect(summary).toContain("Source-dom region stats")
       expect(summary).toContain("Visual iteration matrix")
       expect(summary).toContain("desktop-reference: 1440x900")
-      expect(summary).toContain("comparisonTool: webpage_evaluate")
+      expect(summary).toContain("evidenceMethod: task_scoped_preview_screenshots")
       expect(summary).toContain("largestBytes: 44123")
       expect(summary).toContain("Maintainable iteration state")
       expect(summary).toContain("remainingRegionCount: 11")
@@ -1400,4 +1452,23 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
     ),
   )
   return sourcePackage
+}
+
+function seedFrontendPromptTask(taskID: string): void {
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: Instance.project.id,
+        source: "test",
+        title: "frontend skeleton worktree task",
+        request: "frontend skeleton worktree task",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
 }

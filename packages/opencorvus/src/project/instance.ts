@@ -8,11 +8,14 @@ import { Filesystem } from "@/util/filesystem"
 import path from "node:path"
 import { ProjectRuntimePaths } from "./runtime-paths"
 
+type InstanceInit = () => Promise<unknown>
+
 interface Context {
   directory: string
   worktree: string
   project: Project.Info
   git: boolean
+  initRuns: WeakMap<InstanceInit, Promise<void>>
 }
 
 type StateFactory = <S>(
@@ -24,7 +27,7 @@ type StateFactory = <S>(
 }
 
 type InstanceApi = {
-  provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R>
+  provide<R>(input: { directory: string; init?: InstanceInit; fn: () => R }): Promise<R>
   forEachActive(input: { fn: () => void | Promise<void> }): Promise<void>
   readonly directory: string
   readonly worktree: string
@@ -48,7 +51,7 @@ function needsProjectRefresh(ctx: Context) {
   return (ctx.project.id === "global" || ctx.worktree === "/" || !ctx.git) && Project.isGitRepo(ctx.directory)
 }
 
-async function bootstrapContext(ctx: Context, init?: () => Promise<unknown>) {
+async function bootstrapContext(ctx: Context, init?: InstanceInit) {
   // .gitignore upkeep runs INSIDE context.provide because ensureGitignore()
   // reads `Instance.directory` from the active context. Lazy import breaks the
   // engine/git <-> instance cycle.
@@ -69,11 +72,26 @@ async function bootstrapContext(ctx: Context, init?: () => Promise<unknown>) {
       error: err instanceof Error ? err.message : String(err),
     })
   }
-  await init?.()
+  await runContextInit(ctx, init)
+}
+
+async function runContextInit(ctx: Context, init?: InstanceInit) {
+  if (!init) return
+  const current = ctx.initRuns.get(init)
+  if (current) return current
+  const run = Promise.resolve()
+    .then(init)
+    .then(() => undefined)
+    .catch((error) => {
+      if (ctx.initRuns.get(init) === run) ctx.initRuns.delete(init)
+      throw error
+    })
+  ctx.initRuns.set(init, run)
+  await run
 }
 
 export const Instance: InstanceApi = {
-  async provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R> {
+  async provide<R>(input: { directory: string; init?: InstanceInit; fn: () => R }): Promise<R> {
     // Normalize project directories once so cache keys and boundary checks stay stable.
     const directory = Filesystem.resolve(input.directory)
     let existing = cache.get(directory)
@@ -112,6 +130,7 @@ export const Instance: InstanceApi = {
           worktree: sandbox,
           project,
           git: Project.isGitRepo(project.worktree),
+          initRuns: new WeakMap(),
         }
         await context.provide(ctx, () => bootstrapContext(ctx, input.init))
         return ctx
@@ -126,6 +145,8 @@ export const Instance: InstanceApi = {
     if (needsProjectRefresh(ctx)) {
       ctx = await Instance.refresh(directory)
       await context.provide(ctx, () => bootstrapContext(ctx, input.init))
+    } else if (input.init) {
+      await context.provide(ctx, () => runContextInit(ctx, input.init))
     }
     return context.provide(ctx, async () => {
       return input.fn()
@@ -162,6 +183,7 @@ export const Instance: InstanceApi = {
         worktree: next.sandbox,
         project: next.project,
         git: Project.isGitRepo(next.project.worktree),
+        initRuns: new WeakMap(),
       }
       cache.set(key, Promise.resolve(ctx))
       return ctx

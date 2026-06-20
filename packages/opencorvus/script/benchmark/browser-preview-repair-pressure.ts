@@ -1,0 +1,112 @@
+#!/usr/bin/env bun
+
+import path from "node:path"
+import { Shell } from "../../src/shell/shell"
+
+const PRESSURE_TEST_FILES = [
+  "test/browser-preview/local-module-source-binding.test.ts",
+  "test/browser-preview/region-comparison.test.ts",
+  "test/browser-preview/region-visible-locator.test.ts",
+  "test/browser-preview/region-source-bbox.test.ts",
+  "test/browser-preview/region-route-diagnostics.test.ts",
+  "test/browser-preview/region-route-state.test.ts",
+  "test/browser-preview/region-strict-schema.test.ts",
+  "test/agent/runner-prompt.test.ts",
+  "test/tool/browser-preview.test.ts",
+  "test/server/browser-preview-routes.test.ts",
+  "test/server/browser-preview-sdk-contract.test.ts",
+  "test/build-agent/reference-comparison-report.test.ts",
+  "test/visual-qa/output-tools.test.ts",
+  "test/visual-qa/agent.test.ts",
+  "test/visual-qa/strict-reference-fidelity.test.ts",
+  "test/integrity/acceptance-tools.test.ts",
+  "test/integrity/browser-preview-tool.test.ts",
+  "test/engine/workflow-integrity-step.test.ts",
+  "test/orchestrator/orchestrator-tool-descriptions.test.ts",
+]
+
+const ISOLATED_PRESSURE_TEST_FILES = [
+  "test/integrity/team-agent.test.ts",
+]
+
+const KNOWN_FLAGS = new Set(["--idle-timeout-ms", "--per-test-timeout-ms"])
+
+function flag(name: string): string | undefined {
+  const eq = process.argv.find((item) => item.startsWith(`${name}=`))
+  if (eq) return eq.slice(name.length + 1)
+  const idx = process.argv.indexOf(name)
+  if (idx !== -1 && idx + 1 < process.argv.length) return process.argv[idx + 1]
+  return undefined
+}
+
+function validateFlags(): void {
+  const unknown: string[] = []
+  const args = process.argv.slice(2)
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!
+    if (!arg.startsWith("--")) continue
+    const key = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg
+    if (KNOWN_FLAGS.has(key)) {
+      if (!arg.includes("=") && index + 1 < args.length && !args[index + 1]!.startsWith("--")) index += 1
+      continue
+    }
+    unknown.push(arg)
+  }
+  if (unknown.length > 0) {
+    throw new Error(`unknown browser-preview repair pressure benchmark flag(s): ${unknown.join(" ")}`)
+  }
+}
+
+function parsePositiveInt(name: string, defaultValue: number): number {
+  const raw = flag(name)
+  if (!raw) return defaultValue
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`)
+  return Math.floor(value)
+}
+
+function log(message: string): void {
+  process.stdout.write(`[browser-preview-repair-pressure] ${message}\n`)
+}
+
+validateFlags()
+
+const packageRoot = path.resolve(import.meta.dir, "../..")
+const idleTimeoutMs = parsePositiveInt("--idle-timeout-ms", 120_000)
+const perTestTimeoutMs = parsePositiveInt("--per-test-timeout-ms", 30_000)
+
+log(`cwd=${packageRoot}`)
+log(`idle_timeout_ms=${idleTimeoutMs}`)
+log(`per_test_timeout_ms=${perTestTimeoutMs}`)
+
+const commands = [
+  ["bun", "test", "--timeout", String(perTestTimeoutMs), ...PRESSURE_TEST_FILES].join(" "),
+  ["bun", "test", "--timeout", String(perTestTimeoutMs), ...ISOLATED_PRESSURE_TEST_FILES].join(" "),
+]
+
+for (const command of commands) {
+  log(`command=${command}`)
+  const result = await Shell.run(command, { cwd: packageRoot, idleTimeoutMs })
+
+  if (result.stdout.trim()) process.stdout.write(result.stdout)
+  if (result.stderr.trim()) process.stderr.write(result.stderr)
+
+  if (result.aborted) {
+    log("status=aborted")
+    process.exit(1)
+  }
+  if (result.idleTimedOut) {
+    log("status=idle_timeout")
+    process.exit(1)
+  }
+  if (result.timedOut) {
+    log("status=hard_timeout")
+    process.exit(1)
+  }
+  if (result.exitCode !== 0) {
+    log(`status=failed exit_code=${result.exitCode}`)
+    process.exit(result.exitCode)
+  }
+}
+
+log("status=passed")

@@ -15,12 +15,8 @@ import { ToolAdapterRegistry } from "../../src/executor/protocol"
 import {
   WebpageAnalyzeTool,
   WebpageCompileTool,
-  WebpageEvaluateTool,
   WebpageExtractTool,
-  WebpageRenderTool,
   WebpageRuntimeStateTool,
-  WebpageTextDiffTool,
-  WebpageVisionJudgeTool,
 } from "../../src/frontend-design/tools"
 import type { Tool } from "../../src/tool/tool"
 
@@ -80,12 +76,8 @@ const BUILT_IN_TOOL_IDS = new Set([
 const FRONTEND_DESIGN_TOOL_INFOS: Tool.Info[] = [
   WebpageAnalyzeTool,
   WebpageCompileTool,
-  WebpageEvaluateTool,
   WebpageExtractTool,
-  WebpageRenderTool,
   WebpageRuntimeStateTool,
-  WebpageTextDiffTool,
-  WebpageVisionJudgeTool,
 ]
 
 function providerInputJson(inputSchema: unknown, model = hexinGptModel): JsonNode {

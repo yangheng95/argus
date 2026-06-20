@@ -65,8 +65,8 @@ function initialQueueOrder(priority: PriorityInput | undefined, now: number) {
 
 // ---------------------------------------------------------------------------
 // persistQueuedTask — fast-path for POST /task (<10ms)
-// Historical name: queue=true persists a queued task; queue=false persists an
-// already-active task so creation genuinely bypasses the directory queue.
+// queue=true persists a queued task; queue=false persists an already-active
+// task so same-project work can start in parallel when the caller requests it.
 // ---------------------------------------------------------------------------
 
 export function persistQueuedTask(input: {

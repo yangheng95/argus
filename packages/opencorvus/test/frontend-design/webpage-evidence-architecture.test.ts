@@ -29,39 +29,35 @@ describe("webpage evidence architecture guards", () => {
     expect(combined).not.toContain("WebpageImage")
   })
 
-  test("webpage_render stays URL-only and runtime-neutral", () => {
-    const renderTool = readSource("frontend-design/tools/webpage-render.ts")
-    const renderCore = readSource("browser/webpage/render.ts")
-    const combined = `${renderTool}\n${renderCore}`
-
-    expect(combined).not.toMatch(/static[- ]file fallback/i)
-    expect(combined).not.toMatch(/static mode/i)
-    expect(combined).not.toMatch(/live-server mode/i)
-    expect(combined).not.toMatch(/\bbun run dev\b/i)
-    expect(combined).not.toMatch(/\bnpm start\b/i)
-    expect(combined).not.toMatch(/createStaticServer/)
-    expect(combined).not.toMatch(/node:http/)
-    expect(renderTool).toMatch(/url:\s*z\s*\.\s*string\(\)\s*\.\s*url\(\)/)
-    expect(renderTool).not.toMatch(/visible browser/i)
-    expect(renderCore).toMatch(/headless:\s*true/)
-  })
-
-  test("visual evidence project directories come from Instance context", () => {
-    const renderTool = readSource("frontend-design/tools/webpage-render.ts")
-    const evaluateTool = readSource("frontend-design/tools/webpage-evaluate.ts")
-    const judgeTool = readSource("frontend-design/tools/webpage-vision-judge.ts")
-
-    for (const source of [renderTool, evaluateTool, judgeTool]) {
-      expect(source).toContain("Instance.directory")
-      expect(source).not.toContain("projectDirectory: process.cwd()")
+  test("retired webpage visual gate tools have no implementation or runtime exposure", () => {
+    const retiredToolIDs = ["webpage_render", "webpage_evaluate", "webpage_text_diff", "webpage_vision_judge"]
+    const retiredFiles = [
+      "frontend-design/tools/webpage-render.ts",
+      "frontend-design/tools/webpage-evaluate.ts",
+      "frontend-design/tools/webpage-text-diff.ts",
+      "frontend-design/tools/webpage-vision-judge.ts",
+    ]
+    for (const file of retiredFiles) {
+      expect(fs.existsSync(path.join(SRC_ROOT, file))).toBe(false)
     }
-  })
 
-  test("vision judge failures do not synthesize verdict files", () => {
-    const source = readSource("frontend-design/tools/webpage-vision-judge.ts")
-    expect(source).not.toContain("failurePayload")
-    expect(source).not.toMatch(/accepted:\s*false/)
-    expect(source).toContain("No verdict was written")
+    const runtimeSources = [
+      readSource("frontend-design/static-tools.ts"),
+      readSource("visual-qa/static-tools.ts"),
+      readSource("tool/registry.ts"),
+      readSource("frontend-design/agent.ts"),
+      readSource("visual-qa/agent.ts"),
+      readSource("agent/agent.ts"),
+    ].join("\n")
+    for (const toolID of retiredToolIDs) {
+      expect(runtimeSources).not.toContain(toolID)
+    }
+
+    const idsSource = readSource("frontend-design/tools/ids.ts")
+    expect(idsSource).toContain("WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS")
+    for (const toolID of retiredToolIDs) {
+      expect(idsSource).toContain(toolID)
+    }
   })
 
   test("url extraction keeps DOM evidence independent from external image mirroring", () => {

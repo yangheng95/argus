@@ -10,6 +10,7 @@ import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { DecisionLogBundle } from "@/decision-log/bundle"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 
 const log = Log.create({ service: "engine-state" })
 
@@ -208,7 +209,7 @@ async function finalizeLiveRunForTerminalTask(
   intent: TaskUpdateValues["status"],
   resolved: Partial<typeof EngineTaskTable.$inferInsert>,
   summary: string,
-  options?: TaskUpdateOptions,
+  _options?: TaskUpdateOptions,
 ) {
   const runStatus = intent ? TERMINAL_TASK_RUN_STATUS[intent] : undefined
   if (!runStatus) return
@@ -229,7 +230,7 @@ async function finalizeLiveRunForTerminalTask(
   // Flagged for codex re-consensus in
   // artifacts/2026-05-18-decision-log-disk-materialization.md §11.
   try {
-    await DecisionLogBundle.write(options?.projectDir ?? Instance.directory, task.id)
+    await DecisionLogBundle.write(taskPrimaryProjectRoot(task.id), task.id)
   } catch (err) {
     log.error("terminal decision-log bundle write failed (task termination unaffected)", {
       taskID: task.id,

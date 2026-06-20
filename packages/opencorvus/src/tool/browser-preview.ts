@@ -10,6 +10,9 @@ import { BrowserPreviewToolID } from "./browser-preview-tool-ids"
 import { Tool } from "./tool"
 
 const DEFAULT_PREVIEW_SERVICE_DESCRIPTION = "Start browser preview service"
+const DEFAULT_PREVIEW_TARGET_STARTUP_WAIT_MS = 45_000
+const PREVIEW_TARGET_DISCOVERY_INTERVAL_MS = 250
+const PREVIEW_TARGET_PROBE_SLICE_MS = 1_000
 
 type BrowserPreviewStartupCandidateSource = "explicit" | "process-output" | "command"
 type BrowserPreviewStartupCandidate = {
@@ -74,6 +77,7 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
         throw new Error(`Invalid browser preview URL: ${params.url}`)
       }
 
+      let observedStartupOutput = ""
       const startup = await bash.execute(
         {
           command: params.command,
@@ -83,13 +87,16 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
           description: params.description ?? DEFAULT_PREVIEW_SERVICE_DESCRIPTION,
           background: true,
         },
-        ctx,
+        withBrowserPreviewOutputObserver(ctx, (output) => {
+          observedStartupOutput = output
+        }),
       )
 
+      const targetStartupWaitMs = params.timeout ?? DEFAULT_PREVIEW_TARGET_STARTUP_WAIT_MS
       let explicitUrlPersisted = false
       const startupCandidates: BrowserPreviewStartupCandidate[] = []
       if (explicitUrl) {
-        const reachable = await waitForBrowserPreviewUrlReachable(explicitUrl)
+        const reachable = await waitForBrowserPreviewUrlReachable(explicitUrl, { timeoutMs: targetStartupWaitMs })
         if (reachable) {
           const persisted = await persistBrowserPreviewTarget({ taskID, url: explicitUrl })
           explicitUrlPersisted = true
@@ -108,27 +115,16 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
           })
         }
       }
-      const startupOutput = typeof startup.metadata.output === "string" ? startup.metadata.output : ""
+      let startupOutput = typeof startup.metadata.output === "string" ? startup.metadata.output : observedStartupOutput
       if (!explicitUrl) {
-        for (const url of extractBrowserPreviewUrlsFromText(startupOutput)) {
-          const reachable = await waitForBrowserPreviewUrlReachable(url)
-          if (!reachable) {
-            startupCandidates.push({
-              source: "process-output",
-              url,
-              reachable,
-              skipReason: "process output preview URL was not reachable",
-            })
-            continue
-          }
-          const persisted = await persistBrowserPreviewTarget({ taskID, url })
-          startupCandidates.push({
-            source: "process-output",
-            url,
-            reachable,
-            persistedTargetID: persisted.id,
-          })
-        }
+        startupCandidates.push(
+          ...(await waitForProcessOutputPreviewTargets({
+            taskID,
+            output: () => observedStartupOutput || startupOutput,
+            timeoutMs: targetStartupWaitMs,
+          })),
+        )
+        startupOutput = observedStartupOutput || startupOutput
       } else {
         for (const url of extractBrowserPreviewUrlsFromText(startupOutput)) {
           startupCandidates.push({
@@ -152,7 +148,7 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
         .filter((item) => item.persistedTargetID)
         .map((item) => ({ id: item.persistedTargetID!, url: item.url, source: item.source }))
       const noStartupTargetDiagnostic = "No browser_preview_target was persisted for this service startup."
-      const projectRoot = browserPreviewTaskEvidenceRoot()
+      const projectRoot = browserPreviewTaskEvidenceRoot(taskID)
       const target =
         startupTargets.length > 0
           ? await resolveBrowserPreviewTarget({
@@ -207,3 +203,73 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
     },
   }
 })
+
+type BashOutputObserverInput = { stream: "stdout" | "stderr"; chunk: string; output: string }
+
+function withBrowserPreviewOutputObserver(
+  ctx: Tool.Context,
+  observe: (output: string) => void,
+): Tool.Context {
+  const previousObserver =
+    typeof ctx.extra?.bashOutputObserver === "function"
+      ? (ctx.extra.bashOutputObserver as (input: BashOutputObserverInput) => void)
+      : undefined
+  return {
+    ...ctx,
+    extra: {
+      ...ctx.extra,
+      bashOutputObserver(input: BashOutputObserverInput) {
+        observe(input.output)
+        previousObserver?.(input)
+      },
+    },
+  }
+}
+
+async function waitForProcessOutputPreviewTargets(input: {
+  taskID: string
+  output: () => string
+  timeoutMs: number
+}): Promise<BrowserPreviewStartupCandidate[]> {
+  const candidates = new Map<string, BrowserPreviewStartupCandidate>()
+  const start = Date.now()
+  const idleTimeoutMs = Math.max(0, input.timeoutMs)
+  let lastOutput = input.output()
+  let lastActivityAt = start
+  while (Date.now() - lastActivityAt <= idleTimeoutMs) {
+    const currentOutput = input.output()
+    if (currentOutput !== lastOutput) {
+      lastOutput = currentOutput
+      lastActivityAt = Date.now()
+    }
+    let persisted = false
+    for (const url of extractBrowserPreviewUrlsFromText(currentOutput)) {
+      const remainingMs = Math.max(1, idleTimeoutMs - (Date.now() - lastActivityAt))
+      const reachable = await waitForBrowserPreviewUrlReachable(url, {
+        timeoutMs: Math.min(PREVIEW_TARGET_PROBE_SLICE_MS, remainingMs),
+      })
+      if (!reachable) {
+        candidates.set(url, {
+          source: "process-output",
+          url,
+          reachable,
+          skipReason: "process output preview URL was not reachable",
+        })
+        continue
+      }
+      const target = await persistBrowserPreviewTarget({ taskID: input.taskID, url })
+      candidates.set(url, {
+        source: "process-output",
+        url,
+        reachable,
+        persistedTargetID: target.id,
+      })
+      persisted = true
+    }
+    if (persisted) break
+    const remainingMs = idleTimeoutMs - (Date.now() - lastActivityAt)
+    if (remainingMs <= 0) break
+    await new Promise((resolve) => setTimeout(resolve, Math.min(PREVIEW_TARGET_DISCOVERY_INTERVAL_MS, remainingMs)))
+  }
+  return [...candidates.values()]
+}

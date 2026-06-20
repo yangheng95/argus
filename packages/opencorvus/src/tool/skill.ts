@@ -6,7 +6,11 @@ import { Skill } from "../skill"
 import { PermissionNext } from "../permission/next"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
-import { isWebpageEvidenceAcceptanceToolId, isWebpageEvidenceAnalysisToolId } from "@/frontend-design/tools/ids"
+import {
+  isWebpageEvidenceAcceptanceToolId,
+  isWebpageEvidenceAnalysisToolId,
+  isWebpageEvidenceRetiredVisualToolId,
+} from "@/frontend-design/tools/ids"
 
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const skills = await Skill.all()
@@ -29,6 +33,15 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           agent.name !== "visual-qa" &&
           (skill.required_tools ?? []).some((toolID) => isWebpageEvidenceAcceptanceToolId(toolID))
         ) {
+          return false
+        }
+        if ((skill.required_tools ?? []).some((toolID) => isWebpageEvidenceRetiredVisualToolId(toolID))) {
+          return false
+        }
+        if (skill.agents.length > 0 && !skill.agents.includes(agent.name)) {
+          return false
+        }
+        if ((skill.required_tools ?? []).some((toolID) => !agentCanUseRequiredTool(agent, toolID))) {
           return false
         }
         return true
@@ -168,9 +181,29 @@ function searchSkills(skills: Skill.Info[], query: string | undefined): Skill.In
   const needle = query?.trim().toLocaleLowerCase()
   if (!needle) return skills
   return skills.filter((skill) => {
-    const haystack = [skill.name, skill.description, ...(skill.required_tools ?? [])].join("\n").toLocaleLowerCase()
+    const haystack = [skill.name, skill.description, ...(skill.required_tools ?? []), ...skill.agents]
+      .join("\n")
+      .toLocaleLowerCase()
     return haystack.includes(needle)
   })
+}
+
+type SkillToolAgentSurface = {
+  name: string
+  tools?: {
+    include?: string[]
+    exclude?: string[]
+  }
+  permission?: PermissionNext.Ruleset
+}
+
+function agentCanUseRequiredTool(agent: SkillToolAgentSurface, toolID: string): boolean {
+  const include = agent.tools?.include
+  if (include && include.length > 0 && !include.includes(toolID)) return false
+  if (agent.tools?.exclude?.includes(toolID)) return false
+
+  const rule = PermissionNext.evaluate(toolID, "*", agent.permission)
+  return rule.action !== "deny"
 }
 
 function renderSkillSearch(skills: Skill.Info[], total: number, query: string | undefined): string {
@@ -187,6 +220,7 @@ function renderSkillSearch(skills: Skill.Info[], total: number, query: string | 
     `    <name>${skill.name}</name>`,
     `    <description>${skill.description}</description>`,
     `    <required_tools>${(skill.required_tools ?? []).join(",") || "none"}</required_tools>`,
+    `    <agents>${skill.agents.join(",") || "all"}</agents>`,
     `    <platforms>${skill.platforms.length ? skill.platforms.join(",") : "all"}</platforms>`,
     `    <location>${pathToFileURL(skill.location).href}</location>`,
     "  </skill>",

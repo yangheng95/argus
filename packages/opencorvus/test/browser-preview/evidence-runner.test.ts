@@ -33,12 +33,13 @@ describe("browser preview evidence runner contract", () => {
     const inputType = source.match(/type BrowserPreviewEvidenceRunnerInput = \{[\s\S]*?\n\}/)?.[0] ?? ""
 
     expect(inputType).toContain("projectRoot: string")
+    expect(inputType).toContain("jobID: string")
     expect(inputType).toContain("taskID: string")
     expect(inputType).toContain("targetID: string")
+    expect(inputType).toContain("outDir: string")
     expect(inputType).not.toContain("url:")
-    expect(inputType).not.toContain("outDir:")
     expect(source).toContain("findBrowserPreviewTargetByID")
-    expect(source).toContain("ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, input.taskID, jobID)")
+    expect(source).toContain("ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, input.jobID)")
   })
 
   test("owns browser runtime launch for preview and region comparison evidence", async () => {
@@ -68,8 +69,10 @@ describe("browser preview evidence runner contract", () => {
     await expect(
       runBrowserPreviewEvidenceJob({
         projectRoot: tmp.path,
+        jobID: "art_preview_missing_job",
         taskID,
         targetID: "art_preview_missing_target",
+        outDir: ProjectRuntimePaths.browserPreviewJobRoot(tmp.path, taskID, "art_preview_missing_job"),
         viewportIDs: ["desktop"],
       }),
     ).rejects.toThrow("Browser preview target not found: art_preview_missing_target")

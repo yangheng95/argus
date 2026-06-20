@@ -1,5 +1,3 @@
-import { Identifier } from "@/id/id"
-import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import type { RuntimeCaptureInput, RuntimeCaptureResult } from "@/runtime/capture-contract"
 import { findBrowserPreviewTargetByID } from "./persist"
 import { writeBrowserEvidenceManifest } from "./evidence-runner"
@@ -32,8 +30,7 @@ async function captureWithTestHarness(
   if (!target) {
     throw new Error(`Browser preview target not found: ${input.targetID}`)
   }
-  const jobID = Identifier.ascending("artifact")
-  const outDir = ProjectRuntimePaths.browserPreviewJobRoot(input.projectRoot, input.taskID, jobID)
+  const { jobID, outDir } = input
   const captures: Record<string, RuntimeCaptureResult> = {}
   const artifactPaths: string[] = []
   const diagnostics: string[] = []

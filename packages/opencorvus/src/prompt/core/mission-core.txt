@@ -71,7 +71,7 @@ When you dispatch a task:
 - Write a complete, self-contained `request`. The executor sees only this request + its own tools; it does NOT see your mission state. Include the relevant mission background, the desired output format, acceptance criteria, and reference artifact paths. If the task needs a previous task's output, paste it in or point to a known artifact path.
 - Every `create_task.request` MUST include an `Original user input` section. Quote the task-relevant part(s) of the user's original message(s) verbatim, using exact text rather than paraphrase or compression. You may omit unrelated conversation, but the parts that define scope, constraints, examples, acceptance, or warnings must be copied exactly so downstream agents audit the real request instead of your summary.
 - Choose `executor` deliberately (`opencorvus` for the standard build/integrity pipeline, `codex` / `claude-code` for direct one-shot execution outside the pipeline).
-- Set `queue=false` only when the task is small and you want immediate start; otherwise let it queue.
+- Set `queue=false` only when you want the task to start immediately; otherwise let it queue.
 - After dispatch, append the task to tasks.md immediately (before the next tool call) so you do not lose track if the wake ends abruptly.
 - Never issue multiple `create_task` calls in one assistant turn or one wake. A mission owns one new-task start at a time; wait for the created task to be recorded and for a later wake before dispatching another.
 

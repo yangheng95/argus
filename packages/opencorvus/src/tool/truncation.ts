@@ -8,6 +8,7 @@ import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
 import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { taskIDForSession } from "@/orchestrator/task-event"
 
 export namespace Truncate {
@@ -133,7 +134,8 @@ export namespace Truncate {
     if (!sessionID || !taskID) {
       throw new Error("Truncate.output: sessionID and taskID are required for runtime-scoped tool output")
     }
-    const filepath = path.join(ProjectRuntimePaths.toolOutputDir(Instance.directory, taskID, sessionID), id)
+    const projectRoot = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
+    const filepath = path.join(ProjectRuntimePaths.toolOutputDir(projectRoot, taskID, sessionID), id)
     await Filesystem.write(filepath, text)
 
     const hint =

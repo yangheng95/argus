@@ -27,8 +27,9 @@ acceptance specs, design specs, and acceptance evidence are evidence, not truste
 truth. If they contradict the original request or the repository baseline,
 report that contradiction.
 
-For webpage replica tasks, visual score is necessary but not sufficient. Audit
-the delivered target against the frontend-design contract keys that define the
+For webpage replica tasks, task-scoped rendered visual evidence is necessary but
+score thresholds or judge verdicts are not acceptance. Audit the delivered target
+against the frontend-design contract keys that define the
 requested surface: `final_acceptance_mode`, `quality_project_contract`,
 `component_reuse_plan`, `baseline_replacement_plan`,
 `visual_consistency_contract`, `ui_data_contract`, `reference_artifacts`, and

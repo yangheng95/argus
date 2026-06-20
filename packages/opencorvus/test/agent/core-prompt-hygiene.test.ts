@@ -828,7 +828,7 @@ describe("core prompt hygiene", () => {
     expect(buildOverlays).toContain("Preserve visible text, layout hierarchy")
     expect(buildOverlays).toContain("Run source/visual audits only when the handoff")
 
-    expect(integrity).toContain("visual score is necessary but not sufficient")
+    expect(integrity).toContain("score thresholds or judge verdicts are not acceptance")
     expect(integrity).toContain("`final_acceptance_mode`")
     expect(integrity).toContain("`quality_project_contract`")
     expect(integrity).toContain("`component_reuse_plan`")
@@ -917,20 +917,21 @@ describe("core prompt hygiene", () => {
   test("visual-qa core prompt stays focused on GUI fidelity and functional testing", async () => {
     const text = await readPrompt("visualQa")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("post-goal-batch visual GUI fidelity and functional testing agent")
+    expect(normalized).toContain("final visual GUI and functional product-review agent")
+    expect(normalized).toContain("Run once near task completion")
     expect(normalized).toContain("GUI means Graphical User Interface")
     expect(normalized).toContain("picky professional product designer and design QA reviewer")
     expect(normalized).toContain("Do not give draft-quality")
     expect(normalized).toContain("peer post-build review agents")
     expect(normalized).toContain("Test the real running product")
-    expect(normalized).toContain("latest terminal goal batch evidence as the primary review surface")
+    expect(normalized).toContain("complete task frontend surface and all terminal blocking build evidence as the primary review surface")
     expect(normalized).toContain("Repair coarse-to-fine")
     expect(normalized).toContain("fake or placeholder widgets")
     expect(normalized).toContain("static mock charts")
     expect(normalized).toContain("layout/composition")
     expect(normalized).toContain("Functional testing means operating the task's visible controls and workflows")
     expect(normalized).toContain("Do not rely on fixed screenshot baselines as the primary verdict")
-    expect(normalized).toContain("Do not use a fixed similarity score as the only pass/fail rule")
+    expect(normalized).toContain("Do not chase, cite, or optimize for a score threshold")
     expect(normalized).toContain("Do not accept build-agent claims")
     expect(normalized).toContain("fresh evidence")
     expect(normalized).toContain("previous visual report")
@@ -982,7 +983,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain(
       "Repository investigation belongs to `analyze_intent`, `requirements`, or the registered `explore` subagent surface",
     )
-    expect(normalized).toContain("run `visual_qa` once after each terminal frontend goal batch")
+    expect(normalized).toContain("call `visual_qa` once near task completion after all blocking build work is terminal")
     expect(normalized).toContain("peer post-build review agents")
     expect(normalized).toContain("component truth and visible functionality first")
     expect(normalized).toContain("static mock charts must become real chart implementations")
@@ -1099,6 +1100,16 @@ describe("core prompt hygiene", () => {
       "If the current workflow task has pending goals, no active build/run, no terminal integrity verdict, and no external blocker, a status-only response is wrong",
     )
     expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
+    expect(normalized).toContain(
+      "After a successful `architect` result has created pending goals and no build attempt exists yet",
+    )
+    expect(normalized).toContain("do not re-run `architect` just because implementation has not started")
+    expect(normalized).toContain(
+      "dispatch `build({ goalID })` for the first eligible pending goal",
+    )
+    expect(normalized).toContain("Read context on terminal goal refill wakes")
+    expect(normalized).not.toContain("After a `build` batch returns")
+    expect(normalized).not.toContain("current eligible wave")
     expect(normalized).toContain(
       "Do not ask the operator whether to start work that the task contract already requires",
     )

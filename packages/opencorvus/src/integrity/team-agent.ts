@@ -6,7 +6,12 @@ import type { Tool } from "@/tool/tool"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import { summarizeVisualEvidenceBundle, type VisualEvidenceBundle } from "@/acceptance/visual-evidence"
+import {
+  summarizeVisualEvidenceBundle,
+  validateVisualEvidenceBundleReferenceComparisons,
+  visualEvidenceBundlePasses,
+  type VisualEvidenceBundle,
+} from "@/acceptance/visual-evidence"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import type { TaskRow } from "@/engine/store"
@@ -175,6 +180,8 @@ export type ReviewPromptInput = {
   frontendDesign?: string
   visualQa?: string
   visualEvidence?: VisualEvidenceBundle[]
+  visualEvidenceRequired?: boolean
+  projectRoot?: string
   replayContext: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
@@ -226,6 +233,8 @@ export async function reviewIntegrity(input: {
   frontendDesign?: string
   visualQa?: string
   visualEvidence?: VisualEvidenceBundle[]
+  visualEvidenceRequired?: boolean
+  projectRoot?: string
   replayContext?: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
@@ -267,6 +276,8 @@ export async function reviewIntegrity(input: {
       frontendDesign: input.frontendDesign,
       visualQa: input.visualQa,
       visualEvidence: input.visualEvidence,
+      visualEvidenceRequired: input.visualEvidenceRequired,
+      projectRoot: input.projectRoot,
       attachments: input.attachments,
       signal: input.signal,
     }),
@@ -349,6 +360,8 @@ async function createSingleSessionIntegrityToolKit(input: {
   frontendDesign?: string
   visualQa?: string
   visualEvidence?: VisualEvidenceBundle[]
+  visualEvidenceRequired?: boolean
+  projectRoot?: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
 }) {
@@ -377,6 +390,16 @@ async function createSingleSessionIntegrityToolKit(input: {
         execute: async (raw) => {
           const parsed = IntegrityTeamReportSchema.safeParse(raw)
           if (!parsed.success) return `Error: integrity review failed schema validation: ${parsed.error.message}`
+          const issues = await validateIntegrityConsensusVisualEvidence({
+            report: parsed.data,
+            projectRoot: input.projectRoot,
+            taskID: input.taskID,
+            visualEvidence: input.visualEvidence,
+            visualEvidenceRequired: input.visualEvidenceRequired,
+          })
+          if (issues.length > 0) {
+            return `BLOCKERS (${issues.length}):\n${issues.map((issue, index) => `${index + 1}. ${issue}`).join("\n")}\nFix the report or continue testing/repairing, then call submit_integrity_consensus again.`
+          }
           input.collector.report = parsed.data
           return `PASS: integrity review accepted with verdict=${parsed.data.verdict}.`
         },
@@ -388,6 +411,39 @@ async function createSingleSessionIntegrityToolKit(input: {
       detail: input.collector.report?.teamReportMarkdown ?? "No integrity review submitted.",
     }),
   }
+}
+
+async function validateIntegrityConsensusVisualEvidence(input: {
+  report: IntegrityTeamReport
+  projectRoot?: string
+  taskID?: string
+  visualEvidence?: VisualEvidenceBundle[]
+  visualEvidenceRequired?: boolean
+}): Promise<string[]> {
+  if (input.report.verdict !== "pass" || !input.visualEvidenceRequired) return []
+  if (!input.taskID || !input.projectRoot) {
+    return ["pass verdict for reference visual evidence requires task-scoped project context."]
+  }
+  const bundles = input.visualEvidence ?? []
+  if (bundles.length === 0) {
+    return ["pass verdict requires a valid VisualEvidenceBundle with passed reference-comparison evidence."]
+  }
+  const issues: string[] = []
+  for (const bundle of bundles) {
+    const comparisonValidation = await validateVisualEvidenceBundleReferenceComparisons({
+      projectRoot: input.projectRoot,
+      bundle,
+      expectedTaskID: input.taskID,
+    })
+    if (!visualEvidenceBundlePasses(bundle) || !comparisonValidation.passing) {
+      issues.push(
+        `VisualEvidenceBundle ${bundle.id} is not passing: ${
+          comparisonValidation.issues.join("; ") || "required visual regions are not fully passing"
+        }`,
+      )
+    }
+  }
+  return issues
 }
 
 async function createIntegrityPreviewTools(input: { taskID: string; signal?: AbortSignal }): Promise<ToolSet> {

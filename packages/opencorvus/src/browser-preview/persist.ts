@@ -14,6 +14,9 @@ import { Database } from "@/storage/db"
 
 export const BROWSER_PREVIEW_TARGET_KIND = "browser_preview_target" as const
 export const BROWSER_PREVIEW_EVIDENCE_KIND = "browser_preview_evidence" as const
+const BrowserPreviewEvidenceOperationKind = z.enum(["preview-capture", "reference-comparison", "source-binding"])
+const BrowserPreviewEvidenceStatus = z.enum(["passed", "failed"])
+const REQUIRED_REFERENCE_COMPARISON_ARTIFACTS = ["source_crop", "implementation_crop", "side_by_side"] as const
 
 export const PersistedBrowserPreviewTarget = z.object({
   id: z.string(),
@@ -30,12 +33,12 @@ export const PersistedBrowserPreviewEvidence = z.object({
   taskID: z.string(),
   targetID: z.string(),
   viewportID: z.string(),
-  operationKind: z.enum(["preview-capture", "reference-comparison", "source-binding"]).default("preview-capture"),
+  operationKind: BrowserPreviewEvidenceOperationKind,
   regionID: z.string().optional(),
   stateID: z.string().optional(),
   manifestPath: z.string().optional(),
   artifactPaths: z.record(z.string(), z.string()).optional(),
-  status: z.enum(["passed", "failed"]),
+  status: BrowserPreviewEvidenceStatus,
   summary: z.string(),
   capture: z.unknown().optional(),
   diagnostics: z.string().array(),
@@ -287,7 +290,7 @@ function findBrowserPreviewEvidenceByID(input: {
     payload.operation_kind === "preview-capture" ||
     payload.operation_kind === "source-binding"
       ? payload.operation_kind
-      : "preview-capture"
+      : undefined
   const regionID = typeof payload.region_id === "string" ? payload.region_id : undefined
   const stateID = typeof payload.state_id === "string" ? payload.state_id : undefined
   const manifestPath = typeof payload.manifest_path === "string" ? payload.manifest_path : undefined
@@ -305,7 +308,7 @@ function findBrowserPreviewEvidenceByID(input: {
     ? payload.diagnostics.filter((item): item is string => typeof item === "string")
     : []
   const timeCompleted = typeof payload.time_completed === "number" ? payload.time_completed : row.time_updated
-  if (!targetID || !viewportID || !status || !summary) return undefined
+  if (!targetID || !viewportID || !operationKind || !status || !summary) return undefined
   return {
     id: row.id,
     taskID: row.task_id,
@@ -343,6 +346,7 @@ export async function findReadableBrowserPreviewEvidenceCapturePath(input: {
 }): Promise<string | undefined> {
   const evidence = await findReadableBrowserPreviewEvidenceByID(input)
   if (!evidence) return undefined
+  if (evidence.operationKind !== "preview-capture") return undefined
   return browserPreviewCaptureArtifacts(evidence.capture)[0]?.path
 }
 
@@ -354,6 +358,7 @@ export async function findReadableBrowserPreviewEvidenceArtifactPath(input: {
 }): Promise<string | undefined> {
   const evidence = await findReadableBrowserPreviewEvidenceByID(input)
   if (!evidence) return undefined
+  if (evidence.operationKind !== "reference-comparison") return undefined
   const keyByName: Record<typeof input.artifactName, string> = {
     source: "source_crop",
     implementation: "implementation_crop",
@@ -368,7 +373,7 @@ export function persistBrowserPreviewEvidence(input: {
   taskID: string
   targetID: string
   viewportID: string
-  operationKind?: "preview-capture" | "reference-comparison" | "source-binding"
+  operationKind: "preview-capture" | "reference-comparison" | "source-binding"
   regionID?: string
   stateID?: string
   manifestPath?: string
@@ -382,13 +387,21 @@ export function persistBrowserPreviewEvidence(input: {
   const now = input.now ?? Date.now()
   const id = Identifier.ascending("artifact")
   const projectRoot = input.projectRoot
+  const operationKind = BrowserPreviewEvidenceOperationKind.parse(input.operationKind)
+  const status = BrowserPreviewEvidenceStatus.parse(input.status)
   const artifactPaths = input.artifactPaths
     ? Object.fromEntries(
         Object.entries(input.artifactPaths)
           .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)
-          .map(([key, value]) => [key, toRuntimeRelativePath(projectRoot, value)]),
+          .map(([key, value]) => [key, toBrowserPreviewRuntimeRelativePath(projectRoot, input.taskID, value)]),
       )
     : undefined
+  if (operationKind === "reference-comparison" && status === "passed") {
+    const missing = REQUIRED_REFERENCE_COMPARISON_ARTIFACTS.filter((key) => !artifactPaths?.[key])
+    if (missing.length > 0) {
+      throw new Error(`passed reference-comparison evidence requires artifact path(s): ${missing.join(", ")}`)
+    }
+  }
   Database.use((db) =>
     db
       .insert(EngineArtifactTable)
@@ -403,14 +416,19 @@ export function persistBrowserPreviewEvidence(input: {
         payload: {
           target_id: input.targetID,
           viewport_id: input.viewportID,
-          operation_kind: input.operationKind ?? "preview-capture",
+          operation_kind: operationKind,
           ...(input.regionID ? { region_id: input.regionID } : {}),
           ...(input.stateID ? { state_id: input.stateID } : {}),
-          ...(input.manifestPath ? { manifest_path: toRuntimeRelativePath(projectRoot, input.manifestPath) } : {}),
+          ...(input.manifestPath
+            ? { manifest_path: toBrowserPreviewRuntimeRelativePath(projectRoot, input.taskID, input.manifestPath) }
+            : {}),
           ...(artifactPaths ? { artifact_paths: artifactPaths } : {}),
-          status: input.status,
+          status,
           summary: input.summary,
-          capture: input.capture === undefined ? null : normalizeRuntimePathRefs(projectRoot, input.capture),
+          capture:
+            input.capture === undefined
+              ? null
+              : normalizeBrowserPreviewRuntimePathRefs(projectRoot, input.taskID, input.capture),
           diagnostics: input.diagnostics,
           time_completed: now,
         },
@@ -430,11 +448,18 @@ async function browserPreviewEvidenceArtifactsReadable(
     ...browserPreviewCaptureArtifacts(evidence.capture),
     ...Object.values(evidence.artifactPaths ?? {}).map((artifactPath) => ({ path: artifactPath })),
   ]
+  if (evidence.status === "passed" && evidence.operationKind === "reference-comparison") {
+    for (const key of REQUIRED_REFERENCE_COMPARISON_ARTIFACTS) {
+      const artifactPath = evidence.artifactPaths?.[key]
+      if (!artifactPath) return false
+      artifacts.push({ path: artifactPath })
+    }
+  }
   if (evidence.status === "passed" && artifacts.length === 0) return false
   for (const artifact of artifacts) {
-    const filePath = resolveRuntimeRelativePath(projectRoot, artifact.path)
     let bytes: Buffer
     try {
+      const filePath = resolveBrowserPreviewRuntimeRelativePath(projectRoot, evidence.taskID, artifact.path)
       bytes = await fs.readFile(filePath)
     } catch {
       return false
@@ -491,6 +516,29 @@ export function toRuntimeRelativePath(projectRoot: string, input: string): strin
   return path.relative(path.resolve(projectRoot), absolute).replaceAll(path.sep, "/")
 }
 
+function toBrowserPreviewRuntimeRelativePath(projectRoot: string, taskID: string, input: string): string {
+  const normalized = input.replaceAll("\\", "/")
+  const browserPreviewRoot = ProjectRuntimePaths.taskRelative(taskID, "bp").replaceAll("\\", "/")
+  if (normalized === browserPreviewRoot || normalized.startsWith(`${browserPreviewRoot}/`)) {
+    return normalized
+  }
+  if (
+    normalized === ProjectRuntimePaths.relativeRuntimeRoot() ||
+    normalized.startsWith(`${ProjectRuntimePaths.relativeRuntimeRoot()}/`)
+  ) {
+    throw new Error(`Browser preview artifact path must be under task browser-preview job root: ${input}`)
+  }
+  if (!path.isAbsolute(input)) {
+    throw new Error(`Browser preview artifact path must be runtime-relative or absolute: ${input}`)
+  }
+  const absolute = path.resolve(input)
+  const absoluteBrowserPreviewRoot = path.resolve(ProjectRuntimePaths.taskAbsolute(projectRoot, taskID, "bp"))
+  if (absolute !== absoluteBrowserPreviewRoot && !absolute.startsWith(absoluteBrowserPreviewRoot + path.sep)) {
+    throw new Error(`Browser preview artifact path must be under task browser-preview job root: ${input}`)
+  }
+  return path.relative(path.resolve(projectRoot), absolute).replaceAll(path.sep, "/")
+}
+
 export function resolveRuntimeRelativePath(projectRoot: string, input: string): string {
   const normalized = input.replaceAll("\\", "/")
   if (
@@ -500,6 +548,18 @@ export function resolveRuntimeRelativePath(projectRoot: string, input: string): 
     )
   ) {
     throw new Error(`Browser preview artifact path is not a runtime-relative path: ${input}`)
+  }
+  if (normalized.split("/").includes("..")) {
+    throw new Error(`Browser preview artifact path escapes runtime root: ${input}`)
+  }
+  return path.resolve(projectRoot, ...normalized.split("/"))
+}
+
+function resolveBrowserPreviewRuntimeRelativePath(projectRoot: string, taskID: string, input: string): string {
+  const normalized = input.replaceAll("\\", "/")
+  const browserPreviewRoot = ProjectRuntimePaths.taskRelative(taskID, "bp").replaceAll("\\", "/")
+  if (!(normalized === browserPreviewRoot || normalized.startsWith(`${browserPreviewRoot}/`))) {
+    throw new Error(`Browser preview artifact path is outside task browser-preview job root: ${input}`)
   }
   if (normalized.split("/").includes("..")) {
     throw new Error(`Browser preview artifact path escapes runtime root: ${input}`)
@@ -518,6 +578,24 @@ export function normalizeRuntimePathRefs(projectRoot: string, input: unknown): u
       out[key] = toRuntimeRelativePath(projectRoot, value)
     } else {
       out[key] = normalizeRuntimePathRefs(projectRoot, value)
+    }
+  }
+  return out
+}
+
+function normalizeBrowserPreviewRuntimePathRefs(projectRoot: string, taskID: string, input: unknown): unknown {
+  if (Array.isArray(input)) return input.map((item) => normalizeBrowserPreviewRuntimePathRefs(projectRoot, taskID, item))
+  if (!input || typeof input !== "object") return input
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (key === "artifactPaths" && Array.isArray(value)) {
+      out[key] = value.map((item) =>
+        typeof item === "string" ? toBrowserPreviewRuntimeRelativePath(projectRoot, taskID, item) : item,
+      )
+    } else if (typeof value === "string" && isPathRefKey(key)) {
+      out[key] = toBrowserPreviewRuntimeRelativePath(projectRoot, taskID, value)
+    } else {
+      out[key] = normalizeBrowserPreviewRuntimePathRefs(projectRoot, taskID, value)
     }
   }
   return out

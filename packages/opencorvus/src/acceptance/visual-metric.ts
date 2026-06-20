@@ -290,10 +290,10 @@ export async function computeVisualMetric(input: {
 export function summarizeVisualMetric(metric: VisualMetricResult): string {
   const failed = metric.gates.filter((g) => !g.passed)
   if (failed.length === 0) {
-    return `visual gate passed (score=${metric.score.toFixed(3)})`
+    return "visual metric diagnostics found no blocking difference"
   }
   return (
-    `visual gate FAILED (score=${metric.score.toFixed(3)}): ` +
+    "visual metric diagnostics found differences: " +
     failed.map((g) => `${g.name}=${g.value} vs ${g.threshold}`).join("; ")
   )
 }

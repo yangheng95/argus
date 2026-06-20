@@ -117,7 +117,7 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       expect(handoff).toContain("Source-Region Refactor Guidance")
       expect(handoff).toContain("rawproject evidence")
       expect(handoff).toContain("source data extraction")
-      expect(handoff).toContain("measured webpage_evaluate evidence")
+      expect(handoff).toContain("rendered screenshot review evidence")
       expect(handoff).toContain("zero-finding web_clone_source_audit evidence")
       expect(handoff).toContain("Do not change other agent prompts or communication paths")
       expect(handoff).toContain(

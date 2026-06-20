@@ -1,6 +1,15 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import path from "node:path"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { Database } from "../../src/storage/db"
+import { Instance } from "../../src/project/instance"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { persistBrowserPreviewEvidence, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { createVisualQaOutputTools } from "../../src/visual-qa/output-tools"
 import type { VisualQaReport } from "../../src/visual-qa/schema"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
 function callTool(tools: Record<string, any>, name: string, input: unknown): Promise<string> {
   return tools[name].execute!(input as any, {} as any)
@@ -33,6 +42,13 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
         note: "Fresh screenshot from the real preview.",
       },
     ],
+    reference_parity: {
+      required: false,
+      required_regions: [],
+      reference_comparison_evidence_refs: [],
+      missing_regions: [],
+      blocker_ids: [],
+    },
     commands: [
       {
         command: "node node_modules/playwright/cli.js test visual.spec.ts",
@@ -46,6 +62,56 @@ function validReport(overrides: Partial<VisualQaReport> = {}): VisualQaReport {
     fact_check_items: [],
     ...overrides,
   }
+}
+
+afterEach(async () => {
+  await resetDatabase()
+})
+
+async function seedReferenceComparisonEvidence(input: {
+  projectDirectory: string
+  taskID: string
+  regionID?: string
+  viewportID?: string
+  operationKind?: "preview-capture" | "reference-comparison" | "source-binding"
+  status?: "passed" | "failed"
+}): Promise<string> {
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: Instance.project.id,
+        title: "Reference parity visual QA",
+        request: "Verify reference parity",
+        source: "test",
+        time_created: Date.now(),
+        time_updated: Date.now(),
+      })
+      .run(),
+  )
+  const artifactDir = ProjectRuntimePaths.taskAbsolute(input.projectDirectory, input.taskID, "bp", "visual-qa-reference")
+  await fs.mkdir(artifactDir, { recursive: true })
+  for (const file of ["source.png", "implementation.png", "side-by-side.png"]) {
+    await fs.writeFile(path.join(artifactDir, file), `png:${file}`)
+  }
+  const target = await persistBrowserPreviewTarget({ taskID: input.taskID, url: "http://127.0.0.1:4173/" })
+  return persistBrowserPreviewEvidence({
+    projectRoot: input.projectDirectory,
+    taskID: input.taskID,
+    targetID: target.id,
+    viewportID: input.viewportID ?? "desktop",
+    operationKind: input.operationKind ?? "reference-comparison",
+    regionID: input.regionID ?? "region_header",
+    status: input.status ?? "passed",
+    summary: input.status === "failed" ? "Header comparison failed." : "Header comparison passed.",
+    artifactPaths: {
+      source_crop: path.join(artifactDir, "source.png"),
+      implementation_crop: path.join(artifactDir, "implementation.png"),
+      side_by_side: path.join(artifactDir, "side-by-side.png"),
+    },
+    diagnostics: [],
+  })
 }
 
 describe("visual-qa output tools", () => {
@@ -138,6 +204,293 @@ describe("visual-qa output tools", () => {
     expect(blocked).toContain("accepted=true is incompatible with follow_up_task")
     expect(kit.getCollector().final).toBeUndefined()
   })
+
+  test("reference parity accepted report rejects screenshot-only evidence", async () => {
+    const kit = createVisualQaOutputTools({
+      referenceParityRequired: true,
+      requiredReferenceRegions: ["region_header@desktop"],
+    })
+    const blocked = await callTool(
+      kit.tools,
+      "submit_visual_qa_report",
+      validReport({
+        reference_parity: {
+          required: true,
+          required_regions: ["region_header@desktop"],
+          reference_comparison_evidence_refs: [],
+          missing_regions: [],
+          blocker_ids: [],
+        },
+      }),
+    )
+
+    expect(blocked).toContain("reference_comparison evidence refs")
+    expect(blocked).toContain("screenshots are supporting evidence only")
+    expect(kit.getCollector().final).toBeUndefined()
+  })
+
+  test("reference parity accepted report accepts readable reference-comparison evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_ref_${Date.now()}`
+    const evidenceID = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Reference parity visual QA",
+              request: "Verify reference parity",
+              source: "test",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .run(),
+        )
+        const artifactDir = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "bp", "visual-qa-reference")
+        await fs.mkdir(artifactDir, { recursive: true })
+        for (const file of ["source.png", "implementation.png", "side-by-side.png"]) {
+          await fs.writeFile(path.join(artifactDir, file), `png:${file}`)
+        }
+        const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
+        return persistBrowserPreviewEvidence({
+          projectRoot: tmp.path,
+          taskID,
+          targetID: target.id,
+          viewportID: "desktop",
+          operationKind: "reference-comparison",
+          regionID: "region_header",
+          status: "passed",
+          summary: "Header comparison passed.",
+          artifactPaths: {
+            source_crop: path.join(artifactDir, "source.png"),
+            implementation_crop: path.join(artifactDir, "implementation.png"),
+            side_by_side: path.join(artifactDir, "side-by-side.png"),
+          },
+          diagnostics: [],
+        })
+      },
+    })
+    const kit = createVisualQaOutputTools({
+      taskID,
+      projectRoot: tmp.path,
+      referenceParityRequired: true,
+      requiredReferenceRegions: ["region_header@desktop"],
+    })
+    const result = await callTool(
+      kit.tools,
+      "submit_visual_qa_report",
+      validReport({
+        evidence: [
+          {
+            type: "reference_comparison",
+            ref: evidenceID,
+            viewport: { width: 1440, height: 900 },
+            state: "default",
+            note: "Fresh side-by-side evidence from browser_preview_compare_regions.",
+          },
+        ],
+        coverage: [
+          {
+            region: "region_header",
+            viewports: [{ width: 1440, height: 900 }],
+            states: ["default"],
+            source_refs: ["reference.png"],
+            evidence_refs: [evidenceID],
+            notes: "Checked header reference comparison.",
+          },
+        ],
+        reference_parity: {
+          required: true,
+          required_regions: ["region_header@desktop"],
+          reference_comparison_evidence_refs: [evidenceID],
+          missing_regions: [],
+          blocker_ids: [],
+        },
+      }),
+    )
+
+    expect(result).toContain("PASS")
+    expect(kit.getCollector().final?.accepted).toBe(true)
+  }, 20_000)
+
+  test("reference parity accepted report requires exact region and viewport coverage", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cases: Array<{
+          name: string
+          taskID: string
+          requiredRegions: string[]
+          expected: string
+        }> = [
+          {
+            name: "missing region",
+            taskID: `tsk_visualqa_missing_region_${Date.now()}`,
+            requiredRegions: ["region_header@desktop", "region_table@desktop"],
+            expected: "region_table@desktop",
+          },
+          {
+            name: "wrong viewport",
+            taskID: `tsk_visualqa_wrong_viewport_${Date.now()}`,
+            requiredRegions: ["region_header@mobile"],
+            expected: "region_header@mobile",
+          },
+          {
+            name: "unqualified region",
+            taskID: `tsk_visualqa_unqualified_region_${Date.now()}`,
+            requiredRegions: ["region_header"],
+            expected: "must use the exact format region_id@viewport_id",
+          },
+        ]
+        for (const item of cases) {
+          const evidenceID = await seedReferenceComparisonEvidence({
+            projectDirectory: tmp.path,
+            taskID: item.taskID,
+            regionID: "region_header",
+            viewportID: "desktop",
+          })
+          const kit = createVisualQaOutputTools({
+            taskID: item.taskID,
+            projectRoot: tmp.path,
+            referenceParityRequired: true,
+          })
+          const result = await callTool(
+            kit.tools,
+            "submit_visual_qa_report",
+            validReport({
+              evidence: [
+                {
+                  type: "reference_comparison",
+                  ref: evidenceID,
+                  viewport: { width: 1440, height: 900 },
+                  state: "default",
+                  note: "Fresh side-by-side evidence from browser_preview_compare_regions.",
+                },
+              ],
+              coverage: [
+                {
+                  region: "region_header",
+                  viewports: [{ width: 1440, height: 900 }],
+                  states: ["default"],
+                  source_refs: ["reference.png"],
+                  evidence_refs: [evidenceID],
+                  notes: "Checked header reference comparison.",
+                },
+              ],
+              reference_parity: {
+                required: true,
+                required_regions: item.requiredRegions,
+                reference_comparison_evidence_refs: [evidenceID],
+                missing_regions: [],
+                blocker_ids: [],
+              },
+            }),
+          )
+          expect(result, item.name).toContain("BLOCKERS")
+          expect(result, item.name).toContain(item.expected)
+          expect(kit.getCollector().final, item.name).toBeUndefined()
+        }
+      },
+    })
+  }, 20_000)
+
+  test("reference parity cannot be accepted from self-reported regions without authoritative context", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_self_reported_${Date.now()}`
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const evidenceID = await seedReferenceComparisonEvidence({
+          projectDirectory: tmp.path,
+          taskID,
+          regionID: "region_header",
+          viewportID: "desktop",
+        })
+        const kit = createVisualQaOutputTools({
+          taskID,
+          projectRoot: tmp.path,
+          referenceParityRequired: true,
+          requiredReferenceRegions: [],
+        })
+        const result = await callTool(
+          kit.tools,
+          "submit_visual_qa_report",
+          validReport({
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: evidenceID,
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Fresh side-by-side evidence from browser_preview_compare_regions.",
+              },
+            ],
+            reference_parity: {
+              required: true,
+              required_regions: ["region_header@desktop"],
+              reference_comparison_evidence_refs: [evidenceID],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        )
+        expect(result).toContain("BLOCKERS")
+        expect(result).toContain("authoritative requiredReferenceRegions")
+        expect(kit.getCollector().final).toBeUndefined()
+      },
+    })
+  }, 20_000)
+
+  test("reference parity context-required regions cannot be omitted by the report", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = `tsk_visualqa_context_regions_${Date.now()}`
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const evidenceID = await seedReferenceComparisonEvidence({
+          projectDirectory: tmp.path,
+          taskID,
+          regionID: "region_header",
+          viewportID: "desktop",
+        })
+        const kit = createVisualQaOutputTools({
+          taskID,
+          projectRoot: tmp.path,
+          referenceParityRequired: true,
+          requiredReferenceRegions: ["region_header@desktop", "region_table@desktop"],
+        })
+        const result = await callTool(
+          kit.tools,
+          "submit_visual_qa_report",
+          validReport({
+            evidence: [
+              {
+                type: "reference_comparison",
+                ref: evidenceID,
+                viewport: { width: 1440, height: 900 },
+                state: "default",
+                note: "Fresh side-by-side evidence from browser_preview_compare_regions.",
+              },
+            ],
+            reference_parity: {
+              required: true,
+              required_regions: ["region_header@desktop"],
+              reference_comparison_evidence_refs: [evidenceID],
+              missing_regions: [],
+              blocker_ids: [],
+            },
+          }),
+        )
+        expect(result).toContain("BLOCKERS")
+        expect(result).toContain("region_table@desktop")
+        expect(kit.getCollector().final).toBeUndefined()
+      },
+    })
+  }, 20_000)
 
   test("failed report may submit actionable findings without pretending acceptance", async () => {
     const kit = createVisualQaOutputTools()

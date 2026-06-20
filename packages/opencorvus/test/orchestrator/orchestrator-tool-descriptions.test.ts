@@ -24,10 +24,11 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   })
 
   test("propose_task describes inheriting evidence-backed follow-up work", () => {
-    expect(tools.propose_task.description).toContain("execution evidence")
+    expect(tools.propose_task.description).toContain("terminal parent-task handoff evidence")
     expect(tools.propose_task.description).toContain("artifact state")
-    expect(tools.propose_task.description).toContain("supplemental features")
-    expect(tools.propose_task.description).toContain("project-improvement suggestions")
+    expect(tools.propose_task.description).toContain("Create at most one follow-up task")
+    expect(tools.propose_task.description).toContain("only from terminal parent-task handoff evidence")
+    expect(tools.propose_task.description).toContain("cannot be completed safely inside the ended parent task")
     expect(tools.propose_task.description).toContain("original user request never authorised")
   })
 
@@ -43,6 +44,13 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.add_goal.description).toContain("Use this instead of `modify_goal`")
     expect(tools.add_goal.description).toContain("instead of `architect`")
     expect(tools.add_goal.description).toContain("After this returns, dispatch `build({ goalID })`")
+  })
+
+  test("build description distinguishes async goal start from direct terminal report", () => {
+    expect(tools.build.description).toContain("returns after the child build session and goal_run have started")
+    expect(tools.build.description).toContain("terminal refill wake")
+    expect(tools.build.description).toContain("For task-level direct builds, the tool returns the terminal build report")
+    expect(tools.build.description).not.toContain("After build returns, read the build report")
   })
 
   test("frontend_research and frontend_design descriptions separate investigation division from UI implementation", () => {
@@ -71,17 +79,21 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.frontend_research.description).toContain("NOT build")
     expect(tools.frontend_research.description).toContain("NOT the frontend implementation template owner")
 
-    expect(tools.visual_qa.description).toContain("visual GUI fidelity and functional testing")
+    expect(tools.visual_qa.description).toContain("final frontend visual GUI and functional product review agent")
     expect(tools.visual_qa.description).toContain("GUI means Graphical User Interface")
-    expect(tools.visual_qa.description).toContain("post-goal-batch")
-    expect(tools.visual_qa.description).toContain("once after each terminal frontend goal batch")
-    expect(tools.visual_qa.description).toContain("peer post-build review evidence")
+    expect(tools.visual_qa.description).toContain("Use once near task completion")
+    expect(tools.visual_qa.description).toContain("after all blocking build work is terminal")
+    expect(tools.visual_qa.description).toContain("Visual QA and integrity are peer review agents")
     expect(tools.visual_qa.description).toContain("component truth and visible functionality first")
     expect(tools.visual_qa.description).toContain("layout/composition second")
     expect(tools.visual_qa.description).toContain("micro-style polish last")
+    expect(tools.visual_qa.description).toContain("production_blockers")
+    expect(tools.visual_qa.description).toContain("does not use visual scores or judge verdicts")
     expect(tools.visual_qa.description).not.toContain("UX means User Experience")
-    expect(tools.visual_qa.description).toContain("webpage_render/evaluate/text_diff/vision_judge")
-    expect(tools.visual_qa.description).toContain("does NOT acquire new webpage clone evidence")
+    expect(tools.visual_qa.description).not.toContain("post-goal-batch")
+    expect(tools.visual_qa.description).not.toContain("webpage_render")
+    expect(tools.visual_qa.description).not.toContain("webpage_evaluate")
+    expect(tools.visual_qa.description).toContain("task-scoped browser_preview evidence")
     expect(tools.visual_qa.description).toContain("NOT the final acceptance gate")
     expect(tools.visual_qa.description).toContain("Visual QA and integrity are peer review agents")
     expect(tools.visual_qa.description).toContain("does not replace integrity")
@@ -96,7 +108,13 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   })
 
   test("frontend tool schemas expose one registered field per tool input", () => {
-    expect(Object.keys(tools.frontend_design.inputSchema!.shape)).toEqual(["reason", "urls", "figma_url", "materials"])
+    expect(Object.keys(tools.frontend_design.inputSchema!.shape)).toEqual([
+      "reason",
+      "urls",
+      "figma_url",
+      "materials",
+      "continuation_artifact_id",
+    ])
     expect(
       tools.frontend_design.inputSchema!.safeParse({ reason: "visual reference", urls: ["https://example.com"] })
         .success,

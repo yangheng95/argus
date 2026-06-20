@@ -623,6 +623,48 @@ export async function convergeDeadOwnerLiveExecutionForTasks(input: {
   return { tasks, sessions: 0, toolParts: 0, goalRuns, runs, ownerships: 0, corruptTasks }
 }
 
+export async function abortDeadOwnerLiveExecutionForTasks(input: {
+  tasks: TaskRow[]
+  reason: string
+}): Promise<AbortProcessLiveExecutionResult> {
+  let tasks = 0
+  let sessions = 0
+  let toolParts = 0
+  let goalRuns = 0
+  let runs = 0
+  let corruptTasks = 0
+
+  for (const candidate of input.tasks) {
+    const task = findTask(candidate.id)
+    if (!task || task.time_started == null || task.time_completed != null) continue
+    await provideTaskRootSessionDirectory(task, async () => {
+      const orphanGoalRuns = listGoalRunsForTask(task.id).filter(
+        (row) => row.status !== "queued" && isGoalRunOrphaned(row),
+      )
+      if (orphanGoalRuns.length === 0) return
+      if (task.project_id === "global") {
+        corruptTasks += 1
+        log.error("abortDeadOwnerLiveExecutionForTasks: corrupt global task has dead-owner execution", {
+          taskID: task.id,
+        })
+      }
+
+      const affectedRuns = affectedRunsForGoalRuns(task.id, orphanGoalRuns)
+      goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)
+      runs += await abortRunsForRows(affectedRuns, input.reason)
+      const taskResult = await terminateTaskOwnedSessionsAndFail({
+        task: findTask(task.id) ?? task,
+        reason: input.reason,
+      })
+      tasks += taskResult.tasks
+      sessions += taskResult.sessions
+      toolParts += taskResult.toolParts
+    })
+  }
+
+  return { tasks, sessions, toolParts, goalRuns, runs, ownerships: 0, corruptTasks }
+}
+
 /**
  * Close live orchestrator-owned child tool execution for one task.
  *

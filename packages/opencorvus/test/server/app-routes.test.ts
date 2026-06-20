@@ -30,6 +30,7 @@ describe("app routes", () => {
     expect(paths["/project/current"]?.get).toBeDefined()
     expect(paths["/goal-run/{goalRunID}/acceptance"]?.get).toBeDefined()
     expect(paths["/task/{taskID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"]).toBeDefined()
+    expect(paths["/mission/{missionID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"]).toBeDefined()
   })
 
   test("Server.openapi documents task operator model context conflict errors", async () => {

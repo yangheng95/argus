@@ -7279,6 +7279,7 @@ export type AppSkillsResponses = {
     }
     priority?: number
     required_tools?: Array<string>
+    agents?: Array<string>
     expires_at?: string
     duplicate_locations?: Array<string>
   }>
@@ -7322,6 +7323,7 @@ export type SkillInstalledResponses = {
     }
     priority?: number
     required_tools?: Array<string>
+    agents?: Array<string>
     expires_at?: string
     duplicate_locations?: Array<string>
     dir?: string
@@ -9073,6 +9075,40 @@ export type MissionStatusResponses = {
 
 export type MissionStatusResponse = MissionStatusResponses[keyof MissionStatusResponses]
 
+export type MissionProjectArchiveData = {
+  body?: never
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}/project-archive"
+}
+
+export type MissionProjectArchiveErrors = {
+  /**
+   * Mission project is not a Git worktree
+   */
+  422: {
+    message: string
+  }
+}
+
+export type MissionProjectArchiveError = MissionProjectArchiveErrors[keyof MissionProjectArchiveErrors]
+
+export type MissionProjectArchiveResponses = {
+  /**
+   * ZIP archive
+   */
+  200: Blob | File
+}
+
+export type MissionProjectArchiveResponse = MissionProjectArchiveResponses[keyof MissionProjectArchiveResponses]
+
 export type MissionRenameData = {
   body: {
     title: string
@@ -9331,7 +9367,7 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
     taskID: string
     targetID: string
     viewportID: string
-    operationKind?: "preview-capture" | "reference-comparison" | "source-binding"
+    operationKind: "preview-capture" | "reference-comparison" | "source-binding"
     regionID?: string
     stateID?: string
     manifestPath?: string

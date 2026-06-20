@@ -1,9 +1,13 @@
 import { describe, test, expect, afterAll, afterEach, beforeEach } from "bun:test"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Truncate } from "../../src/tool/truncation"
 import { Identifier } from "../../src/id/id"
 import { Filesystem } from "../../src/util/filesystem"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { Database } from "../../src/storage/db"
+import { Worktree } from "../../src/worktree"
+import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import fs from "fs/promises"
 import path from "path"
@@ -28,10 +32,27 @@ const AGENT_WITH_READ_SEARCH_CODE = {
   ],
 } as any
 
+function seedTask(projectID: string, taskID = "task_truncate_test") {
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        title: "Truncate output task",
+        request: "Persist full tool output",
+        source: "test",
+        time_created: Date.now(),
+        time_updated: Date.now(),
+      })
+      .run(),
+  )
+}
+
 function scoped(options: Truncate.Options = {}): Truncate.Options {
   return {
-    taskID: "task_truncate_test",
-    sessionID: "session_truncate_test",
+    taskID: Identifier.ascending("task"),
+    sessionID: Identifier.ascending("session"),
     ...options,
   }
 }
@@ -46,6 +67,7 @@ describe("Truncate", () => {
 
     afterEach(async () => {
       await runtimeTmp?.[Symbol.asyncDispose]?.()
+      await resetDatabase()
     })
 
     async function truncateOutput(
@@ -55,7 +77,10 @@ describe("Truncate", () => {
     ) {
       return Instance.provide({
         directory: runtimeTmp.path,
-        fn: () => Truncate.output(text, options, agent),
+        fn: () => {
+          if (options.taskID) seedTask(Instance.project.id, options.taskID)
+          return Truncate.output(text, options, agent)
+        },
       })
     }
 
@@ -142,6 +167,38 @@ describe("Truncate", () => {
       const written = await Filesystem.readText(result.outputPath!)
       expect(written).toBe(lines)
     })
+
+    test("writes worktree session output under the task primary project runtime", async () => {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = "task_truncate_worktree"
+      const sessionID = "session_truncate_worktree"
+      await Instance.provide({
+        directory: tmp.path,
+        fn: () => seedTask(Instance.project.id, taskID),
+      })
+      const worktree = await Instance.provide({
+        directory: tmp.path,
+        fn: () => Worktree.create({ name: "truncate-output", taskID, sessionID }),
+      })
+      const worktreeDir = worktree.directory
+      await fs.writeFile(path.join(worktreeDir, ".gitignore"), "# force worktree bootstrap refresh\n", "utf8")
+
+      const result = await Instance.provide({
+        directory: worktreeDir,
+        fn: () =>
+          Truncate.output(
+            Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n"),
+            { taskID, sessionID, maxLines: 10 },
+            AGENT_WITH_TASK,
+          ),
+      })
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      expect(result.outputPath).toContain(ProjectRuntimePaths.toolOutputDir(tmp.path, taskID, sessionID))
+      expect(result.outputPath).not.toContain(ProjectRuntimePaths.toolOutputDir(worktreeDir, taskID, sessionID))
+      expect(await Filesystem.exists(result.outputPath)).toBe(true)
+    }, 20_000)
 
     test("throws when truncation needed but agent has no recovery path (no task / no read+search_code)", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")

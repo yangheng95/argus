@@ -23,16 +23,16 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-function seedRunningTaskRun(input?: { taskCompleted?: number }) {
+function seedRunningTaskRun(projectRoot: string, input?: { taskCompleted?: number }) {
   const now = Date.now()
-  const taskID = `task_term_dl_${now}_${Math.random().toString(36).slice(2)}`
+  const taskID = `tsk_term_dl_${now}_${Math.random().toString(36).slice(2)}`
   const runID = `run_term_dl_${now}_${Math.random().toString(36).slice(2)}`
   const projectID = `project_term_dl_${now}_${Math.random().toString(36).slice(2)}`
   Database.transaction((db) => {
     db.insert(ProjectTable)
       .values({
         id: projectID,
-        worktree: process.cwd(),
+        worktree: projectRoot,
         name: "terminal dl test",
         sandboxes: "[]",
         time_created: now,
@@ -84,10 +84,11 @@ function seedRunningTaskRun(input?: { taskCompleted?: number }) {
 
 describe("terminal seam materializes the complete decision-log bundle", () => {
   test("completed task writes task-scoped runtime decision-log.md", async () => {
-    const { taskID, runID, now } = seedRunningTaskRun()
-    await using tmp = await tmpdir()
+    await using primary = await tmpdir()
+    await using ambient = await tmpdir()
+    const { taskID, runID, now } = seedRunningTaskRun(primary.path)
     await Instance.provide({
-      directory: tmp.path,
+      directory: ambient.path,
       fn: async () => {
         createDecisionLog(taskID).append({
           phase: "requirements",
@@ -100,17 +101,19 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
     })
     // Run still finalized (terminal write did not disturb core state).
     expect(findRun(runID)?.status).toBe("completed")
-    const doc = await fs.readFile(ProjectRuntimePaths.decisionLogPaths(tmp.path, taskID).absolute, "utf8")
+    const doc = await fs.readFile(ProjectRuntimePaths.decisionLogPaths(primary.path, taskID).absolute, "utf8")
     expect(doc).toContain("### runtime")
     expect(doc).toContain("_Why: template pins Bun_")
+    await expect(fs.stat(ProjectRuntimePaths.decisionLogPaths(ambient.path, taskID).absolute)).rejects.toThrow()
   })
 
   test("REPLAYED terminal update on an already-terminal row re-materializes (no-op guard branch)", async () => {
     const completed = Date.now() - 500
-    const { taskID } = seedRunningTaskRun({ taskCompleted: completed })
-    await using tmp = await tmpdir()
+    await using primary = await tmpdir()
+    await using ambient = await tmpdir()
+    const { taskID } = seedRunningTaskRun(primary.path, { taskCompleted: completed })
     await Instance.provide({
-      directory: tmp.path,
+      directory: ambient.path,
       fn: async () => {
         const log = createDecisionLog(taskID)
         log.append({ phase: "acceptance", key: "first", value: "v1", reason: "r1" })
@@ -123,18 +126,20 @@ describe("terminal seam materializes the complete decision-log bundle", () => {
         await updateTask(findTask(taskID)!, { status: "completed", time_completed: completed }, "done again")
       },
     })
-    const doc = await fs.readFile(ProjectRuntimePaths.decisionLogPaths(tmp.path, taskID).absolute, "utf8")
+    const doc = await fs.readFile(ProjectRuntimePaths.decisionLogPaths(primary.path, taskID).absolute, "utf8")
     expect(doc).toContain("### first")
     expect(doc).toContain("### late") // proves the replay re-materialized
+    await expect(fs.stat(ProjectRuntimePaths.decisionLogPaths(ambient.path, taskID).absolute)).rejects.toThrow()
   })
 
   test("terminal bundle write failure does NOT cascade-break task termination", async () => {
-    const { taskID, runID, now } = seedRunningTaskRun()
-    await using tmp = await tmpdir()
+    await using primary = await tmpdir()
+    await using ambient = await tmpdir()
+    const { taskID, runID, now } = seedRunningTaskRun(primary.path)
     // Plant a FILE where `.opencorvus/` must be created → fs.mkdir throws.
-    await fs.writeFile(path.join(tmp.path, ".opencorvus"), "blocker", "utf8")
+    await fs.writeFile(path.join(primary.path, ".opencorvus"), "blocker", "utf8")
     await Instance.provide({
-      directory: tmp.path,
+      directory: ambient.path,
       fn: async () => {
         createDecisionLog(taskID).append({ phase: "requirements", key: "k", value: "v", reason: "r" })
         // Must NOT throw — best-effort + loud (refinement of codex D5).

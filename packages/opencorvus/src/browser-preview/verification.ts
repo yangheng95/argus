@@ -20,8 +20,10 @@ async function captureWithBrowserEvidenceRunner(
 ): Promise<BrowserPreviewVerificationCaptureJobResult> {
   const job = await runBrowserPreviewEvidenceJob({
     projectRoot: input.projectRoot,
+    jobID: input.jobID,
     taskID: input.taskID,
     targetID: input.targetID,
+    outDir: input.outDir,
     viewportIDs: input.viewportIDs,
     signal: input.signal,
   })

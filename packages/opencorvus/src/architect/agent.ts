@@ -42,6 +42,7 @@ import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
 import type { ArchitectResult, ArchitectRetryContext, ParsedRequirement, RequirementsDecision } from "./types"
 import type { WorkloadBrief } from "@/goal-workload-analyst/types"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -95,6 +96,7 @@ export namespace ArchitectAgent {
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
+    continuation?: AgentSessionContinuation
     onSessionCreated?: (sessionID: string) => void
   }
 
@@ -144,6 +146,7 @@ export namespace ArchitectAgent {
       taskID: input.taskID,
       model: input.model,
       signal: input.signal,
+      continuation: input.continuation,
       onStatus: input.onStatus ?? (() => {}),
       onSessionCreated: input.onSessionCreated
         ? (session) => {

@@ -545,7 +545,7 @@ function renderReadme(input: {
     "- Copy/adapt this baseline into the root app before semantic replacement so the implementation keeps captured-source structure and parity evidence.",
     "- Follow frontend_design `quality_project_contract` to create readable semantic source.",
     "- Continue from the captured source baseline and replace named regions in place.",
-    "- Preserve this extracted DOM/CSS baseline until a replacement component passes webpage_evaluate screenshot comparison at the requested threshold.",
+    "- Preserve this extracted DOM/CSS baseline until a replacement component has inspected task-scoped preview screenshot evidence for the requested surface.",
     "- Prefer existing project components first, mature maintained libraries second, and custom components only for page-specific surfaces.",
     "- Use reusable components or mature libraries for complex charts, maps, tables, menus, dialogs, forms, calendars, virtualized lists, or drag/drop behavior when they fit.",
     "- Replace content by slot/component boundaries with source-region traceability.",

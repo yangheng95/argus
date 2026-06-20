@@ -8,6 +8,7 @@ import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Filesystem } from "@/util/filesystem"
 import {
   summarizeVisualEvidenceBundle,
+  validateVisualEvidenceBundleReferenceComparisons,
   visualEvidenceBundlePasses,
   VisualEvidenceBundleListSchema,
   type VisualEvidenceBundle,
@@ -137,7 +138,7 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
     inspect_visual_evidence: tool({
       description:
         "Inspect the scoped VisualEvidenceBundle artifacts for reference-driven UI review. " +
-        "Use this before accepting visual fidelity claims; it returns reference/rendered paths, score, qualitative verdict, region coverage, and provenance from the reviewed task context.",
+        "Use this before accepting visual fidelity claims; it returns reference/rendered paths, blocker-based inspection status, region coverage, and provenance from the reviewed task context.",
       inputSchema: z.object({
         bundle_id: z
           .string()
@@ -146,15 +147,26 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
         max_chars: z.number().int().min(1_000).max(40_000).default(12_000),
       }),
       execute: async ({ bundle_id, max_chars }) =>
-        truncateIntegrityEvidence(renderVisualEvidenceSection(input?.visualEvidence, bundle_id), max_chars),
+        truncateIntegrityEvidence(
+          await renderVisualEvidenceSection({
+            projectDir,
+            visualEvidence: input?.visualEvidence,
+            bundleID: bundle_id,
+            taskID: input?.taskID,
+          }),
+          max_chars,
+        ),
     }),
   }
 }
 
-function renderVisualEvidenceSection(
-  visualEvidence: VisualEvidenceBundle[] | undefined,
-  bundleID: string | undefined,
-): string {
+async function renderVisualEvidenceSection(input: {
+  projectDir: string
+  visualEvidence: VisualEvidenceBundle[] | undefined
+  bundleID: string | undefined
+  taskID: string | undefined
+}): Promise<string> {
+  const { projectDir, visualEvidence, bundleID, taskID } = input
   const parsed = VisualEvidenceBundleListSchema.safeParse(visualEvidence ?? [])
   if (!parsed.success || parsed.data.length === 0) {
     return "# Visual Evidence\n\nNo VisualEvidenceBundle was provided in scoped integrity context."
@@ -165,10 +177,23 @@ function renderVisualEvidenceSection(
   }
   const lines = ["# Visual Evidence"]
   for (const bundle of bundles) {
+    const comparisonValidation = await validateVisualEvidenceBundleReferenceComparisons({
+      projectRoot: projectDir,
+      bundle,
+      expectedTaskID: taskID,
+    })
     lines.push("")
     lines.push(`## ${bundle.id}`)
-    lines.push(`status=${visualEvidenceBundlePasses(bundle) ? "passing" : "not_passing"}`)
+    lines.push(
+      `status=${
+        visualEvidenceBundlePasses(bundle) && comparisonValidation.passing ? "passing" : "not_passing"
+      }`,
+    )
     lines.push(summarizeVisualEvidenceBundle(bundle))
+    if (comparisonValidation.issues.length > 0) {
+      lines.push("Reference comparison issues:")
+      for (const issue of comparisonValidation.issues) lines.push(`- ${issue}`)
+    }
     if (bundle.regions.length > 0) {
       lines.push("Regions:")
       for (const region of bundle.regions) {

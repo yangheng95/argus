@@ -28,7 +28,9 @@ describe("visual-qa agent", () => {
         expect(Object.keys(tools)).toContain("browser_preview")
         expect(Object.keys(tools)).toContain("browser_preview_bind_local_module")
         expect(Object.keys(tools)).toContain("browser_preview_compare_regions")
-        expect(Object.keys(tools)).toContain("webpage_render")
+        expect(Object.keys(tools)).not.toContain("webpage_render")
+        expect(Object.keys(tools)).not.toContain("webpage_evaluate")
+        expect(Object.keys(tools)).not.toContain("webpage_vision_judge")
         expect(Object.keys(tools)).not.toContain("webpage_extract")
 
         for (const info of [BrowserPreviewTool, BrowserPreviewBindLocalModuleTool, BrowserPreviewCompareRegionsTool]) {
@@ -51,9 +53,9 @@ describe("visual-qa agent", () => {
       buildEvidence: "Build report",
       previewCommand: "npm run dev",
     })
-    expect(prompt).toContain("post-goal-batch frontend visual GUI fidelity")
+    expect(prompt).toContain("final frontend visual GUI and functional product review")
     expect(prompt).toContain("Visual QA and integrity are peer post-build review agents")
-    expect(prompt).toContain("visual GUI fidelity and functional testing")
+    expect(prompt).toContain("focused frontend visual/product-design evidence")
     expect(prompt).toContain("GUI means Graphical User Interface")
     expect(prompt).not.toContain("UX means User Experience")
     expect(prompt).toContain("picky professional product designer")
@@ -67,6 +69,9 @@ describe("visual-qa agent", () => {
     expect(prompt).toContain("component truth and visible functionality first")
     expect(prompt).toContain("layout/composition second")
     expect(prompt).toContain("state-style polish last")
+    expect(prompt).toContain("Do not chase visual scores or external judge verdicts")
+    expect(prompt).toContain("blocker-free structured report")
+    expect(prompt).toContain("Reference/clone fidelity is enforced only when")
     expect(prompt).toContain("browser_preview_bind_local_module")
     expect(prompt).toContain("browser_preview_compare_regions")
     expect(prompt).toContain("task-scoped `reference-comparison` evidence")
