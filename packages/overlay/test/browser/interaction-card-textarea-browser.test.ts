@@ -32,6 +32,16 @@ function eventStream() {
   })
 }
 
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 async function saveElementScreenshot(page: any, selector: string, filename: string) {
   const screenshotPath = resolve(".scratch", filename)
   mkdirSync(dirname(screenshotPath), { recursive: true })
@@ -65,6 +75,7 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     payload: {
       questions: [
         {
+          header: "Deployment notes",
           question: "What extra context should the agent include?",
           multiple: false,
           custom: true,
@@ -72,6 +83,23 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
             { label: "Risk summary", description: "Include known risks and mitigations." },
             { label: "QA notes", description: "Include verification details." },
           ],
+        },
+        {
+          header: "Approval scope",
+          question: "Which approvals are covered?",
+          multiple: true,
+          custom: false,
+          options: [
+            { label: "Product owner", description: "Approval from the product owner." },
+            { label: "QA owner", description: "Approval from the QA owner." },
+          ],
+        },
+        {
+          header: "Freeform detail",
+          question: "Add any other details.",
+          multiple: false,
+          custom: true,
+          options: [],
         },
       ],
     },
@@ -90,6 +118,9 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     changes: [],
     interactions: [interaction],
   }
+  const replyStarted = deferred()
+  const releaseReply = deferred()
+  let replyRequestCount = 0
 
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
@@ -155,6 +186,12 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     if (path === `/task/${taskID}/transcript`) return send([])
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
+    if (path === "/interaction/question-autogrow/reply" && req.method === "POST") {
+      replyRequestCount += 1
+      replyStarted.resolve()
+      await releaseReply.promise
+      return send({ message: "Fixture rejected answer" }, { status: 400 })
+    }
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
     return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
@@ -166,10 +203,13 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     const errors: string[] = []
     page.on("pageerror", (error: any) => errors.push(`pageerror: ${error.message || String(error)}`))
     page.on("console", (message: any) => {
-      if (message.type() === "error") errors.push(`console: ${message.text()}`)
+      const expectedReplyFailure =
+        message.type() === "error" && replyRequestCount > 0 && message.text().includes("status of 400")
+      if (message.type() === "error" && !expectedReplyFailure) errors.push(`console: ${message.text()}`)
     })
     page.on("response", (response: any) => {
-      if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
+      const expectedReplyFailure = response.status() === 400 && response.url().includes("/interaction/question-autogrow/reply")
+      if (response.status() >= 400 && !expectedReplyFailure) errors.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 860 })
     await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
@@ -199,7 +239,7 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
 
     await page
       .waitForFunction(
-        () => document.querySelectorAll('.interaction-card[data-id="question-autogrow"] textarea').length >= 2,
+        () => document.querySelectorAll('.interaction-card[data-id="question-autogrow"] textarea').length >= 4,
         { timeout: 15_000 },
       )
       .catch(async (error: unknown) => {
@@ -227,6 +267,41 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
         dialogOverflow: getComputedStyle(dialog).overflowY,
         inlineHeight: inline.getBoundingClientRect().height,
         dialogHeight: dialog.getBoundingClientRect().height,
+        semantics: [".chat-scroll", "#interactionDialog"].map((scopeSelector) => {
+          const scope = document.querySelector<HTMLElement>(scopeSelector)
+          const card = scope?.querySelector<HTMLElement>('.interaction-card[data-id="question-autogrow"]')
+          if (!card) throw new Error(`missing card in ${scopeSelector}`)
+          return {
+            fieldsets: Array.from(card.querySelectorAll("fieldset.interaction-card__question")).map((fieldset) => {
+              const legend = fieldset.querySelector("legend")
+              return {
+                label: legend?.textContent?.trim() ?? "",
+                labelledBy: fieldset.getAttribute("aria-labelledby") ?? "",
+                legendID: legend?.id ?? "",
+              }
+            }),
+            textareas: Array.from(card.querySelectorAll<HTMLTextAreaElement>("textarea")).map((textarea) => {
+              const labelID = textarea.getAttribute("aria-labelledby") ?? ""
+              return {
+                placeholder: textarea.getAttribute("placeholder") ?? "",
+                labelledBy: labelID,
+                label: labelID ? document.getElementById(labelID)?.textContent?.trim() ?? "" : "",
+              }
+            }),
+            describedOptions: Array.from(card.querySelectorAll<HTMLInputElement>("input[aria-describedby]")).map((input) => {
+              const descID = input.getAttribute("aria-describedby") ?? ""
+              return {
+                descID,
+                description: document.getElementById(descID)?.textContent?.trim() ?? "",
+              }
+            }),
+            buttons: Array.from(card.querySelectorAll<HTMLButtonElement>("button[data-action]")).map((button) => ({
+              text: button.textContent?.trim() ?? "",
+              ariaLabel: button.getAttribute("aria-label"),
+              title: button.getAttribute("title") ?? "",
+            })),
+          }
+        }),
       }
     })
     assert.match(before.inlineClass, /\bcomposer-textarea\b/)
@@ -236,6 +311,48 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     assert.equal(before.dialogResize, "none")
     assert.equal(before.inlineOverflow, "auto")
     assert.equal(before.dialogOverflow, "auto")
+    for (const surface of before.semantics) {
+      assert.deepEqual(
+        surface.fieldsets.map((item) => item.label),
+        [
+          "Deployment notes: What extra context should the agent include?",
+          "Approval scope: Which approvals are covered?",
+          "Freeform detail: Add any other details.",
+        ],
+      )
+      for (const fieldset of surface.fieldsets) {
+        assert.ok(fieldset.labelledBy, "fieldset should reference its legend")
+        assert.equal(fieldset.labelledBy, fieldset.legendID)
+      }
+      assert.deepEqual(
+        surface.textareas.map((item) => item.label),
+        [
+          "Deployment notes: What extra context should the agent include?",
+          "Freeform detail: Add any other details.",
+        ],
+      )
+      for (const textarea of surface.textareas) {
+        assert.equal(textarea.placeholder, "Or type a custom answer…")
+        assert.ok(textarea.labelledBy, "textarea should use a real question label, not only placeholder text")
+      }
+      assert.deepEqual(
+        surface.describedOptions.map((item) => item.description).sort(),
+        [
+          "Approval from the product owner.",
+          "Approval from the QA owner.",
+          "Include known risks and mitigations.",
+          "Include verification details.",
+        ].sort(),
+      )
+      assert.deepEqual(
+        surface.buttons.map((button) => button.text),
+        ["Answer", "Skip"],
+      )
+      for (const button of surface.buttons) {
+        assert.equal(button.ariaLabel, null)
+        assert.ok(button.title)
+      }
+    }
 
     const longReply = [
       "Line one: include the release risk summary.",
@@ -257,6 +374,53 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     assert.ok(after > before.inlineHeight, `inline textarea should auto-grow: ${before.inlineHeight} -> ${after}`)
 
     const dialogScreenshot = await saveElementScreenshot(page, "#interactionDialog", "interaction-card-textarea-dialog.png")
+    await page.click('#interactionDialog .interaction-card[data-id="question-autogrow"] [data-action="answer"]')
+    await replyStarted.promise
+    const busyState = await page.evaluate(() => {
+      const card = document.querySelector<HTMLElement>('#interactionDialog .interaction-card[data-id="question-autogrow"]')
+      if (!card) throw new Error("missing dialog card")
+      return {
+        busy: card.getAttribute("aria-busy"),
+        statusText: card.querySelector<HTMLElement>('[role="status"][aria-live="polite"][aria-busy="true"]')?.textContent?.trim() ?? "",
+        disabledButtons: Array.from(card.querySelectorAll<HTMLButtonElement>("button[data-action]")).map((button) => button.disabled),
+        disabledInputs: Array.from(card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")).map((control) => control.disabled),
+        focusInside: card.contains(document.activeElement),
+      }
+    })
+    assert.equal(busyState.busy, "true")
+    assert.equal(busyState.statusText, "Submitting response…")
+    assert.deepEqual(busyState.disabledButtons, [true, true])
+    assert.ok(busyState.disabledInputs.every(Boolean))
+    assert.equal(busyState.focusInside, true)
+
+    releaseReply.resolve()
+    await page.waitForSelector(
+      '#interactionDialog .interaction-card[data-id="question-autogrow"] [role="alert"][aria-live="assertive"]',
+      { timeout: 10_000 },
+    )
+    const failureState = await page.evaluate(() => {
+      const card = document.querySelector<HTMLElement>('#interactionDialog .interaction-card[data-id="question-autogrow"]')
+      const alert = card?.querySelector<HTMLElement>('[role="alert"][aria-live="assertive"]')
+      if (!card || !alert) throw new Error("missing failure alert")
+      return {
+        busy: card.getAttribute("aria-busy"),
+        alertText: alert.textContent?.trim() ?? "",
+        alertAtomic: alert.getAttribute("aria-atomic"),
+        focusInside: card.contains(document.activeElement),
+        activeIsAlert: document.activeElement === alert,
+      }
+    })
+    assert.equal(failureState.busy, "false")
+    assert.match(failureState.alertText, /Fixture rejected answer/)
+    assert.equal(failureState.alertAtomic, "true")
+    assert.equal(failureState.focusInside, true)
+    assert.equal(failureState.activeIsAlert, true)
+    assert.equal(replyRequestCount, 1)
+    const errorScreenshot = await saveElementScreenshot(
+      page,
+      '#interactionDialog .interaction-card[data-id="question-autogrow"]',
+      "interaction-card-error-dialog.png",
+    )
     await page.keyboard.press("Escape")
     await page.waitForFunction(() => !document.querySelector('#interactionDialog .interaction-card[data-id="question-autogrow"]'))
     const inlineScreenshot = await saveElementScreenshot(
@@ -266,6 +430,7 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     )
     assert.ok(inlineScreenshot.endsWith("interaction-card-textarea-inline.png"))
     assert.ok(dialogScreenshot.endsWith("interaction-card-textarea-dialog.png"))
+    assert.ok(errorScreenshot.endsWith("interaction-card-error-dialog.png"))
     assert.deepEqual(errors, [])
   } finally {
     await browser.close()

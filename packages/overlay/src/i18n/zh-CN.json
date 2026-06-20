@@ -623,6 +623,7 @@
   "interaction.reject_title": "拒绝此请求。",
   "interaction.skip": "跳过",
   "interaction.skip_title": "跳过此问题，不发送回复。",
+  "interaction.submitting": "正在提交回复…",
   "llm.auth_choose_method": "选择认证方式",
   "llm.auth_connect": "连接",
   "llm.auth_connect_title": "为该服务商选择认证方式并发起连接。",

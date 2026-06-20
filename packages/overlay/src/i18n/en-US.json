@@ -623,6 +623,7 @@
   "interaction.reject_title": "Reject this request.",
   "interaction.skip": "Skip",
   "interaction.skip_title": "Skip without sending an answer.",
+  "interaction.submitting": "Submitting response…",
   "llm.auth_choose_method": "Choose authentication method",
   "llm.auth_connect": "Connect",
   "llm.auth_connect_title": "Choose and start an auth flow for this provider.",
