@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File | Title |
 | --- | --- |
 | [2026-06-21-frontend-research-context-digest.md](2026-06-21-frontend-research-context-digest.md) | Frontend Research Context Digest |
+| [2026-06-21-operator-message-live-goal-abort-audit.md](2026-06-21-operator-message-live-goal-abort-audit.md) | Operator Message Live Goal Abort Audit |
 
 ## 2026-06-20
 

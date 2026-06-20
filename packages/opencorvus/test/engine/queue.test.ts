@@ -749,7 +749,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("interrupting a live-owned active task queues the wake until ownership closes", async () => {
+  test("waking a live-owned active task queues the wake until ownership closes", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
     await Instance.provide({
@@ -842,7 +842,6 @@ describe("engine queue", () => {
         const result = await dispatchTaskLoop({
           taskID,
           event: { note: "stop the running agent and reconsider" },
-          interrupt: true,
         })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -909,6 +908,10 @@ describe("engine queue", () => {
             .run(),
         )
 
+        await dispatchTaskLoop({ taskID })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
         const owners: Array<{ goalRunID: string; ownershipID: string }> = []
         for (const suffix of ["a", "b"]) {
           const goalID = `goal_queue_multi_${suffix}_${now}`
@@ -963,10 +966,6 @@ describe("engine queue", () => {
           owners.push({ goalRunID, ownershipID: ownershipPayload.ownership_id })
         }
 
-        await dispatchTaskLoop({ taskID })
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-
         const result = await dispatchTaskLoop({
           taskID,
           event: {
@@ -977,7 +976,6 @@ describe("engine queue", () => {
               target: { kind: "build_session", sessionID: `ses_build_a_${now}`, goalID: `goal_queue_multi_a_${now}` },
             },
           },
-          interrupt: true,
         })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -991,6 +989,114 @@ describe("engine queue", () => {
 
         release!()
         await holdLoop
+      },
+    })
+  })
+
+  test("live ownership queues operator wake even after the root loop has exited", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `task_queue_owner_no_loop_${now}`
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop")
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "live owner without root loop",
+              request: "operator wake must wait for live ownership even when root loop exited",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        const goalID = `goal_queue_owner_no_loop_${now}`
+        Database.use((db) =>
+          db
+            .insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "Live owner goal",
+              slug: "live-owner-goal",
+              objective: "Keep ownership as the wake scheduling boundary.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: `ses_owner_no_loop_${now}`,
+          now,
+        })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: `ses_orchestrator_${now}`,
+          orchestratorMessageID: `msg_orchestrator_${now}`,
+          toolCallID: `cal_owner_no_loop_${now}`,
+          toolPartID: `prt_owner_no_loop_${now}`,
+          childSessionID: `ses_owner_no_loop_${now}`,
+          scope: "goal",
+          goalID,
+          goalRunID,
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+
+        const event = { note: "operator guidance while owner is still live" }
+        const result = await dispatchTaskLoop({
+          taskID,
+          event,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result).toBe("queued")
+        expect(interruptTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 1,
+        })
+        for (let i = 0; i < 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          if (runTaskLoop.mock.calls.length >= 1) break
+        }
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID, event })
+        expect(interruptTaskLoop).not.toHaveBeenCalled()
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
       },
     })
   })

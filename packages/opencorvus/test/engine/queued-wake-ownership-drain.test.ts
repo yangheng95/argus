@@ -128,7 +128,6 @@ describe("queued wake ownership drain", () => {
         const result = await dispatchTaskLoop({
           taskID,
           event: { note: "queued behind live ownership" },
-          interrupt: true,
         })
         expect(result).toBe("queued")
         expect(queuedTaskEventStats()).toMatchObject({ tasks: 1 })

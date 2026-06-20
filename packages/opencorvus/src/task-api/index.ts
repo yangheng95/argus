@@ -634,7 +634,6 @@ async function appendAndWakeTaskOperatorMessage(input: {
         messageID: userMessage.info.id,
       },
     },
-    interrupt: true,
   })
 
   return {

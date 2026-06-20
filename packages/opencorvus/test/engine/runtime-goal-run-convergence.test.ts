@@ -331,7 +331,7 @@ describe("EngineRuntime goal-run convergence", () => {
         seedTaskRun(taskID, runID, now, {
           status: "blocked",
           blocking_reason: "orchestrator_stream_error",
-          error: "OrchestratorAborted: task loop dispatch interrupt",
+          error: "OrchestratorAborted: explicit task cancellation",
         })
         seedGoalRun(taskID, runID, "grun_aborted_blocked_one", "aborted", now + 1)
 
@@ -341,7 +341,7 @@ describe("EngineRuntime goal-run convergence", () => {
         const run = findRun(runID)
         expect(run?.status).toBe("blocked")
         expect(run?.blocking_reason).toBe("orchestrator_stream_error")
-        expect(run?.error).toBe("OrchestratorAborted: task loop dispatch interrupt")
+        expect(run?.error).toBe("OrchestratorAborted: explicit task cancellation")
         expect(runTaskLoop).not.toHaveBeenCalled()
         expect(goalRefillNotificationsForTask(taskID)).toHaveLength(0)
       },

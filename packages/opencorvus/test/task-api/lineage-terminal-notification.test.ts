@@ -123,9 +123,9 @@ describe("task terminal lineage notifications", () => {
         expect(dispatchTaskLoop).toHaveBeenCalledWith(
           expect.objectContaining({
             taskID: parentTaskID,
-            interrupt: true,
           }),
         )
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]).not.toHaveProperty("interrupt")
       },
     })
   })
