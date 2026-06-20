@@ -592,6 +592,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
     { taskID: input.taskID, source: "service.message" },
   )
   const wakeTask = await reactivateTaskForOperatorWake(task, "Operator message reactivated task")
+  await reopenActiveRunForOperatorWake(wakeTask, "Operator message reopened blocked run")
 
   void dispatchTaskLoop({
     taskID: input.taskID,
@@ -634,7 +635,7 @@ async function reactivateTaskForOperatorWake(task: TaskRow, summary: string): Pr
       ? { ...(task.metadata as Record<string, unknown>) }
       : {}
   delete metadata.cancelled
-  return updateTask(task, { status: "active", error: null, metadata }, summary)
+  return updateTask(task, { status: isTaskCompleted(task) ? "queued" : "active", error: null, metadata }, summary)
 }
 
 function terminalTaskNotificationText(input: {
@@ -1995,6 +1996,7 @@ export namespace EngineService {
         .run(),
     )
     const wakeTask = await reactivateTaskForOperatorWake(task, "Operator note reactivated task")
+    await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")
     void dispatchTaskLoop({ taskID: wakeTask.id, event: { note: OrchestratorEventNote.retry(task) } })
     return { resumed: true, status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string }
   }
