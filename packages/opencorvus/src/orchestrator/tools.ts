@@ -345,6 +345,93 @@ function continuationFromArtifact(input: {
   }
 }
 
+function stageContinuationUnavailableResult(input: {
+  taskID: string
+  stage: StageContinuationStage
+  artifactID: string
+  finalizerName: string
+}): ReturnType<typeof SubAgentProtocol.yieldResult> | undefined {
+  const toolName = continuationToolName(input.stage)
+  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!row) {
+    return SubAgentProtocol.yieldResult({
+      headline: `${input.stage}: continuation artifact was not found.`,
+      summary:
+        `No fresh worker session was started because continuation_artifact_id=${input.artifactID} does not exist for this task. ` +
+        `Read the current task context and either use the latest pending continuation artifact or start a fresh ${toolName} run without continuation_artifact_id.`,
+      fields: [
+        ["stage", input.stage],
+        ["continuation_artifact_id", input.artifactID],
+        ["state", "not_found"],
+      ],
+      pointer: `read_context scope=decisions; do not reuse ${input.artifactID}`,
+    })
+  }
+  const mismatch =
+    row.payload.stage !== input.stage
+      ? `stage ${row.payload.stage}, not ${input.stage}`
+      : row.payload.finalizer_name !== input.finalizerName
+        ? `finalizer ${row.payload.finalizer_name}, not ${input.finalizerName}`
+        : undefined
+  if (mismatch) {
+    return SubAgentProtocol.yieldResult({
+      headline: `${input.stage}: continuation artifact belongs to a different recovery contract.`,
+      summary:
+        `No fresh worker session was started because continuation_artifact_id=${input.artifactID} targets ${mismatch}. ` +
+        `Use the continuation call printed by the original terminal-finalizer-miss result, or start a fresh ${toolName} run without continuation_artifact_id.`,
+      fields: [
+        ["stage", input.stage],
+        ["continuation_artifact_id", input.artifactID],
+        ["state", "wrong_contract"],
+        ["actual_stage", row.payload.stage],
+        ["actual_finalizer", row.payload.finalizer_name],
+      ],
+      pointer: `read_context scope=decisions; do not reuse ${input.artifactID} with ${toolName}`,
+    })
+  }
+  const state = row.payload.consumed_at
+    ? "consumed"
+    : row.payload.claim_failed_at
+      ? "claim_failed"
+      : row.payload.claimed_at
+        ? "claimed"
+        : undefined
+  if (!state) return undefined
+  const detail =
+    state === "consumed"
+      ? `already consumed by message ${row.payload.continuation_message_id ?? "n/a"}`
+      : state === "claim_failed"
+        ? `has failed claim state: ${row.payload.claim_error ?? "n/a"}`
+        : `already claimed by ${row.payload.claim_id ?? "unknown"}`
+  const nextAction =
+    state === "claimed"
+      ? "wait for the in-flight same-session continuation or inspect the child session before retrying"
+      : `start a fresh ${toolName} run without continuation_artifact_id if the work is still required`
+  return SubAgentProtocol.yieldResult({
+    headline: `${input.stage}: continuation artifact is no longer pending.`,
+    summary:
+      `No fresh worker session was started because continuation_artifact_id=${input.artifactID} ${detail}. ` +
+      `Do not reuse this artifact; ${nextAction}.`,
+    fields: [
+      ["stage", input.stage],
+      ["session_id", row.payload.session_id],
+      ["continuation_artifact_id", input.artifactID],
+      ["state", state],
+      ["detail", detail],
+      ["next_action", nextAction],
+    ],
+    pointer: `read_context scope=decisions; do not reuse ${input.artifactID}`,
+  })
+}
+
+function continuationFromArtifactOrResult(input: Parameters<typeof continuationFromArtifact>[0]):
+  | { continuation: AgentSessionContinuation }
+  | { result: ReturnType<typeof SubAgentProtocol.yieldResult> } {
+  const result = stageContinuationUnavailableResult(input)
+  if (result) return { result }
+  return { continuation: continuationFromArtifact(input) }
+}
+
 function terminalFinalizerMiss(input: {
   err: unknown
   finalizerName: string
@@ -2547,6 +2634,15 @@ export function createOrchestratorTools(input: {
         visual_qa_decisions: visualQaEntries,
       }),
     })
+    const unavailableContinuation = toolInput.continuation_artifact_id
+      ? stageContinuationUnavailableResult({
+          taskID: task.id,
+          stage: "integrity",
+          artifactID: toolInput.continuation_artifact_id,
+          finalizerName: "submit_integrity_consensus",
+        })
+      : undefined
+    if (unavailableContinuation) return { status: "continuation", result: unavailableContinuation }
     const continuationInput = toolInput.continuation_artifact_id
       ? integrityContinuationFromArtifact({ taskID: task.id, artifactID: toolInput.continuation_artifact_id })
       : undefined
@@ -3059,15 +3155,20 @@ export function createOrchestratorTools(input: {
         }
         let continuation: AgentSessionContinuation | undefined
         try {
-          continuation = continuation_artifact_id
-            ? continuationFromArtifact({
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
                 taskID,
                 stage: "requirements",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_requirements",
                 expectedNormalizedStageInput: normalizedStageInput,
               })
-            : undefined
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("requirements", undefined, true)
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
           runnerSessionID = continuation?.sessionID
           const { RequirementsAgent } = await import("@/requirements")
           const frontendDesign = renderFrontendDesignHandoffReference(taskID)
@@ -3350,15 +3451,18 @@ export function createOrchestratorTools(input: {
         const normalizedStageInput = {
           task: taskContinuationScope(task),
         }
-        const continuation = hasContinuation
-          ? continuationFromArtifact({
+        let continuation: AgentSessionContinuation | undefined
+        if (hasContinuation) {
+          const resolvedContinuation = continuationFromArtifactOrResult({
               taskID,
               stage: "frontend-design",
               artifactID: continuation_artifact_id,
               finalizerName: "submit_frontend_template",
               expectedNormalizedStageInput: normalizedStageInput,
             })
-          : undefined
+          if ("result" in resolvedContinuation) return resolvedContinuation.result
+          continuation = resolvedContinuation.continuation
+        }
         if (
           !continuation &&
           !hasAttachments &&
@@ -4035,15 +4139,20 @@ export function createOrchestratorTools(input: {
         }
         let continuation: AgentSessionContinuation | undefined
         try {
-          continuation = continuation_artifact_id
-            ? continuationFromArtifact({
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
                 taskID,
                 stage: "architect",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_architect",
                 expectedNormalizedStageInput: normalizedStageInput,
               })
-            : undefined
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("architect", undefined, true)
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
           runnerSessionID = continuation?.sessionID
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
@@ -4435,15 +4544,21 @@ export function createOrchestratorTools(input: {
           architect_contract_graph_artifact_id: contractGraphArtifact?.id ?? null,
         }
         try {
-          const continuation = continuation_artifact_id
-            ? continuationFromArtifact({
+          let continuation: AgentSessionContinuation | undefined
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
                 taskID,
                 stage: "goal-workload-analyst",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_workload_analysis",
                 expectedNormalizedStageInput: normalizedStageInput,
               })
-            : undefined
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("workload_analysis", undefined, true)
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
           runnerSessionID = continuation?.sessionID
           const { findRequirements } = await import("@/engine/store")
           const requirements = findRequirements(activeSpec.id).map(parsedRequirementFromRow)
@@ -4654,15 +4769,21 @@ export function createOrchestratorTools(input: {
         }
 
         try {
-          const continuation = continuation_artifact_id
-            ? continuationFromArtifact({
+          let continuation: AgentSessionContinuation | undefined
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
                 taskID,
                 stage: "visual-qa",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_visual_qa_report",
                 expectedNormalizedStageInput: normalizedStageInput,
               })
-            : undefined
+            if ("result" in resolvedContinuation) {
+              await close(true)
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
           runnerSessionID = continuation?.sessionID
           const { VisualQaAgent } = await import("@/visual-qa")
           const result = await VisualQaAgent.analyze({
@@ -4876,6 +4997,18 @@ export function createOrchestratorTools(input: {
         const { Session } = await import("@/session")
         let factCheckStepFailed = true
         try {
+        const unavailableContinuation = args.continuation_artifact_id
+          ? stageContinuationUnavailableResult({
+              taskID: task.id,
+              stage: "fact-check",
+              artifactID: args.continuation_artifact_id,
+              finalizerName: "report_fact_check_result",
+            })
+          : undefined
+        if (unavailableContinuation) {
+          factCheckStepFailed = false
+          return unavailableContinuation
+        }
         const continuationInput = args.continuation_artifact_id
           ? factCheckContinuationFromArtifact({ taskID: task.id, artifactID: args.continuation_artifact_id })
           : undefined
@@ -5236,15 +5369,20 @@ export function createOrchestratorTools(input: {
         let continuation: AgentSessionContinuation | undefined
         let runnerSessionID: string | undefined
         try {
-          continuation = continuation_artifact_id
-            ? continuationFromArtifact({
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
                 taskID,
                 stage: "frontend-research",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_research_brief",
                 expectedNormalizedStageInput: normalizedStageInput,
               })
-            : undefined
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("frontend_research", undefined, true)
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
           runnerSessionID = continuation?.sessionID
           const { FrontendResearchAgent } = await import("@/frontend-research")
           const result = await FrontendResearchAgent.run({
@@ -5348,15 +5486,18 @@ export function createOrchestratorTools(input: {
           task: taskContinuationScope(task),
         }
         try {
-          const continuation = continuation_artifact_id
-            ? continuationFromArtifact({
+          let continuation: AgentSessionContinuation | undefined
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
                 taskID,
                 stage: "deep-research",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_research_brief",
                 expectedNormalizedStageInput: normalizedStageInput,
               })
-            : undefined
+            if ("result" in resolvedContinuation) return resolvedContinuation.result
+            continuation = resolvedContinuation.continuation
+          }
           runnerSessionID = continuation?.sessionID
           const { DeepResearchAgent } = await import("@/research")
           const result = await DeepResearchAgent.run({
