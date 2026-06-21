@@ -126,8 +126,8 @@ export function completeOrchestratorToolOwnership(input: {
     },
   })
   void import("@/engine/queue")
-    .then(({ drainQueuedTaskEventIfUnowned }) => {
-      drainQueuedTaskEventIfUnowned(input.taskID)
+    .then(async ({ drainQueuedTaskEventIfUnowned }) => {
+      await drainQueuedTaskEventIfUnowned(input.taskID)
     })
     .catch((error) => {
       log.error("failed to drain queued task event after orchestrator tool ownership completion", {

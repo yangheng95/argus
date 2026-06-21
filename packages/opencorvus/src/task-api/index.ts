@@ -982,7 +982,7 @@ export namespace EngineService {
       scope: "instance",
       run: async () => {
         await EngineRuntime.monitorRuns(hooks())
-        drainPendingQueuedOperatorWakes()
+        await drainPendingQueuedOperatorWakes()
       },
     })
     // Phase-7: no aggressive startup recovery. Live build attempts and
