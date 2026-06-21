@@ -7181,6 +7181,7 @@ export function createOrchestratorTools(input: {
           // state instead of orphaning at attempt-running.
           let goalRunInvalidatedLine = ""
           let goalRunInvalidated = false
+          let goalRunFinalizationFailedLine = ""
           if (attachedGoalID && goalRunID) {
             try {
               const { finalizeBuildAttempt } = await import("@/engine/persist")
@@ -7239,16 +7240,33 @@ export function createOrchestratorTools(input: {
                 })
               }
             } catch (persistErr) {
-              // Failing to record the attempt does NOT abort the build —
-              // the LLM still gets the tool_result text. Log loudly so
-              // it's visible during benchmarks; if persists are silently
-              // dropped the orchestrator will see the goal as still pending
-              // on its next wake and decide what to do.
+              const persistMessage = persistErr instanceof Error ? persistErr.message : String(persistErr)
               log.error("build: finalizeBuildAttempt failed", {
                 taskID,
                 goalID: attachedGoalID,
-                error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+                goalRunID,
+                error: persistMessage,
               })
+              const currentGoalRun = findGoalRun(goalRunID)
+              if (currentGoalRun && isLiveGoalRunStatus(currentGoalRun.status)) {
+                const error = `build finalization failed: ${persistMessage}`
+                updateGoalRun(goalRunID, {
+                  status: "failed",
+                  error,
+                  time_completed: Date.now(),
+                })
+                goalRunFinalizationFailedLine =
+                  `\n- build_finalization_failed: goal_run ${goalRunID} was marked failed because terminal persistence failed: ` +
+                  `${persistMessage}`
+                if (buildOutcome.kind === "ok") {
+                  buildOutcome.result.result = {
+                    ...buildOutcome.result.result,
+                    status: "failed",
+                    error,
+                    summary: `${buildOutcome.result.result.summary}\n\nGoal run finalization failed after the build report returned.`,
+                  }
+                }
+              }
             }
           }
 
@@ -7386,7 +7404,7 @@ export function createOrchestratorTools(input: {
             `### Build report\n` +
             `- summary: ${result.summary}\n` +
             `- files_changed:\n${fileLines}\n` +
-            `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}\n` +
+            `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}${goalRunFinalizationFailedLine}\n` +
             `- repair_report:\n${repairReportLines}\n` +
             `- tests:\n${testLines}` +
             `${factBlock}\n\n` +

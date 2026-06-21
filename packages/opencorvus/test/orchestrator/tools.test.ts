@@ -7355,7 +7355,6 @@ describe("orchestrator tools", () => {
 
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_goal_build_session_bind_${stamp}`
     const taskID = `tsk_goal_build_session_bind_${stamp}`
     const goalID = `gol_build_session_bind_${stamp}`
     let observedSessionID: string | null | undefined
@@ -7365,8 +7364,10 @@ describe("orchestrator tools", () => {
       directory: tmp.path,
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "build session bind test" })
+        const current = Instance.current()
+        if (!current) throw new Error("Expected current instance while seeding build session bind task")
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: current.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7378,6 +7379,7 @@ describe("orchestrator tools", () => {
           goalSlug: "bind-build-session",
           objective: "Verify live goal_run attempts have a session_id before the build result returns",
           now,
+          insertProject: false,
         })
         buildAgentRunImpl = async (input: any) => {
           expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
@@ -7432,7 +7434,95 @@ describe("orchestrator tools", () => {
         expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe("ses_build_session_bind")
       },
     })
-  })
+  }, { timeout: 15_000 })
+
+  test("goal build background finalize failure does not leave a live goal_run", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_goal_finalize_failure_${stamp}`
+    const goalID = `gol_finalize_failure_${stamp}`
+    const terminal = deferred<void>()
+    const finalize = spyOn(EnginePersist, "finalizeBuildAttempt").mockImplementationOnce(() => {
+      throw new Error("simulated terminal persistence failure")
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal finalize failure test" })
+        const current = Instance.current()
+        if (!current) throw new Error("Expected current instance while seeding goal finalize failure task")
+        insertWorkflowTaskWithGoal({
+          projectID: current.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal finalize failure test",
+          taskTitle: "Goal finalize failure task",
+          request: "Do not leave live goal_run when finalize persistence fails",
+          goalTitle: "Finalize failure guard",
+          goalSlug: "finalize-failure-guard",
+          objective: "Verify background finalization failure reaches terminal failed state",
+          now,
+          insertProject: false,
+        })
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input, "ses_goal_finalize_failure")
+          await terminal.promise
+          return {
+            result: {
+              status: "passed",
+              summary: "Build completed but persistence will fail.",
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed implementation.",
+                  reason: "The test needs a normal passed build result before finalization fails.",
+                },
+              ],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_finalize_failure",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          buildToolOptions(),
+        )
+
+        expect(toolText(result)).toContain("Build agent started (status=running")
+        expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("running")
+
+        terminal.resolve()
+        await waitForCondition(
+          "background goal build finalization failure",
+          () => listGoalRunsByGoal(goalID)[0]?.status === "failed",
+        )
+        const run = listGoalRunsByGoal(goalID)[0]
+        expect(run?.error).toContain("build finalization failed: simulated terminal persistence failure")
+        expect(finalize).toHaveBeenCalledTimes(1)
+      },
+    })
+  }, { timeout: 15_000 })
 
   test("goal build rejects duplicate dispatch while a live goal_run exists", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
