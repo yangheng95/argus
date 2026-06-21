@@ -45,9 +45,9 @@ import {
   findLatestAcceptanceVerdictArtifact,
   findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
-  findLatestResearchBriefArtifact,
   findRuns,
   findTask,
+  listResearchBriefArtifacts,
   listGoalRefillNotificationArtifacts,
   listGoalRunsByGoal,
   listGoals,
@@ -68,6 +68,7 @@ const AGENT_FAILURE_PROMPT_CAP = 5
 const TOOL_EXECUTE_FAILURE_PROMPT_CAP = 5
 const OPEN_TOOL_CALL_PROMPT_CAP = 5
 const TERMINAL_GOAL_REFILL_PROMPT_CAP = 5
+const RESEARCH_BRIEF_DESC_CAP = 4
 
 const TerminalGoalRefillNotificationPayloadSchema = z.object({
   task_id: z.string(),
@@ -225,7 +226,7 @@ export interface TaskDesc {
    *  architect snapshot (its spec_snapshot_id != the active snapshot). Stale
    *  briefs are not injected downstream; the LLM may re-run workload_analysis. */
   workload_stale?: boolean
-  research?: ResearchBriefDesc
+  research?: ResearchBriefDesc[]
   frontend_research?: ResearchBriefDesc
   frontend_design?: FrontendDesignHandoffDesc
   active_run_id?: string
@@ -653,10 +654,12 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const workloadStale =
     workloadArtifact && activeSpec ? workloadArtifact.spec_snapshot_id !== activeSpec.id || undefined : undefined
 
-  const research = describeResearchBriefArtifact({
-    task,
-    artifact: findLatestResearchBriefArtifact(task.id),
-  })
+  const research = listResearchBriefArtifacts(task.id)
+    .slice(0, RESEARCH_BRIEF_DESC_CAP)
+    .flatMap((artifact) => {
+      const desc = describeResearchBriefArtifact({ task, artifact })
+      return desc ? [desc] : []
+    })
   const frontendResearch = describeResearchBriefArtifact({
     task,
     artifact: findLatestFrontendResearchBriefArtifact(task.id),
@@ -762,7 +765,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     plan_summary: planSummary,
     workload_analyzed: workloadAnalyzed,
     workload_stale: workloadStale,
-    research,
+    research: research.length > 0 ? research : undefined,
     frontend_research: frontendResearch,
     frontend_design: frontendDesign,
     active_run_id: activeRunForTask?.id,
@@ -947,7 +950,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   lines.push(renderUserRequestSection({ heading: "## Request", request: desc.request, taskID: desc.id }))
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
-  lines.push(...renderResearchBriefDesc("Deep Research Brief", desc.research))
+  lines.push(...renderResearchBriefDescs("Deep Research Brief", desc.research))
   lines.push(...renderResearchBriefDesc("Frontend Research Brief", desc.frontend_research))
   lines.push(...renderFrontendDesignHandoffDesc(desc.frontend_design))
   if (desc.active_run_id) {
@@ -1142,6 +1145,12 @@ function renderResearchBriefDesc(title: string, desc?: ResearchBriefDesc): strin
     "Research is advisory evidence only. It is not a route selector; choose the next tool from full task context.",
   )
   return lines
+}
+
+function renderResearchBriefDescs(title: string, descs?: ResearchBriefDesc[]): string[] {
+  if (!descs || descs.length === 0) return []
+  if (descs.length === 1) return renderResearchBriefDesc(title, descs[0]!)
+  return descs.flatMap((desc, index) => renderResearchBriefDesc(`${title} ${index + 1}/${descs.length}`, desc))
 }
 
 function renderFrontendDesignHandoffDesc(desc?: FrontendDesignHandoffDesc): string[] {
