@@ -214,6 +214,35 @@ function stageInputDigest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value ?? null)).digest("hex")
 }
 
+const EvidenceSnapshotEntrySchema = z
+  .object({
+    count: z.number().int().nonnegative(),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict()
+
+const EvidenceSnapshotSchema = z.record(z.string(), EvidenceSnapshotEntrySchema)
+
+function evidenceSnapshotCount(value: unknown): number {
+  if (value === null || value === undefined) return 0
+  if (Array.isArray(value)) return value.length
+  return 1
+}
+
+function continuationEvidenceSnapshot(input: Record<string, unknown>): z.infer<typeof EvidenceSnapshotSchema> {
+  return Object.fromEntries(
+    Object.entries(input)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => [
+        key,
+        {
+          count: evidenceSnapshotCount(value),
+          digest: stageInputDigest(value),
+        },
+      ]),
+  )
+}
+
 function taskContinuationScope(task: { title: string; request: string }) {
   return {
     task_title: task.title,
@@ -1161,6 +1190,7 @@ const IntegrityStageInputSchema = z
     active_spec_snapshot_id: z.string().min(1),
     phase: z.enum(["pre_build", "post_build"]),
     goal_ids: z.array(z.string().min(1)),
+    evidence_snapshot: EvidenceSnapshotSchema,
   })
   .strict()
 
@@ -2446,11 +2476,61 @@ export function createOrchestratorTools(input: {
     )
       ? "post_build"
       : "pre_build"
+    const lineage = buildSpecSnapshotLineage({
+      taskID,
+      activeSpecSnapshotID: activeSpec.id,
+    })
+    const goalRunsForReview = listGoalRunsForTask(taskID)
+    const replayContext = buildIntegrityReplayContext({
+      taskID,
+      lineage,
+      phase,
+      goals: goalsForReview,
+      requirements,
+      buildRecords: deliveriesForAcceptance,
+      goalRuns: goalRunsForReview,
+    })
+    const frontendDesignEntries = decisionLog.readByPhase("frontend_design")
+    const visualQaEntries = decisionLog.readByPhase("visual_qa")
+    const frontendDesignContract = frontendDesignEntries
+      .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
+      .join("\n\n")
+    const visualQaContract = visualQaEntries
+      .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
+      .join("\n\n")
+    const projectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
+    const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir, taskID })
+    const latestIntegrityAttempt = findLatestIntegrityAttemptArtifact({
+      taskID,
+      specSnapshotID: activeSpec.id,
+      phase,
+    })
+    const referenceParity = deriveVisualQaReferenceParityContext({
+      taskID,
+      specSnapshotID: activeSpec.id,
+      goals: listGoals(taskID),
+      frontendDesignEntries,
+      visualEvidence,
+    })
     const normalizedStageInput = IntegrityStageInputSchema.parse({
       reason: toolInput.reason,
       active_spec_snapshot_id: activeSpec.id,
       phase,
       goal_ids: dbGoals.map((goal) => goal.id).sort(),
+      evidence_snapshot: continuationEvidenceSnapshot({
+        acceptance_deliveries: deliveriesForAcceptance,
+        acceptance_changed_files: acceptanceChangedFiles,
+        acceptance_diffs: acceptanceDiffs,
+        frontend_design_decisions: frontendDesignEntries,
+        goal_runs: goalRunsForReview,
+        latest_integrity_attempt: latestIntegrityAttempt,
+        latest_visual_evidence_bundle: visualEvidence,
+        requirement_decisions: requirementDecisions,
+        requirement_status: requirementStatus,
+        requirements,
+        replay_context: replayContext,
+        visual_qa_decisions: visualQaEntries,
+      }),
     })
     const continuationInput = toolInput.continuation_artifact_id
       ? integrityContinuationFromArtifact({ taskID: task.id, artifactID: toolInput.continuation_artifact_id })
@@ -2465,43 +2545,14 @@ export function createOrchestratorTools(input: {
       if (
         actual.active_spec_snapshot_id !== expected.active_spec_snapshot_id ||
         actual.phase !== expected.phase ||
-        !sameGoalIDs
+        !sameGoalIDs ||
+        stageInputDigest(actual.evidence_snapshot) !== stageInputDigest(expected.evidence_snapshot)
       ) {
         throw new Error(
-          `integrity continuation ${toolInput.continuation_artifact_id} targets spec=${actual.active_spec_snapshot_id} phase=${actual.phase} goals=${actual.goal_ids.join(",")}; current scope is spec=${expected.active_spec_snapshot_id} phase=${expected.phase} goals=${expected.goal_ids.join(",")}`,
+          `integrity continuation ${toolInput.continuation_artifact_id} scope mismatch; stored spec=${actual.active_spec_snapshot_id} phase=${actual.phase} goals=${actual.goal_ids.join(",")} evidence=${stageInputDigest(actual.evidence_snapshot)}, current spec=${expected.active_spec_snapshot_id} phase=${expected.phase} goals=${expected.goal_ids.join(",")} evidence=${stageInputDigest(expected.evidence_snapshot)}`,
         )
       }
     }
-    const lineage = buildSpecSnapshotLineage({
-      taskID,
-      activeSpecSnapshotID: activeSpec.id,
-    })
-    const replayContext = buildIntegrityReplayContext({
-      taskID,
-      lineage,
-      phase,
-      goals: goalsForReview,
-      requirements,
-      buildRecords: deliveriesForAcceptance,
-      goalRuns: listGoalRunsForTask(taskID),
-    })
-    const frontendDesignEntries = decisionLog.readByPhase("frontend_design")
-    const frontendDesignContract = frontendDesignEntries
-      .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
-      .join("\n\n")
-    const visualQaContract = decisionLog
-      .readByPhase("visual_qa")
-      .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
-      .join("\n\n")
-    const projectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
-    const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir, taskID })
-    const referenceParity = deriveVisualQaReferenceParityContext({
-      taskID,
-      specSnapshotID: activeSpec.id,
-      goals: listGoals(taskID),
-      frontendDesignEntries,
-      visualEvidence,
-    })
 
     let activeOwnership: OrchestratorToolOwnershipPayload | undefined
     let ownershipClosed = false
@@ -4543,39 +4594,50 @@ export function createOrchestratorTools(input: {
         }
 
         const decisionLog = createDecisionLog(taskID)
-        const frontendDesign = renderVisualQaFrontendDesignContext(decisionLog.readByPhase("frontend_design"))
+        const frontendDesignEntries = decisionLog.readByPhase("frontend_design")
+        const frontendResearchBriefs = findNonStaleFrontendResearchBriefs({
+          taskID,
+          request: task.request,
+        })
+        const buildDeliveries = findDeliveriesForTask(taskID)
+        const priorVisualQaEntries = decisionLog.readByPhase("visual_qa")
+        const frontendDesign = renderVisualQaFrontendDesignContext(frontendDesignEntries)
         const frontendResearch = renderVisualQaFrontendResearchContext(
-          findNonStaleFrontendResearchBriefs({
-            taskID,
-            request: task.request,
-          }).map((entry) => entry.brief),
+          frontendResearchBriefs.map((entry) => entry.brief),
         )
-        const buildEvidence = renderVisualQaBuildEvidenceContext(findDeliveriesForTask(taskID))
-        const priorVisualQa = renderVisualQaPriorReportContext(decisionLog.readByPhase("visual_qa"))
+        const buildEvidence = renderVisualQaBuildEvidenceContext(buildDeliveries)
+        const priorVisualQa = renderVisualQaPriorReportContext(priorVisualQaEntries)
         const activeSpec = findActiveSpecForTask(taskID)
         const activeGoals = listGoals(taskID)
         const projectRoot = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
         const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir: projectRoot, taskID })
-        const integrityContext = renderVisualQaIntegrityContext(
-          activeSpec
-            ? findLatestIntegrityAttemptArtifact({
-                taskID,
-                specSnapshotID: activeSpec.id,
-                phase: "post_build",
-              })
-            : undefined,
-        )
+        const latestIntegrityAttempt = activeSpec
+          ? findLatestIntegrityAttemptArtifact({
+              taskID,
+              specSnapshotID: activeSpec.id,
+              phase: "post_build",
+            })
+          : undefined
+        const integrityContext = renderVisualQaIntegrityContext(latestIntegrityAttempt)
         const referenceParity = deriveVisualQaReferenceParityContext({
           taskID,
           specSnapshotID: activeSpec?.id,
           goals: activeGoals,
-          frontendDesignEntries: decisionLog.readByPhase("frontend_design"),
+          frontendDesignEntries,
           visualEvidence,
         })
         const normalizedStageInput = {
           task: taskContinuationScope(task),
           active_spec: specContinuationScope(activeSpec),
           goals: goalsContinuationScope(activeGoals),
+          evidence_snapshot: continuationEvidenceSnapshot({
+            frontend_design_decisions: frontendDesignEntries,
+            frontend_research_briefs: frontendResearchBriefs,
+            build_deliveries: buildDeliveries,
+            prior_visual_qa_decisions: priorVisualQaEntries,
+            latest_visual_evidence_bundle: visualEvidence,
+            latest_integrity_attempt: latestIntegrityAttempt,
+          }),
         }
 
         try {
