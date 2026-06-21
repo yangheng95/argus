@@ -488,6 +488,47 @@ describe("frontend-design prompt assembly", () => {
     }
   }, 30_000)
 
+  test("task-scoped skeleton project tool rejects output outside frontend-design-skeleton evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_frontend_skeleton_output_guard"
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedFrontendPromptTask(taskID)
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        await writeAuditFixtureSourcePackage(path.dirname(paths.sourcePackageAbsolute))
+        const tools = createFrontendSkeletonProjectTool({ taskID })
+        const outsideName = `outside-${Date.now().toString(36)}`
+
+        await expect(
+          (tools.create_frontend_skeleton_project as any).execute(
+            {
+              outputDir: "web-clone-target",
+              overwrite: true,
+            },
+            {},
+          ),
+        ).rejects.toThrow("outputDir must be the frontend-design-skeleton evidence directory")
+        await expect(
+          (tools.create_frontend_skeleton_project as any).execute(
+            {
+              outputDir: `../${outsideName}`,
+              overwrite: true,
+            },
+            {},
+          ),
+        ).rejects.toThrow("outputDir must be the frontend-design-skeleton evidence directory")
+
+        expect(await Filesystem.exists(path.join(tmp.path, "web-clone-target"))).toBe(false)
+        expect(await Filesystem.exists(path.resolve(tmp.path, "..", outsideName))).toBe(false)
+
+        const result = await (tools.create_frontend_skeleton_project as any).execute({ overwrite: true }, {})
+        expect(result.metadata.outputDir).toBe(paths.skeletonProjectAbsolute)
+      },
+    })
+  }, 30_000)
+
   test("frontend_design runtime tool groups are static and complete", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-static-tools-"))
     await Instance.provide({

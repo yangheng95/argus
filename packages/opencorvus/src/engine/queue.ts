@@ -40,7 +40,8 @@ type QueuedVolatileTaskEvent = {
 }
 
 type QueuedOperatorWakePayload = {
-  message_id: string
+  wake_id: string
+  message_id?: string
   event: OrchestratorEvent
   time_queued: number
 }
@@ -87,7 +88,7 @@ function pendingQueuedOperatorWakeTaskIDs(): string[] {
 
 function enqueueTaskEvent(taskID: string, event: OrchestratorEvent): void {
   const messageID = event.operatorMessage?.messageID?.trim()
-  if (messageID) {
+  if (messageID || event.operatorIntent) {
     persistQueuedOperatorWake(taskID, event, messageID)
     return
   }
@@ -100,24 +101,27 @@ function enqueueTaskEvent(taskID: string, event: OrchestratorEvent): void {
   queuedTaskEvents.set(taskID, events)
 }
 
-function persistQueuedOperatorWake(taskID: string, event: OrchestratorEvent, messageID: string): void {
-  const exists = Database.use((db) =>
-    db
-      .select({ id: EngineArtifactTable.id })
-      .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "queued_operator_wake"),
-          sql`json_extract(${EngineArtifactTable.payload}, '$.message_id') = ${messageID}`,
-        ),
-      )
-      .get(),
-  )
-  if (exists) return
+function persistQueuedOperatorWake(taskID: string, event: OrchestratorEvent, messageID: string | undefined): void {
+  if (messageID) {
+    const exists = Database.use((db) =>
+      db
+        .select({ id: EngineArtifactTable.id })
+        .from(EngineArtifactTable)
+        .where(
+          and(
+            eq(EngineArtifactTable.task_id, taskID),
+            eq(EngineArtifactTable.kind, "queued_operator_wake"),
+            sql`json_extract(${EngineArtifactTable.payload}, '$.message_id') = ${messageID}`,
+          ),
+        )
+        .get(),
+    )
+    if (exists) return
+  }
   const now = Date.now()
   const payload: QueuedOperatorWakePayload = {
-    message_id: messageID,
+    wake_id: messageID ?? Identifier.ascending("artifact"),
+    ...(messageID ? { message_id: messageID } : {}),
     event,
     time_queued: now,
   }
@@ -416,6 +420,15 @@ export function drainQueuedTaskEventIfUnowned(taskID: string): boolean {
   attachLoopCompletion(taskID, cwd, launchTaskLoop(taskID, queuedEvent))
   log.info("drained queued wake after orchestrator tool ownership cleared", { taskID })
   return true
+}
+
+export function drainPendingQueuedOperatorWakes(): number {
+  const taskIDs = [...new Set(pendingQueuedOperatorWakeTaskIDs())]
+  let drained = 0
+  for (const taskID of taskIDs) {
+    if (drainQueuedTaskEventIfUnowned(taskID)) drained += 1
+  }
+  return drained
 }
 
 /**

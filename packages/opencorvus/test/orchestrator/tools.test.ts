@@ -1936,6 +1936,7 @@ describe("orchestrator tools", () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const taskID = `tsk_frontend_research_unavailable_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
 
     await Instance.provide({
       directory: tmp.path,
@@ -2018,6 +2019,8 @@ describe("orchestrator tools", () => {
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const consumedResult = await tools.frontend_research.execute(
@@ -2044,6 +2047,16 @@ describe("orchestrator tools", () => {
         expect(claimFailedText).toContain("claim_failed")
         expect(claimFailedText).toContain("append recovery prompt failed")
         expect(calls).toBe(0)
+        const statuses = Database.use((db) =>
+          db
+            .select({ payload: ProtocolEventTable.payload })
+            .from(ProtocolEventTable)
+            .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+            .all()
+            .filter((event) => event.payload?.stepID === "frontend_research")
+            .map((event) => String(event.payload?.status ?? "")),
+        )
+        expect(statuses).toEqual(["running", "completed", "running", "completed"])
       },
     })
   })
@@ -2319,15 +2332,16 @@ describe("orchestrator tools", () => {
             .run()
         })
 
-        await expect(
-          tools.workload_analysis.execute(
-            {
-              reason: "Continue previous workload finalizer miss.",
-              continuation_artifact_id: continuationArtifactID,
-            },
-            buildToolOptions("workload_analysis"),
-          ),
-        ).rejects.toThrow(/scope mismatch/)
+        const staleResult = await tools.workload_analysis.execute(
+          {
+            reason: "Continue previous workload finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("workload_analysis"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh workload_analysis")
         expect(calls).toBe(1)
       },
     })
@@ -2495,15 +2509,16 @@ describe("orchestrator tools", () => {
           reason: "test evidence changed after continuation capture",
         })
 
-        await expect(
-          tools.visual_qa.execute(
-            {
-              reason: "Continue stale visual QA after evidence changed.",
-              continuation_artifact_id: continuationArtifactID,
-            },
-            buildToolOptions("visual_qa_stale_evidence"),
-          ),
-        ).rejects.toThrow(/scope mismatch/)
+        const staleResult = await tools.visual_qa.execute(
+          {
+            reason: "Continue stale visual QA after evidence changed.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("visual_qa_stale_evidence"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh visual_qa")
         expect(calls).toBe(1)
       },
     })
@@ -2693,15 +2708,16 @@ describe("orchestrator tools", () => {
           reason: "test evidence changed after continuation capture",
         })
 
-        await expect(
-          tools.integrity.execute(
-            {
-              reason: "Continue stale integrity after visual QA changed.",
-              continuation_artifact_id: continuationArtifactID,
-            },
-            buildToolOptions("integrity_stale_evidence"),
-          ),
-        ).rejects.toThrow(/scope mismatch/)
+        const staleResult = await tools.integrity.execute(
+          {
+            reason: "Continue stale integrity after visual QA changed.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("integrity_stale_evidence"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh integrity")
         expect(calls).toBe(1)
         expect(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })).toBeUndefined()
       },
@@ -6283,12 +6299,13 @@ describe("orchestrator tools", () => {
             .run()
         })
 
-        await expect(
-          tools.architect.execute(
-            { reason: "continue previous architect finalizer miss", continuation_artifact_id: continuationArtifactID },
-            buildToolOptions(),
-          ),
-        ).rejects.toThrow(/scope mismatch/)
+        const staleResult = await tools.architect.execute(
+          { reason: "continue previous architect finalizer miss", continuation_artifact_id: continuationArtifactID },
+          buildToolOptions(),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh architect")
         expect(coordinateCalls).toBe(1)
       },
     })

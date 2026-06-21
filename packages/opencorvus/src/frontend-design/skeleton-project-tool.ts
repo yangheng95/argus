@@ -55,8 +55,11 @@ export function createFrontendSkeletonProjectTool(
           params.sourcePackageDir ?? requireTaskRuntimeDefault(defaults?.sourcePackageAbsolute, "sourcePackageDir"),
           projectRoot,
         )
-        const outputDir = resolveProjectPath(
-          params.outputDir ?? requireTaskRuntimeDefault(defaults?.skeletonProjectAbsolute, "outputDir"),
+        const outputDir = resolveSkeletonOutputDir(
+          {
+            requested: params.outputDir,
+            defaultOutputDir: defaults?.skeletonProjectAbsolute,
+          },
           projectRoot,
         )
         let result: Awaited<ReturnType<typeof generateWebCloneSourceProject>>
@@ -129,4 +132,30 @@ function requireTaskRuntimeDefault(value: string | undefined, field: string): st
 
 function resolveProjectPath(inputPath: string, projectRoot: string): string {
   return path.isAbsolute(inputPath) ? path.resolve(inputPath) : path.resolve(projectRoot, inputPath)
+}
+
+function resolveSkeletonOutputDir(
+  input: { requested: string | undefined; defaultOutputDir: string | undefined },
+  projectRoot: string,
+): string {
+  const outputDir = resolveProjectPath(
+    input.requested ?? requireTaskRuntimeDefault(input.defaultOutputDir, "outputDir"),
+    projectRoot,
+  )
+  const expectedOutputDir = input.defaultOutputDir
+    ? path.resolve(input.defaultOutputDir)
+    : path.resolve(projectRoot, "frontend-design-skeleton")
+  if (!sameResolvedPath(outputDir, expectedOutputDir)) {
+    const expectedRef = input.defaultOutputDir ? expectedOutputDir : "frontend-design-skeleton"
+    throw new Error(
+      `create_frontend_skeleton_project outputDir must be the frontend-design-skeleton evidence directory (${expectedRef}); received ${outputDir}`,
+    )
+  }
+  return outputDir
+}
+
+function sameResolvedPath(left: string, right: string): boolean {
+  const a = path.normalize(left)
+  const b = path.normalize(right)
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b
 }
