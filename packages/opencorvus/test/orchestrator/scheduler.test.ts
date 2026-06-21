@@ -50,11 +50,11 @@ describe("orchestrator scheduler invariants", () => {
       resetGoalStatuses: true,
       retireGoalRuns: true,
       queueFreshRun: true,
-      nextAction: "submit_execution",
+      nextAction: "build",
     })
   })
 
-  test("executor restart falls back to create_run when no plan is active", () => {
+  test("executor restart routes back to architect when no plan is active", () => {
     expect(restartStagePlan("executor", false)).toEqual({
       clearSpec: false,
       clearPlan: false,
@@ -62,7 +62,15 @@ describe("orchestrator scheduler invariants", () => {
       resetGoalStatuses: true,
       retireGoalRuns: true,
       queueFreshRun: false,
-      nextAction: "create_run",
+      nextAction: "architect",
     })
+  })
+
+  test("restart plans do not expose removed dispatch tool names", () => {
+    const payload = JSON.stringify([restartStagePlan("executor", true), restartStagePlan("executor", false)])
+    expect(payload).not.toContain("submit_execution")
+    expect(payload).not.toContain("create_run")
+    expect(payload).not.toContain("retry_goal")
+    expect(payload).not.toContain("dispatch_goal")
   })
 })
