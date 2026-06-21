@@ -168,6 +168,12 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         .success,
     ).toBe(true)
     expect(
+      tools.frontend_design.inputSchema!.safeParse({
+        reason: "ambiguous multi-page live clone reference",
+        urls: ["https://example.com/one", "https://example.com/two"],
+      }).success,
+    ).toBe(false)
+    expect(
       tools.frontend_design.inputSchema!.safeParse({ reason: "old single-url field", url: "https://example.com" })
         .success,
     ).toBe(false)
