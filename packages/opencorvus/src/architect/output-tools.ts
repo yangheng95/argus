@@ -839,10 +839,6 @@ export function createArchitectOutputTools(input: {
         if (internalRuntimePaths.length > 0) {
           return formatInternalRuntimeOwnedPathError(parsedGoal.id, internalRuntimePaths)
         }
-        const unknownContractIDs = unknownContractAuditContractIDs(collector, parsedGoal.acceptance_specs)
-        if (unknownContractIDs.length > 0) {
-          return `Error: goal "${parsedGoal.id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
-        }
         const scriptRefIssues = scriptRefValidationIssues(parsedGoal, dir)
         if (scriptRefIssues.length > 0) {
           return scriptRefError(parsedGoal.id, scriptRefIssues)
@@ -872,6 +868,10 @@ export function createArchitectOutputTools(input: {
         collector.removed_goal_ids = collector.removed_goal_ids.filter((id) => id !== parsedGoal.id)
         if (warnings.length > 0) {
           msg += `\nWarning: paths without an existing parent directory: ${warnings.join(", ")}. Verify these are intentional.`
+        }
+        const forwardContractIDs = unknownContractAuditContractIDs(collector, parsedGoal.acceptance_specs)
+        if (forwardContractIDs.length > 0) {
+          msg += `\nNotice: contract_audit forward reference(s) pending registration: ${forwardContractIDs.join(", ")}. Register matching contract ids before submit_architect.`
         }
         msg += formatOwnedPathNormalizationNotice(normalized.changes)
         return `${msg}\nCurrent: ${formatGoalSnapshot(parsedGoal)}`
@@ -912,12 +912,6 @@ export function createArchitectOutputTools(input: {
         if (internalRuntimePaths.length > 0) {
           return formatInternalRuntimeOwnedPathError(id, internalRuntimePaths)
         }
-        if (updates.acceptance_specs !== undefined) {
-          const unknownContractIDs = unknownContractAuditContractIDs(collector, next.acceptance_specs)
-          if (unknownContractIDs.length > 0) {
-            return `Error: goal "${id}" contract_audit references unknown contract id(s): ${unknownContractIDs.join(", ")}. Use contract ids returned by register_contract; collector unchanged.`
-          }
-        }
         const scriptRefIssues = scriptRefValidationIssues(next, dir)
         if (scriptRefIssues.length > 0) {
           return scriptRefError(id, scriptRefIssues)
@@ -933,7 +927,12 @@ export function createArchitectOutputTools(input: {
           return `No changes: goal "${id}" already matches the submitted updates.\nCurrent: ${formatGoalSnapshot(prior)}`
         }
         collector.goals[idx] = next
-        return `OK: goal "${id}" fields updated (${changedFields.join(", ")})${formatOwnedPathNormalizationNotice(normalized.changes)}\nCurrent: ${formatGoalSnapshot(next)}`
+        const forwardContractIDs = unknownContractAuditContractIDs(collector, next.acceptance_specs)
+        const contractNotice =
+          forwardContractIDs.length > 0
+            ? `\nNotice: contract_audit forward reference(s) pending registration: ${forwardContractIDs.join(", ")}. Register matching contract ids before submit_architect.`
+            : ""
+        return `OK: goal "${id}" fields updated (${changedFields.join(", ")})${contractNotice}${formatOwnedPathNormalizationNotice(normalized.changes)}\nCurrent: ${formatGoalSnapshot(next)}`
       },
     }),
 

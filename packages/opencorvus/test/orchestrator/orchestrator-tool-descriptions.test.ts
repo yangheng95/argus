@@ -125,14 +125,32 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     ).toBe(false)
     expect(tools.frontend_design.inputSchema!.safeParse({ urls: ["https://example.com"] }).success).toBe(false)
 
-    expect(Object.keys(tools.frontend_research.inputSchema!.shape)).toEqual(["reason", "source_urls", "focus"])
+    expect(Object.keys(tools.frontend_research.inputSchema!.shape)).toEqual([
+      "reason",
+      "source_urls",
+      "focus",
+      "continuation_artifact_id",
+    ])
     expect(
       tools.frontend_research.inputSchema!.safeParse({
         reason: "publish investigation packets",
         source_urls: ["https://example.com"],
       }).success,
     ).toBe(true)
-    expect(tools.frontend_research.inputSchema!.safeParse({ reason: "missing urls" }).success).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "continue prior frontend research",
+        continuation_artifact_id: "art_frontend_research_continue",
+      }).success,
+    ).toBe(true)
+    expect(tools.frontend_research.inputSchema!.safeParse({ reason: "missing mode" }).success).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "ambiguous frontend research mode",
+        source_urls: ["https://example.com"],
+        continuation_artifact_id: "art_frontend_research_continue",
+      }).success,
+    ).toBe(false)
 
     expect(Object.keys(tools.visual_qa.inputSchema!.shape)).toEqual(["reason", "focus", "app_url", "preview_command"])
     expect(tools.visual_qa.inputSchema!.safeParse({ reason: "need fresh visual evidence" }).success).toBe(true)

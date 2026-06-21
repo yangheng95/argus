@@ -637,9 +637,8 @@ test("submit_architect reports zero graph contracts as a concern without blockin
   expect(kit.getCollector().finalized).toBe(true)
 })
 
-test("register_goal rejects unknown contract_audit ids without mutating collector goals", async () => {
+test("register_goal accepts forward contract_audit ids and final validation blocks if unresolved", async () => {
   const kit = await registerTwoGoalGraph()
-  const before = JSON.stringify(kit.getCollector().goals)
 
   const out = await kit.tools.register_goal.execute!(
     {
@@ -656,14 +655,30 @@ test("register_goal rejects unknown contract_audit ids without mutating collecto
     {} as any,
   )
 
-  expect(out).toContain("unknown contract id(s): missing_contract")
-  expect(out).toContain("collector unchanged")
-  expect(JSON.stringify(kit.getCollector().goals)).toBe(before)
+  expect(out).toContain('OK: goal "goal_ui" updated in-place')
+  expect(out).toContain("contract_audit forward reference(s) pending registration: missing_contract")
+  expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.acceptance_specs[0]?.scorers[0]).toMatchObject(
+    {
+      type: "contract_audit",
+    },
+  )
+
+  const submitOut = await kit.tools.submit_architect.execute!(
+    {
+      summary: "Graph with unresolved forward contract reference.",
+      decomposition_analysis:
+        "The goal may be registered before its graph contract, but final validation must still reject unresolved contract ids.",
+    } as any,
+    {} as any,
+  )
+
+  expect(submitOut).toContain("BLOCKERS")
+  expect(submitOut).toContain("contract_audit references unknown graph contract missing_contract")
+  expect(kit.getCollector().finalized).toBe(false)
 })
 
-test("modify_goal rejects unknown contract_audit ids without mutating prior goal", async () => {
+test("modify_goal accepts forward contract_audit ids and keeps final validation authoritative", async () => {
   const kit = await registerTwoGoalGraph()
-  const before = JSON.stringify(kit.getCollector().goals.find((goal) => goal.id === "goal_ui"))
 
   const out = await kit.tools.modify_goal.execute!(
     {
@@ -675,9 +690,13 @@ test("modify_goal rejects unknown contract_audit ids without mutating prior goal
     {} as any,
   )
 
-  expect(out).toContain("unknown contract id(s): missing_contract")
-  expect(out).toContain("collector unchanged")
-  expect(JSON.stringify(kit.getCollector().goals.find((goal) => goal.id === "goal_ui"))).toBe(before)
+  expect(out).toContain('OK: goal "goal_ui" fields updated')
+  expect(out).toContain("contract_audit forward reference(s) pending registration: missing_contract")
+  expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.acceptance_specs[0]?.scorers[0]).toMatchObject(
+    {
+      type: "contract_audit",
+    },
+  )
 })
 
 test("register_goal and modify_goal accept contract_audit ids after contract registration", async () => {

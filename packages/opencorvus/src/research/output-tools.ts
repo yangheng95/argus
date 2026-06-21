@@ -296,6 +296,22 @@ function upsertByID<T extends { id: string }>(items: T[], item: T): "registered"
   return "registered"
 }
 
+function knownFactIDs(collector: ResearchCollector): Set<string> {
+  return new Set(collector.facts.map((fact) => fact.id))
+}
+
+function unknownFactIDError(collector: ResearchCollector, label: string, ids: readonly string[]): string | undefined {
+  const known = knownFactIDs(collector)
+  const missing = [...new Set(ids.filter((id) => !known.has(id)))]
+  if (missing.length === 0) return undefined
+  const knownList = [...known].sort()
+  return (
+    `Error: ${label} references unknown fact id(s): ${missing.join(", ")}. ` +
+    `Register or correct the fact ids first; known fact ids: ${knownList.length ? knownList.join(", ") : "(none)"}. ` +
+    "Collector unchanged."
+  )
+}
+
 function upsertBundleSection(
   collector: ResearchCollector,
   section: z.infer<typeof ResearchBundleMarkdownSectionSchema>,
@@ -404,6 +420,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchInferenceSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `inference "${parsed.id}".based_on_fact_ids`, parsed.based_on_fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.inferences, parsed)
         return `OK: inference "${parsed.id}" ${mode} (${collector.inferences.length} total)`
       },
@@ -416,6 +434,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchProblemStatementSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `problem "${parsed.id}".fact_ids`, parsed.fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.problem_statements, parsed)
         return `OK: problem "${parsed.id}" ${mode} (${collector.problem_statements.length} total)`
       },
@@ -428,6 +448,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchUserNeedSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `need "${parsed.id}".fact_ids`, parsed.fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.user_needs, parsed)
         return `OK: need "${parsed.id}" ${mode} (${collector.user_needs.length} total)`
       },
@@ -440,6 +462,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchConstraintSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `constraint "${parsed.id}".fact_ids`, parsed.fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.constraints, parsed)
         return `OK: constraint "${parsed.id}" ${mode} (${collector.constraints.length} total)`
       },
@@ -571,6 +595,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchOpenQuestionSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `open_question "${parsed.id}".related_fact_ids`, parsed.related_fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.open_questions, parsed)
         return `OK: open question "${parsed.id}" ${mode} (${collector.open_questions.length} total)`
       },

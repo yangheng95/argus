@@ -12,6 +12,7 @@ import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { Log } from "@/util/log"
 import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
 import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
@@ -66,6 +67,7 @@ export namespace DeepResearchAgent {
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
+    continuation?: AgentSessionContinuation
     onSessionCreated?: (sessionID: string) => void
   }
 
@@ -97,17 +99,21 @@ export async function runResearchSession(
   config: ResearchSessionConfig,
 ): Promise<DeepResearchAgent.RunResult> {
   const sessionTitle = `${config.sessionTitlePrefix}: ${input.title}`
-  const session = await Session.createNext({
-    kind: config.kind,
-    parentID: input.parentSessionID,
-    title: sessionTitle,
-    directory: Instance.directory,
-  })
-  input.onSessionCreated?.(session.id)
+  const session = input.continuation
+    ? await Session.get(input.continuation.sessionID)
+    : await Session.createNext({
+        kind: config.kind,
+        parentID: input.parentSessionID,
+        title: sessionTitle,
+        directory: Instance.directory,
+      })
+  if (!input.continuation) input.onSessionCreated?.(session.id)
 
   let webpagePrdEvidence: WebpagePrdEvidence | undefined
   try {
-    webpagePrdEvidence = await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
+    webpagePrdEvidence = input.continuation
+      ? undefined
+      : await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
   } catch (err) {
     SessionStatus.set(session.id, {
       type: "terminal",
@@ -144,6 +150,7 @@ export async function runResearchSession(
     taskID: input.taskID,
     model: input.model,
     signal: input.signal,
+    continuation: input.continuation,
     onStatus: input.onStatus,
     toolKit: {
       tools: { ...retrievalTools, ...utilityTools, ...outputToolKit.tools },

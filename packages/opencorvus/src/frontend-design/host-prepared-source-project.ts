@@ -105,7 +105,7 @@ export async function summarizeHostPreparedSourceAudit(input: {
   }
   lines.push(
     "Supervision rule: a passing visual_baseline_allowed audit proves only traceable captured-source baseline adoption. " +
-      "A maintainable final remains unproven until maintainable_replacement_required passes with rendered screenshot review evidence.",
+      "A maintainable final remains unproven until maintainable_replacement_required passes with structured rendered screenshot review evidence.",
   )
   return lines.join("\n")
 }
@@ -598,7 +598,7 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
     "",
     "The host already prepared the frontend-design high-fidelity skeleton evidence project before this model turn. Do not call `create_frontend_skeleton_project` again unless status is blocked and you can name a different output path.",
     "Host-prepared means source evidence exists; it does not mean the frontend template or visual HTML skeleton is already designed. Use `read_file`, `list_directory`, `find_files`, and `search_code` to inspect the bounded task-runtime evidence and any existing frontend app constraints before finalizing. Do not call webpage evidence acquisition tools again unless the host-prepared status is blocked and you can name the exact missing evidence.",
-    "Register `frontend-design-skeleton` only as captured source evidence. Register the current workflow output as `frontend_project.role=visual_baseline_input` when frontend_design has restored a separate static HTML/CSS visual skeleton; do not register implementation_target unless the operator explicitly combines skeleton restoration and full project transcription in this same pass.",
+    "Register `frontend-design-skeleton` only as captured source evidence. Register the current workflow output as `frontend_project.role=visual_baseline_input` only when frontend_design has restored a separate static HTML/CSS visual skeleton and recorded structured `visual_validation_evidence`. When the operator requires production-mergeable implementation, strict project design-system/component reuse, real component semantics, accessibility, no primitive/static substitutes, or generated-output replacement in this same pass, register a real maintainable scaffold as `implementation_target` or report `blocked` with the missing implementation/screenshot evidence.",
     "Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton` as the final deliverable. Create or populate the task-scoped visual HTML skeleton first; all screenshot inspection and parity repair commands for this workflow must target that skeleton.",
     "Use the visual HTML skeleton restoration algorithm inside the normal frontend-design agent flow: source map, region map, one replacement decision per visual region, then HTML/CSS/assets/content restoration with source data/content extraction, HTML boundary, scoped style ownership, asset ownership, interaction-state visuals, and task-scoped screenshot inspection evidence. Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.",
     `Visual iteration viewport matrix: ${visualIterationMatrix}`,
@@ -631,10 +631,10 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
   lines.push("")
   lines.push("# Finalization")
   lines.push(
-    "After bounded evidence read/review plus visual HTML skeleton restoration you can complete with the exposed tools, call `submit_frontend_template` with the full frontend-design contract. The report must identify the skeleton as `visual_baseline_input`, describe completed visual-region restorations, and name any unfinished visual/source debt as frontend_design incomplete/blocked work.",
+    "After bounded evidence read/review plus visual HTML skeleton restoration you can complete with the exposed tools only when structured `visual_validation_evidence` proves the visual skeleton usable with no blocking debt, then call `submit_frontend_template` with the full frontend-design contract. The report must identify the skeleton as `visual_baseline_input`, describe completed visual-region restorations, and name any unfinished visual/source debt as frontend_design incomplete/blocked work. Production/design-system implementation tasks must instead report a real `implementation_target` or `blocked`.",
   )
   lines.push(
-    "Host-prepared webpage rawproject refinement uses `final_acceptance_mode=visual_baseline_allowed` for the first workflow; deferred regions must be reported as unfinished visual/source debt. If compact evidence leaves a named uncertainty, resolve it by reading the smallest relevant source file excerpt instead of replacing agent reasoning with a host-generated generic report.",
+    "Host-prepared webpage rawproject refinement uses `final_acceptance_mode=visual_baseline_allowed` only for screenshot-reviewed visual-skeleton first workflows; deferred regions must be reported as unfinished visual/source debt. Use `maintainable_replacement_required` for production-mergeable implementation, target design-system/component reuse, real component semantics, accessibility, no primitive/static substitutes, or same-pass generated-output replacement. If compact evidence leaves a named uncertainty, resolve it by reading the smallest relevant source file excerpt instead of replacing agent reasoning with a host-generated generic report.",
   )
   return lines.join("\n")
 }
