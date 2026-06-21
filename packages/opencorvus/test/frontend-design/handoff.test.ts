@@ -67,6 +67,24 @@ test("frontend-design handoff is empty before canonical decision-log entries exi
   })
 })
 
+test("frontend-design handoff stays empty when only reference artifacts exist", async () => {
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      createDecisionLog(taskID).append({
+        phase: "frontend_design",
+        key: "reference_artifacts",
+        value: "visual-html-skeleton/screenshots/desktop.png",
+        reason: "visual qa reference artifact only",
+      })
+
+      expect(renderFrontendDesignHandoffReference(taskID)).toBe("")
+      expect(renderFrontendDesignHandoffReference(taskID, { includeExcerpts: false })).toBe("")
+      expect(renderFrontendDesignHandoffReference(taskID, { pathMode: "absolute" })).toBe("")
+    },
+  })
+})
+
 test("frontend-design handoff points to source files and keeps excerpts bounded", async () => {
   await Instance.provide({
     directory: tmp.path,

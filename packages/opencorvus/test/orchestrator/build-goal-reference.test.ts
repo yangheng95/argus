@@ -175,6 +175,12 @@ describe("orchestrator build goal references", () => {
         const decisionLog = createDecisionLog(ids.taskID)
         decisionLog.append({
           phase: "frontend_design",
+          key: "public_report",
+          value: "Frontend design public report exists for goal build context path resolution.",
+          reason: "goal build context path regression",
+        })
+        decisionLog.append({
+          phase: "frontend_design",
           key: "frontend_project",
           value: "status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton",
           reason: "goal build context path regression",
