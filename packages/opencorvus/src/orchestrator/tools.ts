@@ -906,34 +906,63 @@ const DeepResearchInputSchema = z
   .superRefine((input, ctx) => {
     const hasContinuation =
       typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
-    const hasSourceUrls = Array.isArray(input.source_urls) && input.source_urls.length > 0
-    if (!hasContinuation || !hasSourceUrls) return
-    ctx.addIssue({
-      code: "custom",
-      path: ["source_urls"],
-      message:
-        "deep_research continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh source_urls.",
-    })
+    if (!hasContinuation) return
+
+    const freshFields = [
+      input.target_deliverable ? "target_deliverable" : undefined,
+      Array.isArray(input.source_urls) && input.source_urls.length > 0 ? "source_urls" : undefined,
+      typeof input.focus === "string" && input.focus.length > 0 ? "focus" : undefined,
+    ].filter((field): field is string => Boolean(field))
+
+    for (const field of freshFields) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          "deep_research continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh research scope fields.",
+      })
+    }
   })
 
-const VisualQaInputSchema = z.object({
-  reason: z
-    .string()
-    .min(1)
-    .describe("Why dedicated frontend visual GUI fidelity and functional testing is useful now."),
-  focus: z.string().optional().describe("Optional narrowed region/state/viewport focus for visual QA."),
-  app_url: z
-    .string()
-    .optional()
-    .describe("Known preview URL to inspect. Omit when the agent should discover/start preview from scripts."),
-  preview_command: z
-    .string()
-    .optional()
-    .describe(
-      "Suggested project command to start the real preview target. Use Node for Playwright/browser automation on Windows.",
-    ),
-  continuation_artifact_id: StageContinuationArtifactIDField,
-})
+const VisualQaInputSchema = z
+  .object({
+    reason: z
+      .string()
+      .min(1)
+      .describe("Why dedicated frontend visual GUI fidelity and functional testing is useful now."),
+    focus: z.string().optional().describe("Optional narrowed region/state/viewport focus for visual QA."),
+    app_url: z
+      .string()
+      .optional()
+      .describe("Known preview URL to inspect. Omit when the agent should discover/start preview from scripts."),
+    preview_command: z
+      .string()
+      .optional()
+      .describe(
+        "Suggested project command to start the real preview target. Use Node for Playwright/browser automation on Windows.",
+      ),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .superRefine((input, ctx) => {
+    const hasContinuation =
+      typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    if (!hasContinuation) return
+
+    const freshFields = [
+      typeof input.focus === "string" && input.focus.length > 0 ? "focus" : undefined,
+      typeof input.app_url === "string" && input.app_url.length > 0 ? "app_url" : undefined,
+      typeof input.preview_command === "string" && input.preview_command.length > 0 ? "preview_command" : undefined,
+    ].filter((field): field is string => Boolean(field))
+
+    for (const field of freshFields) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          "visual_qa continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh visual QA scope fields.",
+      })
+    }
+  })
 
 const FactCheckInputSchema = z
   .object({
