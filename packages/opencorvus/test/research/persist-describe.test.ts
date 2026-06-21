@@ -8,8 +8,8 @@ import { describeTask, renderTaskDescription } from "../../src/engine/describe"
 import { projectTaskSteps, WorkflowRegistry } from "../../src/engine/workflow"
 import { researchBriefIsStale } from "../../src/research/staleness"
 import {
-  allResearchEvidenceIDsForTask,
-  frontendResearchEvidenceIDsForTask,
+  allResearchEvidenceRefsForTask,
+  frontendResearchEvidenceRefsForTask,
   renderFrontendResearchArchitectPromptSection,
   renderFrontendResearchBriefPromptSection,
   renderFrontendResearchBuildPromptSection,
@@ -247,8 +247,8 @@ describe("research brief persistence and describe projection", () => {
           expect(findLatestResearchBriefArtifact(taskID)).toBeUndefined()
           const artifact = findLatestFrontendResearchBriefArtifact(taskID)
           expect(artifact?.id).toBe(artifactID)
-          expect(frontendResearchEvidenceIDsForTask({ taskID, request })).toEqual(["ev_1"])
-          expect(allResearchEvidenceIDsForTask({ taskID, request })).toEqual(["ev_1"])
+          expect(frontendResearchEvidenceRefsForTask({ taskID, request })).toEqual(["frontend_research:ev_1"])
+          expect(allResearchEvidenceRefsForTask({ taskID, request })).toEqual(["frontend_research:ev_1"])
 
           const prompt = renderFrontendResearchBriefPromptSection({ taskID, request })
           expect(prompt).toContain("Frontend Research Requirements Digest")
@@ -270,7 +270,7 @@ describe("research brief persistence and describe projection", () => {
           const buildPrompt = renderFrontendResearchBuildPromptSection({ taskID, request })
           expect(buildPrompt).toContain("Compact advisory coverage index from frontend_research")
           expect(buildPrompt).toContain("bundle_paths")
-          expect(buildPrompt).toContain("reference_image_evidence_ids: ev_1")
+          expect(buildPrompt).toContain("reference_image_evidence_refs: frontend_research:ev_1")
           expect(buildPrompt).toContain("Functional surfaces")
           expect(buildPrompt).toContain("Visual layout")
           expect(buildPrompt).toContain("Fidelity risks")
@@ -430,7 +430,53 @@ describe("research brief persistence and describe projection", () => {
           expect(json).toBeDefined()
           const parsed = JSON.parse(json!)
           expect(parsed.document_outline[0].title).toBe("Evidence")
-          expect(parsed.document_outline[0].evidence_ids).toEqual(["ev_1"])
+          expect(parsed.document_outline[0].evidence_refs).toEqual(["deep_research:ev_1"])
+        },
+      })
+    },
+    { timeout: INSTANCE_STARTUP_TIMEOUT_MS },
+  )
+
+  test(
+    "downstream research evidence refs stay source-qualified across deep and frontend briefs",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const projectID = "proj_research_persist_scoped_refs"
+          const taskID = "tsk_research_persist_scoped_refs"
+          seedTask({ projectID, taskID, now: 1_000 })
+
+          persistTaskResearchBrief({
+            taskID,
+            brief: validResearchBriefForTask(taskID),
+            now: 2_000,
+          })
+          persistTaskFrontendResearchBrief({
+            taskID,
+            brief: validResearchBriefForTask(
+              taskID,
+              {
+                summary: "Frontend research source-backed summary.",
+                webpage_contract: validWebpageContract(),
+              },
+              "frontend-research",
+            ),
+            now: 3_000,
+          })
+
+          expect(allResearchEvidenceRefsForTask({ taskID, request })).toEqual([
+            "deep_research:ev_1",
+            "frontend_research:ev_1",
+          ])
+
+          const deepPrompt = renderResearchBriefPromptSection({ taskID, request })
+          const frontendPrompt = renderFrontendResearchBriefPromptSection({ taskID, request })
+          expect(deepPrompt).toContain('"id": "deep_research:ev_1"')
+          expect(deepPrompt).toContain('"source_id": "ev_1"')
+          expect(frontendPrompt).toContain('"id": "frontend_research:ev_1"')
+          expect(frontendPrompt).toContain('"source_id": "ev_1"')
         },
       })
     },

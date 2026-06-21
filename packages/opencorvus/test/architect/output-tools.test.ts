@@ -334,7 +334,7 @@ test("architect normalizes frontend-design source baseline owned paths to accept
   expect(kit.getCollector().goals[0]?.owned_paths).toEqual(["package.json", "src/types/api.ts", "src/hooks/useApi.ts"])
 })
 
-test("architect rejects contract evidence_refs outside active research evidence ids", async () => {
+test("architect rejects contract evidence_refs outside active research evidence refs", async () => {
   const kit = createArchitectOutputTools({
     existingGoals: [
       {
@@ -361,7 +361,7 @@ test("architect rejects contract evidence_refs outside active research evidence 
       },
     ],
     workDir: process.cwd(),
-    knownResearchEvidenceIDs: ["ev_1"],
+    knownResearchEvidenceRefs: ["deep_research:ev_1"],
   })
 
   const result = await kit.tools.register_contract.execute!(
@@ -373,6 +373,48 @@ test("architect rejects contract evidence_refs outside active research evidence 
   )
 
   expect(result).toContain("unknown or stale research evidence")
+  expect(kit.getCollector().contract_graph.contracts).toEqual([])
+})
+
+test("architect rejects ambiguous bare evidence_refs when research sources share an evidence id", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [
+      {
+        id: "goal_model",
+        title: "Model",
+        objective: "Define the shared model contract and code paths used by downstream rendering work.",
+        acceptance_specs: [acceptance("goal_model")],
+        owned_paths: ["src/model.ts"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      },
+      {
+        id: "goal_ui",
+        title: "UI",
+        objective: "Render the UI using only the graph contract produced by the model goal.",
+        acceptance_specs: [acceptance("goal_ui")],
+        owned_paths: ["src/ui.tsx"],
+        depends_on: ["goal_model"],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      },
+    ],
+    workDir: process.cwd(),
+    knownResearchEvidenceRefs: ["deep_research:ev_1", "frontend_research:ev_1"],
+  })
+
+  const result = await kit.tools.register_contract.execute!(
+    {
+      ...contractRef(),
+      evidence_refs: ["ev_1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(result).toContain("unknown or stale research evidence ref")
   expect(kit.getCollector().contract_graph.contracts).toEqual([])
 })
 

@@ -148,7 +148,7 @@ type ArchitectValidationInput = {
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
   knownRequirementIDs?: string[]
-  knownResearchEvidenceIDs?: string[]
+  knownResearchEvidenceRefs?: string[]
 }
 
 function toRegisteredGoal(input: unknown): RegisteredGoal {
@@ -519,14 +519,14 @@ export function architectValidationFindings(
     }),
   )
 
-  if (input?.knownResearchEvidenceIDs) {
-    const knownEvidenceIDs = new Set(input.knownResearchEvidenceIDs)
+  if (input?.knownResearchEvidenceRefs) {
+    const knownEvidenceRefs = new Set(input.knownResearchEvidenceRefs)
     for (const contract of collector.contract_graph.contracts) {
-      const unknownEvidenceRefs = contract.evidence_refs.filter((id) => !knownEvidenceIDs.has(id))
+      const unknownEvidenceRefs = contract.evidence_refs.filter((ref) => !knownEvidenceRefs.has(ref))
       if (unknownEvidenceRefs.length > 0) {
         blocker(
           "contract_unknown_research_evidence",
-          `Contract ${contract.id} evidence_refs reference unknown or stale research evidence id(s): ${[...new Set(unknownEvidenceRefs)].join(", ")}.`,
+          `Contract ${contract.id} evidence_refs reference unknown or stale research evidence ref(s): ${[...new Set(unknownEvidenceRefs)].join(", ")}.`,
           { contract_ids: [contract.id] },
           ["register_contract"],
         )
@@ -790,12 +790,12 @@ export function createArchitectOutputTools(input: {
   requireReferenceCoverage?: boolean
   referenceCoverageReasons?: string[]
   knownRequirementIDs?: string[]
-  knownResearchEvidenceIDs?: string[]
+  knownResearchEvidenceRefs?: string[]
 }) {
   let collector = emptyCollector()
   const dir = input.workDir ?? Instance.directory
-  const knownResearchEvidenceIDs =
-    input.knownResearchEvidenceIDs !== undefined ? new Set(input.knownResearchEvidenceIDs) : undefined
+  const knownResearchEvidenceRefs =
+    input.knownResearchEvidenceRefs !== undefined ? new Set(input.knownResearchEvidenceRefs) : undefined
 
   // Single source of truth for "is the architect output complete?". Both the
   // terminal-tool-scoping predicate (`isReadyToFinalize` below) and the
@@ -810,7 +810,7 @@ export function createArchitectOutputTools(input: {
       requireReferenceCoverage: input.requireReferenceCoverage,
       referenceCoverageReasons: input.referenceCoverageReasons,
       knownRequirementIDs: input.knownRequirementIDs,
-      knownResearchEvidenceIDs: input.knownResearchEvidenceIDs,
+      knownResearchEvidenceRefs: input.knownResearchEvidenceRefs,
     })
 
   // Seed the collector with existing goals so modify_goal / remove_goal work
@@ -1148,10 +1148,10 @@ export function createArchitectOutputTools(input: {
         if (unknownGoals.length > 0) {
           return `Error: contract "${contract.id}" references unknown goal id(s): ${[...new Set(unknownGoals)].join(", ")}. Register the goals first; collector unchanged.`
         }
-        if (knownResearchEvidenceIDs && contract.evidence_refs.length > 0) {
-          const unknownEvidenceRefs = contract.evidence_refs.filter((id) => !knownResearchEvidenceIDs.has(id))
+        if (knownResearchEvidenceRefs && contract.evidence_refs.length > 0) {
+          const unknownEvidenceRefs = contract.evidence_refs.filter((ref) => !knownResearchEvidenceRefs.has(ref))
           if (unknownEvidenceRefs.length > 0) {
-            return `Error: contract "${contract.id}" evidence_refs contain unknown or stale research evidence id(s): ${[...new Set(unknownEvidenceRefs)].join(", ")}; collector unchanged.`
+            return `Error: contract "${contract.id}" evidence_refs contain unknown or stale research evidence ref(s): ${[...new Set(unknownEvidenceRefs)].join(", ")}; collector unchanged.`
           }
         }
         const existingIdx = collector.contract_graph.contracts.findIndex((row) => row.id === contract.id)

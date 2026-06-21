@@ -33,7 +33,7 @@ import { Log } from "@/util/log"
 import type { VisualSpec } from "@/frontend-design/types"
 import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
 import {
-  allResearchEvidenceIDsForTask,
+  allResearchEvidenceRefsForTask,
   renderFrontendResearchArchitectPromptSection,
   renderResearchBriefPromptSection,
 } from "@/research/prompt-section"
@@ -121,7 +121,7 @@ export namespace ArchitectAgent {
         ...(input.frontendDesign?.trim() ? ["frontendDesign handoff is present"] : []),
       ],
       knownRequirementIDs: input.requirements?.map((requirement) => requirement.id),
-      knownResearchEvidenceIDs: allResearchEvidenceIDsForTask({
+      knownResearchEvidenceRefs: allResearchEvidenceRefsForTask({
         taskID: input.taskID,
         request: input.taskRequest,
       }),
