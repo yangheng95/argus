@@ -1585,7 +1585,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "build uptake goal test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -1599,6 +1599,7 @@ describe("orchestrator tools", () => {
           now,
           specID,
           requirementIDs: ["REQ-settings"],
+          insertProject: false,
         })
         seedSettingsRequirement({ taskID, specID, now })
         seedBuildUptakeIntegrityHistory({ taskID, specID, now })
@@ -6100,7 +6101,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal integrity build test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -6112,6 +6113,7 @@ describe("orchestrator tools", () => {
           goalSlug: "build-with-architecture-review",
           objective: "Verify build runs before architecture review feedback is recorded",
           now,
+          insertProject: false,
         })
 
         reviewIntegrityImpl = async () => {
@@ -6197,7 +6199,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal scoped build context test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -6211,6 +6213,7 @@ describe("orchestrator tools", () => {
           now,
           specID,
           requirementIDs: ["REQ-feature"],
+          insertProject: false,
         })
 
         Database.use((db) => {
@@ -6571,7 +6574,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal architecture context test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -6583,6 +6586,7 @@ describe("orchestrator tools", () => {
           goalSlug: "feature-implementation",
           objective: "Implement the feature without breaking sibling architecture contracts",
           now,
+          insertProject: false,
         })
 
         Database.use((db) => {
@@ -7855,7 +7859,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "persisted integrity block test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7868,6 +7872,7 @@ describe("orchestrator tools", () => {
           objective: "Verify stale review artifacts do not block a capable build agent",
           now,
           specID,
+          insertProject: false,
         })
         recordIntegrityAttempt({
           taskID,
@@ -7951,7 +7956,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "default retry session reuse test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7963,6 +7968,7 @@ describe("orchestrator tools", () => {
           goalSlug: "reuse-prior-build-session",
           objective: "Verify build retries keep the prior session unless freshContext is requested",
           now,
+          insertProject: false,
         })
         seedTerminalFailedBuildRun({
           taskID,
@@ -8031,7 +8037,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "fresh retry session test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -8043,6 +8049,7 @@ describe("orchestrator tools", () => {
           goalSlug: "fresh-build-session",
           objective: "Verify freshContext skips prior session reuse",
           now,
+          insertProject: false,
         })
         seedTerminalFailedBuildRun({
           taskID,
@@ -8125,7 +8132,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "fresh retry marker cleanup test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -8137,6 +8144,7 @@ describe("orchestrator tools", () => {
           goalSlug: "fresh-marker-cleanup",
           objective: "Verify abandoned prior session ownership is cleared before dispatch",
           now,
+          insertProject: false,
         })
         seedTerminalFailedBuildRun({
           taskID,
@@ -8537,7 +8545,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "persisted integrity concern block test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -8550,6 +8558,7 @@ describe("orchestrator tools", () => {
           objective: "Verify correction counts inform the prompt rather than block dispatch",
           now,
           specID,
+          insertProject: false,
         })
         recordIntegrityAttempt({
           taskID,
@@ -8794,7 +8803,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal cleanup build test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -8806,6 +8815,7 @@ describe("orchestrator tools", () => {
           goalSlug: "clean-successful-worktree",
           objective: "Verify completed goal worktrees are removed after a passed build",
           now,
+          insertProject: false,
         })
 
         buildAgentRunImpl = async (input: any) => {
@@ -8882,7 +8892,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal failed build test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -8894,6 +8904,7 @@ describe("orchestrator tools", () => {
           goalSlug: "preserve-failed-worktree",
           objective: "Verify failed goal worktrees remain available for diagnosis",
           now,
+          insertProject: false,
         })
 
         buildAgentRunImpl = async (input: any) => {
@@ -8954,7 +8965,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal cleanup refused test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -8966,6 +8977,7 @@ describe("orchestrator tools", () => {
           goalSlug: "refuse-unsafe-cleanup",
           objective: "Verify unsafe cleanup failures preserve diagnosis pointers",
           now,
+          insertProject: false,
         })
 
         buildAgentRunImpl = async (input: any) => {
@@ -9031,7 +9043,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "retry rendered attachment test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -9043,10 +9055,11 @@ describe("orchestrator tools", () => {
           goalSlug: "visual-goal",
           objective: "Verify retry screenshots keep canonical attachment URLs",
           now,
+          insertProject: false,
         })
 
         const rendered = await AttachmentStore.write(
-          projectID,
+          Instance.project.id,
           Buffer.from([0x89, 0x50, 0x4e, 0x47]),
           "image/png",
           "rendered.png",
@@ -9137,7 +9150,7 @@ describe("orchestrator tools", () => {
         expect(capturedContext?.retryAttachments).toHaveLength(1)
         const retryAttachment = capturedContext.retryAttachments[0]
         expect(retryAttachment.url).toBe(rendered.url)
-        expect(retryAttachment.url).toStartWith(`/attachment/${projectID}/`)
+        expect(retryAttachment.url).toStartWith(`/attachment/${Instance.project.id}/`)
         await expect(AttachmentStore.inlineFileParts([retryAttachment])).resolves.toHaveLength(1)
       },
     })
