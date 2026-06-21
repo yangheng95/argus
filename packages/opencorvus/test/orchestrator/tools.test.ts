@@ -84,7 +84,13 @@ import { ExecutorRegistry } from "../../src/executor/registry"
 import type { ExecutorAdapter } from "../../src/executor/contract"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
-import { findStageContinuationRequest } from "../../src/engine/stage-continuation"
+import {
+  claimStageContinuationRequest,
+  createStageContinuationRequest,
+  findStageContinuationRequest,
+  markStageContinuationClaimFailed,
+  markStageContinuationConsumed,
+} from "../../src/engine/stage-continuation"
 import { researchSourceDigest } from "../../src/research/schema"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
@@ -1922,6 +1928,122 @@ describe("orchestrator tools", () => {
         )
         expect(toolText(second)).toContain("Frontend research brief persisted")
         expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("frontend_research unavailable continuation artifacts return visible recovery results", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_research_unavailable_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend research unavailable continuation parent" })
+        const projectID = Instance.project.id
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend research unavailable continuation task",
+              request: "Collect webpage packets.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let calls = 0
+        frontendResearchRunImpl = async () => {
+          calls += 1
+          throw new Error("unavailable continuation should not reach child agent")
+        }
+
+        const consumed = createStageContinuationRequest({
+          taskID,
+          stage: "frontend-research",
+          sessionID: `ses_frontend_research_consumed_${stamp}`,
+          parentSessionID: parent.id,
+          normalizedStageInput: { task: { id: taskID } },
+          inputDigest: "digest-consumed",
+          failureName: "TerminalToolMissingError",
+          failureMessage: "missing submit_research_brief",
+          finalizerName: "submit_research_brief",
+        })
+        const consumedClaim = claimStageContinuationRequest({
+          taskID,
+          artifactID: consumed.artifactID,
+          sessionID: `ses_frontend_research_consumed_${stamp}`,
+          finalizerName: "submit_research_brief",
+        })
+        markStageContinuationConsumed({
+          taskID,
+          artifactID: consumed.artifactID,
+          claimID: consumedClaim.claimID,
+          messageID: "msg_consumed_continuation",
+        })
+
+        const claimFailed = createStageContinuationRequest({
+          taskID,
+          stage: "frontend-research",
+          sessionID: `ses_frontend_research_claim_failed_${stamp}`,
+          parentSessionID: parent.id,
+          normalizedStageInput: { task: { id: taskID } },
+          inputDigest: "digest-claim-failed",
+          failureName: "TerminalToolMissingError",
+          failureMessage: "missing submit_research_brief",
+          finalizerName: "submit_research_brief",
+        })
+        const failedClaim = claimStageContinuationRequest({
+          taskID,
+          artifactID: claimFailed.artifactID,
+          sessionID: `ses_frontend_research_claim_failed_${stamp}`,
+          finalizerName: "submit_research_brief",
+        })
+        markStageContinuationClaimFailed({
+          taskID,
+          artifactID: claimFailed.artifactID,
+          claimID: failedClaim.claimID,
+          error: "append recovery prompt failed",
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const consumedResult = await tools.frontend_research.execute(
+          {
+            reason: "try consumed continuation",
+            continuation_artifact_id: consumed.artifactID,
+          },
+          buildToolOptions("frontend_research_consumed"),
+        )
+        const consumedText = toolText(consumedResult)
+        expect(consumedText).toContain("continuation artifact is no longer pending")
+        expect(consumedText).toContain("consumed")
+        expect(consumedText).toContain("msg_consumed_continuation")
+
+        const claimFailedResult = await tools.frontend_research.execute(
+          {
+            reason: "try claim-failed continuation",
+            continuation_artifact_id: claimFailed.artifactID,
+          },
+          buildToolOptions("frontend_research_claim_failed"),
+        )
+        const claimFailedText = toolText(claimFailedResult)
+        expect(claimFailedText).toContain("continuation artifact is no longer pending")
+        expect(claimFailedText).toContain("claim_failed")
+        expect(claimFailedText).toContain("append recovery prompt failed")
+        expect(calls).toBe(0)
       },
     })
   })
