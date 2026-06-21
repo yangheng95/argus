@@ -2217,6 +2217,119 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("integrity terminal finalizer miss returns same-session continuation with ownership closed", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_integrity_continue_${stamp}`
+    const goalID = `goal_integrity_continue_${stamp}`
+    const specID = `spec_integrity_continue_${stamp}`
+    const failedSessionID = `ses_integrity_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity continuation parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity continuation project",
+          taskTitle: "Integrity continuation task",
+          request: "Review the active architecture graph.",
+          goalTitle: "Reviewable goal",
+          goalSlug: "reviewable-goal",
+          objective: "Provide one reviewable goal.",
+          now,
+          specID,
+          requirementIDs: ["REQ-integrity"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        reviewIntegrityImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("integrity", "missing terminal submit_integrity_consensus", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Integrity ended without submit_integrity_consensus.",
+                toolName: "submit_integrity_consensus",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_integrity_consensus",
+          })
+          return integrityTeamResult({
+            verdict: "pass",
+            summary: "Recovered integrity pass.",
+            sessionID: failedSessionID,
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.integrity.execute(
+          {
+            reason: "Need an independent integrity review.",
+          },
+          buildToolOptions("integrity"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("integrity({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("integrity")
+        expect(continuation?.payload.finalizer_name).toBe("submit_integrity_consensus")
+        expect(continuation?.payload.normalized_stage_input).toMatchObject({
+          active_spec_snapshot_id: specID,
+          phase: "pre_build",
+          goal_ids: [goalID],
+        })
+        expect(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })).toBeUndefined()
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+        const second = await tools.integrity.execute(
+          {
+            reason: "Continue previous integrity finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("integrity"),
+        )
+        expect(toolText(second)).toContain("Integrity verdict: pass")
+        expect(calls).toBe(2)
+        const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
+        expect(artifact?.payload.session_id).toBe(failedSessionID)
+        const attempts = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "integrity_attempt")))
+            .all(),
+        )
+        expect(attempts).toHaveLength(1)
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
   test("steer_subagent returns an activity snapshot for a live-owned build goal_run session", async () => {
     const now = Date.now()
     const stamp = now.toString(16)

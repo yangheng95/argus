@@ -32,9 +32,10 @@ mock.module("@/agent/runner", () => ({
   toolErrorPartsFromFinalMessage: () => [],
   runAgentSession: async (input: any) => {
     runnerCalls.push(input)
-    userPrompts.push(input.buildUserPrompt())
+    if (!input.continuation) userPrompts.push(input.buildUserPrompt())
     const session = {
       id:
+        input.continuation?.sessionID ??
         input.existingSessionID ??
         (input.terminalTool.toolName === "submit_integrity_consensus"
           ? "ses_integrity_consensus"
@@ -42,7 +43,7 @@ mock.module("@/agent/runner", () => ({
             ? `ses_reviewer_${runnerCalls.length}`
             : "ses_integrity_plan"),
     }
-    const lifecycle = input.onSessionCreated?.(session)
+    const lifecycle = input.continuation ? undefined : input.onSessionCreated?.(session)
     const collector = input.toolKit.getCollector()
     if (input.terminalTool.toolName === "submit_integrity_review_plan") {
       collector.plan = {
@@ -351,6 +352,56 @@ describe("integrity team-agent replay attempts", () => {
     expect(userPrompts[0]).toContain("Perform the integrity review in this single streaming session")
     expect(userPrompts[0]).toContain("Do not default to five reviewers")
     expect(userPrompts[0]).toContain("Compare current evidence against prior attempts")
+  }, 20_000)
+
+  test("passes integrity continuation through without opening a new session lifecycle", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { reviewIntegrity } = await import("../../src/integrity/team-agent")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await reviewIntegrity({
+          userRequest: "Ship settings validation",
+          taskTitle: "Settings validation",
+          goals: [
+            {
+              id: "goal_settings",
+              title: "Settings",
+              objective: "Validate settings",
+              acceptance_specs: [],
+              owned_paths: ["src/settings.ts"],
+              depends_on: [],
+              priority: "blocking",
+              kind: "feature",
+              requirement_ids: [],
+            },
+          ],
+          replayContext: replayContext(3),
+          taskID: "tsk_team_continuation",
+          parentSessionID: "ses_parent",
+          continuation: {
+            sessionID: "ses_integrity_existing",
+            artifactID: "art_integrity_continue",
+            reason: "Continue integrity after missing submit_integrity_consensus.",
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_integrity_consensus",
+          },
+        })
+        expect(result.sessionID).toBe("ses_integrity_existing")
+      },
+    })
+
+    expect(runnerCalls).toHaveLength(1)
+    expect(runnerCalls[0].continuation).toMatchObject({
+      sessionID: "ses_integrity_existing",
+      finalizerName: "submit_integrity_consensus",
+    })
+    expect(forwarders.map((item) => item.reviewID())).toEqual(["review_ses_integrity_existing"])
+    expect(startedEvents).toHaveLength(0)
+    expect(progressEvents).toHaveLength(0)
+    expect(userPrompts).toHaveLength(0)
+    expect(completedEvents).toHaveLength(1)
+    expect(completedEvents[0].payload.sessionID).toBe("ses_integrity_existing")
   }, 20_000)
 
   test("uses replayContext attempt number for no-goals soft completed event", async () => {

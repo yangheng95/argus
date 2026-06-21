@@ -250,6 +250,15 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       }).success,
     ).toBe(false)
 
+    expect(Object.keys(tools.integrity.inputSchema!.shape)).toEqual(["reason", "continuation_artifact_id"])
+    expect(tools.integrity.inputSchema!.safeParse({ reason: "review active graph" }).success).toBe(true)
+    expect(
+      tools.integrity.inputSchema!.safeParse({
+        reason: "continue previous integrity finalizer miss",
+        continuation_artifact_id: "art_integrity_continue",
+      }).success,
+    ).toBe(true)
+
     expect(Object.keys(tools.browser_preview.inputSchema!.shape)).toEqual([
       "command",
       "workdir",
