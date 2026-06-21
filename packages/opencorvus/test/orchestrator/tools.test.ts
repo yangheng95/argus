@@ -2021,6 +2021,37 @@ describe("orchestrator tools", () => {
           error: "append recovery prompt failed",
         })
 
+        const staleClaim = createStageContinuationRequest({
+          taskID,
+          stage: "frontend-research",
+          sessionID: `ses_frontend_research_stale_claim_${stamp}`,
+          parentSessionID: parent.id,
+          normalizedStageInput: { task: { id: taskID } },
+          inputDigest: "digest-stale-claim",
+          failureName: "TerminalToolMissingError",
+          failureMessage: "missing submit_research_brief",
+          finalizerName: "submit_research_brief",
+        })
+        claimStageContinuationRequest({
+          taskID,
+          artifactID: staleClaim.artifactID,
+          sessionID: `ses_frontend_research_stale_claim_${stamp}`,
+          finalizerName: "submit_research_brief",
+        })
+        const staleClaimRow = findStageContinuationRequest({ taskID, artifactID: staleClaim.artifactID })
+        Database.use((db) =>
+          db
+            .update(EngineArtifactTable)
+            .set({
+              payload: {
+                ...staleClaimRow!.payload,
+                claim_owner: "previous-process",
+              },
+            })
+            .where(eq(EngineArtifactTable.id, staleClaim.artifactID))
+            .run(),
+        )
+
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -2052,6 +2083,18 @@ describe("orchestrator tools", () => {
         expect(claimFailedText).toContain("continuation artifact is no longer pending")
         expect(claimFailedText).toContain("claim_failed")
         expect(claimFailedText).toContain("append recovery prompt failed")
+
+        const staleClaimResult = await tools.frontend_research.execute(
+          {
+            reason: "try claimed continuation from previous process",
+            continuation_artifact_id: staleClaim.artifactID,
+          },
+          buildToolOptions("frontend_research_stale_claim"),
+        )
+        const staleClaimText = toolText(staleClaimResult)
+        expect(staleClaimText).toContain("continuation artifact is no longer pending")
+        expect(staleClaimText).toContain("claim_failed")
+        expect(staleClaimText).toContain("previous-process")
         expect(calls).toBe(0)
         const statuses = Database.use((db) =>
           db
@@ -2062,7 +2105,7 @@ describe("orchestrator tools", () => {
             .filter((event) => event.payload?.stepID === "frontend_research")
             .map((event) => String(event.payload?.status ?? "")),
         )
-        expect(statuses).toEqual(["running", "completed", "running", "completed"])
+        expect(statuses).toEqual(["running", "completed", "running", "completed", "running", "completed"])
       },
     })
   })
