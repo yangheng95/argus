@@ -630,8 +630,12 @@ function scopedFidelityForBuildGoal(input: {
   return { sourceCoverage, referenceCoverage, assemblyOwners }
 }
 
+function findLiveGoalRunByGoalID(goalID: string) {
+  return listGoalRunsByGoal(goalID).find((goalRun) => isLiveGoalRunStatus(goalRun.status))
+}
+
 function assertNoLiveGoalRunForBuild(input: { taskID: string; goalID: string; action: string }): void {
-  const liveGoalRun = listGoalRunsByGoal(input.goalID).find((goalRun) => isLiveGoalRunStatus(goalRun.status))
+  const liveGoalRun = findLiveGoalRunByGoalID(input.goalID)
   if (!liveGoalRun) return
   throw new Error(
     `${input.action}: goal ${input.goalID} already has live goal_run ${liveGoalRun.id} ` +
@@ -5431,6 +5435,14 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find((g) => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
+        const liveGoalRun = findLiveGoalRunByGoalID(goalID)
+        if (liveGoalRun) {
+          return (
+            `Error: modify_goal refused because goal ${goalID} already has live goal_run ${liveGoalRun.id} ` +
+            `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}). ` +
+            `Wait for terminal refill evidence or cancel the live attempt before changing the goal contract.`
+          )
+        }
         const liveOwner = findLiveBuildOwnershipByGoal({ taskID, goalID })
         if (liveOwner) {
           return (
