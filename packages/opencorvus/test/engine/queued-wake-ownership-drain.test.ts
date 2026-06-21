@@ -154,4 +154,155 @@ describe("queued wake ownership drain", () => {
       },
     })
   })
+
+  test("operator message wakes queued behind live ownership drain in order", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `task_queue_operator_messages_${now}`
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        let runCount = 0
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
+          runCount += 1
+          if (runCount === 1) await holdLoop
+        })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "operator wake queue task",
+              request: "operator messages must remain ordered behind live ownership",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        const goalID = `goal_queue_operator_messages_${now}`
+        Database.use((db) =>
+          db
+            .insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "Live goal",
+              slug: "live-goal",
+              objective: "Prove queued operator messages drain in order.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        const childSessionID = `ses_build_operator_messages_${now}`
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: childSessionID,
+          now,
+        })
+
+        await dispatchTaskLoop({ taskID })
+        await waitForMockCalls(runTaskLoop, 1)
+
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: `ses_orchestrator_${now}`,
+          orchestratorMessageID: `msg_orchestrator_${now}`,
+          toolCallID: `cal_build_${now}`,
+          toolPartID: `prt_build_${now}`,
+          childSessionID,
+          scope: "goal",
+          goalID,
+          goalRunID,
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+
+        const first = await dispatchTaskLoop({
+          taskID,
+          event: {
+            note: "first operator message",
+            operatorMessage: {
+              text: "first queued operator message",
+              source: "api_message",
+              messageID: `msg_operator_first_${now}`,
+            },
+          },
+        })
+        const second = await dispatchTaskLoop({
+          taskID,
+          event: {
+            note: "second operator message",
+            operatorMessage: {
+              text: "second queued operator message",
+              source: "api_message",
+              messageID: `msg_operator_second_${now}`,
+            },
+          },
+        })
+        expect(first).toBe("queued")
+        expect(second).toBe("queued")
+        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1, events: 2 })
+
+        release!()
+        await holdLoop
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1, events: 2 })
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 1,
+        })
+        await waitForMockCalls(runTaskLoop, 3)
+
+        expect(queuedTaskEventStats()).toMatchObject({ tasks: 0, events: 0 })
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            operatorMessage: {
+              text: "first queued operator message",
+              messageID: `msg_operator_first_${now}`,
+            },
+          },
+        })
+        expect(runTaskLoop.mock.calls[2]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            operatorMessage: {
+              text: "second queued operator message",
+              messageID: `msg_operator_second_${now}`,
+            },
+          },
+        })
+      },
+    })
+  })
 })
