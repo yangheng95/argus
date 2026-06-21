@@ -114,6 +114,7 @@ export type EngineArtifactKind =
   | "goal_workload"
   | "build_session_contract"
   | "orchestrator_tool_ownership"
+  | "queued_operator_wake"
   | "goal_refill_notification"
   | "exploration"
   | "browser_preview_target"
