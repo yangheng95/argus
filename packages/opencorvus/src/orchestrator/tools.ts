@@ -4620,6 +4620,8 @@ export function createOrchestratorTools(input: {
         const { FactCheckAgent } = await import("@/fact-check")
         const { findFactCheckAttempt, recordFactCheckAttempt } = await import("@/fact-check/persist")
         const { Session } = await import("@/session")
+        let factCheckStepFailed = true
+        try {
         const continuationInput = args.continuation_artifact_id
           ? factCheckContinuationFromArtifact({ taskID: task.id, artifactID: args.continuation_artifact_id })
           : undefined
@@ -4661,6 +4663,7 @@ export function createOrchestratorTools(input: {
           targetMessageContentHash: resolvedArgs.target_message_content_hash,
         })
         if (cached) {
+          factCheckStepFailed = false
           return (
             `fact_check (cached, no LLM work) — verdict=\`${cached.payload.report.overall_verdict}\`\n\n` +
             renderFactCheckReport(cached.payload.report)
@@ -4752,6 +4755,7 @@ export function createOrchestratorTools(input: {
               `unresolved=${result.report.unresolved.length}`,
             reason: `fact-check on ${resolvedArgs.target_agent} (${resolvedArgs.reason.slice(0, 200)})`,
           })
+          factCheckStepFailed = result.outcome !== "completed"
           return (
             `fact_check completed — verdict=\`${result.report.overall_verdict}\`\n\n` +
             renderFactCheckReport(result.report)
@@ -4804,6 +4808,9 @@ export function createOrchestratorTools(input: {
             if (continuationResult) return continuationResult
           }
           return `fact_check ${outcome}: ${errMessage}`
+        }
+        } finally {
+          await trackStepComplete("fact_check", undefined, factCheckStepFailed)
         }
       },
     }),

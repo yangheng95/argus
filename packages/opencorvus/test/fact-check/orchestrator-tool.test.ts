@@ -9,7 +9,7 @@
  * surfaces step 6 / 7 own.
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { Database } from "../../src/storage/db"
+import { Database, and, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
@@ -23,6 +23,8 @@ import { createDecisionLog } from "../../src/decision-log"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 import { findStageContinuationRequest } from "../../src/engine/stage-continuation"
+import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
+import type { MiniWorkflow } from "../../src/engine/workflow"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -160,6 +162,36 @@ function toolText(result: unknown): string {
   throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
 }
 
+const factCheckWorkflow: MiniWorkflow = {
+  id: "custom_fact_check_only",
+  name: "Custom fact-check only",
+  description: "Test workflow that exposes fact_check as a task-level step.",
+  goalLoopStepIDs: [],
+  steps: [
+    {
+      id: "fact_check",
+      tool: "fact_check",
+      label: "Fact check",
+      hint: "Verify factual claims.",
+      scope: "task",
+      skippable: false,
+      after: [],
+    },
+  ],
+}
+
+function factCheckWorkflowStatuses(taskID: string): string[] {
+  return Database.use((db) =>
+    db
+      .select({ payload: ProtocolEventTable.payload })
+      .from(ProtocolEventTable)
+      .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+      .all()
+      .filter((event) => event.payload?.stepID === "fact_check")
+      .map((event) => String(event.payload?.status ?? "")),
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -207,7 +239,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           outcome: "completed",
         })
 
-        const { tools } = createOrchestratorTools({ taskID: "tsk_fc_A", agentSessionID: "ses_orch_A" })
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_A",
+          agentSessionID: "ses_orch_A",
+          workflow: factCheckWorkflow,
+        })
         const result = await tools.fact_check.execute(
           {
             target_session_id: targetSession,
@@ -233,6 +269,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         const entries = createDecisionLog("tsk_fc_A").readByPhase("fact_check")
         expect(entries.length).toBe(1)
         expect(entries[0].value).toContain("verdict=clean")
+        expect(factCheckWorkflowStatuses("tsk_fc_A")).toEqual(["running", "completed"])
       },
     })
   })
@@ -251,7 +288,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           throw new Error("agent should NOT run — tool must reject before dispatch")
         }
 
-        const { tools } = createOrchestratorTools({ taskID: "tsk_fc_D", agentSessionID: "ses_orch_D" })
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_D",
+          agentSessionID: "ses_orch_D",
+          workflow: factCheckWorkflow,
+        })
         const result = await tools.fact_check.execute(
           {
             target_session_id: targetSession,
@@ -267,6 +308,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         // No artifact, no decision-log entry
         expect(listFactCheckAttempts("tsk_fc_D").length).toBe(0)
         expect(createDecisionLog("tsk_fc_D").readByPhase("fact_check").length).toBe(0)
+        expect(factCheckWorkflowStatuses("tsk_fc_D")).toEqual(["running", "failed"])
       },
     })
   })
@@ -307,7 +349,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           }
         }
 
-        const { tools } = createOrchestratorTools({ taskID: "tsk_fc_C", agentSessionID: "ses_orch_C" })
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_C",
+          agentSessionID: "ses_orch_C",
+          workflow: factCheckWorkflow,
+        })
         const args = {
           target_session_id: targetSession,
           target_agent: "build",
@@ -319,7 +365,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         expect(toolText(first)).toContain("verdict=`clean`")
         expect(toolText(first)).not.toContain("cached")
 
-        const secondTools = createOrchestratorTools({ taskID: "tsk_fc_C", agentSessionID: "ses_orch_C" }).tools
+        const secondTools = createOrchestratorTools({
+          taskID: "tsk_fc_C",
+          agentSessionID: "ses_orch_C",
+          workflow: factCheckWorkflow,
+        }).tools
         const second = await secondTools.fact_check.execute(
           { ...args, reason: "Second call — should hit cache." },
           {} as any,
@@ -327,6 +377,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         expect(runCallCount).toBe(1) // NOT incremented — agent did NOT re-run
         expect(toolText(second)).toContain("cached")
         expect(toolText(second)).toContain("verdict=`clean`")
+        expect(factCheckWorkflowStatuses("tsk_fc_C")).toEqual(["running", "completed", "running", "completed"])
       },
     })
   })
@@ -474,7 +525,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           }
         }
 
-        const { tools } = createOrchestratorTools({ taskID: "tsk_fc_I", agentSessionID: "ses_orch_I" })
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_I",
+          agentSessionID: "ses_orch_I",
+          workflow: factCheckWorkflow,
+        })
         const first = await tools.fact_check.execute(
           {
             target_session_id: targetSession,
@@ -506,6 +561,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         expect(afterMiss[0].payload.outcome).toBe("tool_error")
         expect(afterMiss[0].payload.fact_check_session_id).toBe(failedSessionID)
         expect(afterMiss[0].payload.target_message_id).toBe(targetMsg)
+        expect(factCheckWorkflowStatuses("tsk_fc_I")).toEqual(["running", "failed"])
 
         const second = await tools.fact_check.execute(
           {
@@ -522,6 +578,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
 
         const afterContinuation = listFactCheckAttempts("tsk_fc_I")
         expect(afterContinuation.map((row) => row.payload.outcome).sort()).toEqual(["completed", "tool_error"])
+        expect(factCheckWorkflowStatuses("tsk_fc_I")).toEqual(["running", "failed", "running", "completed"])
 
         const third = await tools.fact_check.execute(
           {
@@ -534,6 +591,14 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         )
         expect(toolText(third)).toContain("cached")
         expect(calls.length).toBe(2)
+        expect(factCheckWorkflowStatuses("tsk_fc_I")).toEqual([
+          "running",
+          "failed",
+          "running",
+          "completed",
+          "running",
+          "completed",
+        ])
       },
     })
   })
