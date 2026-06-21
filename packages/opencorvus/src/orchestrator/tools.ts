@@ -889,6 +889,33 @@ const FrontendResearchInputSchema = z
     }
   })
 
+const DeepResearchInputSchema = z
+  .object({
+    reason: z.string().min(1).describe("Why evidence research is needed for this task."),
+    target_deliverable: z
+      .enum(["prd", "spec", "research_report", "implementation_input", "mixed"])
+      .optional()
+      .describe("The likely document/input shape being researched."),
+    source_urls: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Known source URLs the research agent must webfetch before any broader discovery."),
+    focus: z.string().optional().describe("Optional narrow focus for the research agent."),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .superRefine((input, ctx) => {
+    const hasContinuation =
+      typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const hasSourceUrls = Array.isArray(input.source_urls) && input.source_urls.length > 0
+    if (!hasContinuation || !hasSourceUrls) return
+    ctx.addIssue({
+      code: "custom",
+      path: ["source_urls"],
+      message:
+        "deep_research continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh source_urls.",
+    })
+  })
+
 const VisualQaInputSchema = z.object({
   reason: z
     .string()
@@ -5078,19 +5105,7 @@ export function createOrchestratorTools(input: {
     deep_research: tool({
       description:
         "OPTIONAL deep evidence side-tool agent. Use when the task depends on multi-source external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, `frontend_research` is a separate candidate; for implementation-template/source handoff, `frontend_design` is a separate candidate. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up deep research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a acceptance path.",
-      inputSchema: z.object({
-        reason: z.string().min(1).describe("Why evidence research is needed for this task."),
-        target_deliverable: z
-          .enum(["prd", "spec", "research_report", "implementation_input", "mixed"])
-          .optional()
-          .describe("The likely document/input shape being researched."),
-        source_urls: z
-          .array(z.string().min(1))
-          .default([])
-          .describe("Known source URLs the research agent must webfetch before any broader discovery."),
-        focus: z.string().optional().describe("Optional narrow focus for the research agent."),
-        continuation_artifact_id: StageContinuationArtifactIDField,
-      }),
+      inputSchema: DeepResearchInputSchema,
       execute: async ({ reason, target_deliverable, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         let runnerSessionID: string | undefined

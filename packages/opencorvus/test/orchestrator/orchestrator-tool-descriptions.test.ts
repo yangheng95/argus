@@ -210,6 +210,13 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         continuation_artifact_id: "art_deep_research_continue",
       }).success,
     ).toBe(true)
+    expect(
+      tools.deep_research.inputSchema!.safeParse({
+        reason: "ambiguous deep research continuation",
+        source_urls: ["https://example.com/new-source"],
+        continuation_artifact_id: "art_deep_research_continue",
+      }).success,
+    ).toBe(false)
 
     expect(Object.keys(tools.fact_check.inputSchema!.shape)).toEqual([
       "target_session_id",
