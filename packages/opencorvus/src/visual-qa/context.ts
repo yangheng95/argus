@@ -51,72 +51,75 @@ export function renderVisualQaFrontendDesignContext(entries: VisualQaDecisionEnt
   return included > 0 ? lines.join("\n") : ""
 }
 
-export function renderVisualQaFrontendResearchContext(brief?: ResearchBrief): string {
-  const contract = brief?.webpage_contract
-  if (!contract) return ""
+export function renderVisualQaFrontendResearchContext(input?: ResearchBrief | ResearchBrief[]): string {
+  const briefs = (Array.isArray(input) ? input : input ? [input] : []).filter((brief) => brief.webpage_contract)
+  if (briefs.length === 0) return ""
   const lines = [
     "# Frontend Research Pointers",
     "",
     "Only webpage contract pointers relevant to GUI fidelity and functional testing are included. Use bundle paths only for drilldown.",
-    "",
-    `source_url: ${contract.source_url}`,
   ]
-  if (contract.reference_image_evidence_ids.length) {
-    lines.push(`reference_image_evidence_ids: ${contract.reference_image_evidence_ids.join(", ")}`)
-    lines.push("", REFERENCE_EVIDENCE_SCOPE_SECTION)
-  }
-  lines.push(
-    renderBulletGroup(
-      "functional_surfaces",
-      contract.functional_surfaces
-        .slice(0, 8)
-        .map(
-          (item) =>
-            `${item.id}: ${item.title}; behavior=${limitText(item.user_visible_behavior, 220)}; interactions=${item.required_interactions.slice(0, 3).join(" | ") || "(none)"}; evidence=${item.evidence_ids.join(", ")}`,
-        ),
-    ),
-  )
-  lines.push(
-    renderBulletGroup(
-      "visual_layout",
-      contract.visual_layout
-        .slice(0, 8)
-        .map(
-          (item) =>
-            `${item.id}: ${item.viewport} ${item.region}; layout=${limitText(item.layout_contract, 220)}; spacing=${limitText(item.spacing_and_alignment, 160)}; evidence=${item.evidence_ids.join(", ")}`,
-        ),
-    ),
-  )
-  lines.push(
-    renderBulletGroup(
-      "interaction_states",
-      contract.interaction_states
-        .slice(0, 8)
-        .map(
-          (item) =>
-            `${item.id}: ${item.component} ${item.state}; behavior=${limitText(item.behavior, 220)}; evidence=${item.evidence_ids.join(", ")}`,
-        ),
-    ),
-  )
-  lines.push(
-    renderBulletGroup(
-      "fidelity_acceptance",
-      contract.fidelity_acceptance
-        .slice(0, 8)
-        .map(
-          (item) =>
-            `${item.id}: ${item.target}; criterion=${limitText(item.criterion, 240)}; evidence=${item.evidence_ids.join(", ")}`,
-        ),
-    ),
-  )
-  if (brief.bundle) {
+
+  for (const brief of briefs) {
+    const contract = brief.webpage_contract!
+    lines.push("", `## ${contract.source_url}`)
+    if (contract.reference_image_evidence_ids.length) {
+      lines.push(`reference_image_evidence_ids: ${contract.reference_image_evidence_ids.join(", ")}`)
+      lines.push("", REFERENCE_EVIDENCE_SCOPE_SECTION)
+    }
     lines.push(
-      "",
-      "bundle_paths:",
-      `- full_markdown_path: ${brief.bundle.full_markdown_path}`,
-      `- evidence_json_path: ${brief.bundle.evidence_json_path}`,
-      `- citation_map_path: ${brief.bundle.citation_map_path}`,
+      renderBulletGroup(
+        "functional_surfaces",
+        contract.functional_surfaces
+          .slice(0, 8)
+          .map(
+            (item) =>
+              `${item.id}: ${item.title}; behavior=${limitText(item.user_visible_behavior, 220)}; interactions=${item.required_interactions.slice(0, 3).join(" | ") || "(none)"}; evidence=${item.evidence_ids.join(", ")}`,
+          ),
+      ),
     )
+    lines.push(
+      renderBulletGroup(
+        "visual_layout",
+        contract.visual_layout
+          .slice(0, 8)
+          .map(
+            (item) =>
+              `${item.id}: ${item.viewport} ${item.region}; layout=${limitText(item.layout_contract, 220)}; spacing=${limitText(item.spacing_and_alignment, 160)}; evidence=${item.evidence_ids.join(", ")}`,
+          ),
+      ),
+    )
+    lines.push(
+      renderBulletGroup(
+        "interaction_states",
+        contract.interaction_states
+          .slice(0, 8)
+          .map(
+            (item) =>
+              `${item.id}: ${item.component} ${item.state}; behavior=${limitText(item.behavior, 220)}; evidence=${item.evidence_ids.join(", ")}`,
+          ),
+      ),
+    )
+    lines.push(
+      renderBulletGroup(
+        "fidelity_acceptance",
+        contract.fidelity_acceptance
+          .slice(0, 8)
+          .map(
+            (item) =>
+              `${item.id}: ${item.target}; criterion=${limitText(item.criterion, 240)}; evidence=${item.evidence_ids.join(", ")}`,
+          ),
+    )
+    )
+    if (brief.bundle) {
+      lines.push(
+        "",
+        "bundle_paths:",
+        `- full_markdown_path: ${brief.bundle.full_markdown_path}`,
+        `- evidence_json_path: ${brief.bundle.evidence_json_path}`,
+        `- citation_map_path: ${brief.bundle.citation_map_path}`,
+      )
+    }
   }
   return lines.filter((line) => line !== "").join("\n")
 }

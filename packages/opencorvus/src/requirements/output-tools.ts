@@ -85,7 +85,7 @@ export const RequirementRegistrationSchema = z.object({
     .array(z.string().min(1))
     .default([])
     .describe(
-      "Source-qualified research evidence refs that support this requirement, for example deep_research:ev_1 or frontend_research:ev_1. Empty when the requirement does not depend on research facts.",
+      "Source-qualified research evidence refs that support this requirement, for example deep_research:ev_1 or frontend_research:artifact_123:ev_1. Empty when the requirement does not depend on research facts.",
     ),
 })
 

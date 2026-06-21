@@ -79,9 +79,9 @@ function seedTask(input: { projectID: string; taskID: string; now: number }) {
   )
 }
 
-function validWebpageContract() {
+function validWebpageContract(sourceURL = "https://example.com/page") {
   return {
-    source_url: "https://example.com/page",
+    source_url: sourceURL,
     reference_image_evidence_ids: ["ev_1"],
     functional_surfaces: [
       {
@@ -247,13 +247,16 @@ describe("research brief persistence and describe projection", () => {
           expect(findLatestResearchBriefArtifact(taskID)).toBeUndefined()
           const artifact = findLatestFrontendResearchBriefArtifact(taskID)
           expect(artifact?.id).toBe(artifactID)
-          expect(frontendResearchEvidenceRefsForTask({ taskID, request })).toEqual(["frontend_research:ev_1"])
-          expect(allResearchEvidenceRefsForTask({ taskID, request })).toEqual(["frontend_research:ev_1"])
+          const evidenceRef = `frontend_research:${artifactID}:ev_1`
+          expect(frontendResearchEvidenceRefsForTask({ taskID, request })).toEqual([evidenceRef])
+          expect(allResearchEvidenceRefsForTask({ taskID, request })).toEqual([evidenceRef])
 
           const prompt = renderFrontendResearchBriefPromptSection({ taskID, request })
           expect(prompt).toContain("Frontend Research Requirements Digest")
+          expect(prompt).toContain(`"artifact_id": "${artifactID}"`)
           expect(prompt).toContain('"webpage_contract_requirement_index"')
           expect(prompt).toContain('"bundle_paths"')
+          expect(prompt).toContain(evidenceRef)
           expect(prompt).toContain("SHOULD_NOT_APPEAR_IN_BUILD_FACT")
           expect(prompt).not.toContain('"webpage_contract"')
           expect(prompt).not.toContain("Example documentation excerpt.")
@@ -264,13 +267,15 @@ describe("research brief persistence and describe projection", () => {
           expect(architectPrompt).toContain('"style_requirements"')
           expect(architectPrompt).toContain('"fidelity_risks"')
           expect(architectPrompt).toContain('"bundle_paths"')
+          expect(architectPrompt).toContain(evidenceRef)
           expect(architectPrompt).not.toContain('"webpage_contract"')
           expect(architectPrompt).not.toContain("Example documentation excerpt.")
 
           const buildPrompt = renderFrontendResearchBuildPromptSection({ taskID, request })
           expect(buildPrompt).toContain("Compact advisory coverage index from frontend_research")
+          expect(buildPrompt).toContain(`artifact_id: ${artifactID}`)
           expect(buildPrompt).toContain("bundle_paths")
-          expect(buildPrompt).toContain("reference_image_evidence_refs: frontend_research:ev_1")
+          expect(buildPrompt).toContain(`reference_image_evidence_refs: ${evidenceRef}`)
           expect(buildPrompt).toContain("Functional surfaces")
           expect(buildPrompt).toContain("Visual layout")
           expect(buildPrompt).toContain("Fidelity risks")
@@ -292,6 +297,75 @@ describe("research brief persistence and describe projection", () => {
 
           const pipeline = WorkflowRegistry.resolveSync("pipeline")!
           expect(projectTaskSteps(taskID, pipeline).frontend_research?.status).toBe("completed")
+        },
+      })
+    },
+    { timeout: INSTANCE_STARTUP_TIMEOUT_MS },
+  )
+
+  test(
+    "injects multiple frontend_research_brief artifacts without hiding earlier pages",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const projectID = "proj_frontend_research_persist_multi"
+          const taskID = "tsk_frontend_research_persist_multi"
+          seedTask({ projectID, taskID, now: 1_000 })
+          const firstArtifactID = persistTaskFrontendResearchBrief({
+            taskID,
+            brief: validResearchBriefForTask(
+              taskID,
+              {
+                summary: "Frontend research first page summary.",
+                webpage_contract: validWebpageContract("https://example.com/first"),
+              },
+              "frontend-research",
+            ),
+            now: 2_000,
+          })
+          const secondArtifactID = persistTaskFrontendResearchBrief({
+            taskID,
+            brief: validResearchBriefForTask(
+              taskID,
+              {
+                summary: "Frontend research second page summary.",
+                webpage_contract: validWebpageContract("https://example.com/second"),
+              },
+              "frontend-research",
+            ),
+            now: 3_000,
+          })
+          const firstEvidenceRef = `frontend_research:${firstArtifactID}:ev_1`
+          const secondEvidenceRef = `frontend_research:${secondArtifactID}:ev_1`
+
+          expect(frontendResearchEvidenceRefsForTask({ taskID, request })).toEqual([
+            secondEvidenceRef,
+            firstEvidenceRef,
+          ])
+
+          const requirementsPrompt = renderFrontendResearchBriefPromptSection({ taskID, request })
+          expect(requirementsPrompt).toContain(`"artifact_id": "${firstArtifactID}"`)
+          expect(requirementsPrompt).toContain(`"artifact_id": "${secondArtifactID}"`)
+          expect(requirementsPrompt).toContain("https://example.com/first")
+          expect(requirementsPrompt).toContain("https://example.com/second")
+          expect(requirementsPrompt).toContain(firstEvidenceRef)
+          expect(requirementsPrompt).toContain(secondEvidenceRef)
+
+          const architectPrompt = renderFrontendResearchArchitectPromptSection({ taskID, request })
+          expect(architectPrompt).toContain(`"artifact_id": "${firstArtifactID}"`)
+          expect(architectPrompt).toContain(`"artifact_id": "${secondArtifactID}"`)
+          expect(architectPrompt).toContain(firstEvidenceRef)
+          expect(architectPrompt).toContain(secondEvidenceRef)
+
+          const buildPrompt = renderFrontendResearchBuildPromptSection({ taskID, request })
+          expect(buildPrompt).toContain(`artifact_id: ${firstArtifactID}`)
+          expect(buildPrompt).toContain(`artifact_id: ${secondArtifactID}`)
+          expect(buildPrompt).toContain("source_url: https://example.com/first")
+          expect(buildPrompt).toContain("source_url: https://example.com/second")
+          expect(buildPrompt).toContain(firstEvidenceRef)
+          expect(buildPrompt).toContain(secondEvidenceRef)
         },
       })
     },
@@ -453,7 +527,7 @@ describe("research brief persistence and describe projection", () => {
             brief: validResearchBriefForTask(taskID),
             now: 2_000,
           })
-          persistTaskFrontendResearchBrief({
+          const frontendArtifactID = persistTaskFrontendResearchBrief({
             taskID,
             brief: validResearchBriefForTask(
               taskID,
@@ -465,17 +539,18 @@ describe("research brief persistence and describe projection", () => {
             ),
             now: 3_000,
           })
+          const frontendEvidenceRef = `frontend_research:${frontendArtifactID}:ev_1`
 
           expect(allResearchEvidenceRefsForTask({ taskID, request })).toEqual([
             "deep_research:ev_1",
-            "frontend_research:ev_1",
+            frontendEvidenceRef,
           ])
 
           const deepPrompt = renderResearchBriefPromptSection({ taskID, request })
           const frontendPrompt = renderFrontendResearchBriefPromptSection({ taskID, request })
           expect(deepPrompt).toContain('"id": "deep_research:ev_1"')
           expect(deepPrompt).toContain('"source_id": "ev_1"')
-          expect(frontendPrompt).toContain('"id": "frontend_research:ev_1"')
+          expect(frontendPrompt).toContain(`"id": "${frontendEvidenceRef}"`)
           expect(frontendPrompt).toContain('"source_id": "ev_1"')
         },
       })

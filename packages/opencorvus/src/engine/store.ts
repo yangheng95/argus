@@ -304,6 +304,27 @@ export function findLatestFrontendResearchBriefArtifact(taskID: string): Researc
   return findLatestResearchBriefArtifactByKind(taskID, "frontend_research_brief")
 }
 
+export function listFrontendResearchBriefArtifacts(taskID: string): ResearchBriefArtifactRow[] {
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "frontend_research_brief"),
+          eq(EngineArtifactTable.label, "active"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all(),
+  )
+  return rows.flatMap((row) => {
+    const parsed = parseResearchBriefArtifactRow(row, taskID)
+    return parsed ? [parsed] : []
+  })
+}
+
 function findLatestResearchBriefArtifactByKind(
   taskID: string,
   kind: "research_brief" | "frontend_research_brief",
@@ -323,7 +344,10 @@ function findLatestResearchBriefArtifactByKind(
       .limit(1)
       .get(),
   )
-  if (!row) return undefined
+  return row ? parseResearchBriefArtifactRow(row, taskID) : undefined
+}
+
+function parseResearchBriefArtifactRow(row: ArtifactRow, taskID: string): ResearchBriefArtifactRow | undefined {
   const parsed = ResearchBriefSchema.safeParse(row.payload)
   if (!parsed.success) return undefined
   if (validateResearchBriefIntegrity(parsed.data)) return undefined
