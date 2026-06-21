@@ -2125,6 +2125,90 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("workload_analysis continuation rejects stale goal graph before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_workload_stale_scope_${stamp}`
+    const goalID = `goal_workload_stale_scope_${stamp}`
+    const failedSessionID = `ses_workload_stale_scope_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "workload stale continuation parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Workload stale continuation project",
+          taskTitle: "Workload stale continuation task",
+          request: "Size the active architecture goals before the graph changes.",
+          goalTitle: "Sized goal",
+          goalSlug: "sized-goal",
+          objective: "Implement and verify one surface.",
+          now,
+          specID: `spec_workload_stale_scope_${stamp}`,
+          requirementIDs: ["REQ-workload"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        goalWorkloadAnalyzeImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("goal-workload-analyst", "missing terminal submit_workload_analysis", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Workload analyst ended without submit_workload_analysis.",
+              toolName: "submit_workload_analysis",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.workload_analysis.execute(
+          {
+            reason: "Need an independent workload review.",
+          },
+          buildToolOptions("workload_analysis"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineGoalTable)
+            .set({
+              objective: "Implement and verify a changed surface after graph mutation.",
+              time_updated: now + 1,
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run()
+        })
+
+        await expect(
+          tools.workload_analysis.execute(
+            {
+              reason: "Continue previous workload finalizer miss.",
+              continuation_artifact_id: continuationArtifactID,
+            },
+            buildToolOptions("workload_analysis"),
+          ),
+        ).rejects.toThrow(/scope mismatch/)
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
   test("visual_qa terminal finalizer miss returns same-session continuation", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
@@ -5724,6 +5808,132 @@ describe("orchestrator tools", () => {
         )
         expect(toolText(second)).toContain("Architect decomposition complete")
         expect(coordinateCalls).toBe(2)
+      },
+    })
+  })
+
+  test("architect continuation rejects stale active spec scope before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_architect_stale_scope_${stamp}`
+    const taskID = `tsk_architect_stale_scope_${stamp}`
+    const reqSpecID = `spec_architect_stale_scope_${stamp}`
+    const nextSpecID = `spec_architect_stale_scope_next_${stamp}`
+    const failedSessionID = `ses_architect_stale_scope_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Architect stale continuation test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Architect stale continuation task",
+          request: "Decompose a task after finalizer miss, then change the active spec.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineSpecSnapshotTable)
+        .values({
+          id: reqSpecID,
+          task_id: taskID,
+          version: 1,
+          status: "ready",
+          summary: "Requirements parsed",
+          content: "# Requirements\n- REQ-1 original scope",
+          scope: "original scope",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      insertRequirements(db, {
+        taskID,
+        specSnapshotID: reqSpecID,
+        now,
+        requirements: [
+          {
+            id: "REQ-1",
+            title: "Original scope",
+            description: "The original active spec is in force.",
+            acceptance: ["original spec accepted"],
+            evidence_refs: ["user request"],
+            non_goals: ["No changed scope."],
+            priority: "blocking",
+          },
+        ],
+      })
+    })
+
+    let continuationArtifactID = ""
+    let coordinateCalls = 0
+    architectCoordinateImpl = async (input: any) => {
+      coordinateCalls += 1
+      await input.onSessionCreated?.(failedSessionID)
+      throw new AgentRunError("architect", "missing terminal submit_architect", {
+        nonRetryable: true,
+        cause: new Message.TerminalToolMissingError({
+          message: "Architect ended without submit_architect.",
+          toolName: "submit_architect",
+          retries: 0,
+        }),
+      })
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect stale continuation test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.architect.execute({ reason: "initial decomposition" }, buildToolOptions())
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineSpecSnapshotTable)
+            .set({ status: "superseded", time_updated: now + 1 })
+            .where(eq(EngineSpecSnapshotTable.id, reqSpecID))
+            .run()
+          db.insert(EngineSpecSnapshotTable)
+            .values({
+              id: nextSpecID,
+              task_id: taskID,
+              version: 2,
+              status: "ready",
+              summary: "Requirements changed",
+              content: "# Requirements\n- REQ-1 changed scope",
+              scope: "changed scope",
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
+        })
+
+        await expect(
+          tools.architect.execute(
+            { reason: "continue previous architect finalizer miss", continuation_artifact_id: continuationArtifactID },
+            buildToolOptions(),
+          ),
+        ).rejects.toThrow(/scope mismatch/)
+        expect(coordinateCalls).toBe(1)
       },
     })
   })
