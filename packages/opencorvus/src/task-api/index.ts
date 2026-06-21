@@ -972,9 +972,9 @@ export namespace EngineService {
       EngineInteraction.subscribe(hooks())
       current.booted = true
     }
-    // Narrow liveness tick: if a non-terminal task's active run has no live
-    // goal runs left, wake the task loop once so the orchestrator can inspect
-    // the no-live-goal snapshot. This does not restore executor/status polling.
+    // Narrow runtime observer: project interaction blockers and terminal-goal
+    // refill facts into durable state. This does not restore executor/status
+    // polling or the retired no-live-goal batch wake.
     Scheduler.register({
       id: "engine.liveness",
       interval: ORCHESTRATOR_POLL_INTERVAL_MS,
@@ -983,13 +983,12 @@ export namespace EngineService {
         await EngineRuntime.monitorRuns(hooks())
       },
     })
-    // Phase-7: no aggressive startup recovery. The post-phase-5 build model
-    // is synchronous within a single orchestrator wake — nothing survives
-    // across process restart that needs a dedicated cleanup phase. Orphan
-    // runs surface via describe.ts `run_orphan` on the next wake and the
-    // orchestrator LLM decides whether to retry / restart_from_stage /
-    // drop. OS-level cleanup (worktrees, processes) is owned by the
-    // ownership registry, not by a recovery function.
+    // Phase-7: no aggressive startup recovery. Live build attempts and
+    // terminal refill facts are durable; orphan runs surface via describe.ts
+    // `run_orphan` on the next wake and the orchestrator LLM decides whether
+    // to retry / restart_from_stage / drop. OS-level cleanup (worktrees,
+    // processes) is owned by the ownership registry, not by a recovery
+    // function.
   }
 
   export async function createTask(raw: z.input<typeof CreateTaskInput>) {
