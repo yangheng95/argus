@@ -94,7 +94,7 @@ import { describeTask, renderTaskDescription } from "@/engine/describe"
 import { deriveTaskStatus, isTaskTerminal } from "@/engine/task-status"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 import { AgentTrace } from "@/trace"
-import { paragraphSummary } from "@/agent/report"
+import { paragraphSummary, type AgentReport } from "@/agent/report"
 import { NamedError } from "@opencorvus-ai/util/error"
 import {
   isOrchestratorNoDecisionObservationToolName,
@@ -291,6 +291,43 @@ function finalTextFromMessage(finalMessage: Message.WithParts | undefined): stri
 
 function providerVisiblePartCount(finalMessage: Message.WithParts | undefined): number {
   return finalMessage?.parts.filter((part) => part.type === "text" || part.type === "tool").length ?? 0
+}
+
+function renderWakeToolDecision(tool: OrchestratorWakeToolDecision): string {
+  return tool.decisionEffect ? `${tool.name}(${tool.decisionEffect})` : tool.name
+}
+
+function buildOrchestratorWakeTraceReport(input: {
+  finalText?: string
+  finish?: string
+  wakeTools: OrchestratorWakeToolDecision[]
+  streamErrors: Array<{ reason: string; errorName?: string }>
+}): AgentReport {
+  const finalText = input.finalText?.trim()
+  if (finalText) {
+    return {
+      summary: paragraphSummary(finalText),
+      detail: finalText,
+    }
+  }
+
+  const toolSummary = input.wakeTools.map(renderWakeToolDecision).join(", ")
+  const lines = [
+    `Orchestrator wake completed with finish=${input.finish ?? "unknown"} and no final text.`,
+    toolSummary ? `Wake tools: ${toolSummary}.` : "Wake tools: none.",
+  ]
+  if (input.streamErrors.length > 0) {
+    lines.push(
+      `Stream errors: ${input.streamErrors
+        .map((error) => `${error.errorName ?? "error"}: ${error.reason}`)
+        .join("; ")}`,
+    )
+  }
+  const detail = lines.join("\n")
+  return {
+    summary: paragraphSummary(detail),
+    detail,
+  }
 }
 
 async function collectOrchestratorWakeToolNames(input: {
@@ -819,12 +856,15 @@ export namespace Orchestrator {
         }
       }
 
+      const wakeTools = !ctrl.signal.aborted
+        ? await collectOrchestratorWakeToolNames({
+            sessionID: agentSession.id,
+            boundaryMessageID: promptBoundaryMessageID,
+          })
+        : []
+
       if (!ctrl.signal.aborted && streamErrors.length === 0) {
         const taskTerminal = isTaskTerminal(requireTask(taskID))
-        const wakeTools = await collectOrchestratorWakeToolNames({
-          sessionID: agentSession.id,
-          boundaryMessageID: promptBoundaryMessageID,
-        })
         const noDecision = classifyOrchestratorDecisionStop({
           taskTerminal,
           finish: assistantInfo?.finish,
@@ -842,6 +882,12 @@ export namespace Orchestrator {
 
       if (AgentTrace.isEnabled()) {
         const finalText = finalTextFromMessage(finalMessage)
+        const report = buildOrchestratorWakeTraceReport({
+          finalText,
+          finish: assistantInfo?.finish,
+          wakeTools,
+          streamErrors,
+        })
         recordOrchestratorTraceReportForSession(agentSession, {
           sessionID: agentSession.id,
           parentSessionID: task.session_id ?? undefined,
@@ -851,10 +897,7 @@ export namespace Orchestrator {
           finishReason: assistantInfo?.finish,
           finalText,
           streamErrors: streamErrors.map((e) => ({ reason: e.reason, name: e.errorName })),
-          report: {
-            summary: paragraphSummary(finalText ?? "orchestrator completed without final text"),
-            detail: finalText ?? "orchestrator completed without final text",
-          },
+          report,
         })
       }
 
