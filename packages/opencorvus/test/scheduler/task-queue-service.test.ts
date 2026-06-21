@@ -852,6 +852,46 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(0)
   })
 
+  test("recovery releases stale in-flight prompt promises that stop producing activity", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
+    })
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(
+      (async () => {
+        await new Promise<never>(() => {})
+      }) as never,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const id = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [{ type: "text", text: "hang without activity" }],
+          },
+          source: "test",
+        })
+        await waitForQueueStatus(id, "running")
+        await Bun.sleep(1100)
+
+        const outcome = await Promise.race([
+          TaskQueueService.runNow().then(() => "resolved" as const),
+          Bun.sleep(3_000).then(() => "timed-out" as const),
+        ])
+
+        expect(outcome).toBe("resolved")
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.status).toBe("failed")
+        expect(row?.error_message).toBe("task timed out while running")
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
+  })
+
   test("publishes session error when stale running task reaches terminal failure", async () => {
     await using tmp = await tmpdir({
       git: true,
