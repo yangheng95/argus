@@ -2885,6 +2885,75 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("live goal_run without tool ownership blocks contract mutation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_live_goal_run_guard_${stamp}`
+    const taskID = `tsk_live_goal_run_guard_${stamp}`
+    const goalID = `gol_live_goal_run_guard_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "live goal_run guard",
+      taskTitle: "live goal_run guard",
+      request: "Do not mutate a goal while its async build goal_run is live",
+      goalTitle: "Async build goal",
+      goalSlug: "async-build-goal",
+      objective: "Guard live goal_run facts",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "live goal_run parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "live goal_run child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const runID = await createAbortableCoordinatorRun({ taskID, sessionID: child.id, now })
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          runID,
+          sessionID: child.id,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const modifyResult = toolText(
+          await tools.modify_goal.execute(
+            {
+              goalID,
+              updates: { objective: "Mutated while live goal_run exists" },
+              reason: "should be rejected while async build is live",
+            },
+            buildToolOptions(),
+          ),
+        )
+
+        expect(modifyResult).toContain("Error: modify_goal refused")
+        expect(modifyResult).toContain(`live goal_run ${goalRunID}`)
+        expect(findGoal(goalID)?.objective).toBe("Guard live goal_run facts")
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
   test("add_goal appends a new operator instruction goal to the active plan", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
