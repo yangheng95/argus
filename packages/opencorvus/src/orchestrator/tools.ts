@@ -4964,42 +4964,53 @@ export function createOrchestratorTools(input: {
       inputSchema: IntegrityInputSchema,
       execute: async (toolInput, options) => {
         const toolExecution = requireOrchestratorToolExecutionContext(options, "integrity")
-        const outcome = await runIntegrityReview(toolExecution, toolInput)
-        if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
-          await blockActiveRunForTask(taskID, {
-            blockingReason: "integrity artifact_missing",
-            error: outcome.artifactMissing.error,
-            summary: "Run blocked by missing integrity attempt artifact",
-          })
-        } else if (outcome.status === "reviewed" && outcome.verdict === "pass" && outcome.phase === "post_build") {
-          const task = requireTask(taskID)
-          const completed = Date.now()
-          const activeRun = findActiveRunForTask(taskID)
-          if (activeRun) {
-            await updateRun(
-              activeRun,
-              {
-                status: "completed",
-                blocking_reason: null,
-                error: null,
-                time_completed: completed,
-              },
-              "Run completed by passing integrity gate",
-            )
-          }
-          await updateTask(
-            task,
-            { status: "completed", error: null, time_completed: completed },
-            "Task completed by passing integrity gate",
+        await trackStepStart("integrity")
+        let integrityStepFailed = true
+        try {
+          const outcome = await runIntegrityReview(toolExecution, toolInput)
+          integrityStepFailed = !(
+            outcome.status === "reviewed" &&
+            outcome.verdict === "pass" &&
+            outcome.phase === "post_build"
           )
-        } else if (outcome.status === "reviewed" && outcome.phase === "post_build") {
-          await blockActiveRunForTask(taskID, {
-            blockingReason: `integrity verdict ${outcome.verdict}`,
-            error: outcome.summary,
-            summary: "Run blocked by non-pass integrity gate",
-          })
+          if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
+            await blockActiveRunForTask(taskID, {
+              blockingReason: "integrity artifact_missing",
+              error: outcome.artifactMissing.error,
+              summary: "Run blocked by missing integrity attempt artifact",
+            })
+          } else if (outcome.status === "reviewed" && outcome.verdict === "pass" && outcome.phase === "post_build") {
+            const task = requireTask(taskID)
+            const completed = Date.now()
+            const activeRun = findActiveRunForTask(taskID)
+            if (activeRun) {
+              await updateRun(
+                activeRun,
+                {
+                  status: "completed",
+                  blocking_reason: null,
+                  error: null,
+                  time_completed: completed,
+                },
+                "Run completed by passing integrity gate",
+              )
+            }
+            await updateTask(
+              task,
+              { status: "completed", error: null, time_completed: completed },
+              "Task completed by passing integrity gate",
+            )
+          } else if (outcome.status === "reviewed" && outcome.phase === "post_build") {
+            await blockActiveRunForTask(taskID, {
+              blockingReason: `integrity verdict ${outcome.verdict}`,
+              error: outcome.summary,
+              summary: "Run blocked by non-pass integrity gate",
+            })
+          }
+          return renderIntegrityOutcome(outcome)
+        } finally {
+          await trackStepComplete("integrity", undefined, integrityStepFailed)
         }
-        return renderIntegrityOutcome(outcome)
       },
     }),
 
