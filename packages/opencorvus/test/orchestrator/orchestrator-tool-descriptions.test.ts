@@ -211,6 +211,45 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       }).success,
     ).toBe(true)
 
+    expect(Object.keys(tools.fact_check.inputSchema!.shape)).toEqual([
+      "target_session_id",
+      "target_agent",
+      "fact_check_items",
+      "reason",
+      "continuation_artifact_id",
+    ])
+    expect(
+      tools.fact_check.inputSchema!.safeParse({
+        target_session_id: "ses_worker",
+        target_agent: "build",
+        fact_check_items: [
+          {
+            claim: "React 19 introduced use() for reading promise-backed resources",
+            confidence: "medium",
+            category: "library",
+            source: "model prior",
+          },
+        ],
+        reason: "Verify a worker claim with external documentation.",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.fact_check.inputSchema!.safeParse({
+        reason: "Continue prior fact-check finalizer miss.",
+        continuation_artifact_id: "art_fact_check_continue",
+      }).success,
+    ).toBe(true)
+    expect(tools.fact_check.inputSchema!.safeParse({ reason: "Missing target fields." }).success).toBe(false)
+    expect(
+      tools.fact_check.inputSchema!.safeParse({
+        target_session_id: "ses_worker",
+        target_agent: "build",
+        fact_check_items: [],
+        reason: "Ambiguous fact-check mode should be rejected.",
+        continuation_artifact_id: "art_fact_check_continue",
+      }).success,
+    ).toBe(false)
+
     expect(Object.keys(tools.browser_preview.inputSchema!.shape)).toEqual([
       "command",
       "workdir",
