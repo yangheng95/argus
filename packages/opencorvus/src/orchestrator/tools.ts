@@ -504,6 +504,10 @@ type IntegrityReviewOutcome =
       pointer: string
     }
   | {
+      status: "continuation"
+      result: ReturnType<typeof SubAgentProtocol.yieldResult>
+    }
+  | {
       status: "reviewed"
       specSnapshotID: string
       phase: "pre_build" | "post_build"
@@ -970,6 +974,46 @@ const FactCheckStageInputSchema = z
   .strict()
 
 type FactCheckStageInput = z.infer<typeof FactCheckStageInputSchema>
+
+const IntegrityInputSchema = z.object({
+  reason: z.string().optional().describe("Why you decided to run integrity review"),
+  continuation_artifact_id: StageContinuationArtifactIDField,
+})
+
+type IntegrityToolInput = z.infer<typeof IntegrityInputSchema>
+
+const IntegrityStageInputSchema = z
+  .object({
+    reason: z.string().optional(),
+    active_spec_snapshot_id: z.string().min(1),
+    phase: z.enum(["pre_build", "post_build"]),
+    goal_ids: z.array(z.string().min(1)),
+  })
+  .strict()
+
+type IntegrityStageInput = z.infer<typeof IntegrityStageInputSchema>
+
+function integrityContinuationFromArtifact(input: {
+  taskID: string
+  artifactID: string
+}): { continuation: AgentSessionContinuation; normalizedStageInput: IntegrityStageInput } {
+  const finalizerName = "submit_integrity_consensus"
+  const continuation = continuationFromArtifact({
+    taskID: input.taskID,
+    stage: "integrity",
+    artifactID: input.artifactID,
+    finalizerName,
+  })
+  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!row) throw new Error(`stage continuation request not found: ${input.artifactID}`)
+  const parsed = IntegrityStageInputSchema.safeParse(row.payload.normalized_stage_input)
+  if (!parsed.success) {
+    throw new Error(
+      `stage continuation ${input.artifactID} does not contain a valid integrity normalized_stage_input: ${parsed.error.message}`,
+    )
+  }
+  return { continuation, normalizedStageInput: parsed.data }
+}
 
 function factCheckContinuationFromArtifact(input: {
   taskID: string
@@ -2039,6 +2083,9 @@ export function createOrchestratorTools(input: {
         pointer: outcome.pointer,
       })
     }
+    if (outcome.status === "continuation") {
+      return outcome.result
+    }
     if (outcome.status === "reviewed") {
       const headline = outcome.artifactMissing
         ? `Integrity session completed but status=artifact_missing — durable integrity_attempt persistence failed. ` +
@@ -2078,7 +2125,10 @@ export function createOrchestratorTools(input: {
     throw new Error(`Unknown integrity outcome: ${(outcome as { status?: string }).status ?? "unknown"}`)
   }
 
-  async function runIntegrityReview(toolExecution: OrchestratorToolExecutionContext): Promise<IntegrityReviewOutcome> {
+  async function runIntegrityReview(
+    toolExecution: OrchestratorToolExecutionContext,
+    toolInput: IntegrityToolInput,
+  ): Promise<IntegrityReviewOutcome> {
     const task = requireTask(taskID)
     const activeSpec = findActiveSpecForTask(task.id)
     if (!activeSpec) {
@@ -2097,11 +2147,13 @@ export function createOrchestratorTools(input: {
       }
     }
 
-    const singleflightKey = `${task.id}:${activeSpec.id}`
+    const singleflightKey = `${task.id}:${activeSpec.id}:${
+      toolInput.continuation_artifact_id ? `continuation:${toolInput.continuation_artifact_id}` : "fresh"
+    }`
     const inflight = integrityReviewSingleflight.get(singleflightKey)
     if (inflight) return inflight
 
-    const reviewPromise = runIntegrityReviewOnce({ task, activeSpec, dbGoals, toolExecution })
+    const reviewPromise = runIntegrityReviewOnce({ task, activeSpec, dbGoals, toolExecution, toolInput })
     integrityReviewSingleflight.set(singleflightKey, reviewPromise)
     try {
       return await reviewPromise
@@ -2117,8 +2169,9 @@ export function createOrchestratorTools(input: {
     activeSpec: NonNullable<ReturnType<typeof findActiveSpecForTask>>
     dbGoals: ReturnType<typeof listGoals>
     toolExecution: OrchestratorToolExecutionContext
+    toolInput: IntegrityToolInput
   }): Promise<IntegrityReviewOutcome> {
-    const { task, activeSpec, dbGoals, toolExecution } = ctx
+    const { task, activeSpec, dbGoals, toolExecution, toolInput } = ctx
 
     const { findDeliveriesForTask, findRequirements, listGoalRunsForTask } = await import("@/engine/store")
     const reqRows = findRequirements(activeSpec.id)
@@ -2220,6 +2273,32 @@ export function createOrchestratorTools(input: {
     )
       ? "post_build"
       : "pre_build"
+    const normalizedStageInput = IntegrityStageInputSchema.parse({
+      reason: toolInput.reason,
+      active_spec_snapshot_id: activeSpec.id,
+      phase,
+      goal_ids: dbGoals.map((goal) => goal.id).sort(),
+    })
+    const continuationInput = toolInput.continuation_artifact_id
+      ? integrityContinuationFromArtifact({ taskID: task.id, artifactID: toolInput.continuation_artifact_id })
+      : undefined
+    const continuation = continuationInput?.continuation
+    if (continuationInput) {
+      const expected = normalizedStageInput
+      const actual = continuationInput.normalizedStageInput
+      const sameGoalIDs =
+        actual.goal_ids.length === expected.goal_ids.length &&
+        actual.goal_ids.every((goalID, index) => goalID === expected.goal_ids[index])
+      if (
+        actual.active_spec_snapshot_id !== expected.active_spec_snapshot_id ||
+        actual.phase !== expected.phase ||
+        !sameGoalIDs
+      ) {
+        throw new Error(
+          `integrity continuation ${toolInput.continuation_artifact_id} targets spec=${actual.active_spec_snapshot_id} phase=${actual.phase} goals=${actual.goal_ids.join(",")}; current scope is spec=${expected.active_spec_snapshot_id} phase=${expected.phase} goals=${expected.goal_ids.join(",")}`,
+        )
+      }
+    }
     const lineage = buildSpecSnapshotLineage({
       taskID,
       activeSpecSnapshotID: activeSpec.id,
@@ -2253,6 +2332,27 @@ export function createOrchestratorTools(input: {
 
     let activeOwnership: OrchestratorToolOwnershipPayload | undefined
     let ownershipClosed = false
+    const openIntegrityOwnership = (sessionID: string) => {
+      if (activeOwnership) return
+      const ownershipPayload = createOrchestratorToolOwnershipPayload({
+        taskID,
+        orchestratorSessionID: toolExecution.orchestratorSessionID,
+        orchestratorMessageID: toolExecution.orchestratorMessageID,
+        toolCallID: toolExecution.toolCallID,
+        toolPartID: toolExecution.toolPartID,
+        childSessionID: sessionID,
+        toolName: "integrity",
+        scope: "task",
+      })
+      insertOrchestratorToolOwnershipArtifact({
+        taskID,
+        runID: findActiveRunForTask(taskID)?.id ?? null,
+        goalRunID: null,
+        label: "tool-ownership-start",
+        payload: ownershipPayload,
+      })
+      activeOwnership = ownershipPayload
+    }
     const closeIntegrityOwnership = (outcome: "completed" | "failed" | "cancelled", error?: string) => {
       if (!activeOwnership || ownershipClosed) return
       ownershipClosed = true
@@ -2265,7 +2365,9 @@ export function createOrchestratorTools(input: {
     }
 
     let verdict: Awaited<ReturnType<typeof reviewIntegrity>>
+    let runnerSessionID = continuation?.sessionID
     try {
+      if (runnerSessionID) openIntegrityOwnership(runnerSessionID)
       verdict = await reviewIntegrity({
         userRequest: task.request,
         taskTitle: task.title,
@@ -2289,31 +2391,27 @@ export function createOrchestratorTools(input: {
         taskID,
         task,
         parentSessionID: input.agentSessionID,
+        continuation,
         onSessionCreated: (sessionID) => {
-          if (activeOwnership) return
-          const ownershipPayload = createOrchestratorToolOwnershipPayload({
-            taskID,
-            orchestratorSessionID: toolExecution.orchestratorSessionID,
-            orchestratorMessageID: toolExecution.orchestratorMessageID,
-            toolCallID: toolExecution.toolCallID,
-            toolPartID: toolExecution.toolPartID,
-            childSessionID: sessionID,
-            toolName: "integrity",
-            scope: "task",
-          })
-          insertOrchestratorToolOwnershipArtifact({
-            taskID,
-            runID: findActiveRunForTask(taskID)?.id ?? null,
-            goalRunID: null,
-            label: "tool-ownership-start",
-            payload: ownershipPayload,
-          })
-          activeOwnership = ownershipPayload
+          runnerSessionID = sessionID
+          openIntegrityOwnership(sessionID)
         },
       })
       closeIntegrityOwnership("completed")
     } catch (err) {
       closeIntegrityOwnership("failed", err instanceof Error ? err.message : String(err))
+      const continuationResult = continuationResultForTerminalFinalizerMiss({
+        err,
+        taskID: task.id,
+        stage: "integrity",
+        sessionID: runnerSessionID,
+        parentSessionID: input.agentSessionID,
+        finalizerName: "submit_integrity_consensus",
+        normalizedStageInput,
+      })
+      if (continuationResult) {
+        return { status: "continuation", result: continuationResult }
+      }
       throw err
     }
 
@@ -4442,12 +4540,10 @@ export function createOrchestratorTools(input: {
         "matches the user request, OR you already ran integrity for this spec " +
         "snapshot and have no new signal. Requires architect goals on the active " +
         "spec snapshot.",
-      inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to run integrity review"),
-      }),
-      execute: async (_input, options) => {
+      inputSchema: IntegrityInputSchema,
+      execute: async (toolInput, options) => {
         const toolExecution = requireOrchestratorToolExecutionContext(options, "integrity")
-        const outcome = await runIntegrityReview(toolExecution)
+        const outcome = await runIntegrityReview(toolExecution, toolInput)
         if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
           await blockActiveRunForTask(taskID, {
             blockingReason: "integrity artifact_missing",
