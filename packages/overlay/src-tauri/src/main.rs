@@ -1892,8 +1892,8 @@ mod tests {
         assert!(
             EMBEDDED_SERVER_FILES
                 .iter()
-                .any(|file| file.path == "browser-mcp-node/stdio.mjs"),
-            "embedded sidecar payload must include browser-mcp-node/stdio.mjs"
+                .any(|file| file.path == "browser-mcp-node/browser.mjs"),
+            "embedded sidecar payload must include browser-mcp-node/browser.mjs"
         );
         let node_entry = EMBEDDED_SERVER_FILES
             .iter()
