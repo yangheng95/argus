@@ -185,6 +185,15 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         continuation_artifact_id: "art_visual_qa_continue",
       }).success,
     ).toBe(true)
+    for (const freshField of ["focus", "app_url", "preview_command"] as const) {
+      expect(
+        tools.visual_qa.inputSchema!.safeParse({
+          reason: "ambiguous visual QA continuation",
+          continuation_artifact_id: "art_visual_qa_continue",
+          [freshField]: freshField === "app_url" ? "http://127.0.0.1:5173" : "fresh scope",
+        }).success,
+      ).toBe(false)
+    }
     expect(tools.visual_qa.inputSchema!.safeParse({ focus: "mobile" }).success).toBe(false)
 
     expect(Object.keys(tools.workload_analysis.inputSchema!.shape)).toEqual(["reason", "continuation_artifact_id"])
@@ -217,6 +226,15 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         continuation_artifact_id: "art_deep_research_continue",
       }).success,
     ).toBe(false)
+    for (const freshField of ["target_deliverable", "focus"] as const) {
+      expect(
+        tools.deep_research.inputSchema!.safeParse({
+          reason: "ambiguous deep research continuation",
+          continuation_artifact_id: "art_deep_research_continue",
+          [freshField]: freshField === "target_deliverable" ? "prd" : "fresh scope",
+        }).success,
+      ).toBe(false)
+    }
 
     expect(Object.keys(tools.fact_check.inputSchema!.shape)).toEqual([
       "target_session_id",
