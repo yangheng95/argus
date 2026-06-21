@@ -831,6 +831,23 @@ const FrontendDesignInputSchema = z
   .extend({ materials: FrontendDesignMaterialsField })
   .extend({ continuation_artifact_id: StageContinuationArtifactIDField })
   .strict()
+  .superRefine((input, ctx) => {
+    const hasContinuation = typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    if (!hasContinuation) return
+    const freshFields = [
+      Array.isArray(input.urls) && input.urls.length > 0 ? "urls" : undefined,
+      typeof input.figma_url === "string" && input.figma_url.length > 0 ? "figma_url" : undefined,
+      Array.isArray(input.materials) && input.materials.length > 0 ? "materials" : undefined,
+    ].filter((field): field is string => !!field)
+    for (const field of freshFields) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          "frontend_design continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh visual scope fields.",
+      })
+    }
+  })
 
 const FrontendResearchReasonField = z
   .string()
@@ -839,8 +856,9 @@ const FrontendResearchReasonField = z
 const FrontendResearchSourceUrlsField = z
   .array(z.string().min(1))
   .min(1)
+  .max(1)
   .describe(
-    "Source page URLs the frontend-research agent must partition into investigation work packets from prepared evidence.",
+    "Exactly one source page URL the frontend-research agent must partition into investigation work packets from prepared evidence. Call frontend_research separately for additional pages.",
   )
 const FrontendResearchFocusField = z
   .string()
