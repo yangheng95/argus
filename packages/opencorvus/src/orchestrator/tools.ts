@@ -214,11 +214,77 @@ function stageInputDigest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value ?? null)).digest("hex")
 }
 
+function taskContinuationScope(task: { title: string; request: string }) {
+  return {
+    task_title: task.title,
+    task_request_digest: stageInputDigest(task.request),
+  }
+}
+
+function specContinuationScope(
+  spec:
+    | {
+        id: string
+        version: number
+        status: string
+        summary: string | null
+        content: string
+        scope: string | null
+      }
+    | undefined,
+) {
+  if (!spec) return null
+  return {
+    id: spec.id,
+    version: spec.version,
+    status: spec.status,
+    summary_digest: stageInputDigest(spec.summary ?? null),
+    content_digest: stageInputDigest(spec.content),
+    scope_digest: stageInputDigest(spec.scope ?? null),
+  }
+}
+
+function goalsContinuationScope(
+  goals: Array<{
+    id: string
+    spec_snapshot_id: string | null
+    title: string
+    slug: string
+    objective: string
+    acceptance_specs: unknown
+    owned_paths: unknown
+    depends_on: unknown
+    kind: string
+    requirement_ids: unknown
+    priority: string
+    order_index: number
+  }>,
+) {
+  return goals
+    .slice()
+    .sort((a, b) => a.order_index - b.order_index || a.id.localeCompare(b.id))
+    .map((goal) => ({
+      id: goal.id,
+      spec_snapshot_id: goal.spec_snapshot_id,
+      title: goal.title,
+      slug: goal.slug,
+      objective_digest: stageInputDigest(goal.objective),
+      acceptance_specs_digest: stageInputDigest(goal.acceptance_specs),
+      owned_paths_digest: stageInputDigest(goal.owned_paths),
+      depends_on_digest: stageInputDigest(goal.depends_on),
+      kind: goal.kind,
+      requirement_ids_digest: stageInputDigest(goal.requirement_ids),
+      priority: goal.priority,
+      order_index: goal.order_index,
+    }))
+}
+
 function continuationFromArtifact(input: {
   taskID: string
   stage: StageContinuationStage
   artifactID: string
   finalizerName: string
+  expectedNormalizedStageInput?: unknown
 }): AgentSessionContinuation {
   const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
   if (!row) throw new Error(`stage continuation request not found: ${input.artifactID}`)
@@ -231,6 +297,14 @@ function continuationFromArtifact(input: {
     throw new Error(
       `stage continuation ${input.artifactID} targets finalizer ${row.payload.finalizer_name}, not ${input.finalizerName}`,
     )
+  }
+  if (input.expectedNormalizedStageInput !== undefined) {
+    const expectedDigest = stageInputDigest(input.expectedNormalizedStageInput)
+    if (row.payload.input_digest !== expectedDigest) {
+      throw new Error(
+        `stage continuation ${input.artifactID} scope mismatch for ${input.stage}; stored input_digest=${row.payload.input_digest}, current input_digest=${expectedDigest}. Start a fresh ${continuationToolName(input.stage)} run instead of continuing a stale child session.`,
+      )
+    }
   }
   return {
     sessionID: row.payload.session_id,
@@ -267,7 +341,15 @@ function continuationToolName(stage: StageContinuationStage): string {
   return explicit[stage] ?? stage.replaceAll("-", "_")
 }
 
-function continuationReason(input: { stage: StageContinuationStage; finalizerName: string; normalizedStageInput: unknown }) {
+function continuationReason(input: {
+  stage: StageContinuationStage
+  finalizerName: string
+  pointerReason?: string | null
+  normalizedStageInput: unknown
+}) {
+  if (typeof input.pointerReason === "string" && input.pointerReason.trim()) {
+    return `Continue after missing ${input.finalizerName}: ${input.pointerReason.trim()}`
+  }
   const normalized = input.normalizedStageInput
   if (normalized && typeof normalized === "object" && !Array.isArray(normalized)) {
     const reason = (normalized as { reason?: unknown }).reason
@@ -284,6 +366,7 @@ function continuationResultForTerminalFinalizerMiss(input: {
   parentSessionID: string
   finalizerName: string
   normalizedStageInput: unknown
+  pointerReason?: string | null
 }): ReturnType<typeof SubAgentProtocol.yieldResult> | undefined {
   const miss = terminalFinalizerMiss({ err: input.err, finalizerName: input.finalizerName })
   if (!miss) return undefined
@@ -292,6 +375,7 @@ function continuationResultForTerminalFinalizerMiss(input: {
   const reason = continuationReason({
     stage: input.stage,
     finalizerName: input.finalizerName,
+    pointerReason: input.pointerReason,
     normalizedStageInput: input.normalizedStageInput,
   })
   const request = createStageContinuationRequest({
@@ -2469,6 +2553,7 @@ export function createOrchestratorTools(input: {
         parentSessionID: input.agentSessionID,
         finalizerName: "submit_integrity_consensus",
         normalizedStageInput,
+        pointerReason: toolInput.reason ?? null,
       })
       if (continuationResult) {
         return { status: "continuation", result: continuationResult }
@@ -2876,10 +2961,7 @@ export function createOrchestratorTools(input: {
         const decisionLog = createDecisionLog(taskID)
         const maturityScopePendingBeforeID = decisionLog.readByKey("maturity_scope_pending")?.id
         const normalizedStageInput = {
-          reason: reason ?? null,
-          task_title: task.title,
-          task_request_digest: stageInputDigest(task.request),
-          continuation_artifact_id: continuation_artifact_id ?? null,
+          task: taskContinuationScope(task),
         }
         let continuation: AgentSessionContinuation | undefined
         try {
@@ -2889,6 +2971,7 @@ export function createOrchestratorTools(input: {
                 stage: "requirements",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_requirements",
+                expectedNormalizedStageInput: normalizedStageInput,
               })
             : undefined
           runnerSessionID = continuation?.sessionID
@@ -3098,6 +3181,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_requirements",
             normalizedStageInput,
+            pointerReason: reason ?? null,
           })
           if (continuationResult) return continuationResult
           // P4 (rule 4 — same systemic shape as analyze_intent / frontend_design
@@ -3106,11 +3190,11 @@ export function createOrchestratorTools(input: {
           // requirements set. Without this the abort surfaces only as a
           // thrown tool result the orchestrator may swallow during recovery.
           const { createDecisionLog } = await import("@/decision-log")
-          const reason = err instanceof Error ? err.message : String(err)
+          const failureReason = err instanceof Error ? err.message : String(err)
           createDecisionLog(taskID).append({
             phase: "requirements",
             key: "abort_requirements_failed",
-            value: `Requirements stage aborted: ${reason.slice(0, 400)}`,
+            value: `Requirements stage aborted: ${failureReason.slice(0, 400)}`,
             reason: "requirements_threw",
           })
           throw err
@@ -3149,14 +3233,7 @@ export function createOrchestratorTools(input: {
       inputSchema: FrontendDesignInputSchema,
       execute: async ({ reason, urls, figma_url, materials, continuation_artifact_id }) => {
         const task = requireTask(taskID)
-        const continuation = continuation_artifact_id
-          ? continuationFromArtifact({
-              taskID,
-              stage: "frontend-design",
-              artifactID: continuation_artifact_id,
-              finalizerName: "submit_frontend_template",
-            })
-          : undefined
+        const hasContinuation = typeof continuation_artifact_id === "string" && continuation_artifact_id.length > 0
 
         // Guard: skip if no visual input available. Figma URL counts as visual.
         const hasAttachments = Array.isArray(task.attachments) && task.attachments.length > 0
@@ -3165,24 +3242,29 @@ export function createOrchestratorTools(input: {
         const meta = (task.metadata as Record<string, unknown> | null) ?? {}
         const metaFigma = typeof meta.figma_url === "string" ? meta.figma_url : undefined
         const rawInputUrls = (Array.isArray(urls) ? urls : []).filter((u) => typeof u === "string" && u.length > 0)
-        const inputUrls = continuation ? [] : rawInputUrls
+        const inputUrls = hasContinuation ? [] : rawInputUrls
         const figmaUrls = [
           ...(figma_url ? [figma_url] : []),
           ...(metaFigma ? [metaFigma] : []),
           ...inputUrls.filter((u) => isFigmaUrl(u)),
-        ].filter(() => !continuation)
+        ].filter(() => !hasContinuation)
         const liveUrls = inputUrls.filter((u) => !isFigmaUrl(u))
         const rawMaterialPaths = Array.isArray(materials)
           ? materials.filter((m) => typeof m === "string" && m.length > 0)
           : []
-        const materialPaths = continuation ? [] : rawMaterialPaths
+        const materialPaths = hasContinuation ? [] : rawMaterialPaths
         const normalizedStageInput = {
-          reason: reason ?? null,
-          urls: rawInputUrls,
-          figma_url: figma_url ?? metaFigma ?? null,
-          materials: rawMaterialPaths,
-          continuation_artifact_id: continuation_artifact_id ?? null,
+          task: taskContinuationScope(task),
         }
+        const continuation = hasContinuation
+          ? continuationFromArtifact({
+              taskID,
+              stage: "frontend-design",
+              artifactID: continuation_artifact_id,
+              finalizerName: "submit_frontend_template",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
+          : undefined
         if (
           !continuation &&
           !hasAttachments &&
@@ -3797,6 +3879,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_frontend_template",
             normalizedStageInput,
+            pointerReason: reason ?? null,
           })
           if (continuationResult) return continuationResult
           throw err instanceof Error ? err : new Error(msg)
@@ -3853,11 +3936,8 @@ export function createOrchestratorTools(input: {
         // creates the runner session internally.
         let runnerSessionID: string | undefined
         const normalizedStageInput = {
-          reason: reason ?? null,
-          task_title: task.title,
-          task_request_digest: stageInputDigest(task.request),
-          active_spec_id: activeSpec.id,
-          continuation_artifact_id: continuation_artifact_id ?? null,
+          task: taskContinuationScope(task),
+          active_spec: specContinuationScope(activeSpec),
         }
         let continuation: AgentSessionContinuation | undefined
         try {
@@ -3867,6 +3947,7 @@ export function createOrchestratorTools(input: {
                 stage: "architect",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_architect",
+                expectedNormalizedStageInput: normalizedStageInput,
               })
             : undefined
           runnerSessionID = continuation?.sessionID
@@ -4178,6 +4259,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_architect",
             normalizedStageInput,
+            pointerReason: reason ?? null,
           })
           if (continuationResult) return continuationResult
           createDecisionLog(taskID).append({
@@ -4251,9 +4333,12 @@ export function createOrchestratorTools(input: {
 
         await trackStepStart("workload_analysis")
         let runnerSessionID: string | undefined
+        const contractGraphArtifact = findLatestArchitectContractGraphArtifact(taskID)
         const normalizedStageInput = {
-          reason,
-          continuation_artifact_id,
+          task: taskContinuationScope(task),
+          active_spec: specContinuationScope(activeSpec),
+          goals: goalsContinuationScope(goals),
+          architect_contract_graph_artifact_id: contractGraphArtifact?.id ?? null,
         }
         try {
           const continuation = continuation_artifact_id
@@ -4262,6 +4347,7 @@ export function createOrchestratorTools(input: {
                 stage: "goal-workload-analyst",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_workload_analysis",
+                expectedNormalizedStageInput: normalizedStageInput,
               })
             : undefined
           runnerSessionID = continuation?.sessionID
@@ -4386,14 +4472,15 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_workload_analysis",
             normalizedStageInput,
+            pointerReason: reason ?? null,
           })
           if (continuationResult) return continuationResult
           const { createDecisionLog } = await import("@/decision-log")
-          const reason = err instanceof Error ? err.message : String(err)
+          const failureReason = err instanceof Error ? err.message : String(err)
           createDecisionLog(taskID).append({
             phase: "architect",
             key: "abort_workload_analysis_failed",
-            value: `Workload analysis stage aborted: ${reason.slice(0, 400)}`,
+            value: `Workload analysis stage aborted: ${failureReason.slice(0, 400)}`,
             reason: "workload_analysis_threw",
           })
           throw err
@@ -4438,6 +4525,7 @@ export function createOrchestratorTools(input: {
         const buildEvidence = renderVisualQaBuildEvidenceContext(findDeliveriesForTask(taskID))
         const priorVisualQa = renderVisualQaPriorReportContext(decisionLog.readByPhase("visual_qa"))
         const activeSpec = findActiveSpecForTask(taskID)
+        const activeGoals = listGoals(taskID)
         const projectRoot = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
         const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir: projectRoot, taskID })
         const integrityContext = renderVisualQaIntegrityContext(
@@ -4452,16 +4540,14 @@ export function createOrchestratorTools(input: {
         const referenceParity = deriveVisualQaReferenceParityContext({
           taskID,
           specSnapshotID: activeSpec?.id,
-          goals: listGoals(taskID),
+          goals: activeGoals,
           frontendDesignEntries: decisionLog.readByPhase("frontend_design"),
           visualEvidence,
         })
         const normalizedStageInput = {
-          reason,
-          focus,
-          app_url,
-          preview_command,
-          continuation_artifact_id,
+          task: taskContinuationScope(task),
+          active_spec: specContinuationScope(activeSpec),
+          goals: goalsContinuationScope(activeGoals),
         }
 
         try {
@@ -4471,6 +4557,7 @@ export function createOrchestratorTools(input: {
                 stage: "visual-qa",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_visual_qa_report",
+                expectedNormalizedStageInput: normalizedStageInput,
               })
             : undefined
           runnerSessionID = continuation?.sessionID
@@ -4553,6 +4640,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_visual_qa_report",
             normalizedStageInput,
+            pointerReason: reason,
           })
           if (continuationResult) return continuationResult
           log.error("visual_qa: failed", { taskID, error: msg })
@@ -4865,6 +4953,7 @@ export function createOrchestratorTools(input: {
               parentSessionID: input.agentSessionID,
               finalizerName: "report_fact_check_result",
               normalizedStageInput: resolvedArgs,
+              pointerReason: resolvedArgs.reason,
             })
             if (continuationResult) return continuationResult
           }
@@ -5029,10 +5118,7 @@ export function createOrchestratorTools(input: {
         const task = requireTask(taskID)
         await trackStepStart("frontend_research")
         const normalizedStageInput = {
-          reason,
-          source_urls: source_urls ?? [],
-          focus: focus ?? null,
-          continuation_artifact_id: continuation_artifact_id ?? null,
+          task: taskContinuationScope(task),
         }
         let continuation: AgentSessionContinuation | undefined
         let runnerSessionID: string | undefined
@@ -5043,6 +5129,7 @@ export function createOrchestratorTools(input: {
                 stage: "frontend-research",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_research_brief",
+                expectedNormalizedStageInput: normalizedStageInput,
               })
             : undefined
           runnerSessionID = continuation?.sessionID
@@ -5112,6 +5199,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_research_brief",
             normalizedStageInput,
+            pointerReason: reason,
           })
           if (continuationResult) return continuationResult
           if (runnerSessionID) {
@@ -5144,11 +5232,7 @@ export function createOrchestratorTools(input: {
         const task = requireTask(taskID)
         let runnerSessionID: string | undefined
         const normalizedStageInput = {
-          reason,
-          target_deliverable,
-          source_urls,
-          focus,
-          continuation_artifact_id,
+          task: taskContinuationScope(task),
         }
         try {
           const continuation = continuation_artifact_id
@@ -5157,6 +5241,7 @@ export function createOrchestratorTools(input: {
                 stage: "deep-research",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_research_brief",
+                expectedNormalizedStageInput: normalizedStageInput,
               })
             : undefined
           runnerSessionID = continuation?.sessionID
@@ -5212,6 +5297,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_research_brief",
             normalizedStageInput,
+            pointerReason: reason,
           })
           if (continuationResult) return continuationResult
           if (runnerSessionID) {
