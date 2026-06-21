@@ -1,7 +1,4 @@
-import {
-  findLatestResearchBriefArtifact,
-  listFrontendResearchBriefArtifacts,
-} from "@/engine/store"
+import { listResearchBriefArtifacts, listFrontendResearchBriefArtifacts } from "@/engine/store"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import { researchBriefIsStale, researchRequestHashInput } from "./staleness"
 import { RESEARCH_PROMPT_LIMITS, type ResearchBrief } from "./schema"
@@ -16,11 +13,14 @@ const FRONTEND_RESEARCH_BUILD_OPEN_QUESTION_CAP = 8
 const FRONTEND_RESEARCH_LABEL_CHARS = 160
 const FRONTEND_RESEARCH_DETAIL_CHARS = 240
 const FRONTEND_RESEARCH_BRIEF_CAP = 4
+const DEEP_RESEARCH_BRIEF_CAP = 4
 
-export type FrontendResearchPromptBrief = {
+export type ResearchPromptBrief = {
   artifactID: string
   brief: ResearchBrief
 }
+
+export type FrontendResearchPromptBrief = ResearchPromptBrief
 
 export function scopedResearchEvidenceRef(source: ResearchEvidenceSource, evidenceID: string): string {
   return `${source}:${evidenceID}`
@@ -38,18 +38,20 @@ function scopedFrontendResearchEvidenceRefs(artifactID: string, evidenceIDs: str
   return evidenceIDs.map((id) => scopedFrontendResearchEvidenceRef(artifactID, id))
 }
 
-export function findNonStaleResearchBrief(input: { taskID?: string; request: string }): ResearchBrief | undefined {
-  return findNonStaleBrief({
-    ...input,
-    findLatestArtifact: findLatestResearchBriefArtifact,
-  })
+function scopedDeepResearchEvidenceRef(artifactID: string, evidenceID: string): string {
+  return scopedResearchEvidenceRef("deep_research", `${artifactID}:${evidenceID}`)
 }
 
-export function findNonStaleFrontendResearchBrief(input: {
-  taskID?: string
-  request: string
-}): ResearchBrief | undefined {
-  return findNonStaleFrontendResearchBriefs(input)[0]?.brief
+function scopedDeepResearchEvidenceRefs(artifactID: string, evidenceIDs: string[]): string[] {
+  return evidenceIDs.map((id) => scopedDeepResearchEvidenceRef(artifactID, id))
+}
+
+export function findNonStaleResearchBriefs(input: { taskID?: string; request: string }): ResearchPromptBrief[] {
+  if (!input.taskID) return []
+  return listResearchBriefArtifacts(input.taskID)
+    .filter((artifact) => !researchBriefStaleForRequest({ taskID: input.taskID!, request: input.request, brief: artifact.payload }))
+    .slice(0, DEEP_RESEARCH_BRIEF_CAP)
+    .map((artifact) => ({ artifactID: artifact.id, brief: artifact.payload }))
 }
 
 export function findNonStaleFrontendResearchBriefs(input: {
@@ -61,22 +63,6 @@ export function findNonStaleFrontendResearchBriefs(input: {
     .filter((artifact) => !researchBriefStaleForRequest({ taskID: input.taskID!, request: input.request, brief: artifact.payload }))
     .slice(0, FRONTEND_RESEARCH_BRIEF_CAP)
     .map((artifact) => ({ artifactID: artifact.id, brief: artifact.payload }))
-}
-
-function findNonStaleBrief(input: {
-  taskID?: string
-  request: string
-  findLatestArtifact: (taskID: string) => { payload: ResearchBrief } | undefined
-}): ResearchBrief | undefined {
-  if (!input.taskID) return undefined
-  const artifact = input.findLatestArtifact(input.taskID)
-  if (!artifact) return undefined
-  const stale = researchBriefIsStale({
-    request: input.request,
-    requestHashInput: researchRequestHashInputForTask(input.taskID, input.request),
-    brief: artifact.payload,
-  })
-  return stale.stale ? undefined : artifact.payload
 }
 
 function researchBriefStaleForRequest(input: { taskID: string; request: string; brief: ResearchBrief }): boolean {
@@ -96,8 +82,9 @@ function researchRequestHashInputForTask(taskID: string, request: string) {
 }
 
 export function researchEvidenceRefsForTask(input: { taskID?: string; request: string }): string[] {
-  const brief = findNonStaleResearchBrief(input)
-  return brief ? brief.evidence_index.map((item) => scopedResearchEvidenceRef("deep_research", item.id)) : []
+  return findNonStaleResearchBriefs(input).flatMap(({ artifactID, brief }) =>
+    brief.evidence_index.map((item) => scopedDeepResearchEvidenceRef(artifactID, item.id)),
+  )
 }
 
 export function frontendResearchEvidenceRefsForTask(input: { taskID?: string; request: string }): string[] {
@@ -111,9 +98,9 @@ export function allResearchEvidenceRefsForTask(input: { taskID?: string; request
 }
 
 export function renderResearchBriefPromptSection(input: { taskID?: string; request: string }): string {
-  const brief = findNonStaleResearchBrief(input)
+  const briefs = findNonStaleResearchBriefs(input)
   return renderResearchBriefSection({
-    brief,
+    briefs,
     source: "deep_research",
     heading: "# Research Brief (advisory evidence input)",
     preamble:
@@ -139,130 +126,135 @@ export function renderFrontendResearchBuildPromptSection(input: { taskID?: strin
 }
 
 function renderResearchBriefSection(input: {
-  brief?: ResearchBrief
+  briefs?: ResearchPromptBrief[]
   source: ResearchEvidenceSource
   heading: string
   preamble: string
 }): string {
-  const brief = input.brief
-  if (!brief) return ""
+  const briefs = input.briefs ?? []
+  if (briefs.length === 0) return ""
   const source = input.source
+  const evidenceRef = (artifactID: string, evidenceID: string) =>
+    source === "deep_research"
+      ? scopedDeepResearchEvidenceRef(artifactID, evidenceID)
+      : scopedFrontendResearchEvidenceRef(artifactID, evidenceID)
+  const evidenceRefs = (artifactID: string, evidenceIDs: string[]) => evidenceIDs.map((id) => evidenceRef(artifactID, id))
   const data = {
-    summary: limitText(brief.summary, RESEARCH_PROMPT_LIMITS.summaryChars),
-    evidence_index: brief.evidence_index.slice(0, RESEARCH_PROMPT_LIMITS.evidenceItems).map((item) => ({
-      id: scopedResearchEvidenceRef(source, item.id),
-      source_id: item.id,
-      kind: item.kind,
-      reliability: item.reliability,
-      title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
-      pointer: limitText(item.pointer, RESEARCH_PROMPT_LIMITS.itemChars),
-      excerpt: limitText(item.excerpt, RESEARCH_PROMPT_LIMITS.itemChars),
-      volatile: item.volatile,
+    briefs: briefs.map(({ artifactID, brief }) => ({
+      artifact_id: artifactID,
+      summary: limitText(brief.summary, RESEARCH_PROMPT_LIMITS.summaryChars),
+      evidence_index: brief.evidence_index.slice(0, RESEARCH_PROMPT_LIMITS.evidenceItems).map((item) => ({
+        id: evidenceRef(artifactID, item.id),
+        source_id: item.id,
+        kind: item.kind,
+        reliability: item.reliability,
+        title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
+        pointer: limitText(item.pointer, RESEARCH_PROMPT_LIMITS.itemChars),
+        excerpt: limitText(item.excerpt, RESEARCH_PROMPT_LIMITS.itemChars),
+        volatile: item.volatile,
+      })),
+      facts: brief.facts.slice(0, RESEARCH_PROMPT_LIMITS.factItems).map((item) => ({
+        id: item.id,
+        statement: limitText(item.statement, RESEARCH_PROMPT_LIMITS.itemChars),
+        evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+      })),
+      problem_statements: brief.problem_statements.slice(0, RESEARCH_PROMPT_LIMITS.problemItems).map((item) => ({
+        id: item.id,
+        statement: limitText(item.statement, RESEARCH_PROMPT_LIMITS.itemChars),
+        fact_ids: item.fact_ids,
+      })),
+      user_needs: brief.user_needs.slice(0, RESEARCH_PROMPT_LIMITS.needItems).map((item) => ({
+        id: item.id,
+        need: limitText(item.need, RESEARCH_PROMPT_LIMITS.itemChars),
+        fact_ids: item.fact_ids,
+      })),
+      constraints: brief.constraints.slice(0, RESEARCH_PROMPT_LIMITS.constraintItems).map((item) => ({
+        id: item.id,
+        constraint: limitText(item.constraint, RESEARCH_PROMPT_LIMITS.itemChars),
+        fact_ids: item.fact_ids,
+      })),
+      document_outline: brief.document_outline.slice(0, RESEARCH_PROMPT_LIMITS.documentOutlineItems).map((item) => ({
+        id: item.id,
+        title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
+        purpose: limitText(item.purpose, RESEARCH_PROMPT_LIMITS.itemChars),
+        evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+      })),
+      webpage_contract: brief.webpage_contract
+        ? {
+            source_url: limitText(brief.webpage_contract.source_url, RESEARCH_PROMPT_LIMITS.itemChars),
+            reference_image_evidence_refs: evidenceRefs(artifactID, brief.webpage_contract.reference_image_evidence_ids),
+            functional_surfaces: brief.webpage_contract.functional_surfaces
+              .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
+              .map((item) => ({
+                id: item.id,
+                title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
+                user_visible_behavior: limitText(item.user_visible_behavior, RESEARCH_PROMPT_LIMITS.itemChars),
+                required_interactions: item.required_interactions.map((interaction) =>
+                  limitText(interaction, RESEARCH_PROMPT_LIMITS.itemChars),
+                ),
+                evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+              })),
+            visual_layout: brief.webpage_contract.visual_layout
+              .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
+              .map((item) => ({
+                id: item.id,
+                viewport: item.viewport,
+                region: limitText(item.region, RESEARCH_PROMPT_LIMITS.itemChars),
+                layout_contract: limitText(item.layout_contract, RESEARCH_PROMPT_LIMITS.itemChars),
+                spacing_and_alignment: limitText(item.spacing_and_alignment, RESEARCH_PROMPT_LIMITS.itemChars),
+                evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+              })),
+            style_requirements: brief.webpage_contract.style_requirements
+              .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
+              .map((item) => ({
+                id: item.id,
+                token_or_selector: limitText(item.token_or_selector, RESEARCH_PROMPT_LIMITS.itemChars),
+                requirement: limitText(item.requirement, RESEARCH_PROMPT_LIMITS.itemChars),
+                evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+              })),
+            interaction_states: brief.webpage_contract.interaction_states
+              .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
+              .map((item) => ({
+                id: item.id,
+                component: limitText(item.component, RESEARCH_PROMPT_LIMITS.itemChars),
+                state: limitText(item.state, RESEARCH_PROMPT_LIMITS.itemChars),
+                behavior: limitText(item.behavior, RESEARCH_PROMPT_LIMITS.itemChars),
+                evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+              })),
+            data_content_inventory: brief.webpage_contract.data_content_inventory
+              .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
+              .map((item) => ({
+                id: item.id,
+                surface: limitText(item.surface, RESEARCH_PROMPT_LIMITS.itemChars),
+                content_contract: limitText(item.content_contract, RESEARCH_PROMPT_LIMITS.itemChars),
+                evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+              })),
+            fidelity_acceptance: brief.webpage_contract.fidelity_acceptance
+              .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
+              .map((item) => ({
+                id: item.id,
+                target: limitText(item.target, RESEARCH_PROMPT_LIMITS.itemChars),
+                criterion: limitText(item.criterion, RESEARCH_PROMPT_LIMITS.itemChars),
+                evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+              })),
+            fidelity_risks: brief.webpage_contract.fidelity_risks
+              .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
+              .map((item) => ({
+                id: item.id,
+                risk: limitText(item.risk, RESEARCH_PROMPT_LIMITS.itemChars),
+                impact: limitText(item.impact, RESEARCH_PROMPT_LIMITS.itemChars),
+                evidence_refs: evidenceRefs(artifactID, item.evidence_ids),
+              })),
+          }
+        : undefined,
+      open_questions: brief.open_questions.slice(0, RESEARCH_PROMPT_LIMITS.openQuestionItems).map((item) => ({
+        id: item.id,
+        blocking: item.blocking,
+        question: limitText(item.question, RESEARCH_PROMPT_LIMITS.itemChars),
+        related_fact_ids: item.related_fact_ids,
+      })),
+      bundle_paths: brief.bundle,
     })),
-    facts: brief.facts.slice(0, RESEARCH_PROMPT_LIMITS.factItems).map((item) => ({
-      id: item.id,
-      statement: limitText(item.statement, RESEARCH_PROMPT_LIMITS.itemChars),
-      evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-    })),
-    problem_statements: brief.problem_statements.slice(0, RESEARCH_PROMPT_LIMITS.problemItems).map((item) => ({
-      id: item.id,
-      statement: limitText(item.statement, RESEARCH_PROMPT_LIMITS.itemChars),
-      fact_ids: item.fact_ids,
-    })),
-    user_needs: brief.user_needs.slice(0, RESEARCH_PROMPT_LIMITS.needItems).map((item) => ({
-      id: item.id,
-      need: limitText(item.need, RESEARCH_PROMPT_LIMITS.itemChars),
-      fact_ids: item.fact_ids,
-    })),
-    constraints: brief.constraints.slice(0, RESEARCH_PROMPT_LIMITS.constraintItems).map((item) => ({
-      id: item.id,
-      constraint: limitText(item.constraint, RESEARCH_PROMPT_LIMITS.itemChars),
-      fact_ids: item.fact_ids,
-    })),
-    document_outline: brief.document_outline.slice(0, RESEARCH_PROMPT_LIMITS.documentOutlineItems).map((item) => ({
-      id: item.id,
-      title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
-      purpose: limitText(item.purpose, RESEARCH_PROMPT_LIMITS.itemChars),
-      evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-    })),
-    webpage_contract: brief.webpage_contract
-      ? {
-          source_url: limitText(brief.webpage_contract.source_url, RESEARCH_PROMPT_LIMITS.itemChars),
-          reference_image_evidence_refs: scopedResearchEvidenceRefs(
-            source,
-            brief.webpage_contract.reference_image_evidence_ids,
-          ),
-          functional_surfaces: brief.webpage_contract.functional_surfaces
-            .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
-            .map((item) => ({
-              id: item.id,
-              title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
-              user_visible_behavior: limitText(item.user_visible_behavior, RESEARCH_PROMPT_LIMITS.itemChars),
-              required_interactions: item.required_interactions.map((interaction) =>
-                limitText(interaction, RESEARCH_PROMPT_LIMITS.itemChars),
-              ),
-              evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-            })),
-          visual_layout: brief.webpage_contract.visual_layout
-            .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
-            .map((item) => ({
-              id: item.id,
-              viewport: item.viewport,
-              region: limitText(item.region, RESEARCH_PROMPT_LIMITS.itemChars),
-              layout_contract: limitText(item.layout_contract, RESEARCH_PROMPT_LIMITS.itemChars),
-              spacing_and_alignment: limitText(item.spacing_and_alignment, RESEARCH_PROMPT_LIMITS.itemChars),
-              evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-            })),
-          style_requirements: brief.webpage_contract.style_requirements
-            .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
-            .map((item) => ({
-              id: item.id,
-              token_or_selector: limitText(item.token_or_selector, RESEARCH_PROMPT_LIMITS.itemChars),
-              requirement: limitText(item.requirement, RESEARCH_PROMPT_LIMITS.itemChars),
-              evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-            })),
-          interaction_states: brief.webpage_contract.interaction_states
-            .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
-            .map((item) => ({
-              id: item.id,
-              component: limitText(item.component, RESEARCH_PROMPT_LIMITS.itemChars),
-              state: limitText(item.state, RESEARCH_PROMPT_LIMITS.itemChars),
-              behavior: limitText(item.behavior, RESEARCH_PROMPT_LIMITS.itemChars),
-              evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-            })),
-          data_content_inventory: brief.webpage_contract.data_content_inventory
-            .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
-            .map((item) => ({
-              id: item.id,
-              surface: limitText(item.surface, RESEARCH_PROMPT_LIMITS.itemChars),
-              content_contract: limitText(item.content_contract, RESEARCH_PROMPT_LIMITS.itemChars),
-              evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-            })),
-          fidelity_acceptance: brief.webpage_contract.fidelity_acceptance
-            .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
-            .map((item) => ({
-              id: item.id,
-              target: limitText(item.target, RESEARCH_PROMPT_LIMITS.itemChars),
-              criterion: limitText(item.criterion, RESEARCH_PROMPT_LIMITS.itemChars),
-              evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-            })),
-          fidelity_risks: brief.webpage_contract.fidelity_risks
-            .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
-            .map((item) => ({
-              id: item.id,
-              risk: limitText(item.risk, RESEARCH_PROMPT_LIMITS.itemChars),
-              impact: limitText(item.impact, RESEARCH_PROMPT_LIMITS.itemChars),
-              evidence_refs: scopedResearchEvidenceRefs(source, item.evidence_ids),
-            })),
-        }
-      : undefined,
-    open_questions: brief.open_questions.slice(0, RESEARCH_PROMPT_LIMITS.openQuestionItems).map((item) => ({
-      id: item.id,
-      blocking: item.blocking,
-      question: limitText(item.question, RESEARCH_PROMPT_LIMITS.itemChars),
-      related_fact_ids: item.related_fact_ids,
-    })),
-    bundle_paths: brief.bundle,
   }
   const lines: string[] = []
   lines.push(input.heading)

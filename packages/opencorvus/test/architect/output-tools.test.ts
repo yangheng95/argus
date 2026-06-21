@@ -361,7 +361,7 @@ test("architect rejects contract evidence_refs outside active research evidence 
       },
     ],
     workDir: process.cwd(),
-    knownResearchEvidenceRefs: ["deep_research:ev_1"],
+    knownResearchEvidenceRefs: ["deep_research:art_deep:ev_1"],
   })
 
   const result = await kit.tools.register_contract.execute!(
@@ -403,7 +403,7 @@ test("architect rejects ambiguous bare evidence_refs when research sources share
       },
     ],
     workDir: process.cwd(),
-    knownResearchEvidenceRefs: ["deep_research:ev_1", "frontend_research:ev_1"],
+    knownResearchEvidenceRefs: ["deep_research:art_deep:ev_1", "frontend_research:art_frontend:ev_1"],
   })
 
   const result = await kit.tools.register_contract.execute!(

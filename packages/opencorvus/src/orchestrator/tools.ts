@@ -101,12 +101,12 @@ import {
   findLatestArchitectContractGraphArtifact,
   findLatestGoalWorkloadArtifact,
   findLatestIntegrityAttemptArtifact,
-  findLatestResearchBriefArtifact,
   findLatestAcceptanceVerdictArtifact,
   findLatestAcceptanceVerdictArtifactForAcceptance,
   findLatestIntegrityArtifactMissingStatus,
   findLatestTipGoalRun,
   findChildrenOfTask,
+  listResearchBriefArtifacts,
   listFrontendResearchBriefArtifacts,
   findPlan,
   findRun,
@@ -5879,12 +5879,15 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "all") {
-          await appendResearchBriefContext(
-            sections,
-            "Deep Research Brief",
-            findLatestResearchBriefArtifact(taskID),
-            task.request,
-          )
+          const researchBriefs = listResearchBriefArtifacts(taskID).slice(0, 4)
+          for (const [index, artifact] of researchBriefs.entries()) {
+            await appendResearchBriefContext(
+              sections,
+              researchBriefs.length === 1 ? "Deep Research Brief" : `Deep Research Brief ${index + 1}/${researchBriefs.length}`,
+              artifact,
+              task.request,
+            )
+          }
           const frontendResearchBriefs = listFrontendResearchBriefArtifacts(taskID).slice(0, 4)
           for (const [index, artifact] of frontendResearchBriefs.entries()) {
             await appendResearchBriefContext(

@@ -29,6 +29,7 @@ import {
   beginBuildAttempt,
   insertRequirements,
   persistTaskFrontendResearchBrief,
+  persistTaskResearchBrief,
   recordIntegrityAttempt,
   startNewAttempt,
   updateGoalRun,
@@ -3517,6 +3518,69 @@ describe("orchestrator tools", () => {
         expect(result).toContain(secondArtifactID)
         expect(result).toContain("https://example.com/first")
         expect(result).toContain("https://example.com/second")
+      },
+    })
+  })
+
+  test("read_context surfaces multiple deep research briefs", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_deep_research_${stamp}`
+    const taskID = `tsk_read_context_deep_research_${stamp}`
+    const goalID = `gol_read_context_deep_research_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read context deep research",
+      taskTitle: "read context deep research",
+      request: "Surface every deep research brief in read_context",
+      goalTitle: "Read context deep goal",
+      goalSlug: "read-context-deep-goal",
+      objective: "Show all deep research briefs",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read context deep research parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const firstArtifactID = persistTaskResearchBrief({
+          taskID,
+          brief: minimalDeepResearchBrief({
+            taskID,
+            sessionID: `ses_deep_research_first_${stamp}`,
+          }),
+          now: now + 1,
+        })
+        const secondArtifactID = persistTaskResearchBrief({
+          taskID,
+          brief: minimalDeepResearchBrief({
+            taskID,
+            sessionID: `ses_deep_research_second_${stamp}`,
+          }),
+          now: now + 2,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+
+        expect(result).toContain("Deep Research Brief 1/2")
+        expect(result).toContain("Deep Research Brief 2/2")
+        expect(result).toContain(firstArtifactID)
+        expect(result).toContain(secondArtifactID)
+        expect(result).toContain(`ses_deep_research_first_${stamp}`)
+        expect(result).toContain(`ses_deep_research_second_${stamp}`)
       },
     })
   })

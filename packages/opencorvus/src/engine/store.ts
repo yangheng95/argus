@@ -304,7 +304,18 @@ export function findLatestFrontendResearchBriefArtifact(taskID: string): Researc
   return findLatestResearchBriefArtifactByKind(taskID, "frontend_research_brief")
 }
 
+export function listResearchBriefArtifacts(taskID: string): ResearchBriefArtifactRow[] {
+  return listResearchBriefArtifactsByKind(taskID, "research_brief")
+}
+
 export function listFrontendResearchBriefArtifacts(taskID: string): ResearchBriefArtifactRow[] {
+  return listResearchBriefArtifactsByKind(taskID, "frontend_research_brief")
+}
+
+function listResearchBriefArtifactsByKind(
+  taskID: string,
+  kind: "research_brief" | "frontend_research_brief",
+): ResearchBriefArtifactRow[] {
   const rows = Database.use((db) =>
     db
       .select()
@@ -312,7 +323,7 @@ export function listFrontendResearchBriefArtifacts(taskID: string): ResearchBrie
       .where(
         and(
           eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "frontend_research_brief"),
+          eq(EngineArtifactTable.kind, kind),
           eq(EngineArtifactTable.label, "active"),
         ),
       )

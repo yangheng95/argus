@@ -8,7 +8,7 @@ function callTool(tools: Record<string, any>, name: string, input: unknown): Pro
 describe("requirements evidence refs", () => {
   test("register_requirement preserves research evidence refs structurally", async () => {
     const kit = createRequirementsOutputTools({
-      allowedResearchEvidenceRefs: ["deep_research:ev_1", "frontend_research:ev_2"],
+      allowedResearchEvidenceRefs: ["deep_research:art_deep:ev_1", "frontend_research:art_frontend:ev_2"],
     })
     await callTool(kit.tools, "register_requirement", {
       id: "REQ-1",
@@ -16,7 +16,7 @@ describe("requirements evidence refs", () => {
       description: "Generate an evidence-backed PRD input.",
       acceptance: "The PRD input includes cited external facts.",
       non_goals: "It does not publish the final document directly.",
-      evidence_refs: ["deep_research:ev_1", "frontend_research:ev_2"],
+      evidence_refs: ["deep_research:art_deep:ev_1", "frontend_research:art_frontend:ev_2"],
     })
 
     for (const [key, value] of [
@@ -37,13 +37,13 @@ describe("requirements evidence refs", () => {
     const submit = await callTool(kit.tools, "submit_requirements", { final: true, fact_check_items: [] })
     expect(submit).toContain("PASS")
     expect(kit.getCollector().requirements[0].evidence_refs).toEqual([
-      "deep_research:ev_1",
-      "frontend_research:ev_2",
+      "deep_research:art_deep:ev_1",
+      "frontend_research:art_frontend:ev_2",
     ])
   })
 
   test("register_requirement rejects unknown research evidence refs", async () => {
-    const kit = createRequirementsOutputTools({ allowedResearchEvidenceRefs: ["deep_research:ev_1"] })
+    const kit = createRequirementsOutputTools({ allowedResearchEvidenceRefs: ["deep_research:art_deep:ev_1"] })
     const result = await callTool(kit.tools, "register_requirement", {
       id: "REQ-1",
       type: "explicit",
@@ -59,7 +59,7 @@ describe("requirements evidence refs", () => {
 
   test("register_requirement rejects ambiguous bare refs when deep and frontend research share an evidence id", async () => {
     const kit = createRequirementsOutputTools({
-      allowedResearchEvidenceRefs: ["deep_research:ev_1", "frontend_research:ev_1"],
+      allowedResearchEvidenceRefs: ["deep_research:art_deep:ev_1", "frontend_research:art_frontend:ev_1"],
     })
     const result = await callTool(kit.tools, "register_requirement", {
       id: "REQ-1",
