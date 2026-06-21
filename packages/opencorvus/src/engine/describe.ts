@@ -298,8 +298,8 @@ export interface FrontendDesignHandoffDesc {
   is_complete: boolean
   has_public_report: boolean
   has_evidence_source_manifest: boolean
-  frontend_template_path: string
-  source_manifest_path: string
+  frontend_template_path?: string
+  source_manifest_path?: string
   present_keys: string[]
   missing_completion_keys: string[]
   latest_decision_id: string
@@ -361,13 +361,15 @@ function describeFrontendDesignHandoff(taskID: string): FrontendDesignHandoffDes
     entry.timeCreated >= latest.timeCreated ? entry : latest,
   )
   const paths = frontendDesignArtifactPaths("", taskID)
+  const hasPublicReport = latestByKey.has("public_report")
+  const hasEvidenceSourceManifest = latestByKey.has("evidence_source_manifest")
 
   return {
     is_complete: missingCompletionKeys.length === 0,
-    has_public_report: latestByKey.has("public_report"),
-    has_evidence_source_manifest: latestByKey.has("evidence_source_manifest"),
-    frontend_template_path: paths.templateRelative,
-    source_manifest_path: paths.manifestRelative,
+    has_public_report: hasPublicReport,
+    has_evidence_source_manifest: hasEvidenceSourceManifest,
+    frontend_template_path: hasPublicReport ? paths.templateRelative : undefined,
+    source_manifest_path: hasEvidenceSourceManifest ? paths.manifestRelative : undefined,
     present_keys: [...latestByKey.keys()].sort(),
     missing_completion_keys: [...missingCompletionKeys],
     latest_decision_id: latestEntry.id,
@@ -1150,8 +1152,8 @@ function renderFrontendDesignHandoffDesc(desc?: FrontendDesignHandoffDesc): stri
   lines.push(`- is_complete: ${desc.is_complete ? "true" : "false"}`)
   lines.push(`- has_public_report: ${desc.has_public_report ? "true" : "false"}`)
   lines.push(`- has_evidence_source_manifest: ${desc.has_evidence_source_manifest ? "true" : "false"}`)
-  lines.push(`- frontend_template_path: ${desc.frontend_template_path}`)
-  lines.push(`- source_manifest_path: ${desc.source_manifest_path}`)
+  if (desc.frontend_template_path) lines.push(`- frontend_template_path: ${desc.frontend_template_path}`)
+  if (desc.source_manifest_path) lines.push(`- source_manifest_path: ${desc.source_manifest_path}`)
   lines.push(`- latest_decision_id: ${desc.latest_decision_id}`)
   lines.push(`- latest_updated_at: ${new Date(desc.latest_updated_at).toISOString()}`)
   if (desc.public_report_decision_id) lines.push(`- public_report_decision_id: ${desc.public_report_decision_id}`)
