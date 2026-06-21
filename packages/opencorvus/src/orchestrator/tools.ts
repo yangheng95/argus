@@ -45,6 +45,7 @@ import { isHostKillingCommand } from "@/tool/bash"
 import { BrowserPreviewTool, BrowserPreviewToolStaticDefinition } from "@/tool/browser-preview"
 import { WAIT_MAX_MS, WAIT_MIN_MS, WaitToolDescription, WaitToolParameters, executeWait } from "@/tool/wait"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { ExploreAgent } from "@/explore/agent"
 import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
@@ -52,7 +53,13 @@ import { EngineProtocol } from "@/engine/protocol"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
 import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
-import { findNonStaleFrontendResearchBriefs, renderFrontendResearchBuildPromptSection } from "@/research/prompt-section"
+import {
+  findNonStaleFrontendResearchBriefs,
+  renderFrontendResearchArchitectPromptSection,
+  renderFrontendResearchBriefPromptSection,
+  renderFrontendResearchBuildPromptSection,
+  renderResearchBriefPromptSection,
+} from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { readLatestTaskVisualEvidenceBundleSync } from "@/acceptance/visual-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -183,6 +190,7 @@ import type {
 } from "@/integrity"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 import { AgentRunError } from "@/agent/runner"
+import { isHttpWebpageUrl } from "@/util/web-url"
 import {
   createStageContinuationRequest,
   failNonCurrentOwnerStageContinuationClaim,
@@ -298,6 +306,7 @@ function goalsContinuationScope(
       spec_snapshot_id: goal.spec_snapshot_id,
       title: goal.title,
       slug: goal.slug,
+      retry_count: getGoalRetryCount(goal.id),
       objective_digest: stageInputDigest(goal.objective),
       acceptance_specs_digest: stageInputDigest(goal.acceptance_specs),
       owned_paths_digest: stageInputDigest(goal.owned_paths),
@@ -307,6 +316,129 @@ function goalsContinuationScope(
       priority: goal.priority,
       order_index: goal.order_index,
     }))
+}
+
+function taskArrayField(task: { attachments?: unknown; design_specs?: unknown; system_artifacts?: unknown }, key: "attachments" | "design_specs" | "system_artifacts") {
+  const value = task[key]
+  return Array.isArray(value) ? value : []
+}
+
+function frontendDesignMetadataPromptScope(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null
+  const figmaUrl = (metadata as { figma_url?: unknown }).figma_url
+  return typeof figmaUrl === "string" && figmaUrl.trim() ? { figma_url: figmaUrl.trim() } : null
+}
+
+function architectWorkloadPromptScope(workloadBriefs: unknown) {
+  if (!Array.isArray(workloadBriefs)) return []
+  return workloadBriefs
+    .filter((brief) => brief && typeof brief === "object")
+    .map((brief) => brief as Record<string, unknown>)
+    .filter((brief) => typeof brief.decomposition_concern === "string" && brief.decomposition_concern.trim())
+    .map((brief) => {
+      const inventory =
+        brief.execution_inventory && typeof brief.execution_inventory === "object" && !Array.isArray(brief.execution_inventory)
+          ? (brief.execution_inventory as Record<string, unknown>)
+          : {}
+      return {
+        goal_id: typeof brief.goal_id === "string" ? brief.goal_id : "",
+        decomposition_concern: (brief.decomposition_concern as string).trim(),
+        execution_inventory: {
+          surfaces: inventory.surfaces ?? 0,
+          states: inventory.states ?? 0,
+          data_contracts: inventory.data_contracts ?? 0,
+          verification_points: inventory.verification_points ?? 0,
+        },
+      }
+    })
+}
+
+async function hostPreparedFrontendProjectEvidenceSnapshot(taskID: string) {
+  const paths = ProjectRuntimePaths.frontendDesignPaths(
+    taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id }),
+    taskID,
+  )
+  const [sourcePackageStat, skeletonProjectStat] = await Promise.all([
+    fs.stat(paths.sourcePackageAbsolute).catch(() => undefined),
+    fs.stat(paths.skeletonProjectAbsolute).catch(() => undefined),
+  ])
+  if (!sourcePackageStat?.isDirectory() || !skeletonProjectStat?.isDirectory()) return null
+  const { readHostPreparedCompactEvidence, summarizeHostPreparedSourceAudit } = await import(
+    "@/frontend-design/host-prepared-source-project"
+  )
+  const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({
+    sourcePackage: paths.sourcePackageAbsolute,
+    projectRoot: paths.skeletonProjectAbsolute,
+  })
+  const compactEvidence = await readHostPreparedCompactEvidence({
+    sourcePackage: paths.sourcePackageAbsolute,
+    projectRoot: paths.skeletonProjectAbsolute,
+    sourceAuditEvidence,
+  })
+  return {
+    project_root: paths.skeletonProjectRelative,
+    source_package: paths.sourcePackageRelative,
+    compact_evidence_digest: stageInputDigest(compactEvidence),
+  }
+}
+
+function requirementsPromptEvidenceSnapshot(taskID: string, task: TaskRow, frontendDesign: string) {
+  return continuationEvidenceSnapshot({
+    attachments: taskArrayField(task, "attachments"),
+    design_specs: taskArrayField(task, "design_specs"),
+    frontend_design: frontendDesign,
+    clarification_transcript: clarificationTranscriptSection(taskID),
+    operator_notes: operatorNotesSection(taskID),
+    deep_research: renderResearchBriefPromptSection({ taskID, request: task.request }),
+    frontend_research: renderFrontendResearchBriefPromptSection({ taskID, request: task.request }),
+  })
+}
+
+function architectPromptEvidenceSnapshot(input: {
+  taskID: string
+  task: TaskRow
+  requirements: unknown
+  requirementDecisions: unknown
+  frontendDesign: string
+  workloadBriefs: unknown
+  decisionLogPrompt: string
+}) {
+  return continuationEvidenceSnapshot({
+    attachments: taskArrayField(input.task, "attachments"),
+    design_specs: taskArrayField(input.task, "design_specs"),
+    requirements: input.requirements,
+    requirement_decisions: input.requirementDecisions,
+    frontend_design: input.frontendDesign,
+    workload_briefs: architectWorkloadPromptScope(input.workloadBriefs),
+    deep_research: renderResearchBriefPromptSection({ taskID: input.taskID, request: input.task.request }),
+    frontend_research: renderFrontendResearchArchitectPromptSection({
+      taskID: input.taskID,
+      request: input.task.request,
+    }),
+    decision_log: input.decisionLogPrompt,
+  })
+}
+
+async function frontendDesignPromptEvidenceSnapshot(taskID: string, task: TaskRow) {
+  return continuationEvidenceSnapshot({
+    attachments: taskArrayField(task, "attachments"),
+    system_artifacts: taskArrayField(task, "system_artifacts"),
+    design_specs: taskArrayField(task, "design_specs"),
+    metadata: frontendDesignMetadataPromptScope(task.metadata),
+    host_prepared_frontend_project: await hostPreparedFrontendProjectEvidenceSnapshot(taskID),
+  })
+}
+
+function frontendResearchSourceUrlFromStageInput(input: unknown): string | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
+  const value = (input as { source_url?: unknown }).source_url
+  return typeof value === "string" && isHttpWebpageUrl(value) ? value : undefined
+}
+
+function frontendResearchFocusFromStageInput(input: unknown): string | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
+  const value = (input as { focus?: unknown }).focus
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
 }
 
 function continuationFromArtifact(input: {
@@ -1101,7 +1233,7 @@ const FrontendResearchReasonField = z
   .min(1)
   .describe("Why frontend webpage investigation packets are useful for this task.")
 const FrontendResearchSourceUrlsField = z
-  .array(z.string().min(1))
+  .array(z.string().min(1).refine(isHttpWebpageUrl, "frontend_research source_urls entries must be HTTP(S) webpage URLs"))
   .min(1)
   .max(1)
   .describe(
@@ -1122,12 +1254,21 @@ const FrontendResearchInputSchema = z
   .superRefine((input, ctx) => {
     const hasSourceUrls = Array.isArray(input.source_urls) && input.source_urls.length > 0
     const hasContinuation = typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const hasFocus = typeof input.focus === "string" && input.focus.trim().length > 0
     if (hasSourceUrls === hasContinuation) {
       ctx.addIssue({
         code: "custom",
         path: hasSourceUrls ? ["continuation_artifact_id"] : ["source_urls"],
         message:
           "frontend_research requires exactly one input mode: source_urls for a fresh research session, or continuation_artifact_id for same-session finalizer recovery.",
+      })
+    }
+    if (hasContinuation && hasFocus) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["focus"],
+        message:
+          "frontend_research continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh focus.",
       })
     }
   })
@@ -3201,8 +3342,10 @@ export function createOrchestratorTools(input: {
         let runnerSessionID: string | undefined
         const decisionLog = createDecisionLog(taskID)
         const maturityScopePendingBeforeID = decisionLog.readByKey("maturity_scope_pending")?.id
+        const frontendDesign = renderFrontendDesignHandoffReference(taskID)
         const normalizedStageInput = {
           task: taskContinuationScope(task),
+          evidence_snapshot: requirementsPromptEvidenceSnapshot(taskID, task, frontendDesign),
         }
         let continuation: AgentSessionContinuation | undefined
         try {
@@ -3222,7 +3365,6 @@ export function createOrchestratorTools(input: {
           }
           runnerSessionID = continuation?.sessionID
           const { RequirementsAgent } = await import("@/requirements")
-          const frontendDesign = renderFrontendDesignHandoffReference(taskID)
 
           // Stage-level retry was removed in step 5/7 (rule 8 — single
           // source). Transient LLM-call failures are now retried inside
@@ -3499,8 +3641,9 @@ export function createOrchestratorTools(input: {
           ? materials.filter((m) => typeof m === "string" && m.length > 0)
           : []
         const materialPaths = hasContinuation ? [] : rawMaterialPaths
-        const normalizedStageInput = {
+        let normalizedStageInput = {
           task: taskContinuationScope(task),
+          evidence_snapshot: await frontendDesignPromptEvidenceSnapshot(taskID, task),
         }
         let continuation: AgentSessionContinuation | undefined
         if (hasContinuation) {
@@ -3807,6 +3950,10 @@ export function createOrchestratorTools(input: {
           ...(Array.isArray(enrichedTask.system_artifacts) ? (enrichedTask.system_artifacts as any[]) : []),
         ]
         const enrichedHasAttachments = designVisuals.length > 0
+        normalizedStageInput = {
+          task: taskContinuationScope(enrichedTask),
+          evidence_snapshot: await frontendDesignPromptEvidenceSnapshot(taskID, enrichedTask),
+        }
 
         // Fail-fast if frontend_design was invoked on the strength of URLs /
         // materials but every source failed to materialize. Running
@@ -4178,6 +4325,17 @@ export function createOrchestratorTools(input: {
           })
         }
         const existingGoals = listGoals(taskID)
+        const decisionLog = createDecisionLog(taskID)
+        const reqRows = findRequirements(activeSpec.id)
+        const requirements = reqRows.map(parsedRequirementFromRow)
+        const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
+          key: d.key,
+          value: d.value,
+          reason: d.reason,
+        }))
+        const frontendDesign = renderFrontendDesignHandoffReference(taskID)
+        const workloadArtifact = findLatestGoalWorkloadArtifact(taskID)
+        const decisionLogPrompt = decisionLog.toPromptSection()
 
         await trackStepStart("architect")
 
@@ -4187,6 +4345,16 @@ export function createOrchestratorTools(input: {
         const normalizedStageInput = {
           task: taskContinuationScope(task),
           active_spec: specContinuationScope(activeSpec),
+          existing_goals: goalsContinuationScope(existingGoals),
+          evidence_snapshot: architectPromptEvidenceSnapshot({
+            taskID,
+            task,
+            requirements,
+            requirementDecisions,
+            frontendDesign,
+            workloadBriefs: workloadArtifact?.briefs,
+            decisionLogPrompt,
+          }),
         }
         let continuation: AgentSessionContinuation | undefined
         try {
@@ -4205,28 +4373,16 @@ export function createOrchestratorTools(input: {
             continuation = resolvedContinuation.continuation
           }
           runnerSessionID = continuation?.sessionID
-          const { createDecisionLog } = await import("@/decision-log")
-          const decisionLog = createDecisionLog(taskID)
 
           // Load Requirements output straight from the DB so the Architect
           // sees the same REQ-N list the overlay does. Decisions come from
           // the decision log phase=requirements section the Requirements
           // agent already seeded.
-          const { findRequirements } = await import("@/engine/store")
-          const reqRows = findRequirements(activeSpec.id)
-          const requirements = reqRows.map(parsedRequirementFromRow)
-          const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
-            key: d.key,
-            value: d.value,
-            reason: d.reason,
-          }))
-          const frontendDesign = renderFrontendDesignHandoffReference(taskID)
           // Goal Workload Analyst sizing feedback (advisory). On the first
           // architect pass this is undefined (no analyst has run yet); on a
           // re-dispatch it carries the analyst's per-goal briefs so architect
           // can act on decomposition_concern. Architect re-decomposes, so all
           // briefs are acceptable input — no snapshot filter here.
-          const workloadArtifact = findLatestGoalWorkloadArtifact(taskID)
 
           const { ArchitectAgent } = await import("@/architect/agent")
           const { copyRequirementsToSpecSnapshot, persistArchitectContractGraph, upsertGoalsFromArchitect } =
@@ -5425,8 +5581,18 @@ export function createOrchestratorTools(input: {
       execute: async ({ reason, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         await trackStepStart("frontend_research")
+        const continuationRow = continuation_artifact_id
+          ? findStageContinuationRequest({ taskID, artifactID: continuation_artifact_id })
+          : undefined
+        const storedContinuationSourceUrl = frontendResearchSourceUrlFromStageInput(
+          continuationRow?.payload.normalized_stage_input,
+        )
+        const storedContinuationFocus = frontendResearchFocusFromStageInput(continuationRow?.payload.normalized_stage_input)
+        const sourceUrl = continuation_artifact_id ? storedContinuationSourceUrl : source_urls?.find(isHttpWebpageUrl)
         const normalizedStageInput = {
           task: taskContinuationScope(task),
+          source_url: sourceUrl ?? null,
+          focus: continuation_artifact_id ? (storedContinuationFocus ?? null) : focus?.trim() || null,
         }
         let continuation: AgentSessionContinuation | undefined
         let runnerSessionID: string | undefined
@@ -5451,8 +5617,8 @@ export function createOrchestratorTools(input: {
             title: task.title,
             request: task.request,
             targetDeliverable: "implementation_input",
-            sourceUrls: continuation ? undefined : source_urls,
-            focus,
+            sourceUrls: sourceUrl ? [sourceUrl] : undefined,
+            focus: continuation ? undefined : focus,
             reason,
             taskID,
             parentSessionID: input.agentSessionID,

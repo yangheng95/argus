@@ -227,6 +227,19 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     ).toBe(false)
     expect(
       tools.frontend_research.inputSchema!.safeParse({
+        reason: "local files are not prepared webpage sources",
+        source_urls: ["file:///tmp/source.html"],
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "continue prior frontend research",
+        continuation_artifact_id: "art_frontend_research_continue",
+        focus: "new focus would be ignored by the continuation prompt",
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
         reason: "continue prior frontend research",
         continuation_artifact_id: "art_frontend_research_continue",
       }).success,

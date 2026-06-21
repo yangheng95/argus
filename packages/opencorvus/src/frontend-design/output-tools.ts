@@ -10,6 +10,10 @@ import { tool } from "ai"
 import { createHash } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
+import { BrowserRuntime } from "@/browser/runtime"
+import { runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
+import { requireRuntimePackage } from "@/runtime/package-require"
 import {
   ColorSchema,
   ComponentSchema,
@@ -27,6 +31,41 @@ import {
 import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 
 export type { FrontendTemplateFinal } from "./schema"
+
+const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
+
+const StaticHtmlScreenshotScript = String.raw`
+const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
+
+function decodePayload() {
+  const raw = Buffer.from(process.env.OPENCORVUS_FRONTEND_RENDER_PAYLOAD || "", "base64").toString("utf8");
+  return JSON.parse(raw);
+}
+
+(async () => {
+  const payload = decodePayload();
+  let browser;
+  try {
+    browser = await chromium.launch({
+      executablePath: payload.executablePath,
+      headless: true,
+      args: payload.launchArgs,
+      timeout: payload.timeoutMs,
+    });
+    const page = await browser.newPage({
+      viewport: { width: payload.viewport.width, height: payload.viewport.height },
+      deviceScaleFactor: 1,
+    });
+    await page.goto(payload.url, { waitUntil: "networkidle", timeout: payload.timeoutMs });
+    const bytes = await page.screenshot({ type: "png", fullPage: false });
+    process.stdout.write(JSON.stringify({ ok: true, screenshotBase64: bytes.toString("base64") }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+})();
+`
 
 // ---------------------------------------------------------------------------
 // Collector — private. Callers read through getSpecs() / getStats().
@@ -306,18 +345,6 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
   const source = input as Record<string, unknown>
   const normalized: Record<string, unknown> = { ...source }
 
-  const normalizePlanItems = (value: unknown): unknown => {
-    if (!Array.isArray(value)) return value
-    return value.map((item) => {
-      if (!item || typeof item !== "object" || Array.isArray(item)) return item
-      const record = { ...(item as Record<string, unknown>) }
-      if (record.parity_guard === undefined && typeof record.replacement_guard === "string") {
-        record.parity_guard = record.replacement_guard
-      }
-      return record
-    })
-  }
-
   // Some providers flatten a nested tool object into keys like
   // `frontend_project<arg_key>status`; rebuild that object before Zod parsing.
   const frontendProject: Record<string, unknown> = {
@@ -339,9 +366,6 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
   if (sawFlattenedFrontendProject || source.frontend_project) {
     normalized.frontend_project = frontendProject
   }
-  normalized.component_reuse_plan = normalizePlanItems(source.component_reuse_plan)
-  normalized.baseline_replacement_plan = normalizePlanItems(source.baseline_replacement_plan)
-
   return normalized
 }
 
@@ -375,10 +399,10 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
   }
 }
 
-function assertFrontendTemplateFinal(
+async function assertFrontendTemplateFinal(
   final: FrontendTemplateFinal,
   options: { artifactRoot: string; artifactRootRelative?: string },
-): void {
+): Promise<void> {
   const requiredRenderedFields = [
     ["frontend_template", final.frontend_template],
     ["fillable_modules", final.fillable_modules],
@@ -420,7 +444,10 @@ function assertFrontendTemplateFinal(
     )
   }
   if (final.frontend_project.role === "visual_baseline_input") {
-    const quality = inspectVisualBaselineQuality(final, { ...options, requireArtifactVerification: true })
+    const quality = await inspectVisualBaselineQualityForSubmit(final, {
+      ...options,
+      requireArtifactVerification: true,
+    })
     if (quality.status === "evidence_missing") {
       throw new Error(
         "frontend_project.role=visual_baseline_input requires artifact-backed rendered screenshot review evidence for the visual-html-skeleton output; " +
@@ -434,6 +461,27 @@ function assertFrontendTemplateFinal(
       )
     }
   }
+}
+
+async function inspectVisualBaselineQualityForSubmit(
+  final: FrontendTemplateFinal,
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): Promise<{
+  status: "high_fidelity_evidence_reported" | "incomplete_visual_fidelity" | "evidence_missing"
+  hasRemainingDebt: boolean
+}> {
+  const text = collectVisualBaselineText(final)
+  const hasRemainingDebt = hasBlockingVisualDebt(text)
+  const hasRenderedScreenshotEvidence = await hasStructuredRenderedScreenshotEvidenceForSubmit(final, options)
+  const hasStructuredDebt = final.visual_validation_evidence.some(
+    (item) => item.review_status === "reviewed_with_blocking_debt",
+  )
+
+  if (hasRemainingDebt || hasStructuredDebt) {
+    return { status: "incomplete_visual_fidelity", hasRemainingDebt: hasRemainingDebt || hasStructuredDebt }
+  }
+  if (hasRenderedScreenshotEvidence) return { status: "high_fidelity_evidence_reported", hasRemainingDebt }
+  return { status: "evidence_missing", hasRemainingDebt }
 }
 
 function renderFrontendProjectReport(final: FrontendTemplateFinal): string {
@@ -566,10 +614,42 @@ function hasStructuredRenderedScreenshotEvidence(
   return final.visual_validation_evidence.some((item) => isUsableRenderedScreenshotEvidence(item, options))
 }
 
+async function hasStructuredRenderedScreenshotEvidenceForSubmit(
+  final: FrontendTemplateFinal,
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): Promise<boolean> {
+  for (const item of final.visual_validation_evidence) {
+    if (await isUsableRenderedScreenshotEvidenceForSubmit(item, options)) return true
+  }
+  return false
+}
+
 function isUsableRenderedScreenshotEvidence(
   item: FrontendTemplateFinal["visual_validation_evidence"][number],
   options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
 ): boolean {
+  if (item.render_target !== "visual-html-skeleton") return false
+  if (item.review_status !== "reviewed_no_blocking_debt") return false
+  if (item.screenshot_sha256.toLowerCase() === item.source_reference_sha256.toLowerCase()) return false
+
+  const entrypoint = resolveEvidenceArtifactPath(options, item.rendered_entrypoint, "visual-html-skeleton")
+  const screenshot = resolveEvidenceArtifactPath(options, item.screenshot_artifact, "visual-html-skeleton")
+  const sourceReference = resolveEvidenceArtifactPath(options, item.source_reference_artifact, "web-clone-source")
+  const diff = item.diff_artifact
+    ? resolveEvidenceArtifactPath(options, item.diff_artifact, "visual-html-skeleton")
+    : undefined
+  if (!entrypoint || !screenshot || !sourceReference || (item.diff_artifact && !diff)) return false
+  if (!entrypoint.relativePath.endsWith(".html")) return false
+  if (!isRenderedVisualSkeletonArtifactRelativePath(screenshot.relativePath)) return false
+  if (diff && !isRenderedVisualSkeletonArtifactRelativePath(diff.relativePath)) return false
+  if (options.requireArtifactVerification) return false
+  return true
+}
+
+async function isUsableRenderedScreenshotEvidenceForSubmit(
+  item: FrontendTemplateFinal["visual_validation_evidence"][number],
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): Promise<boolean> {
   if (item.render_target !== "visual-html-skeleton") return false
   if (item.review_status !== "reviewed_no_blocking_debt") return false
   if (item.screenshot_sha256.toLowerCase() === item.source_reference_sha256.toLowerCase()) return false
@@ -591,13 +671,21 @@ function isUsableRenderedScreenshotEvidence(
   const verifiedSourceReference = verifyEvidenceFile(options.artifactRoot, sourceReference, "web-clone-source")
   if (!verifiedEntrypoint || !verifiedScreenshot || !verifiedSourceReference) return false
   if (diff && !verifyEvidenceFile(options.artifactRoot, diff, "visual-html-skeleton")) return false
+  if (!(await isDecodedRasterImageFile(verifiedScreenshot))) return false
+  if (!(await isDecodedRasterImageFile(verifiedSourceReference))) return false
 
   const screenshotSha = sha256File(verifiedScreenshot)
   const sourceReferenceSha = sha256File(verifiedSourceReference)
   return (
     screenshotSha === item.screenshot_sha256.toLowerCase() &&
     sourceReferenceSha === item.source_reference_sha256.toLowerCase() &&
-    screenshotSha !== sourceReferenceSha
+    screenshotSha !== sourceReferenceSha &&
+    (await renderedEntrypointMatchesScreenshot({
+      entrypointFile: verifiedEntrypoint,
+      expectedScreenshotSha256: screenshotSha,
+      viewportLabel: item.viewport,
+      fallbackScreenshotFile: verifiedScreenshot,
+    }))
   )
 }
 
@@ -673,6 +761,91 @@ function isReadableFile(file: string): boolean {
 
 function sha256File(file: string): string {
   return createHash("sha256").update(fs.readFileSync(file)).digest("hex")
+}
+
+async function isDecodedRasterImageFile(file: string): Promise<boolean> {
+  try {
+    const metadata = await sharp(file).metadata()
+    return (
+      (metadata.format === "png" || metadata.format === "jpeg" || metadata.format === "webp") &&
+      typeof metadata.width === "number" &&
+      metadata.width > 0 &&
+      typeof metadata.height === "number" &&
+      metadata.height > 0
+    )
+  } catch {
+    return false
+  }
+}
+
+async function renderedEntrypointMatchesScreenshot(input: {
+  entrypointFile: string
+  expectedScreenshotSha256: string
+  viewportLabel: string
+  fallbackScreenshotFile: string
+}): Promise<boolean> {
+  try {
+    const viewport =
+      viewportDimensionsFromLabel(input.viewportLabel) ?? (await rasterDimensions(input.fallbackScreenshotFile))
+    if (!viewport) return false
+    const rendered = await renderVisualHtmlSkeletonScreenshotForValidation({
+      entrypointFile: input.entrypointFile,
+      viewport,
+    })
+    return createHash("sha256").update(rendered).digest("hex") === input.expectedScreenshotSha256
+  } catch {
+    return false
+  }
+}
+
+function viewportDimensionsFromLabel(label: string): { width: number; height: number } | undefined {
+  const match = /(?:^|[^0-9])([1-9][0-9]{1,4})\s*x\s*([1-9][0-9]{1,4})(?:[^0-9]|$)/i.exec(label)
+  if (!match) return undefined
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return undefined
+  return { width, height }
+}
+
+async function rasterDimensions(file: string): Promise<{ width: number; height: number } | undefined> {
+  try {
+    const metadata = await sharp(file).metadata()
+    if (
+      typeof metadata.width === "number" &&
+      metadata.width > 0 &&
+      typeof metadata.height === "number" &&
+      metadata.height > 0
+    ) {
+      return { width: metadata.width, height: metadata.height }
+    }
+  } catch {}
+  return undefined
+}
+
+export async function renderVisualHtmlSkeletonScreenshotForValidation(input: {
+  entrypointFile: string
+  viewport: { width: number; height: number }
+  timeoutMs?: number
+}): Promise<Buffer> {
+  const timeoutMs = input.timeoutMs ?? 60_000
+  const executablePath = await BrowserRuntime.findBrowserExecutable()
+  const sidecar = await runBrowserNodeSidecar<{ ok: true; screenshotBase64: string } | { ok: false; error: string }>({
+    script: StaticHtmlScreenshotScript,
+    payload: {
+      executablePath,
+      launchArgs: BrowserRuntime.defaultLaunchArgs(),
+      timeoutMs,
+      url: pathToFileURL(input.entrypointFile).href,
+      viewport: input.viewport,
+    },
+    payloadEnvName: "OPENCORVUS_FRONTEND_RENDER_PAYLOAD",
+    hardTimeoutMs: timeoutMs + 10_000,
+    label: "frontend visual baseline static render",
+  })
+  if (!sidecar.result.ok) {
+    throw new Error(`frontend visual baseline static render failed: ${sidecar.result.error}`)
+  }
+  return Buffer.from(sidecar.result.screenshotBase64, "base64")
 }
 
 function collectVisualBaselineText(final: FrontendTemplateFinal): string {
@@ -886,7 +1059,7 @@ export function createFrontendTemplateOutputTools(
         const final = normalizeFrontendTemplateFinal(
           FrontendTemplateFinalSchema.parse(normalizeFrontendTemplateInput(input)),
         )
-        assertFrontendTemplateFinal(final, { artifactRoot, artifactRootRelative })
+        await assertFrontendTemplateFinal(final, { artifactRoot, artifactRootRelative })
         if (autoIteration && final.template_iteration_notes.length < 2) {
           throw new Error(
             "assistant.auto_iteration=true requires at least two frontend template review-pass notes before submit_frontend_template.",

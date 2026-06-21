@@ -4,7 +4,11 @@ import { createHash } from "node:crypto"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { buildFrontendTemplateReport, createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
+import {
+  buildFrontendTemplateReport,
+  createFrontendTemplateOutputTools,
+  renderVisualHtmlSkeletonScreenshotForValidation,
+} from "../../src/frontend-design/output-tools"
 
 const materialInventoryItems = [
   {
@@ -14,8 +18,23 @@ const materialInventoryItems = [
   },
 ]
 
-const renderedScreenshotSha = "a".repeat(64)
 const sourceReferenceSha = "b".repeat(64)
+const sourceReferencePng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNgYGD4DwABBAEAghnFoQAAAABJRU5ErkJggg==",
+  "base64",
+)
+
+function forgedPngHeader(): Buffer {
+  const bytes = Buffer.alloc(33)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write("IHDR", 12, "ascii")
+  bytes.writeUInt32BE(1, 16)
+  bytes.writeUInt32BE(1, 20)
+  bytes[24] = 8
+  bytes[25] = 6
+  return bytes
+}
 
 function sha256(bytes: Buffer | string): string {
   return createHash("sha256").update(bytes).digest("hex")
@@ -23,23 +42,37 @@ function sha256(bytes: Buffer | string): string {
 
 async function createVisualEvidenceFixture(overrides: Record<string, unknown> = {}) {
   const artifactRoot = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-visual-evidence-"))
-  const screenshotBytes = Buffer.from("rendered visual skeleton screenshot", "utf8")
-  const sourceReferenceBytes = Buffer.from("source reference screenshot", "utf8")
   const diffBytes = Buffer.from('{"mismatchPixels":0}\n', "utf8")
 
   await fs.mkdir(path.join(artifactRoot, "visual-html-skeleton", "screenshots"), { recursive: true })
   await fs.mkdir(path.join(artifactRoot, "visual-html-skeleton"), { recursive: true })
   await fs.mkdir(path.join(artifactRoot, "web-clone-source"), { recursive: true })
-  await fs.writeFile(path.join(artifactRoot, "visual-html-skeleton", "index.html"), "<!doctype html><main></main>\n")
-  await fs.writeFile(path.join(artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), screenshotBytes)
-  await fs.writeFile(path.join(artifactRoot, "web-clone-source", "reference.png"), sourceReferenceBytes)
+  const entrypoint = path.join(artifactRoot, "visual-html-skeleton", "index.html")
+  await fs.writeFile(
+    entrypoint,
+    [
+      "<!doctype html>",
+      '<meta charset="utf-8">',
+      "<style>",
+      "html, body { margin: 0; width: 100%; height: 100%; background: rgb(8, 22, 37); }",
+      "main { width: 100vw; height: 100vh; background: linear-gradient(135deg, rgb(8, 22, 37), rgb(34, 92, 126)); }",
+      "</style>",
+      "<main></main>",
+    ].join("\n"),
+  )
+  const renderedScreenshotPng = await renderVisualHtmlSkeletonScreenshotForValidation({
+    entrypointFile: entrypoint,
+    viewport: { width: 320, height: 180 },
+  })
+  await fs.writeFile(path.join(artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), renderedScreenshotPng)
+  await fs.writeFile(path.join(artifactRoot, "web-clone-source", "reference.png"), sourceReferencePng)
   await fs.writeFile(path.join(artifactRoot, "visual-html-skeleton", "visual-diff.json"), diffBytes)
 
   return {
     artifactRoot,
     evidence: visualValidationEvidence({
-      screenshot_sha256: sha256(screenshotBytes),
-      source_reference_sha256: sha256(sourceReferenceBytes),
+      screenshot_sha256: sha256(renderedScreenshotPng),
+      source_reference_sha256: sha256(sourceReferencePng),
       ...overrides,
     }),
   }
@@ -54,8 +87,8 @@ function visualValidationEvidence(overrides: Record<string, unknown> = {}) {
       screenshot_artifact: "visual-html-skeleton/screenshots/desktop.png",
       source_reference_artifact: "web-clone-source/reference.png",
       renderer: "node_playwright_static_file",
-      viewport: "desktop-1440x900",
-      screenshot_sha256: renderedScreenshotSha,
+      viewport: "desktop-320x180",
+      screenshot_sha256: "a".repeat(64),
       source_reference_sha256: sourceReferenceSha,
       diff_artifact: "visual-html-skeleton/visual-diff.json",
       review_status: "reviewed_no_blocking_debt",
@@ -518,6 +551,199 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
   expect(report).toContain("transcribe the accepted HTML skeleton")
   expect(report).toContain("visual_quality_status: visual_evidence_reported")
   expect(report).not.toContain("maintainable_status: incomplete_source_baseline")
+})
+
+test("submit_frontend_template rejects text files masquerading as visual baseline screenshots", async () => {
+  const fakeScreenshot = Buffer.from("rendered visual skeleton screenshot", "utf8")
+  const fixture = await createVisualEvidenceFixture({ screenshot_sha256: sha256(fakeScreenshot) })
+  await fs.writeFile(path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), fakeScreenshot)
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Skeleton screenshots must be compared against source reference.png.",
+        visual_validation_evidence: fixture.evidence,
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: [
+            "visual-html-skeleton/index.html",
+            "visual-html-skeleton/styles/tokens.css",
+            "visual-html-skeleton/screenshots/desktop.png",
+          ],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Derived from source IR and source skeleton; not a final app."],
+        },
+        template_iteration_notes: ["checked visual skeleton source authority"],
+        completeness_review: "Rendered screenshot review evidence was recorded.",
+        reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects forged image headers as visual baseline screenshots", async () => {
+  const fakeScreenshot = forgedPngHeader()
+  const fixture = await createVisualEvidenceFixture({ screenshot_sha256: sha256(fakeScreenshot) })
+  await fs.writeFile(path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), fakeScreenshot)
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Skeleton screenshots must be compared against source reference.png.",
+        visual_validation_evidence: fixture.evidence,
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: [
+            "visual-html-skeleton/index.html",
+            "visual-html-skeleton/styles/tokens.css",
+            "visual-html-skeleton/screenshots/desktop.png",
+          ],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Derived from source IR and source skeleton; not a final app."],
+        },
+        template_iteration_notes: ["checked visual skeleton source authority"],
+        completeness_review: "Rendered screenshot review evidence was recorded.",
+        reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects valid screenshots not rendered from the current entrypoint", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  await fs.writeFile(
+    path.join(fixture.artifactRoot, "visual-html-skeleton", "index.html"),
+    [
+      "<!doctype html>",
+      '<meta charset="utf-8">',
+      "<style>",
+      "html, body { margin: 0; width: 100%; height: 100%; background: rgb(45, 16, 18); }",
+      "main { width: 100vw; height: 100vh; background: rgb(45, 16, 18); }",
+      "</style>",
+      "<main></main>",
+    ].join("\n"),
+  )
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Skeleton screenshots must be compared against source reference.png.",
+        visual_validation_evidence: fixture.evidence,
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: [
+            "visual-html-skeleton/index.html",
+            "visual-html-skeleton/styles/tokens.css",
+            "visual-html-skeleton/screenshots/desktop.png",
+          ],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Derived from source IR and source skeleton; not a final app."],
+        },
+        template_iteration_notes: ["checked stale rendered screenshot"],
+        completeness_review: "Rendered screenshot evidence was stale relative to the current entrypoint.",
+        reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
 })
 
 test("submit_frontend_template rejects visual baseline without rendered screenshot evidence", async () => {
@@ -1057,7 +1283,7 @@ test("submit_frontend_template rejects self-attested screenshot evidence without
           "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/nonexistent-desktop.png.",
         visual_validation_evidence: visualValidationEvidence({
           screenshot_artifact: "visual-html-skeleton/screenshots/nonexistent-desktop.png",
-          screenshot_sha256: renderedScreenshotSha,
+          screenshot_sha256: "a".repeat(64),
           source_reference_sha256: sourceReferenceSha,
           review_summary: "Self-attested screenshot path and arbitrary hashes without real artifact files.",
         }),
@@ -1793,7 +2019,7 @@ test("visual baseline workflow reports source baseline submissions as incomplete
   expect(report).toContain("frontend-design-skeleton is captured source evidence only")
 })
 
-test("component reuse plan accepts provider naming and incomplete library hints without schema rejection", async () => {
+test("component reuse plan accepts canonical provider fields and incomplete library hints without schema rejection", async () => {
   const submit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
   const base = {
     design_system: "custom dashboard",
@@ -1835,7 +2061,7 @@ test("component reuse plan accepts provider naming and incomplete library hints 
           mature_library_candidates: [],
           props_states: "rows and sort state",
           replacement_boundary: "table region",
-          replacement_guard: "visual diff",
+          parity_guard: "visual diff",
           project_specific_reason: "not applicable",
         },
       ],
@@ -1850,7 +2076,7 @@ test("component reuse plan accepts provider naming and incomplete library hints 
           mature_library_candidates: [],
           deletion_rule: "Keep baseline until visual parity is proven.",
           source_refs: [],
-          replacement_guard: "visual diff",
+          parity_guard: "visual diff",
         },
       ],
     },
