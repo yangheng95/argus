@@ -43,10 +43,10 @@ import {
   findActiveRunForTask,
   findActiveSpecForTask,
   findLatestAcceptanceVerdictArtifact,
-  findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
   findRuns,
   findTask,
+  listFrontendResearchBriefArtifacts,
   listResearchBriefArtifacts,
   listGoalRefillNotificationArtifacts,
   listGoalRunsByGoal,
@@ -227,7 +227,7 @@ export interface TaskDesc {
    *  briefs are not injected downstream; the LLM may re-run workload_analysis. */
   workload_stale?: boolean
   research?: ResearchBriefDesc[]
-  frontend_research?: ResearchBriefDesc
+  frontend_research?: ResearchBriefDesc[]
   frontend_design?: FrontendDesignHandoffDesc
   active_run_id?: string
   active_run_status?: string
@@ -288,6 +288,7 @@ export interface ResearchBriefDesc {
   session_id: string
   stale: boolean
   stale_reasons: string[]
+  source_urls: string[]
   source_count: number
   fact_count: number
   blocking_open_question_count: number
@@ -338,6 +339,7 @@ function describeResearchBriefArtifact(input: {
     session_id: artifact.payload.metadata.research_session_id,
     stale: staleness.stale,
     stale_reasons: staleness.reasons,
+    source_urls: researchBriefSourceURLs(artifact.payload),
     source_count: artifact.payload.evidence_index.length,
     fact_count: artifact.payload.facts.length,
     blocking_open_question_count: artifact.payload.open_questions.filter((item) => item.blocking).length,
@@ -348,6 +350,11 @@ function describeResearchBriefArtifact(input: {
     ],
     summary: artifact.payload.summary,
   }
+}
+
+function researchBriefSourceURLs(brief: ResearchBriefArtifactRow["payload"]): string[] {
+  const urls = brief.webpage_contract?.source_url ? [brief.webpage_contract.source_url] : []
+  return [...new Set(urls)]
 }
 
 function describeFrontendDesignHandoff(taskID: string): FrontendDesignHandoffDesc | undefined {
@@ -660,10 +667,12 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       const desc = describeResearchBriefArtifact({ task, artifact })
       return desc ? [desc] : []
     })
-  const frontendResearch = describeResearchBriefArtifact({
-    task,
-    artifact: findLatestFrontendResearchBriefArtifact(task.id),
-  })
+  const frontendResearch = listFrontendResearchBriefArtifacts(task.id)
+    .slice(0, RESEARCH_BRIEF_DESC_CAP)
+    .flatMap((artifact) => {
+      const desc = describeResearchBriefArtifact({ task, artifact })
+      return desc ? [desc] : []
+    })
   const frontendDesign = describeFrontendDesignHandoff(task.id)
 
   let planSummary: string | undefined
@@ -951,7 +960,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
   lines.push(...renderResearchBriefDescs("Deep Research Brief", desc.research))
-  lines.push(...renderResearchBriefDesc("Frontend Research Brief", desc.frontend_research))
+  lines.push(...renderResearchBriefDescs("Frontend Research Brief", desc.frontend_research))
   lines.push(...renderFrontendDesignHandoffDesc(desc.frontend_design))
   if (desc.active_run_id) {
     const orphanTag = desc.run_orphan ? " ORPHAN" : ""
@@ -1136,6 +1145,7 @@ function renderResearchBriefDesc(title: string, desc?: ResearchBriefDesc): strin
   if (desc.stale_reasons.length > 0) {
     lines.push(`- stale_reasons: ${desc.stale_reasons.join(", ")}`)
   }
+  if (desc.source_urls.length > 0) lines.push(`- source_urls: ${desc.source_urls.join(", ")}`)
   lines.push(
     `- coverage: sources=${desc.source_count}, facts=${desc.fact_count}, blocking_open_questions=${desc.blocking_open_question_count}`,
   )

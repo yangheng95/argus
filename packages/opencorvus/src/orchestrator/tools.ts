@@ -4602,9 +4602,7 @@ export function createOrchestratorTools(input: {
         const buildDeliveries = findDeliveriesForTask(taskID)
         const priorVisualQaEntries = decisionLog.readByPhase("visual_qa")
         const frontendDesign = renderVisualQaFrontendDesignContext(frontendDesignEntries)
-        const frontendResearch = renderVisualQaFrontendResearchContext(
-          frontendResearchBriefs.map((entry) => entry.brief),
-        )
+        const frontendResearch = renderVisualQaFrontendResearchContext(frontendResearchBriefs)
         const buildEvidence = renderVisualQaBuildEvidenceContext(buildDeliveries)
         const priorVisualQa = renderVisualQaPriorReportContext(priorVisualQaEntries)
         const activeSpec = findActiveSpecForTask(taskID)
