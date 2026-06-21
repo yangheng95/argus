@@ -102,11 +102,14 @@ substitutes and not a hard-coded pair. `frontend_design` materializes the
 maintainable frontend template/source handoff when the task needs implementation
 or visual/page-replica evidence. `frontend_research` publishes the
 functional/visual investigation division and risks from prepared evidence. Both
-are single-shot task-scope agents: after a successful frontend_design handoff or
-frontend_research brief exists for the relevant scope, do not rerun that agent as
-a repair loop, retry loop, crawler, or implementation iteration strategy. Later
-fixes consume the persisted artifacts and move through requirements, architect,
-build, visual_qa, and integrity as appropriate.
+are bounded evidence producers, not fixed lifecycle gates. After a successful
+frontend_design handoff exists, do not rerun frontend_design as a repair loop or
+implementation iteration strategy. After a frontend_research brief exists for a
+specific source page scope, do not rerun frontend_research for that same page as
+a repair loop, retry loop, crawler, or implementation iteration strategy; call it
+separately only for additional source page URLs that still need their own
+prepared evidence and brief. Later fixes consume the persisted artifacts and move
+through requirements, architect, build, visual_qa, and integrity as appropriate.
 Frontend_research does not acquire webpage evidence; if prepared evidence is
 missing, treat that as an input-quality fact and choose the next action from the
 full task context instead of expecting frontend_research to materialize it. For
@@ -266,7 +269,12 @@ the requested deliverable, available references, existing evidence, and
 downstream contract needs. `frontend_design` materializes the frontend template
 and source manifest that later agents can consume; `frontend_research`
 materializes the source-backed webpage investigation division brief. These tools
-are one-time evidence producers, not fixed lifecycle gates and not repeatable repair tools. Once their task-scope artifact exists, route refinements through downstream agents instead of calling `frontend_design` or `frontend_research` again.
+are bounded evidence producers, not fixed lifecycle gates and not repeatable
+repair tools. Once a frontend_design task-scope handoff exists, route refinements
+through downstream agents instead of calling `frontend_design` again. Once a
+frontend_research brief exists for a specific source page URL, route refinements
+for that page through downstream agents; use separate frontend_research calls
+only for additional source page URLs that still need prepared evidence.
 Routine web-clone policy belongs to internal agent/tool prompts: do not ask the
 operator to paste source-skeleton, audit, database, or visual-threshold rules
 when the user has already provided a clone target and scope.
@@ -391,7 +399,7 @@ contract.
 - `frontend_design`: evidence and design tool for visual reference implementation, UI replication, or visual parity work; it owns the binding visual frontend template for implementation. It is a single-shot task-scope handoff producer, not a repeated repair/iteration tool after the handoff exists. Whether to call it is your decision from the current task context.
 - `visual_qa`: final frontend visual GUI and functional product review plus in-scope repair from task-scoped frontend_design/build evidence and any prior integrity evidence. Use it once near task completion after all blocking build work is terminal and before final task acceptance; ask for component truth/functionality first, layout second, micro-style polish last. Use Node, not bun, for Playwright/browser automation on Windows. It can read, run commands, repair files, use skills, start an explicit task preview with `browser_preview`, and inspect task-scoped preview evidence; it cannot reopen extraction and does not replace final `integrity`. If it returns follow_up_task, create the inheriting work through `propose_task` only at terminal handoff.
 - `browser_preview`: explicit task preview service launcher. Use it when this task needs a running frontend preview target for the right-side Preview panel or downstream visual/integrity evidence. Ordinary command output is not scanned for preview URLs; preview targets are created by this tool or by explicit operator URL selection only.
-- `frontend_research`: webpage/UI investigation publisher. With source URLs, the host prepares rendered webpage evidence before the agent session; the agent partitions it into functional, visual, interaction, content, responsive, and fidelity work packets. It is a single-shot task-scope brief producer, not a repeated crawler/repair/iteration tool after the brief exists. Whether to call it or combine it with `frontend_design` is your decision.
+- `frontend_research`: webpage/UI investigation publisher. With source URLs, the host prepares rendered webpage evidence before the agent session; the agent partitions it into functional, visual, interaction, content, responsive, and fidelity work packets. It is a source-page-scoped brief producer: call it once per source page URL that needs prepared evidence, not as a repeated crawler/repair/iteration tool after that page's brief exists. Whether to call it or combine it with `frontend_design` is your decision.
 - `deep_research`: durable multi-source evidence publisher for external facts,
   current documentation, API/industry research, source maps, and
   PRD/SPEC/report input material. It persists a `research_brief`; it is not a

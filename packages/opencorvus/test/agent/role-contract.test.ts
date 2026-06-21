@@ -261,7 +261,9 @@ test("deep-research and frontend-design role descriptions keep document research
   )
 
   expect(AgentRoleContract.description("frontend-research")).toContain("Frontend research agent")
-  expect(AgentRoleContract.description("frontend-research")).toContain("host-prepared rendered webpage evidence")
+  expect(AgentRoleContract.description("frontend-research")).toContain(
+    "host can prepare rendered webpage evidence for that page",
+  )
   expect(AgentRoleContract.description("frontend-research")).toContain(
     "source-backed webpage investigation work packets",
   )
@@ -278,9 +280,10 @@ test("deep-research and frontend-design role descriptions keep document research
   expect(AgentRoleContract.description("frontend-research")).toContain(
     "does not create the frontend implementation template",
   )
-  expect(AgentRoleContract.description("frontend-research")).toContain("Single-shot task-scope investigation publisher")
+  expect(AgentRoleContract.description("frontend-research")).toContain("Source-page-scoped investigation publisher")
+  expect(AgentRoleContract.description("frontend-research")).toContain("dispatch one session per source page URL")
   expect(AgentRoleContract.description("frontend-research")).toContain(
-    "do not use it as a repeatable crawler, repair, retry, or implementation iteration agent",
+    "do not reuse the same page scope as a repeatable crawler, repair, retry, or implementation iteration agent",
   )
 })
 
