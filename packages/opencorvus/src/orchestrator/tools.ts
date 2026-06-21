@@ -904,6 +904,95 @@ const VisualQaInputSchema = z.object({
   continuation_artifact_id: StageContinuationArtifactIDField,
 })
 
+const FactCheckInputSchema = z
+  .object({
+    target_session_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Session id of the worker whose terminal report you want fact-checked."),
+    target_agent: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Worker agent name: build / requirements / architect / frontend-design / intent-analysis / integrity.",
+      ),
+    fact_check_items: FactCheckItemListSchema.optional().describe(
+      "Copy of the fact_check_items[] array from the worker's terminal report. " +
+        "Empty array is allowed only when you also explain `reason` why fact-check is " +
+        "still useful (e.g., load-bearing prose claims the worker didn't register).",
+    ),
+    reason: z.string().min(10).describe("Why you decided to dispatch fact-check on this worker output."),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    const hasContinuation =
+      typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const freshFields = [
+      typeof input.target_session_id === "string" && input.target_session_id.length > 0
+        ? "target_session_id"
+        : undefined,
+      typeof input.target_agent === "string" && input.target_agent.length > 0 ? "target_agent" : undefined,
+      Array.isArray(input.fact_check_items) ? "fact_check_items" : undefined,
+    ].filter((field): field is string => !!field)
+    if (hasContinuation) {
+      for (const field of freshFields) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message:
+            "fact_check continuation_artifact_id resumes the original same-session finalizer recovery and cannot be combined with fresh target fields.",
+        })
+      }
+      return
+    }
+    for (const field of ["target_session_id", "target_agent", "fact_check_items"] as const) {
+      if (freshFields.includes(field)) continue
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message: `fact_check fresh mode requires ${field}.`,
+      })
+    }
+  })
+
+const FactCheckStageInputSchema = z
+  .object({
+    target_session_id: z.string().min(1),
+    target_agent: z.string().min(1),
+    fact_check_items: FactCheckItemListSchema,
+    reason: z.string().min(10),
+    target_message_id: z.string().min(1),
+    target_message_content_hash: z.string().min(1),
+  })
+  .strict()
+
+type FactCheckStageInput = z.infer<typeof FactCheckStageInputSchema>
+
+function factCheckContinuationFromArtifact(input: {
+  taskID: string
+  artifactID: string
+}): { continuation: AgentSessionContinuation; normalizedStageInput: FactCheckStageInput } {
+  const finalizerName = "report_fact_check_result"
+  const continuation = continuationFromArtifact({
+    taskID: input.taskID,
+    stage: "fact-check",
+    artifactID: input.artifactID,
+    finalizerName,
+  })
+  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!row) throw new Error(`stage continuation request not found: ${input.artifactID}`)
+  const parsed = FactCheckStageInputSchema.safeParse(row.payload.normalized_stage_input)
+  if (!parsed.success) {
+    throw new Error(
+      `stage continuation ${input.artifactID} does not contain a valid fact_check normalized_stage_input: ${parsed.error.message}`,
+    )
+  }
+  return { continuation, normalizedStageInput: parsed.data }
+}
+
 function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string; goalRunID?: string }): {
   sessionID: string
   source: string
@@ -4428,48 +4517,52 @@ export function createOrchestratorTools(input: {
         "- verdict=needs_orchestrator_action → invoke modify_goal / restart_from_stage / " +
         "fail_task per the corrected[i].recommended_action.\n" +
         "- verdict=inconclusive → retry fact_check or proceed with a caveat note.",
-      inputSchema: z.object({
-        target_session_id: z.string().describe("Session id of the worker whose terminal report you want fact-checked."),
-        target_agent: z
-          .string()
-          .describe(
-            "Worker agent name: build / requirements / architect / frontend-design / intent-analysis / integrity.",
-          ),
-        fact_check_items: FactCheckItemListSchema.describe(
-          "Copy of the fact_check_items[] array from the worker's terminal report. " +
-            "Empty array is allowed only when you also explain `reason` why fact-check is " +
-            "still useful (e.g., load-bearing prose claims the worker didn't register).",
-        ),
-        reason: z.string().min(10).describe("Why you decided to dispatch fact-check on this worker output."),
-      }),
+      inputSchema: FactCheckInputSchema,
       execute: async (args) => {
         const task = requireTask(taskID)
         await trackStepStart("fact_check")
         const { FactCheckAgent } = await import("@/fact-check")
         const { findFactCheckAttempt, recordFactCheckAttempt } = await import("@/fact-check/persist")
         const { Session } = await import("@/session")
+        const continuationInput = args.continuation_artifact_id
+          ? factCheckContinuationFromArtifact({ taskID: task.id, artifactID: args.continuation_artifact_id })
+          : undefined
+        const continuation = continuationInput?.continuation
 
         // Step 1: snapshot — also acts as the terminal-state precondition.
-        const snap = await Session.snapshotLatestAssistant(args.target_session_id)
-        if (!snap.finished) {
-          return (
-            `fact_check rejected: target session is not in a terminal state ` +
-            `(reason=${snap.reason ?? "unknown"}). Retry after the worker finishes streaming.`
-          )
-        }
-        if (!snap.messageID || !snap.contentHash) {
-          return (
-            "fact_check rejected: target session has no terminal assistant message. " +
-            "Confirm you passed the correct target_session_id."
-          )
+        let resolvedArgs: FactCheckStageInput
+        if (continuationInput) {
+          resolvedArgs = continuationInput.normalizedStageInput
+        } else {
+          const snap = await Session.snapshotLatestAssistant(args.target_session_id!)
+          if (!snap.finished) {
+            return (
+              `fact_check rejected: target session is not in a terminal state ` +
+              `(reason=${snap.reason ?? "unknown"}). Retry after the worker finishes streaming.`
+            )
+          }
+          if (!snap.messageID || !snap.contentHash) {
+            return (
+              "fact_check rejected: target session has no terminal assistant message. " +
+              "Confirm you passed the correct target_session_id."
+            )
+          }
+          resolvedArgs = FactCheckStageInputSchema.parse({
+            target_session_id: args.target_session_id,
+            target_agent: args.target_agent,
+            fact_check_items: args.fact_check_items,
+            reason: args.reason,
+            target_message_id: snap.messageID,
+            target_message_content_hash: snap.contentHash,
+          })
         }
 
         // Step 2: idempotency cache.
         const cached = findFactCheckAttempt({
           invokedByOrchestratorSessionID: input.agentSessionID,
-          targetSessionID: args.target_session_id,
-          targetMessageID: snap.messageID,
-          targetMessageContentHash: snap.contentHash,
+          targetSessionID: resolvedArgs.target_session_id,
+          targetMessageID: resolvedArgs.target_message_id,
+          targetMessageContentHash: resolvedArgs.target_message_content_hash,
         })
         if (cached) {
           return (
@@ -4480,20 +4573,22 @@ export function createOrchestratorTools(input: {
 
         // Step 3: run agent.
         const timeStarted = Date.now()
+        let runnerSessionID = continuation?.sessionID
         try {
           const result = await FactCheckAgent.run({
-            targetSessionID: args.target_session_id,
-            targetAgent: args.target_agent,
-            targetMessageID: snap.messageID,
-            targetMessageContentHash: snap.contentHash,
-            factCheckItems: args.fact_check_items,
-            reason: args.reason,
+            targetSessionID: resolvedArgs.target_session_id,
+            targetAgent: resolvedArgs.target_agent,
+            targetMessageID: resolvedArgs.target_message_id,
+            targetMessageContentHash: resolvedArgs.target_message_content_hash,
+            factCheckItems: resolvedArgs.fact_check_items,
+            reason: resolvedArgs.reason,
             orchestratorSessionID: input.agentSessionID,
             taskID: task.id,
             signal: input.signal,
-            // No onSessionCreated hook needed at this layer — the runner
-            // creates the child session under parentSessionID for overlay
-            // nesting automatically.
+            continuation,
+            onSessionCreated: (sessionID) => {
+              runnerSessionID = sessionID
+            },
           })
           // Step 3a: scope consistency check (codex impl review §3).  The
           // LLM populates report.scope itself; we must assert it matches
@@ -4504,27 +4599,30 @@ export function createOrchestratorTools(input: {
           // retry (rule 7: no silent fallback).
           const scope = result.report.scope
           const scopeMismatch =
-            scope.target_session_id !== args.target_session_id ||
-            scope.target_agent !== args.target_agent ||
-            scope.target_message_id !== snap.messageID ||
-            scope.target_message_content_hash !== snap.contentHash
+            scope.target_session_id !== resolvedArgs.target_session_id ||
+            scope.target_agent !== resolvedArgs.target_agent ||
+            scope.target_message_id !== resolvedArgs.target_message_id ||
+            scope.target_message_content_hash !== resolvedArgs.target_message_content_hash
           if (scopeMismatch) {
             const synthetic = synthesizeToolErrorReport({
-              snap,
-              args,
+              snap: {
+                messageID: resolvedArgs.target_message_id,
+                contentHash: resolvedArgs.target_message_content_hash,
+              },
+              args: resolvedArgs,
               reason:
                 `fact-check returned a report.scope inconsistent with the host snapshot ` +
-                `(expected target_session=${args.target_session_id} agent=${args.target_agent} ` +
-                `message_id=${snap.messageID}; got session=${scope.target_session_id} ` +
+                `(expected target_session=${resolvedArgs.target_session_id} agent=${resolvedArgs.target_agent} ` +
+                `message_id=${resolvedArgs.target_message_id}; got session=${scope.target_session_id} ` +
                 `agent=${scope.target_agent} message_id=${scope.target_message_id})`,
             })
             recordFactCheckAttempt({
               taskID: task.id,
               factCheckSessionID: result.sessionID,
-              targetSessionID: args.target_session_id,
-              targetAgent: args.target_agent,
-              targetMessageID: snap.messageID,
-              targetMessageContentHash: snap.contentHash,
+              targetSessionID: resolvedArgs.target_session_id,
+              targetAgent: resolvedArgs.target_agent,
+              targetMessageID: resolvedArgs.target_message_id,
+              targetMessageContentHash: resolvedArgs.target_message_content_hash,
               invokedByOrchestratorSessionID: input.agentSessionID,
               report: synthetic,
               timeStarted,
@@ -4535,10 +4633,10 @@ export function createOrchestratorTools(input: {
           recordFactCheckAttempt({
             taskID: task.id,
             factCheckSessionID: result.sessionID,
-            targetSessionID: args.target_session_id,
-            targetAgent: args.target_agent,
-            targetMessageID: snap.messageID,
-            targetMessageContentHash: snap.contentHash,
+            targetSessionID: resolvedArgs.target_session_id,
+            targetAgent: resolvedArgs.target_agent,
+            targetMessageID: resolvedArgs.target_message_id,
+            targetMessageContentHash: resolvedArgs.target_message_content_hash,
             invokedByOrchestratorSessionID: input.agentSessionID,
             report: result.report,
             timeStarted,
@@ -4550,13 +4648,13 @@ export function createOrchestratorTools(input: {
           const { createDecisionLog } = await import("@/decision-log")
           createDecisionLog(task.id).append({
             phase: "fact_check",
-            key: `fact_check:${args.target_session_id}:${snap.messageID}`,
+            key: `fact_check:${resolvedArgs.target_session_id}:${resolvedArgs.target_message_id}`,
             value:
               `verdict=${result.report.overall_verdict} ` +
               `verified=${result.report.verified.length} ` +
               `corrected=${result.report.corrected.length} ` +
               `unresolved=${result.report.unresolved.length}`,
-            reason: `fact-check on ${args.target_agent} (${args.reason.slice(0, 200)})`,
+            reason: `fact-check on ${resolvedArgs.target_agent} (${resolvedArgs.reason.slice(0, 200)})`,
           })
           return (
             `fact_check completed — verdict=\`${result.report.overall_verdict}\`\n\n` +
@@ -4578,25 +4676,37 @@ export function createOrchestratorTools(input: {
           const outcome: "aborted" | "tool_error" = input.signal?.aborted ? "aborted" : "tool_error"
           const errMessage = err instanceof Error ? err.message : String(err)
           const synthetic = synthesizeToolErrorReport({
-            snap,
-            args,
+            snap: {
+              messageID: resolvedArgs.target_message_id,
+              contentHash: resolvedArgs.target_message_content_hash,
+            },
+            args: resolvedArgs,
             reason: `fact-check ${outcome}: ${errMessage}`,
           })
           recordFactCheckAttempt({
             taskID: task.id,
-            // No child session id available — the run threw before
-            // returning a session reference.  Mark explicitly so
-            // listFactCheckAttempts consumers can distinguish.
-            factCheckSessionID: `(no-session:${outcome})`,
-            targetSessionID: args.target_session_id,
-            targetAgent: args.target_agent,
-            targetMessageID: snap.messageID,
-            targetMessageContentHash: snap.contentHash,
+            factCheckSessionID: runnerSessionID ?? `(no-session:${outcome})`,
+            targetSessionID: resolvedArgs.target_session_id,
+            targetAgent: resolvedArgs.target_agent,
+            targetMessageID: resolvedArgs.target_message_id,
+            targetMessageContentHash: resolvedArgs.target_message_content_hash,
             invokedByOrchestratorSessionID: input.agentSessionID,
             report: synthetic,
             timeStarted,
             outcome,
           })
+          if (outcome === "tool_error") {
+            const continuationResult = continuationResultForTerminalFinalizerMiss({
+              err,
+              taskID: task.id,
+              stage: "fact-check",
+              sessionID: runnerSessionID,
+              parentSessionID: input.agentSessionID,
+              finalizerName: "report_fact_check_result",
+              normalizedStageInput: resolvedArgs,
+            })
+            if (continuationResult) return continuationResult
+          }
           return `fact_check ${outcome}: ${errMessage}`
         }
       },

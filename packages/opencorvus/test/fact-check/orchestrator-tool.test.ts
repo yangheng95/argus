@@ -20,6 +20,9 @@ import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { listFactCheckAttempts, recordFactCheckAttempt } from "../../src/fact-check/persist"
 import type { FactCheckReport } from "../../src/fact-check/schema"
 import { createDecisionLog } from "../../src/decision-log"
+import { AgentRunError } from "../../src/agent/runner"
+import { Message } from "../../src/session/message"
+import { findStageContinuationRequest } from "../../src/engine/stage-continuation"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -135,6 +138,28 @@ const SAMPLE_ITEM = {
   source: "model prior",
 }
 
+function toolText(result: unknown): string {
+  if (typeof result === "string") return result
+  if (
+    result &&
+    typeof result === "object" &&
+    (result as { type?: unknown }).type === "final" &&
+    typeof (result as { output?: unknown }).output === "string"
+  ) {
+    return (result as { output: string }).output
+  }
+  if (
+    result &&
+    typeof result === "object" &&
+    typeof (result as { output?: unknown }).output === "string" &&
+    typeof (result as { title?: unknown }).title === "string" &&
+    typeof (result as { metadata?: unknown }).metadata === "object"
+  ) {
+    return (result as { output: string }).output
+  }
+  throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -194,9 +219,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         )
 
         // Yield is markdown — must contain verdict + verified section
-        expect(typeof result).toBe("string")
-        expect(String(result)).toContain("verdict=`clean`")
-        expect(String(result)).toContain("Verified (1)")
+        expect(toolText(result)).toContain("verdict=`clean`")
+        expect(toolText(result)).toContain("Verified (1)")
 
         // Artifact persisted
         const rows = listFactCheckAttempts("tsk_fc_A")
@@ -237,8 +261,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("rejected")
-        expect(String(result)).toContain("not in a terminal state")
+        expect(toolText(result)).toContain("rejected")
+        expect(toolText(result)).toContain("not in a terminal state")
 
         // No artifact, no decision-log entry
         expect(listFactCheckAttempts("tsk_fc_D").length).toBe(0)
@@ -292,8 +316,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         }
         const first = await tools.fact_check.execute(args, {} as any)
         expect(runCallCount).toBe(1)
-        expect(String(first)).toContain("verdict=`clean`")
-        expect(String(first)).not.toContain("cached")
+        expect(toolText(first)).toContain("verdict=`clean`")
+        expect(toolText(first)).not.toContain("cached")
 
         const secondTools = createOrchestratorTools({ taskID: "tsk_fc_C", agentSessionID: "ses_orch_C" }).tools
         const second = await secondTools.fact_check.execute(
@@ -301,8 +325,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           {} as any,
         )
         expect(runCallCount).toBe(1) // NOT incremented — agent did NOT re-run
-        expect(String(second)).toContain("cached")
-        expect(String(second)).toContain("verdict=`clean`")
+        expect(toolText(second)).toContain("cached")
+        expect(toolText(second)).toContain("verdict=`clean`")
       },
     })
   })
@@ -346,8 +370,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("verdict=`inconclusive`")
-        expect(String(result)).toContain("tool_failed")
+        expect(toolText(result)).toContain("verdict=`inconclusive`")
+        expect(toolText(result)).toContain("tool_failed")
 
         const row = listFactCheckAttempts("tsk_fc_F")[0]
         expect(row.payload.report.overall_verdict).toBe("inconclusive")
@@ -386,13 +410,130 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("aborted")
+        expect(toolText(result)).toContain("aborted")
 
         const rows = listFactCheckAttempts("tsk_fc_E")
         expect(rows.length).toBe(1)
         expect(rows[0].payload.outcome).toBe("aborted")
         expect(rows[0].payload.report.overall_verdict).toBe("inconclusive")
         expect(rows[0].payload.report.unresolved[0].why_unresolved).toBe("tool_failed")
+      },
+    })
+  })
+
+  test("[I] terminal finalizer miss persists tool_error before same-session continuation", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedTask("proj_fc_I", "tsk_fc_I", Date.now())
+        const { sessionID: targetSession, messageID: targetMsg } = await createTerminalSessionWithAssistant(
+          "Terminal finalizer miss claim about React 19.",
+        )
+        const failedSessionID = "ses_fc_terminal_miss_I"
+        const calls: any[] = []
+        factCheckAgentImpl = async (i) => {
+          calls.push(i)
+          if (calls.length === 1) {
+            i.onSessionCreated?.(failedSessionID)
+            const terminalError = new Message.TerminalToolMissingError({
+              message: "Fact-check ended without report_fact_check_result.",
+              toolName: "report_fact_check_result",
+              retries: 0,
+            })
+            throw new AgentRunError("fact-check", "missing terminal fact-check report", {
+              nonRetryable: true,
+              cause: terminalError,
+            })
+          }
+          expect(i.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            finalizerName: "report_fact_check_result",
+          })
+          return {
+            sessionID: failedSessionID,
+            report: {
+              ...baseReport,
+              scope: {
+                target_session_id: i.targetSessionID,
+                target_agent: i.targetAgent,
+                target_message_id: i.targetMessageID,
+                target_message_content_hash: i.targetMessageContentHash,
+                items_total: 1,
+                items_inspected: 1,
+              },
+              verified: [
+                {
+                  claim: SAMPLE_ITEM.claim,
+                  evidence: [{ kind: "web", pointer: "https://react.dev", excerpt: "React docs" }],
+                },
+              ],
+              overall_verdict: "clean",
+            },
+            outcome: "completed",
+          }
+        }
+
+        const { tools } = createOrchestratorTools({ taskID: "tsk_fc_I", agentSessionID: "ses_orch_I" })
+        const first = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Worker registered a claim and the first fact-check misses its terminal report.",
+          },
+          {} as any,
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("fact_check({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match).not.toBeNull()
+        const continuationArtifactID = match![1]
+        const request = findStageContinuationRequest({ taskID: "tsk_fc_I", artifactID: continuationArtifactID })
+        expect(request?.payload.stage).toBe("fact-check")
+        expect(request?.payload.finalizer_name).toBe("report_fact_check_result")
+        expect(request?.payload.session_id).toBe(failedSessionID)
+        expect(request?.payload.normalized_stage_input).toMatchObject({
+          target_session_id: targetSession,
+          target_agent: "build",
+          target_message_id: targetMsg,
+          fact_check_items: [SAMPLE_ITEM],
+        })
+
+        const afterMiss = listFactCheckAttempts("tsk_fc_I")
+        expect(afterMiss.length).toBe(1)
+        expect(afterMiss[0].payload.outcome).toBe("tool_error")
+        expect(afterMiss[0].payload.fact_check_session_id).toBe(failedSessionID)
+        expect(afterMiss[0].payload.target_message_id).toBe(targetMsg)
+
+        const second = await tools.fact_check.execute(
+          {
+            reason: "Continue the previous fact-check terminal report miss in the same session.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          {} as any,
+        )
+        expect(toolText(second)).toContain("verdict=`clean`")
+        expect(calls.length).toBe(2)
+        expect(calls[1].targetSessionID).toBe(targetSession)
+        expect(calls[1].targetMessageID).toBe(targetMsg)
+        expect(calls[1].continuation.artifactID).toBe(continuationArtifactID)
+
+        const afterContinuation = listFactCheckAttempts("tsk_fc_I")
+        expect(afterContinuation.map((row) => row.payload.outcome).sort()).toEqual(["completed", "tool_error"])
+
+        const third = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Fresh repeat should return the completed cached fact-check attempt.",
+          },
+          {} as any,
+        )
+        expect(toolText(third)).toContain("cached")
+        expect(calls.length).toBe(2)
       },
     })
   })
@@ -434,8 +575,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("tool_error")
-        expect(String(result)).toContain("inconsistent with the host snapshot")
+        expect(toolText(result)).toContain("tool_error")
+        expect(toolText(result)).toContain("inconsistent with the host snapshot")
 
         const rows = listFactCheckAttempts("tsk_fc_H")
         expect(rows.length).toBe(1)
@@ -477,7 +618,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("tool_error")
+        expect(toolText(result)).toContain("tool_error")
 
         const rows = listFactCheckAttempts("tsk_fc_empty_err")
         expect(rows.length).toBe(1)
@@ -525,8 +666,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("tool_error")
-        expect(String(result)).toContain("snapshot stale")
+        expect(toolText(result)).toContain("tool_error")
+        expect(toolText(result)).toContain("snapshot stale")
 
         const rows = listFactCheckAttempts("tsk_fc_stale")
         expect(rows.length).toBe(1)
@@ -580,7 +721,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("verdict=`clean`")
+        expect(toolText(result)).toContain("verdict=`clean`")
         expect(listFactCheckAttempts("tsk_fc_G").length).toBe(1)
       },
     })
