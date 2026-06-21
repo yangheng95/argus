@@ -1065,7 +1065,7 @@ const FactCheckInputSchema = z
       .min(1)
       .optional()
       .describe(
-        "Worker agent name: build / requirements / architect / frontend-design / intent-analysis / integrity.",
+        "Optional consistency check for the worker agent name. The host derives the actual value from target_session_id.",
       ),
     fact_check_items: FactCheckItemListSchema.optional().describe(
       "Copy of the fact_check_items[] array from the worker's terminal report. " +
@@ -1083,7 +1083,6 @@ const FactCheckInputSchema = z
       typeof input.target_session_id === "string" && input.target_session_id.length > 0
         ? "target_session_id"
         : undefined,
-      typeof input.target_agent === "string" && input.target_agent.length > 0 ? "target_agent" : undefined,
       Array.isArray(input.fact_check_items) ? "fact_check_items" : undefined,
     ].filter((field): field is string => !!field)
     if (hasContinuation) {
@@ -1097,7 +1096,7 @@ const FactCheckInputSchema = z
       }
       return
     }
-    for (const field of ["target_session_id", "target_agent", "fact_check_items"] as const) {
+    for (const field of ["target_session_id", "fact_check_items"] as const) {
       if (freshFields.includes(field)) continue
       ctx.addIssue({
         code: "custom",
@@ -1119,6 +1118,35 @@ const FactCheckStageInputSchema = z
   .strict()
 
 type FactCheckStageInput = z.infer<typeof FactCheckStageInputSchema>
+
+function resolveFactCheckTargetScope(input: {
+  taskID: string
+  targetSessionID: string
+  assertedTargetAgent?: string
+}): { targetAgent: string } | { error: string } {
+  const owningTaskID = taskIDForSession(input.targetSessionID)
+  if (owningTaskID !== input.taskID) {
+    return {
+      error:
+        owningTaskID === undefined
+          ? `target_session_id ${input.targetSessionID} is not owned by any task.`
+          : `target_session_id ${input.targetSessionID} belongs to task ${owningTaskID}, not current task ${input.taskID}.`,
+    }
+  }
+  const targetAgent = sessionRole(input.targetSessionID)
+  if (!targetAgent) {
+    return { error: `target_session_id ${input.targetSessionID} has no session kind to derive target_agent.` }
+  }
+  const asserted = input.assertedTargetAgent?.trim()
+  if (asserted && asserted !== targetAgent) {
+    return {
+      error:
+        `target_agent mismatch for ${input.targetSessionID}: caller asserted ${asserted}, ` +
+        `but the session kind is ${targetAgent}.`,
+    }
+  }
+  return { targetAgent }
+}
 
 const IntegrityInputSchema = z.object({
   reason: z.string().optional().describe("Why you decided to run integrity review"),
@@ -4750,6 +4778,8 @@ export function createOrchestratorTools(input: {
         "Use when (1) integrity verdict=pass AND (2) the worker's terminal report has " +
         "non-empty fact_check_items OR makes load-bearing factual claims about external " +
         "systems (APIs, library versions, third-party protocols, numbers, paths). " +
+        "Pass target_session_id from the current task; target_agent is derived from that session " +
+        "and an explicit target_agent is only a consistency assertion. " +
         "The tool dedupes automatically across repeated calls — you do NOT need to " +
         "track 'already checked'.  If the target session is still streaming, the tool " +
         "will reject; retry after it finishes.\n" +
@@ -4781,6 +4811,14 @@ export function createOrchestratorTools(input: {
         if (continuationInput) {
           resolvedArgs = continuationInput.normalizedStageInput
         } else {
+          const targetScope = resolveFactCheckTargetScope({
+            taskID: task.id,
+            targetSessionID: args.target_session_id!,
+            assertedTargetAgent: args.target_agent,
+          })
+          if ("error" in targetScope) {
+            return `fact_check rejected: ${targetScope.error}`
+          }
           const snap = await Session.snapshotLatestAssistant(args.target_session_id!)
           if (!snap.finished) {
             return (
@@ -4796,7 +4834,7 @@ export function createOrchestratorTools(input: {
           }
           resolvedArgs = FactCheckStageInputSchema.parse({
             target_session_id: args.target_session_id,
-            target_agent: args.target_agent,
+            target_agent: targetScope.targetAgent,
             fact_check_items: args.fact_check_items,
             reason: args.reason,
             target_message_id: snap.messageID,

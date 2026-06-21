@@ -67,7 +67,8 @@ const baseReport: FactCheckReport = {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-function seedTask(projectID: string, taskID: string, now: number) {
+async function seedTask(projectID: string, taskID: string, now: number): Promise<string> {
+  const root = await Session.create({ kind: "root", title: "FC e2e task root" })
   Database.use((db) => {
     db.insert(ProjectTable)
       .values({
@@ -83,7 +84,7 @@ function seedTask(projectID: string, taskID: string, now: number) {
       .values({
         id: taskID,
         project_id: projectID,
-        session_id: null,
+        session_id: root.id,
         source: "test",
         title: "FC e2e task",
         request: "Build a thing",
@@ -95,10 +96,15 @@ function seedTask(projectID: string, taskID: string, now: number) {
       })
       .run()
   })
+  return root.id
 }
 
-async function createTerminalSessionWithAssistant(text: string): Promise<{ sessionID: string; messageID: string }> {
-  const session = await Session.create({ kind: "build" })
+async function createTerminalSessionWithAssistant(
+  text: string,
+  parentID: string,
+  kind = "build",
+): Promise<{ sessionID: string; messageID: string }> {
+  const session = await Session.create({ kind, parentID })
   const userID = Identifier.ascending("message")
   await Session.updateMessage({
     id: userID,
@@ -116,7 +122,7 @@ async function createTerminalSessionWithAssistant(text: string): Promise<{ sessi
     parentID: userID,
     modelID: "test",
     providerID: "test",
-    agent: "build",
+    agent: kind,
     path: { cwd: "/tmp/fc-e2e", root: "/tmp/fc-e2e" },
     time: { created: Date.now() },
     cost: 0,
@@ -197,8 +203,8 @@ function factCheckWorkflowStatuses(taskID: string): string[] {
 // ---------------------------------------------------------------------------
 
 describe("fact_check orchestrator tool (e2e A–G)", () => {
-  beforeEach(() => {
-    resetDatabase()
+  beforeEach(async () => {
+    await resetDatabase()
     factCheckAgentImpl = undefined
   })
   afterEach(async () => {
@@ -211,9 +217,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_A", "tsk_fc_A", Date.now())
+        const rootSessionID = await seedTask("proj_fc_A", "tsk_fc_A", Date.now())
         const { sessionID: targetSession, messageID: targetMsg } = await createTerminalSessionWithAssistant(
           "Built a component using react 19.",
+          rootSessionID,
         )
 
         factCheckAgentImpl = async (i) => ({
@@ -247,7 +254,6 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         const result = await tools.fact_check.execute(
           {
             target_session_id: targetSession,
-            target_agent: "build",
             fact_check_items: [SAMPLE_ITEM],
             reason: "Worker registered a React-19 claim worth verifying.",
           },
@@ -280,8 +286,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_D", "tsk_fc_D", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Streaming claim.")
+        const rootSessionID = await seedTask("proj_fc_D", "tsk_fc_D", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Streaming claim.",
+          rootSessionID,
+        )
         SessionStatus.set(targetSession, { type: "streaming" })
 
         factCheckAgentImpl = async () => {
@@ -313,14 +322,96 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     })
   })
 
+  test("[scope] rejects target sessions outside the current task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await seedTask("proj_fc_scope_current", "tsk_fc_scope_current", Date.now())
+        const otherRootSessionID = await seedTask("proj_fc_scope_other", "tsk_fc_scope_other", Date.now() + 1)
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Other task claim.",
+          otherRootSessionID,
+        )
+
+        factCheckAgentImpl = async () => {
+          throw new Error("agent should NOT run for cross-task target session")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_scope_current",
+          agentSessionID: "ses_orch_scope_current",
+          workflow: factCheckWorkflow,
+        })
+        const result = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Cross-task target should be rejected before fact-check dispatch.",
+          },
+          {} as any,
+        )
+
+        expect(toolText(result)).toContain("fact_check rejected:")
+        expect(toolText(result)).toContain("belongs to task tsk_fc_scope_other")
+        expect(listFactCheckAttempts("tsk_fc_scope_current")).toHaveLength(0)
+        expect(factCheckWorkflowStatuses("tsk_fc_scope_current")).toEqual(["running", "failed"])
+      },
+    })
+  })
+
+  test("[scope] rejects caller target_agent that disagrees with session kind", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const rootSessionID = await seedTask("proj_fc_agent_mismatch", "tsk_fc_agent_mismatch", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Requirements claim.",
+          rootSessionID,
+          "requirements",
+        )
+
+        factCheckAgentImpl = async () => {
+          throw new Error("agent should NOT run for target_agent mismatch")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_agent_mismatch",
+          agentSessionID: "ses_orch_agent_mismatch",
+          workflow: factCheckWorkflow,
+        })
+        const result = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Caller target_agent must not override the target session kind.",
+          },
+          {} as any,
+        )
+
+        expect(toolText(result)).toContain("fact_check rejected:")
+        expect(toolText(result)).toContain("target_agent mismatch")
+        expect(toolText(result)).toContain("session kind is requirements")
+        expect(listFactCheckAttempts("tsk_fc_agent_mismatch")).toHaveLength(0)
+        expect(factCheckWorkflowStatuses("tsk_fc_agent_mismatch")).toEqual(["running", "failed"])
+      },
+    })
+  })
+
   // e2e C: idempotency — second call returns cached without re-dispatch
   test("[C] idempotent: second call with same target hits cache, no re-dispatch", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_C", "tsk_fc_C", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Cacheable claim text.")
+        const rootSessionID = await seedTask("proj_fc_C", "tsk_fc_C", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Cacheable claim text.",
+          rootSessionID,
+        )
 
         let runCallCount = 0
         factCheckAgentImpl = async (i) => {
@@ -388,8 +479,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_F", "tsk_fc_F", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Network-dependent claim.")
+        const rootSessionID = await seedTask("proj_fc_F", "tsk_fc_F", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Network-dependent claim.",
+          rootSessionID,
+        )
 
         factCheckAgentImpl = async (i) => ({
           sessionID: "ses_fc_run_F",
@@ -437,8 +531,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_E", "tsk_fc_E", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Cancelled mid-run.")
+        const rootSessionID = await seedTask("proj_fc_E", "tsk_fc_E", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Cancelled mid-run.",
+          rootSessionID,
+        )
 
         const ac = new AbortController()
         factCheckAgentImpl = async () => {
@@ -477,9 +574,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_I", "tsk_fc_I", Date.now())
+        const rootSessionID = await seedTask("proj_fc_I", "tsk_fc_I", Date.now())
         const { sessionID: targetSession, messageID: targetMsg } = await createTerminalSessionWithAssistant(
           "Terminal finalizer miss claim about React 19.",
+          rootSessionID,
         )
         const failedSessionID = "ses_fc_terminal_miss_I"
         const calls: any[] = []
@@ -609,8 +707,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_H", "tsk_fc_H", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Truthful claim.")
+        const rootSessionID = await seedTask("proj_fc_H", "tsk_fc_H", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Truthful claim.",
+          rootSessionID,
+        )
 
         factCheckAgentImpl = async (i) => ({
           sessionID: "ses_fc_run_H",
@@ -661,9 +762,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_empty_err", "tsk_fc_empty_err", Date.now())
+        const rootSessionID = await seedTask("proj_fc_empty_err", "tsk_fc_empty_err", Date.now())
         const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
           "Worker output. No structured items registered, but agent errored mid-run.",
+          rootSessionID,
         )
 
         factCheckAgentImpl = async () => {
@@ -703,8 +805,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_stale", "tsk_fc_stale", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Real message.")
+        const rootSessionID = await seedTask("proj_fc_stale", "tsk_fc_stale", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Real message.",
+          rootSessionID,
+        )
 
         // Bypass the FactCheckAgent mock — force the real run() to fire
         // so loadTargetMessageText() is actually exercised.  We point the
@@ -751,9 +856,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_G", "tsk_fc_G", Date.now())
+        const rootSessionID = await seedTask("proj_fc_G", "tsk_fc_G", Date.now())
         const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
           "External-executor passed result.",
+          rootSessionID,
         )
 
         factCheckAgentImpl = async (i) => {
