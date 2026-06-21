@@ -103,6 +103,33 @@ describe("research webpage PRD evidence", () => {
   )
 
   test(
+    "prepares uppercase-scheme live webpage URLs through the shared evidence pipeline",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = "tsk_research_webpage_prd_uppercase_scheme"
+      const calls: string[] = []
+
+      const evidence = await prepareWebpagePrdEvidence({
+        projectDir: tmp.path,
+        worktreeDir: tmp.path,
+        taskID,
+        sourceUrls: ["HTTPS://example.com/markets/world-economy/"],
+        pipeline: fakePipeline(calls),
+      })
+
+      expect(evidence?.status).toBe("generated")
+      expect(evidence?.url).toBe("HTTPS://example.com/markets/world-economy/")
+      expect(calls).toEqual([
+        "extract:HTTPS://example.com/markets/world-economy/",
+        "compile",
+        "analyze",
+        "captureRuntimeState:HTTPS://example.com/markets/world-economy/",
+      ])
+    },
+    { timeout: WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS },
+  )
+
+  test(
     "reads existing frontend-design evidence without running the live webpage pipeline",
     async () => {
       await using tmp = await tmpdir()

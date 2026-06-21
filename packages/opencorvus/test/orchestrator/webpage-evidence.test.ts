@@ -114,6 +114,29 @@ describe("live webpage evidence pipeline", () => {
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "web-clone-context.md"))).toBe(true)
   })
 
+  test("treats uppercase HTTP schemes as live webpage URLs", async () => {
+    await using tmp = await tmpdir()
+    const taskID = "tsk_webpage_evidence_uppercase_scheme"
+    const calls: string[] = []
+
+    const result = await ensureLiveWebpageEvidence({
+      projectDir: tmp.path,
+      worktreeDir: tmp.path,
+      taskID,
+      urls: ["HTTPS://example.com/markets"],
+      pipeline: fakePipeline(calls),
+    })
+
+    expect(result.status).toBe("generated")
+    expect(result.url).toBe("HTTPS://example.com/markets")
+    expect(calls).toEqual([
+      "extract:HTTPS://example.com/markets",
+      "compile",
+      "analyze",
+      "captureRuntimeState:HTTPS://example.com/markets",
+    ])
+  })
+
   test("repoints the project webpage evidence view from a previous task to the current task", async () => {
     await using tmp = await tmpdir()
     const firstCalls: string[] = []

@@ -350,6 +350,7 @@ function stageContinuationUnavailableResult(input: {
   stage: StageContinuationStage
   artifactID: string
   finalizerName: string
+  expectedNormalizedStageInput?: unknown
 }): ReturnType<typeof SubAgentProtocol.yieldResult> | undefined {
   const toolName = continuationToolName(input.stage)
   const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
@@ -396,32 +397,55 @@ function stageContinuationUnavailableResult(input: {
       : row.payload.claimed_at
         ? "claimed"
         : undefined
-  if (!state) return undefined
-  const detail =
-    state === "consumed"
-      ? `already consumed by message ${row.payload.continuation_message_id ?? "n/a"}`
-      : state === "claim_failed"
-        ? `has failed claim state: ${row.payload.claim_error ?? "n/a"}`
-        : `already claimed by ${row.payload.claim_id ?? "unknown"}`
-  const nextAction =
-    state === "claimed"
-      ? "wait for the in-flight same-session continuation or inspect the child session before retrying"
-      : `start a fresh ${toolName} run without continuation_artifact_id if the work is still required`
-  return SubAgentProtocol.yieldResult({
-    headline: `${input.stage}: continuation artifact is no longer pending.`,
-    summary:
-      `No fresh worker session was started because continuation_artifact_id=${input.artifactID} ${detail}. ` +
-      `Do not reuse this artifact; ${nextAction}.`,
-    fields: [
-      ["stage", input.stage],
-      ["session_id", row.payload.session_id],
-      ["continuation_artifact_id", input.artifactID],
-      ["state", state],
-      ["detail", detail],
-      ["next_action", nextAction],
-    ],
-    pointer: `read_context scope=decisions; do not reuse ${input.artifactID}`,
-  })
+  if (state) {
+    const detail =
+      state === "consumed"
+        ? `already consumed by message ${row.payload.continuation_message_id ?? "n/a"}`
+        : state === "claim_failed"
+          ? `has failed claim state: ${row.payload.claim_error ?? "n/a"}`
+          : `already claimed by ${row.payload.claim_id ?? "unknown"}`
+    const nextAction =
+      state === "claimed"
+        ? "wait for the in-flight same-session continuation or inspect the child session before retrying"
+        : `start a fresh ${toolName} run without continuation_artifact_id if the work is still required`
+    return SubAgentProtocol.yieldResult({
+      headline: `${input.stage}: continuation artifact is no longer pending.`,
+      summary:
+        `No fresh worker session was started because continuation_artifact_id=${input.artifactID} ${detail}. ` +
+        `Do not reuse this artifact; ${nextAction}.`,
+      fields: [
+        ["stage", input.stage],
+        ["session_id", row.payload.session_id],
+        ["continuation_artifact_id", input.artifactID],
+        ["state", state],
+        ["detail", detail],
+        ["next_action", nextAction],
+      ],
+      pointer: `read_context scope=decisions; do not reuse ${input.artifactID}`,
+    })
+  }
+  if (input.expectedNormalizedStageInput !== undefined) {
+    const currentDigest = stageInputDigest(input.expectedNormalizedStageInput)
+    if (row.payload.input_digest !== currentDigest) {
+      return SubAgentProtocol.yieldResult({
+        headline: `${input.stage}: continuation artifact scope is stale.`,
+        summary:
+          `No fresh worker session was started because continuation_artifact_id=${input.artifactID} was created for an older ${input.stage} input scope. ` +
+          `Do not reuse this stale artifact; start a fresh ${toolName} run without continuation_artifact_id if the work is still required.`,
+        fields: [
+          ["stage", input.stage],
+          ["session_id", row.payload.session_id],
+          ["continuation_artifact_id", input.artifactID],
+          ["state", "scope_mismatch"],
+          ["stored_input_digest", row.payload.input_digest],
+          ["current_input_digest", currentDigest],
+          ["next_action", `start a fresh ${toolName} run without continuation_artifact_id`],
+        ],
+        pointer: `read_context scope=decisions; start fresh ${toolName}`,
+      })
+    }
+  }
+  return undefined
 }
 
 function continuationFromArtifactOrResult(input: Parameters<typeof continuationFromArtifact>[0]):
@@ -1212,6 +1236,7 @@ const FactCheckInputSchema = z
       typeof input.target_session_id === "string" && input.target_session_id.length > 0
         ? "target_session_id"
         : undefined,
+      typeof input.target_agent === "string" && input.target_agent.length > 0 ? "target_agent" : undefined,
       Array.isArray(input.fact_check_items) ? "fact_check_items" : undefined,
     ].filter((field): field is string => !!field)
     if (hasContinuation) {
@@ -2659,9 +2684,32 @@ export function createOrchestratorTools(input: {
         !sameGoalIDs ||
         stageInputDigest(actual.evidence_snapshot) !== stageInputDigest(expected.evidence_snapshot)
       ) {
-        throw new Error(
-          `integrity continuation ${toolInput.continuation_artifact_id} scope mismatch; stored spec=${actual.active_spec_snapshot_id} phase=${actual.phase} goals=${actual.goal_ids.join(",")} evidence=${stageInputDigest(actual.evidence_snapshot)}, current spec=${expected.active_spec_snapshot_id} phase=${expected.phase} goals=${expected.goal_ids.join(",")} evidence=${stageInputDigest(expected.evidence_snapshot)}`,
-        )
+        const continuationArtifactID = continuationInput.continuation.artifactID
+        return {
+          status: "continuation",
+          result: SubAgentProtocol.yieldResult({
+            headline: "integrity: continuation artifact scope is stale.",
+            summary:
+              `No fresh integrity session was started because continuation_artifact_id=${continuationArtifactID} was created for an older integrity review scope. ` +
+              "Do not reuse this stale artifact; start a fresh integrity run without continuation_artifact_id if the review is still required.",
+            fields: [
+              ["stage", "integrity"],
+              ["session_id", continuationInput.continuation.sessionID],
+              ["continuation_artifact_id", continuationArtifactID],
+              ["state", "scope_mismatch"],
+              ["stored_active_spec_snapshot_id", actual.active_spec_snapshot_id],
+              ["current_active_spec_snapshot_id", expected.active_spec_snapshot_id],
+              ["stored_phase", actual.phase],
+              ["current_phase", expected.phase],
+              ["stored_goal_ids", actual.goal_ids],
+              ["current_goal_ids", expected.goal_ids],
+              ["stored_evidence_digest", stageInputDigest(actual.evidence_snapshot)],
+              ["current_evidence_digest", stageInputDigest(expected.evidence_snapshot)],
+              ["next_action", "start a fresh integrity run without continuation_artifact_id"],
+            ],
+            pointer: "read_context scope=decisions; start fresh integrity",
+          }),
+        }
       }
     }
 
@@ -3164,7 +3212,7 @@ export function createOrchestratorTools(input: {
                 expectedNormalizedStageInput: normalizedStageInput,
               })
             if ("result" in resolvedContinuation) {
-              await trackStepComplete("requirements", undefined, true)
+              await trackStepComplete("requirements")
               return resolvedContinuation.result
             }
             continuation = resolvedContinuation.continuation
@@ -4148,7 +4196,7 @@ export function createOrchestratorTools(input: {
                 expectedNormalizedStageInput: normalizedStageInput,
               })
             if ("result" in resolvedContinuation) {
-              await trackStepComplete("architect", undefined, true)
+              await trackStepComplete("architect")
               return resolvedContinuation.result
             }
             continuation = resolvedContinuation.continuation
@@ -4554,7 +4602,7 @@ export function createOrchestratorTools(input: {
                 expectedNormalizedStageInput: normalizedStageInput,
               })
             if ("result" in resolvedContinuation) {
-              await trackStepComplete("workload_analysis", undefined, true)
+              await trackStepComplete("workload_analysis")
               return resolvedContinuation.result
             }
             continuation = resolvedContinuation.continuation
@@ -4779,7 +4827,7 @@ export function createOrchestratorTools(input: {
                 expectedNormalizedStageInput: normalizedStageInput,
               })
             if ("result" in resolvedContinuation) {
-              await close(true)
+              await close(false)
               return resolvedContinuation.result
             }
             continuation = resolvedContinuation.continuation
@@ -5247,7 +5295,7 @@ export function createOrchestratorTools(input: {
           .string()
           .optional()
           .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
-      }),
+      }).strict(),
       execute: async () => {
         const task = requireTask(taskID)
         await trackStepStart("analyze_intent")
@@ -5378,7 +5426,7 @@ export function createOrchestratorTools(input: {
                 expectedNormalizedStageInput: normalizedStageInput,
               })
             if ("result" in resolvedContinuation) {
-              await trackStepComplete("frontend_research", undefined, true)
+              await trackStepComplete("frontend_research")
               return resolvedContinuation.result
             }
             continuation = resolvedContinuation.continuation

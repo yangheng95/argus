@@ -63,7 +63,9 @@ import { ORCHESTRATOR_POLL_INTERVAL_MS, budgetRow, deriveTitle, progressStatus }
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
 import {
+  discardQueuedTaskEvent,
   directoryQueueSnapshot,
+  drainPendingQueuedOperatorWakes,
   dispatchTaskLoop,
   reorderQueuedTasksForCwd,
   startQueuedTaskInCwd,
@@ -92,7 +94,6 @@ import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/en
 import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import { cancelSessionPromptByID, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
-import { discardQueuedTaskEvent } from "@/engine/queue"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
 import { Orchestrator } from "@/orchestrator/agent"
@@ -981,6 +982,7 @@ export namespace EngineService {
       scope: "instance",
       run: async () => {
         await EngineRuntime.monitorRuns(hooks())
+        drainPendingQueuedOperatorWakes()
       },
     })
     // Phase-7: no aggressive startup recovery. Live build attempts and

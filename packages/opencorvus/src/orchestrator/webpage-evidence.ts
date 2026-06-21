@@ -8,6 +8,7 @@ import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import type { Tool } from "@/tool/tool"
 import { prepareWebCloneContext } from "@/web-clone/context"
 import { readPngEvidence } from "@/web-clone/evidence-integrity"
+import { isHttpWebpageUrl } from "@/util/web-url"
 
 export type LiveWebpageEvidenceStatus = "skipped" | "reused" | "generated"
 export type LiveWebpageEvidenceFailurePhase =
@@ -114,7 +115,7 @@ export async function ensureLiveWebpageEvidence(input: {
   signal?: AbortSignal
   pipeline?: LiveWebpageEvidencePipeline
 }): Promise<LiveWebpageEvidenceResult> {
-  const url = input.urls.find((item) => item.startsWith("http://") || item.startsWith("https://"))
+  const url = input.urls.find(isHttpWebpageUrl)
   if (!url) return { status: "skipped", artifacts: [] }
 
   await TaskRuntimeMaterializer.materializeFrontendDesign({

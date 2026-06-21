@@ -78,6 +78,21 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     ).toBe(false)
   })
 
+  test("analyze_intent schema rejects unknown continuation-like fields", () => {
+    expect(Object.keys(tools.analyze_intent.inputSchema!.shape)).toEqual(["reason"])
+    expect(
+      tools.analyze_intent.inputSchema!.safeParse({
+        reason: "Need a fresh intent read after an operator message.",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.analyze_intent.inputSchema!.safeParse({
+        reason: "Do not strip continuation-like input into a fresh intent session.",
+        continuation_artifact_id: "art_intent_continue",
+      }).success,
+    ).toBe(false)
+  })
+
   test("continuation-capable stage schemas reject unknown fields instead of stripping them", () => {
     const validInputsByTool: Record<string, Record<string, unknown>> = {
       requirements: { reason: "analyze requirements" },
@@ -325,6 +340,13 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         target_agent: "build",
         fact_check_items: [],
         reason: "Ambiguous fact-check mode should be rejected.",
+        continuation_artifact_id: "art_fact_check_continue",
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.fact_check.inputSchema!.safeParse({
+        target_agent: "build",
+        reason: "Contradictory target assertion must not be accepted during continuation.",
         continuation_artifact_id: "art_fact_check_continue",
       }).success,
     ).toBe(false)
