@@ -26,7 +26,7 @@ describe("EngineRuntime goal-run convergence", () => {
     await resetDatabase()
   })
 
-  test("terminal goal runs wake the task loop without waiting for sibling terminal settlement", async () => {
+  test("terminal goal runs coalesce one task-loop wake without waiting for sibling terminal settlement", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -50,7 +50,7 @@ describe("EngineRuntime goal-run convergence", () => {
         expect(run?.status).toBe("blocked")
         expect(run?.blocking_reason).toBe("integrity verdict needs_correction")
         expect(run?.error).toBe("Integrity needs correction")
-        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID })
         expect(runTaskLoop.mock.calls[0]?.[0].event).toBeUndefined()
         const facts = goalRefillNotificationsForTask(taskID)
@@ -228,7 +228,7 @@ describe("EngineRuntime goal-run convergence", () => {
 
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
 
         seedGoalRun(taskID, runID, "grun_one", "completed", now + 10)
         seedGoalRun(taskID, runID, "grun_two", "completed", now + 11)
@@ -236,7 +236,7 @@ describe("EngineRuntime goal-run convergence", () => {
         await EngineRuntime.syncRun(runID, hooks())
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(goalRefillNotificationsForTask(taskID)).toHaveLength(2)
       },
     })
