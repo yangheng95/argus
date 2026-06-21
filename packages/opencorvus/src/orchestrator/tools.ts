@@ -1021,6 +1021,7 @@ const DeepResearchInputSchema = z
     focus: z.string().optional().describe("Optional narrow focus for the research agent."),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
+  .strict()
   .superRefine((input, ctx) => {
     const hasContinuation =
       typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
@@ -1061,6 +1062,7 @@ const VisualQaInputSchema = z
       ),
     continuation_artifact_id: StageContinuationArtifactIDField,
   })
+  .strict()
   .superRefine((input, ctx) => {
     const hasContinuation =
       typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
@@ -1177,10 +1179,12 @@ function resolveFactCheckTargetScope(input: {
   return { targetAgent }
 }
 
-const IntegrityInputSchema = z.object({
-  reason: z.string().optional().describe("Why you decided to run integrity review"),
-  continuation_artifact_id: StageContinuationArtifactIDField,
-})
+const IntegrityInputSchema = z
+  .object({
+    reason: z.string().optional().describe("Why you decided to run integrity review"),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
 
 type IntegrityToolInput = z.infer<typeof IntegrityInputSchema>
 
@@ -3019,7 +3023,7 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
         continuation_artifact_id: StageContinuationArtifactIDField,
-      }),
+      }).strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         let task = requireTask(taskID)
         log.info("requirements guard check", { taskID, hasSpec: !!findActiveSpecForTask(task.id) })
@@ -3993,7 +3997,7 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
         continuation_artifact_id: StageContinuationArtifactIDField,
-      }),
+      }).strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
@@ -4387,7 +4391,7 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run workload analysis"),
         continuation_artifact_id: StageContinuationArtifactIDField,
-      }),
+      }).strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
@@ -6742,53 +6746,55 @@ export function createOrchestratorTools(input: {
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
         "per-goal build → integrity (the pipeline workflow). Frontend evidence tools are available candidates " +
         "when the full task context needs visual/reference material for build dispatch.",
-      inputSchema: z.object({
-        request: z
-          .string()
-          .optional()
-          .describe(
-            "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt, including dependency materialization, worktree MERGING resolution, package/script/toolchain fixes, port selection, or product behavior fixes proven by verification. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
-          ),
-        reason: z
-          .string()
-          .describe(
-            "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
-          ),
-        goalID: z
-          .string()
-          .optional()
-          .describe(
-            "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
-          ),
-        directBuildIntent: z
-          .literal("modify_files")
-          .optional()
-          .describe(
-            "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
-          ),
-        freshContext: z
-          .boolean()
-          .optional()
-          .describe(
-            "Optional escape hatch for context-wedged per-goal retries. When true AND `goalID` is set, " +
-              "skip the prior goal_run.session_id reuse and dispatch this build into a brand-new build session " +
-              "with zero accumulated context. Use ONLY after a same-context retry approach is demonstrably " +
-              "stuck - typical evidence: (a) the goal has already failed >=2 times on this contract with the " +
-              "same root error class and `read_context` shows the build session near or over its context cap; " +
-              "(b) `compaction` returned `nothing-to-compress` or `post-compaction-still-over`; (c) the prior " +
-              "session_id is unrecoverable (deletion / DB lineage gap). Burns the prior session's reasoning " +
-              "history - the goal contract (objective / acceptance_specs / owned_paths) is preserved by the " +
-              "engine_goal row, and you MUST restate every concrete lesson the prior attempts produced inside " +
-              "`request`, because the new session will not see them. Has no effect on task-level direct builds " +
-              "(no goalID); the host ignores it in that path.",
-          ),
-        userConfirmedStaleIntegrityData: z
-          .boolean()
-          .optional()
-          .describe(
-            "Set true only after the user explicitly confirmed continuing while the latest completed integrity session is status=artifact_missing and its durable integrity_attempt artifact could not be recovered.",
-          ),
-      }),
+      inputSchema: z
+        .object({
+          request: z
+            .string()
+            .optional()
+            .describe(
+              "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt, including dependency materialization, worktree MERGING resolution, package/script/toolchain fixes, port selection, or product behavior fixes proven by verification. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
+            ),
+          reason: z
+            .string()
+            .describe(
+              "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
+            ),
+          goalID: z
+            .string()
+            .optional()
+            .describe(
+              "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
+            ),
+          directBuildIntent: z
+            .literal("modify_files")
+            .optional()
+            .describe(
+              "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
+            ),
+          freshContext: z
+            .boolean()
+            .optional()
+            .describe(
+              "Optional escape hatch for context-wedged per-goal retries. When true AND `goalID` is set, " +
+                "skip the prior goal_run.session_id reuse and dispatch this build into a brand-new build session " +
+                "with zero accumulated context. Use ONLY after a same-context retry approach is demonstrably " +
+                "stuck - typical evidence: (a) the goal has already failed >=2 times on this contract with the " +
+                "same root error class and `read_context` shows the build session near or over its context cap; " +
+                "(b) `compaction` returned `nothing-to-compress` or `post-compaction-still-over`; (c) the prior " +
+                "session_id is unrecoverable (deletion / DB lineage gap). Burns the prior session's reasoning " +
+                "history - the goal contract (objective / acceptance_specs / owned_paths) is preserved by the " +
+                "engine_goal row, and you MUST restate every concrete lesson the prior attempts produced inside " +
+                "`request`, because the new session will not see them. Has no effect on task-level direct builds " +
+                "(no goalID); the host ignores it in that path.",
+            ),
+          userConfirmedStaleIntegrityData: z
+            .boolean()
+            .optional()
+            .describe(
+              "Set true only after the user explicitly confirmed continuing while the latest completed integrity session is status=artifact_missing and its durable integrity_attempt artifact could not be recovered.",
+            ),
+        })
+        .strict(),
       execute: async (
         { request = "", reason, goalID, directBuildIntent, freshContext = false, userConfirmedStaleIntegrityData },
         options,
