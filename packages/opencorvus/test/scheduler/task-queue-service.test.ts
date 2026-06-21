@@ -862,6 +862,7 @@ describe("scheduler.task-queue-service", () => {
         await new Promise<never>(() => {})
       }) as never,
     )
+    const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => true)
 
     await Instance.provide({
       directory: tmp.path,
@@ -886,6 +887,7 @@ describe("scheduler.task-queue-service", () => {
         const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
         expect(row?.status).toBe("failed")
         expect(row?.error_message).toBe("task timed out while running")
+        expect(cancel).toHaveBeenCalledWith(session.id, tmp.path)
       },
     })
 
