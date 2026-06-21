@@ -542,7 +542,8 @@ export namespace TaskQueueService {
     )
     if (stale.length === 0) return
     for (const task of stale) {
-      Database.use((db) =>
+      const session = await Session.get(task.session_id)
+      const failed = Database.use((db) =>
         db
           .update(TaskQueueTable)
           .set({
@@ -553,11 +554,19 @@ export namespace TaskQueueService {
             time_updated: now,
           })
           .where(and(eq(TaskQueueTable.id, task.id), eq(TaskQueueTable.status, "running")))
-          .run(),
+          .returning({ id: TaskQueueTable.id })
+          .get(),
       )
+      if (!failed) continue
       log.warn("marked stale running task failed after inactivity", {
         id: task.id,
         sessionID: task.session_id,
+      })
+      const promptCancelled = SessionPrompt.cancel(session.id, session.directory)
+      log.warn("cancelled stale running session prompt after inactivity", {
+        id: task.id,
+        sessionID: task.session_id,
+        promptCancelled,
       })
       const inFlight = state().inFlight.get(task.id)
       if (inFlight) {
