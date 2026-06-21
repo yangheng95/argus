@@ -923,7 +923,7 @@ const FrontendDesignUrlsField = z
   .array(z.string())
   .optional()
   .describe(
-    "Any number of design-reference URLs: live pages, design-tool share links " +
+    "Design-reference URLs: at most one non-Figma live/page URL plus any Figma design links. Design-tool share links " +
       "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
       "Non-Figma URLs are available to frontend-design for webpage evidence extraction and may also be materialized " +
       "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
@@ -955,6 +955,17 @@ const FrontendDesignInputSchema = z
   .strict()
   .superRefine((input, ctx) => {
     const hasContinuation = typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const liveUrls = (Array.isArray(input.urls) ? input.urls : []).filter(
+      (url) => typeof url === "string" && url.length > 0 && !isFigmaUrl(url),
+    )
+    if (!hasContinuation && liveUrls.length > 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["urls"],
+        message:
+          "frontend_design accepts at most one non-Figma live/page URL because the task-scoped webpage clone evidence package has one primary source URL.",
+      })
+    }
     if (!hasContinuation) return
     const freshFields = [
       Array.isArray(input.urls) && input.urls.length > 0 ? "urls" : undefined,
