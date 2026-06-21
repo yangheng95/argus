@@ -83,7 +83,7 @@ import type { ExecutorAdapter } from "../../src/executor/contract"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 import { findStageContinuationRequest } from "../../src/engine/stage-continuation"
-import { researchSourceDigest } from "../../src/research"
+import { researchSourceDigest } from "../../src/research/schema"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -91,6 +91,9 @@ let computeRequirementStatusSnapshotImpl: ((input: any) => any[]) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
 let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let frontendResearchRunImpl: ((input: any) => Promise<any>) | undefined
+let deepResearchRunImpl: ((input: any) => Promise<any>) | undefined
+let goalWorkloadAnalyzeImpl: ((input: any) => Promise<any>) | undefined
+let visualQaAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
 let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
 
@@ -260,6 +263,153 @@ function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string
     },
     subpage_research_tasks: [],
     open_questions: [],
+  }
+}
+
+function minimalDeepResearchBrief(input: { taskID: string; sessionID: string }) {
+  const evidence = [
+    {
+      id: "ev_deep_source",
+      kind: "web" as const,
+      pointer: "https://example.com/source",
+      title: "Deep research source",
+      retrieved_at: "2026-06-21T00:00:00.000Z",
+      reliability: "primary" as const,
+      excerpt: "Deep research evidence for the target task.",
+      volatile: false,
+    },
+  ]
+  const paths = ProjectRuntimePaths.deepResearchPaths(process.cwd(), input.taskID, input.sessionID)
+  return {
+    metadata: {
+      research_session_id: input.sessionID,
+      created_for_message_id: "msg_deep_research_recovered",
+      request_hash: "deep-research-request-hash",
+      source_digest: researchSourceDigest(evidence),
+      created_at: "2026-06-21T00:00:00.000Z",
+    },
+    scope: {
+      user_goal: "Collect source-backed research for implementation planning.",
+      deliverable_type: "research_report" as const,
+      audience: "orchestrator and downstream agents",
+      explicit_non_goals: [],
+      assumed_non_goals: [],
+    },
+    bundle: {
+      full_markdown_path: `${paths.relativeDir}/research-bundle.md`,
+      evidence_json_path: `${paths.relativeDir}/evidence.json`,
+      citation_map_path: `${paths.relativeDir}/citation-map.json`,
+    },
+    summary: "Recovered deep research brief.",
+    evidence_index: evidence,
+    facts: [
+      {
+        id: "fact_deep_source_exists",
+        statement: "A source-backed research item exists.",
+        evidence_ids: ["ev_deep_source"],
+      },
+    ],
+    inferences: [
+      {
+        id: "inf_deep_source_is_useful",
+        inference: "The source-backed item can inform implementation planning.",
+        based_on_fact_ids: ["fact_deep_source_exists"],
+        confidence: "high" as const,
+      },
+    ],
+    problem_statements: [
+      {
+        id: "problem_need_source_backing",
+        statement: "Planning must use source-backed evidence.",
+        fact_ids: ["fact_deep_source_exists"],
+      },
+    ],
+    user_needs: [
+      {
+        id: "need_research_report",
+        need: "Downstream agents need a durable research report.",
+        fact_ids: ["fact_deep_source_exists"],
+      },
+    ],
+    constraints: [
+      {
+        id: "constraint_source_backed",
+        constraint: "Do not replace source-backed facts with guesses.",
+        fact_ids: ["fact_deep_source_exists"],
+      },
+    ],
+    document_outline: [
+      {
+        id: "section_sources",
+        title: "Sources",
+        purpose: "Summarize source-backed implementation context.",
+        evidence_ids: ["ev_deep_source"],
+      },
+    ],
+    subpage_research_tasks: [],
+    open_questions: [],
+  }
+}
+
+function minimalWorkloadBrief(goalID: string) {
+  return {
+    goal_id: goalID,
+    why_not_smaller: ["This goal crosses visible UI and verification surfaces."],
+    underestimation_traps: ["Do not report success without running the acceptance check."],
+    execution_inventory: {
+      surfaces: 1,
+      states: 1,
+      data_contracts: 1,
+      verification_points: 1,
+    },
+    verification_inventory: ["Run the targeted acceptance command."],
+    references: {
+      contract_ids: [],
+      reference_coverage_ids: [],
+      acceptance_spec_ids: ["acc-workload"],
+      visual_spec_ids: [],
+      prd_sections: ["Implementation"],
+    },
+  }
+}
+
+function minimalVisualQaReport() {
+  return {
+    accepted: true,
+    summary: "Recovered visual QA report.",
+    coverage: [
+      {
+        region: "main surface",
+        viewports: [{ width: 1280, height: 720 }],
+        states: ["default"],
+        source_refs: ["build evidence"],
+        evidence_refs: ["visual-qa-evidence"],
+        notes: "Main surface was checked.",
+      },
+    ],
+    findings: [],
+    production_blockers: [],
+    follow_up_task: null,
+    repairs: [],
+    evidence: [
+      {
+        type: "command" as const,
+        ref: "bun test visual-qa",
+        state: "default",
+        note: "Visual QA recovery test evidence.",
+      },
+    ],
+    reference_parity: {
+      required: false,
+      required_regions: [],
+      reference_comparison_evidence_refs: [],
+      missing_regions: [],
+      blocker_ids: [],
+    },
+    commands: [],
+    changed_files: [],
+    open_questions: [],
+    fact_check_items: [],
   }
 }
 
@@ -508,6 +658,34 @@ mock.module("@/frontend-research", () => ({
     run: (input: any) => {
       if (!frontendResearchRunImpl) throw new Error("FrontendResearchAgent.run mock not configured")
       return frontendResearchRunImpl(input)
+    },
+  },
+}))
+
+mock.module("@/research", () => ({
+  DeepResearchAgent: {
+    run: (input: any) => {
+      if (!deepResearchRunImpl) throw new Error("DeepResearchAgent.run mock not configured")
+      return deepResearchRunImpl(input)
+    },
+  },
+  researchSourceDigest,
+}))
+
+mock.module("@/goal-workload-analyst", () => ({
+  GoalWorkloadAnalystAgent: {
+    analyze: (input: any) => {
+      if (!goalWorkloadAnalyzeImpl) throw new Error("GoalWorkloadAnalystAgent.analyze mock not configured")
+      return goalWorkloadAnalyzeImpl(input)
+    },
+  },
+}))
+
+mock.module("@/visual-qa", () => ({
+  VisualQaAgent: {
+    analyze: (input: any) => {
+      if (!visualQaAnalyzeImpl) throw new Error("VisualQaAgent.analyze mock not configured")
+      return visualQaAnalyzeImpl(input)
     },
   },
 }))
@@ -925,6 +1103,11 @@ describe("orchestrator tools", () => {
     await resetDatabase()
     tmp = await tmpdir()
     architectCoordinateImpl = undefined
+    designAnalyzeImpl = undefined
+    frontendResearchRunImpl = undefined
+    deepResearchRunImpl = undefined
+    goalWorkloadAnalyzeImpl = undefined
+    visualQaAnalyzeImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
     reviewIntegrityImpl = async () => integrityTeamResult({ sessionID: "ses_integrity_default" })
@@ -937,6 +1120,9 @@ describe("orchestrator tools", () => {
     architectCoordinateImpl = undefined
     designAnalyzeImpl = undefined
     frontendResearchRunImpl = undefined
+    deepResearchRunImpl = undefined
+    goalWorkloadAnalyzeImpl = undefined
+    visualQaAnalyzeImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
     ExecutorRegistry.reset()
@@ -1732,6 +1918,300 @@ describe("orchestrator tools", () => {
           buildToolOptions("frontend_research"),
         )
         expect(toolText(second)).toContain("Frontend research brief persisted")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("deep_research terminal finalizer miss returns same-session continuation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_deep_research_continue_${stamp}`
+    const failedSessionID = `ses_deep_research_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "deep research continuation parent" })
+        const projectID = Instance.project.id
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Deep research continuation task",
+              request: "Collect source-backed research.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        deepResearchRunImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("deep-research", "missing terminal submit_research_brief", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Deep research ended without submit_research_brief.",
+                toolName: "submit_research_brief",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_research_brief",
+          })
+          expect(input.sourceUrls).toBeUndefined()
+          return {
+            brief: minimalDeepResearchBrief({
+              taskID,
+              sessionID: failedSessionID,
+            }),
+            bundle: {
+              full_markdown: "# Deep research\n- recovered",
+              evidence_json: "{}",
+              citation_map_json: "{}",
+            },
+            factCheckItems: [],
+            sessionID: failedSessionID,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.deep_research.execute(
+          {
+            reason: "Need source-backed research.",
+            source_urls: ["https://example.com/source"],
+          },
+          buildToolOptions("deep_research"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("deep_research({")
+        expect(firstText).not.toContain("continuation_call: research({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("deep-research")
+        expect(continuation?.payload.finalizer_name).toBe("submit_research_brief")
+
+        const second = await tools.deep_research.execute(
+          {
+            reason: "Continue previous deep research finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("deep_research"),
+        )
+        expect(toolText(second)).toContain("Deep research brief persisted")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("workload_analysis terminal finalizer miss returns same-session continuation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_workload_continue_${stamp}`
+    const goalID = `goal_workload_continue_${stamp}`
+    const failedSessionID = `ses_workload_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "workload continuation parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Workload continuation project",
+          taskTitle: "Workload continuation task",
+          request: "Size the active architecture goals.",
+          goalTitle: "Sized goal",
+          goalSlug: "sized-goal",
+          objective: "Implement and verify one surface.",
+          now,
+          specID: `spec_workload_continue_${stamp}`,
+          requirementIDs: ["REQ-workload"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        goalWorkloadAnalyzeImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("goal-workload-analyst", "missing terminal submit_workload_analysis", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Workload analyst ended without submit_workload_analysis.",
+                toolName: "submit_workload_analysis",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_workload_analysis",
+          })
+          return {
+            briefs: [minimalWorkloadBrief(goalID)],
+            specSnapshotID: `spec_workload_continue_${stamp}`,
+            summary: "Recovered workload analysis.",
+            sessionID: failedSessionID,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.workload_analysis.execute(
+          {
+            reason: "Need an independent workload review.",
+          },
+          buildToolOptions("workload_analysis"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("workload_analysis({")
+        expect(firstText).not.toContain("goal_workload_analyst({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("goal-workload-analyst")
+        expect(continuation?.payload.finalizer_name).toBe("submit_workload_analysis")
+
+        const second = await tools.workload_analysis.execute(
+          {
+            reason: "Continue previous workload finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("workload_analysis"),
+        )
+        expect(toolText(second)).toContain("Workload analysis complete")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("visual_qa terminal finalizer miss returns same-session continuation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_visual_qa_continue_${stamp}`
+    const failedSessionID = `ses_visual_qa_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "visual QA continuation parent" })
+        const projectID = Instance.project.id
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Visual QA continuation task",
+              request: "Review the finished visible product.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        visualQaAnalyzeImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("visual-qa", "missing terminal submit_visual_qa_report", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Visual QA ended without submit_visual_qa_report.",
+                toolName: "submit_visual_qa_report",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_visual_qa_report",
+          })
+          return {
+            report: minimalVisualQaReport(),
+            sessionID: failedSessionID,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.visual_qa.execute(
+          {
+            reason: "Need final GUI review.",
+          },
+          buildToolOptions("visual_qa"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("visual_qa({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("visual-qa")
+        expect(continuation?.payload.finalizer_name).toBe("submit_visual_qa_report")
+
+        const second = await tools.visual_qa.execute(
+          {
+            reason: "Continue previous visual QA finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("visual_qa"),
+        )
+        expect(toolText(second)).toContain("visual_qa complete: accepted=true")
         expect(calls).toBe(2)
       },
     })

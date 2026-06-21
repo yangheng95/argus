@@ -1,6 +1,7 @@
 import type { ToolSet } from "ai"
 import { runAgentSession } from "@/agent/runner"
 import { Agent } from "@/agent/agent"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
@@ -53,6 +54,7 @@ export namespace VisualQaAgent {
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
     onSessionCreated?: (sessionID: string) => void
+    continuation?: AgentSessionContinuation
   }
 
   export interface AnalyzeResult {
@@ -96,6 +98,7 @@ export namespace VisualQaAgent {
       taskID: input.taskID,
       model: input.model,
       signal: input.signal,
+      continuation: input.continuation,
       onStatus: input.onStatus ?? (() => {}),
       onSessionCreated: input.onSessionCreated
         ? (session) => {

@@ -171,9 +171,45 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       }).success,
     ).toBe(false)
 
-    expect(Object.keys(tools.visual_qa.inputSchema!.shape)).toEqual(["reason", "focus", "app_url", "preview_command"])
+    expect(Object.keys(tools.visual_qa.inputSchema!.shape)).toEqual([
+      "reason",
+      "focus",
+      "app_url",
+      "preview_command",
+      "continuation_artifact_id",
+    ])
     expect(tools.visual_qa.inputSchema!.safeParse({ reason: "need fresh visual evidence" }).success).toBe(true)
+    expect(
+      tools.visual_qa.inputSchema!.safeParse({
+        reason: "continue prior visual QA",
+        continuation_artifact_id: "art_visual_qa_continue",
+      }).success,
+    ).toBe(true)
     expect(tools.visual_qa.inputSchema!.safeParse({ focus: "mobile" }).success).toBe(false)
+
+    expect(Object.keys(tools.workload_analysis.inputSchema!.shape)).toEqual(["reason", "continuation_artifact_id"])
+    expect(tools.workload_analysis.inputSchema!.safeParse({ reason: "size goals" }).success).toBe(true)
+    expect(
+      tools.workload_analysis.inputSchema!.safeParse({
+        reason: "continue prior workload analysis",
+        continuation_artifact_id: "art_workload_continue",
+      }).success,
+    ).toBe(true)
+
+    expect(Object.keys(tools.deep_research.inputSchema!.shape)).toEqual([
+      "reason",
+      "target_deliverable",
+      "source_urls",
+      "focus",
+      "continuation_artifact_id",
+    ])
+    expect(tools.deep_research.inputSchema!.safeParse({ reason: "collect evidence" }).success).toBe(true)
+    expect(
+      tools.deep_research.inputSchema!.safeParse({
+        reason: "continue prior deep research",
+        continuation_artifact_id: "art_deep_research_continue",
+      }).success,
+    ).toBe(true)
 
     expect(Object.keys(tools.browser_preview.inputSchema!.shape)).toEqual([
       "command",

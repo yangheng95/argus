@@ -258,11 +258,11 @@ function continuationToolName(stage: StageContinuationStage): string {
   const explicit: Partial<Record<StageContinuationStage, string>> = {
     "frontend-design": "frontend_design",
     "frontend-research": "frontend_research",
-    "deep-research": "research",
+    "deep-research": "deep_research",
     "visual-qa": "visual_qa",
-    "intent-analysis": "intent_analysis",
+    "intent-analysis": "analyze_intent",
     "fact-check": "fact_check",
-    "goal-workload-analyst": "goal_workload_analyst",
+    "goal-workload-analyst": "workload_analysis",
   }
   return explicit[stage] ?? stage.replaceAll("-", "_")
 }
@@ -901,6 +901,7 @@ const VisualQaInputSchema = z.object({
     .describe(
       "Suggested project command to start the real preview target. Use Node for Playwright/browser automation on Windows.",
     ),
+  continuation_artifact_id: StageContinuationArtifactIDField,
 })
 
 function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string; goalRunID?: string }): {
@@ -3976,8 +3977,9 @@ export function createOrchestratorTools(input: {
         "new structure (a split). Briefs feed the next per-goal `build` automatically.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run workload analysis"),
+        continuation_artifact_id: StageContinuationArtifactIDField,
       }),
-      execute: async () => {
+      execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
         if (!activeSpec) {
@@ -4001,7 +4003,20 @@ export function createOrchestratorTools(input: {
 
         await trackStepStart("workload_analysis")
         let runnerSessionID: string | undefined
+        const normalizedStageInput = {
+          reason,
+          continuation_artifact_id,
+        }
         try {
+          const continuation = continuation_artifact_id
+            ? continuationFromArtifact({
+                taskID,
+                stage: "goal-workload-analyst",
+                artifactID: continuation_artifact_id,
+                finalizerName: "submit_workload_analysis",
+              })
+            : undefined
+          runnerSessionID = continuation?.sessionID
           const { findRequirements } = await import("@/engine/store")
           const requirements = findRequirements(activeSpec.id).map(parsedRequirementFromRow)
           const frontendDesign = renderFrontendDesignHandoffReference(taskID)
@@ -4070,6 +4085,7 @@ export function createOrchestratorTools(input: {
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
             onSessionCreated: (id) => {
               runnerSessionID = id
             },
@@ -4114,6 +4130,16 @@ export function createOrchestratorTools(input: {
               error: trackErr instanceof Error ? trackErr.message : String(trackErr),
             })
           }
+          const continuationResult = continuationResultForTerminalFinalizerMiss({
+            err,
+            taskID,
+            stage: "goal-workload-analyst",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "submit_workload_analysis",
+            normalizedStageInput,
+          })
+          if (continuationResult) return continuationResult
           const { createDecisionLog } = await import("@/decision-log")
           const reason = err instanceof Error ? err.message : String(err)
           createDecisionLog(taskID).append({
@@ -4142,10 +4168,11 @@ export function createOrchestratorTools(input: {
         "It may use skills, bash/edit/write/apply_patch, and task-scoped browser_preview evidence. " +
         "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final. Visual QA and integrity are peer review agents; visual_qa does not replace integrity and is not integrity's workflow prerequisite.",
       inputSchema: VisualQaInputSchema,
-      execute: async ({ reason, focus, app_url, preview_command }) => {
+      execute: async ({ reason, focus, app_url, preview_command, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         await trackStepStart("visual_qa")
         let closed = false
+        let runnerSessionID: string | undefined
         const close = async (failed = false) => {
           if (closed) return
           closed = true
@@ -4181,8 +4208,24 @@ export function createOrchestratorTools(input: {
           frontendDesignEntries: decisionLog.readByPhase("frontend_design"),
           visualEvidence,
         })
+        const normalizedStageInput = {
+          reason,
+          focus,
+          app_url,
+          preview_command,
+          continuation_artifact_id,
+        }
 
         try {
+          const continuation = continuation_artifact_id
+            ? continuationFromArtifact({
+                taskID,
+                stage: "visual-qa",
+                artifactID: continuation_artifact_id,
+                finalizerName: "submit_visual_qa_report",
+              })
+            : undefined
+          runnerSessionID = continuation?.sessionID
           const { VisualQaAgent } = await import("@/visual-qa")
           const result = await VisualQaAgent.analyze({
             taskTitle: task.title,
@@ -4202,6 +4245,10 @@ export function createOrchestratorTools(input: {
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
           })
 
           decisionLog.append({
@@ -4250,6 +4297,16 @@ export function createOrchestratorTools(input: {
         } catch (err) {
           await close(true)
           const msg = err instanceof Error ? err.message : String(err)
+          const continuationResult = continuationResultForTerminalFinalizerMiss({
+            err,
+            taskID,
+            stage: "visual-qa",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "submit_visual_qa_report",
+            normalizedStageInput,
+          })
+          if (continuationResult) return continuationResult
           log.error("visual_qa: failed", { taskID, error: msg })
           decisionLog.append({
             phase: "visual_qa",
@@ -4819,22 +4876,40 @@ export function createOrchestratorTools(input: {
           .default([])
           .describe("Known source URLs the research agent must webfetch before any broader discovery."),
         focus: z.string().optional().describe("Optional narrow focus for the research agent."),
+        continuation_artifact_id: StageContinuationArtifactIDField,
       }),
-      execute: async ({ reason, target_deliverable, source_urls, focus }) => {
+      execute: async ({ reason, target_deliverable, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         let runnerSessionID: string | undefined
+        const normalizedStageInput = {
+          reason,
+          target_deliverable,
+          source_urls,
+          focus,
+          continuation_artifact_id,
+        }
         try {
+          const continuation = continuation_artifact_id
+            ? continuationFromArtifact({
+                taskID,
+                stage: "deep-research",
+                artifactID: continuation_artifact_id,
+                finalizerName: "submit_research_brief",
+              })
+            : undefined
+          runnerSessionID = continuation?.sessionID
           const { DeepResearchAgent } = await import("@/research")
           const result = await DeepResearchAgent.run({
             title: task.title,
             request: task.request,
             targetDeliverable: target_deliverable,
-            sourceUrls: source_urls,
+            sourceUrls: continuation ? undefined : source_urls,
             focus,
             reason,
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
             onStatus: () => {},
             onSessionCreated: (id) => {
               runnerSessionID = id
@@ -4867,6 +4942,16 @@ export function createOrchestratorTools(input: {
           })
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
+          const continuationResult = continuationResultForTerminalFinalizerMiss({
+            err,
+            taskID,
+            stage: "deep-research",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "submit_research_brief",
+            normalizedStageInput,
+          })
+          if (continuationResult) return continuationResult
           if (runnerSessionID) {
             SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
           }
