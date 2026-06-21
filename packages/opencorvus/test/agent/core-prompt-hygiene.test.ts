@@ -1142,11 +1142,13 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("decide whether `frontend_design`, `frontend_research`, both, or neither are needed")
     expect(normalized).toContain("UI replication from visual reference")
-    expect(normalized).toContain("These tools are one-time evidence producers, not fixed lifecycle gates")
+    expect(normalized).toContain("These tools are bounded evidence producers, not fixed lifecycle gates")
     expect(normalized).toContain("not repeatable repair tools")
-    expect(normalized).toContain("do not rerun that agent as a repair loop, retry loop, crawler")
+    expect(normalized).toContain("do not rerun frontend_research for that same page")
+    expect(normalized).toContain("additional source page URLs that still need their own prepared evidence")
     expect(normalized).not.toContain("`frontend_design` and any needed `frontend_research` MUST be first")
     expect(normalized).not.toContain("`frontend_design` and `frontend_research` in parallel")
+    expect(normalized).not.toContain("frontend_research brief exists for the relevant scope, do not rerun that agent")
     expect(normalized).not.toContain("Typical shape")
     expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
@@ -1156,7 +1158,7 @@ describe("core prompt hygiene", () => {
     )
   })
 
-  test("frontend design and frontend research prompts advertise one-shot handoff semantics", async () => {
+  test("frontend design and frontend research prompts advertise bounded handoff semantics", async () => {
     const frontendDesign = (await readPrompt("frontendDesign")).replace(/\s+/g, " ")
     const frontendResearch = (await readPrompt("frontendResearch")).replace(/\s+/g, " ")
     const orchestratorTools = await readSource("orchestrator/tools.ts")
@@ -1164,12 +1166,14 @@ describe("core prompt hygiene", () => {
     expect(frontendDesign).toContain("single-shot task-scope handoff agent")
     expect(frontendDesign).toContain("without independent webpage extraction, alternate reference interpretation")
     expect(frontendDesign).toContain("or repeated repair/retry/implementation iteration through frontend_design")
-    expect(frontendResearch).toContain("single-shot task-scope investigation publisher")
+    expect(frontendResearch).toContain("source-page-scoped investigation publisher")
+    expect(frontendResearch).toContain("additional source page URLs require separate frontend_research sessions")
     expect(frontendResearch).toContain("not a repeated crawler, repair, retry, or implementation iteration agent")
     expect(orchestratorTools).toContain("Single-shot task-scope handoff producer")
     expect(orchestratorTools).toContain("Do not use frontend_design as a repeated repair")
-    expect(orchestratorTools).toContain("Single-shot task-scope brief producer")
-    expect(orchestratorTools).toContain("Do not use frontend_research as a repeated crawler")
+    expect(orchestratorTools).toContain("Source-page-scoped brief producer")
+    expect(orchestratorTools).toContain("call frontend_research separately for additional pages")
+    expect(orchestratorTools).not.toContain("dispatch once for the relevant webpage investigation scope")
   })
 
   test("orchestrator prompt documents freshContext per-goal retry triggers and cost", async () => {
