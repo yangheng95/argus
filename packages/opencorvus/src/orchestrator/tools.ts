@@ -2483,7 +2483,7 @@ export function createOrchestratorTools(input: {
       .filter(Boolean)
       .join(", ")
 
-    return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} Candidate continuation fact: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
+    return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} Candidate continuation fact: ${plan.nextAction}.`
   }
 
   // Agents that need to ask the user a question do so directly via
