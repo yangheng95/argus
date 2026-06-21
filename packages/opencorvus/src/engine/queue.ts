@@ -384,8 +384,10 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
     // Detach via queueMicrotask so `advanceQueue` → `startLoopForTask` →
     // `.finally` re-entry doesn't stack synchronously.
     queueMicrotask(() => {
-      if (drainQueuedTaskEventIfUnowned(taskID)) return
-      advanceQueue(cwd).catch((err) => {
+      void (async () => {
+        if (await drainQueuedTaskEventIfUnowned(taskID)) return
+        await advanceQueue(cwd)
+      })().catch((err) => {
         log.error("advanceQueue failed after loop exit", {
           cwd,
           error: err instanceof Error ? err.message : String(err),
@@ -395,7 +397,7 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
   })
 }
 
-export function drainQueuedTaskEventIfUnowned(taskID: string): boolean {
+export async function drainQueuedTaskEventIfUnowned(taskID: string): Promise<boolean> {
   if (!hasQueuedTaskEvent(taskID)) return false
 
   const task = findTask(taskID)
@@ -415,6 +417,11 @@ export function drainQueuedTaskEventIfUnowned(taskID: string): boolean {
   const liveOwners = listLiveOrchestratorToolOwnership(taskID)
   if (liveOwners.length > 0) return false
 
+  if (isTaskQueued(task)) {
+    await advanceQueue(cwd)
+    return !hasQueuedTaskEvent(taskID)
+  }
+
   const queuedEvent = takeQueuedTaskEvent(taskID)
   if (!queuedEvent) return false
   attachLoopCompletion(taskID, cwd, launchTaskLoop(taskID, queuedEvent))
@@ -422,11 +429,11 @@ export function drainQueuedTaskEventIfUnowned(taskID: string): boolean {
   return true
 }
 
-export function drainPendingQueuedOperatorWakes(): number {
+export async function drainPendingQueuedOperatorWakes(): Promise<number> {
   const taskIDs = [...new Set(pendingQueuedOperatorWakeTaskIDs())]
   let drained = 0
   for (const taskID of taskIDs) {
-    if (drainQueuedTaskEventIfUnowned(taskID)) drained += 1
+    if (await drainQueuedTaskEventIfUnowned(taskID)) drained += 1
   }
   return drained
 }

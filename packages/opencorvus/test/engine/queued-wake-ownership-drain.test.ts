@@ -2,6 +2,8 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { beginBuildAttempt } from "../../src/engine/persist"
 import { dispatchTaskLoop, drainPendingQueuedOperatorWakes, queuedTaskEventStats } from "../../src/engine/queue"
+import { findTask } from "../../src/engine/store"
+import { deriveTaskStatus } from "../../src/engine/task-status"
 import {
   completeOrchestratorToolOwnership,
   createOrchestratorToolOwnershipPayload,
@@ -30,6 +32,11 @@ async function waitForMockCalls(mockFn: { mock: { calls: unknown[] } }, count: n
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
   throw new Error(`Timed out waiting for ${count} mock calls; last=${mockFn.mock.calls.length}`)
+}
+
+function taskStatus(taskID: string): string | undefined {
+  const task = findTask(taskID)
+  return task ? deriveTaskStatus(task) : undefined
 }
 
 describe("queued wake ownership drain", () => {
@@ -94,7 +101,7 @@ describe("queued wake ownership drain", () => {
             .run(),
         )
 
-        expect(drainPendingQueuedOperatorWakes()).toBe(1)
+        expect(await drainPendingQueuedOperatorWakes()).toBe(1)
         await waitForMockCalls(runTaskLoop, 1)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
           taskID,
@@ -106,6 +113,80 @@ describe("queued wake ownership drain", () => {
           },
         })
         expect(queuedOperatorWakeLabels(taskID)).toEqual(["drained"])
+      },
+    })
+  })
+
+  test("durable operator wakes do not bypass queued same-cwd task serialization", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const activeID = `task_queue_active_sibling_${now}`
+        const queuedID = `task_queue_durable_wake_blocked_${now}`
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values([
+              {
+                id: activeID,
+                project_id: Instance.project.id,
+                source: "test",
+                title: "active cwd sibling",
+                request: "hold the cwd queue slot",
+                priority: "normal",
+                time_started: now,
+                time_created: now,
+                time_updated: now,
+              },
+              {
+                id: queuedID,
+                project_id: Instance.project.id,
+                source: "test",
+                title: "queued task with durable wake",
+                request: "must not start while sibling is active",
+                priority: "normal",
+                time_created: now + 1,
+                time_updated: now + 1,
+              },
+            ])
+            .run(),
+        )
+
+        await dispatchTaskLoop({
+          taskID: queuedID,
+          event: { note: "User requested retry for queued task.", operatorIntent: { kind: "retry" } },
+        })
+
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(taskStatus(activeID)).toBe("active")
+        expect(taskStatus(queuedID)).toBe("queued")
+        expect(queuedOperatorWakeLabels(queuedID)).toEqual(["pending"])
+        expect(await drainPendingQueuedOperatorWakes()).toBe(0)
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(taskStatus(queuedID)).toBe("queued")
+        expect(queuedOperatorWakeLabels(queuedID)).toEqual(["pending"])
+
+        Database.use((db) =>
+          db
+            .update(EngineTaskTable)
+            .set({ time_completed: now + 2, time_updated: now + 2 })
+            .where(eq(EngineTaskTable.id, activeID))
+            .run(),
+        )
+
+        expect(await drainPendingQueuedOperatorWakes()).toBe(1)
+        await waitForMockCalls(runTaskLoop, 1)
+        expect(taskStatus(queuedID)).toBe("active")
+        expect(queuedOperatorWakeLabels(queuedID)).toEqual(["drained"])
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID: queuedID,
+          event: { note: "User requested retry for queued task.", operatorIntent: { kind: "retry" } },
+        })
       },
     })
   })
