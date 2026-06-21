@@ -53,6 +53,51 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.build.description).not.toContain("After build returns, read the build report")
   })
 
+  test("build schema rejects misspelled goal scope instead of stripping it into direct build", () => {
+    expect(Object.keys(tools.build.inputSchema!.shape)).toEqual([
+      "request",
+      "reason",
+      "goalID",
+      "directBuildIntent",
+      "freshContext",
+      "userConfirmedStaleIntegrityData",
+    ])
+    expect(
+      tools.build.inputSchema!.safeParse({
+        reason: "Run the scoped goal build.",
+        goalID: "gol_valid_scope",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.build.inputSchema!.safeParse({
+        reason: "Run the scoped goal build.",
+        goal_id: "gol_typo_scope",
+        request: "Implement the scoped goal.",
+        directBuildIntent: "modify_files",
+      }).success,
+    ).toBe(false)
+  })
+
+  test("continuation-capable stage schemas reject unknown fields instead of stripping them", () => {
+    const validInputsByTool: Record<string, Record<string, unknown>> = {
+      requirements: { reason: "analyze requirements" },
+      architect: { reason: "decompose goals" },
+      workload_analysis: { reason: "size goals" },
+      deep_research: { reason: "collect evidence" },
+      visual_qa: { reason: "review visual product" },
+      integrity: { reason: "review active graph" },
+    }
+    for (const [toolName, validInput] of Object.entries(validInputsByTool)) {
+      expect(tools[toolName].inputSchema!.safeParse(validInput).success).toBe(true)
+      expect(
+        tools[toolName].inputSchema!.safeParse({
+          ...validInput,
+          accidental_scope: "must not be stripped",
+        }).success,
+      ).toBe(false)
+    }
+  })
+
   test("frontend_research and frontend_design descriptions separate investigation division from UI implementation", () => {
     expect(tools.frontend_design.description).toContain("frontend/UI implementation")
     expect(tools.frontend_design.description).toContain(
