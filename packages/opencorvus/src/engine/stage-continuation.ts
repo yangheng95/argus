@@ -1,6 +1,7 @@
 import { EngineArtifactTable, type EngineArtifactKind, type EngineMetadata } from "@/engine/engine.sql"
 import { Database, and, desc, eq } from "@/storage/db"
 import { Identifier } from "@/id/id"
+import { processOwner } from "@/engine/lease"
 
 export type StageContinuationFailureName = "TerminalToolMissingError" | "StructuredOutputError"
 export type StageContinuationKind = "protocol-finalizer-miss"
@@ -33,6 +34,7 @@ export interface StageContinuationRequestPayload extends EngineMetadata {
   created_at: number
   claimed_at?: number
   claim_id?: string
+  claim_owner?: string
   claim_failed_at?: number
   claim_error?: string
   consumed_at?: number
@@ -183,6 +185,7 @@ export function claimStageContinuationRequest(input: {
     ...payload,
     claimed_at: now,
     claim_id: claimID,
+    claim_owner: processOwner(),
   }
   updateStageContinuationPayload({
     taskID: input.taskID,
@@ -201,6 +204,34 @@ export function claimStageContinuationRequest(input: {
     claimID,
     messageID,
   }
+}
+
+export function failNonCurrentOwnerStageContinuationClaim(input: {
+  taskID: string
+  artifactID: string
+  now?: number
+}): StageContinuationRequestRow | undefined {
+  const current = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!current) return undefined
+  const payload = current.payload
+  if (!payload.claimed_at || payload.consumed_at || payload.claim_failed_at) return current
+  if (payload.claim_owner === processOwner()) return current
+  const now = input.now ?? Date.now()
+  const claimID = payload.claim_id ?? "unknown"
+  updateStageContinuationPayload({
+    taskID: input.taskID,
+    artifactID: input.artifactID,
+    label: "claim-failed",
+    now,
+    payload: {
+      ...payload,
+      claim_failed_at: now,
+      claim_error:
+        `claim ${claimID} was owned by ${payload.claim_owner ?? "an unstamped previous process"} ` +
+        "but no continuation message was consumed before this process observed it.",
+    },
+  })
+  return findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
 }
 
 export function markStageContinuationClaimFailed(input: {

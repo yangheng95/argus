@@ -185,6 +185,7 @@ import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 import { AgentRunError } from "@/agent/runner"
 import {
   createStageContinuationRequest,
+  failNonCurrentOwnerStageContinuationClaim,
   findStageContinuationRequest,
   type AgentSessionContinuation,
   type StageContinuationStage,
@@ -315,7 +316,7 @@ function continuationFromArtifact(input: {
   finalizerName: string
   expectedNormalizedStageInput?: unknown
 }): AgentSessionContinuation {
-  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  let row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
   if (!row) throw new Error(`stage continuation request not found: ${input.artifactID}`)
   if (row.payload.stage !== input.stage) {
     throw new Error(
@@ -353,7 +354,7 @@ function stageContinuationUnavailableResult(input: {
   expectedNormalizedStageInput?: unknown
 }): ReturnType<typeof SubAgentProtocol.yieldResult> | undefined {
   const toolName = continuationToolName(input.stage)
-  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  let row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
   if (!row) {
     return SubAgentProtocol.yieldResult({
       headline: `${input.stage}: continuation artifact was not found.`,
@@ -390,6 +391,8 @@ function stageContinuationUnavailableResult(input: {
       pointer: `read_context scope=decisions; do not reuse ${input.artifactID} with ${toolName}`,
     })
   }
+  row =
+    failNonCurrentOwnerStageContinuationClaim({ taskID: input.taskID, artifactID: input.artifactID }) ?? row
   const state = row.payload.consumed_at
     ? "consumed"
     : row.payload.claim_failed_at
