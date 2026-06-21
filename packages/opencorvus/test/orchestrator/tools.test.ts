@@ -28,6 +28,7 @@ import { SessionTable } from "../../src/session/session.sql"
 import {
   beginBuildAttempt,
   insertRequirements,
+  persistTaskFrontendResearchBrief,
   recordIntegrityAttempt,
   startNewAttempt,
   updateGoalRun,
@@ -3366,6 +3367,71 @@ describe("orchestrator tools", () => {
 
         expect(toolText(result)).toContain("No live build ownership found")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("read_context surfaces multiple frontend research briefs", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_frontend_research_${stamp}`
+    const taskID = `tsk_read_context_frontend_research_${stamp}`
+    const goalID = `gol_read_context_frontend_research_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read context frontend research",
+      taskTitle: "read context frontend research",
+      request: "Surface every frontend research page in read_context",
+      goalTitle: "Read context goal",
+      goalSlug: "read-context-goal",
+      objective: "Show all frontend research briefs",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read context frontend research parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const firstArtifactID = persistTaskFrontendResearchBrief({
+          taskID,
+          brief: minimalFrontendResearchBrief({
+            taskID,
+            sessionID: `ses_frontend_research_first_${stamp}`,
+            sourceURL: "https://example.com/first",
+          }),
+          now: now + 1,
+        })
+        const secondArtifactID = persistTaskFrontendResearchBrief({
+          taskID,
+          brief: minimalFrontendResearchBrief({
+            taskID,
+            sessionID: `ses_frontend_research_second_${stamp}`,
+            sourceURL: "https://example.com/second",
+          }),
+          now: now + 2,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+
+        expect(result).toContain("Frontend Research Brief 1/2")
+        expect(result).toContain("Frontend Research Brief 2/2")
+        expect(result).toContain(firstArtifactID)
+        expect(result).toContain(secondArtifactID)
+        expect(result).toContain("https://example.com/first")
+        expect(result).toContain("https://example.com/second")
       },
     })
   })

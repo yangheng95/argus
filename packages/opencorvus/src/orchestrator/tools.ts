@@ -52,7 +52,7 @@ import { EngineProtocol } from "@/engine/protocol"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
 import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
-import { findNonStaleFrontendResearchBrief, renderFrontendResearchBuildPromptSection } from "@/research/prompt-section"
+import { findNonStaleFrontendResearchBriefs, renderFrontendResearchBuildPromptSection } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { readLatestTaskVisualEvidenceBundleSync } from "@/acceptance/visual-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -99,7 +99,6 @@ import {
   findRequirements,
   findLatestArchitectContractGraph,
   findLatestArchitectContractGraphArtifact,
-  findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
   findLatestIntegrityAttemptArtifact,
   findLatestResearchBriefArtifact,
@@ -108,6 +107,7 @@ import {
   findLatestIntegrityArtifactMissingStatus,
   findLatestTipGoalRun,
   findChildrenOfTask,
+  listFrontendResearchBriefArtifacts,
   findPlan,
   findRun,
   getGoalRetryCount,
@@ -331,7 +331,7 @@ async function appendResearchBriefContext(
   request: string,
 ) {
   if (!artifact) return
-  const { researchBriefIsStale } = await import("@/research")
+  const { researchBriefIsStale } = await import("@/research/staleness")
   const stale = researchBriefIsStale({ request, brief: artifact.payload })
   const brief = artifact.payload
   const subpageResearchTasks = brief.subpage_research_tasks ?? []
@@ -341,6 +341,7 @@ async function appendResearchBriefContext(
     `- session: ${brief.metadata.research_session_id}`,
     `- stale: ${stale.stale ? "true" : "false"}`,
     stale.reasons.length > 0 ? `- stale_reasons: ${stale.reasons.join(", ")}` : "",
+    brief.webpage_contract ? `- source_url: ${brief.webpage_contract.source_url}` : "",
     `- sources: ${brief.evidence_index.length}`,
     `- facts: ${brief.facts.length}`,
     `- subpage_research_tasks: ${subpageResearchTasks.length}`,
@@ -4429,10 +4430,10 @@ export function createOrchestratorTools(input: {
         const decisionLog = createDecisionLog(taskID)
         const frontendDesign = renderVisualQaFrontendDesignContext(decisionLog.readByPhase("frontend_design"))
         const frontendResearch = renderVisualQaFrontendResearchContext(
-          findNonStaleFrontendResearchBrief({
+          findNonStaleFrontendResearchBriefs({
             taskID,
             request: task.request,
-          }),
+          }).map((entry) => entry.brief),
         )
         const buildEvidence = renderVisualQaBuildEvidenceContext(findDeliveriesForTask(taskID))
         const priorVisualQa = renderVisualQaPriorReportContext(decisionLog.readByPhase("visual_qa"))
@@ -5760,12 +5761,15 @@ export function createOrchestratorTools(input: {
             findLatestResearchBriefArtifact(taskID),
             task.request,
           )
-          await appendResearchBriefContext(
-            sections,
-            "Frontend Research Brief",
-            findLatestFrontendResearchBriefArtifact(taskID),
-            task.request,
-          )
+          const frontendResearchBriefs = listFrontendResearchBriefArtifacts(taskID).slice(0, 4)
+          for (const [index, artifact] of frontendResearchBriefs.entries()) {
+            await appendResearchBriefContext(
+              sections,
+              `Frontend Research Brief ${index + 1}/${frontendResearchBriefs.length}`,
+              artifact,
+              task.request,
+            )
+          }
 
           // Fact-check attempts (one-line per row) — specs/fact-check-agent-2026-05-25.md
           // §6.1.2 step 7. Integrity replay reads this same artifact stream
