@@ -100,9 +100,12 @@ describe("visual-qa final blocker-based acceptance", () => {
   })
 
   test("frontend research reference image ids trigger strict context", () => {
-    const context = renderVisualQaFrontendResearchContext(researchBriefWithReference())
+    const context = renderVisualQaFrontendResearchContext({
+      artifactID: "art_frontend_reference",
+      brief: researchBriefWithReference(),
+    })
 
-    expect(context).toContain("reference_image_evidence_ids: ev_ref")
+    expect(context).toContain("reference_image_evidence_ids: frontend_research:art_frontend_reference:ev_ref")
     expect(context).toContain("Reference Evidence Scope")
     expect(context).toContain("not an automatic universal clone requirement")
   })

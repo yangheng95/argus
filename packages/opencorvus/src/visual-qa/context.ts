@@ -5,6 +5,10 @@ import type { ResearchBrief } from "@/research/schema"
 
 type VisualQaDecisionEntry = Pick<DecisionEntry, "key" | "value" | "reason">
 type VisualQaDelivery = Pick<AcceptanceRow, "id" | "status" | "summary" | "result">
+type VisualQaFrontendResearchBrief = {
+  artifactID: string
+  brief: ResearchBrief
+}
 type VisualQaIntegrityAttempt = {
   id?: string
   payload?: unknown
@@ -51,8 +55,10 @@ export function renderVisualQaFrontendDesignContext(entries: VisualQaDecisionEnt
   return included > 0 ? lines.join("\n") : ""
 }
 
-export function renderVisualQaFrontendResearchContext(input?: ResearchBrief | ResearchBrief[]): string {
-  const briefs = (Array.isArray(input) ? input : input ? [input] : []).filter((brief) => brief.webpage_contract)
+export function renderVisualQaFrontendResearchContext(
+  input?: VisualQaFrontendResearchBrief | VisualQaFrontendResearchBrief[],
+): string {
+  const briefs = (Array.isArray(input) ? input : input ? [input] : []).filter(({ brief }) => brief.webpage_contract)
   if (briefs.length === 0) return ""
   const lines = [
     "# Frontend Research Pointers",
@@ -60,11 +66,14 @@ export function renderVisualQaFrontendResearchContext(input?: ResearchBrief | Re
     "Only webpage contract pointers relevant to GUI fidelity and functional testing are included. Use bundle paths only for drilldown.",
   ]
 
-  for (const brief of briefs) {
+  for (const { artifactID, brief } of briefs) {
     const contract = brief.webpage_contract!
     lines.push("", `## ${contract.source_url}`)
+    lines.push(`artifact_id: ${artifactID}`)
     if (contract.reference_image_evidence_ids.length) {
-      lines.push(`reference_image_evidence_ids: ${contract.reference_image_evidence_ids.join(", ")}`)
+      lines.push(
+        `reference_image_evidence_ids: ${frontendResearchEvidenceRefs(artifactID, contract.reference_image_evidence_ids).join(", ")}`,
+      )
       lines.push("", REFERENCE_EVIDENCE_SCOPE_SECTION)
     }
     lines.push(
@@ -74,7 +83,7 @@ export function renderVisualQaFrontendResearchContext(input?: ResearchBrief | Re
           .slice(0, 8)
           .map(
             (item) =>
-              `${item.id}: ${item.title}; behavior=${limitText(item.user_visible_behavior, 220)}; interactions=${item.required_interactions.slice(0, 3).join(" | ") || "(none)"}; evidence=${item.evidence_ids.join(", ")}`,
+              `${item.id}: ${item.title}; behavior=${limitText(item.user_visible_behavior, 220)}; interactions=${item.required_interactions.slice(0, 3).join(" | ") || "(none)"}; evidence=${frontendResearchEvidenceRefs(artifactID, item.evidence_ids).join(", ")}`,
           ),
       ),
     )
@@ -85,7 +94,7 @@ export function renderVisualQaFrontendResearchContext(input?: ResearchBrief | Re
           .slice(0, 8)
           .map(
             (item) =>
-              `${item.id}: ${item.viewport} ${item.region}; layout=${limitText(item.layout_contract, 220)}; spacing=${limitText(item.spacing_and_alignment, 160)}; evidence=${item.evidence_ids.join(", ")}`,
+              `${item.id}: ${item.viewport} ${item.region}; layout=${limitText(item.layout_contract, 220)}; spacing=${limitText(item.spacing_and_alignment, 160)}; evidence=${frontendResearchEvidenceRefs(artifactID, item.evidence_ids).join(", ")}`,
           ),
       ),
     )
@@ -96,7 +105,7 @@ export function renderVisualQaFrontendResearchContext(input?: ResearchBrief | Re
           .slice(0, 8)
           .map(
             (item) =>
-              `${item.id}: ${item.component} ${item.state}; behavior=${limitText(item.behavior, 220)}; evidence=${item.evidence_ids.join(", ")}`,
+              `${item.id}: ${item.component} ${item.state}; behavior=${limitText(item.behavior, 220)}; evidence=${frontendResearchEvidenceRefs(artifactID, item.evidence_ids).join(", ")}`,
           ),
       ),
     )
@@ -107,9 +116,9 @@ export function renderVisualQaFrontendResearchContext(input?: ResearchBrief | Re
           .slice(0, 8)
           .map(
             (item) =>
-              `${item.id}: ${item.target}; criterion=${limitText(item.criterion, 240)}; evidence=${item.evidence_ids.join(", ")}`,
+              `${item.id}: ${item.target}; criterion=${limitText(item.criterion, 240)}; evidence=${frontendResearchEvidenceRefs(artifactID, item.evidence_ids).join(", ")}`,
           ),
-    )
+      ),
     )
     if (brief.bundle) {
       lines.push(
@@ -122,6 +131,14 @@ export function renderVisualQaFrontendResearchContext(input?: ResearchBrief | Re
     }
   }
   return lines.filter((line) => line !== "").join("\n")
+}
+
+function frontendResearchEvidenceRef(artifactID: string, evidenceID: string): string {
+  return `frontend_research:${artifactID}:${evidenceID}`
+}
+
+function frontendResearchEvidenceRefs(artifactID: string, evidenceIDs: string[]): string[] {
+  return evidenceIDs.map((id) => frontendResearchEvidenceRef(artifactID, id))
 }
 
 export function renderVisualQaBuildEvidenceContext(deliveries: VisualQaDelivery[]): string {

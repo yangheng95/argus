@@ -290,9 +290,11 @@ describe("research brief persistence and describe projection", () => {
 
           const desc = await describeTask(taskID)
           expect(desc.research).toBeUndefined()
-          expect(desc.frontend_research?.artifact_id).toBe(artifactID)
+          expect(desc.frontend_research?.map((item) => item.artifact_id)).toEqual([artifactID])
+          expect(desc.frontend_research?.map((item) => item.source_urls)).toEqual([[validWebpageContract().source_url]])
           const rendered = renderTaskDescription(desc)
           expect(rendered).toContain("## Frontend Research Brief")
+          expect(rendered).toContain(`- source_urls: ${validWebpageContract().source_url}`)
           expect(rendered).toContain("Frontend research source-backed summary.")
 
           const pipeline = WorkflowRegistry.resolveSync("pipeline")!
@@ -366,6 +368,25 @@ describe("research brief persistence and describe projection", () => {
           expect(buildPrompt).toContain("source_url: https://example.com/second")
           expect(buildPrompt).toContain(firstEvidenceRef)
           expect(buildPrompt).toContain(secondEvidenceRef)
+
+          const desc = await describeTask(taskID)
+          expect(desc.frontend_research?.map((item) => item.artifact_id)).toEqual([
+            secondArtifactID,
+            firstArtifactID,
+          ])
+          expect(desc.frontend_research?.map((item) => item.source_urls)).toEqual([
+            ["https://example.com/second"],
+            ["https://example.com/first"],
+          ])
+          const rendered = renderTaskDescription(desc)
+          expect(rendered).toContain("## Frontend Research Brief 1/2")
+          expect(rendered).toContain("## Frontend Research Brief 2/2")
+          expect(rendered).toContain(secondArtifactID)
+          expect(rendered).toContain(firstArtifactID)
+          expect(rendered).toContain("- source_urls: https://example.com/second")
+          expect(rendered).toContain("- source_urls: https://example.com/first")
+          expect(rendered).toContain("Frontend research second page summary.")
+          expect(rendered).toContain("Frontend research first page summary.")
         },
       })
     },
