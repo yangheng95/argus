@@ -203,25 +203,44 @@ describe("DecisionLogBundle", () => {
 })
 
 describe("renderFrontendDesignHandoffReference pathMode (systemic absolute-path fix)", () => {
+  function seedFrontendDesignHandoff(taskID: string) {
+    createDecisionLog(taskID).append({
+      phase: "frontend_design",
+      key: "public_report",
+      value: "frontend_design public report exists",
+      reason: "path mode test handoff",
+    })
+  }
+
+  test("no frontend_design decision-log handoff entries emits no public report path", () => {
+    expect(renderFrontendDesignHandoffReference("tsk_no_frontend_design", { includeExcerpts: false })).toBe("")
+  })
+
   test("default (no pathMode) keeps the relative path — in-process unchanged", () => {
-    const out = renderFrontendDesignHandoffReference("tsk_x", { includeExcerpts: false })
-    expect(out).toContain(frontendDesignArtifactPaths("", "tsk_x").templateRelative)
+    const taskID = "tsk_x"
+    seedFrontendDesignHandoff(taskID)
+    const out = renderFrontendDesignHandoffReference(taskID, { includeExcerpts: false })
+    expect(out).toContain(frontendDesignArtifactPaths("", taskID).templateRelative)
     expect(out).not.toContain("/abs/")
   })
 
   test("pathMode 'absolute' without projectDir HARD FAILS (rule 7 — no silent relative fallback)", () => {
+    const taskID = "tsk_abs_missing_project"
+    seedFrontendDesignHandoff(taskID)
     expect(() =>
-      renderFrontendDesignHandoffReference("tsk_x", { includeExcerpts: false, pathMode: "absolute" }),
+      renderFrontendDesignHandoffReference(taskID, { includeExcerpts: false, pathMode: "absolute" }),
     ).toThrow(/projectDir/)
   })
 
   test("pathMode 'absolute' emits the project-rooted absolute path for external executors", () => {
-    const out = renderFrontendDesignHandoffReference("tsk_x", {
+    const taskID = "tsk_abs_project"
+    seedFrontendDesignHandoff(taskID)
+    const out = renderFrontendDesignHandoffReference(taskID, {
       includeExcerpts: false,
       pathMode: "absolute",
       projectDir: "/abs/proj",
     })
-    const expected = frontendDesignArtifactPaths("/abs/proj", "tsk_x").templateAbsolute
+    const expected = frontendDesignArtifactPaths("/abs/proj", taskID).templateAbsolute
     expect(out).toContain(expected)
     expect(out).toContain(expected)
   })

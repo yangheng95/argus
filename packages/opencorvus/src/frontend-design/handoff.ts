@@ -119,6 +119,9 @@ export function renderFrontendDesignHandoffReference(
   const valueCap = options?.valueCap ?? 500
   const includeExcerpts = options?.includeExcerpts ?? true
   const mode = options?.pathMode ?? "relative"
+  const entries = latestByKey(createDecisionLog(taskID).readByPhase("frontend_design"))
+  const present = FRONTEND_DESIGN_HANDOFF_KEYS.filter((key) => entries.has(key))
+  if (present.length === 0) return ""
 
   const relative = ProjectRuntimePaths.frontendDesignPaths("", taskID)
   let templatePath = relative.templateRelative
@@ -150,10 +153,6 @@ export function renderFrontendDesignHandoffReference(
   )
 
   if (!includeExcerpts) return lines.join("\n")
-
-  const entries = latestByKey(createDecisionLog(taskID).readByPhase("frontend_design"))
-  const present = FRONTEND_DESIGN_HANDOFF_KEYS.filter((key) => entries.has(key))
-  if (present.length === 0) return lines.join("\n")
 
   const sourceRegionGuidance = renderSourceRegionRefactorGuidance(entries)
   if (sourceRegionGuidance) {

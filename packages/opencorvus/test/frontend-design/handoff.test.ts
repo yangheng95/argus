@@ -56,6 +56,17 @@ afterEach(async () => {
   await tmp?.[Symbol.asyncDispose]?.()
 })
 
+test("frontend-design handoff is empty before canonical decision-log entries exist", async () => {
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(renderFrontendDesignHandoffReference(taskID)).toBe("")
+      expect(renderFrontendDesignHandoffReference(taskID, { includeExcerpts: false })).toBe("")
+      expect(renderFrontendDesignHandoffReference(taskID, { pathMode: "absolute" })).toBe("")
+    },
+  })
+})
+
 test("frontend-design handoff points to source files and keeps excerpts bounded", async () => {
   await Instance.provide({
     directory: tmp.path,
