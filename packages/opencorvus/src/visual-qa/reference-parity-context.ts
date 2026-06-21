@@ -39,9 +39,6 @@ export function deriveVisualQaReferenceParityContext(input: {
       }
     }
   }
-  if (input.frontendDesignEntries?.some((entry) => entry.key === "reference_artifacts" && entry.value.trim())) {
-    required = true
-  }
   for (const bundle of input.visualEvidence ?? []) {
     if (bundle.taskID !== input.taskID) continue
     for (const region of bundle.regions.filter((item) => item.required)) {

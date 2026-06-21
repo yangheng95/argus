@@ -259,6 +259,48 @@ describe("research output tools", () => {
     expect(kit.buildReport().detail).toContain("functional_surfaces=1")
   })
 
+  test("webpage contract source must match the prepared frontend research source URL", async () => {
+    const kit = await registerMinimalBrief(
+      createResearchOutputTools({ expectedWebpageSourceUrl: "https://example.com/markets/world-economy/" }),
+    )
+
+    const result = await callTool(kit.tools, "set_webpage_contract_source", {
+      source_url: "https://example.com/other-page/",
+      reference_image_evidence_ids: [],
+    })
+
+    expect(result).toContain("must match the prepared frontend_research source URL")
+    expect(result).toContain("https://example.com/markets/world-economy/")
+    expect(kit.getCollector().webpage_contract_source).toBeUndefined()
+  })
+
+  test("webpage contract source rejects non-http URLs", async () => {
+    const kit = await registerMinimalBrief()
+
+    await expect(
+      callTool(kit.tools, "set_webpage_contract_source", {
+        source_url: "file:///tmp/reference.html",
+        reference_image_evidence_ids: [],
+      }),
+    ).rejects.toThrow("source_url must be an HTTP(S) webpage URL")
+
+    expect(kit.getCollector().webpage_contract_source).toBeUndefined()
+  })
+
+  test("webpage contract source rejects unknown fields instead of stripping source contract drift", async () => {
+    const kit = await registerMinimalBrief()
+
+    await expect(
+      callTool(kit.tools, "set_webpage_contract_source", {
+        source_url: "https://example.com/markets/world-economy/",
+        sourceUrl: "https://example.com/other-page/",
+        reference_image_evidence_ids: [],
+      }),
+    ).rejects.toThrow("Unrecognized key")
+
+    expect(kit.getCollector().webpage_contract_source).toBeUndefined()
+  })
+
   test("submit_research_brief rejects webpage contract references to unknown evidence", async () => {
     const kit = await registerMinimalBrief()
     await registerWebpageContract(kit)

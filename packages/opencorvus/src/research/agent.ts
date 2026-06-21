@@ -19,6 +19,7 @@ import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { SkillTool } from "@/tool/skill"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
+import { isHttpWebpageUrl } from "@/util/web-url"
 import {
   buildResearchBriefFromDraft,
   createResearchOutputTools,
@@ -133,7 +134,8 @@ export async function runResearchSession(
     taskID: input.taskID,
     signal: input.signal,
   })
-  const outputToolKit = createResearchOutputTools()
+  const expectedWebpageSourceUrl = config.kind === "frontend-research" ? input.sourceUrls?.find(isHttpWebpageUrl) : undefined
+  const outputToolKit = createResearchOutputTools({ expectedWebpageSourceUrl })
 
   log.info(`${config.kind} starting`, {
     title: input.title,
@@ -247,7 +249,7 @@ async function prepareInputWebpagePrdEvidence(
   mode: ResearchSessionConfig["prepareWebpageEvidence"],
 ): Promise<WebpagePrdEvidence | undefined> {
   const sourceUrls = input.sourceUrls ?? []
-  const hasWebpageSource = sourceUrls.some((url) => /^https?:\/\//i.test(url))
+  const hasWebpageSource = sourceUrls.some(isHttpWebpageUrl)
   if (!hasWebpageSource) return undefined
   if (mode === "none") return undefined
   if (mode === "prd-only" && input.targetDeliverable !== "prd") return undefined
@@ -260,7 +262,7 @@ async function prepareInputWebpagePrdEvidence(
       return await readPreparedWebpagePrdEvidence({
         projectDir,
         taskID: input.taskID,
-        url: sourceUrls.find((url) => /^https?:\/\//i.test(url))!,
+        url: sourceUrls.find(isHttpWebpageUrl)!,
       })
     } catch (err) {
       log.info("frontend-research prepared webpage evidence not yet available", {

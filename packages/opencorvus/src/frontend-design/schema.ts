@@ -103,7 +103,7 @@ export const ComponentReusePlanItemSchema = z.object({
     .describe(
       "Optional reason when implementation_strategy=project_specific_component; explain why existing components and mature libraries do not fit when known.",
     ),
-})
+}).strict()
 
 export const BaselineReplacementPlanItemSchema = z.object({
   boundary_id: z
@@ -162,7 +162,7 @@ export const BaselineReplacementPlanItemSchema = z.object({
     .describe(
       "Optional reason when replacement_strategy=project_specific_component; explain why no project component or mature library fits when known.",
     ),
-})
+}).strict()
 
 export const CompactTemplateItemSchema = z.object({
   title: z.string().min(1).describe("Short stable heading for this template item."),
@@ -178,7 +178,7 @@ export const CompactTemplateItemSchema = z.object({
     .describe(
       "Evidence anchors such as web-clone-source paths, source-ir paths, skeleton slots, or screenshot regions.",
     ),
-})
+}).strict()
 
 export const MaterialInventoryItemSchema = z.object({
   title: z
@@ -199,7 +199,7 @@ export const MaterialInventoryItemSchema = z.object({
     .describe(
       "Evidence anchors or file/path ids for this material group. Reference paths/ids instead of dense payloads.",
   ),
-})
+}).strict()
 
 export const VisualValidationEvidenceSchema = z.object({
   id: z.string().min(1).describe("Stable visual validation evidence id, e.g. visual-render-desktop."),
@@ -238,7 +238,7 @@ export const VisualValidationEvidenceSchema = z.object({
     .enum(["reviewed_no_blocking_debt", "reviewed_with_blocking_debt"])
     .describe("Whether screenshot review found blocking visual debt."),
   review_summary: z.string().min(1).describe("Concrete summary of the screenshot review and comparison result."),
-})
+}).strict()
 export type VisualValidationEvidence = z.infer<typeof VisualValidationEvidenceSchema>
 
 const OptionalMarkdownField = (description: string) =>
@@ -330,6 +330,7 @@ export const FrontendTemplateFinalSchema = z.object({
       generation_tool: z.string().default(""),
       notes: z.array(z.string().min(1)).default([]),
     })
+    .strict()
     .default({
       status: "not_created",
       role: "source_baseline_input",
@@ -403,20 +404,20 @@ export const FrontendTemplateFinalSchema = z.object({
   fact_check_items: FactCheckItemListSchema.default([]).describe(
     "Every factual claim (third-party design system name, API behaviour, library version) you have NOT verified via tool calls in this session. Empty when only design observations or in-session-verified statements.",
   ),
-})
+}).strict()
 export type FrontendTemplateFinal = z.infer<typeof FrontendTemplateFinalSchema>
 
 export const ToolCompactTemplateItemSchema = z.object({
   title: z.string().min(1),
   detail: z.string().min(1),
   source_refs: z.array(z.string().min(1)).default([]),
-})
+}).strict()
 
 export const ToolMaterialInventoryItemSchema = z.object({
   title: z.string().min(1),
   detail: z.string().min(1),
   source_refs: z.array(z.string().min(1)).default([]),
-})
+}).strict()
 
 export const ToolComponentReusePlanItemSchema = z.object({
   family_id: z.string().min(1),
@@ -435,7 +436,7 @@ export const ToolComponentReusePlanItemSchema = z.object({
   replacement_boundary: z.string().min(1),
   parity_guard: z.string().min(1),
   project_specific_reason: z.string().default(""),
-})
+}).strict()
 
 export const ToolBaselineReplacementPlanItemSchema = z.object({
   boundary_id: z.string().min(1),
@@ -454,7 +455,7 @@ export const ToolBaselineReplacementPlanItemSchema = z.object({
   source_refs: z.array(z.string().min(1)).default([]),
   parity_guard: z.string().min(1),
   project_specific_reason: z.string().default(""),
-})
+}).strict()
 
 export const ToolVisualValidationEvidenceSchema = z.object({
   id: z.string().min(1),
@@ -471,7 +472,7 @@ export const ToolVisualValidationEvidenceSchema = z.object({
   diff_artifact: z.string().default(""),
   review_status: z.enum(["reviewed_no_blocking_debt", "reviewed_with_blocking_debt"]),
   review_summary: z.string().min(1),
-})
+}).strict()
 
 export const FrontendTemplateToolInputSchema = z.object({
   design_system: z.string().min(1),
@@ -500,6 +501,7 @@ export const FrontendTemplateToolInputSchema = z.object({
       generation_tool: z.string().default(""),
       notes: z.array(z.string().min(1)).default([]),
     })
+    .strict()
     .default({
       status: "not_created",
       role: "source_baseline_input",
@@ -518,7 +520,7 @@ export const FrontendTemplateToolInputSchema = z.object({
   completeness_review: z.string().default(""),
   reference_artifacts: z.array(z.string().min(1)).default([]),
   open_questions: FlexibleStringListSchema,
-})
+}).strict()
 
 const IdField = z
   .string()

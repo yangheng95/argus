@@ -2,6 +2,7 @@ import { tool } from "ai"
 import { z } from "zod"
 import { limitSummary, markdownList } from "@/agent/report"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
+import { isHttpWebpageUrl } from "@/util/web-url"
 import {
   ResearchBriefSchema,
   ResearchBundleCitationEntrySchema,
@@ -60,9 +61,9 @@ export const ResearchFinalizeSchema = z
   .strict()
 
 const WebpageContractSourceInputSchema = z.object({
-  source_url: z.string().min(1),
+  source_url: z.string().min(1).refine(isHttpWebpageUrl, "source_url must be an HTTP(S) webpage URL"),
   reference_image_evidence_ids: z.array(z.string().min(1)).default([]),
-})
+}).strict()
 
 const ResearchBriefDraftSchema = ResearchBriefSchema.omit({
   metadata: true,
@@ -364,7 +365,7 @@ export function buildResearchReport(collector: ResearchCollector) {
   }
 }
 
-export function createResearchOutputTools() {
+export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: string } = {}) {
   let collector = emptyCollector()
   const tools = {
     set_research_scope: tool({
@@ -487,7 +488,14 @@ export function createResearchOutputTools() {
       execute: async (input) => {
         const closed = rejectFinalized(collector)
         if (closed) return closed
-        collector.webpage_contract_source = WebpageContractSourceInputSchema.parse(input)
+        const parsed = WebpageContractSourceInputSchema.parse(input)
+        if (options.expectedWebpageSourceUrl && parsed.source_url !== options.expectedWebpageSourceUrl) {
+          return (
+            "Error: webpage_contract.source_url must match the prepared frontend_research source URL " +
+            `${options.expectedWebpageSourceUrl}; received ${parsed.source_url}.`
+          )
+        }
+        collector.webpage_contract_source = parsed
         return "OK: webpage contract source set"
       },
     }),

@@ -96,6 +96,7 @@ import { researchSourceDigest } from "../../src/research/schema"
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let computeRequirementStatusSnapshotImpl: ((input: any) => any[]) | undefined
+let requirementsRunImpl: ((input: any) => Promise<any>) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
 let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let frontendResearchRunImpl: ((input: any) => Promise<any>) | undefined
@@ -271,6 +272,98 @@ function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string
     },
     subpage_research_tasks: [],
     open_questions: [],
+  }
+}
+
+function minimalFrontendDesignAnalysis() {
+  return {
+    specs: [],
+    designSystem: "Reference design system",
+    techStack: ["React"],
+    frontendTemplate: "Frontend design continuation recovered from the existing child session.",
+    finalAcceptanceMode: "maintainable_replacement_required",
+    fillableModules: "Recovered fillable modules from visual reference evidence.",
+    componentInventory: "Recovered component inventory.",
+    qualityProjectContract: "Recovered quality contract for downstream implementation.",
+    componentReusePlan: [
+      {
+        family_id: "comp-recovered-shell",
+        name: "Recovered shell",
+        observed_surface: "Reference shell",
+        source_refs: ["attachment://original-reference.png"],
+        implementation_strategy: "existing_project_component",
+        reuse_source: "src/components/Shell.tsx",
+        mature_library_candidates: [],
+        props_states: "default",
+        replacement_boundary: "page shell",
+        parity_guard: "compare against visual reference",
+      },
+    ],
+    materialInventory: "Recovered material inventory.",
+    frontendProject: {
+      status: "not_created",
+      role: "source_baseline_input",
+      project_root: "",
+      source_package: "",
+      entrypoints: [],
+      generation_tool: "",
+      notes: [],
+    },
+    visualConsistencyContract: "Match the visual reference.",
+    uiDataContract: "Use captured visible data only.",
+    templateIterationNotes: ["Recovered existing review pass."],
+    completenessReview: "Recovered frontend design handoff.",
+    referenceArtifacts: ["attachment://original-reference.png"],
+    openQuestions: [],
+    report: {
+      summary: "Recovered frontend design handoff.",
+      detail: "Recovered frontend design handoff.",
+      commands: [],
+      changed_files: [],
+      open_questions: [],
+      fact_check_items: [],
+    },
+  }
+}
+
+function minimalArchitectResult(goalID = "goal_recovered_app_shell") {
+  return {
+    summary: "Recovered architecture.",
+    goals: [
+      {
+        id: goalID,
+        title: "Recovered app shell",
+        objective: "Implement a typed app shell after continuing the prior architect session.",
+        acceptance_specs: [
+          {
+            id: `acc-${goalID}`,
+            source_requirement_id: "REQ-1",
+            goal_id: goalID,
+            title: "typecheck passes",
+            scorers: [
+              {
+                type: "llm_judge",
+                name: "typecheck evidence",
+                criteria: "The app shell typechecks.",
+              },
+            ],
+            severity: "essential",
+          },
+        ],
+        owned_paths: ["src/App.tsx"],
+        depends_on: [],
+        exports: ["AppShell"],
+        imports: [],
+        kind: "bootstrap",
+        requirement_ids: ["REQ-1"],
+        priority: "blocking",
+      },
+    ],
+    removedGoalIDs: [],
+    traceability: [{ requirementID: "REQ-1", goalIDs: [goalID] }],
+    fidelity: { sourceCoverage: [], referenceCoverage: [], assemblyOwners: [] },
+    contractGraph: { version: 1, contracts: [], dependency_contracts: [] },
+    validationFindings: [],
   }
 }
 
@@ -652,6 +745,15 @@ mock.module("@/architect/agent", () => ({
   },
 }))
 
+mock.module("@/requirements", () => ({
+  RequirementsAgent: {
+    run: (input: any) => {
+      if (!requirementsRunImpl) throw new Error("RequirementsAgent.run mock not configured")
+      return requirementsRunImpl(input)
+    },
+  },
+}))
+
 mock.module("@/frontend-design", () => ({
   FrontendDesignAgent: {
     analyze: (input: any) => {
@@ -946,12 +1048,10 @@ async function writePassingSourceSkeletonHandoff(projectDir: string) {
 }
 
 function minimalPngBytes(): Uint8Array {
-  return Uint8Array.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
-    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49,
-    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
-    0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-  ])
+  return Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8//8/AwAI/AL+KDv4AAAAAElFTkSuQmCC",
+    "base64",
+  )
 }
 
 async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<void> {
@@ -1110,6 +1210,7 @@ describe("orchestrator tools", () => {
   beforeEach(async () => {
     await resetDatabase()
     tmp = await tmpdir()
+    requirementsRunImpl = undefined
     architectCoordinateImpl = undefined
     designAnalyzeImpl = undefined
     frontendResearchRunImpl = undefined
@@ -1125,6 +1226,7 @@ describe("orchestrator tools", () => {
     buildAgentRunImpl = undefined
     reviewIntegrityImpl = undefined
     computeRequirementStatusSnapshotImpl = undefined
+    requirementsRunImpl = undefined
     architectCoordinateImpl = undefined
     designAnalyzeImpl = undefined
     frontendResearchRunImpl = undefined
@@ -1882,6 +1984,8 @@ describe("orchestrator tools", () => {
             kind: "protocol-finalizer-miss",
             finalizerName: "submit_research_brief",
           })
+          expect(input.sourceUrls).toEqual(["https://example.com/page"])
+          expect(input.focus).toBeUndefined()
           return {
             brief: minimalFrontendResearchBrief({
               taskID,
@@ -2210,6 +2314,434 @@ describe("orchestrator tools", () => {
           buildToolOptions("deep_research"),
         )
         expect(toolText(second)).toContain("Deep research brief persisted")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("requirements continuation rejects stale frontend design evidence before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_requirements_stale_fd_${stamp}`
+    const failedSessionID = `ses_requirements_stale_fd_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "requirements stale frontend design parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Requirements stale frontend design task",
+              request: "Extract requirements before frontend design evidence changes.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        requirementsRunImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("requirements", "missing terminal submit_requirements", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Requirements ended without submit_requirements.",
+              toolName: "submit_requirements",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.requirements.execute(
+          {
+            reason: "Need requirements.",
+          },
+          buildToolOptions("requirements_stale_fd"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        createDecisionLog(taskID).append({
+          phase: "frontend_design",
+          key: "public_report",
+          value: "Frontend design evidence became available after the requirements continuation was created.",
+          reason: "test evidence changed after continuation capture",
+        })
+
+        const staleResult = await tools.requirements.execute(
+          {
+            reason: "Continue previous requirements finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("requirements_stale_fd"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh requirements")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("frontend_design continuation rejects stale visual artifacts before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_stale_visual_${stamp}`
+    const failedSessionID = `ses_frontend_design_stale_visual_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design stale visual parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend design stale visual task",
+              request: "Analyze the visual reference before it changes.",
+              kind: "workflow",
+              priority: "normal",
+              attachments: [
+                {
+                  sha: "sha-original-reference",
+                  url: "attachment://original-reference.png",
+                  mime: "image/png",
+                  size: 42,
+                  filename: "original-reference.png",
+                  intent: "visual_reference",
+                  source: "user-upload",
+                },
+              ],
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        designAnalyzeImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("frontend-design", "missing terminal submit_frontend_template", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Frontend design ended without submit_frontend_template.",
+              toolName: "submit_frontend_template",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_design.execute(
+          {
+            reason: "Need frontend design handoff.",
+          },
+          buildToolOptions("frontend_design_stale_visual"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineTaskTable)
+            .set({
+              system_artifacts: [
+                {
+                  sha: "sha-new-reference",
+                  url: "attachment://new-reference.png",
+                  mime: "image/png",
+                  size: 84,
+                  filename: "new-reference.png",
+                  intent: "visual_reference",
+                  source: "url-screenshot",
+                },
+              ],
+              time_updated: now + 1,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+        })
+
+        const staleResult = await tools.frontend_design.execute(
+          {
+            reason: "Continue previous frontend design finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_design_stale_visual"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh frontend_design")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("frontend_design continuation rejects stale host-prepared source evidence before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_stale_host_evidence_${stamp}`
+    const failedSessionID = `ses_frontend_design_stale_host_evidence_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design stale host evidence parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend design stale host evidence task",
+              request: "Analyze the host-prepared source evidence before it changes.",
+              kind: "workflow",
+              priority: "normal",
+              attachments: [
+                {
+                  sha: "sha-original-reference",
+                  url: "attachment://original-reference.png",
+                  mime: "image/png",
+                  size: 42,
+                  filename: "original-reference.png",
+                  intent: "visual_reference",
+                  source: "user-upload",
+                },
+              ],
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        const sourceDataDir = path.join(paths.skeletonProjectAbsolute, "src", "data")
+        await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+        await fs.mkdir(sourceDataDir, { recursive: true })
+        await fs.writeFile(path.join(paths.sourcePackageAbsolute, "reference.png"), minimalPngBytes())
+        await fs.writeFile(
+          path.join(sourceDataDir, "sourceDomReplacementPlan.ts"),
+          "export const sourceDomReplacementPlan = [] as const\n",
+          "utf8",
+        )
+        await fs.writeFile(
+          path.join(sourceDataDir, "sourceDomIterationState.ts"),
+          'export const sourceDomIterationState = {"generatedRegionCount":1,"semanticReplacementCount":0,"remainingRegionCount":1} as const\n',
+          "utf8",
+        )
+        const writeSourceManifest = async (referenceImage: string, regionCount: number) => {
+          await fs.writeFile(
+            path.join(sourceDataDir, "sourceProjectManifest.json"),
+            JSON.stringify(
+              {
+                visualIteration: {
+                  referenceImage,
+                  evidenceMethod: "test-source-package",
+                  viewportMatrix: [
+                    {
+                      name: "desktop",
+                      width: 1440,
+                      height: 900,
+                      evidenceRole: "reference",
+                      comparison: "captured-source",
+                    },
+                  ],
+                  rule: "Use host-prepared source evidence as the visual baseline.",
+                },
+                sourceDomRegions: {
+                  count: regionCount,
+                  largestBytes: 128,
+                  highPriorityCount: 1,
+                  replacementPlanCount: 0,
+                  iterationStateModule: "sourceDomIterationState.ts",
+                  semanticReplacementCount: 0,
+                },
+              },
+              null,
+              2,
+            ),
+            "utf8",
+          )
+        }
+        await writeSourceManifest("reference.png", 1)
+
+        let continuationArtifactID = ""
+        let calls = 0
+        designAnalyzeImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("frontend-design", "missing terminal submit_frontend_template", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Frontend design ended without submit_frontend_template.",
+              toolName: "submit_frontend_template",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_design.execute(
+          {
+            reason: "Need frontend design handoff from host-prepared source evidence.",
+          },
+          buildToolOptions("frontend_design_stale_host_evidence"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        await writeSourceManifest("reference-updated.png", 2)
+
+        const staleResult = await tools.frontend_design.execute(
+          {
+            reason: "Continue previous frontend design finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_design_stale_host_evidence"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh frontend_design")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("frontend_design continuation ignores unrelated task metadata changes", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_metadata_resume_${stamp}`
+    const failedSessionID = `ses_frontend_design_metadata_resume_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design metadata resume parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend design metadata resume task",
+              request: "Analyze the visual reference before unrelated metadata changes.",
+              kind: "workflow",
+              priority: "normal",
+              attachments: [
+                {
+                  sha: "sha-original-reference",
+                  url: "attachment://original-reference.png",
+                  mime: "image/png",
+                  size: 42,
+                  filename: "original-reference.png",
+                  intent: "visual_reference",
+                  source: "user-upload",
+                },
+              ],
+              metadata: { unrelated_counter: 1 },
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        designAnalyzeImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("frontend-design", "missing terminal submit_frontend_template", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Frontend design ended without submit_frontend_template.",
+                toolName: "submit_frontend_template",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_frontend_template",
+          })
+          return minimalFrontendDesignAnalysis()
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_design.execute(
+          {
+            reason: "Need frontend design handoff.",
+          },
+          buildToolOptions("frontend_design_metadata_resume"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineTaskTable)
+            .set({
+              metadata: { unrelated_counter: 2 },
+              time_updated: now + 1,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+        })
+
+        const second = await tools.frontend_design.execute(
+          {
+            reason: "Continue previous frontend design finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_design_metadata_resume"),
+        )
+        expect(toolText(second)).toContain("SUCCESS: frontend_design public report")
+        expect(toolText(second)).not.toContain("scope_mismatch")
         expect(calls).toBe(2)
       },
     })
@@ -6246,6 +6778,146 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("architect continuation ignores unrendered unflagged workload brief changes", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_architect_workload_unflagged_${stamp}`
+    const goalID = `goal_architect_workload_unflagged_${stamp}`
+    const specID = `spec_architect_workload_unflagged_${stamp}`
+    const failedSessionID = `ses_architect_workload_unflagged_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect workload unflagged parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Architect workload unflagged project",
+          taskTitle: "Architect workload unflagged task",
+          request: "Refine a goal graph with unflagged workload notes.",
+          goalTitle: "Unflagged workload goal",
+          goalSlug: "unflagged-workload-goal",
+          objective: "Implement the unflagged workload goal contract.",
+          now,
+          specID,
+          requirementIDs: ["REQ-architect"],
+          insertProject: false,
+        })
+        const brief = {
+          goal_id: goalID,
+          decomposition_concern: "",
+          why_not_smaller: ["original unrendered note"],
+          underestimation_traps: ["original trap"],
+          execution_inventory: {
+            surfaces: 1,
+            states: 1,
+            data_contracts: 1,
+            verification_points: 1,
+          },
+          verification_inventory: ["run typecheck"],
+          references: {
+            contract_ids: [],
+            reference_coverage_ids: [],
+            acceptance_spec_ids: [],
+            visual_spec_ids: [],
+            prd_sections: [],
+          },
+        }
+        Database.use((db) => {
+          db.insert(EngineArtifactTable)
+            .values({
+              id: `art_workload_original_${stamp}`,
+              task_id: taskID,
+              run_id: null,
+              goal_run_id: null,
+              acceptance_id: null,
+              kind: "goal_workload",
+              label: "active",
+              payload: {
+                spec_snapshot_id: specID,
+                summary: "No goals flagged.",
+                briefs: [brief],
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        architectCoordinateImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("architect", "missing terminal submit_architect", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Architect ended without submit_architect.",
+                toolName: "submit_architect",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_architect",
+          })
+          return minimalArchitectResult(`goal_recovered_workload_${stamp}`)
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.architect.execute({ reason: "refine graph" }, buildToolOptions("architect_workload"))
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.insert(EngineArtifactTable)
+            .values({
+              id: `art_workload_changed_${stamp}`,
+              task_id: taskID,
+              run_id: null,
+              goal_run_id: null,
+              acceptance_id: null,
+              kind: "goal_workload",
+              label: "active",
+              payload: {
+                spec_snapshot_id: specID,
+                summary: "No goals flagged; unrendered notes changed.",
+                briefs: [{ ...brief, why_not_smaller: ["changed unrendered note"] }],
+              },
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
+        })
+
+        const second = await tools.architect.execute(
+          {
+            reason: "continue previous architect finalizer miss",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("architect_workload"),
+        )
+        expect(toolText(second)).toContain("Architect decomposition complete")
+        expect(toolText(second)).not.toContain("scope_mismatch")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
   test("architect continuation rejects stale active spec scope before resuming worker", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
@@ -6369,6 +7041,169 @@ describe("orchestrator tools", () => {
         expect(toolText(staleResult)).toContain("scope_mismatch")
         expect(toolText(staleResult)).toContain("start a fresh architect")
         expect(coordinateCalls).toBe(1)
+      },
+    })
+  })
+
+  test("architect continuation rejects stale existing goal graph before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_architect_stale_goals_${stamp}`
+    const goalID = `goal_architect_stale_goals_${stamp}`
+    const specID = `spec_architect_stale_goals_${stamp}`
+    const failedSessionID = `ses_architect_stale_goals_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect stale goal graph parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Architect stale goal graph project",
+          taskTitle: "Architect stale goal graph task",
+          request: "Refine the existing goal graph.",
+          goalTitle: "Original goal",
+          goalSlug: "original-goal",
+          objective: "Implement the original goal contract.",
+          now,
+          specID,
+          requirementIDs: ["REQ-architect"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        architectCoordinateImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("architect", "missing terminal submit_architect", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Architect ended without submit_architect.",
+              toolName: "submit_architect",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.architect.execute({ reason: "refine graph" }, buildToolOptions("architect_goals"))
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineGoalTable)
+            .set({
+              objective: "Implement a changed goal contract after the continuation was created.",
+              time_updated: now + 1,
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run()
+        })
+
+        const staleResult = await tools.architect.execute(
+          {
+            reason: "continue previous architect finalizer miss",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("architect_goals"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh architect")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("architect continuation rejects stale goal retry labels before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_architect_stale_retry_${stamp}`
+    const goalID = `goal_architect_stale_retry_${stamp}`
+    const specID = `spec_architect_stale_retry_${stamp}`
+    const failedSessionID = `ses_architect_stale_retry_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect stale retry parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Architect stale retry project",
+          taskTitle: "Architect stale retry task",
+          request: "Refine the existing goal graph after build retry state changes.",
+          goalTitle: "Retry-sensitive goal",
+          goalSlug: "retry-sensitive-goal",
+          objective: "Implement the retry-sensitive goal contract.",
+          now,
+          specID,
+          requirementIDs: ["REQ-architect"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        architectCoordinateImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("architect", "missing terminal submit_architect", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Architect ended without submit_architect.",
+              toolName: "submit_architect",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.architect.execute({ reason: "refine graph" }, buildToolOptions("architect_retry"))
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID,
+          artifactID: `grun_architect_retry_${stamp}`,
+          workspaceDir: tmp.path,
+          workspaceBranch: "codex/retry",
+          retryCount: 1,
+          status: "completed",
+          now: now + 1,
+        })
+
+        const staleResult = await tools.architect.execute(
+          {
+            reason: "continue previous architect finalizer miss",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("architect_retry"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh architect")
+        expect(calls).toBe(1)
       },
     })
   })
