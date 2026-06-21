@@ -254,6 +254,28 @@ function terminalFinalizerMiss(input: {
   return { failureMessage: data.message ?? input.err.message }
 }
 
+function continuationToolName(stage: StageContinuationStage): string {
+  const explicit: Partial<Record<StageContinuationStage, string>> = {
+    "frontend-design": "frontend_design",
+    "frontend-research": "frontend_research",
+    "deep-research": "research",
+    "visual-qa": "visual_qa",
+    "intent-analysis": "intent_analysis",
+    "fact-check": "fact_check",
+    "goal-workload-analyst": "goal_workload_analyst",
+  }
+  return explicit[stage] ?? stage.replaceAll("-", "_")
+}
+
+function continuationReason(input: { stage: StageContinuationStage; finalizerName: string; normalizedStageInput: unknown }) {
+  const normalized = input.normalizedStageInput
+  if (normalized && typeof normalized === "object" && !Array.isArray(normalized)) {
+    const reason = (normalized as { reason?: unknown }).reason
+    if (typeof reason === "string" && reason.trim()) return `Continue after missing ${input.finalizerName}: ${reason.trim()}`
+  }
+  return `Continue ${input.stage} after missing ${input.finalizerName}.`
+}
+
 function continuationResultForTerminalFinalizerMiss(input: {
   err: unknown
   taskID: string
@@ -266,6 +288,12 @@ function continuationResultForTerminalFinalizerMiss(input: {
   const miss = terminalFinalizerMiss({ err: input.err, finalizerName: input.finalizerName })
   if (!miss) return undefined
   if (!input.sessionID) return undefined
+  const toolName = continuationToolName(input.stage)
+  const reason = continuationReason({
+    stage: input.stage,
+    finalizerName: input.finalizerName,
+    normalizedStageInput: input.normalizedStageInput,
+  })
   const request = createStageContinuationRequest({
     taskID: input.taskID,
     stage: input.stage,
@@ -276,20 +304,23 @@ function continuationResultForTerminalFinalizerMiss(input: {
     failureName: "TerminalToolMissingError",
     failureMessage: miss.failureMessage,
     finalizerName: input.finalizerName,
+    reason,
   })
+  const pointerPayload = JSON.stringify({ reason, continuation_artifact_id: request.artifactID })
   return SubAgentProtocol.yieldResult({
     headline: `${input.stage}: terminal finalizer missing; same-session continuation is ready.`,
     summary:
       `The ${input.stage} worker session ${input.sessionID} ended without calling ${input.finalizerName}. ` +
-      `No fresh worker session was started. Re-dispatch this same tool with continuation_artifact_id=${request.artifactID} to append a visible recovery message to the same child session.`,
+      `No fresh worker session was started. Re-dispatch ${toolName} with reason and continuation_artifact_id=${request.artifactID} to append a visible recovery message to the same child session.`,
     fields: [
       ["stage", input.stage],
       ["session_id", input.sessionID],
       ["continuation_artifact_id", request.artifactID],
+      ["continuation_call", `${toolName}(${pointerPayload})`],
       ["finalizer", input.finalizerName],
       ["failure", "TerminalToolMissingError"],
     ],
-    pointer: `${input.stage}({ continuation_artifact_id: "${request.artifactID}" })`,
+    pointer: `${toolName}(${pointerPayload})`,
   })
 }
 
@@ -819,8 +850,22 @@ const FrontendResearchFocusField = z
 const FrontendResearchInputSchema = z
   .object({})
   .extend({ reason: FrontendResearchReasonField })
-  .extend({ source_urls: FrontendResearchSourceUrlsField })
+  .extend({ source_urls: FrontendResearchSourceUrlsField.optional() })
   .extend({ focus: FrontendResearchFocusField })
+  .extend({ continuation_artifact_id: StageContinuationArtifactIDField })
+  .strict()
+  .superRefine((input, ctx) => {
+    const hasSourceUrls = Array.isArray(input.source_urls) && input.source_urls.length > 0
+    const hasContinuation = typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    if (hasSourceUrls === hasContinuation) {
+      ctx.addIssue({
+        code: "custom",
+        path: hasSourceUrls ? ["continuation_artifact_id"] : ["source_urls"],
+        message:
+          "frontend_research requires exactly one input mode: source_urls for a fresh research session, or continuation_artifact_id for same-session finalizer recovery.",
+      })
+    }
+  })
 
 const VisualQaInputSchema = z.object({
   reason: z
@@ -4631,22 +4676,39 @@ export function createOrchestratorTools(input: {
       description:
         "OPTIONAL webpage/UI investigation publisher. Single-shot task-scope brief producer: dispatch once for the relevant webpage investigation scope, persist the brief, then send later repair/refinement through downstream agents that consume the brief. Do not use frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after its frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It persists a frontend_research_brief/webpage_contract artifact built from small registration tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: FrontendResearchInputSchema,
-      execute: async ({ reason, source_urls, focus }) => {
+      execute: async ({ reason, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         await trackStepStart("frontend_research")
+        const normalizedStageInput = {
+          reason,
+          source_urls: source_urls ?? [],
+          focus: focus ?? null,
+          continuation_artifact_id: continuation_artifact_id ?? null,
+        }
+        let continuation: AgentSessionContinuation | undefined
         let runnerSessionID: string | undefined
         try {
+          continuation = continuation_artifact_id
+            ? continuationFromArtifact({
+                taskID,
+                stage: "frontend-research",
+                artifactID: continuation_artifact_id,
+                finalizerName: "submit_research_brief",
+              })
+            : undefined
+          runnerSessionID = continuation?.sessionID
           const { FrontendResearchAgent } = await import("@/frontend-research")
           const result = await FrontendResearchAgent.run({
             title: task.title,
             request: task.request,
             targetDeliverable: "implementation_input",
-            sourceUrls: source_urls,
+            sourceUrls: continuation ? undefined : source_urls,
             focus,
             reason,
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
             onStatus: () => {},
             onSessionCreated: (id) => {
               runnerSessionID = id
@@ -4693,6 +4755,16 @@ export function createOrchestratorTools(input: {
             })
           }
           const msg = err instanceof Error ? err.message : String(err)
+          const continuationResult = continuationResultForTerminalFinalizerMiss({
+            err,
+            taskID,
+            stage: "frontend-research",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "submit_research_brief",
+            normalizedStageInput,
+          })
+          if (continuationResult) return continuationResult
           if (runnerSessionID) {
             SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
           }
@@ -4703,7 +4775,7 @@ export function createOrchestratorTools(input: {
             fields: [
               ["session", runnerSessionID ?? "not-created"],
               ["status", "failed"],
-              ["source_urls", source_urls],
+              ["source_urls", source_urls ?? []],
               ["focus", focus?.trim() ? focus : "none"],
               ["artifact_id", "none"],
             ],

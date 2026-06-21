@@ -83,6 +83,7 @@ import type { ExecutorAdapter } from "../../src/executor/contract"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 import { findStageContinuationRequest } from "../../src/engine/stage-continuation"
+import { researchSourceDigest } from "../../src/research"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -126,6 +127,140 @@ function toolText(result: unknown): string {
     return (result as { output: string }).output
   }
   throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
+}
+
+function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string; sourceURL: string }) {
+  const evidence = [
+    {
+      id: "ev_page_reference",
+      kind: "web" as const,
+      pointer: "web-clone-source/reference.png",
+      title: "Rendered webpage reference",
+      retrieved_at: "2026-06-21T00:00:00.000Z",
+      reliability: "primary" as const,
+      excerpt: "Rendered webpage reference evidence for frontend investigation.",
+      volatile: false,
+    },
+  ]
+  const paths = ProjectRuntimePaths.frontendResearchPaths(process.cwd(), input.taskID, input.sessionID)
+  return {
+    metadata: {
+      research_session_id: input.sessionID,
+      created_for_message_id: "msg_frontend_research_recovered",
+      request_hash: "frontend-research-request-hash",
+      source_digest: researchSourceDigest(evidence),
+      created_at: "2026-06-21T00:00:00.000Z",
+    },
+    scope: {
+      user_goal: "Investigate the webpage before implementation.",
+      deliverable_type: "implementation_input" as const,
+      audience: "downstream frontend agents",
+      explicit_non_goals: [],
+      assumed_non_goals: [],
+    },
+    bundle: {
+      full_markdown_path: `${paths.relativeDir}/research-bundle.md`,
+      evidence_json_path: `${paths.relativeDir}/evidence.json`,
+      citation_map_path: `${paths.relativeDir}/citation-map.json`,
+    },
+    summary: "Recovered frontend research brief.",
+    evidence_index: evidence,
+    facts: [
+      {
+        id: "fact_reference_exists",
+        statement: "A rendered webpage reference exists for investigation.",
+        evidence_ids: ["ev_page_reference"],
+      },
+    ],
+    inferences: [
+      {
+        id: "inf_downstream_needs_reference",
+        inference: "Downstream agents must use the rendered reference as visual evidence.",
+        based_on_fact_ids: ["fact_reference_exists"],
+        confidence: "high" as const,
+      },
+    ],
+    problem_statements: [
+      {
+        id: "problem_visual_parity",
+        statement: "Implementation must preserve the captured visual layout.",
+        fact_ids: ["fact_reference_exists"],
+      },
+    ],
+    user_needs: [
+      {
+        id: "need_source_backed_packets",
+        need: "Downstream agents need source-backed investigation packets.",
+        fact_ids: ["fact_reference_exists"],
+      },
+    ],
+    constraints: [
+      {
+        id: "constraint_reference_backed",
+        constraint: "Do not replace reference-backed observations with unsupported guesses.",
+        fact_ids: ["fact_reference_exists"],
+      },
+    ],
+    document_outline: [
+      {
+        id: "section_visual_contract",
+        title: "Visual contract",
+        purpose: "Summarize visual evidence for downstream work.",
+        evidence_ids: ["ev_page_reference"],
+      },
+    ],
+    webpage_contract: {
+      source_url: input.sourceURL,
+      reference_image_evidence_ids: ["ev_page_reference"],
+      functional_surfaces: [
+        {
+          id: "surface_page",
+          evidence_ids: ["ev_page_reference"],
+          title: "Page surface",
+          user_visible_behavior: "The page renders a visible webpage surface.",
+          required_interactions: [],
+        },
+      ],
+      visual_layout: [
+        {
+          id: "layout_page",
+          evidence_ids: ["ev_page_reference"],
+          viewport: "desktop" as const,
+          region: "page",
+          layout_contract: "Preserve the rendered page layout.",
+          spacing_and_alignment: "Spacing and alignment come from rendered evidence.",
+        },
+      ],
+      style_requirements: [
+        {
+          id: "style_page",
+          evidence_ids: ["ev_page_reference"],
+          token_or_selector: "page",
+          requirement: "Use rendered evidence for visible styling.",
+        },
+      ],
+      interaction_states: [],
+      data_content_inventory: [
+        {
+          id: "data_page",
+          evidence_ids: ["ev_page_reference"],
+          surface: "page",
+          content_contract: "Use visible captured content as evidence.",
+        },
+      ],
+      fidelity_acceptance: [
+        {
+          id: "accept_page",
+          evidence_ids: ["ev_page_reference"],
+          target: "page",
+          criterion: "Compare implementation against rendered reference evidence.",
+        },
+      ],
+      fidelity_risks: [],
+    },
+    subpage_research_tasks: [],
+    open_questions: [],
+  }
 }
 
 function successfulAbortAdapter(): ExecutorAdapter {
@@ -1482,6 +1617,122 @@ describe("orchestrator tools", () => {
           reason: "error",
           error: "rendered webpage evidence capture failed",
         })
+      },
+    })
+  })
+
+  test("frontend_research terminal finalizer miss returns same-session continuation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_frontend_research_continue_${stamp}`
+    const taskID = `tsk_frontend_research_continue_${stamp}`
+    const failedSessionID = `ses_frontend_research_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend research continuation parent" })
+        Database.use((db) => {
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Frontend research continuation project",
+              sandboxes: "[]",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend research continuation task",
+              request: "Investigate a webpage before implementation.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        frontendResearchRunImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("frontend-research", "missing terminal submit_research_brief", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Frontend research ended without submit_research_brief.",
+                toolName: "submit_research_brief",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_research_brief",
+          })
+          return {
+            brief: minimalFrontendResearchBrief({
+              taskID,
+              sessionID: failedSessionID,
+              sourceURL: "https://example.com/page",
+            }),
+            bundle: {
+              full_markdown: "# Frontend research\n- recovered",
+              evidence_json: "{}",
+              citation_map_json: "{}",
+            },
+            factCheckItems: [],
+            sessionID: failedSessionID,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_research.execute(
+          {
+            reason: "Need webpage investigation packets.",
+            source_urls: ["https://example.com/page"],
+          },
+          buildToolOptions("frontend_research"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("frontend_research({")
+        expect(firstText).toContain('"reason":"Continue after missing submit_research_brief: Need webpage investigation packets."')
+        expect(firstText).not.toContain("frontend-research({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("frontend-research")
+        expect(continuation?.payload.finalizer_name).toBe("submit_research_brief")
+
+        const second = await tools.frontend_research.execute(
+          {
+            reason: "Continue previous frontend research finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_research"),
+        )
+        expect(toolText(second)).toContain("Frontend research brief persisted")
+        expect(calls).toBe(2)
       },
     })
   })

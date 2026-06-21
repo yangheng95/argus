@@ -201,12 +201,15 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "frontend_design's first workflow deliverable is a source-editable static HTML/CSS visual skeleton",
     )
-    expect(prompt).toContain("Report it as `submit_frontend_template.frontend_project.role=visual_baseline_input`")
+    expect(prompt).toContain("Report visual-only work as `submit_frontend_template.frontend_project.role=visual_baseline_input`")
+    expect(prompt).toContain("For production/component-system tasks, set `final_acceptance_mode=maintainable_replacement_required`")
     expect(prompt).toContain("not the implementation target or acceptance app root")
     expect(prompt).toContain(
       "if the skeleton conflicts with those artifacts or visible pixels, the original source evidence wins",
     )
-    expect(prompt).toContain("Later workflow stages transcribe this HTML skeleton into project source")
+    expect(prompt).toContain(
+      "Later workflow stages transcribe this HTML skeleton into project source only after the skeleton is screenshot-validated",
+    )
     expect(prompt).toContain("Do not pass `web-clone-target`")
     const webClonePaths = ProjectRuntimePaths.frontendDesignPaths("", "tsk_web_clone")
     const visualSkeleton = ProjectRuntimePaths.taskRelative("tsk_web_clone", "fd", "visual-html-skeleton")
@@ -275,7 +278,7 @@ describe("frontend-design prompt assembly", () => {
     )
     expect(prompt).toContain("Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence")
     expect(prompt).toContain(
-      "the skeleton is source-editable static HTML/CSS, not compiled output, not raw source DOM replay",
+      "A visual baseline must explicitly say it is source-editable static HTML/CSS, not compiled output, not raw source DOM replay",
     )
     expect(prompt).toContain(
       "Put later React/Vue/etc. project transcription constraints into `quality_project_contract`, not into the current skeleton source",
@@ -914,6 +917,7 @@ describe("frontend-design prompt assembly", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        seedFrontendPromptTask(taskID)
         const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
         await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-ir"), { recursive: true })
         await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-skeleton"), { recursive: true })

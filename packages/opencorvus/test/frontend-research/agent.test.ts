@@ -40,4 +40,11 @@ describe("frontend-research agent", () => {
       "do not invent endpoints, payloads, live market feeds, or backend obligations from visual labels alone",
     )
   })
+
+  test("runResearchSession forwards continuation into the shared agent runner", async () => {
+    const source = await Bun.file(new URL("../../src/research/agent.ts", import.meta.url)).text()
+    const runAgentSessionCall = source.slice(source.indexOf("const out = await runAgentSession"))
+
+    expect(runAgentSessionCall).toContain("continuation: input.continuation")
+  })
 })

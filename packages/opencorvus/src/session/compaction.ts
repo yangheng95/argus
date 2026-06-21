@@ -29,6 +29,7 @@ import type { ModelMessage, StopCondition, ToolSet } from "ai"
 import { SessionLoop } from "./loop"
 import { Todo } from "./todo"
 import { SessionControl } from "./control"
+import { createHash } from "node:crypto"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -44,6 +45,15 @@ export namespace SessionCompaction {
 
   const TRANSCRIPT_FIELD_MAX_CHARS = 30_000
   const DISPATCH_ANCHOR_REFERENCE_MAX_CHARS = 4_000
+  const TOOL_INPUT_STRING_MAX_CHARS = 1_000
+  const TOOL_INPUT_STRING_HEAD_CHARS = 240
+  const TOOL_INPUT_STRING_TAIL_CHARS = 160
+  const TOOL_INPUT_COLLECTION_MAX_ITEMS = 32
+  const TOOL_INPUT_OBJECT_MAX_KEYS = 80
+  const TOOL_INPUT_OBJECT_OMITTED_KEY_SAMPLE_MAX = 16
+  const TOOL_INPUT_OBJECT_KEY_MAX_CHARS = 160
+  const TOOL_INPUT_DEPTH_MAX = 8
+  const TOOL_INPUT_JSON_MAX_CHARS = 8_000
   type Turn = {
     start: number
     end: number
@@ -60,6 +70,8 @@ export namespace SessionCompaction {
     head: Message.WithParts[]
     tail_start_id?: string
   }
+
+  type ToolStateForTranscript = z.infer<typeof Message.ToolState>
 
   type CompletedCompaction = {
     userIndex: number
@@ -144,6 +156,139 @@ export namespace SessionCompaction {
     }
   }
 
+  function sha256(text: string) {
+    return createHash("sha256").update(text).digest("hex")
+  }
+
+  function largeTextProjection(text: string) {
+    return {
+      kind: "compaction_large_text",
+      chars: text.length,
+      sha256: sha256(text),
+      head: text.slice(0, TOOL_INPUT_STRING_HEAD_CHARS),
+      tail: text.slice(text.length - TOOL_INPUT_STRING_TAIL_CHARS),
+    }
+  }
+
+  function compactObjectKeyForTranscript(key: string) {
+    if (key.length <= TOOL_INPUT_OBJECT_KEY_MAX_CHARS) return key
+    const head = key.slice(0, 96)
+    const tail = key.slice(key.length - 32)
+    return `${head}...[${key.length} chars sha256:${sha256(key).slice(0, 12)}]...${tail}`
+  }
+
+  function projectToolInputValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+    if (typeof value === "string") {
+      if (value.length <= TOOL_INPUT_STRING_MAX_CHARS) return value
+      return largeTextProjection(value)
+    }
+    if (value === null || typeof value !== "object") return value
+    if (seen.has(value)) return { kind: "compaction_circular_reference" }
+    if (depth >= TOOL_INPUT_DEPTH_MAX) {
+      return {
+        kind: "compaction_depth_limit",
+        objectType: Object.prototype.toString.call(value),
+      }
+    }
+
+    seen.add(value)
+    if (Array.isArray(value)) {
+      const items = value
+        .slice(0, TOOL_INPUT_COLLECTION_MAX_ITEMS)
+        .map((item) => projectToolInputValue(item, depth + 1, seen))
+      if (value.length > TOOL_INPUT_COLLECTION_MAX_ITEMS) {
+        items.push({
+          kind: "compaction_omitted_array_items",
+          omitted: value.length - TOOL_INPUT_COLLECTION_MAX_ITEMS,
+        })
+      }
+      seen.delete(value)
+      return items
+    }
+
+    const result: Record<string, unknown> = {}
+    let ownKeyCount = 0
+    let omittedKeyCount = 0
+    const omittedKeySample: string[] = []
+    const objectValue = value as Record<string, unknown>
+    for (const key in objectValue) {
+      if (!Object.prototype.hasOwnProperty.call(objectValue, key)) continue
+      ownKeyCount++
+      const compactKey = compactObjectKeyForTranscript(key)
+      if (ownKeyCount <= TOOL_INPUT_OBJECT_MAX_KEYS) {
+        result[compactKey] = projectToolInputValue(objectValue[key], depth + 1, seen)
+        continue
+      }
+      omittedKeyCount++
+      if (omittedKeySample.length < TOOL_INPUT_OBJECT_OMITTED_KEY_SAMPLE_MAX) {
+        omittedKeySample.push(compactKey)
+      }
+    }
+    if (omittedKeyCount > 0) {
+      result.__compaction_omitted_key_count = omittedKeyCount
+      result.__compaction_omitted_key_sample = omittedKeySample
+    }
+    seen.delete(value)
+    return result
+  }
+
+  function sampleTopLevelObjectKeys(value: Record<string, unknown>) {
+    const keys: string[] = []
+    for (const key in value) {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) continue
+      keys.push(compactObjectKeyForTranscript(key))
+      if (keys.length >= TOOL_INPUT_OBJECT_OMITTED_KEY_SAMPLE_MAX) break
+    }
+    return keys
+  }
+
+  function compactToolInputProjection(value: unknown): unknown {
+    const projected = projectToolInputValue(value, 0, new WeakSet())
+    const serialized = JSON.stringify(projected)
+    if (serialized.length <= TOOL_INPUT_JSON_MAX_CHARS) return projected
+
+    const topLevel =
+      value !== null && typeof value === "object" && !Array.isArray(value)
+        ? { keys: sampleTopLevelObjectKeys(value as Record<string, unknown>) }
+        : Array.isArray(value)
+          ? { arrayLength: value.length }
+          : {}
+    return {
+      kind: "compaction_tool_input_summary",
+      chars: serialized.length,
+      sha256: sha256(serialized),
+      ...topLevel,
+      excerpt: compactTranscriptField(serialized, Math.min(TOOL_INPUT_JSON_MAX_CHARS, DISPATCH_ANCHOR_REFERENCE_MAX_CHARS)),
+    }
+  }
+
+  function jsonForToolInputTranscript(value: unknown) {
+    return jsonForTranscript(compactToolInputProjection(value))
+  }
+
+  function compactToolStateProjection(state: ToolStateForTranscript): unknown {
+    const projectedState = compactToolInputProjection(state)
+    if (projectedState === null || typeof projectedState !== "object" || Array.isArray(projectedState)) return projectedState
+    if ("kind" in projectedState) return projectedState
+
+    return {
+      ...projectedState,
+      input: {
+        kind: "compaction_repeated_tool_input",
+        location: "sibling_input_element",
+      },
+    }
+  }
+
+  function jsonForToolStateTranscript(state: ToolStateForTranscript) {
+    return jsonForTranscript(compactToolStateProjection(state))
+  }
+
+  function outputForToolTranscript(output: string) {
+    if (output.length <= TOOL_INPUT_STRING_MAX_CHARS) return transcriptText(output)
+    return jsonForTranscript(largeTextProjection(output))
+  }
+
   function renderTranscriptPart(part: Message.Part) {
     switch (part.type) {
       case "text":
@@ -159,10 +304,10 @@ export namespace SessionCompaction {
       case "tool": {
         const lines = [
           `<tool name="${escapeTranscriptText(part.tool)}" status="${part.state.status}">`,
-          `<input>${jsonForTranscript(part.state.input)}</input>`,
+          `<input>${jsonForToolInputTranscript(part.state.input)}</input>`,
         ]
         if (part.state.status === "completed") {
-          lines.push(`<output>${transcriptText(part.state.output)}</output>`)
+          lines.push(`<output>${outputForToolTranscript(part.state.output)}</output>`)
           if (part.state.attachments?.length) {
             const attachments = part.state.attachments
               .map((item) => item.filename ?? item.mime)
@@ -173,7 +318,7 @@ export namespace SessionCompaction {
         } else if (part.state.status === "error") {
           lines.push(`<error>${transcriptText(renderToolFailureCause(part.state.failure))}</error>`)
         } else {
-          lines.push(`<state>${jsonForTranscript(part.state)}</state>`)
+          lines.push(`<state>${jsonForToolStateTranscript(part.state)}</state>`)
         }
         lines.push("</tool>")
         return lines.join("\n")
@@ -982,6 +1127,7 @@ export namespace SessionCompaction {
   )
 
   export const TestHooks = {
+    compactToolInputProjection,
     selectCompactionInput,
     selectedHeadEvidenceRequirements,
     runtimeContext,

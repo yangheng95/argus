@@ -693,6 +693,10 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("do not synthesize a parallel token catalog")
     expect(normalized).toContain("Treat `webpage_contract` as an investigation partition contract")
     expect(normalized).toContain("Build the brief with small registration tools")
+    expect(normalized).toContain(
+      "Fields named `fact_ids`, `based_on_fact_ids`, or `related_fact_ids` may cite only ids previously registered through `register_research_fact`",
+    )
+    expect(normalized).toContain("do not cite evidence ids, risk ids, packet ids, webpage contract ids")
     expect(normalized).toContain("Do not submit raw markdown or JSON documents as string fields")
     expect(normalized).toContain("Do not submit a final PRD or a raw artifact list")
     expect(normalized).toContain("Classify likely real component kinds explicitly")
