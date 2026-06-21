@@ -2304,6 +2304,89 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("visual_qa continuation rejects stale frontend evidence before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_visual_qa_stale_evidence_${stamp}`
+    const failedSessionID = `ses_visual_qa_stale_evidence_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "visual QA stale evidence parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Visual QA stale evidence task",
+              request: "Review the finished visible product after frontend evidence changes.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        visualQaAnalyzeImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("visual-qa", "missing terminal submit_visual_qa_report", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Visual QA ended without submit_visual_qa_report.",
+                toolName: "submit_visual_qa_report",
+                retries: 0,
+              }),
+            })
+          }
+          throw new Error("stale visual_qa continuation reached child agent")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.visual_qa.execute(
+          {
+            reason: "Need final GUI review.",
+          },
+          buildToolOptions("visual_qa_stale_evidence"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        createDecisionLog(taskID).append({
+          phase: "frontend_design",
+          key: "public_report",
+          value: "New frontend design report materialized after the visual QA continuation was created.",
+          reason: "test evidence changed after continuation capture",
+        })
+
+        await expect(
+          tools.visual_qa.execute(
+            {
+              reason: "Continue stale visual QA after evidence changed.",
+              continuation_artifact_id: continuationArtifactID,
+            },
+            buildToolOptions("visual_qa_stale_evidence"),
+          ),
+        ).rejects.toThrow(/scope mismatch/)
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
   test("integrity terminal finalizer miss returns same-session continuation with ownership closed", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
@@ -2413,6 +2496,92 @@ describe("orchestrator tools", () => {
         )
         expect(attempts).toHaveLength(1)
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("integrity continuation rejects stale visual QA evidence before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_integrity_stale_evidence_${stamp}`
+    const goalID = `goal_integrity_stale_evidence_${stamp}`
+    const specID = `spec_integrity_stale_evidence_${stamp}`
+    const failedSessionID = `ses_integrity_stale_evidence_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity stale evidence parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity stale evidence project",
+          taskTitle: "Integrity stale evidence task",
+          request: "Reject integrity continuation after review evidence changes.",
+          goalTitle: "Reviewable stale evidence goal",
+          goalSlug: "reviewable-stale-evidence-goal",
+          objective: "Provide one reviewable goal.",
+          now,
+          specID,
+          requirementIDs: ["REQ-integrity-stale"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        reviewIntegrityImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("integrity", "missing terminal submit_integrity_consensus", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Integrity ended without submit_integrity_consensus.",
+                toolName: "submit_integrity_consensus",
+                retries: 0,
+              }),
+            })
+          }
+          throw new Error("stale integrity continuation reached child agent")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.integrity.execute(
+          {
+            reason: "Need an independent integrity review.",
+          },
+          buildToolOptions("integrity_stale_evidence"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        createDecisionLog(taskID).append({
+          phase: "visual_qa",
+          key: "latest_summary",
+          value: "New visual QA evidence appeared after the integrity continuation was created.",
+          reason: "test evidence changed after continuation capture",
+        })
+
+        await expect(
+          tools.integrity.execute(
+            {
+              reason: "Continue stale integrity after visual QA changed.",
+              continuation_artifact_id: continuationArtifactID,
+            },
+            buildToolOptions("integrity_stale_evidence"),
+          ),
+        ).rejects.toThrow(/scope mismatch/)
+        expect(calls).toBe(1)
+        expect(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })).toBeUndefined()
       },
     })
   })
