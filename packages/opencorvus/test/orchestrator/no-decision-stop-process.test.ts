@@ -166,6 +166,28 @@ function finalAssistantText(input: Parameters<typeof SessionPrompt.prompt>[0], t
   } satisfies Message.WithParts
 }
 
+function finalAssistantWithoutText(input: Parameters<typeof SessionPrompt.prompt>[0], finish = "stop") {
+  const messageID = Identifier.ascending("message")
+  const time = Date.now()
+  return {
+    info: {
+      id: messageID,
+      sessionID: input.sessionID,
+      role: "assistant",
+      time: { created: time, completed: time },
+      parentID: "",
+      modelID: "control",
+      providerID: "mock-control",
+      agent: "orchestrator",
+      path: { cwd: Instance.directory, root: Instance.directory },
+      cost: 0,
+      tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      finish,
+    },
+    parts: [],
+  } satisfies Message.WithParts
+}
+
 function spySelfWakeDispatch() {
   return spyOn(EngineQueue, "dispatchTaskLoop").mockResolvedValue("started")
 }
@@ -310,6 +332,57 @@ describe("orchestrator no-decision stop process", () => {
       },
     })
   }, 60_000)
+
+  test("tool-only decision wake records a trace report without task error or self-wake", async () => {
+    installControlModel()
+    await using tmp = await tmpdir({ git: true, config: { model: "mock-control/control" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const root = await Session.create({ kind: "root", title: "tool-only orchestrator root" })
+        await Session.mergeConfigOverlay({
+          sessionID: root.id,
+          patch: { model: "mock-control/control" },
+        })
+        insertActiveRun({ taskID, runID, rootSessionID: root.id, now })
+
+        const dispatchTaskLoop = spySelfWakeDispatch()
+        spyOn(SessionPrompt, "prompt").mockImplementation((async (input) => {
+          await persistOrchestratorToolMessage({
+            sessionID: input.sessionID,
+            tool: "build",
+            callID: "tool-only-build",
+            now: Date.now(),
+            decisionEffect: "decision",
+            output: "build dispatched without final prose",
+          })
+          return finalAssistantWithoutText(input)
+        }) as never)
+
+        await Orchestrator.processTask(taskID)
+
+        const refreshed = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+        )
+        expect(refreshed?.error ?? null).toBeNull()
+        expect(streamErrorArtifacts(taskID)).toHaveLength(0)
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        const run = findRun(runID)
+        expect(run?.status).toBe("running")
+        expect(run?.blocking_reason).toBeNull()
+
+        const { AgentTrace } = await import("../../src/trace")
+        const wakeReports = AgentTrace.readTaskEvents(taskID).filter((event) => event.kind === "orchestrator_wake")
+        expect(wakeReports).toHaveLength(1)
+        const report = wakeReports[0]?.payload?.report as { summary?: string; detail?: string } | undefined
+        expect(report?.summary).toContain("finish=stop")
+        expect(report?.detail).toContain("Wake tools: build(decision).")
+      },
+    })
+  }, 30_000)
 
   test("no-decision self-wake re-enters through the real task queue", async () => {
     installControlModel()

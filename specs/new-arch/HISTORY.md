@@ -18,6 +18,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | --- | --- |
 | [2026-06-21-frontend-research-context-digest.md](2026-06-21-frontend-research-context-digest.md) | Frontend Research Context Digest |
 | [2026-06-21-operator-message-live-goal-abort-audit.md](2026-06-21-operator-message-live-goal-abort-audit.md) | Operator Message Live Goal Abort Audit |
+| [2026-06-21-orchestrator-tool-only-trace-summary.md](2026-06-21-orchestrator-tool-only-trace-summary.md) | Orchestrator Tool-Only Trace Summary Repair |
 | [2026-06-21-world-economy-stuck-adversarial-goal-review.md](2026-06-21-world-economy-stuck-adversarial-goal-review.md) | World Economy Stuck Adversarial Goal Review |
 
 ## 2026-06-20
