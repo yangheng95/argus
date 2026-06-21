@@ -1635,10 +1635,13 @@ describe("orchestrator tools", () => {
           }
         }
 
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const result = await tools.build.execute(
@@ -1723,10 +1726,13 @@ describe("orchestrator tools", () => {
       directory: tmp.path,
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "contract audit drift predispatch" })
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         await expect(
@@ -2582,10 +2588,13 @@ describe("orchestrator tools", () => {
           })
         }
 
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const first = await tools.integrity.execute(
@@ -2633,6 +2642,16 @@ describe("orchestrator tools", () => {
         )
         expect(attempts).toHaveLength(1)
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+        const statuses = Database.use((db) =>
+          db
+            .select({ payload: ProtocolEventTable.payload })
+            .from(ProtocolEventTable)
+            .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+            .all()
+            .filter((event) => event.payload?.stepID === "integrity")
+            .map((event) => String(event.payload?.status ?? "")),
+        )
+        expect(statuses).toEqual(["running", "failed", "running", "failed"])
       },
     })
   })
