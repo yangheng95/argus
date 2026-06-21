@@ -27,7 +27,7 @@ import { renderUserRequestSection } from "@/intent/request-prompt"
 import type { VisualSpec } from "@/frontend-design/types"
 import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
 import {
-  allResearchEvidenceIDsForTask,
+  allResearchEvidenceRefsForTask,
   renderFrontendResearchBriefPromptSection,
   renderResearchBriefPromptSection,
 } from "@/research/prompt-section"
@@ -95,7 +95,7 @@ export namespace RequirementsAgent {
     })
     const outputToolKit = createRequirementsOutputTools({
       decisionLog: input.decisionLog,
-      allowedResearchEvidenceIDs: allResearchEvidenceIDsForTask({
+      allowedResearchEvidenceRefs: allResearchEvidenceRefsForTask({
         taskID: input.taskID,
         request: input.request,
       }),

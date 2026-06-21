@@ -45,7 +45,7 @@ export interface RegisteredDecision {
 export interface RequirementsOutputToolOptions {
   decisionLog?: DecisionLog
   decisionPhase?: string
-  allowedResearchEvidenceIDs?: string[]
+  allowedResearchEvidenceRefs?: string[]
 }
 
 const REQUIRED_DECISION_KEYS = [
@@ -85,7 +85,7 @@ export const RequirementRegistrationSchema = z.object({
     .array(z.string().min(1))
     .default([])
     .describe(
-      "Research evidence IDs that support this requirement. Empty when the requirement does not depend on research facts.",
+      "Source-qualified research evidence refs that support this requirement, for example deep_research:ev_1 or frontend_research:ev_1. Empty when the requirement does not depend on research facts.",
     ),
 })
 
@@ -126,8 +126,8 @@ export function buildRequirementsReport(collector: RequirementsCollector) {
 
 export function createRequirementsOutputTools(options: RequirementsOutputToolOptions = {}) {
   let collector = emptyCollector()
-  const allowedEvidenceIDs =
-    options.allowedResearchEvidenceIDs !== undefined ? new Set(options.allowedResearchEvidenceIDs) : undefined
+  const allowedEvidenceRefs =
+    options.allowedResearchEvidenceRefs !== undefined ? new Set(options.allowedResearchEvidenceRefs) : undefined
 
   const tools = {
     register_requirement: tool({
@@ -138,12 +138,12 @@ export function createRequirementsOutputTools(options: RequirementsOutputToolOpt
         if (!/^REQ-\d+$/.test(id)) return `Error: id must be REQ-N format (got "${id}")`
         if (collector.requirements.some((r) => r.id === id)) return `Error: ${id} already registered`
         if (evidence_refs.length > 0) {
-          if (!allowedEvidenceIDs || allowedEvidenceIDs.size === 0) {
+          if (!allowedEvidenceRefs || allowedEvidenceRefs.size === 0) {
             return "Error: evidence_refs were provided but there is no active non-stale research brief for this task."
           }
-          const unknown = evidence_refs.filter((ref) => !allowedEvidenceIDs.has(ref))
+          const unknown = evidence_refs.filter((ref) => !allowedEvidenceRefs.has(ref))
           if (unknown.length > 0) {
-            return `Error: evidence_refs contain unknown research evidence id(s): ${[...new Set(unknown)].join(", ")}`
+            return `Error: evidence_refs contain unknown research evidence ref(s): ${[...new Set(unknown)].join(", ")}`
           }
         }
         collector.requirements.push({ id, type, description, acceptance, non_goals, evidence_refs })
