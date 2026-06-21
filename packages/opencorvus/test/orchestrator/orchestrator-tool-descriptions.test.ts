@@ -124,6 +124,19 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         .success,
     ).toBe(false)
     expect(tools.frontend_design.inputSchema!.safeParse({ urls: ["https://example.com"] }).success).toBe(false)
+    for (const freshScope of [
+      { urls: ["https://example.com/new"] },
+      { figma_url: "https://www.figma.com/design/example" },
+      { materials: ["design.md"] },
+    ]) {
+      expect(
+        tools.frontend_design.inputSchema!.safeParse({
+          reason: "continue prior frontend design",
+          continuation_artifact_id: "art_frontend_design_continue",
+          ...freshScope,
+        }).success,
+      ).toBe(false)
+    }
 
     expect(Object.keys(tools.frontend_research.inputSchema!.shape)).toEqual([
       "reason",
@@ -137,6 +150,12 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         source_urls: ["https://example.com"],
       }).success,
     ).toBe(true)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "ambiguous multi-page frontend research",
+        source_urls: ["https://example.com/a", "https://example.com/b"],
+      }).success,
+    ).toBe(false)
     expect(
       tools.frontend_research.inputSchema!.safeParse({
         reason: "continue prior frontend research",
