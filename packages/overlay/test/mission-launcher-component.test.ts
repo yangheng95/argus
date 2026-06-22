@@ -253,6 +253,22 @@ test("Mission activity does not implicitly reopen the newest Mission session whi
   expect(MAIN_TSX).toContain('void selectTask("")')
 })
 
+test("New Task launcher clears stale conversation state and owns Tasks focus", () => {
+  const start = MAIN_TSX.indexOf("function openTaskLauncher")
+  const end = MAIN_TSX.indexOf("function openMissionLauncher", start)
+  const block = MAIN_TSX.slice(start, end)
+  expect(start).toBeGreaterThanOrEqual(0)
+  expect(block).toContain("abortCodingAssistantActivation()")
+  expect(block).toContain("setMissionLauncherActive(false)")
+  expect(block).toContain("setAssistantLauncherActive(false)")
+  expect(block).toContain('resetCenterWorkbenchToFocusedPanel("tasks")')
+  expect(block).toContain('setSelectedLeftActivity("tasks")')
+  expect(block).toContain('setSelectedLeftPanelActivity("tasks")')
+  expect(block).toContain('void selectTask("")')
+  expect(MAIN_TSX).toContain('document.getElementById("btnCreateTask")?.addEventListener("click"')
+  expect(MAIN_TSX).toContain("openTaskLauncher()")
+})
+
 test("Mission task projection selection explicitly rebinds the left toolbar and center panel to Tasks", () => {
   const start = MAIN_TSX.indexOf("function selectMissionTask")
   const end = MAIN_TSX.indexOf("function openMissionLauncher", start)

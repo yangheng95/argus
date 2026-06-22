@@ -14,7 +14,7 @@ import { isSelectedTaskSSEConnected, startSSE, stopSSE } from "./sse"
 import { showAppDialog } from "./app-dialog"
 import { initGitCurrent } from "../utils/git"
 import { t } from "../utils/i18n"
-import { clearMessages, setSelectedTaskID, abortChatRequest, setChatAttachments } from "../store/messages"
+import { clearMessages, setSelectedTaskID, abortChatRequest, setChatAttachments, messageStore } from "../store/messages"
 import {
   loadTasks,
   loadBoard,
@@ -42,6 +42,7 @@ import { ingestPersistedConversationMessage, resetWriter } from "./tree-writer"
 import { cancelConversationReplay, conversationSourceDirectory, hydrateTaskConversation } from "./conversation"
 import { resetSelectedLiveCursor } from "./selected-stream-cursor"
 import { ackTaskNotificationIfPresent } from "./notify"
+import { cardTreeStore } from "../store/card-tree"
 
 // ── Types ──
 
@@ -197,6 +198,20 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError"
 }
 
+function hasConversationPanelState(): boolean {
+  return (
+    !!messageStore.selectedTaskID ||
+    messageStore.messages.length > 0 ||
+    Object.keys(messageStore.messagesBySession).length > 0 ||
+    !!messageStore.chatRequest ||
+    messageStore.chatAttachments.length > 0 ||
+    cardTreeStore.order.length > 0 ||
+    Object.keys(cardTreeStore.cards).length > 0 ||
+    cardTreeStore.screenshotItems.length > 0 ||
+    cardTreeStore.rewindCursor !== null
+  )
+}
+
 export async function selectTask(taskID: string, options: SelectTaskOptions = {}): Promise<void> {
   const nextTaskID = taskID || ""
   const explicitDirectory = options.directory?.trim() ?? ""
@@ -225,7 +240,13 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     }
     return
   }
-  if (!nextTaskID && !boardStore.selectedSource && !boardStore.board && !boardStore.taskSwitching) {
+  if (
+    !nextTaskID &&
+    !boardStore.selectedSource &&
+    !boardStore.board &&
+    !boardStore.taskSwitching &&
+    !hasConversationPanelState()
+  ) {
     return
   }
 

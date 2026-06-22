@@ -491,6 +491,19 @@ function selectMissionTask(taskID: string, directory?: string): void {
   void selectTask(taskID, { directory })
 }
 
+function openTaskLauncher(): void {
+  abortCodingAssistantActivation()
+  setMissionLauncherActive(false)
+  setAssistantLauncherActive(false)
+  resetCenterWorkbenchToFocusedPanel("tasks")
+  setSelectedLeftActivity("tasks")
+  setSelectedLeftPanelActivity("tasks")
+  void selectTask("")
+  queueMicrotask(() => {
+    document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
+  })
+}
+
 function openMissionLauncher(): void {
   abortCodingAssistantActivation()
   setAssistantLauncherActive(false)
@@ -1538,13 +1551,7 @@ function onDocumentReady(callback: () => void): void {
 function bindSidebarStaticControls(): void {
   // ── Sidebar buttons ──
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
-    // Deselect current task and focus the composer — the user types their
-    // request directly in the ChatComposer, no modal dialog needed.
-    setMissionLauncherActive(false)
-    resetCenterWorkbenchToFocusedPanel("tasks")
-    void selectTask("")
-    const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
-    textarea?.focus()
+    openTaskLauncher()
   })
   document.getElementById("btnCreateMission")?.addEventListener("click", () => {
     openMissionLauncher()

@@ -94,7 +94,7 @@ describe("initial workspace restore directory sync", () => {
   test("retargets the API client before selecting a restored cross-project task", async () => {
     await expect(restoreInitialWorkspace()).resolves.toBe(true)
 
-    expect(boardStore.selectedSource).toEqual({ kind: "task", id: "tsk_saved" })
+    expect(boardStore.selectedSource).toEqual({ kind: "task", id: "tsk_saved", directory: "D:/projects/new" })
     expect(new URL(apiUrl("agent")).searchParams.get("directory")).toBe("D:/projects/new")
   })
 
