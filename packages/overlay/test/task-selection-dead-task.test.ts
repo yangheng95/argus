@@ -32,6 +32,9 @@ const { __setHostTransportForTest, HOST_CAPABILITIES } = await import("../src/se
 const { setSettingsStore } = await import("../src/store/settings")
 const { configure } = await import("../src/services/api")
 const { taskOwningDirectory } = await import("../src/services/task-directory")
+const { setMessages, setSelectedTaskID, messageStore } = await import("../src/store/messages")
+const { cardTreeStore, setCardTreeStore } = await import("../src/store/card-tree")
+const { resetWriter } = await import("../src/services/tree-writer")
 
 beforeEach(() => {
   hydrateCalls.length = 0
@@ -43,6 +46,9 @@ beforeEach(() => {
   setBoardStore("selectedSource", null)
   setBoardStore("taskSwitching", false)
   setBoardStore("selectEpoch", 0)
+  setMessages([])
+  setSelectedTaskID("")
+  resetWriter()
   setSettingsStore({
     directory: DEFAULT_TEST_DIRECTORY,
     savedDirectory: DEFAULT_TEST_DIRECTORY,
@@ -174,6 +180,36 @@ describe("task selection initial hydrate", () => {
     expect(boardStore.selectedSource).toBeNull()
     expect(boardStore.board).toBeNull()
     expect(boardStore.taskSwitching).toBe(false)
+    expect(stoppedStreams).toBe(1)
+  })
+
+  test("deselect clears stale message panel projections even when no source is selected", async () => {
+    setMessages([
+      {
+        info: { id: "msg_stale", sessionID: "ses_stale", role: "assistant", time: { created: 1 } },
+        parts: [{ id: "part_stale", type: "text", text: "old response" }],
+      },
+    ])
+    setCardTreeStore("order", ["card_stale"])
+    setCardTreeStore("cards", "card_stale", {
+      id: "card_stale",
+      title: "Old response",
+      parts: [{ id: "part_stale", type: "text", text: "old response" }],
+      childIDs: [],
+    } as any)
+    setBoardStore({
+      selectedSource: null,
+      board: null,
+      taskSwitching: false,
+    })
+
+    await selectTask("")
+
+    expect(messageStore.messages).toEqual([])
+    expect(messageStore.messagesBySession).toEqual({})
+    expect(cardTreeStore.order).toEqual([])
+    expect(Object.keys(cardTreeStore.cards)).toEqual([])
+    expect(boardStore.selectEpoch).toBe(1)
     expect(stoppedStreams).toBe(1)
   })
 
