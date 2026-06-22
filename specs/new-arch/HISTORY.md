@@ -12,6 +12,12 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [right-sidebar-opencode-tui-upgrade-2026-06-04.md](right-sidebar-opencode-tui-upgrade-2026-06-04.md)                                   | Right Sidebar OpenCode TUI Upgrade                  |
 | [spec-vscode-extension.md](spec-vscode-extension.md)                                                                                   | spec: opencorvus VSCode 扩展                        |
 
+## 2026-06-23
+
+| File | Title |
+| --- | --- |
+| [2026-06-23-screenshot-thumbnail-load-queue-cancellation.md](2026-06-23-screenshot-thumbnail-load-queue-cancellation.md) | Screenshot Thumbnail Load Queue Cancellation |
+
 ## 2026-06-22
 
 | File | Title |

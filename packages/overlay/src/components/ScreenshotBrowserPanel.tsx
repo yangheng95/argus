@@ -24,7 +24,11 @@ const SCREENSHOT_BROWSER_GRID_GAP = 8
 const SCREENSHOT_BROWSER_LAZY_ROOT_MARGIN = "96px"
 const SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 1
 
-const pendingThumbnailLoads: Array<() => void> = []
+interface ScreenshotThumbnailLoadJob {
+  readonly load: () => void
+}
+
+const pendingThumbnailLoads: ScreenshotThumbnailLoadJob[] = []
 let thumbnailLoadFrame = 0
 
 function scheduleThumbnailLoadPump(): void {
@@ -32,19 +36,22 @@ function scheduleThumbnailLoadPump(): void {
   thumbnailLoadFrame = requestAnimationFrame(() => {
     thumbnailLoadFrame = 0
     const batch = pendingThumbnailLoads.splice(0, SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME)
-    for (const load of batch) load()
+    for (const job of batch) job.load()
     if (pendingThumbnailLoads.length > 0) scheduleThumbnailLoadPump()
   })
 }
 
 function enqueueScreenshotThumbnailLoad(load: () => void): () => void {
-  let cancelled = false
-  pendingThumbnailLoads.push(() => {
-    if (!cancelled) load()
-  })
+  const job: ScreenshotThumbnailLoadJob = { load }
+  pendingThumbnailLoads.push(job)
   scheduleThumbnailLoadPump()
   return () => {
-    cancelled = true
+    const index = pendingThumbnailLoads.indexOf(job)
+    if (index >= 0) pendingThumbnailLoads.splice(index, 1)
+    if (pendingThumbnailLoads.length === 0 && thumbnailLoadFrame) {
+      cancelAnimationFrame(thumbnailLoadFrame)
+      thumbnailLoadFrame = 0
+    }
   }
 }
 

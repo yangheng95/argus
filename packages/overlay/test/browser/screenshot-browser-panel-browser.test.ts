@@ -563,6 +563,49 @@ test(
         `scrolling should not materialize the full screenshot history: ${attachmentRequests.length - requestsBeforeOpen}`,
       )
 
+      const requestsBeforeCancellationStress = attachmentRequests.length
+      await page.$eval(".screenshot-browser-groups[data-virtualized=\"true\"]", (node) => {
+        const scroll = node as HTMLElement
+        const maxTop = Math.max(0, scroll.scrollHeight - scroll.clientHeight)
+        for (const ratio of [0, 0.15, 0.35, 0.55, 0.8, 1, 0.45, 0]) {
+          scroll.scrollTop = Math.round(maxTop * ratio)
+        }
+      })
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve())
+          }),
+      )
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      await page.waitForFunction(
+        () => document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open === "false",
+      )
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          }),
+      )
+      const closedAttachmentRequests = attachmentRequests.length - requestsBeforeCancellationStress
+      assert.ok(
+        closedAttachmentRequests < 8,
+        `closing screenshots left too many thumbnail loads active: ${closedAttachmentRequests}`,
+      )
+      const requestsBeforeReopen = attachmentRequests.length
+      const reopenStart = Date.now()
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']")
+      await page.waitForSelector(".screenshot-browser-card")
+      const reopenFirstCardElapsed = Date.now() - reopenStart
+      assert.ok(reopenFirstCardElapsed < 1_500, `screenshot browser reopen first card took ${reopenFirstCardElapsed}ms`)
+      assert.ok(
+        attachmentRequests.length - requestsBeforeReopen < 24,
+        `reopening screenshots materialized too many attachments: ${attachmentRequests.length - requestsBeforeReopen}`,
+      )
+      const reopenScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-reopen.png")
+      writeFileSync(reopenScreenshotPath, await page.screenshot({ fullPage: false }))
+
       await page.setViewport({ width: 960, height: 1000 })
       await new Promise((resolve) => setTimeout(resolve, 100))
 
