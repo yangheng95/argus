@@ -361,9 +361,7 @@ export function TitlebarMenubar() {
   function resetLayout() {
     setSettingsStore({
       sidebarWidth: null,
-      sectionsWidth: null,
       sidebarCollapsed: false,
-      rightPanelCollapsed: false,
     })
     saveSettings()
     closeMenu()

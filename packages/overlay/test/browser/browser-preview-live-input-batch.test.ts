@@ -386,7 +386,6 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
       localStorage.setItem("oc_locale", "en-US")
       localStorage.setItem("oc_directory", "D:/overlay/workspace/live-input")
       localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.setItem("oc_right_panel_collapsed", "false")
       localStorage.setItem("oc_workspace_task", "tsk_browserpreview_live_input_batch")
       localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/live-input")
       const settings = {

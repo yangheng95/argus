@@ -132,7 +132,6 @@ describe("theme-architecture Step 0 — structural tokens are not in theme block
     "--ui-panel-padding-y",
     "--ui-rail-width",
     "--ui-rail-min-width",
-    "--ui-sections-width",
     "--ui-sidebar-width",
     "--ui-chat-priority-width",
     "--ui-chat-min-width",

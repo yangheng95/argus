@@ -73,6 +73,33 @@ async function leftPaneState(page: OverlayPage) {
 
 type LeftPaneState = Awaited<ReturnType<typeof leftPaneState>>
 
+async function leftPaneMaxContract(page: OverlayPage) {
+  return await page.$eval("#leftPaneResizer", (node) => {
+    const separator = node as HTMLElement
+    const panelBody = document.querySelector<HTMLElement>("#panelBody")!
+    const tokenPx = (name: string) => {
+      const probe = document.createElement("div")
+      probe.style.position = "absolute"
+      probe.style.visibility = "hidden"
+      probe.style.pointerEvents = "none"
+      probe.style.width = `var(${name})`
+      document.body.appendChild(probe)
+      const width = probe.getBoundingClientRect().width
+      probe.remove()
+      return width
+    }
+    const max = separator.getAttribute("aria-valuemax")
+    const separatorWidth = separator.getBoundingClientRect().width
+    const panelWidth = panelBody.getBoundingClientRect().width
+    const chatMin = tokenPx("--ui-chat-min-width")
+    const railMin = tokenPx("--ui-rail-min-width")
+    return {
+      maxValue: max === null ? null : Number(max),
+      expectedMaxWithoutRetiredRightPane: Math.round(Math.max(railMin, panelWidth - separatorWidth - chatMin)),
+    }
+  })
+}
+
 type PaneDragProbeEventType = "pane-geometry-read" | "pane-style-write" | "pane-aria-write"
 
 interface PaneDragProbeEvent {
@@ -192,7 +219,7 @@ async function installPaneDragProbe(page: OverlayPage) {
 
     const setPropertyOriginal = CSSStyleDeclaration.prototype.setProperty
     CSSStyleDeclaration.prototype.setProperty = function (propertyName: string, value?: string | null, priority?: string) {
-      if (propertyName === "--ui-scale" || propertyName === "--ui-sidebar-width" || propertyName === "--ui-sections-width") {
+      if (propertyName === "--ui-scale" || propertyName === "--ui-sidebar-width") {
         probe.record("pane-style-write", probe.styleWritesByFrame, { name: propertyName })
       }
       return setPropertyOriginal.call(this, propertyName, value, priority)
@@ -343,6 +370,8 @@ test(
         localStorage.setItem("oc_theme", "light")
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_right_panel_collapsed", "true")
+        localStorage.setItem("oc_sections_width", "9999")
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
         ;(window as any).__TAURI__ = {
@@ -378,6 +407,7 @@ test(
       }, server.origin)
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
       await page.waitForSelector("#leftPaneResizer", { visible: true })
+      const initialMaxContract = await leftPaneMaxContract(page)
       await installPaneDragProbe(page)
 
       const initial = await leftPaneState(page)
@@ -389,6 +419,13 @@ test(
       assert.equal(initial.controls, "sidebar workspaceMain")
       assert.equal(initial.tabIndex, 0)
       assert.ok(initial.minValue! < initial.maxValue!)
+      assert.ok(
+        Math.abs(initial.maxValue! - initialMaxContract.expectedMaxWithoutRetiredRightPane) <= 2,
+        `left pane max should not reserve retired right pane width: ${JSON.stringify({
+          initial,
+          initialMaxContract,
+        })}`,
+      )
       assert.ok(initial.nowValue! >= initial.minValue!)
       assert.ok(initial.nowValue! <= initial.maxValue!)
 

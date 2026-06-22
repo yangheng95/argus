@@ -837,7 +837,6 @@ test(
         localStorage.setItem("oc_locale", "en-US")
         localStorage.setItem("oc_directory", "D:/overlay/workspace/preview-stress")
         localStorage.setItem("oc_server_url", serverUrl)
-        localStorage.setItem("oc_right_panel_collapsed", "false")
         localStorage.setItem("oc_workspace_task", "tsk_browserpreview_visual_stress")
         localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/preview-stress")
         const settings = {

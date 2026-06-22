@@ -29,35 +29,41 @@ afterEach(() => {
   applySettings({})
 })
 
-test("right panel defaults expanded while preserving explicit collapsed settings", () => {
+test("retired right pane settings are not part of the overlay settings store", () => {
   applySettings({})
-  expect(settingsStore.rightPanelCollapsed).toBe(false)
+  expect("rightPanelCollapsed" in settingsStore).toBe(false)
+  expect("sectionsWidth" in settingsStore).toBe(false)
 
-  applySettings({ rightPanelCollapsed: true })
-  expect(settingsStore.rightPanelCollapsed).toBe(true)
+  applySettings({ rightPanelCollapsed: true, sectionsWidth: 640 } as any)
+  expect("rightPanelCollapsed" in settingsStore).toBe(false)
+  expect("sectionsWidth" in settingsStore).toBe(false)
 })
 
-test("browser settings leave missing right panel collapse value to DEFAULT_SETTINGS", () => {
+test("browser settings ignore stale retired right pane localStorage keys", () => {
   const localStorage = new MemoryStorage()
   ;(globalThis as { window?: unknown }).window = { localStorage }
 
-  const missing = loadBrowserOverlaySettings()
-  expect(missing.rightPanelCollapsed).toBeUndefined()
-  applySettings(missing)
-  expect(settingsStore.rightPanelCollapsed).toBe(false)
-
   localStorage.setItem("oc_right_panel_collapsed", "true")
-  const collapsed = loadBrowserOverlaySettings()
-  expect(collapsed.rightPanelCollapsed).toBe(true)
-  applySettings(collapsed)
-  expect(settingsStore.rightPanelCollapsed).toBe(true)
+  localStorage.setItem("oc_sections_width", "640")
+
+  const loaded = loadBrowserOverlaySettings()
+  expect("rightPanelCollapsed" in loaded).toBe(false)
+  expect("sectionsWidth" in loaded).toBe(false)
+
+  applySettings(loaded)
+  expect("rightPanelCollapsed" in settingsStore).toBe(false)
+  expect("sectionsWidth" in settingsStore).toBe(false)
 })
 
-test("right panel default width tokens are wider than the left rail", () => {
-  const css = readFileSync(join(import.meta.dir, "../src/styles/tokens/design-language.css"), "utf8")
-  expect(css).toContain(
-    "--ui-sections-width: clamp(calc(380px * var(--ui-scale)), 30vw, calc(560px * var(--ui-scale)))",
-  )
-  expect(css).not.toContain("--ui-tui-sections-width")
-  expect(css).not.toContain("--ui-tui-chat-min-width")
+test("retired right pane storage keys stay absent from settings sources", () => {
+  const settings = readFileSync(join(import.meta.dir, "../src/store/settings.ts"), "utf8")
+  const storage = readFileSync(join(import.meta.dir, "../src/services/overlay-settings-storage.ts"), "utf8")
+  const pane = readFileSync(join(import.meta.dir, "../src/services/pane.ts"), "utf8")
+
+  expect(settings).not.toContain("rightPanelCollapsed")
+  expect(settings).not.toContain("sectionsWidth")
+  expect(storage).not.toContain("oc_right_panel_collapsed")
+  expect(storage).not.toContain("oc_sections_width")
+  expect(pane).not.toContain("rightHandleId")
+  expect(pane).not.toContain("sectionsWidth")
 })

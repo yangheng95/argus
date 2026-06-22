@@ -69,7 +69,6 @@ test("closed titlebar menus do not block inspector interactions", async () => {
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
-      localStorage.setItem("oc_right_panel_collapsed", "false")
     }, server.port)
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')

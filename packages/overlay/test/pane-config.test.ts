@@ -12,10 +12,7 @@ test("PANEL_PANE_CONFIG targets the default panel's elements and variables", () 
     bodyId: "panelBody",
     leftHandleId: "leftPaneResizer",
     leftControls: ["sidebar", "workspaceMain"],
-    rightHandleId: null,
-    rightControls: null,
     sidebarVar: "--ui-sidebar-width",
-    sectionsVar: "--ui-sections-width",
   } satisfies PaneConfig)
 })
 
@@ -36,10 +33,8 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(pane).toContain('import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"')
   expect(pane).toContain('import { layoutTokenPx } from "../utils/layout-tokens"')
   expect(pane).toContain('layoutTokenPx("--ui-rail-width")')
-  expect(pane).toContain('layoutTokenPx("--ui-sections-width")')
   expect(pane).toContain('layoutTokenPx("--ui-rail-min-width")')
   expect(pane).toContain('layoutTokenPx("--ui-chat-min-width")')
-  expect(pane).toContain('layoutTokenPx("--ui-chat-priority-width")')
   expect(pane).not.toContain("120 * scale")
   expect(pane).not.toContain("300 * scale")
   expect(pane).toContain("function flushPendingPaneResize")
@@ -47,9 +42,9 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(pane).toContain("paneDrag.resizeOnFrame.schedule()")
   expect(pane).toContain("paneDrag.resizeOnFrame.cancel()")
   expect(pane).not.toContain("resizePane(paneDrag.side, event.clientX")
-  expect(pane).toContain('side: "left" | "right"')
-  expect(pane).toContain('side === "left" ? sidebarWidth : null')
-  expect(pane).toContain('side === "right" ? sectionsWidth : null')
+  expect(pane).not.toContain('side: "left" | "right"')
+  expect(pane).not.toContain("sectionsWidth")
+  expect(pane).not.toContain("rightPanelCollapsed")
   expect(pane).toContain("aria-valuemin")
   expect(pane).toContain("aria-valuemax")
   expect(pane).toContain("aria-valuenow")
@@ -84,7 +79,7 @@ test("pane layout writes and handle semantics run in separate frame phases", () 
   expect(pane).toContain("pendingPaneHandleSemantics.set(config, { ...state })")
   expect(pane).toContain("renderPaneHandleSemanticsOnFrame.schedule()")
   expect(renderPaneLayoutFunction).toContain("setPaneWidthProperty(config.sidebarVar, widths.sidebar)")
-  expect(renderPaneLayoutFunction).toContain("setPaneWidthProperty(config.sectionsVar, widths.sections)")
+  expect(renderPaneLayoutFunction).not.toContain("setPaneWidthProperty(config.sectionsVar")
   expect(renderPaneLayoutFunction).toContain("schedulePaneHandleSemantics(state, config)")
   expect(renderPaneLayoutFunction).not.toContain("renderPaneHandleSemantics(state, config)")
   expect(main).toContain("const renderPaneLayoutOnFrame = createAnimationFrameScheduler(flushPaneLayout)")
@@ -109,24 +104,26 @@ test("Mission no longer owns an independent pane layout or persisted widths", ()
   expect(settings).not.toContain("missionChannelsWidth")
 })
 
-test("right pane drag measures from the whole pane body, not the center column edge", () => {
+test("default pane layout has no retired right pane width source", () => {
   const pane = readSrc("services/pane.ts")
   expect(pane).toContain("const panelBody = document.getElementById(config.bodyId)")
   expect(pane).toContain("function paneResizeBounds")
-  expect(pane).toContain("bounds.bodyRect.right - clientX")
-  expect(pane).toContain("export function defaultSectionsWidth")
-  expect(pane).toContain("state.sectionsWidth ?? defaultSectionsWidth(config)")
+  expect(pane).toContain("clientX - bounds.bodyRect.left")
+  expect(pane).not.toContain("bounds.bodyRect.right - clientX")
+  expect(pane).not.toContain("export function defaultSectionsWidth")
+  expect(pane).not.toContain("state.sectionsWidth")
   expect(pane).not.toContain("document.getElementById(config.centerId)")
 })
 
-test("default settings keep the right inspector expanded", () => {
+test("settings no longer persist retired right pane state", () => {
   const settings = readSrc("store/settings.ts")
   const storage = readSrc("services/overlay-settings-storage.ts")
   expect(settings).toContain('typeof input?.sidebarCollapsed === "boolean"')
-  expect(settings).toContain("rightPanelCollapsed: false")
-  expect(settings).toContain('typeof input?.rightPanelCollapsed === "boolean"')
+  expect(settings).not.toContain("rightPanelCollapsed")
+  expect(settings).not.toContain("sectionsWidth")
   expect(storage).toContain('sidebarCollapsed: read("oc_sidebar_collapsed") === "true"')
-  expect(storage).toContain('rightPanelCollapsedRaw === null ? undefined : rightPanelCollapsedRaw === "true"')
+  expect(storage).not.toContain("oc_right_panel_collapsed")
+  expect(storage).not.toContain("oc_sections_width")
 })
 
 test("center workbench no longer keeps an outer width source", () => {

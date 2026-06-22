@@ -163,7 +163,6 @@ test(
           ]),
         )
         localStorage.setItem("oc_server_url", serverUrl)
-        localStorage.setItem("oc_right_panel_collapsed", "false")
       }, server.origin)
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector("#solidRightActivityToolbar")

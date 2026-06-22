@@ -220,7 +220,6 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
       localStorage.setItem("oc_directory", seed.projectRoot)
       localStorage.setItem("oc_workspace_directory", seed.projectRoot)
       localStorage.setItem("oc_workspace_task", seed.taskID)
-      localStorage.setItem("oc_right_panel_collapsed", "false")
     }, { serverUrl: server.origin, taskID, projectRoot })
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })

@@ -444,7 +444,6 @@ test(
         localStorage.setItem("oc_locale", "en-US")
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_server_url", serverUrl)
-        localStorage.setItem("oc_right_panel_collapsed", "false")
         const settings = {
           serverUrl,
           autoServer: false,
@@ -870,7 +869,6 @@ test(
         localStorage.setItem("oc_locale", "en-US")
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_server_url", serverUrl)
-        localStorage.setItem("oc_right_panel_collapsed", "false")
         const settings = {
           serverUrl,
           autoServer: false,

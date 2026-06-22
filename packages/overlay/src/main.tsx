@@ -1788,7 +1788,6 @@ disposers.push(
 
     createEffect(() => {
       const sidebarCollapsed = false
-      const rightPanelCollapsed = settingsStore.rightPanelCollapsed
 
       const sidebar = document.getElementById("sidebar")
       const sections = document.getElementById("sections")
@@ -1805,9 +1804,7 @@ disposers.push(
       schedulePaneLayout(
         {
           sidebarCollapsed,
-          rightPanelCollapsed,
           sidebarWidth: settingsStore.sidebarWidth,
-          sectionsWidth: settingsStore.sectionsWidth,
         }
       )
     })
@@ -1828,14 +1825,11 @@ disposers.push(
 const paneCallbacks = {
   getState: () => ({
     sidebarCollapsed: false,
-    rightPanelCollapsed: settingsStore.rightPanelCollapsed,
     sidebarWidth: settingsStore.sidebarWidth,
-    sectionsWidth: settingsStore.sectionsWidth,
   }),
-  onWidthsChanged: (sidebarWidth: number | null, sectionsWidth: number | null) => {
+  onWidthsChanged: (sidebarWidth: number | null) => {
     setSettingsStore({
       ...(sidebarWidth != null ? { sidebarWidth } : {}),
-      ...(sectionsWidth != null ? { sectionsWidth } : {}),
     })
     saveSettings()
   },

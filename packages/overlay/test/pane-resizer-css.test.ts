@@ -8,15 +8,15 @@ function readSrc(rel: string): string {
   return readFileSync(join(ROOT, "src", rel), "utf8")
 }
 
-test("right pane resizer CSS stays retired with the null right handle config", () => {
+test("right pane resizer CSS stays retired with no right handle config", () => {
   const html = readSrc("index.html")
   const pane = readSrc("services/pane.ts")
   const workspaceCss = readSrc("styles/surfaces/workspace.css")
 
   expect(html).toContain('id="leftPaneResizer"')
   expect(html).not.toContain('id="rightPaneResizer"')
-  expect(pane).toContain("rightHandleId: null")
-  expect(pane).toContain("rightControls: null")
+  expect(pane).not.toContain("rightHandleId")
+  expect(pane).not.toContain("rightControls")
   expect(workspaceCss).toContain(".pane-resizer-left")
   expect(workspaceCss).not.toContain(".pane-resizer-right")
 })
