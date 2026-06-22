@@ -195,7 +195,6 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
     if (!element) return
     const measure = () => setListWidth(element.clientWidth)
     const measureOnFrame = createAnimationFrameScheduler(measure)
-    measure()
     const observer = new ResizeObserver(measureOnFrame.schedule)
     observer.observe(element)
     measureOnFrame.schedule()

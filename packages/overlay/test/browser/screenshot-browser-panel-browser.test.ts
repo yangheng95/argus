@@ -222,31 +222,65 @@ test(
         const original = Element.prototype.scrollIntoView
         const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window)
         const originalCancelAnimationFrame = window.cancelAnimationFrame.bind(window)
-        const queuedFrames = new Map<number, FrameRequestCallback>()
-        let nextFrameID = 1
-        ;(window as any).__screenshotBrowserScrollIntoViewCalls = 0
-        ;(window as any).__screenshotBrowserQueuedFrames = () => queuedFrames.size
-        ;(window as any).__screenshotBrowserFlushFrames = () => {
-          const callbacks = Array.from(queuedFrames.values())
-          queuedFrames.clear()
+        const clientWidthOwner =
+          Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth")?.get
+            ? HTMLElement.prototype
+            : Element.prototype
+        const clientWidthDescriptor = Object.getOwnPropertyDescriptor(clientWidthOwner, "clientWidth")
+        if (!clientWidthDescriptor?.get) throw new Error("clientWidth getter was not found")
+        let frameDepth = 0
+        let sequence = 0
+        ;(window as any).__screenshotBrowserLayoutEvents = []
+        ;(window as any).__screenshotBrowserRestoreInstrumentation = () => {
+          Object.defineProperty(clientWidthOwner, "clientWidth", clientWidthDescriptor)
           window.requestAnimationFrame = originalRequestAnimationFrame
           window.cancelAnimationFrame = originalCancelAnimationFrame
-          for (const callback of callbacks) callback(performance.now())
-          return callbacks.length
+          Element.prototype.scrollIntoView = original
         }
+        const recordLayoutEvent = (event: Record<string, unknown>) => {
+          ;(window as any).__screenshotBrowserLayoutEvents.push({
+            inRaf: frameDepth > 0,
+            sequence: ++sequence,
+            ...event,
+          })
+        }
+        Object.defineProperty(clientWidthOwner, "clientWidth", {
+          configurable: true,
+          get: function getClientWidthInstrumented(this: Element) {
+            if (this instanceof HTMLElement && this.classList.contains("screenshot-browser-groups")) {
+              recordLayoutEvent({ type: "screenshot-list-client-width" })
+            }
+            return clientWidthDescriptor.get!.call(this)
+          },
+        })
         window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-          const frameID = nextFrameID++
-          queuedFrames.set(frameID, callback)
-          return frameID
+          return originalRequestAnimationFrame((time) => {
+            frameDepth += 1
+            try {
+              callback(time)
+            } finally {
+              frameDepth -= 1
+            }
+          })
         }) as typeof requestAnimationFrame
-        window.cancelAnimationFrame = ((frameID: number) => {
-          queuedFrames.delete(frameID)
-        }) as typeof cancelAnimationFrame
+        window.cancelAnimationFrame = originalCancelAnimationFrame
         Element.prototype.scrollIntoView = function scrollIntoViewInstrumented(
           this: Element,
           arg?: boolean | ScrollIntoViewOptions,
         ) {
-          ;(window as any).__screenshotBrowserScrollIntoViewCalls += 1
+          if (this instanceof HTMLElement && this.id === "centerWorkbenchScreenshots") {
+            recordLayoutEvent({
+              active: this.dataset.active,
+              grow: this.style.getPropertyValue("--center-workbench-panel-grow"),
+              open: this.dataset.open,
+              selected: this.dataset.selected,
+              separatorControls: document
+                .querySelector<HTMLElement>("#centerWorkbenchSeparatorWorkflow")
+                ?.getAttribute("aria-controls"),
+              type: "screenshots-scroll-into-view",
+              workbenchOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open,
+            })
+          }
           return (original as (this: Element, arg?: boolean | ScrollIntoViewOptions) => void).call(this, arg)
         }
       })
@@ -254,13 +288,35 @@ test(
       const openStart = Date.now()
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']")
-      const scrollsBeforeFrame = await page.evaluate(() => (window as any).__screenshotBrowserScrollIntoViewCalls)
-      assert.equal(scrollsBeforeFrame, 0, `screenshot open called scrollIntoView before RAF: ${scrollsBeforeFrame}`)
-      const queuedFrames = await page.evaluate(() => (window as any).__screenshotBrowserQueuedFrames())
-      assert.ok(queuedFrames > 0, `screenshot open did not schedule RAF reveal: ${queuedFrames}`)
-      await page.evaluate(() => (window as any).__screenshotBrowserFlushFrames())
-      const scrollsAfterFrame = await page.evaluate(() => (window as any).__screenshotBrowserScrollIntoViewCalls)
-      assert.ok(scrollsAfterFrame > 0, `screenshot open did not reveal the panel on RAF: ${scrollsAfterFrame}`)
+      await page.waitForFunction(() =>
+        Array.from((window as any).__screenshotBrowserLayoutEvents ?? []).some(
+          (event: any) => event.type === "screenshots-scroll-into-view",
+        ),
+      )
+      const layoutEvents = await page.evaluate(() => (window as any).__screenshotBrowserLayoutEvents)
+      const synchronousEvents = layoutEvents.filter(
+        (event: any) =>
+          (event.type === "screenshot-list-client-width" || event.type === "screenshots-scroll-into-view") &&
+          !event.inRaf,
+      )
+      assert.deepEqual(synchronousEvents, [], `screenshot open did layout work outside RAF: ${JSON.stringify(layoutEvents)}`)
+      const revealState = layoutEvents.filter((event: any) => event.type === "screenshots-scroll-into-view").at(-1)
+      assert.ok(revealState, `screenshot open did not reveal the panel on RAF: ${JSON.stringify(layoutEvents)}`)
+      assert.equal(typeof revealState.sequence, "number")
+      const { sequence: _sequence, ...revealStateStable } = revealState
+      assert.deepEqual(revealStateStable, {
+        active: "true",
+        grow: "1",
+        inRaf: true,
+        open: "true",
+        selected: "true",
+        separatorControls: "centerWorkbenchWorkflow centerWorkbenchScreenshots",
+        type: "screenshots-scroll-into-view",
+        workbenchOpen: "true",
+      })
+      const widthRead = layoutEvents.find((event: any) => event.type === "screenshot-list-client-width")
+      assert.ok(widthRead?.inRaf, `screenshot open did not measure list width on RAF: ${JSON.stringify(layoutEvents)}`)
+      await page.evaluate(() => (window as any).__screenshotBrowserRestoreInstrumentation())
       await page.waitForSelector(".screenshot-browser-card")
       await page.waitForFunction(() => {
         const img = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")

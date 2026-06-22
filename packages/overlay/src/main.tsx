@@ -391,17 +391,6 @@ function revealPendingCenterWorkbenchPanel(): void {
   getCenterWorkbenchViews()[panel]?.scrollIntoView({ block: "nearest", inline: "nearest" })
 }
 
-const revealCenterWorkbenchPanelOnFrame = createAnimationFrameScheduler(revealPendingCenterWorkbenchPanel)
-disposers.push(() => {
-  revealCenterWorkbenchPanelOnFrame.cancel()
-  pendingCenterWorkbenchRevealPanel = null
-})
-
-function scheduleCenterWorkbenchPanelReveal(panel: CenterWorkbenchPanel): void {
-  pendingCenterWorkbenchRevealPanel = panel
-  revealCenterWorkbenchPanelOnFrame.schedule()
-}
-
 function resetCenterWorkbenchToFocusedPanel(activity: PrimaryLeftActivity): void {
   const panel = leftActivityCenterPanel(activity)
   setWorkspaceOpen(false)
@@ -723,8 +712,21 @@ function renderCenterWorkbenchPanelLayout(): void {
   renderCenterWorkbenchPanelSeparators()
 }
 
-const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayout)
-disposers.push(() => renderCenterWorkbenchPanelLayoutOnFrame.cancel())
+function renderCenterWorkbenchPanelLayoutAndReveal(): void {
+  renderCenterWorkbenchPanelLayout()
+  revealPendingCenterWorkbenchPanel()
+}
+
+const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayoutAndReveal)
+disposers.push(() => {
+  renderCenterWorkbenchPanelLayoutOnFrame.cancel()
+  pendingCenterWorkbenchRevealPanel = null
+})
+
+function scheduleCenterWorkbenchPanelReveal(panel: CenterWorkbenchPanel): void {
+  pendingCenterWorkbenchRevealPanel = panel
+  renderCenterWorkbenchPanelLayoutOnFrame.schedule()
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
