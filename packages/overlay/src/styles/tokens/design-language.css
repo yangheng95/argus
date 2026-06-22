@@ -104,6 +104,8 @@
   --ui-breakpoint-lg: 900px;
   --ui-breakpoint-xl: 1120px;
 
+  --ui-overlay-min-width: 1120px;
+  --ui-overlay-min-height: 720px;
   --oc-header-height: calc(40px * var(--ui-scale, 1));
   --oc-header-padding-x: calc(6px * var(--ui-scale, 1));
   --oc-header-padding-y: 0;
@@ -173,6 +175,7 @@
   --ui-sidebar-width: var(--ui-rail-width);
   --ui-chat-priority-width: calc(640px * var(--ui-scale));
   --ui-chat-min-width: calc(500px * var(--ui-scale));
+  --ui-workbench-panel-min-width: calc(280px * var(--ui-scale));
 
   /* Theme swatch previews: the titlebar theme-picker shows a 12x12 chip
      for each available theme. These previews are metadata about *other*

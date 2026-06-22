@@ -102,6 +102,7 @@ import { taskOwningDirectory } from "./services/task-directory"
 import { taskScopedPath } from "./services/task-path"
 import { createAnimationFrameScheduler } from "./utils/animation-frame"
 import { promptProfileCatalogRequestKey, promptProfileCatalogScope } from "./services/prompt-profile-scope"
+import { layoutTokenPx } from "./utils/layout-tokens"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -249,7 +250,6 @@ type LeftActivity = "tasks" | "mission" | "assistant" | "memory" | "skill" | "mc
 type PrimaryLeftActivity = "tasks" | "mission" | "assistant"
 type PrimaryCenterPanel = "task" | "mission" | "chat"
 
-const CENTER_WORKBENCH_MIN_PANEL_WIDTH = 128
 const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
   "workflow",
   "explorer",
@@ -674,9 +674,8 @@ function centerWorkbenchRightPanel(
 }
 
 function centerWorkbenchPanelMinWidth(totalWidth: number): number {
-  const scale = currentUIScale()
-  const desiredMin = CENTER_WORKBENCH_MIN_PANEL_WIDTH * scale
-  return Math.min(desiredMin, Math.max(80 * scale, (totalWidth - 2) / 2))
+  void totalWidth
+  return layoutTokenPx("--ui-workbench-panel-min-width")
 }
 
 function centerWorkbenchPanelResizeMetrics(

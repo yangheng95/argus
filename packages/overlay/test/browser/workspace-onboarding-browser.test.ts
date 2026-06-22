@@ -126,7 +126,7 @@ test("browser overlay opens a project by submitting an explicit server path", as
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    await page.setViewport({ width: 900, height: 720 })
+    await page.setViewport({ width: 1120, height: 720 })
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_locale", "en-US")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
@@ -207,7 +207,7 @@ test("browser onboarding surfaces project discovery failures instead of renderin
   const browser = await launchBrowser(["--disable-dev-shm-usage"])
   try {
     const page = await browser.newPage()
-    await page.setViewport({ width: 900, height: 720 })
+    await page.setViewport({ width: 1120, height: 720 })
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_locale", "en-US")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
@@ -264,7 +264,7 @@ test("browser onboarding directory rows use Button focus chrome and keep setDire
   try {
     const openOnboardingPage = async () => {
       const page = await browser.newPage()
-      await page.setViewport({ width: 900, height: 760 })
+      await page.setViewport({ width: 1120, height: 760 })
       await page.evaluateOnNewDocument(
         ({ portValue, recentDirectory }) => {
           localStorage.setItem("oc_locale", "en-US")

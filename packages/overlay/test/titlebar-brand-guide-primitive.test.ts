@@ -52,13 +52,12 @@ describe("titlebar brand guide primitive", () => {
   test("compact brand rules follow the base rules so the menu cannot cover the trigger", () => {
     const copyBase = TITLEBAR_CSS.indexOf(".brand-guide-copyblock {")
     const cardBase = TITLEBAR_CSS.indexOf(".brand-guide-card {")
-    const compactCopy = TITLEBAR_CSS.indexOf("@media (max-width: 520px)", copyBase)
     const compactCard = TITLEBAR_CSS.indexOf("@media (max-width: 760px)", cardBase)
     expect(copyBase).toBeGreaterThan(-1)
     expect(cardBase).toBeGreaterThan(-1)
-    expect(compactCopy).toBeGreaterThan(copyBase)
     expect(compactCard).toBeGreaterThan(cardBase)
-    expect(TITLEBAR_CSS.slice(compactCopy)).toMatch(/\.brand-guide-copyblock\s*\{\s*display:\s*none/)
+    expect([...TITLEBAR_CSS.matchAll(/\.brand-guide-copyblock\s*\{/g)]).toHaveLength(2)
+    expect(TITLEBAR_CSS.slice(compactCard)).toMatch(/\.brand-guide-copyblock\s*\{\s*display:\s*none/)
     expect(TITLEBAR_CSS.slice(compactCard)).toMatch(/\.brand-guide-card\s*\{[\s\S]*width:\s*min\(calc\(320px/)
     expect(TITLEBAR_CSS.slice(compactCard)).toMatch(
       /\.brand-guide-card\s*\{[\s\S]*transform:\s*translateY\(var\(--ui-titlebar-height\)\)/,
