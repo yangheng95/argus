@@ -218,10 +218,49 @@ test(
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      await page.evaluate(() => {
+        const original = Element.prototype.scrollIntoView
+        const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window)
+        const originalCancelAnimationFrame = window.cancelAnimationFrame.bind(window)
+        const queuedFrames = new Map<number, FrameRequestCallback>()
+        let nextFrameID = 1
+        ;(window as any).__screenshotBrowserScrollIntoViewCalls = 0
+        ;(window as any).__screenshotBrowserQueuedFrames = () => queuedFrames.size
+        ;(window as any).__screenshotBrowserFlushFrames = () => {
+          const callbacks = Array.from(queuedFrames.values())
+          queuedFrames.clear()
+          window.requestAnimationFrame = originalRequestAnimationFrame
+          window.cancelAnimationFrame = originalCancelAnimationFrame
+          for (const callback of callbacks) callback(performance.now())
+          return callbacks.length
+        }
+        window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+          const frameID = nextFrameID++
+          queuedFrames.set(frameID, callback)
+          return frameID
+        }) as typeof requestAnimationFrame
+        window.cancelAnimationFrame = ((frameID: number) => {
+          queuedFrames.delete(frameID)
+        }) as typeof cancelAnimationFrame
+        Element.prototype.scrollIntoView = function scrollIntoViewInstrumented(
+          this: Element,
+          arg?: boolean | ScrollIntoViewOptions,
+        ) {
+          ;(window as any).__screenshotBrowserScrollIntoViewCalls += 1
+          return (original as (this: Element, arg?: boolean | ScrollIntoViewOptions) => void).call(this, arg)
+        }
+      })
       const requestsBeforeOpen = attachmentRequests.length
       const openStart = Date.now()
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']")
+      const scrollsBeforeFrame = await page.evaluate(() => (window as any).__screenshotBrowserScrollIntoViewCalls)
+      assert.equal(scrollsBeforeFrame, 0, `screenshot open called scrollIntoView before RAF: ${scrollsBeforeFrame}`)
+      const queuedFrames = await page.evaluate(() => (window as any).__screenshotBrowserQueuedFrames())
+      assert.ok(queuedFrames > 0, `screenshot open did not schedule RAF reveal: ${queuedFrames}`)
+      await page.evaluate(() => (window as any).__screenshotBrowserFlushFrames())
+      const scrollsAfterFrame = await page.evaluate(() => (window as any).__screenshotBrowserScrollIntoViewCalls)
+      assert.ok(scrollsAfterFrame > 0, `screenshot open did not reveal the panel on RAF: ${scrollsAfterFrame}`)
       await page.waitForSelector(".screenshot-browser-card")
       await page.waitForFunction(() => {
         const img = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
