@@ -94,6 +94,7 @@ import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/en
 import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import { cancelSessionPromptByID, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
+import { listLiveOrchestratorToolOwnership } from "@/engine/tool-ownership"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
 import { Orchestrator } from "@/orchestrator/agent"
@@ -195,6 +196,12 @@ function requireTaskInCurrentProject(taskID: string): TaskRow {
   const task = requireTask(taskID)
   assertTaskBelongsToCurrentProject(task)
   return task
+}
+
+async function provideTaskRootSessionInstance<T>(task: TaskRow, fn: () => Promise<T>): Promise<T> {
+  if (Instance.current() || !task.session_id) return fn()
+  const session = await Session.getInProject({ sessionID: task.session_id, projectID: task.project_id })
+  return Instance.provide({ directory: session.directory, fn })
 }
 
 function requireGoalInCurrentProject(goalID: string): GoalRow {
@@ -1847,6 +1854,23 @@ export namespace EngineService {
     for (const sessionID of sessionIDs.reverse()) {
       const session = await Session.get(sessionID)
       cancelSessionPromptInScope({ session, taskID })
+    }
+    const liveOwnerships = listLiveOrchestratorToolOwnership(taskID)
+    if (liveOwnerships.length > 0) {
+      const { abortLiveOrchestratorToolOwnership } = await import("@/engine/writer")
+      await withTimeout(
+        provideTaskRootSessionInstance(task, () =>
+          abortLiveOrchestratorToolOwnership({
+            taskID,
+            reason: "task cancelled",
+            ownerships: liveOwnerships,
+            originSite: "task-api.cancel-task",
+            promptDirectory: Project.get(task.project_id)?.worktree,
+          }),
+        ),
+        cleanupTimeoutMs,
+        "abortLiveOrchestratorToolOwnership",
+      ).catch((err) => onAbortFailure("abortLiveOrchestratorToolOwnership", err, {}))
     }
     const liveGoalRuns = listGoalRunsForTask(taskID).filter(
       (row) => !["completed", "failed", "aborted"].includes(row.status),
