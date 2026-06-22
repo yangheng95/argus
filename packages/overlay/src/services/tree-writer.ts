@@ -28,7 +28,13 @@ import {
   type CardNode,
   type CardStatus,
 } from "../store/card-tree"
-import { flushCardStats, linkChildToParent, markCardStatsDirty, unlinkChildFromParent } from "../store/card-tree-stats"
+import {
+  flushCardStats,
+  linkChildToParent,
+  markCardStatsDirty,
+  markCardStatsRemoved,
+  unlinkChildFromParent,
+} from "../store/card-tree-stats"
 import { boardStore, setBoardProjectionHandler } from "../store/board"
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message"
 import { stageAccent } from "../utils/card-color"
@@ -154,6 +160,7 @@ function projectUsageOntoCard(
     setCardTreeStore("cards", targetCardID, "contextTokens", latestContext)
     setCardTreeStore("cards", targetCardID, "contextTokensEstimated", false)
   }
+  markCardStatsDirty(targetCardID)
 }
 
 /** A part's exact display target: which card owns it and at which index in
@@ -338,7 +345,10 @@ export function resetWriter(
   setCardTreeStore(
     "cards",
     produce((c: Record<string, CardNode>) => {
-      for (const k of Object.keys(c)) delete c[k]
+      for (const k of Object.keys(c)) {
+        markCardStatsRemoved(k)
+        delete c[k]
+      }
     }),
   )
   setCardTreeStore("rewindCursor", null)
@@ -1015,6 +1025,7 @@ function removeCardReferences(cardID: string): void {
         card.childIDs = card.childIDs.filter((id) => id !== cardID)
         affectedParents.push(card.id)
       }
+      markCardStatsRemoved(cardID)
       delete cards[cardID]
     }),
   )
@@ -2056,9 +2067,13 @@ function migrateTurnCard(session: SessionInfo, fromCardID: string, toCardID: str
           session.partIndex.set(pid, { cardID: toCardID, index: baseLen + tgt.index })
         }
       }
-      if (fromCardID in cards) delete cards[fromCardID]
+      if (fromCardID in cards) {
+        markCardStatsRemoved(fromCardID)
+        delete cards[fromCardID]
+      }
     }),
   )
+  markCardStatsDirty(toCardID)
   for (const [mid, cid] of session.messageCardIDs) {
     if (cid === fromCardID) session.messageCardIDs.set(mid, toCardID)
   }
@@ -2084,9 +2099,11 @@ function migrateLifecycleCardToTurnCard(
         messageID,
         time,
       }
+      markCardStatsRemoved(fromCardID)
       delete cards[fromCardID]
     }),
   )
+  markCardStatsDirty(toCardID)
   if (session.activeCardID === fromCardID) session.activeCardID = toCardID
 }
 
@@ -2669,6 +2686,7 @@ function rebuildTaskContextCard(board: any): void {
       setCardTreeStore(
         "cards",
         produce((c: Record<string, CardNode>) => {
+          markCardStatsRemoved("ctx:user-request")
           delete c["ctx:user-request"]
         }),
       )
@@ -2754,15 +2772,21 @@ function rebuildGoalStepCards(board: any): void {
   setCardTreeStore(
     "cards",
     produce((c: Record<string, CardNode>) => {
+      const removedCardIDs: string[] = []
       for (const id of Object.keys(c)) {
         if (!id.startsWith("step:")) continue
         const owningGoal = goalIDFromStepCardID(id)
         if (!owningGoal) {
+          removedCardIDs.push(id)
           delete c[id]
           continue
         }
-        if (!liveGoalIDs.has(owningGoal)) delete c[id]
+        if (!liveGoalIDs.has(owningGoal)) {
+          removedCardIDs.push(id)
+          delete c[id]
+        }
       }
+      for (const id of removedCardIDs) markCardStatsRemoved(id)
     }),
   )
 
@@ -2993,10 +3017,15 @@ function rebuildInteractionCards(board: any): {
   setCardTreeStore(
     "cards",
     produce((cards: Record<string, CardNode>) => {
+      const removedCardIDs: string[] = []
       for (const cardID of Object.keys(cards)) {
         if (!cardID.startsWith("interaction-card:")) continue
-        if (!aliveCardIDs.has(cardID)) delete cards[cardID]
+        if (!aliveCardIDs.has(cardID)) {
+          removedCardIDs.push(cardID)
+          delete cards[cardID]
+        }
       }
+      for (const cardID of removedCardIDs) markCardStatsRemoved(cardID)
     }),
   )
 

@@ -1,6 +1,7 @@
 // ── Card Tree Stats Kernel ──
 //
-// Incrementally-maintained subtree aggregates for collapsed bubble headers.
+// Incrementally-maintained card-tree aggregates for collapsed bubble headers
+// and the chat-header usage strip.
 //
 // Why this exists: the collapsed bubble UI surfaces three subtree aggregates
 // per card — activity counts ("🤖 2  🛠 14  💬 5"), latest text-or-tool
@@ -10,16 +11,20 @@
 // through the recursion. At 500 cards and ~10 visible collapsed bubbles
 // the per-event cost is O(visible × subtree) ≈ O(N²).
 //
-// Fix: store `subtreeCounts` / `subtreeLatestHit` / `subtreeTodoHit` on each
-// CardNode, maintained by an explicit O(depth) bubble-up walk from the
-// affected leaf when tree-writer mutates parts/childIDs. The Solid memos
-// then read these fields directly — O(1) per bubble, invalidating only when
-// the cached value actually changes (we equality-check before writing). Net
-// per-event work shrinks from O(visible × subtree) to O(depth).
+// Fix: store `subtreeCounts` / `subtreeLatestHit` / `subtreeTodoHit` /
+// `subtreeUsageAggregate` on each CardNode, maintained by an explicit
+// O(depth) bubble-up walk from the affected leaf when tree-writer mutates
+// parts/usage/childIDs. The Solid memos then read these fields directly —
+// O(1) per bubble, invalidating only when the cached value actually changes
+// (we equality-check before writing). Net per-event work shrinks from
+// O(visible × subtree) to O(depth). The chat-header usage strip reads
+// `cardTreeStore.usageAggregate`, which is maintained from a per-card own
+// usage index so the always-mounted header does not scan
+// `Object.values(cardTreeStore.cards)` on every SSE event.
 //
 // Contract:
 //   - `markCardStatsDirty(cardID)` queues a card whose own-level inputs
-//     changed (parts, toolPart, or childIDs touched).
+//     changed (parts, toolPart, usage/context tokens, or childIDs touched).
 //   - `flushCardStats()` drains the queue, walking each card's ancestor
 //     chain via `parentID` and rewriting cached fields where they differ.
 //   - Tree-writer must call `flushCardStats()` inside every reactivity
@@ -36,7 +41,7 @@
 // Transient cards (built inline by the renderer with `children: CardNode[]`
 // instead of store-backed `childIDs: string[]`) never flow through tree-writer,
 // so their cache is never populated. The public collectors in
-// `utils/card-tree.ts` keep the recursive walk as a fallback for that case.
+// `utils/card-tree.ts` keep a separate recursive path for that case.
 
 import { toolNameKey, displayToolIcon, displayToolDetail } from "../utils/tool"
 import { extractTodos } from "../utils/todos"
@@ -45,6 +50,7 @@ import {
   mergeScreenshotBrowserItemSets,
   type ScreenshotBrowserItem,
 } from "../utils/screenshot-browser"
+import { aggregateUsageAcrossSessions, type UsageAggregate } from "../utils/format-usage"
 import {
   cardTreeStore,
   registerCardTreeOrderStatsHandler,
@@ -59,9 +65,9 @@ import {
 // ── Own-level computation (mirrors utils/card-tree.ts policy) ──
 //
 // These functions own the "what counts as an activity / preview hit / todo
-// hit" policy for a SINGLE node's own parts + toolPart. The recursive walk
-// in `utils/card-tree.ts` is the fallback; both must stay byte-equivalent
-// for transient cards, which the cache-invariant test enforces by comparing
+// hit" policy for a SINGLE node's own parts + toolPart. The recursive path
+// in `utils/card-tree.ts` serves transient cards; both must stay
+// byte-equivalent, which the cache-invariant test enforces by comparing
 // cached output to a recursive recomputation on the same fixture.
 
 const AGENT_SPAWN_TOOLS = new Set(["task", "agent", "spawnagent", "subagent"])
@@ -240,8 +246,10 @@ function equalScreenshotItems(a: readonly ScreenshotBrowserItem[] | undefined, b
 const dirtyCardIDs = new Set<string>()
 let topLevelRootIDs = new Set<string>()
 let topLevelScreenshotItemSets = new Map<string, readonly ScreenshotBrowserItem[]>()
+let cardUsageAggregates = new Map<string, UsageAggregate>()
 let topLevelOrderDirty = true
 let topLevelScreenshotItemsDirty = true
+let usageAggregateDirty = true
 
 function markTopLevelOrderDirty(): void {
   topLevelOrderDirty = true
@@ -288,10 +296,62 @@ function flushTopLevelScreenshotItems(): void {
   }
 }
 
+function equalUsageAggregate(a: UsageAggregate | undefined, b: UsageAggregate): boolean {
+  return a !== undefined && a.tokens === b.tokens && a.costUSD === b.costUSD && a.estimated === b.estimated
+}
+
+function isZeroUsageAggregate(aggregate: UsageAggregate): boolean {
+  return aggregate.tokens === 0 && aggregate.costUSD === 0 && !aggregate.estimated
+}
+
+function combineUsageAggregates(aggregates: Iterable<UsageAggregate>): UsageAggregate {
+  let tokens = 0
+  let costUSD = 0
+  let estimated = false
+  for (const aggregate of aggregates) {
+    tokens += aggregate.tokens
+    costUSD += aggregate.costUSD
+    estimated = estimated || aggregate.estimated
+  }
+  return { tokens, costUSD, estimated }
+}
+
+function removeCardUsageAggregate(cardID: string): boolean {
+  const removed = cardUsageAggregates.delete(cardID)
+  if (removed) usageAggregateDirty = true
+  return removed
+}
+
+function syncCardOwnUsageAggregate(cardID: string, aggregate: UsageAggregate): void {
+  if (isZeroUsageAggregate(aggregate)) {
+    removeCardUsageAggregate(cardID)
+    return
+  }
+  if (!equalUsageAggregate(cardUsageAggregates.get(cardID), aggregate)) {
+    cardUsageAggregates.set(cardID, aggregate)
+    usageAggregateDirty = true
+  }
+}
+
+function flushUsageAggregate(): void {
+  if (!usageAggregateDirty) return
+  usageAggregateDirty = false
+  const aggregate = combineUsageAggregates(cardUsageAggregates.values())
+  if (!equalUsageAggregate(cardTreeStore.usageAggregate, aggregate)) {
+    setCardTreeStore("usageAggregate", aggregate)
+  }
+}
+
 /** Mark a card as needing a subtree-stats recompute. Cheap; safe to call
  *  many times per batch — recompute happens once in `flushCardStats`. */
 export function markCardStatsDirty(cardID: string): void {
   if (cardID) dirtyCardIDs.add(cardID)
+}
+
+export function markCardStatsRemoved(cardID: string): void {
+  if (!cardID) return
+  dirtyCardIDs.delete(cardID)
+  removeCardUsageAggregate(cardID)
 }
 
 /** Maintain the back-pointer used by `bubbleStatsFromCard`. Tree-writer
@@ -320,12 +380,15 @@ export function unlinkChildFromParent(childID: string): void {
  *  have changed either). */
 function recomputeNodeStats(cardID: string): boolean {
   const card = cardTreeStore.cards[cardID]
-  if (!card) return false
+  if (!card) return removeCardUsageAggregate(cardID)
   const suppress = suppressToolsForCard(card)
   const own = ownLevelStats(card, suppress)
   let counts = own.counts
   let latestHit = own.latestHit
   let todoHit = own.todoHit
+  const ownUsageAggregate = aggregateUsageAcrossSessions([card])
+  syncCardOwnUsageAggregate(cardID, ownUsageAggregate)
+  let usageAggregate = ownUsageAggregate
   const screenshotItemSets: Array<readonly ScreenshotBrowserItem[]> = [own.screenshotItems]
   for (const childID of card.childIDs ?? []) {
     const child = cardTreeStore.cards[childID]
@@ -350,6 +413,9 @@ function recomputeNodeStats(cardID: string): boolean {
     }
     todoHit = pickLater(todoHit, child.subtreeTodoHit)
     if (child.subtreeScreenshotItems) screenshotItemSets.push(child.subtreeScreenshotItems)
+    if (child.subtreeUsageAggregate) {
+      usageAggregate = combineUsageAggregates([usageAggregate, child.subtreeUsageAggregate])
+    }
   }
   const screenshotItems = mergeScreenshotBrowserItemSets(screenshotItemSets)
   let changed = false
@@ -368,6 +434,10 @@ function recomputeNodeStats(cardID: string): boolean {
   if (!equalScreenshotItems(card.subtreeScreenshotItems, screenshotItems)) {
     setCardTreeStore("cards", cardID, "subtreeScreenshotItems", screenshotItems)
     syncTopLevelRootScreenshotItems(cardID, screenshotItems)
+    changed = true
+  }
+  if (!equalUsageAggregate(card.subtreeUsageAggregate, usageAggregate)) {
+    setCardTreeStore("cards", cardID, "subtreeUsageAggregate", usageAggregate)
     changed = true
   }
   return changed
@@ -400,6 +470,7 @@ export function flushCardStats(): void {
     for (const id of toFlush) bubbleStatsFromCard(id, seen)
   }
   flushTopLevelScreenshotItems()
+  flushUsageAggregate()
 }
 
 /** Test-only escape hatch: clear queue without flushing. Production code
@@ -408,14 +479,19 @@ export function __resetCardStatsForTests(): void {
   dirtyCardIDs.clear()
   topLevelRootIDs = new Set<string>()
   topLevelScreenshotItemSets = new Map<string, readonly ScreenshotBrowserItem[]>()
+  cardUsageAggregates = new Map<string, UsageAggregate>()
   topLevelOrderDirty = true
   topLevelScreenshotItemsDirty = true
+  usageAggregateDirty = true
 }
 
 registerCardTreeOrderStatsHandler(markTopLevelOrderDirty)
 
 registerCardTreePruneStatsHandler(() => {
   markTopLevelOrderDirty()
+  for (const cardID of cardUsageAggregates.keys()) {
+    if (!cardTreeStore.cards[cardID]) removeCardUsageAggregate(cardID)
+  }
   for (const [cardID, card] of Object.entries(cardTreeStore.cards)) {
     const parentID = card?.parentID
     if (parentID) {

@@ -42,7 +42,7 @@ import { loadAllLocales, localeTag, setLocale } from "./utils/i18n"
 import { ApiError, apiJson, configure as configureApi } from "./services/api"
 import { t } from "./utils/i18n"
 import { renderMarkdown } from "./utils/markdown"
-import { aggregateUsageAcrossSessions, formatUsageStrip } from "./utils/format-usage"
+import { formatUsageStrip } from "./utils/format-usage"
 import {
   applyTheme,
   applyZoom,
@@ -1638,21 +1638,14 @@ disposers.push(
       void setLocale(settingsStore.locale)
     })
 
-    // Chat header usage strip — whole-conversation token + USD-cost
-    // estimate aggregated across every runtime session in the selected
-    // task's card tree. The aggregation kernel lives in
-    // `utils/format-usage.ts` (`aggregateUsageAcrossSessions` +
-    // `formatUsageStrip`) so it can be unit-tested without DOM or Solid.
-    // This effect is the reactive glue: it reads the cards proxy so
-    // Solid re-runs the effect whenever a card is added, removed, or
-    // its `usage` field changes, and writes the formatted string into
-    // `#chatUsage`. An empty string hides the chip via the
+    // Chat header usage strip — card-tree-stats maintains the aggregate so
+    // this always-mounted UI glue does not scan the full card dictionary on
+    // every SSE update. An empty string hides the chip via the
     // `.chat-usage:empty { display: none }` rule.
     createEffect(() => {
       const target = document.getElementById("chatUsage")
       if (!target) return
-      const aggregate = aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards))
-      target.textContent = formatUsageStrip(aggregate)
+      target.textContent = formatUsageStrip(cardTreeStore.usageAggregate)
     })
 
     // ── Debug-copy (double-click `任务` header) ──

@@ -7,9 +7,9 @@
 // copy-paste).
 //
 // `aggregateUsageAcrossSessions` is the pure kernel of the chat-header
-// usage strip. main.tsx wraps it with a Solid effect that subscribes to
-// `cardTreeStore.cards`; extracted here so it can be unit-tested without
-// touching the DOM or Solid.
+// usage strip. `store/card-tree-stats.ts` owns the Solid-store projection,
+// while this file owns only the token/cost semantics so it can be
+// unit-tested without touching the DOM or Solid.
 
 /** Compact token count — "8.4k" rather than "8432", so low-contrast hint
  *  chrome reads at a glance without dominating the row. */
@@ -69,6 +69,12 @@ export interface UsageCardLike {
   }
 }
 
+export interface UsageAggregate {
+  tokens: number
+  costUSD: number
+  estimated: boolean
+}
+
 /** Aggregate whole-conversation usage by summing each card's own
  *  per-message usage. tree-writer projects `Message.Assistant.{tokens,cost}`
  *  onto exactly one turn card per assistant message — every card carries
@@ -76,11 +82,7 @@ export interface UsageCardLike {
  *  sum-across-cards gives the conversation total. Cards without a `usage`
  *  field (user messages, phase boundaries, tool-result chrome) contribute
  *  nothing. */
-export function aggregateUsageAcrossSessions(cards: Iterable<UsageCardLike | undefined | null>): {
-  tokens: number
-  costUSD: number
-  estimated: boolean
-} {
+export function aggregateUsageAcrossSessions(cards: Iterable<UsageCardLike | undefined | null>): UsageAggregate {
   let tokens = 0
   let costUSD = 0
   let estimated = false

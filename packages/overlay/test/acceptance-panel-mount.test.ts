@@ -287,6 +287,13 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain("<InspectorPanel")
 })
 
+test("chat usage strip reads the stats-kernel aggregate instead of scanning every card", async () => {
+  const main = await readSrc("src/main.tsx")
+  expect(main).toContain("formatUsageStrip(cardTreeStore.usageAggregate)")
+  expect(main).not.toContain("aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards))")
+  expect(main).not.toContain('import { aggregateUsageAcrossSessions')
+})
+
 test("ConversationAgentRail owns workflow navigation without high-energy effects", async () => {
   const component = await readSrc("src/components/ConversationAgentRail.tsx")
   const css = await readSrc("src/styles/surfaces/conversation.css")

@@ -12,7 +12,7 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
 const { setBoardStore } = await import("../src/store/board")
 const { applyEvent, hydrateConversationView, resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
-const { aggregateUsageAcrossSessions } = await import("../src/utils/format-usage")
+const { aggregateUsageAcrossSessions, formatUsageStrip } = await import("../src/utils/format-usage")
 
 const TASK_ID = "tsk_message_tokens"
 const SID = "ses_message_tokens"
@@ -102,6 +102,7 @@ test("handleMessageUpdated projects info.tokens + info.cost onto the turn card",
   expect(agg.tokens).toBe(1_550)
   expect(agg.costUSD).toBe(0.0182)
   expect(agg.estimated).toBe(false)
+  expect(cardTreeStore.usageAggregate).toEqual(agg)
 })
 
 test("live message regroup keeps user and assistant turns on the real timeline", async () => {
@@ -677,4 +678,57 @@ test("aggregateUsageAcrossSessions sums per-message usage across multiple sessio
   expect(agg.tokens).toBe(6_250)
   expect(agg.costUSD).toBeCloseTo(0.115, 5)
   expect(agg.estimated).toBe(false)
+  expect(cardTreeStore.usageAggregate.tokens).toBe(agg.tokens)
+  expect(cardTreeStore.usageAggregate.costUSD).toBeCloseTo(agg.costUSD, 5)
+  expect(cardTreeStore.usageAggregate.estimated).toBe(agg.estimated)
+  expect(formatUsageStrip(cardTreeStore.usageAggregate)).toBe("6.3k tok · $0.115")
+})
+
+test("message.removed subtracts deleted card usage from the store aggregate", async () => {
+  setBoardStore("board", {
+    task: { id: TASK_ID, status: "active", time: { created: T0 }, request: "test", attachments: [] },
+    goals: [],
+    interactions: [],
+    goalWorkflows: [],
+  } as any)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
+  resetWriter()
+
+  applyEvent(
+    messageUpdated({
+      id: "msg_removed_usage_a",
+      sessionID: SID,
+      role: "assistant",
+      time: { created: T0 + 100 },
+      tokens: { input: 500, output: 100, reasoning: 0, total: 600, cache: { read: 0, write: 0 } },
+      cost: 0.01,
+    }),
+  )
+  applyEvent(
+    messageUpdated({
+      id: "msg_removed_usage_b",
+      sessionID: SID,
+      role: "assistant",
+      time: { created: T0 + 200 },
+      tokens: { input: 800, output: 250, reasoning: 0, total: 1_050, cache: { read: 0, write: 0 } },
+      cost: 0.025,
+    }),
+  )
+
+  expect(cardTreeStore.usageAggregate.tokens).toBe(1_650)
+  expect(cardTreeStore.usageAggregate.costUSD).toBeCloseTo(0.035, 5)
+
+  applyEvent({
+    type: "message.removed",
+    properties: {
+      taskID: TASK_ID,
+      sessionID: SID,
+      messageID: "msg_removed_usage_a",
+    },
+  })
+
+  expect(cardTreeStore.cards[`assistant:session:${SID}:message:msg_removed_usage_a`]).toBeUndefined()
+  expect(cardTreeStore.usageAggregate.tokens).toBe(1_050)
+  expect(cardTreeStore.usageAggregate.costUSD).toBeCloseTo(0.025, 5)
+  expect(cardTreeStore.usageAggregate.estimated).toBe(false)
 })
