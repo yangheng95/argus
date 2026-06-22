@@ -1,4 +1,4 @@
-import { Show, createEffect, createResource, createSignal } from "solid-js"
+import { Show, createResource, createSignal } from "solid-js"
 import { appStore } from "../store/app"
 import { boardStore, setBoardStore } from "../store/board"
 import { clearMessages, setChatAttachments } from "../store/messages"
@@ -62,6 +62,7 @@ function MissionContent(props: MissionProps) {
   const [missionRecords, missionRecordsCtl] = createResource(
     () => {
       if (!props.active) return null
+      if (!appStore.connected) return null
       return {
         search: searchQuery().trim(),
         refresh: missionRefreshToken(),
@@ -85,6 +86,14 @@ function MissionContent(props: MissionProps) {
 
   const selectedMissionSessionID = () =>
     boardStore.selectedSource?.kind === "session" ? boardStore.selectedSource.id : ""
+
+  function missionLedgerError(): string {
+    if (props.active && !appStore.connected) return t("mission.ledger.error_offline")
+    if (missionRecords.error) {
+      return t("mission.ledger.error_load_failed", { error: humanizeApiError(missionRecords.error) })
+    }
+    return ""
+  }
 
   function reportActionError(action: string, err: unknown): void {
     setActionError({ action, error: humanizeApiError(err) })
@@ -241,12 +250,8 @@ function MissionContent(props: MissionProps) {
       <MissionList
         missions={missionRecords()?.records ?? []}
         selectedSessionID={selectedMissionSessionID()}
-        loading={missionRecords.loading}
-        error={
-          missionRecords.error
-            ? t("mission.ledger.error_load_failed", { error: humanizeApiError(missionRecords.error) })
-            : ""
-        }
+        loading={appStore.connected && missionRecords.loading}
+        error={missionLedgerError()}
         searchQuery={searchQuery()}
         onSearchChange={setSearchQuery}
         onSelectMission={(mission) => void handleMissionSelect(mission)}
