@@ -219,6 +219,10 @@ export interface PromptProfileCatalog {
   profiles: PromptProfileOption[]
 }
 
+export type PromptProfileCatalogScope =
+  | { kind: "project"; directory: string }
+  | { kind: "session"; sessionID: string; directory: string }
+
 export interface PromptProfileDraft {
   id: string
   label: string
@@ -240,6 +244,8 @@ export function modelContextID(context: TaskOperatorModelContext | null | undefi
 }
 
 const [sessionConfigRefreshTokenValue, setSessionConfigRefreshTokenValue] = createSignal(0)
+const [promptProfileCatalogRefreshTokenValue, setPromptProfileCatalogRefreshTokenValue] = createSignal(0)
+let pendingPromptProfileCatalogLoad: { key: string; promise: Promise<PromptProfileCatalog> } | null = null
 
 export function sessionConfigRefreshToken(): number {
   return sessionConfigRefreshTokenValue()
@@ -247,6 +253,14 @@ export function sessionConfigRefreshToken(): number {
 
 export function markSessionConfigStale(_sessionID?: string): void {
   setSessionConfigRefreshTokenValue((value) => value + 1)
+}
+
+export function promptProfileCatalogRefreshToken(): number {
+  return promptProfileCatalogRefreshTokenValue()
+}
+
+export function markPromptProfileCatalogStale(): void {
+  setPromptProfileCatalogRefreshTokenValue((value) => value + 1)
 }
 
 function directoryScopedPath(path: string, directory: string, label: string): string {
@@ -326,12 +340,25 @@ export async function resetDatabase(projectDir: string): Promise<DatabaseResetRe
   })
 }
 
-export async function loadPromptProfileCatalog(sessionID?: string): Promise<PromptProfileCatalog> {
+export async function loadPromptProfileCatalog(scope: PromptProfileCatalogScope): Promise<PromptProfileCatalog> {
   if (!appStore.connected) {
     throw new Error("Cannot load prompt profiles while disconnected")
   }
-  const suffix = sessionID ? `?sessionID=${encodeURIComponent(sessionID)}` : ""
-  return await apiJson(`config/prompt-profile${suffix}`)
+  const directory = scope.directory.trim()
+  if (!directory) throw new Error("loadPromptProfileCatalog: directory is required")
+  const sessionID = scope.kind === "session" ? scope.sessionID.trim() : ""
+  if (scope.kind === "session" && !sessionID) throw new Error("loadPromptProfileCatalog: sessionID is required")
+  const key = `${directory}\n${sessionID}`
+  if (pendingPromptProfileCatalogLoad?.key === key) return await pendingPromptProfileCatalogLoad.promise
+  const params = new URLSearchParams({ directory })
+  if (sessionID) params.set("sessionID", sessionID)
+  const promise = apiJson(`config/prompt-profile?${params.toString()}`) as Promise<PromptProfileCatalog>
+  pendingPromptProfileCatalogLoad = { key, promise }
+  try {
+    return await promise
+  } finally {
+    if (pendingPromptProfileCatalogLoad?.promise === promise) pendingPromptProfileCatalogLoad = null
+  }
 }
 
 function promptProfileConfigShape(
@@ -483,9 +510,11 @@ export async function importPromptProfiles(
   preview: PromptProfileImportPreview,
   catalog: PromptProfileCatalog,
 ): Promise<any> {
-  return await updateConfig((current) => {
+  const saved = await updateConfig((current) => {
     importPromptProfileConfig(current, preview, catalog)
   })
+  markPromptProfileCatalogStale()
+  return saved
 }
 
 export function createPromptProfileID(existingIDs: Iterable<string>, baseLabel: string): string {
@@ -542,19 +571,23 @@ export function deletePromptProfileConfig(
 }
 
 export async function savePromptProfile(profile: PromptProfileDraft, defaultActive: string): Promise<any> {
-  return await updateConfig((current) => {
+  const saved = await updateConfig((current) => {
     upsertPromptProfileConfig(current, profile, defaultActive)
   })
+  markPromptProfileCatalogStale()
+  return saved
 }
 
 export async function deletePromptProfile(profileID: string, nextActive: string, defaultActive: string): Promise<any> {
-  return await updateConfig((current) => {
+  const saved = await updateConfig((current) => {
     deletePromptProfileConfig(current, profileID, nextActive, defaultActive)
   })
+  markPromptProfileCatalogStale()
+  return saved
 }
 
 export async function setProjectPromptProfileActive(profileID: string): Promise<any> {
-  return await updateConfig((current) => {
+  const saved = await updateConfig((current) => {
     const promptProfile =
       current.prompt_profile && typeof current.prompt_profile === "object" && !Array.isArray(current.prompt_profile)
         ? { ...current.prompt_profile }
@@ -564,6 +597,8 @@ export async function setProjectPromptProfileActive(profileID: string): Promise<
       active: profileID,
     }
   })
+  markPromptProfileCatalogStale()
+  return saved
 }
 
 export async function setSessionPromptProfileActive(
@@ -571,7 +606,9 @@ export async function setSessionPromptProfileActive(
   profileID: string,
   directory: string,
 ): Promise<SessionConfigResponse> {
-  return await patchSessionConfig({ sessionID, directory, diff: { prompt_profile: { active: profileID } } })
+  const saved = await patchSessionConfig({ sessionID, directory, diff: { prompt_profile: { active: profileID } } })
+  markPromptProfileCatalogStale()
+  return saved
 }
 
 export async function syncAgentPromptLocale(locale: string): Promise<void> {

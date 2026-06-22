@@ -7,9 +7,6 @@ import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { t } from "../../utils/i18n"
 import { renderMarkdown } from "../../utils/markdown"
-import { appStore } from "../../store/app"
-import { activeSessionID, rootTaskSessionID } from "../../store/board"
-import { activeDirectory } from "../../services/workspace"
 import {
   createPromptProfileID,
   deletePromptProfile,
@@ -25,6 +22,11 @@ import {
   type PromptProfileOption,
   type PromptProfileTarget,
 } from "../../services/config"
+import {
+  promptProfileCatalogDirectory,
+  promptProfileCatalogRequestKey,
+  promptProfileCatalogScope,
+} from "../../services/prompt-profile-scope"
 import { AutoGrowTextarea } from "../primitives/AutoGrowTextarea"
 import { Button } from "../ui/Button"
 import { SettingsGroup, SettingsPanel, SettingsPill, SettingsRow } from "./primitives"
@@ -98,8 +100,11 @@ export default function PromptCatalog() {
   let promptProfileLoadSequence = 0
   let importFileInput: HTMLInputElement | undefined
 
-  const profileConfigVersion = createMemo(() => JSON.stringify(appStore.config?.prompt_profile ?? null))
-  const currentScopeSessionID = createMemo(() => rootTaskSessionID() || activeSessionID() || "")
+  const profileRequestKey = createMemo(() => promptProfileCatalogRequestKey())
+  const currentScopeSessionID = createMemo(() => {
+    const scope = promptProfileCatalogScope()
+    return scope.kind === "session" ? scope.sessionID : ""
+  })
   const profiles = createMemo(() => profileCatalog()?.profiles ?? [])
   const projectActiveProfileID = createMemo(() => profileCatalog()?.project_active ?? "")
   const sessionActiveProfileID = createMemo(() => profileCatalog()?.session_active ?? "")
@@ -120,15 +125,15 @@ export default function PromptCatalog() {
   })
 
   async function refreshPromptProfiles(): Promise<void> {
-    if (!appStore.connected || !activeDirectory().trim()) {
+    const scope = promptProfileCatalogScope()
+    if (scope.kind === "unavailable" || scope.kind === "pending") {
       setProfileCatalog(null)
       return
     }
     setProfileLoading(true)
     const sequence = ++promptProfileLoadSequence
     try {
-      const sessionID = currentScopeSessionID() || undefined
-      const catalog = await loadPromptProfileCatalog(sessionID)
+      const catalog = await loadPromptProfileCatalog(scope)
       if (sequence !== promptProfileLoadSequence) return
       setProfileCatalog(catalog)
       setSelectedProfileID((current) =>
@@ -141,21 +146,19 @@ export default function PromptCatalog() {
     }
   }
 
-  createEffect(() => {
-    const connected = appStore.connected
-    const directory = activeDirectory().trim()
-    const version = profileConfigVersion()
-    const sessionID = currentScopeSessionID()
-    void version
-    void sessionID
-    if (!connected || !directory) {
+  createEffect<string>((previousKey) => {
+    const requestKey = profileRequestKey()
+    if (requestKey === previousKey) return previousKey
+    const scope = promptProfileCatalogScope()
+    if (scope.kind === "unavailable" || scope.kind === "pending") {
       setProfileCatalog(null)
-      return
+      return requestKey
     }
     void refreshPromptProfiles().catch((error) => {
       showNotice(error instanceof Error ? error.message : String(error), "error")
     })
-  })
+    return requestKey
+  }, "")
 
   createEffect(() => {
     const list = profiles()
@@ -297,7 +300,7 @@ export default function PromptCatalog() {
     const profile = currentProfile()
     const sessionID = currentScopeSessionID()
     if (!profile || !sessionID || sessionActiveProfileID() === profile.id) return
-    const directory = activeDirectory().trim()
+    const directory = promptProfileCatalogDirectory()
     if (!directory) return
     setSaving(true)
     try {
