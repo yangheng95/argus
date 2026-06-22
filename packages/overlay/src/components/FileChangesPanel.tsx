@@ -16,6 +16,7 @@ export interface FileChangesPanelProps {
   activeView: FileChangesActiveView
   onActiveViewChange: (view: FileChangesActiveView) => void
   onCloseDiff: () => void
+  active: () => boolean
 }
 
 export function FileChangesPanel(props: FileChangesPanelProps) {
@@ -62,7 +63,7 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
         />
         <div class="file-changes-body">
           <TabPanel value="changes" class="file-changes-view">
-            <ChangesPanel hasSelectedTask />
+            <ChangesPanel active={props.active} hasSelectedTask />
           </TabPanel>
           <TabPanel value="diff" class="file-changes-view file-changes-diff">
             <Show

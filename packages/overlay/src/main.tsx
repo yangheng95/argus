@@ -1000,6 +1000,7 @@ if (fileChangesMountEl) {
       <FileChangesPanel
         diffOpen={workspaceOpen()}
         diffTarget={workspaceTarget()}
+        active={() => isCenterWorkbenchPanelOpen("file") || isCenterWorkbenchPanelOpen("diff")}
         activeView={fileChangesActiveView()}
         onActiveViewChange={setFileChangesActiveView}
         onCloseDiff={closeWorkspace}

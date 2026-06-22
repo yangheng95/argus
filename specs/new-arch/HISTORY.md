@@ -48,6 +48,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-prompt-profile-task-session-owner.md](2026-06-22-prompt-profile-task-session-owner.md) | Prompt Profile Task Session Owner |
 | [2026-06-22-screenshot-browser-virtual-row-measurement.md](2026-06-22-screenshot-browser-virtual-row-measurement.md) | Screenshot Browser Virtual Row Measurement |
 | [2026-06-22-pane-semantics-layout-frame.md](2026-06-22-pane-semantics-layout-frame.md) | Pane Semantics Layout Frame |
+| [2026-06-22-file-changes-hidden-projection-boundary.md](2026-06-22-file-changes-hidden-projection-boundary.md) | File Changes Hidden Projection Boundary |
 
 ## 2026-06-21
 

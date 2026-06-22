@@ -25,16 +25,22 @@ export interface ChangesPanelProps {
   changes?: FileChange[]
   /** Whether a task is currently selected (affects empty-state messaging). */
   hasSelectedTask?: boolean
+  /** Whether the file changes surface is visible enough to run broad card-tree projections. */
+  active?: () => boolean
 }
 
 export function ChangesPanel(props: ChangesPanelProps) {
+  const panelActive = () => props.active?.() ?? true
+
   const agentGroups = createMemo<ChangeGroup[]>(() => {
+    if (!panelActive()) return []
     const board = boardStore.board as any
     const roots = cardTreeStore.order.map((id) => cardTreeStore.cards[id]).filter((node): node is CardNode => !!node)
     return collectAgentFileChangeGroupsFromNodes(roots, String(board?.task?.directory || ""), board?.goalWorkflows)
   })
 
   const sourceGroups = createMemo<ChangeGroup[]>(() => {
+    if (!panelActive()) return []
     if (props.changes === undefined) return currentChangeGroups()
     const changes = props.changes
     return [
@@ -48,6 +54,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
   })
 
   const requestKey = createMemo(() => {
+    if (!panelActive()) return false
     const groups = sourceGroups()
     const agentKey = changeGroupsRevisionKey(agentGroups())
     return props.changes !== undefined
@@ -56,12 +63,15 @@ export function ChangesPanel(props: ChangesPanelProps) {
   })
 
   const [resolvedGroups] = createResource(requestKey, async () => {
+    if (!panelActive()) return []
     if (props.changes !== undefined) return sourceGroups()
     return resolveCurrentChangeGroups()
   })
 
   const groups = createMemo<ChangeGroup[]>(() =>
-    props.changes === undefined
+    !panelActive()
+      ? []
+      : props.changes === undefined
       ? mergeChangeGroups([...agentGroups(), ...(resolvedGroups() || sourceGroups())])
       : sourceGroups().filter((group) => group.changes.length > 0),
   )
