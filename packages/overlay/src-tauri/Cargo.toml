@@ -26,6 +26,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 flate2 = "1"
 tar = "0.4"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
 [profile.release]
 strip = true
 lto = false

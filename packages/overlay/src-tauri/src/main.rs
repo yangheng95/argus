@@ -101,6 +101,193 @@ fn startup_overlay_window_size(
     constrain_overlay_window_size(width, height, min_size)
 }
 
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct OverlayResizeRect {
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+}
+
+#[cfg(windows)]
+impl OverlayResizeRect {
+    fn width(self) -> i32 {
+        self.right - self.left
+    }
+
+    fn height(self) -> i32 {
+        self.bottom - self.top
+    }
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum OverlayResizeEdge {
+    Left,
+    Right,
+    Top,
+    TopLeft,
+    TopRight,
+    Bottom,
+    BottomLeft,
+    BottomRight,
+}
+
+#[cfg(windows)]
+fn overlay_resize_edge_moves_left(edge: OverlayResizeEdge) -> bool {
+    matches!(
+        edge,
+        OverlayResizeEdge::Left | OverlayResizeEdge::TopLeft | OverlayResizeEdge::BottomLeft
+    )
+}
+
+#[cfg(windows)]
+fn overlay_resize_edge_moves_top(edge: OverlayResizeEdge) -> bool {
+    matches!(
+        edge,
+        OverlayResizeEdge::Top | OverlayResizeEdge::TopLeft | OverlayResizeEdge::TopRight
+    )
+}
+
+#[cfg(windows)]
+fn overlay_resize_edge_from_wparam(value: usize) -> Option<OverlayResizeEdge> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        WMSZ_BOTTOM, WMSZ_BOTTOMLEFT, WMSZ_BOTTOMRIGHT, WMSZ_LEFT, WMSZ_RIGHT, WMSZ_TOP,
+        WMSZ_TOPLEFT, WMSZ_TOPRIGHT,
+    };
+
+    match value as u32 {
+        WMSZ_LEFT => Some(OverlayResizeEdge::Left),
+        WMSZ_RIGHT => Some(OverlayResizeEdge::Right),
+        WMSZ_TOP => Some(OverlayResizeEdge::Top),
+        WMSZ_TOPLEFT => Some(OverlayResizeEdge::TopLeft),
+        WMSZ_TOPRIGHT => Some(OverlayResizeEdge::TopRight),
+        WMSZ_BOTTOM => Some(OverlayResizeEdge::Bottom),
+        WMSZ_BOTTOMLEFT => Some(OverlayResizeEdge::BottomLeft),
+        WMSZ_BOTTOMRIGHT => Some(OverlayResizeEdge::BottomRight),
+        _ => None,
+    }
+}
+
+#[cfg(windows)]
+fn constrain_overlay_resize_rect_to_min_aspect(
+    rect: OverlayResizeRect,
+    edge: OverlayResizeEdge,
+    min_size: OverlayWindowSize,
+) -> OverlayResizeRect {
+    let mut next = rect;
+    let min_width = min_size.width.round() as i32;
+    let min_height = min_size.height.round() as i32;
+    if next.width() < min_width {
+        if overlay_resize_edge_moves_left(edge) {
+            next.left = next.right - min_width;
+        } else {
+            next.right = next.left + min_width;
+        }
+    }
+    if next.height() < min_height {
+        if overlay_resize_edge_moves_top(edge) {
+            next.top = next.bottom - min_height;
+        } else {
+            next.bottom = next.top + min_height;
+        }
+    }
+
+    let max_height = (next.width() as f64 / overlay_min_aspect_ratio(min_size))
+        .round()
+        .max(min_size.height) as i32;
+    if next.height() <= max_height {
+        return next;
+    }
+
+    if overlay_resize_edge_moves_top(edge) {
+        next.top = next.bottom - max_height;
+    } else {
+        next.bottom = next.top + max_height;
+    }
+    next
+}
+
+#[cfg(windows)]
+struct OverlayResizeAspectState {
+    min_size: OverlayWindowSize,
+}
+
+#[cfg(windows)]
+static OVERLAY_RESIZE_ASPECT_STATE: OnceLock<OverlayResizeAspectState> = OnceLock::new();
+
+#[cfg(windows)]
+const OVERLAY_RESIZE_ASPECT_SUBCLASS_ID: usize = 0x0C0A_5A51;
+
+#[cfg(windows)]
+unsafe extern "system" fn overlay_resize_aspect_subclass_proc(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    msg: u32,
+    wparam: windows_sys::Win32::Foundation::WPARAM,
+    lparam: windows_sys::Win32::Foundation::LPARAM,
+    subclass_id: usize,
+    ref_data: usize,
+) -> windows_sys::Win32::Foundation::LRESULT {
+    use windows_sys::Win32::{
+        Foundation::RECT,
+        UI::{
+            Shell::{DefSubclassProc, RemoveWindowSubclass},
+            WindowsAndMessaging::{WM_NCDESTROY, WM_SIZING},
+        },
+    };
+
+    if msg == WM_SIZING {
+        let state = &*(ref_data as *const OverlayResizeAspectState);
+        if let Some(edge) = overlay_resize_edge_from_wparam(wparam) {
+            let rect = &mut *(lparam as *mut RECT);
+            let constrained = constrain_overlay_resize_rect_to_min_aspect(
+                OverlayResizeRect {
+                    left: rect.left,
+                    top: rect.top,
+                    right: rect.right,
+                    bottom: rect.bottom,
+                },
+                edge,
+                state.min_size,
+            );
+            rect.left = constrained.left;
+            rect.top = constrained.top;
+            rect.right = constrained.right;
+            rect.bottom = constrained.bottom;
+            return 1;
+        }
+    }
+
+    if msg == WM_NCDESTROY {
+        RemoveWindowSubclass(hwnd, Some(overlay_resize_aspect_subclass_proc), subclass_id);
+    }
+    DefSubclassProc(hwnd, msg, wparam, lparam)
+}
+
+#[cfg(windows)]
+fn install_overlay_resize_aspect_constraint<R: Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    min_size: OverlayWindowSize,
+) -> Result<(), String> {
+    use windows_sys::Win32::UI::Shell::SetWindowSubclass;
+
+    let state = OVERLAY_RESIZE_ASPECT_STATE.get_or_init(|| OverlayResizeAspectState { min_size });
+    let hwnd = window.hwnd().map_err(|err| err.to_string())?;
+    let ok = unsafe {
+        SetWindowSubclass(
+            hwnd.0 as _,
+            Some(overlay_resize_aspect_subclass_proc),
+            OVERLAY_RESIZE_ASPECT_SUBCLASS_ID,
+            state as *const OverlayResizeAspectState as usize,
+        )
+    };
+    if ok == 0 {
+        return Err("failed to install overlay resize aspect constraint".to_string());
+    }
+    Ok(())
+}
+
 // ── Windows: Job Object with KILL_ON_JOB_CLOSE ──────────────────────────────
 //
 // When the overlay exits (even on crash), closing the last handle to the job
@@ -538,7 +725,10 @@ fn embedded_server_payload_dir_name() -> String {
     format!("sidecar-{}", EMBEDDED_SERVER_STAMP)
 }
 
-fn cleanup_stale_embedded_sidecars(parent: &Path, current_dir_name: &str) -> Vec<(PathBuf, String)> {
+fn cleanup_stale_embedded_sidecars(
+    parent: &Path,
+    current_dir_name: &str,
+) -> Vec<(PathBuf, String)> {
     let entries = match fs::read_dir(parent) {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
@@ -1454,6 +1644,9 @@ fn main() {
                     min_size.width,
                     min_size.height,
                 )));
+                #[cfg(windows)]
+                install_overlay_resize_aspect_constraint(&window, min_size)
+                    .map_err(std::io::Error::other)?;
                 if let Ok(Some(monitor)) = window.primary_monitor() {
                     let screen = monitor.size();
                     let scale = monitor.scale_factor();
@@ -1759,6 +1952,64 @@ mod tests {
         assert_eq!(constrained.height, 720.0);
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn overlay_windows_sizing_rect_enforces_minimum_aspect_ratio() {
+        let min_size = OverlayWindowSize {
+            width: 1120.0,
+            height: 720.0,
+        };
+        let constrained = constrain_overlay_resize_rect_to_min_aspect(
+            OverlayResizeRect {
+                left: 0,
+                top: 0,
+                right: 1120,
+                bottom: 1000,
+            },
+            OverlayResizeEdge::Bottom,
+            min_size,
+        );
+
+        assert_eq!(
+            constrained,
+            OverlayResizeRect {
+                left: 0,
+                top: 0,
+                right: 1120,
+                bottom: 720,
+            }
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn overlay_windows_sizing_rect_keeps_top_edge_anchor() {
+        let min_size = OverlayWindowSize {
+            width: 1120.0,
+            height: 720.0,
+        };
+        let constrained = constrain_overlay_resize_rect_to_min_aspect(
+            OverlayResizeRect {
+                left: 0,
+                top: -280,
+                right: 1120,
+                bottom: 720,
+            },
+            OverlayResizeEdge::Top,
+            min_size,
+        );
+
+        assert_eq!(
+            constrained,
+            OverlayResizeRect {
+                left: 0,
+                top: 0,
+                right: 1120,
+                bottom: 720,
+            }
+        );
+    }
+
     #[test]
     fn startup_overlay_window_size_uses_configured_minimum_floor() {
         let min_size = OverlayWindowSize {
@@ -1944,7 +2195,10 @@ mod tests {
             unrelated_dir.is_dir(),
             "non-sidecar directory should remain"
         );
-        assert!(sidecar_file.is_file(), "sidecar-prefixed file should remain");
+        assert!(
+            sidecar_file.is_file(),
+            "sidecar-prefixed file should remain"
+        );
 
         fs::remove_dir_all(&parent).expect("test directory should be removed");
     }
@@ -2058,10 +2312,9 @@ mod tests {
 
     #[test]
     fn embedded_payload_marks_manifest_worker_resource_executable_when_present() {
-        let Some(worker) =
-            EMBEDDED_PLUGIN_RESOURCE_FILES
-                .iter()
-                .find(|path| path.contains("worker"))
+        let Some(worker) = EMBEDDED_PLUGIN_RESOURCE_FILES
+            .iter()
+            .find(|path| path.contains("worker"))
         else {
             return;
         };

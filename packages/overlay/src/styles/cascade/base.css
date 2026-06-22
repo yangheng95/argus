@@ -93,9 +93,10 @@ body {
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
+  width: 100vw;
   min-width: var(--ui-overlay-min-width);
   min-height: var(--ui-overlay-min-height);
-  height: 100vh;
+  height: min(100vh, calc(100vw * var(--ui-overlay-min-height-units) / var(--ui-overlay-min-width-units)));
   display: flex;
   flex-direction: column;
   transition: background var(--ui-duration-base) var(--ui-timing-standard);
