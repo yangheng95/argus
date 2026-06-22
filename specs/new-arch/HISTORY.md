@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File | Title |
 | --- | --- |
+| [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md) | Browser Preview Evidence Previewable Image |
 | [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md) | Screenshot Browser Open Jank |
 
 ## 2026-06-21
