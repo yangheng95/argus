@@ -684,7 +684,7 @@ function continuationResultForTerminalFinalizerMiss(input: {
 }
 
 async function appendResearchBriefContext(
-  sections: string[],
+  output: ReadContextOutput,
   title: string,
   artifact: ResearchBriefArtifactRow | undefined,
   request: string,
@@ -694,27 +694,139 @@ async function appendResearchBriefContext(
   const stale = researchBriefIsStale({ request, brief: artifact.payload })
   const brief = artifact.payload
   const subpageResearchTasks = brief.subpage_research_tasks ?? []
-  sections.push(
+  const pointer = `research artifact ${artifact.id}; bundle ${brief.bundle.full_markdown_path}`
+  output.add(
     `\n## ${title}`,
     `- artifact: ${artifact.id}`,
     `- session: ${brief.metadata.research_session_id}`,
     `- stale: ${stale.stale ? "true" : "false"}`,
-    stale.reasons.length > 0 ? `- stale_reasons: ${stale.reasons.join(", ")}` : "",
+    stale.reasons.length > 0
+      ? `- stale_reasons: ${readContextCompactList(stale.reasons, pointer, { listCap: 8, itemCap: 160 })}`
+      : "",
     brief.webpage_contract ? `- source_url: ${brief.webpage_contract.source_url}` : "",
     `- sources: ${brief.evidence_index.length}`,
     `- facts: ${brief.facts.length}`,
     `- subpage_research_tasks: ${subpageResearchTasks.length}`,
     subpageResearchTasks.length > 0
-      ? `- subpage_research_task_refs: ${subpageResearchTasks
-          .slice(0, 5)
-          .map((item) => `${item.id}=${item.url}`)
-          .join("; ")}`
+      ? `- subpage_research_task_refs: ${readContextCompactList(
+          subpageResearchTasks.map((item) => `${item.id}=${item.url}`),
+          pointer,
+          { listCap: 5, itemCap: 180, joiner: "; " },
+        )}`
       : "",
     `- blocking_open_questions: ${brief.open_questions.filter((item) => item.blocking).length}`,
-    `- bundle: ${brief.bundle.full_markdown_path}, ${brief.bundle.evidence_json_path}, ${brief.bundle.citation_map_path}`,
-    `- summary: ${brief.summary.slice(0, 800)}`,
+    `- bundle: ${readContextCompactList(
+      [brief.bundle.full_markdown_path, brief.bundle.evidence_json_path, brief.bundle.citation_map_path],
+      pointer,
+      { listCap: 3, itemCap: 220 },
+    )}`,
+    `- summary: ${readContextCompactInline(brief.summary, pointer, READ_CONTEXT_RESEARCH_SUMMARY_CHAR_CAP)}`,
     `Research is advisory evidence only; it is not a workflow step or next-tool instruction.`,
+    { sectionCap: READ_CONTEXT_RESEARCH_BRIEF_CHAR_CAP, pointer },
   )
+}
+
+export const READ_CONTEXT_OUTPUT_CHAR_BUDGET = SubAgentProtocol.HARD_CHAR_CAP
+const READ_CONTEXT_CLOSURE_CHAR_CAP = 1_500
+const READ_CONTEXT_REFILL_FACTS_CHAR_CAP = 2_000
+const READ_CONTEXT_GOAL_BLOCK_CHAR_CAP = 1_800
+const READ_CONTEXT_EVALUATION_BLOCK_CHAR_CAP = 900
+const READ_CONTEXT_EVALUATION_SUMMARY_CHAR_CAP = 300
+const READ_CONTEXT_EVALUATION_CHECK_EVIDENCE_CHAR_CAP = 200
+const READ_CONTEXT_ARTIFACT_STATUS_CHAR_CAP = 1_200
+const READ_CONTEXT_INTEGRITY_LATEST_CHAR_CAP = 3_200
+const READ_CONTEXT_INTEGRITY_REPORT_CHAR_CAP = 2_400
+const READ_CONTEXT_INTEGRITY_HISTORY_ALL_CHAR_CAP = 4_800
+const READ_CONTEXT_INTEGRITY_HISTORY_DEDICATED_CHAR_CAP = 16_000
+const READ_CONTEXT_DECISION_REVIEW_CHAR_CAP = 3_500
+const READ_CONTEXT_DECISION_GENERAL_CHAR_CAP = 5_500
+const READ_CONTEXT_RESEARCH_BRIEF_CHAR_CAP = 1_200
+const READ_CONTEXT_RESEARCH_SUMMARY_CHAR_CAP = 420
+const READ_CONTEXT_FACT_CHECK_ATTEMPT_CHAR_CAP = 500
+const READ_CONTEXT_DELIVERY_BLOCK_CHAR_CAP = 900
+const READ_CONTEXT_DELIVERY_SUMMARY_CHAR_CAP = 420
+
+type ReadContextAddOptions = {
+  pointer: string
+  sectionCap?: number
+}
+
+type ReadContextOutput = ReturnType<typeof createReadContextOutput>
+
+function createReadContextOutput() {
+  const sections: string[] = []
+  let usedChars = 0
+
+  function add(...input: Array<string | ReadContextAddOptions | undefined>): boolean {
+    const options = input[input.length - 1]
+    if (!options || typeof options !== "object" || !("pointer" in options)) {
+      throw new Error("read_context output block missing pointer")
+    }
+    const rawLines = input.slice(0, -1) as Array<string | undefined>
+    const block = normalizeReadContextBlock(rawLines)
+    if (!block) return true
+    const bounded =
+      typeof options.sectionCap === "number"
+        ? readContextTrimText(block, options.pointer, options.sectionCap)
+        : block
+    if (!bounded) return true
+
+    const separatorChars = sections.length > 0 ? 1 : 0
+    const remaining = READ_CONTEXT_OUTPUT_CHAR_BUDGET - usedChars - separatorChars
+    if (remaining <= 0) return false
+    const fits = bounded.length <= remaining
+    const rendered = fits ? bounded : readContextTrimText(bounded, options.pointer, remaining)
+    if (!rendered) return false
+    sections.push(rendered)
+    usedChars += separatorChars + rendered.length
+    return fits
+  }
+
+  function result(): string {
+    return sections.length > 0 ? sections.join("\n") : "No context available yet."
+  }
+
+  return { add, result }
+}
+
+function normalizeReadContextBlock(lines: Array<string | undefined>): string {
+  return lines
+    .filter((line): line is string => typeof line === "string")
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+function readContextTrimText(text: string, pointer: string, cap: number): string {
+  if (cap <= 0) return ""
+  if (text.length <= cap) return text
+  const marker = `\n[read_context omitted ${text.length - cap} chars; full detail: ${pointer}]`
+  if (marker.length >= cap) return `[read_context output budget reached; full detail: ${pointer}]`.slice(0, cap)
+  const sliceLength = Math.max(0, cap - marker.length)
+  return `${text.slice(0, sliceLength)}${marker}`
+}
+
+function readContextCompactInline(text: string, pointer: string, cap: number): string {
+  return readContextTrimText(text.replace(/\s+/g, " ").trim(), pointer, cap).replace(/\s+/g, " ").trim()
+}
+
+function readContextCompactList(
+  items: string[],
+  pointer: string,
+  options: { listCap: number; itemCap: number; joiner?: string },
+): string {
+  let truncatedItems = 0
+  const shown = items.slice(0, options.listCap).map((item) => {
+    const normalized = item.replace(/\s+/g, " ").trim()
+    if (normalized.length <= options.itemCap) return normalized
+    truncatedItems += 1
+    return `${normalized.slice(0, Math.max(0, options.itemCap - 3))}...`
+  })
+  const tails: string[] = []
+  if (items.length > options.listCap) tails.push(`+${items.length - options.listCap} more`)
+  if (truncatedItems > 0) tails.push(`${truncatedItems} truncated`)
+  const more = tails.length > 0 ? ` (${tails.join("; ")} at ${pointer})` : ""
+  return `${shown.join(options.joiner ?? ", ")}${more}`
 }
 
 type OrchestratorToolExecutionContext = {
@@ -6195,7 +6307,7 @@ export function createOrchestratorTools(input: {
       }),
       execute: async ({ scope }) => {
         const task = requireTask(taskID)
-        const sections: string[] = []
+        const output = createReadContextOutput()
         const autoIteration = (await EngineConfig.get()).auto_iteration === true
         // Source-level caps on read_context output. Rationale: this tool is
         // called every orchestrator turn; tool results live forever in session
@@ -6205,27 +6317,43 @@ export function createOrchestratorTools(input: {
         // Caps below preserve the LATEST state per goal rather than history.
         // The decision-log cap is the shared DECISION_LOG_PROMPT_LIMIT (single
         // source — see decision-log/index.ts), consumed at the call site below.
-        const EVAL_CHECK_EVIDENCE_CAP = 200
-
         if (scope === "goals" || scope === "all") {
           const desc = await describeTask(taskID)
           const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals, { autoIteration })
           if (closureLines.length > 0) {
-            sections.push(closureLines.join("\n"))
+            output.add(closureLines.join("\n"), {
+              pointer: "read_context scope=goals",
+              sectionCap: READ_CONTEXT_CLOSURE_CHAR_CAP,
+            })
           }
           const terminalGoalRefillLines = renderTerminalGoalRefillNotifications(desc.recent_terminal_goal_refills)
           if (terminalGoalRefillLines.length > 0) {
-            sections.push(terminalGoalRefillLines.join("\n"))
+            output.add(terminalGoalRefillLines.join("\n"), {
+              pointer: "read_context scope=goals terminal refill facts",
+              sectionCap: READ_CONTEXT_REFILL_FACTS_CHAR_CAP,
+            })
           }
           if (desc.goals.length === 0) {
-            sections.push("## Goals (none authored yet)")
+            output.add("## Goals (none authored yet)", { pointer: "read_context scope=goals" })
           } else {
-            sections.push(`## Goals (${desc.goals.length})`)
+            output.add(`## Goals (${desc.goals.length})`, { pointer: "read_context scope=goals" })
             if (desc.active_bootstrap_goal_id) {
-              sections.push(`Bootstrap-first goal: ${desc.active_bootstrap_goal_id}`)
+              output.add(`Bootstrap-first goal: ${desc.active_bootstrap_goal_id}`, {
+                pointer: "read_context scope=goals",
+              })
             }
+            let omittedGoals = 0
             for (const g of desc.goals) {
-              sections.push(renderGoal(g).join("\n"))
+              const added = output.add(renderGoal(g).join("\n"), {
+                pointer: `read_context scope=goals goal=${g.id}`,
+                sectionCap: READ_CONTEXT_GOAL_BLOCK_CHAR_CAP,
+              })
+              if (!added) omittedGoals += 1
+            }
+            if (omittedGoals > 0) {
+              output.add(`- ${omittedGoals} goal blocks omitted by read_context output budget.`, {
+                pointer: "read_context scope=goals",
+              })
             }
           }
         }
@@ -6254,16 +6382,39 @@ export function createOrchestratorTools(input: {
               omitted > 0
                 ? `\n## Evaluations (latest ${latestPerGoal.length} of ${evals.length}; ${omitted} superseded omitted)`
                 : `\n## Evaluations (${latestPerGoal.length})`
-            sections.push(header)
+            output.add(header, { pointer: "read_context scope=evaluations" })
+            let omittedEvals = 0
             for (const e of latestPerGoal) {
-              sections.push(`- [${e.verdict}] ${e.summary}`)
+              const lines = [
+                `- [${e.verdict}] ${readContextCompactInline(
+                  e.summary,
+                  "read_context scope=evaluations",
+                  READ_CONTEXT_EVALUATION_SUMMARY_CHAR_CAP,
+                )}`,
+              ]
               const checks = e.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
               if (checks) {
                 for (const c of checks.slice(0, 5)) {
-                  const evidence = c.evidence ? c.evidence.slice(0, EVAL_CHECK_EVIDENCE_CAP) : ""
-                  sections.push(`  - ${c.name}: ${c.status}${evidence ? ` — ${evidence}` : ""}`)
+                  const evidence = c.evidence
+                    ? readContextCompactInline(
+                        c.evidence,
+                        "read_context scope=evaluations",
+                        READ_CONTEXT_EVALUATION_CHECK_EVIDENCE_CHAR_CAP,
+                      )
+                    : ""
+                  lines.push(`  - ${c.name}: ${c.status}${evidence ? ` — ${evidence}` : ""}`)
                 }
               }
+              const added = output.add(lines.join("\n"), {
+                pointer: "read_context scope=evaluations",
+                sectionCap: READ_CONTEXT_EVALUATION_BLOCK_CHAR_CAP,
+              })
+              if (!added) omittedEvals += 1
+            }
+            if (omittedEvals > 0) {
+              output.add(`- ${omittedEvals} evaluation blocks omitted by read_context output budget.`, {
+                pointer: "read_context scope=evaluations",
+              })
             }
           }
         }
@@ -6276,13 +6427,17 @@ export function createOrchestratorTools(input: {
           const { findLatestIntegrityArtifactMissingStatus } = await import("@/engine/store")
           const missingStatus = findLatestIntegrityArtifactMissingStatus(taskID)
           if (missingStatus) {
-            sections.push(
+            output.add(
               `\n## Integrity artifact status`,
               `- session: ${missingStatus.sessionID}`,
               `- status: artifact_missing`,
               `- recorded_at: ${new Date(missingStatus.emittedAt).toISOString()}`,
               `- detail: the completed integrity session has no durable integrity_attempt artifact yet; the prior artifact is not the current result.`,
               missingStatus.error ? `- error: ${missingStatus.error}` : "",
+              {
+                pointer: "read_context scope=integrity_history artifact status",
+                sectionCap: READ_CONTEXT_ARTIFACT_STATUS_CHAR_CAP,
+              },
             )
           }
           if (activeSpec) {
@@ -6298,13 +6453,33 @@ export function createOrchestratorTools(input: {
               const latest = history.attempts.at(-1)
               if (scope === "all" && latest) {
                 const teamReportMarkdown = latest.teamReportMarkdown ?? ""
-                sections.push(
+                const latestLines = [
                   `\n## Integrity (latest)`,
                   `- verdict: ${latest.verdict ?? "unknown"} — issues=${latest.blockingFindings.length} corrections=${latest.requiredRepairs.length} missing=${latest.unresolvedDisagreements.length} (spec snapshot lineage)`,
-                )
-                if (teamReportMarkdown) sections.push("", teamReportMarkdown)
+                ]
+                if (teamReportMarkdown) {
+                  latestLines.push(
+                    "",
+                    "Team report excerpt:",
+                    readContextTrimText(
+                      teamReportMarkdown,
+                      `integrity_attempt artifact ${latest.artifactID}`,
+                      READ_CONTEXT_INTEGRITY_REPORT_CHAR_CAP,
+                    ),
+                  )
+                }
+                output.add(latestLines.join("\n"), {
+                  pointer: `integrity_attempt artifact ${latest.artifactID}`,
+                  sectionCap: READ_CONTEXT_INTEGRITY_LATEST_CHAR_CAP,
+                })
               }
-              sections.push(`\n${renderIntegrityRootHistoryBlock(history)}`)
+              output.add(renderIntegrityRootHistoryBlock(history), {
+                pointer: "read_context scope=integrity_history",
+                sectionCap:
+                  scope === "integrity_history"
+                    ? READ_CONTEXT_INTEGRITY_HISTORY_DEDICATED_CHAR_CAP
+                    : READ_CONTEXT_INTEGRITY_HISTORY_ALL_CHAR_CAP,
+              })
             }
           }
         }
@@ -6321,19 +6496,27 @@ export function createOrchestratorTools(input: {
           // signal that drives architect re-run / fail_task per
           // orchestrator-core.txt's repair ladder).
           const reviewSection = log.phasePromptSection("review", "Architecture review history", { limit: 5 })
-          if (reviewSection) sections.push(`\n${reviewSection}`)
+          if (reviewSection)
+            output.add(reviewSection, {
+              pointer: "read_context scope=decisions review history",
+              sectionCap: READ_CONTEXT_DECISION_REVIEW_CHAR_CAP,
+            })
           const section = log.toPromptSection({
             limit: DECISION_LOG_PROMPT_LIMIT,
             excludePhases: ["review"],
           })
-          if (section) sections.push(`\n${section}`)
+          if (section)
+            output.add(section, {
+              pointer: "read_context scope=decisions",
+              sectionCap: READ_CONTEXT_DECISION_GENERAL_CHAR_CAP,
+            })
         }
 
         if (scope === "all") {
           const researchBriefs = listResearchBriefArtifacts(taskID).slice(0, 4)
           for (const [index, artifact] of researchBriefs.entries()) {
             await appendResearchBriefContext(
-              sections,
+              output,
               researchBriefs.length === 1 ? "Deep Research Brief" : `Deep Research Brief ${index + 1}/${researchBriefs.length}`,
               artifact,
               task.request,
@@ -6342,7 +6525,7 @@ export function createOrchestratorTools(input: {
           const frontendResearchBriefs = listFrontendResearchBriefArtifacts(taskID).slice(0, 4)
           for (const [index, artifact] of frontendResearchBriefs.entries()) {
             await appendResearchBriefContext(
-              sections,
+              output,
               `Frontend Research Brief ${index + 1}/${frontendResearchBriefs.length}`,
               artifact,
               task.request,
@@ -6364,15 +6547,19 @@ export function createOrchestratorTools(input: {
               omitted > 0
                 ? `\n## Fact-check attempts (latest ${latest.length} of ${fcRows.length}; ${omitted} older omitted)`
                 : `\n## Fact-check attempts (${latest.length})`
-            sections.push(header)
+            output.add(header, { pointer: "read_context scope=all fact-check attempts" })
             for (const row of latest) {
               const r = row.payload.report
-              sections.push(
+              output.add(
                 `- [${r.overall_verdict}] target=\`${row.payload.target_agent}\` ` +
                   `session=\`${row.payload.target_session_id.slice(0, 16)}…\` ` +
                   `verified=${r.verified.length} corrected=${r.corrected.length} ` +
                   `unresolved=${r.unresolved.length} ` +
                   `(${row.payload.outcome})`,
+                {
+                  pointer: "read_context scope=all fact-check attempts",
+                  sectionCap: READ_CONTEXT_FACT_CHECK_ATTEMPT_CHAR_CAP,
+                },
               )
             }
           }
@@ -6399,16 +6586,43 @@ export function createOrchestratorTools(input: {
             deliveries.push({ goalRunID: gr.id, goalID: gr.goal_id, status: gr.status, acceptance })
           }
           if (deliveries.length > 0) {
-            sections.push(`\n## Deliveries (${deliveries.length} — latest per goal)`)
+            output.add(`\n## Deliveries (${deliveries.length} — latest per goal)`, {
+              pointer: "read_context scope=deliveries",
+            })
+            let omittedDeliveries = 0
             for (const d of deliveries) {
               const diffs = (d.acceptance!.result as any)?.diffs as Array<{ file: string }> | undefined
-              sections.push(`- goal_run ${d.goalRunID} [${d.status}]: ${d.acceptance!.summary}`)
-              if (diffs?.length) sections.push(`  files: ${diffs.map((f) => f.file).join(", ")}`)
+              const lines = [
+                `- goal_run ${d.goalRunID} [${d.status}]: ${readContextCompactInline(
+                  d.acceptance!.summary,
+                  `acceptance for goal_run ${d.goalRunID}`,
+                  READ_CONTEXT_DELIVERY_SUMMARY_CHAR_CAP,
+                )}`,
+              ]
+              if (diffs?.length) {
+                lines.push(
+                  `  files: ${readContextCompactList(
+                    diffs.map((f) => f.file),
+                    `acceptance for goal_run ${d.goalRunID}`,
+                    { listCap: 12, itemCap: 180 },
+                  )}`,
+                )
+              }
+              const added = output.add(lines.join("\n"), {
+                pointer: `read_context scope=deliveries goal_run=${d.goalRunID}`,
+                sectionCap: READ_CONTEXT_DELIVERY_BLOCK_CHAR_CAP,
+              })
+              if (!added) omittedDeliveries += 1
+            }
+            if (omittedDeliveries > 0) {
+              output.add(`- ${omittedDeliveries} delivery blocks omitted by read_context output budget.`, {
+                pointer: "read_context scope=deliveries",
+              })
             }
           }
         }
 
-        const result = sections.length > 0 ? sections.join("\n") : "No context available yet."
+        const result = output.result()
         // Telemetry: read_context is structurally bounded by the per-section
         // caps above, but if a future change blows through the budget the
         // protocol layer surfaces it instead of letting it slip silently.
