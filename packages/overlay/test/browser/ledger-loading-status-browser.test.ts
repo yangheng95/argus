@@ -187,3 +187,84 @@ test("left ledger loading skeletons expose live status text without visual regre
     await server.close()
   }
 })
+
+test("Mission ledger shows offline connection boundary without requesting missions", async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
+  let missionRequests = 0
+  const badResponses: string[] = []
+  const server = await startBrowserFixture(async (req) => {
+    const url = new URL(req.url)
+    const path = route(url)
+    if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+    if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+    const staticResponse = await overlayStaticResponse(path)
+    if (staticResponse) return staticResponse
+    if (path === "/global/health") return send({ error: "offline for mission boundary test" }, 503)
+    if (path === "/mission") {
+      missionRequests += 1
+      return send({ error: "mission should not load while offline" }, 500)
+    }
+    if (path === "/global/projects/discover") {
+      return send({
+        root: "D:/overlay/workspace",
+        defaultDirectory: PROJECT_DIRECTORY,
+        projects: [{ directory: PROJECT_DIRECTORY, name: "loading-status", marker: "package.json" }],
+      })
+    }
+    if (path === "/project/current/worktrees") return send([])
+    if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return send({ profiles: [] })
+    if (path === "/log") return req.method === "POST" ? send({ ok: true }) : send([])
+    return send({ error: `unhandled ${req.method} ${path}` }, 404)
+  })
+
+  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  try {
+    const page = await browser.newPage()
+    page.on("response", (response: any) => {
+      if (response.status() >= 400 && !response.url().endsWith("/global/health")) {
+        badResponses.push(`${response.status()} ${response.url()}`)
+      }
+    })
+    await page.setViewport({ width: 1280, height: 760 })
+    await page.evaluateOnNewDocument((input: { directory: string; serverUrl: string }) => {
+      localStorage.setItem("oc_directory", input.directory)
+      localStorage.setItem("oc_saved_directory", input.directory)
+      localStorage.setItem("oc_locale", "en-US")
+      localStorage.setItem("oc_theme", "light")
+      localStorage.setItem("oc_server_url", input.serverUrl)
+      localStorage.setItem("oc_auto_server", "false")
+    }, { directory: PROJECT_DIRECTORY, serverUrl: server.origin })
+
+    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]', {
+      visible: true,
+    })
+    await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
+    await page.waitForSelector(".mission-ledger-list [role='alert']", { visible: true, timeout: 15_000 })
+
+    const state = await page.$eval(".mission-ledger-list", (container: HTMLElement) => {
+      const alert = container.querySelector<HTMLElement>("[role='alert']")
+      const loading = container.querySelector<HTMLElement>("[role='status'][aria-busy='true']")
+      return {
+        alertText: alert?.textContent?.trim().replace(/\s+/g, " ") ?? "",
+        loadingVisible: !!loading,
+        rowCount: container.querySelectorAll('[data-ui="mission-row"]').length,
+      }
+    })
+    assert.match(state.alertText, /OpenCorvus is not connected yet/)
+    assert.equal(state.loadingVisible, false)
+    assert.equal(state.rowCount, 0)
+    assert.equal(missionRequests, 0)
+    assert.deepEqual(badResponses, [])
+
+    const element = await page.$(".mission-ledger-list")
+    assert.ok(element)
+    const screenshotPath = await saveScreenshot(element, "mission-ledger-offline-boundary.png")
+    assert.ok(screenshotPath.endsWith("mission-ledger-offline-boundary.png"))
+  } finally {
+    await browser.close().catch(() => undefined)
+    await server.close()
+  }
+})

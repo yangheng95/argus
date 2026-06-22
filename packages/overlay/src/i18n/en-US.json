@@ -1096,6 +1096,7 @@
   "mission.ledger.empty_filtered": "No missions match the current search.",
   "mission.ledger.updated_unknown": "No updates",
   "mission.ledger.error_load_failed": "Failed to load missions: {{error}}",
+  "mission.ledger.error_offline": "OpenCorvus is not connected yet. The Mission list will load after the connection is ready.",
   "mission.ledger.error_retry": "Retry",
   "mission.ledger.abort_title": "Stop this mission (click twice to confirm).",
   "mission.ledger.download_project_title": "Download this mission's project files and execution flow ZIP.",

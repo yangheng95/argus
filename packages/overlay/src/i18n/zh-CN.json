@@ -1096,6 +1096,7 @@
   "mission.ledger.empty_filtered": "没有 Mission 匹配当前搜索。",
   "mission.ledger.updated_unknown": "暂无更新",
   "mission.ledger.error_load_failed": "Mission 列表加载失败：{{error}}",
+  "mission.ledger.error_offline": "OpenCorvus 尚未连接。连接就绪后会加载 Mission 列表。",
   "mission.ledger.error_retry": "重试",
   "mission.ledger.abort_title": "停止此 Mission（点两次确认）。",
   "mission.ledger.download_project_title": "下载此 Mission 项目文件和执行流程 ZIP。",

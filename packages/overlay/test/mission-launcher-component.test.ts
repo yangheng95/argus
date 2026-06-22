@@ -82,12 +82,22 @@ test("Mission left activity retires the Channel rail and task bindings surface",
 
 test("Mission left activity loads and paginates Mission records only while active", () => {
   expect(MISSION_TSX).toContain("if (!props.active) return null")
+  expect(MISSION_TSX).toContain("if (!appStore.connected) return null")
   expect(MISSION_TSX).toContain("activation: props.activationToken ?? 0")
   expect(MISSION_TSX).toContain("loadMissions({")
   expect(MISSION_TSX).toContain("limit: MISSION_LIST_PAGE_SIZE + 1")
   expect(MISSION_TSX).toContain("cursorUpdated: cursor.updated")
   expect(MISSION_TSX).toContain("cursorSessionID: cursor.sessionID")
   expect(MISSION_TSX).toContain("missionPage(records, MISSION_LIST_PAGE_SIZE)")
+})
+
+test("Mission ledger shows the backend connection boundary instead of indefinite skeleton cards", () => {
+  expect(MISSION_TSX).toContain("function missionLedgerError(): string")
+  expect(MISSION_TSX).toContain('if (props.active && !appStore.connected) return t("mission.ledger.error_offline")')
+  expect(MISSION_TSX).toContain("loading={appStore.connected && missionRecords.loading}")
+  expect(MISSION_TSX).toContain("error={missionLedgerError()}")
+  expect(I18N_EN_US).toContain('"mission.ledger.error_offline"')
+  expect(I18N_ZH_CN).toContain('"mission.ledger.error_offline"')
 })
 
 test("Mission abort immediately removes the interruptible row action before list refresh settles", () => {
