@@ -94,6 +94,7 @@ import { openImagePreview } from "./services/image-preview"
 import { buildChatDebugBlob, buildTaskDebugBlob, writeDebugClipboard } from "./utils/debug-info"
 import { taskOwningDirectory } from "./services/task-directory"
 import { taskScopedPath } from "./services/task-path"
+import { createAnimationFrameScheduler } from "./utils/animation-frame"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -1790,6 +1791,7 @@ interface CenterWorkbenchPanelResize {
 }
 
 let centerWorkbenchPanelResize: CenterWorkbenchPanelResize | null = null
+let pendingCenterWorkbenchPanelResizeClientX: number | null = null
 
 function startCenterWorkbenchPanelResize(event: PointerEvent, leftPanel: CenterWorkbenchPanel): void {
   const metrics = centerWorkbenchPanelResizeMetrics(leftPanel)
@@ -1806,6 +1808,21 @@ function startCenterWorkbenchPanelResize(event: PointerEvent, leftPanel: CenterW
   event.preventDefault()
 }
 
+function applyPendingCenterWorkbenchPanelResize(): void {
+  const drag = centerWorkbenchPanelResize
+  const clientX = pendingCenterWorkbenchPanelResizeClientX
+  pendingCenterWorkbenchPanelResizeClientX = null
+  if (!drag || clientX == null) return
+  updateCenterWorkbenchPanelWeights(drag, clientX - drag.leftRect.left)
+  renderCenterWorkbenchPanelSeparators()
+}
+
+const applyCenterWorkbenchPanelResizeOnFrame = createAnimationFrameScheduler(applyPendingCenterWorkbenchPanelResize)
+disposers.push(() => {
+  applyCenterWorkbenchPanelResizeOnFrame.cancel()
+  pendingCenterWorkbenchPanelResizeClientX = null
+})
+
 function updateCenterWorkbenchPanelWeights(
   metrics: Pick<CenterWorkbenchPanelResize, "leftPanel" | "rightPanel" | "totalWidth" | "totalWeight" | "minWidth">,
   rawLeftWidth: number,
@@ -1821,10 +1838,9 @@ function updateCenterWorkbenchPanelWeights(
 }
 
 function updateCenterWorkbenchPanelResize(event: PointerEvent): void {
-  const drag = centerWorkbenchPanelResize
-  if (!drag) return
-  updateCenterWorkbenchPanelWeights(drag, event.clientX - drag.leftRect.left)
-  renderCenterWorkbenchPanelSeparators()
+  if (!centerWorkbenchPanelResize) return
+  pendingCenterWorkbenchPanelResizeClientX = event.clientX
+  applyCenterWorkbenchPanelResizeOnFrame.schedule()
 }
 
 function resizeCenterWorkbenchPanelByKeyboard(event: KeyboardEvent, leftPanel: CenterWorkbenchPanel): void {
@@ -1852,6 +1868,8 @@ function resizeCenterWorkbenchPanelByKeyboard(event: KeyboardEvent, leftPanel: C
 
 function stopCenterWorkbenchPanelResize(): void {
   if (!centerWorkbenchPanelResize) return
+  applyCenterWorkbenchPanelResizeOnFrame.cancel()
+  applyPendingCenterWorkbenchPanelResize()
   centerWorkbenchPanelResize = null
   delete document.body.dataset.centerWorkbenchPanelResizing
   saveSettings()
@@ -1901,13 +1919,16 @@ window.addEventListener(
   },
   listenerOpts,
 )
-const onResize = () => {
+function applyWindowResize(): void {
   applyZoom(settingsStore.zoom)
   renderPaneLayout(paneCallbacks.getState(), PANEL_PANE_CONFIG)
   renderCenterWorkbenchPanelSeparators()
 }
-window.addEventListener("resize", onResize, listenerOpts)
-if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize, listenerOpts)
+
+const applyWindowResizeOnFrame = createAnimationFrameScheduler(applyWindowResize)
+disposers.push(() => applyWindowResizeOnFrame.cancel())
+window.addEventListener("resize", applyWindowResizeOnFrame.schedule, listenerOpts)
+if (window.visualViewport) window.visualViewport.addEventListener("resize", applyWindowResizeOnFrame.schedule, listenerOpts)
 window.addEventListener(
   "blur",
   () => {
