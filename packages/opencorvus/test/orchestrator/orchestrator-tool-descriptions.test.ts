@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { asSchema } from "ai"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { BrowserPreviewToolStaticDefinition } from "../../src/tool/browser-preview"
 
@@ -179,6 +180,20 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   })
 
   test("frontend tool schemas expose one registered field per tool input", () => {
+    const frontendDesignJsonSchema = asSchema(tools.frontend_design.inputSchema as any).jsonSchema as any
+    const frontendResearchJsonSchema = asSchema(tools.frontend_research.inputSchema as any).jsonSchema as any
+
+    expect(frontendDesignJsonSchema.properties?.urls?.description).toContain("Use the plural field `urls`")
+    expect(frontendDesignJsonSchema.properties?.urls?.description).toContain("do not send legacy `url`")
+    expect(frontendDesignJsonSchema.properties?.urls?.description).toContain("at most one non-Figma live/page URL")
+    expect(frontendResearchJsonSchema.properties?.source_urls?.description).toContain(
+      "Use the plural field `source_urls`",
+    )
+    expect(frontendResearchJsonSchema.properties?.source_urls?.description).toContain("do not send `url`")
+    expect(frontendResearchJsonSchema.properties?.source_urls?.description).toContain(
+      "exactly one HTTP(S) webpage URL per fresh call",
+    )
+
     expect(Object.keys(tools.frontend_design.inputSchema!.shape)).toEqual([
       "reason",
       "urls",
@@ -385,11 +400,17 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       "command",
       "workdir",
       "url",
+      "viewports",
       "timeout",
       "leaseTimeout",
       "description",
     ])
-    expect(tools.browser_preview.inputSchema!.safeParse({ command: "npm run dev" }).success).toBe(true)
+    expect(
+      tools.browser_preview.inputSchema!.safeParse({
+        command: "npm run dev",
+        viewports: [{ id: "desktop", labelKey: "browserPreview.viewport.desktop", width: 1440, height: 900 }],
+      }).success,
+    ).toBe(true)
     expect(tools.browser_preview.inputSchema!.safeParse({ url: "http://127.0.0.1:5173/" }).success).toBe(false)
   })
 

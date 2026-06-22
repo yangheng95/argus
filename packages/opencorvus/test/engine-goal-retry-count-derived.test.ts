@@ -54,4 +54,9 @@ describe("engine_goal.retry_count column retired", () => {
     // the retry_count column doesn't exist anymore.
     expect(body).not.toMatch(/EngineGoalTable[\s\S]*?retry_count:/m)
   })
+
+  test("inspect-task diagnostic does not query retired engine_goal retry_count", () => {
+    const source = readFileSync(resolve(import.meta.dir, "../../../script/inspect-task.ts"), "utf8")
+    expect(source).not.toContain("retry_count")
+  })
 })

@@ -46,6 +46,13 @@ describe("engine_goal schema — runtime workspace columns retired", () => {
     expect(ddlCode).not.toMatch(/^\s*workspace_base_ref\s+text/m)
   })
 
+  test("inspect-task diagnostic does not query retired engine_goal workspace columns", () => {
+    const source = readFileSync(resolve(import.meta.dir, "../../../script/inspect-task.ts"), "utf8")
+    expect(source).not.toContain("workspace_branch")
+    expect(source).not.toContain("workspace_dir")
+    expect(source).not.toContain("workspace_base_ref")
+  })
+
   test("findGoalLatestWorkspace is exported from engine/store", async () => {
     const mod = await import("@/engine/store")
     expect(typeof mod.findGoalLatestWorkspace).toBe("function")
