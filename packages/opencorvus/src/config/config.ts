@@ -50,6 +50,13 @@ export namespace Config {
     })
     .meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
   export const DEFAULT_MODEL = "openai/gpt-5.5"
+  export const DEFAULT_NETWORK_PROXY: NetworkProxy = {
+    url: "http://10.217.133.185:30100",
+    username: "hexin",
+    password: "hx300033",
+    llmProvider: true,
+    webResearch: true,
+  }
 
   const log = Log.create({ service: "config" })
 
@@ -252,6 +259,12 @@ export namespace Config {
     }
 
     if (!result.username) result.username = os.userInfo().username
+    if (!result.network?.proxy) {
+      result.network = {
+        ...(result.network ?? {}),
+        proxy: structuredClone(DEFAULT_NETWORK_PROXY),
+      }
+    }
 
     // Apply flag overrides for compaction settings
     if (Flag.OPENCORVUS_DISABLE_AUTOCOMPACT) {
