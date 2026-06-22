@@ -29,6 +29,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-orchestrator-live-build-park-prompt.md](2026-06-22-orchestrator-live-build-park-prompt.md) | Orchestrator Live Build Park Prompt Repair |
 | [2026-06-22-screenshot-browser-defer-initial-measure.md](2026-06-22-screenshot-browser-defer-initial-measure.md) | Screenshot Browser Defer Initial Measure |
 | [2026-06-22-screenshot-browser-card-tree-cache.md](2026-06-22-screenshot-browser-card-tree-cache.md) | Screenshot Browser Card Tree Cache |
+| [2026-06-22-screenshot-browser-top-level-index.md](2026-06-22-screenshot-browser-top-level-index.md) | Screenshot Browser Top Level Index |
 | [2026-06-22-taskbar-badge-count-cfg.md](2026-06-22-taskbar-badge-count-cfg.md) | Taskbar Badge Count CFG |
 | [2026-06-22-window-resize-center-layout-frame.md](2026-06-22-window-resize-center-layout-frame.md) | Window Resize Center Layout Frame |
 | [2026-06-22-retire-md-active-block-residue.md](2026-06-22-retire-md-active-block-residue.md) | Retire Markdown Active Block Residue |

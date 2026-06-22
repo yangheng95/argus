@@ -5,7 +5,6 @@ import { cardTreeStore } from "../store/card-tree"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import {
   buildScreenshotBrowserRows,
-  collectScreenshotBrowserItemsFromCardTree,
   groupScreenshotBrowserItems,
   type ScreenshotBrowserItem,
   type ScreenshotBrowserRow,
@@ -176,8 +175,7 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
   const active = createMemo(() => props.active())
   const items = createMemo(() => {
     if (!active()) return []
-    void cardTreeStore.visibleVersion
-    return collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)
+    return cardTreeStore.screenshotItems
   })
   const groups = createMemo(() => groupScreenshotBrowserItems(items()))
   const columnCount = createMemo(() => {

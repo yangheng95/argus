@@ -47,6 +47,7 @@ import {
 } from "../utils/screenshot-browser"
 import {
   cardTreeStore,
+  registerCardTreeOrderStatsHandler,
   registerCardTreePruneStatsHandler,
   setCardTreeStore,
   type ActivityCounts,
@@ -237,6 +238,55 @@ function equalScreenshotItems(a: readonly ScreenshotBrowserItem[] | undefined, b
 // ── Dirty queue + bubble-up ──
 
 const dirtyCardIDs = new Set<string>()
+let topLevelRootIDs = new Set<string>()
+let topLevelScreenshotItemSets = new Map<string, readonly ScreenshotBrowserItem[]>()
+let topLevelOrderDirty = true
+let topLevelScreenshotItemsDirty = true
+
+function markTopLevelOrderDirty(): void {
+  topLevelOrderDirty = true
+  topLevelScreenshotItemsDirty = true
+}
+
+function syncTopLevelRootScreenshotItems(cardID: string, items: readonly ScreenshotBrowserItem[]): void {
+  if (!topLevelRootIDs.has(cardID)) return
+  if (items.length > 0) {
+    topLevelScreenshotItemSets.set(cardID, items)
+  } else {
+    topLevelScreenshotItemSets.delete(cardID)
+  }
+  topLevelScreenshotItemsDirty = true
+}
+
+function rebuildTopLevelScreenshotRoots(): void {
+  const nextRootIDs = new Set<string>()
+  const nextItemSets = new Map<string, readonly ScreenshotBrowserItem[]>()
+  for (const cardID of cardTreeStore.order) {
+    if (nextRootIDs.has(cardID)) continue
+    nextRootIDs.add(cardID)
+    const card = cardTreeStore.cards[cardID]
+    if (!card) throw new Error(`card-tree stats order references missing card ${cardID}`)
+    const items = card.subtreeScreenshotItems
+    if (!Array.isArray(items)) {
+      throw new Error(`card-tree root ${cardID} is missing subtreeScreenshotItems cache`)
+    }
+    if (items.length > 0) nextItemSets.set(cardID, items)
+  }
+  topLevelRootIDs = nextRootIDs
+  topLevelScreenshotItemSets = nextItemSets
+  topLevelOrderDirty = false
+  topLevelScreenshotItemsDirty = true
+}
+
+function flushTopLevelScreenshotItems(): void {
+  if (topLevelOrderDirty) rebuildTopLevelScreenshotRoots()
+  if (!topLevelScreenshotItemsDirty) return
+  topLevelScreenshotItemsDirty = false
+  const screenshotItems = mergeScreenshotBrowserItemSets(topLevelScreenshotItemSets.values())
+  if (!equalScreenshotItems(cardTreeStore.screenshotItems, screenshotItems)) {
+    setCardTreeStore("screenshotItems", screenshotItems)
+  }
+}
 
 /** Mark a card as needing a subtree-stats recompute. Cheap; safe to call
  *  many times per batch — recompute happens once in `flushCardStats`. */
@@ -317,6 +367,7 @@ function recomputeNodeStats(cardID: string): boolean {
   }
   if (!equalScreenshotItems(card.subtreeScreenshotItems, screenshotItems)) {
     setCardTreeStore("cards", cardID, "subtreeScreenshotItems", screenshotItems)
+    syncTopLevelRootScreenshotItems(cardID, screenshotItems)
     changed = true
   }
   return changed
@@ -339,23 +390,32 @@ function bubbleStatsFromCard(cardID: string, seen: Set<string>): void {
  *  ancestors visited via a prior entry are skipped. Safe to call when the
  *  queue is empty (no-op). */
 export function flushCardStats(): void {
-  if (dirtyCardIDs.size === 0) return
-  const toFlush = [...dirtyCardIDs]
-  dirtyCardIDs.clear()
-  const seen = new Set<string>()
-  // Re-seeding seen from scratch each flush is correct: a card touched in
-  // a prior flush has its cache already settled relative to its descendants;
-  // a new flush only needs to revisit ancestors of cards dirtied THIS round.
-  for (const id of toFlush) bubbleStatsFromCard(id, seen)
+  if (dirtyCardIDs.size > 0) {
+    const toFlush = [...dirtyCardIDs]
+    dirtyCardIDs.clear()
+    const seen = new Set<string>()
+    // Re-seeding seen from scratch each flush is correct: a card touched in
+    // a prior flush has its cache already settled relative to its descendants;
+    // a new flush only needs to revisit ancestors of cards dirtied THIS round.
+    for (const id of toFlush) bubbleStatsFromCard(id, seen)
+  }
+  flushTopLevelScreenshotItems()
 }
 
 /** Test-only escape hatch: clear queue without flushing. Production code
  *  should never need this — tree-writer always flushes at batch end. */
 export function __resetCardStatsForTests(): void {
   dirtyCardIDs.clear()
+  topLevelRootIDs = new Set<string>()
+  topLevelScreenshotItemSets = new Map<string, readonly ScreenshotBrowserItem[]>()
+  topLevelOrderDirty = true
+  topLevelScreenshotItemsDirty = true
 }
 
+registerCardTreeOrderStatsHandler(markTopLevelOrderDirty)
+
 registerCardTreePruneStatsHandler(() => {
+  markTopLevelOrderDirty()
   for (const [cardID, card] of Object.entries(cardTreeStore.cards)) {
     const parentID = card?.parentID
     if (parentID) {

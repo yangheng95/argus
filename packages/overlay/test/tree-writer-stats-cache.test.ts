@@ -22,7 +22,8 @@ installRealOverlayI18n()
 
 const { setBoardStore } = await import("../src/store/board")
 const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer")
-const { cardTreeStore } = await import("../src/store/card-tree")
+const { cardTreeStore, replaceCardTreeOrder, setCardTreeStore } = await import("../src/store/card-tree")
+const { flushCardStats } = await import("../src/store/card-tree-stats")
 const cardTreeUtils = await import("../src/utils/card-tree")
 const screenshotBrowserUtils = await import("../src/utils/screenshot-browser")
 
@@ -118,6 +119,17 @@ function walkScreenshotItems(cardID: string): Array<import("../src/utils/screens
   return screenshotBrowserUtils.mergeScreenshotBrowserItemSets(itemSets)
 }
 
+function walkTopLevelScreenshotItems(): Array<import("../src/utils/screenshot-browser").ScreenshotBrowserItem> {
+  const seen = new Set<string>()
+  const itemSets: Array<Array<import("../src/utils/screenshot-browser").ScreenshotBrowserItem>> = []
+  for (const cardID of cardTreeStore.order) {
+    if (seen.has(cardID)) continue
+    seen.add(cardID)
+    itemSets.push(walkScreenshotItems(cardID))
+  }
+  return screenshotBrowserUtils.mergeScreenshotBrowserItemSets(itemSets)
+}
+
 function forEachStoreBackedCard(callback: (card: any) => void): void {
   for (const card of Object.values(cardTreeStore.cards)) {
     if (!card) continue
@@ -135,6 +147,7 @@ function expectCacheMatchesWalk(): void {
     expect(card.subtreeCounts).toEqual(fresh)
     expect(card.subtreeScreenshotItems).toEqual(walkScreenshotItems(card.id))
   })
+  expect(cardTreeStore.screenshotItems).toEqual(walkTopLevelScreenshotItems())
 }
 
 // ── Cases ──
@@ -327,6 +340,11 @@ test("screenshot file, browser evidence, and tool attachment items are cached an
     "/attachment/project/browser.png",
     "/attachment/project/tool.webp",
   ])
+  expect(cardTreeStore.screenshotItems.map((item) => item.src)).toEqual([
+    "/attachment/project/file.png",
+    "/attachment/project/browser.png",
+    "/attachment/project/tool.webp",
+  ])
 
   applyEvent({
     type: "message.part.removed",
@@ -343,6 +361,87 @@ test("screenshot file, browser evidence, and tool attachment items are cached an
     "/attachment/project/file.png",
     "/attachment/project/tool.webp",
   ])
+  expect(cardTreeStore.screenshotItems.map((item) => item.src)).toEqual([
+    "/attachment/project/file.png",
+    "/attachment/project/tool.webp",
+  ])
+})
+
+test("resetWriter clears the top-level screenshot cache", () => {
+  bootstrap()
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: "part_screenshot_reset",
+        messageID: MSG_ID_A,
+        sessionID: SID,
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "file",
+        url: "/attachment/project/reset.png",
+        mime: "image/png",
+        filename: "reset.png",
+      },
+    },
+  })
+  flushBufferedPartDeltas()
+  expect(cardTreeStore.screenshotItems.map((item) => item.src)).toEqual(["/attachment/project/reset.png"])
+
+  resetWriter()
+
+  expect(cardTreeStore.order).toEqual([])
+  expect(cardTreeStore.screenshotItems).toEqual([])
+})
+
+test("top-level screenshot cache bounds many roots before the panel reads it", () => {
+  resetWriter()
+  try {
+    const rootCount = 5_000
+    const order = Array.from({ length: rootCount }, (_item, index) => `bulk-root-${index}`)
+    const cards = Object.fromEntries(
+      order.map((id, index) => {
+        const item = {
+          id: `file:bulk-message-${index}:bulk-part-${index}`,
+          role: "visual-qa" as const,
+          src: `/attachment/project/bulk-${index}.png`,
+          alt: `bulk-${index}.png`,
+          title: `bulk-${index}.png`,
+          detail: "image/png",
+          time: index + 1,
+          messageID: `bulk-message-${index}`,
+          partID: `bulk-part-${index}`,
+          source: "file" as const,
+        }
+        return [
+          id,
+          {
+            id,
+            kind: "agent" as const,
+            role: "visual-qa",
+            stage: "visual-qa",
+            title: `Bulk ${index}`,
+            time: index + 1,
+            parts: [],
+            childIDs: [],
+            subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
+            subtreeScreenshotItems: [item],
+          },
+        ]
+      }),
+    )
+
+    setCardTreeStore("cards", cards)
+    replaceCardTreeOrder(order)
+    flushCardStats()
+
+    expect(cardTreeStore.screenshotItems).toHaveLength(screenshotBrowserUtils.SCREENSHOT_BROWSER_ITEM_LIMIT)
+    expect(cardTreeStore.screenshotItems[0]?.src).toBe("/attachment/project/bulk-4999.png")
+    expect(cardTreeStore.screenshotItems.at(-1)?.src).toBe("/attachment/project/bulk-4880.png")
+  } finally {
+    resetWriter()
+  }
 })
 
 test("subtree latest-hit cache equals the fresh recursive pick", () => {
