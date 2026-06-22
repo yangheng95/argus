@@ -101,10 +101,6 @@ fn startup_overlay_window_size(
     constrain_overlay_window_size(width, height, min_size)
 }
 
-fn overlay_window_needs_resize(current: OverlayWindowSize, next: OverlayWindowSize) -> bool {
-    (current.width - next.width).abs() > 0.5 || (current.height - next.height).abs() > 0.5
-}
-
 // ── Windows: Job Object with KILL_ON_JOB_CLOSE ──────────────────────────────
 //
 // When the overlay exits (even on crash), closing the last handle to the job
@@ -1575,28 +1571,6 @@ fn main() {
         .expect("error while building tauri application")
         .run(|app, event| match event {
             tauri::RunEvent::Exit => stop_server(app),
-            tauri::RunEvent::WindowEvent {
-                label,
-                event: tauri::WindowEvent::Resized(size),
-                ..
-            } if label == "main" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let min_size = overlay_main_min_size(app.config());
-                    let scale = window
-                        .scale_factor()
-                        .expect("main window scale factor must be readable");
-                    let logical_size = size.to_logical::<f64>(scale);
-                    let current = OverlayWindowSize {
-                        width: logical_size.width,
-                        height: logical_size.height,
-                    };
-                    let next =
-                        constrain_overlay_window_size(current.width, current.height, min_size);
-                    if overlay_window_needs_resize(current, next) {
-                        let _ = window.set_size(tauri::LogicalSize::new(next.width, next.height));
-                    }
-                }
-            }
             _ => {}
         })
 }
