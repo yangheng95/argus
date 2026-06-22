@@ -28,6 +28,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-overlay-ui-serving-source.md](2026-06-22-overlay-ui-serving-source.md) | Overlay UI Serving Source |
 | [2026-06-22-packaged-overlay-ui-asset-parity.md](2026-06-22-packaged-overlay-ui-asset-parity.md) | Packaged Overlay UI Asset Parity |
 | [2026-06-22-orchestrator-live-build-park-prompt.md](2026-06-22-orchestrator-live-build-park-prompt.md) | Orchestrator Live Build Park Prompt Repair |
+| [2026-06-22-overlay-proxy-delete-button.md](2026-06-22-overlay-proxy-delete-button.md) | Overlay Proxy Delete Button |
 | [2026-06-22-mission-ledger-connection-boundary.md](2026-06-22-mission-ledger-connection-boundary.md) | Mission Ledger Connection Boundary |
 | [2026-06-22-left-pane-drag-frame-coalescing.md](2026-06-22-left-pane-drag-frame-coalescing.md) | Left Pane Drag Frame Coalescing |
 | [2026-06-22-screenshot-browser-defer-initial-measure.md](2026-06-22-screenshot-browser-defer-initial-measure.md) | Screenshot Browser Defer Initial Measure |

@@ -53,6 +53,7 @@ import {
   ShoppingBag,
   Square,
   Terminal,
+  Trash2,
   Undo2,
   Upload,
   Workflow,
@@ -151,6 +152,7 @@ export type IconName =
   | "drag-handle"
   | "download"
   | "upload"
+  | "delete"
   // Status family (was Board.statusIcon innerHTML strings + status-icon
   // CSS data-stroke/data-fill switch). The status-icon CSS rules
   // (.status-icon[data-status="..."]) drive `color`, which currentColor
@@ -235,6 +237,7 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "drag-handle": { component: GripVertical },
   download: { component: Download },
   upload: { component: Upload },
+  delete: { component: Trash2 },
   "status-idle": { component: Circle },
   "status-queued": { component: Clock },
   "status-active": { component: Play },
