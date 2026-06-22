@@ -10607,6 +10607,10 @@ export type TaskCreateData = {
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
+    /**
+     * POST /task only. Defaults to true. When true, the selected directory is created when missing and initialized as Git when needed before task creation.
+     */
+    "init-git"?: boolean
   }
   url: "/task"
 }

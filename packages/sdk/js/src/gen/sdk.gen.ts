@@ -6328,6 +6328,7 @@ export class Task extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      "init-git"?: boolean
       project?: string
       requestID?: string
       source?: string
@@ -6798,6 +6799,7 @@ export class Task extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
+            { in: "query", key: "init-git" },
             { in: "body", key: "project" },
             { in: "body", key: "requestID" },
             { in: "body", key: "source" },

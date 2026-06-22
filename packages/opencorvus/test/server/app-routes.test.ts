@@ -50,19 +50,26 @@ describe("app routes", () => {
   test("Server.openapi documents directory query for project-scoped routes only once", async () => {
     const spec = await Server.openapi()
     const paths = spec.paths ?? {}
-    const parameterNames = (operation: { parameters?: Array<{ name?: string; in?: string }> } | undefined) =>
+    const queryParameterNames = (operation: { parameters?: Array<{ name?: string; in?: string }> } | undefined) =>
       (operation?.parameters ?? [])
-        .filter((parameter) => parameter.in === "query" && parameter.name === "directory")
+        .filter((parameter) => parameter.in === "query")
         .map((parameter) => parameter.name)
+    const directoryParameterNames = (operation: { parameters?: Array<{ name?: string; in?: string }> } | undefined) =>
+      queryParameterNames(operation).filter((name) => name === "directory")
 
-    expect(parameterNames(paths["/project/current"]?.get)).toEqual(["directory"])
-    expect(parameterNames(paths["/task/{taskID}/browser-preview"]?.get)).toEqual(["directory"])
-    expect(parameterNames(paths["/task/{taskID}/browser-preview/evidence/{evidenceID}"]?.get)).toEqual(["directory"])
-    expect(parameterNames(paths["/session"]?.get)).toEqual(["directory"])
-    expect(parameterNames(paths["/global/health"]?.get)).toEqual([])
-    expect(parameterNames(paths["/log"]?.get)).toEqual([])
-    expect(parameterNames(paths["/log/files"]?.get)).toEqual([])
-    expect(parameterNames(paths["/log/tail"]?.get)).toEqual([])
+    expect(directoryParameterNames(paths["/project/current"]?.get)).toEqual(["directory"])
+    expect(directoryParameterNames(paths["/task/{taskID}/browser-preview"]?.get)).toEqual(["directory"])
+    expect(directoryParameterNames(paths["/task/{taskID}/browser-preview/evidence/{evidenceID}"]?.get)).toEqual([
+      "directory",
+    ])
+    expect(directoryParameterNames(paths["/session"]?.get)).toEqual(["directory"])
+    expect(directoryParameterNames(paths["/global/health"]?.get)).toEqual([])
+    expect(directoryParameterNames(paths["/log"]?.get)).toEqual([])
+    expect(directoryParameterNames(paths["/log/files"]?.get)).toEqual([])
+    expect(directoryParameterNames(paths["/log/tail"]?.get)).toEqual([])
+    expect(queryParameterNames(paths["/task"]?.post)).toEqual(["directory", "init-git"])
+    expect(queryParameterNames(paths["/tasks"]?.get)).toContain("directory")
+    expect(queryParameterNames(paths["/tasks"]?.get)).not.toContain("init-git")
   })
 
   test("Server.openapi marks selected preview target request body required", async () => {
