@@ -46,6 +46,9 @@ type OverlayAssetRefs = {
   styles: string[]
 }
 
+const OVERLAY_UI_SOURCE_HEADER = "x-opencorvus-overlay-ui-source"
+const OVERLAY_UI_ASSETS_HEADER = "x-opencorvus-overlay-ui-assets"
+
 function overlayAssetRefs(html: string): OverlayAssetRefs {
   const scripts = Array.from(
     new Set(Array.from(html.matchAll(/\bsrc=["'](?:\.?\/)?(assets\/[^"']+\.js)["']/g), (match) => match[1])),
@@ -59,6 +62,10 @@ function overlayAssetRefs(html: string): OverlayAssetRefs {
     scripts,
     styles,
   }
+}
+
+function overlayAssetHeader(refs: OverlayAssetRefs): string {
+  return [...refs.scripts, ...refs.styles].sort().join(",")
 }
 
 async function currentDistAssetRefs(): Promise<OverlayAssetRefs> {
@@ -149,6 +156,8 @@ describe("packaged overlay-server health", () => {
       | undefined
     let uiStatus: number | undefined
     let uiContentType: string | null | undefined
+    let uiSourceHeader: string | null | undefined
+    let uiAssetsHeader: string | null | undefined
     let uiHtml = ""
     const deadline = Date.now() + 30_000
     while (Date.now() < deadline) {
@@ -161,6 +170,8 @@ describe("packaged overlay-server health", () => {
         healthStatus = healthResponse.status
         uiStatus = uiResponse.status
         uiContentType = uiResponse.headers.get("content-type")
+        uiSourceHeader = uiResponse.headers.get(OVERLAY_UI_SOURCE_HEADER)
+        uiAssetsHeader = uiResponse.headers.get(OVERLAY_UI_ASSETS_HEADER)
         uiHtml = indexHtml
         if (healthResponse.ok) {
           healthBody = JSON.parse(healthText) as {
@@ -184,6 +195,8 @@ describe("packaged overlay-server health", () => {
 
     expect(uiStatus).toBe(200)
     expect(uiContentType).toContain("text/html")
+    expect(uiSourceHeader).toBe("embedded")
+    expect(uiAssetsHeader).toBe(overlayAssetHeader(expectedAssetRefs))
     expect(uiHtml).toContain('data-page="overlay"')
     expect(overlayAssetRefs(uiHtml)).toEqual(expectedAssetRefs)
 
@@ -211,6 +224,11 @@ describe("packaged overlay-server health", () => {
       expect(assetText.length).toBeGreaterThan(0)
       expect(assetText).not.toContain('data-page="overlay"')
     }
+
+    const missingAssetResponse = await fetch(`http://127.0.0.1:${port}/ui/assets/missing-health-probe.css`)
+    expect(missingAssetResponse.status).toBe(404)
+    expect(missingAssetResponse.headers.get("content-type")).not.toContain("text/html")
+    expect(await missingAssetResponse.text()).not.toContain('data-page="overlay"')
 
     proc.kill()
     const [stdout, stderr] = await Promise.all([collect(proc.stdout), collect(proc.stderr)])

@@ -3,7 +3,13 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { Hono } from "hono"
-import { OverlayUI, selectOverlayUiServingSource } from "../../src/server/overlay-ui"
+import {
+  OVERLAY_UI_ASSETS_HEADER,
+  OVERLAY_UI_SOURCE_HEADER,
+  OverlayUI,
+  overlayUiAssetRefs,
+  selectOverlayUiServingSource,
+} from "../../src/server/overlay-ui"
 import { Log } from "../../src/util/log"
 import { ensureOverlayDist } from "../../../overlay/test/overlay-dist"
 
@@ -106,6 +112,9 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
     expect(body).toContain('src="./i18n/zh-CN.json"')
     // External URLs untouched
     expect(body).toContain('src="https://cdn.example.com/keep.js"')
+    expect(res.headers.get(OVERLAY_UI_SOURCE_HEADER)).toBe("directory")
+    expect(res.headers.get(OVERLAY_UI_ASSETS_HEADER)).toBe("assets/app.js,assets/main.css")
+    expect(overlayUiAssetRefs(body)).toEqual(["assets/app.js", "assets/main.css"])
   })
 
   test("GET /ui/ preserves reverse-proxy public prefix in rewritten asset paths", async () => {
@@ -147,6 +156,18 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
     expect(body).toBe(`body{margin:0}`)
   })
 
+  test("missing static assets return 404 instead of SPA fallback HTML", async () => {
+    const assetRes = await app.request("http://localhost/ui/assets/missing.css")
+    expect(assetRes.status).toBe(404)
+    expect(assetRes.headers.get("content-type")).not.toMatch(/text\/html/)
+    expect(await assetRes.text()).not.toContain('<div id="root">')
+
+    const i18nRes = await app.request("http://localhost/ui/i18n/missing.json")
+    expect(i18nRes.status).toBe(404)
+    expect(i18nRes.headers.get("content-type")).not.toMatch(/text\/html/)
+    expect(await i18nRes.text()).not.toContain('<div id="root">')
+  })
+
   test("SPA fallback: missing route serves rewritten index.html (200, not 404)", async () => {
     // Deep-link case: webview reload at /ui/task/abc/conversation
     // — no on-disk file there, must fall through to index.html so
@@ -158,6 +179,8 @@ describe("OverlayUI route handler (audit W2-G4)", () => {
     expect(body).toContain('<div id="root">')
     // Rewrite must still apply on the fallback path.
     expect(body).toContain('src="../../assets/app.js"')
+    expect(res.headers.get(OVERLAY_UI_SOURCE_HEADER)).toBe("directory")
+    expect(res.headers.get(OVERLAY_UI_ASSETS_HEADER)).toBe("assets/app.js,assets/main.css")
   })
 
   test("path traversal probe never leaks the on-disk secret file", async () => {
@@ -198,6 +221,8 @@ describe("OverlayUI built bundle", () => {
     const indexRes = await app.request("http://localhost/ui/index.html")
     expect(indexRes.status).toBe(200)
     const indexHtml = await indexRes.text()
+    expect(indexRes.headers.get(OVERLAY_UI_SOURCE_HEADER)).toBe("directory")
+    expect(indexRes.headers.get(OVERLAY_UI_ASSETS_HEADER)).toBe(overlayUiAssetRefs(indexHtml).join(","))
     const scriptMatch = indexHtml.match(/src="\.\/assets\/([^"]+\.js)"/)
     expect(scriptMatch?.[1]).toBeDefined()
 

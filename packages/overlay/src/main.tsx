@@ -102,6 +102,7 @@ import { taskOwningDirectory } from "./services/task-directory"
 import { taskScopedPath } from "./services/task-path"
 import { createAnimationFrameScheduler } from "./utils/animation-frame"
 import { promptProfileCatalogRequestKey, promptProfileCatalogScope } from "./services/prompt-profile-scope"
+import { clampCenterWorkbenchResizeWidth, centerWorkbenchResizeRange } from "./utils/center-workbench-size"
 import { layoutTokenPx } from "./utils/layout-tokens"
 
 // ── Module teardown ──
@@ -692,6 +693,8 @@ function centerWorkbenchPanelResizeMetrics(
   const rightRect = rightBody.getBoundingClientRect()
   const totalWidth = leftRect.width + rightRect.width
   if (totalWidth <= 0) return null
+  const minWidth = centerWorkbenchPanelMinWidth(totalWidth)
+  if (!centerWorkbenchResizeRange(totalWidth, minWidth)) return null
   return {
     leftPanel,
     rightPanel,
@@ -701,7 +704,7 @@ function centerWorkbenchPanelResizeMetrics(
     rightRect,
     totalWidth,
     totalWeight: centerWorkbenchPanelWeight(leftPanel) + centerWorkbenchPanelWeight(rightPanel),
-    minWidth: centerWorkbenchPanelMinWidth(totalWidth),
+    minWidth,
   }
 }
 
@@ -718,11 +721,12 @@ function renderCenterWorkbenchPanelSeparators(): void {
     const separator = separators[panel]
     if (!separator) continue
     const rightPanel = centerWorkbenchRightPanel(panel, panels)
-    const enabled = !!rightPanel && showsAdjacentPanels
+    const metrics = rightPanel ? centerWorkbenchPanelResizeMetrics(panel, panels) : null
+    const enabled = !!rightPanel && !!metrics && showsAdjacentPanels
     separator.hidden = !enabled
     separator.dataset.disabled = String(!enabled)
     separator.tabIndex = enabled ? 0 : -1
-    if (!rightPanel) {
+    if (!rightPanel || !metrics) {
       separator.removeAttribute("aria-controls")
       separator.removeAttribute("aria-valuemin")
       separator.removeAttribute("aria-valuemax")
@@ -733,10 +737,9 @@ function renderCenterWorkbenchPanelSeparators(): void {
     const rightControlID = views[rightPanel]?.id
     if (leftControlID && rightControlID) separator.setAttribute("aria-controls", `${leftControlID} ${rightControlID}`)
     else separator.removeAttribute("aria-controls")
-    const metrics = centerWorkbenchPanelResizeMetrics(panel, panels)
-    const min = metrics ? Math.round(metrics.minWidth) : 0
-    const max = metrics ? Math.round(metrics.totalWidth - metrics.minWidth) : 0
-    const now = metrics ? Math.round(metrics.leftRect.width) : 0
+    const min = Math.round(metrics.minWidth)
+    const max = Math.round(metrics.totalWidth - metrics.minWidth)
+    const now = Math.round(metrics.leftRect.width)
     separator.setAttribute("aria-valuemin", String(min))
     separator.setAttribute("aria-valuemax", String(max))
     separator.setAttribute("aria-valuenow", String(Math.min(Math.max(now, min), max)))
@@ -1896,7 +1899,8 @@ function updateCenterWorkbenchPanelWeights(
   metrics: Pick<CenterWorkbenchPanelResize, "leftPanel" | "rightPanel" | "totalWidth" | "totalWeight" | "minWidth">,
   rawLeftWidth: number,
 ): void {
-  const leftWidth = Math.min(Math.max(rawLeftWidth, metrics.minWidth), metrics.totalWidth - metrics.minWidth)
+  const leftWidth = clampCenterWorkbenchResizeWidth(metrics.totalWidth, metrics.minWidth, rawLeftWidth)
+  if (leftWidth === null) return
   const leftWeight = metrics.totalWeight * (leftWidth / metrics.totalWidth)
   const rightWeight = metrics.totalWeight - leftWeight
   setSettingsStore("centerWorkbenchPanelWeights", {
