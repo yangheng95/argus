@@ -52,7 +52,7 @@ import {
   LIVE_GOAL_RUN_STATUSES,
   LIVE_RUN_STATUSES,
 } from "./catalog"
-import { deriveTaskStatus } from "./task-status"
+import { deriveTaskStatus, taskTerminalReason } from "./task-status"
 import { ArchitectContractGraphSchema, type ArchitectContractGraph } from "@/architect/contract-graph"
 import {
   ResearchBriefSchema,
@@ -1622,6 +1622,7 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     title: row.title,
     request: row.request,
     status: deriveTaskStatus(row),
+    terminalReason: taskTerminalReason(row),
     priority: row.priority,
     queue: {
       order: row.queue_order,
@@ -1656,6 +1657,7 @@ export function viewTaskListTask(row: TaskRow, input?: { directory?: string; que
     source: row.source,
     title: row.title,
     status: deriveTaskStatus(row),
+    terminalReason: taskTerminalReason(row),
     priority: row.priority,
     queue: {
       order: row.queue_order,

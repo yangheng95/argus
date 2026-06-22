@@ -1,6 +1,6 @@
 import z from "zod"
 import { goalStatusByID } from "@/engine/describe"
-import { deriveTaskStatus, isTaskActive, isTaskQueued } from "@/engine/task-status"
+import { deriveTaskStatus, isTaskActive, isTaskQueued, taskTerminalReason } from "@/engine/task-status"
 import {
   findActivePlanForTask,
   findActiveRunForTask,
@@ -214,6 +214,7 @@ function buildBoard(
       title: task.title,
       request: task.request,
       status: deriveTaskStatus(task),
+      terminalReason: taskTerminalReason(task),
       priority: task.priority,
       // Phase-6-f-4: blocking lives on run (or none when no active run).
       blockingReason: run?.blocking_reason ?? undefined,
@@ -715,6 +716,15 @@ function boardFailure(input: {
       checks: boardChecks(input.evaluation.checks),
     }
   }
+  const terminalReason = taskTerminalReason(input.task)
+  if (terminalReason === "interrupted") {
+    return {
+      source: "task" as const,
+      title: "Task interrupted",
+      summary: clipBoard(input.task.error ?? input.run?.error ?? "Task execution was interrupted."),
+      checks: undefined,
+    }
+  }
   if (input.run?.error) {
     return {
       source: "run" as const,
@@ -760,6 +770,7 @@ function boardOverview(input: {
     | undefined
 }) {
   const derivedStatus = deriveTaskStatus(input.task)
+  const terminalReason = taskTerminalReason(input.task)
   const active = derivedStatus === "queued" || derivedStatus === "active"
   const terminal = derivedStatus === "completed" || derivedStatus === "failed" || derivedStatus === "cancelled"
   const canRetry = terminal && input.pendingInteractions.length === 0
@@ -768,6 +779,8 @@ function boardOverview(input: {
       ? "Waiting on human input"
       : derivedStatus === "completed"
         ? "Accepted acceptance is ready"
+        : terminalReason === "interrupted"
+          ? "Task was interrupted"
         : derivedStatus === "failed"
           ? "Current attempt failed acceptance"
           : derivedStatus === "cancelled"
@@ -796,11 +809,17 @@ function boardOverview(input: {
           detail: "Reply to the permission or question request to unblock the task.",
         }
       : derivedStatus === "failed"
-        ? {
-            kind: "replan" as const,
-            title: "Replan from the latest failure",
-            detail: "Review the failed acceptance result, tighten the scope if needed, then replan or retry.",
-          }
+        ? terminalReason === "interrupted"
+          ? {
+              kind: "retry" as const,
+              title: "Retry after interruption",
+              detail: "The server interrupted this attempt. Retry will continue from the latest durable task context.",
+            }
+          : {
+              kind: "replan" as const,
+              title: "Replan from the latest failure",
+              detail: "Review the failed acceptance result, tighten the scope if needed, then replan or retry.",
+            }
         : derivedStatus === "cancelled"
           ? {
               kind: "retry" as const,
@@ -875,6 +894,7 @@ function buildWorkflowFields(
     projectTaskStepsFromWorkflowEvents(task.id),
   )
   const taskStatus = deriveTaskStatus(task)
+  const terminalReason = taskTerminalReason(task)
 
   const workflowBoard = {
     id: workflow.id,
@@ -887,7 +907,7 @@ function buildWorkflowFields(
       skippable: step.skippable,
       status: (step.scope === "task"
         ? (projectedTaskSteps[step.id]?.status ?? "pending")
-        : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id, taskStatus)) as
+        : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id, taskStatus, terminalReason)) as
         | "pending"
         | "running"
         | "completed"
@@ -1040,10 +1060,12 @@ function deriveGoalScopeStatusFromProjection(
   projection: Record<string, { steps: Record<string, { status: string }> }>,
   stepID: string,
   taskStatus: ReturnType<typeof deriveTaskStatus>,
+  terminalReason?: ReturnType<typeof taskTerminalReason>,
 ): string {
   const entries = Object.values(projection)
   const terminalCancelled = taskStatus === "cancelled"
-  const terminalFailed = taskStatus === "failed"
+  const terminalFailed = taskStatus === "failed" && terminalReason !== "interrupted"
+  const terminalInterrupted = terminalReason === "interrupted"
   const terminalCompleted = taskStatus === "completed"
   if (entries.length === 0) return terminalCancelled ? "skipped" : "pending"
   const statuses = entries.map((g) => g.steps[stepID]?.status ?? "pending")
@@ -1051,6 +1073,7 @@ function deriveGoalScopeStatusFromProjection(
     if (terminalCancelled) return "skipped"
     if (terminalFailed) return "failed"
     if (terminalCompleted) return "completed"
+    if (terminalInterrupted) return "pending"
     return "running"
   }
   if (statuses.every((s) => s === "completed" || s === "skipped")) return "completed"
@@ -1059,6 +1082,7 @@ function deriveGoalScopeStatusFromProjection(
     if (terminalCancelled) return "skipped"
     if (terminalFailed) return "failed"
     if (terminalCompleted) return "completed"
+    if (terminalInterrupted) return "pending"
     return "running"
   }
   if (terminalCancelled) return "skipped"

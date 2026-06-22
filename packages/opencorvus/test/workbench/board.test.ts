@@ -460,6 +460,94 @@ test("cancelled terminal task does not project partially completed goal workflow
   })
 })
 
+test("shutdown-interrupted task is not presented as acceptance failure", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const stamp = now.toString(16)
+  const projectID = `project_board_interrupted_${stamp}`
+  const taskID = `tsk_board_interrupted_${stamp}`
+  const runID = `run_board_interrupted_${stamp}`
+  const goalID = `gol_board_interrupted_${stamp}`
+  const goalRunID = `glr_board_interrupted_${stamp}`
+  const reason = "Server shutdown: SIGINT"
+
+  Database.use((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: tmp.path,
+        name: "Board interrupted workflow projection",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Interrupted task",
+        request: "resume after server shutdown",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now - 10_000,
+        time_updated: now,
+        time_started: now - 10_000,
+        time_completed: now,
+        error: reason,
+        metadata: { interrupted: true },
+      } as any)
+      .run()
+    db.insert(EngineGoalTable)
+      .values({
+        id: goalID,
+        task_id: taskID,
+        title: "Interrupted goal",
+        slug: "interrupted-goal",
+        objective: "This goal was running when the server exited.",
+        order_index: 0,
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run()
+    db.insert(EngineArtifactTable)
+      .values({
+        id: goalRunID,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: goalRunID,
+        kind: "goal_run_attempt",
+        label: "running-before-shutdown",
+        payload: {
+          goal_id: goalID,
+          status: "running",
+          retry_count: 0,
+          time_started: now - 5_000,
+        },
+        time_created: now - 5_000,
+        time_updated: now - 5_000,
+      })
+      .run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      const buildStep = board.workflow.steps.find((step: any) => step.id === "build")
+      expect(board.task.status).toBe("failed")
+      expect(board.task.terminalReason).toBe("interrupted")
+      expect(board.overview.currentFailure.title).toBe("Task interrupted")
+      expect(board.overview.headline).toBe("Task was interrupted")
+      expect(board.overview.nextStep.kind).toBe("retry")
+      expect(buildStep?.status).toBe("pending")
+      expect(buildStep?.status).not.toBe("failed")
+    },
+  })
+})
+
 test("queued task without a run exposes cancel but not retry", async () => {
   await resetDatabase()
   await using tmp = await tmpdir()

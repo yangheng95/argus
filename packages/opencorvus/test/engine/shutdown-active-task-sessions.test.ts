@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { abortActiveTasksForProject, abortCurrentProcessLiveExecution } from "../../src/engine/writer"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { deriveTaskStatus } from "../../src/engine/task-status"
+import { deriveTaskStatus, taskTerminalReason } from "../../src/engine/task-status"
 import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol/message-bridge"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -115,6 +115,7 @@ describe("shutdown aborts active task-owned sessions", () => {
         const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(task).toBeDefined()
         expect(deriveTaskStatus(task!)).toBe("failed")
+        expect(taskTerminalReason(task!)).toBe("interrupted")
         expect(task?.error).toBe(reason)
 
         const part = (await Message.parts(messageID))[0]
@@ -175,6 +176,7 @@ describe("shutdown aborts active task-owned sessions", () => {
     const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
     expect(task).toBeDefined()
     expect(deriveTaskStatus(task!)).toBe("failed")
+    expect(taskTerminalReason(task!)).toBe("interrupted")
     expect(task?.error).toBe(reason)
   })
 
@@ -270,6 +272,7 @@ describe("shutdown aborts active task-owned sessions", () => {
     const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
     expect(task).toBeDefined()
     expect(deriveTaskStatus(task!)).toBe("failed")
+    expect(taskTerminalReason(task!)).toBe("interrupted")
     expect(task?.error).toBe(reason)
     const part = (await Message.parts(messageID))[0]
     expect(part?.type).toBe("tool")

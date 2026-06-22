@@ -295,6 +295,7 @@ export const Task = z.object({
   title: z.string(),
   request: z.string(),
   status: z.enum(["queued", "active", "completed", "failed", "cancelled"]),
+  terminalReason: z.enum(["completed", "failed", "cancelled", "interrupted"]).optional(),
   priority: z.enum(["critical", "high", "normal", "low"]),
   queue: z
     .object({
