@@ -22,7 +22,7 @@ import { Button } from "./ui/Button"
 import { SelectControl } from "./ui/SelectControl"
 import { SegmentedControl } from "./ui/SegmentedControl"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
-import { browserPreviewLivePoint } from "./browser-preview-live-point"
+import { browserPreviewLivePoint, type BrowserPreviewLiveImageRect } from "./browser-preview-live-point"
 
 type BrowserPreviewCandidate = BrowserPreviewTarget["candidates"][number]
 
@@ -317,13 +317,70 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   let liveInputRequestInFlight = false
   let pendingLiveInputScopeKey = ""
   let pendingLiveInputs: BrowserPreviewLiveInput[] = []
+  let liveImageElement: HTMLImageElement | null = null
+  let liveImageRect: BrowserPreviewLiveImageRect | undefined
+  let liveImageRectScopeKey = ""
+  let liveImageResizeObserver: ResizeObserver | null = null
 
   const flushLiveInputOnFrame = createAnimationFrameScheduler(() => {
     void flushLiveInputBatch()
   })
 
+  const clearLiveImageRect = () => {
+    liveImageRect = undefined
+    liveImageRectScopeKey = ""
+  }
+
+  const measureLiveImageRectOnFrame = createAnimationFrameScheduler(() => {
+    const scope = liveScope()
+    const image = liveImage()
+    const element = liveImageElement
+    if (!scope || !image || !element || !browserPreviewLiveImageMatchesScope(image, scope)) {
+      clearLiveImageRect()
+      return
+    }
+    const rect = element.getBoundingClientRect()
+    liveImageRect = {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+    }
+    liveImageRectScopeKey = browserPreviewLiveScopeKey(scope)
+  })
+
+  const scheduleLiveImageRectMeasure = () => {
+    measureLiveImageRectOnFrame.schedule()
+  }
+
+  const disconnectLiveImageElement = () => {
+    liveImageResizeObserver?.disconnect()
+    liveImageResizeObserver = null
+    liveImageElement = null
+    clearLiveImageRect()
+  }
+
+  const bindLiveImageElement = (element: HTMLImageElement) => {
+    if (liveImageElement === element) {
+      scheduleLiveImageRectMeasure()
+      return
+    }
+    liveImageResizeObserver?.disconnect()
+    liveImageElement = element
+    clearLiveImageRect()
+    if (typeof ResizeObserver !== "undefined") {
+      liveImageResizeObserver = new ResizeObserver(scheduleLiveImageRectMeasure)
+      liveImageResizeObserver.observe(element)
+    } else {
+      liveImageResizeObserver = null
+    }
+    scheduleLiveImageRectMeasure()
+  }
+
   onCleanup(() => {
     flushLiveInputOnFrame.cancel()
+    measureLiveImageRectOnFrame.cancel()
+    disconnectLiveImageElement()
     const current = captureImage()
     if (current) URL.revokeObjectURL(current.url)
     const live = liveImage()
@@ -340,12 +397,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       url: next,
     })
     if (previous && previous.url !== next) URL.revokeObjectURL(previous.url)
+    scheduleLiveImageRectMeasure()
   }
 
   const clearLiveImageUrl = () => {
     const previous = liveImage()
     if (!previous) return
     setLiveImage(undefined)
+    disconnectLiveImageElement()
     URL.revokeObjectURL(previous.url)
   }
 
@@ -454,12 +513,17 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     }
   }
 
-  const livePoint = (event: MouseEvent | WheelEvent, element: HTMLElement) => {
+  const livePoint = (event: MouseEvent | WheelEvent) => {
     const viewport = selectedViewport()
-    const image = element.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
-    if (!viewport || !image) return undefined
-    const rect = image.getBoundingClientRect()
-    return browserPreviewLivePoint(event, rect, viewport)
+    const scope = liveScope()
+    const image = liveImage()
+    if (!viewport || !scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return undefined
+    const key = browserPreviewLiveScopeKey(scope)
+    if (!liveImageRect || liveImageRectScopeKey !== key) {
+      scheduleLiveImageRectMeasure()
+      return undefined
+    }
+    return browserPreviewLivePoint(event, liveImageRect, viewport)
   }
 
   const sendLiveInput = (input: BrowserPreviewLiveInput) => {
@@ -484,7 +548,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
 
   const handleLivePointerDown: JSX.EventHandlerUnion<HTMLElement, PointerEvent> = (event) => {
     if (event.button > 2) return
-    const point = livePoint(event, event.currentTarget)
+    const point = livePoint(event)
     if (!point) return
     event.currentTarget.focus()
     event.preventDefault()
@@ -493,7 +557,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   }
 
   const handleLiveWheel: JSX.EventHandlerUnion<HTMLElement, WheelEvent> = (event) => {
-    const point = livePoint(event, event.currentTarget)
+    const point = livePoint(event)
     if (!point) return
     event.preventDefault()
     sendLiveInput({ kind: "wheel", ...point, deltaX: event.deltaX, deltaY: event.deltaY })
@@ -826,11 +890,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                   aria-label={t("browser_preview.title")}
                 >
                   <img
+                    ref={bindLiveImageElement}
                     src={url()}
                     alt={targetUrl() ?? t("browser_preview.title")}
                     data-ui="browser-preview-live-screenshot"
                     decoding="async"
                     draggable={false}
+                    onLoad={scheduleLiveImageRectMeasure}
                     onError={() => handleLiveImageDecodeError(url())}
                   />
                 </figure>

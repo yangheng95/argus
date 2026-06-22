@@ -89,6 +89,11 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("liveImageUrl")
   expect(component).toContain("pendingLiveInputs: BrowserPreviewLiveInput[]")
   expect(component).toContain("const flushLiveInputOnFrame = createAnimationFrameScheduler")
+  expect(component).toContain("let liveImageRect: BrowserPreviewLiveImageRect | undefined")
+  expect(component).toContain("const measureLiveImageRectOnFrame = createAnimationFrameScheduler")
+  expect(component).toContain("new ResizeObserver(scheduleLiveImageRectMeasure)")
+  expect(component).toContain("ref={bindLiveImageElement}")
+  expect(component).toContain("onLoad={scheduleLiveImageRectMeasure}")
   expect(component).toContain("function flushLiveInputBatch()")
   expect(component).toContain("queueLiveInput(input)")
   expect(component).toContain("sendTaskBrowserPreviewLiveInputsObjectUrl({ ...scope, inputs })")
@@ -192,6 +197,13 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).not.toContain("browser_preview.viewport.toggle")
   expect(component).toContain('data-ui="browser-preview-evidence"')
   expect(component).toContain('data-ui="browser-preview-evidence-missing"')
+  const livePointSource = component.slice(
+    component.indexOf("const livePoint ="),
+    component.indexOf("const sendLiveInput =", component.indexOf("const livePoint =")),
+  )
+  expect(livePointSource).toContain("browserPreviewLivePoint(event, liveImageRect, viewport)")
+  expect(livePointSource).not.toContain("querySelector")
+  expect(livePointSource).not.toContain("getBoundingClientRect")
   const targetStatusSourceStart = component.indexOf('class="browser-preview-status"')
   const targetStatusSource = component.slice(targetStatusSourceStart, component.indexOf("<Switch", targetStatusSourceStart))
   expect(targetStatusSource).toContain('role={target.loading || targetTransitionPending() ? "status" : undefined}')
