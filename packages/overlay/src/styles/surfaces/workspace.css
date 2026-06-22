@@ -577,7 +577,7 @@ body[data-resizing="true"] .pane-resizer::after {
   }
 
   .center-workbench-view[data-open="true"] {
-    flex: 0 0 min(100%, max(calc(280px * var(--ui-scale)), calc(50vw)));
+    flex: 0 0 min(100%, max(var(--ui-workbench-panel-min-width), calc(50vw)));
   }
 
   .left-activity-shell,

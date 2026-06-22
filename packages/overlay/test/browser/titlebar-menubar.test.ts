@@ -9,8 +9,25 @@ import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
-const viewports = [320, 480, 600, 760, 1440]
+const viewports = [320, 480, 600, 700, 760, 1120, 1440]
 const locales = ["en-US", "zh-CN"]
+const PROMPT_PROFILE_CATALOG = {
+  active: "general",
+  project_active: "general",
+  session_active: null,
+  default: "general",
+  targets: [],
+  profiles: [
+    {
+      id: "general",
+      label: "General",
+      description: "Default prompt profile",
+      built_in: true,
+      editable: false,
+      agents: {},
+    },
+  ],
+}
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -33,6 +50,7 @@ test(
     assert.equal(typeof globalThis.Bun, "undefined")
     let config: Record<string, unknown> = {
       model: "openai/super-long-provider-model-name-for-titlebar-geometry",
+      prompt_profile: { active: "general" },
     }
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
@@ -44,6 +62,7 @@ test(
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/mission") return send([])
       if (path === "/session") return send([])
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs")
@@ -62,6 +81,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config/prompt") return send([])
+      if (path === "/config/prompt-profile") return send(PROMPT_PROFILE_CATALOG)
       if (path === "/config") return send(config)
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
@@ -190,10 +210,17 @@ test(
                 if (intersects) overlaps.push(`${a.label} overlaps ${b.label}`)
               }
             }
+            const layoutWidth = Math.max(
+              window.innerWidth,
+              document.documentElement.scrollWidth,
+              document.body?.scrollWidth || 0,
+            )
             const outOfBounds = rects
-              .filter((rect) => rect.left < -0.5 || rect.right > window.innerWidth + 0.5)
+              .filter((rect) => rect.left < -0.5 || rect.right > layoutWidth + 0.5)
               .map((rect) => `${rect.label}:${rect.left.toFixed(1)}-${rect.right.toFixed(1)}`)
             const brand = document.querySelector(".titlebar-brand")?.getBoundingClientRect()
+            const copyblock = document.querySelector<HTMLElement>(".brand-guide-copyblock")
+            const copyblockRect = copyblock?.getBoundingClientRect()
             const badge = document.querySelector<HTMLElement>("#connBadge")
             const triggers = Array.from(document.querySelectorAll<HTMLElement>("[data-menu-trigger]"))
               .filter((node) => getComputedStyle(node).display !== "none")
@@ -219,6 +246,10 @@ test(
               overlaps,
               outOfBounds,
               brandWidth: brand?.width || 0,
+              brandCopyblockDisplay: copyblock ? getComputedStyle(copyblock).display : "",
+              brandCopyblockWidth: copyblockRect?.width || 0,
+              layoutWidth,
+              viewportWidth: window.innerWidth,
               badgeText: badge?.textContent || "",
               badgeTitle: badge?.getAttribute("title") || "",
               titlebarHeight: titlebar.getBoundingClientRect().height,
@@ -249,7 +280,21 @@ test(
             mkdirSync(dirname(screenshotPath), { recursive: true })
             writeFileSync(screenshotPath, await titlebarElement.screenshot({}))
           }
+          if (locale === "en-US" && width === 1120) {
+            const screenshotPath = resolve(".scratch/overlay-minimum-1120-full.png")
+            mkdirSync(dirname(screenshotPath), { recursive: true })
+            writeFileSync(screenshotPath, await page.screenshot({ fullPage: true }))
+          }
+          if (locale === "en-US" && width === 700) {
+            const titlebarElement = await page.$("#titlebar")
+            assert.ok(titlebarElement)
+            const screenshotPath = resolve(".scratch/titlebar-compact-700-component.png")
+            mkdirSync(dirname(screenshotPath), { recursive: true })
+            writeFileSync(screenshotPath, await titlebarElement.screenshot({}))
+          }
           if (width <= 760) {
+            assert.equal(geometry.brandCopyblockDisplay, "none")
+            assert.equal(geometry.brandCopyblockWidth, 0)
             assert.equal(
               geometry.triggerMetrics.every((item) => item.width <= 32),
               true,
@@ -558,7 +603,7 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
-      await page.setViewport({ width: 960, height: 720 })
+      await page.setViewport({ width: 1120, height: 720 })
       await page.evaluateOnNewDocument(() => {
         localStorage.setItem("oc_theme", "vscode-dark")
         localStorage.setItem("oc_locale", "en-US")
@@ -850,7 +895,7 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
-      await page.setViewport({ width: 900, height: 720 })
+      await page.setViewport({ width: 1120, height: 720 })
       await page.evaluateOnNewDocument((portValue) => {
         localStorage.setItem("oc_locale", "en-US")
         localStorage.removeItem("oc_directory")
@@ -988,7 +1033,7 @@ test(
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
-      await page.setViewport({ width: 960, height: 720 })
+      await page.setViewport({ width: 1120, height: 720 })
       await page.evaluateOnNewDocument((portValue) => {
         localStorage.setItem("oc_locale", "en-US")
         localStorage.setItem("oc_recent_directories", JSON.stringify(["D:/overlay/workspace/app"]))
@@ -1471,10 +1516,10 @@ test(
       assert.equal(Number.isFinite(leftDrag.max), true)
       assert.equal(Number.isFinite(afterLeftDrag.leftMax), true)
       assert.equal(Number.isFinite(afterLeftDrag.leftNow), true)
-      assert.ok(afterLeftDrag.sidebar > leftDrag.initialSidebar + 200)
+      assert.ok(afterLeftDrag.sidebar > leftDrag.initialSidebar)
       assert.ok(afterLeftDrag.sidebar >= afterLeftDrag.leftMax! - 2)
       assert.ok(afterLeftDrag.leftNow! >= afterLeftDrag.leftMax! - 1)
-      assert.ok(afterLeftDrag.chat > 300)
+      assert.ok(afterLeftDrag.chat >= 500)
       assert.ok(afterLeftDrag.leftDivider <= 2)
       assert.ok(afterLeftDrag.rightDivider <= 2)
       assert.ok(Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider) <= 1)

@@ -890,6 +890,10 @@
     display: none;
   }
 
+  .brand-guide-copyblock {
+    display: none;
+  }
+
   .titlebar-brand {
     flex: 0 0 calc(32px * var(--ui-scale));
     width: calc(32px * var(--ui-scale));
@@ -899,12 +903,5 @@
   .engine-bar {
     max-width: 100%;
     overflow-x: auto;
-  }
-}
-
-@media (max-width: 520px) {
-  /* breakpoint: --ui-breakpoint-sm */
-  .brand-guide-copyblock {
-    display: none;
   }
 }

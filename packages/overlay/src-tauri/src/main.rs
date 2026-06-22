@@ -41,8 +41,69 @@ const TRAY_TOOLTIP_DEFAULT: &str = "OpenCorvus";
 const TRAY_TOOLTIP_ALERT: &str = "OpenCorvus - Action required";
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+const OVERLAY_WINDOW_WIDTH_FRACTION: f64 = 0.80;
+const OVERLAY_WINDOW_HEIGHT_FRACTION: f64 = 0.72;
+const OVERLAY_WINDOW_MAX_WIDTH: f64 = 1600.0;
+const OVERLAY_WINDOW_MAX_HEIGHT: f64 = 920.0;
 
 include!(concat!(env!("OUT_DIR"), "/embedded_sidecar.rs"));
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct OverlayWindowSize {
+    width: f64,
+    height: f64,
+}
+
+fn overlay_main_min_size(config: &tauri::utils::config::Config) -> OverlayWindowSize {
+    let main_window = config
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .expect("main window config must exist");
+    OverlayWindowSize {
+        width: main_window
+            .min_width
+            .expect("main window config must set minWidth"),
+        height: main_window
+            .min_height
+            .expect("main window config must set minHeight"),
+    }
+}
+
+fn overlay_min_aspect_ratio(min_size: OverlayWindowSize) -> f64 {
+    min_size.width / min_size.height
+}
+
+fn constrain_overlay_window_size(
+    width: f64,
+    height: f64,
+    min_size: OverlayWindowSize,
+) -> OverlayWindowSize {
+    let width = width.max(min_size.width);
+    let mut height = height.max(min_size.height);
+    let max_height_for_width = width / overlay_min_aspect_ratio(min_size);
+    if height > max_height_for_width {
+        height = max_height_for_width;
+    }
+    OverlayWindowSize { width, height }
+}
+
+fn startup_overlay_window_size(
+    logical_width: f64,
+    logical_height: f64,
+    min_size: OverlayWindowSize,
+) -> OverlayWindowSize {
+    let width = (logical_width * OVERLAY_WINDOW_WIDTH_FRACTION)
+        .clamp(min_size.width, OVERLAY_WINDOW_MAX_WIDTH);
+    let height = (logical_height * OVERLAY_WINDOW_HEIGHT_FRACTION)
+        .clamp(min_size.height, OVERLAY_WINDOW_MAX_HEIGHT);
+    constrain_overlay_window_size(width, height, min_size)
+}
+
+fn overlay_window_needs_resize(current: OverlayWindowSize, next: OverlayWindowSize) -> bool {
+    (current.width - next.width).abs() > 0.5 || (current.height - next.height).abs() > 0.5
+}
 
 // ── Windows: Job Object with KILL_ON_JOB_CLOSE ──────────────────────────────
 //
@@ -1390,22 +1451,24 @@ fn main() {
                 let _ = set_window_icon(&window);
             }
 
-            // Adapt window size & position to primary monitor
+            // Adapt window size & position to primary monitor.
             if let Some(window) = app.get_webview_window("main") {
+                let min_size = overlay_main_min_size(app.config());
+                let _ = window.set_min_size(Some(tauri::LogicalSize::new(
+                    min_size.width,
+                    min_size.height,
+                )));
                 if let Ok(Some(monitor)) = window.primary_monitor() {
                     let screen = monitor.size();
                     let scale = monitor.scale_factor();
                     let logical_w = screen.width as f64 / scale;
                     let logical_h = screen.height as f64 / scale;
 
-                    // Panel: ~80% width (clamped 760..1600), ~72% height (clamped 480..920)
-                    let w = (logical_w * 0.80).clamp(760.0, 1600.0);
-                    let h = (logical_h * 0.72).clamp(480.0, 920.0);
-                    // Position: centered on primary monitor
-                    let x = (logical_w - w) / 2.0;
-                    let y = (logical_h - h) / 2.0;
+                    let size = startup_overlay_window_size(logical_w, logical_h, min_size);
+                    let x = (logical_w - size.width) / 2.0;
+                    let y = (logical_h - size.height) / 2.0;
 
-                    let _ = window.set_size(tauri::LogicalSize::new(w, h));
+                    let _ = window.set_size(tauri::LogicalSize::new(size.width, size.height));
                     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
                 }
             }
@@ -1510,10 +1573,31 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
-                stop_server(app);
+        .run(|app, event| match event {
+            tauri::RunEvent::Exit => stop_server(app),
+            tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::Resized(size),
+                ..
+            } if label == "main" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let min_size = overlay_main_min_size(app.config());
+                    let scale = window
+                        .scale_factor()
+                        .expect("main window scale factor must be readable");
+                    let logical_size = size.to_logical::<f64>(scale);
+                    let current = OverlayWindowSize {
+                        width: logical_size.width,
+                        height: logical_size.height,
+                    };
+                    let next =
+                        constrain_overlay_window_size(current.width, current.height, min_size);
+                    if overlay_window_needs_resize(current, next) {
+                        let _ = window.set_size(tauri::LogicalSize::new(next.width, next.height));
+                    }
+                }
             }
+            _ => {}
         })
 }
 
@@ -1675,6 +1759,44 @@ fn create_taskbar_badge_icon() -> tauri::image::Image<'static> {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn overlay_window_size_enforces_minimum_dimensions() {
+        let min_size = OverlayWindowSize {
+            width: 1120.0,
+            height: 720.0,
+        };
+
+        assert_eq!(
+            constrain_overlay_window_size(640.0, 480.0, min_size),
+            min_size
+        );
+    }
+
+    #[test]
+    fn overlay_window_size_enforces_minimum_aspect_ratio() {
+        let min_size = OverlayWindowSize {
+            width: 1120.0,
+            height: 720.0,
+        };
+        let constrained = constrain_overlay_window_size(1120.0, 900.0, min_size);
+
+        assert_eq!(constrained.width, 1120.0);
+        assert_eq!(constrained.height, 720.0);
+    }
+
+    #[test]
+    fn startup_overlay_window_size_uses_configured_minimum_floor() {
+        let min_size = OverlayWindowSize {
+            width: 1120.0,
+            height: 720.0,
+        };
+
+        assert_eq!(
+            startup_overlay_window_size(1000.0, 700.0, min_size),
+            min_size
+        );
+    }
 
     #[test]
     fn overlay_settings_filename_is_jsonc() {

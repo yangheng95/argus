@@ -24,6 +24,7 @@
 // and which DOM handles / CSS variables back them via the PaneConfig.
 
 import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"
+import { layoutTokenPx } from "../utils/layout-tokens"
 
 // ── Types ──
 
@@ -135,12 +136,9 @@ export function paneHandleWidth(node: Element | null | undefined): number {
 }
 
 function paneBodyWidth(config: PaneConfig): number {
-  return (
-    (document.getElementById(config.bodyId) as HTMLElement | null)?.clientWidth ??
-    window.visualViewport?.width ??
-    window.innerWidth ??
-    900
-  )
+  const body = document.getElementById(config.bodyId) as HTMLElement | null
+  if (!body) throw new Error(`Pane body element not found: ${config.bodyId}`)
+  return body.clientWidth
 }
 
 function paneHandleElement(config: PaneConfig, side: "left" | "right"): HTMLElement | null {
@@ -167,21 +165,19 @@ function paneResolvedWidthForSide(state: PaneState, config: PaneConfig, side: "l
 }
 
 /**
- * Compute the default rail width based on the current panel width.
+ * Compute the default rail width from the shared layout token contract.
  */
 export function defaultRailWidth(config: PaneConfig): number {
-  const scale = currentUIScale()
-  const panelWidth = paneBodyWidth(config)
-  return clampNumber(panelWidth * 0.22, 220 * scale, 380 * scale)
+  void config
+  return layoutTokenPx("--ui-rail-width")
 }
 
 /**
- * Compute the default width for the right-side sections pane.
+ * Compute the default width for the right-side sections pane from layout tokens.
  */
 export function defaultSectionsWidth(config: PaneConfig): number {
-  const scale = currentUIScale()
-  const panelWidth = paneBodyWidth(config)
-  return clampNumber(panelWidth * 0.3, 380 * scale, 560 * scale)
+  void config
+  return layoutTokenPx("--ui-sections-width")
 }
 
 /**
@@ -214,11 +210,10 @@ export function resolvedPaneWidths(
   sidebar: number
   sections: number
 } {
-  const scale = currentUIScale()
   const panelWidth = paneBodyWidth(config)
-  const railMin = 120 * scale
-  const chatPreferred = 500 * scale
-  const chatMin = 300 * scale
+  const railMin = layoutTokenPx("--ui-rail-min-width")
+  const chatPreferred = layoutTokenPx("--ui-chat-priority-width")
+  const chatMin = layoutTokenPx("--ui-chat-min-width")
 
   const leftHandle = paneHandleWidth(paneHandleElement(config, "left"))
   const rightHandle = paneHandleWidth(paneHandleElement(config, "right"))
@@ -273,8 +268,7 @@ function paneResizeBounds(state: PaneState, config: PaneConfig, side: "left" | "
   const bodyRect = panelBody?.getBoundingClientRect()
   if (!bodyRect) return null
 
-  const scale = currentUIScale()
-  const railMin = 120 * scale
+  const railMin = layoutTokenPx("--ui-rail-min-width")
   const now = paneResolvedWidthForSide(state, config, side)
   let max = bodyRect.width
   for (let index = 0; index < 6; index += 1) {

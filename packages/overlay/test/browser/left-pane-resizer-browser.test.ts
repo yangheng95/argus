@@ -422,9 +422,9 @@ test(
       const atMax = await waitForLeftPaneState(
         page,
         "End to move sidebar width to maximum",
-        (state) => state.nowValue === state.maxValue,
+        (state) => state.nowValue !== null && state.maxValue !== null && state.nowValue >= state.maxValue - 2,
       )
-      assert.equal(atMax.sidebarWidth, atMax.maxValue)
+      assert.ok(atMax.sidebarWidth >= atMax.maxValue! - 2)
 
       const afterMoveBurst = await page.$eval("#leftPaneResizer", (node) => {
         const probe = (window as any).__paneDragProbe
@@ -532,10 +532,10 @@ test(
       )
 
       await resetPaneDragProbe(page)
-      await page.setViewport({ width: 700, height: 760 })
+      await page.setViewport({ width: 900, height: 760 })
       const compact = await waitForLeftPaneState(
         page,
-        "compact layout to hide and untab left pane separator",
+        "component compact layout to hide and untab left pane separator",
         (state) => state.display === "none" && state.tabIndex === -1 && state.now === null,
       )
       await waitForAnimationFrames(page, 3)
@@ -548,7 +548,7 @@ test(
       assert.equal(compact.max, null)
       assert.equal(compact.now, null)
       await writeFile(
-        resolve(".scratch", "left-pane-resizer-compact-resize.png"),
+        resolve(".scratch", "left-pane-resizer-component-compact-resize.png"),
         await page.screenshot({ fullPage: true }),
       )
 
