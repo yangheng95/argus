@@ -68,4 +68,3 @@ Relevant surfaces:
 - The same wake does not dispatch a no-decision self-wake.
 - Existing no-decision self-wake behavior remains unchanged and bounded by the
   stream-error fuse.
-
