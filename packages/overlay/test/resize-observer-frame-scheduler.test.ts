@@ -107,3 +107,28 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   expect(main).toContain("applyPendingCenterWorkbenchPanelResize()")
   expect(main).not.toContain("updateCenterWorkbenchPanelWeights(drag, event.clientX")
 })
+
+test("center workbench panel open schedules layout reads after DOM state writes", () => {
+  const main = readFileSync(join(repoRoot, "packages/overlay/src/main.tsx"), "utf8")
+  const panelEffectStart = main.indexOf("createEffect(() => {\n      const panels = centerWorkbenchPanels()")
+  const settingsEffectStart = main.indexOf("createEffect(() => {\n      settingsStore.centerWorkbenchPanelWeights")
+  const nextEffectStart = main.indexOf("createEffect(() => {\n      const panels = centerWorkbenchPanels()", settingsEffectStart)
+
+  expect(panelEffectStart).toBeGreaterThan(0)
+  expect(settingsEffectStart).toBeGreaterThan(panelEffectStart)
+  expect(nextEffectStart).toBeGreaterThan(settingsEffectStart)
+
+  const panelOpenEffect = main.slice(panelEffectStart, settingsEffectStart)
+  const settingsWeightEffect = main.slice(settingsEffectStart, nextEffectStart)
+
+  expect(main).toContain("function renderCenterWorkbenchPanelLayout(): void")
+  expect(main).toContain(
+    "const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayout)",
+  )
+  expect(main).toContain("disposers.push(() => renderCenterWorkbenchPanelLayoutOnFrame.cancel())")
+  expect(panelOpenEffect).toContain("renderCenterWorkbenchPanelLayoutOnFrame.schedule()")
+  expect(panelOpenEffect).not.toContain("renderCenterWorkbenchPanelWeights()")
+  expect(panelOpenEffect).not.toContain("renderCenterWorkbenchPanelSeparators()")
+  expect(settingsWeightEffect).toContain("settingsStore.centerWorkbenchPanelWeights")
+  expect(settingsWeightEffect).not.toContain("centerWorkbenchPanels().length")
+})

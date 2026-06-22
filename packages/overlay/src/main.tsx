@@ -693,6 +693,14 @@ function renderCenterWorkbenchPanelSeparators(): void {
   }
 }
 
+function renderCenterWorkbenchPanelLayout(): void {
+  renderCenterWorkbenchPanelWeights()
+  renderCenterWorkbenchPanelSeparators()
+}
+
+const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayout)
+disposers.push(() => renderCenterWorkbenchPanelLayoutOnFrame.cancel())
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
@@ -1667,13 +1675,11 @@ disposers.push(
           body.dataset.selected = String(open && panel === selectedPanel)
         }
       }
-      renderCenterWorkbenchPanelWeights()
-      renderCenterWorkbenchPanelSeparators()
+      renderCenterWorkbenchPanelLayoutOnFrame.schedule()
     })
 
     createEffect(() => {
       settingsStore.centerWorkbenchPanelWeights
-      centerWorkbenchPanels().length
       renderCenterWorkbenchPanelWeights()
       renderCenterWorkbenchPanelSeparators()
     })
