@@ -73,9 +73,20 @@ async function leftPaneState(page: OverlayPage) {
 
 type LeftPaneState = Awaited<ReturnType<typeof leftPaneState>>
 
+type PaneDragProbeEventType = "pane-geometry-read" | "pane-style-write" | "pane-aria-write"
+
+interface PaneDragProbeEvent {
+  type: PaneDragProbeEventType
+  frame: number
+  sequence: number
+  id?: string
+  name?: string
+}
+
 interface PaneDragProbeSummary {
   frame: number
   rafCallbacks: number
+  events: PaneDragProbeEvent[]
   rectReadsTotal: number
   rectReadsBeforeFrame: number
   styleWritesTotal: number
@@ -84,6 +95,9 @@ interface PaneDragProbeSummary {
   ariaWritesTotal: number
   ariaWritesBeforeFrame: number
   ariaWriteFrames: number
+  geometryReadsAfterStyleWritesTotal: number
+  geometryReadFramesAfterStyleWrites: number
+  geometryReadsInUiScaleWriteFrames: number
 }
 
 async function installPaneDragProbe(page: OverlayPage) {
@@ -97,31 +111,64 @@ async function installPaneDragProbe(page: OverlayPage) {
       rectReadsByFrame: {} as Record<string, number>,
       styleWritesByFrame: {} as Record<string, number>,
       ariaWritesByFrame: {} as Record<string, number>,
+      events: [] as PaneDragProbeEvent[],
+      sequence: 0,
       reset() {
         this.frame = 0
         this.rafCallbacks = 0
         this.rectReadsByFrame = {}
         this.styleWritesByFrame = {}
         this.ariaWritesByFrame = {}
+        this.events = []
+        this.sequence = 0
       },
-      bump(bucket: Record<string, number>) {
+      record(type: PaneDragProbeEventType, bucket: Record<string, number>, detail: { id?: string; name?: string }) {
         const key = String(this.frame)
         bucket[key] = (bucket[key] ?? 0) + 1
+        this.sequence += 1
+        this.events.push({
+          type,
+          frame: this.frame,
+          sequence: this.sequence,
+          ...detail,
+        })
       },
       summary(): PaneDragProbeSummary {
         const total = (bucket: Record<string, number>) => Object.values(bucket).reduce((sum, value) => sum + value, 0)
         const frames = (bucket: Record<string, number>) => Object.keys(bucket).filter((key) => (bucket[key] ?? 0) > 0).length
+        const styleWriteFrames = new Set<number>()
+        const uiScaleWriteFrames = new Set<number>()
+        const styleSeenByFrame = new Set<number>()
+        const geometryReadFramesAfterStyleWrites = new Set<number>()
+        let geometryReadsAfterStyleWritesTotal = 0
+        for (const event of this.events) {
+          if (event.type === "pane-style-write") {
+            styleWriteFrames.add(event.frame)
+            styleSeenByFrame.add(event.frame)
+            if (event.name === "--ui-scale") uiScaleWriteFrames.add(event.frame)
+          } else if (event.type === "pane-geometry-read" && styleSeenByFrame.has(event.frame)) {
+            geometryReadsAfterStyleWritesTotal += 1
+            geometryReadFramesAfterStyleWrites.add(event.frame)
+          }
+        }
+        const geometryReadsInUiScaleWriteFrames = this.events.filter(
+          (event) => event.type === "pane-geometry-read" && uiScaleWriteFrames.has(event.frame),
+        ).length
         return {
           frame: this.frame,
           rafCallbacks: this.rafCallbacks,
+          events: this.events.slice(),
           rectReadsTotal: total(this.rectReadsByFrame),
           rectReadsBeforeFrame: this.rectReadsByFrame["0"] ?? 0,
           styleWritesTotal: total(this.styleWritesByFrame),
           styleWritesBeforeFrame: this.styleWritesByFrame["0"] ?? 0,
-          styleWriteFrames: frames(this.styleWritesByFrame),
+          styleWriteFrames: styleWriteFrames.size || frames(this.styleWritesByFrame),
           ariaWritesTotal: total(this.ariaWritesByFrame),
           ariaWritesBeforeFrame: this.ariaWritesByFrame["0"] ?? 0,
           ariaWriteFrames: frames(this.ariaWritesByFrame),
+          geometryReadsAfterStyleWritesTotal,
+          geometryReadFramesAfterStyleWrites: geometryReadFramesAfterStyleWrites.size,
+          geometryReadsInUiScaleWriteFrames,
         }
       },
     }
@@ -138,15 +185,15 @@ async function installPaneDragProbe(page: OverlayPage) {
     const rectOriginal = Element.prototype.getBoundingClientRect
     Element.prototype.getBoundingClientRect = function () {
       if (this instanceof HTMLElement && (this.id === "panelBody" || this.id === "leftPaneResizer")) {
-        probe.bump(probe.rectReadsByFrame)
+        probe.record("pane-geometry-read", probe.rectReadsByFrame, { id: this.id })
       }
       return rectOriginal.call(this)
     }
 
     const setPropertyOriginal = CSSStyleDeclaration.prototype.setProperty
     CSSStyleDeclaration.prototype.setProperty = function (propertyName: string, value?: string | null, priority?: string) {
-      if (propertyName === "--ui-sidebar-width" || propertyName === "--ui-sections-width") {
-        probe.bump(probe.styleWritesByFrame)
+      if (propertyName === "--ui-scale" || propertyName === "--ui-sidebar-width" || propertyName === "--ui-sections-width") {
+        probe.record("pane-style-write", probe.styleWritesByFrame, { name: propertyName })
       }
       return setPropertyOriginal.call(this, propertyName, value, priority)
     }
@@ -154,7 +201,7 @@ async function installPaneDragProbe(page: OverlayPage) {
     const setAttributeOriginal = Element.prototype.setAttribute
     Element.prototype.setAttribute = function (name: string, value: string) {
       if (this instanceof HTMLElement && this.id === "leftPaneResizer" && name.startsWith("aria-value")) {
-        probe.bump(probe.ariaWritesByFrame)
+        probe.record("pane-aria-write", probe.ariaWritesByFrame, { id: this.id, name })
       }
       return setAttributeOriginal.call(this, name, value)
     }
@@ -163,6 +210,47 @@ async function installPaneDragProbe(page: OverlayPage) {
 
 async function paneDragProbeSummary(page: OverlayPage): Promise<PaneDragProbeSummary> {
   return await page.evaluate(() => (window as any).__paneDragProbe.summary())
+}
+
+async function resetPaneDragProbe(page: OverlayPage): Promise<void> {
+  await page.evaluate(() => (window as any).__paneDragProbe.reset())
+}
+
+async function waitForAnimationFrames(page: OverlayPage, count: number): Promise<void> {
+  await page.evaluate(
+    (frameCount) =>
+      new Promise<void>((resolveFrame) => {
+        let remaining = frameCount
+        const next = () => {
+          remaining -= 1
+          if (remaining <= 0) {
+            resolveFrame()
+            return
+          }
+          requestAnimationFrame(next)
+        }
+        requestAnimationFrame(next)
+      }),
+    count,
+  )
+}
+
+function assertNoPaneGeometryReadsAfterStyleWrites(summary: PaneDragProbeSummary, label: string): void {
+  assert.equal(
+    summary.geometryReadsAfterStyleWritesTotal,
+    0,
+    `${label}: pane geometry read after style write in the same RAF callback: ${JSON.stringify(summary.events)}`,
+  )
+}
+
+function assertPaneViewportResizeGeometryIsDeferred(summary: PaneDragProbeSummary, label: string): void {
+  assert.ok(summary.styleWritesTotal > 0, `${label}: expected resize style writes, got ${JSON.stringify(summary)}`)
+  assert.equal(
+    summary.geometryReadsInUiScaleWriteFrames,
+    0,
+    `${label}: pane geometry read shared the --ui-scale resize write frame: ${JSON.stringify(summary.events)}`,
+  )
+  assertNoPaneGeometryReadsAfterStyleWrites(summary, label)
 }
 
 async function waitForLeftPaneState(
@@ -309,7 +397,7 @@ test(
       const expanded = await waitForLeftPaneState(
         page,
         "ArrowRight to increase sidebar width",
-        (state) => state.sidebarWidth > initial.sidebarWidth + 10,
+        (state) => state.sidebarWidth > initial.sidebarWidth + 10 && state.nowValue! > initial.nowValue!,
       )
       assert.equal(expanded.focused, true)
       assert.ok(expanded.sidebarWidth > initial.sidebarWidth)
@@ -319,7 +407,7 @@ test(
       await waitForLeftPaneState(
         page,
         "ArrowLeft to decrease sidebar width",
-        (state) => state.sidebarWidth < expanded.sidebarWidth - 10,
+        (state) => state.sidebarWidth < expanded.sidebarWidth - 10 && state.nowValue! < expanded.nowValue! - 10,
       )
 
       await page.keyboard.press("Home")
@@ -372,13 +460,14 @@ test(
       assert.equal(afterMoveBurst.styleWritesBeforeFrame, 0)
       assert.equal(afterMoveBurst.ariaWritesBeforeFrame, 0)
 
-      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+      await waitForAnimationFrames(page, 2)
       const afterDragFrame = await paneDragProbeSummary(page)
       assert.ok(afterDragFrame.rectReadsTotal > 0)
       assert.ok(afterDragFrame.styleWritesTotal > 0)
       assert.ok(afterDragFrame.ariaWritesTotal > 0)
       assert.equal(afterDragFrame.styleWriteFrames, 1)
-      assert.equal(afterDragFrame.ariaWriteFrames, 1)
+      assert.ok(afterDragFrame.ariaWriteFrames >= 1)
+      assertNoPaneGeometryReadsAfterStyleWrites(afterDragFrame, "left pane pointermove")
 
       const afterPointerUp = await page.$eval("#leftPaneResizer", (node) => {
         const probe = (window as any).__paneDragProbe
@@ -408,7 +497,12 @@ test(
         return probe.summary() as PaneDragProbeSummary
       })
       assert.ok(afterPointerUp.styleWritesBeforeFrame > 0)
-      assert.ok(afterPointerUp.ariaWritesBeforeFrame > 0)
+      assert.equal(afterPointerUp.ariaWritesBeforeFrame, 0)
+      assertNoPaneGeometryReadsAfterStyleWrites(afterPointerUp, "left pane pointerup flush")
+      await waitForAnimationFrames(page, 2)
+      const afterPointerUpFrames = await paneDragProbeSummary(page)
+      assert.ok(afterPointerUpFrames.ariaWritesTotal > 0)
+      assertNoPaneGeometryReadsAfterStyleWrites(afterPointerUpFrames, "left pane pointerup scheduled semantics")
       const afterDrag = await waitForLeftPaneState(
         page,
         "pointerup flush to persist final sidebar width",
@@ -422,18 +516,59 @@ test(
         await page.screenshot({ fullPage: true }),
       )
 
+      await resetPaneDragProbe(page)
+      await page.setViewport({ width: 1180, height: 720 })
+      await waitForLeftPaneState(
+        page,
+        "desktop viewport resize keeps the left pane separator visible",
+        (state) => state.display === "block" && state.tabIndex === 0 && state.now !== null,
+      )
+      await waitForAnimationFrames(page, 3)
+      const desktopResize = await paneDragProbeSummary(page)
+      assertPaneViewportResizeGeometryIsDeferred(desktopResize, "desktop viewport resize")
+      await writeFile(
+        resolve(".scratch", "left-pane-resizer-desktop-resize.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+
+      await resetPaneDragProbe(page)
       await page.setViewport({ width: 700, height: 760 })
       const compact = await waitForLeftPaneState(
         page,
         "compact layout to hide and untab left pane separator",
         (state) => state.display === "none" && state.tabIndex === -1 && state.now === null,
       )
+      await waitForAnimationFrames(page, 3)
+      const compactResize = await paneDragProbeSummary(page)
+      assertPaneViewportResizeGeometryIsDeferred(compactResize, "compact viewport resize")
       assert.equal(compact.display, "none")
       assert.equal(compact.disabled, "true")
       assert.equal(compact.tabIndex, -1)
       assert.equal(compact.min, null)
       assert.equal(compact.max, null)
       assert.equal(compact.now, null)
+      await writeFile(
+        resolve(".scratch", "left-pane-resizer-compact-resize.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+
+      await resetPaneDragProbe(page)
+      await page.setViewport({ width: 1280, height: 760 })
+      const restored = await waitForLeftPaneState(
+        page,
+        "restored desktop viewport resize returns the left pane separator",
+        (state) => state.display === "block" && state.tabIndex === 0 && state.now !== null,
+      )
+      await waitForAnimationFrames(page, 3)
+      const restoredResize = await paneDragProbeSummary(page)
+      assertPaneViewportResizeGeometryIsDeferred(restoredResize, "restored desktop viewport resize")
+      assert.equal(restored.display, "block")
+      assert.equal(restored.disabled, "false")
+      assert.equal(restored.tabIndex, 0)
+      await writeFile(
+        resolve(".scratch", "left-pane-resizer-restored-desktop-resize.png"),
+        await page.screenshot({ fullPage: true }),
+      )
 
       await page.close()
     } finally {

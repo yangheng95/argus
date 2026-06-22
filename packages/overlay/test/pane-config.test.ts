@@ -30,6 +30,8 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(html).toContain('aria-valuenow="0"')
   expect(html).toContain('tabindex="0"')
   expect(pane).toContain("function renderPaneHandleSemantics")
+  expect(pane).toContain("const renderPaneHandleSemanticsOnFrame = createAnimationFrameScheduler(flushPaneHandleSemantics)")
+  expect(pane).toContain("function schedulePaneHandleSemantics")
   expect(pane).toContain("function resizePaneByKeyboard")
   expect(pane).toContain('import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"')
   expect(pane).toContain("function flushPendingPaneResize")
@@ -48,6 +50,34 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(css).toContain(".pane-resizer:focus-visible")
   expect(css).toContain("outline: var(--oc-border-width) solid var(--accent)")
   expect(main).not.toContain("leftResizer.dataset.disabled")
+})
+
+test("pane layout writes and handle semantics run in separate frame phases", () => {
+  const pane = readSrc("services/pane.ts")
+  const main = readSrc("main.tsx")
+  const renderPaneLayoutStart = pane.indexOf("export function renderPaneLayout")
+  const applyWindowResizeStart = main.indexOf("function applyWindowResize(): void")
+  const applyWindowResizeEnd = main.indexOf("const applyWindowResizeOnFrame", applyWindowResizeStart)
+
+  expect(renderPaneLayoutStart).toBeGreaterThan(0)
+  expect(applyWindowResizeStart).toBeGreaterThan(0)
+  expect(applyWindowResizeEnd).toBeGreaterThan(applyWindowResizeStart)
+
+  const renderPaneLayoutFunction = pane.slice(renderPaneLayoutStart, pane.indexOf("\n}\n", renderPaneLayoutStart) + 3)
+  const applyWindowResizeFunction = main.slice(applyWindowResizeStart, applyWindowResizeEnd)
+
+  expect(pane).toContain("const pendingPaneHandleSemantics = new Map<PaneConfig, PaneState>()")
+  expect(pane).toContain("pendingPaneHandleSemantics.set(config, { ...state })")
+  expect(pane).toContain("renderPaneHandleSemanticsOnFrame.schedule()")
+  expect(renderPaneLayoutFunction).toContain("setPaneWidthProperty(config.sidebarVar, widths.sidebar)")
+  expect(renderPaneLayoutFunction).toContain("setPaneWidthProperty(config.sectionsVar, widths.sections)")
+  expect(renderPaneLayoutFunction).toContain("schedulePaneHandleSemantics(state, config)")
+  expect(renderPaneLayoutFunction).not.toContain("renderPaneHandleSemantics(state, config)")
+  expect(main).toContain("const renderPaneLayoutOnFrame = createAnimationFrameScheduler(flushPaneLayout)")
+  expect(main).toContain("function schedulePaneLayout(state: PaneState): void")
+  expect(applyWindowResizeFunction).toContain("applyZoom(settingsStore.zoom)")
+  expect(applyWindowResizeFunction).toContain("schedulePaneLayout(paneCallbacks.getState())")
+  expect(applyWindowResizeFunction).not.toContain("renderPaneLayout(paneCallbacks.getState(), PANEL_PANE_CONFIG)")
 })
 
 test("Mission no longer owns an independent pane layout or persisted widths", () => {
