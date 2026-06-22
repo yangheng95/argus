@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import test from "node:test"
+import { deflateSync } from "node:zlib"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
@@ -20,10 +21,67 @@ const TASK = {
 
 const SCREENSHOT_COUNT = 120
 
-const PNG_BYTES = Buffer.from(
-  "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",
-  "base64",
-)
+const SCREENSHOT_IMAGE_WIDTH = 1440
+const SCREENSHOT_IMAGE_HEIGHT = 900
+const screenshotPngCache = new Map<number, Buffer>()
+
+function u32(value: number): Buffer {
+  const buffer = Buffer.alloc(4)
+  buffer.writeUInt32BE(value >>> 0, 0)
+  return buffer
+}
+
+function crc32(buffer: Buffer): number {
+  let crc = 0xffffffff
+  for (const byte of buffer) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1))
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function pngChunk(type: string, data = Buffer.alloc(0)): Buffer {
+  const typeBuffer = Buffer.from(type, "ascii")
+  return Buffer.concat([u32(data.length), typeBuffer, data, u32(crc32(Buffer.concat([typeBuffer, data])))])
+}
+
+function screenshotPngBytes(index: number): Buffer {
+  const cached = screenshotPngCache.get(index)
+  if (cached) return cached
+  const bytesPerPixel = 3
+  const rowStride = 1 + SCREENSHOT_IMAGE_WIDTH * bytesPerPixel
+  const raw = Buffer.alloc(rowStride * SCREENSHOT_IMAGE_HEIGHT)
+  for (let y = 0; y < SCREENSHOT_IMAGE_HEIGHT; y += 1) {
+    const row = y * rowStride
+    raw[row] = 0
+    for (let x = 0; x < SCREENSHOT_IMAGE_WIDTH; x += 1) {
+      const offset = row + 1 + x * bytesPerPixel
+      raw[offset] = (x + index * 17) & 255
+      raw[offset + 1] = (y + index * 29) & 255
+      raw[offset + 2] = ((x >> 2) + (y >> 1) + index * 41) & 255
+    }
+  }
+  const ihdr = Buffer.concat([
+    u32(SCREENSHOT_IMAGE_WIDTH),
+    u32(SCREENSHOT_IMAGE_HEIGHT),
+    Buffer.from([8, 2, 0, 0, 0]),
+  ])
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw, { level: 1 })),
+    pngChunk("IEND"),
+  ])
+  screenshotPngCache.set(index, png)
+  return png
+}
+
+function screenshotIndex(path: string): number | null {
+  const match = /^\/attachment\/project\/screenshot-(\d+)\.png$/.exec(path)
+  return match ? Number.parseInt(match[1], 10) : null
+}
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -130,9 +188,10 @@ test(
       if (path === "/favicon.ico") return new Response(null, { status: 204 })
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
-      if (/^\/attachment\/project\/screenshot-\d+\.png$/.test(path)) {
+      const requestedScreenshotIndex = screenshotIndex(path)
+      if (requestedScreenshotIndex != null) {
         attachmentRequests.push(path)
-        return new Response(PNG_BYTES, { headers: { "content-type": "image/png" } })
+        return new Response(screenshotPngBytes(requestedScreenshotIndex), { headers: { "content-type": "image/png" } })
       }
       if (path === "/global/health") return json({ version: "1.2.3" })
       if (path === "/global/projects/discover") return json([])
@@ -219,6 +278,18 @@ test(
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      await page.waitForSelector(`[data-task-id="${TASK.id}"]`, { visible: true })
+      await page.waitForFunction(() =>
+        performance
+          .getEntriesByType("resource")
+          .some((entry) => entry.name.includes("/task/tsk_screenshot_browser/conversation")),
+      )
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          }),
+      )
       await page.evaluate(() => {
         const original = Element.prototype.scrollIntoView
         const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window)
@@ -232,6 +303,54 @@ test(
         let frameDepth = 0
         let sequence = 0
         ;(window as any).__screenshotBrowserLayoutEvents = []
+        ;(window as any).__screenshotBrowserOpenPerf = {
+          longTasks: [],
+          rafGaps: [],
+          supportedLongTasks: false,
+        }
+        let openPerfObserver: PerformanceObserver | undefined
+        let openPerfFrame = 0
+        let previousOpenPerfFrameTime = 0
+        const sampleOpenPerfFrame = (time: number) => {
+          const metrics = (window as any).__screenshotBrowserOpenPerf
+          if (!metrics?.sampling) return
+          if (previousOpenPerfFrameTime > 0) metrics.rafGaps.push(time - previousOpenPerfFrameTime)
+          previousOpenPerfFrameTime = time
+          openPerfFrame = originalRequestAnimationFrame(sampleOpenPerfFrame)
+        }
+        ;(window as any).__screenshotBrowserStartOpenPerf = () => {
+          const metrics = (window as any).__screenshotBrowserOpenPerf
+          metrics.longTasks = []
+          metrics.rafGaps = []
+          metrics.sampling = true
+          previousOpenPerfFrameTime = 0
+          openPerfFrame = originalRequestAnimationFrame(sampleOpenPerfFrame)
+          if ("PerformanceObserver" in window) {
+            const supported = PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false
+            metrics.supportedLongTasks = supported
+            if (supported) {
+              openPerfObserver = new PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                  metrics.longTasks.push({
+                    duration: entry.duration,
+                    name: entry.name,
+                    startTime: entry.startTime,
+                  })
+                }
+              })
+              openPerfObserver.observe({ entryTypes: ["longtask"] })
+            }
+          }
+        }
+        ;(window as any).__screenshotBrowserStopOpenPerf = () => {
+          const metrics = (window as any).__screenshotBrowserOpenPerf
+          if (metrics) metrics.sampling = false
+          if (openPerfFrame) originalCancelAnimationFrame(openPerfFrame)
+          openPerfFrame = 0
+          openPerfObserver?.disconnect()
+          openPerfObserver = undefined
+          return metrics
+        }
         ;(window as any).__screenshotBrowserRestoreInstrumentation = () => {
           Object.defineProperty(clientWidthOwner, "clientWidth", clientWidthDescriptor)
           window.requestAnimationFrame = originalRequestAnimationFrame
@@ -286,6 +405,7 @@ test(
         }
       })
       const requestsBeforeOpen = attachmentRequests.length
+      await page.evaluate(() => (window as any).__screenshotBrowserStartOpenPerf())
       const openStart = Date.now()
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']")
@@ -317,14 +437,28 @@ test(
       })
       const widthRead = layoutEvents.find((event: any) => event.type === "screenshot-list-client-width")
       assert.ok(widthRead?.inRaf, `screenshot open did not measure list width on RAF: ${JSON.stringify(layoutEvents)}`)
-      await page.evaluate(() => (window as any).__screenshotBrowserRestoreInstrumentation())
       await page.waitForSelector(".screenshot-browser-card")
+      const firstCardVisibleElapsed = Date.now() - openStart
+      assert.ok(firstCardVisibleElapsed < 1_500, `screenshot browser first card took ${firstCardVisibleElapsed}ms`)
       await page.waitForFunction(() => {
-        const img = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
-        return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+        const cardCount = document.querySelectorAll(".screenshot-browser-card").length
+        const images = Array.from(document.querySelectorAll<HTMLImageElement>(".screenshot-browser__thumb-image"))
+        return (
+          cardCount > 0 &&
+          images.length === cardCount &&
+          images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)
+        )
       })
-      const openElapsed = Date.now() - openStart
-      assert.ok(openElapsed < 5_000, `screenshot browser open took ${openElapsed}ms`)
+      const decodedElapsed = Date.now() - openStart
+      const openPerf = await page.evaluate(() => (window as any).__screenshotBrowserStopOpenPerf())
+      await page.evaluate(() => (window as any).__screenshotBrowserRestoreInstrumentation())
+      const maxRafGap = Math.max(0, ...((openPerf?.rafGaps ?? []) as number[]))
+      const longTaskDurations = ((openPerf?.longTasks ?? []) as Array<{ duration: number }>).map((entry) => entry.duration)
+      const maxLongTask = Math.max(0, ...longTaskDurations)
+      assert.equal(openPerf?.supportedLongTasks, true, `longtask observer unavailable: ${JSON.stringify(openPerf)}`)
+      assert.ok(decodedElapsed < 5_000, `screenshot browser visible image decode took ${decodedElapsed}ms`)
+      assert.ok(maxRafGap < 180, `screenshot browser open RAF gap was ${maxRafGap}ms: ${JSON.stringify(openPerf)}`)
+      assert.ok(maxLongTask < 180, `screenshot browser open long task was ${maxLongTask}ms: ${JSON.stringify(openPerf)}`)
 
       const state = await page.evaluate(() => ({
         screenshotsOpen: document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open,
@@ -376,6 +510,8 @@ test(
       assert.ok(thumbLayout.triggerHeight >= 130, JSON.stringify(thumbLayout))
       assert.ok(thumbLayout.imageWidth >= thumbLayout.triggerWidth - 1, JSON.stringify(thumbLayout))
       assert.ok(thumbLayout.imageHeight >= thumbLayout.triggerHeight - 1, JSON.stringify(thumbLayout))
+      assert.equal(thumbLayout.naturalWidth, SCREENSHOT_IMAGE_WIDTH, JSON.stringify(thumbLayout))
+      assert.equal(thumbLayout.naturalHeight, SCREENSHOT_IMAGE_HEIGHT, JSON.stringify(thumbLayout))
 
       await page.setViewport({ width: 960, height: 760 })
       await new Promise((resolve) => setTimeout(resolve, 100))
@@ -430,17 +566,46 @@ test(
       await page.setViewport({ width: 960, height: 1000 })
       await new Promise((resolve) => setTimeout(resolve, 100))
 
-      await page.evaluate(() => {
+      const legalNarrowPanelWidth = await page.evaluate(() => {
+        const panelMinProbe = document.createElement("div")
+        panelMinProbe.style.position = "fixed"
+        panelMinProbe.style.visibility = "hidden"
+        panelMinProbe.style.width = "var(--ui-workbench-panel-min-width)"
+        document.body.appendChild(panelMinProbe)
+        const panelMinWidth = Math.ceil(panelMinProbe.getBoundingClientRect().width)
+        panelMinProbe.remove()
+        return panelMinWidth
+      })
+      await page.evaluate((width) => {
         const workbench = document.getElementById("centerWorkbench")
         const screenshots = document.getElementById("centerWorkbenchScreenshots")
-        workbench?.style.setProperty("flex", "0 0 320px")
-        workbench?.style.setProperty("width", "320px")
-        screenshots?.style.setProperty("flex", "0 0 320px")
-        screenshots?.style.setProperty("width", "320px")
-      })
+        workbench?.style.setProperty("flex", `0 0 ${width}px`)
+        workbench?.style.setProperty("width", `${width}px`)
+        screenshots?.style.setProperty("flex", `0 0 ${width}px`)
+        screenshots?.style.setProperty("width", `${width}px`)
+      }, legalNarrowPanelWidth)
       await new Promise((resolve) => setTimeout(resolve, 100))
       await page.$eval(".screenshot-browser-panel", (node: HTMLElement) => {
         node.scrollIntoView({ block: "center", inline: "center" })
+      })
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          }),
+      )
+      await page.evaluate(() => {
+        const panel = document.querySelector<HTMLElement>(".screenshot-browser-panel")
+        if (!panel) return
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          const rect = panel.getBoundingClientRect()
+          if (rect.left >= 0 && rect.right <= window.innerWidth) return
+          if (rect.left < 0) {
+            window.scrollBy({ left: rect.left - 8, behavior: "auto" })
+          } else if (rect.right > window.innerWidth) {
+            window.scrollBy({ left: rect.right - window.innerWidth + 8, behavior: "auto" })
+          }
+        }
       })
       await page.evaluate(
         () =>
@@ -482,6 +647,7 @@ test(
         return {
           bodyOverflowX: document.documentElement.scrollWidth - window.innerWidth,
           allowedBodyOverflowX: Math.max(0, overlayMinWidth - window.innerWidth),
+          viewportWidth: window.innerWidth,
           panelMinWidth,
           panel,
           grid,
@@ -493,6 +659,12 @@ test(
       })
       assert.ok(
         narrowLayout.panel?.width && narrowLayout.panel.width >= narrowLayout.panelMinWidth - 1,
+        JSON.stringify(narrowLayout),
+      )
+      assert.ok(
+        narrowLayout.panel?.left !== undefined &&
+          narrowLayout.panel.left >= 0 &&
+          narrowLayout.panel.right <= narrowLayout.viewportWidth,
         JSON.stringify(narrowLayout),
       )
       assert.ok((narrowLayout.grid?.scrollWidth ?? 0) <= (narrowLayout.grid?.clientWidth ?? 0) + 1, JSON.stringify(narrowLayout))
@@ -545,6 +717,11 @@ test(
             titleRect.left < window.innerWidth &&
             titleRect.bottom > 0 &&
             titleRect.top < window.innerHeight,
+          fullTitle:
+            titleRect.left >= 0 &&
+            titleRect.right <= window.innerWidth &&
+            titleRect.top >= 0 &&
+            titleRect.bottom <= window.innerHeight,
           visibleList:
             listRect.right > 0 &&
             listRect.left < window.innerWidth &&
@@ -555,6 +732,7 @@ test(
       assert.equal(narrowPanelRect.title, "Screenshots", JSON.stringify(narrowPanelRect))
       assert.ok(narrowPanelRect.cardCount > 0, JSON.stringify(narrowPanelRect))
       assert.equal(narrowPanelRect.visibleTitle, true, JSON.stringify(narrowPanelRect))
+      assert.equal(narrowPanelRect.fullTitle, true, JSON.stringify(narrowPanelRect))
       assert.equal(narrowPanelRect.visibleList, true, JSON.stringify(narrowPanelRect))
       const narrowPanelScreenshot = await page.screenshot({
         clip: {

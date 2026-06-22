@@ -22,7 +22,7 @@ const SCREENSHOT_BROWSER_CARD_MIN_WIDTH = 132
 const SCREENSHOT_BROWSER_MAX_COLUMNS = 3
 const SCREENSHOT_BROWSER_GRID_GAP = 8
 const SCREENSHOT_BROWSER_LAZY_ROOT_MARGIN = "96px"
-const SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 3
+const SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 1
 
 const pendingThumbnailLoads: Array<() => void> = []
 let thumbnailLoadFrame = 0
@@ -121,6 +121,10 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
               alt={props.item.alt}
               triggerClass="screenshot-browser__thumb-trigger"
               imageClass="screenshot-browser__thumb-image"
+              imageAttributes={{
+                decoding: "async",
+                fetchpriority: "low",
+              }}
             />
           )}
         </Show>
