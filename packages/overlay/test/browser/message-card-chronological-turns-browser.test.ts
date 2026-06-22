@@ -19,6 +19,11 @@ const SCREENSHOT_FIRST_USER_PATH = resolve(
   "message-card-chronological-turns-browser",
   "first-user-card.png",
 )
+const SCREENSHOT_USAGE_HEADER_PATH = resolve(
+  ".scratch",
+  "message-card-chronological-turns-browser",
+  "usage-header.png",
+)
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -63,6 +68,8 @@ function message(input: {
   created: number
   text: string
   parentSessionID?: string
+  tokens?: { input: number; output: number; total: number }
+  cost?: number
 }) {
   return {
     info: {
@@ -75,6 +82,10 @@ function message(input: {
       time: { created: input.created },
       ...(input.parentSessionID ? { parentSessionID: input.parentSessionID } : {}),
       ...(input.role === "assistant" ? { providerID: "openai", modelID: "gpt-5-mini" } : {}),
+      ...(input.role === "assistant" && input.tokens
+        ? { tokens: { ...input.tokens, reasoning: 0, cache: { read: 0, write: 0 } } }
+        : {}),
+      ...(input.role === "assistant" && typeof input.cost === "number" ? { cost: input.cost } : {}),
     },
     parts: [
       {
@@ -135,6 +146,8 @@ test("message cards render as chronological message turns without same-session m
       agent: "coding-assistant",
       created: T0 + 200,
       text: "Coding assistant reply one",
+      tokens: { input: 500, output: 100, total: 600 },
+      cost: 0.01,
     }),
     message({
       id: "msg_o1",
@@ -145,6 +158,8 @@ test("message cards render as chronological message turns without same-session m
       agent: "orchestrator",
       created: T0 + 300,
       text: "Orchestrator turn one",
+      tokens: { input: 800, output: 250, total: 1_050 },
+      cost: 0.025,
     }),
     message({
       id: "msg_child",
@@ -186,6 +201,8 @@ test("message cards render as chronological message turns without same-session m
       agent: "coding-assistant",
       created: T0 + 700,
       text: "Coding assistant reply two",
+      tokens: { input: 1_200, output: 350, total: 1_550 },
+      cost: 0.025,
     }),
   ]
   const sessions = [
@@ -357,6 +374,31 @@ test("message cards render as chronological message turns without same-session m
       "assistant:session:ses_coding:message:msg_assistant_2",
     ]
     await page.waitForSelector(`[data-card-id="${expectedCardIDs.at(-1)}"]`, { visible: true, timeout: 15_000 })
+    await page.waitForFunction(() => document.getElementById("chatUsage")?.textContent?.trim() === "3.2k tok · $0.060", {
+      timeout: 15_000,
+    })
+    const usageHeaderMetrics = await page.evaluate(() => {
+      const title = document.getElementById("chatViewTitle")?.getBoundingClientRect()
+      const usage = document.getElementById("chatUsage")?.getBoundingClientRect()
+      return {
+        usageText: document.getElementById("chatUsage")?.textContent?.trim() || "",
+        titleRight: title?.right ?? 0,
+        usageLeft: usage?.left ?? 0,
+        usageWidth: usage?.width ?? 0,
+        usageHeight: usage?.height ?? 0,
+      }
+    })
+    assert.equal(usageHeaderMetrics.usageText, "3.2k tok · $0.060")
+    assert.ok(usageHeaderMetrics.usageWidth > 0, "usage chip should be visible")
+    assert.ok(usageHeaderMetrics.usageHeight > 0, "usage chip should occupy header height")
+    assert.ok(
+      usageHeaderMetrics.usageLeft > usageHeaderMetrics.titleRight,
+      "usage chip should not overlap the chat title",
+    )
+    const header = await page.$(".chat-header")
+    assert.ok(header, "chat header should exist")
+    mkdirSync(dirname(SCREENSHOT_USAGE_HEADER_PATH), { recursive: true })
+    writeFileSync(SCREENSHOT_USAGE_HEADER_PATH, await header.screenshot({}))
     assert.deepEqual(errors, [])
 
     const readVisibleExpectedIDs = async () =>

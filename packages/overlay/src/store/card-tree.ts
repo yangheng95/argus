@@ -45,6 +45,7 @@
 
 import { createStore, produce, reconcile } from "solid-js/store"
 import type { ScreenshotBrowserItem } from "../utils/screenshot-browser"
+import type { UsageAggregate } from "../utils/format-usage"
 
 export type CardKind =
   | "agent" // per-session agent card (orchestrator, build worker, planner, ...)
@@ -362,6 +363,10 @@ export interface CardNode {
    *  subtreeTodoHit, so the screenshot browser can read top-level subtree
    *  aggregates without walking every child card on toolbar open. */
   subtreeScreenshotItems?: ScreenshotBrowserItem[]
+  /** Cached usage aggregate for this card's subtree. Maintained by the same
+   *  stats kernel so the always-mounted chat header usage strip never scans
+   *  the entire card dictionary on SSE updates. */
+  subtreeUsageAggregate?: UsageAggregate
 }
 
 export interface CardTreeStore {
@@ -374,6 +379,11 @@ export interface CardTreeStore {
    *  `subtreeScreenshotItems`; UI surfaces read this directly so opening the
    *  screenshot browser does not scan top-level roots. */
   screenshotItems: ScreenshotBrowserItem[]
+  /** Whole card-tree usage aggregate maintained by `card-tree-stats.ts`
+   *  from each card's own usage payload. This preserves the historic
+   *  chat-header semantics of aggregating every card in the dictionary,
+   *  including message cards that already have usage but no visible parts. */
+  usageAggregate: UsageAggregate
   /** Monotonic transcript-generation counter. Increments only when the whole
    *  visible tree is replaced, so scroll owners can drop follow-lock from the
    *  previous transcript instance without guessing from DOM emptiness. */
@@ -400,6 +410,7 @@ export const [cardTreeStore, setCardTreeStore] = createStore<CardTreeStore>({
   order: [],
   cards: {},
   screenshotItems: [],
+  usageAggregate: { tokens: 0, costUSD: 0, estimated: false },
   treeEpoch: 0,
   treeReplacementScrollIntent: "preserve",
   treeReplacementCause: "init",

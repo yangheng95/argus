@@ -11,6 +11,7 @@
 // Run: bun test test/tree-writer-stats-cache.test.ts
 
 import { test, expect } from "bun:test"
+import type { UsageAggregate } from "../src/utils/format-usage"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).requestAnimationFrame = (() => 1) as any
@@ -23,9 +24,10 @@ installRealOverlayI18n()
 const { setBoardStore } = await import("../src/store/board")
 const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore, replaceCardTreeOrder, setCardTreeStore } = await import("../src/store/card-tree")
-const { flushCardStats } = await import("../src/store/card-tree-stats")
+const { flushCardStats, markCardStatsDirty } = await import("../src/store/card-tree-stats")
 const cardTreeUtils = await import("../src/utils/card-tree")
 const screenshotBrowserUtils = await import("../src/utils/screenshot-browser")
+const { aggregateUsageAcrossSessions } = await import("../src/utils/format-usage")
 
 const TASK_ID = "tsk_stats"
 const SID = "ses_stats"
@@ -72,7 +74,8 @@ function bootstrap() {
 
 // ── Reference recursive walks (mirror the policy in utils/card-tree.ts) ──
 // Intentionally a separate implementation from both the cache and the
-// fallback, so a bug in the kernel can't silently make the fallback match.
+// transient-card recursive path, so a bug in the kernel can't silently make
+// the independent walk match.
 
 function walkCounts(cardID: string): { messages: number; tools: number; agents: number; skills: number } {
   const card = cardTreeStore.cards[cardID]
@@ -130,6 +133,26 @@ function walkTopLevelScreenshotItems(): Array<import("../src/utils/screenshot-br
   return screenshotBrowserUtils.mergeScreenshotBrowserItemSets(itemSets)
 }
 
+function combineUsageAggregates(aggregates: Iterable<UsageAggregate>): UsageAggregate {
+  let tokens = 0
+  let costUSD = 0
+  let estimated = false
+  for (const aggregate of aggregates) {
+    tokens += aggregate.tokens
+    costUSD += aggregate.costUSD
+    estimated = estimated || aggregate.estimated
+  }
+  return { tokens, costUSD, estimated }
+}
+
+function walkUsageAggregate(cardID: string): UsageAggregate {
+  const card = cardTreeStore.cards[cardID]
+  if (!card) return { tokens: 0, costUSD: 0, estimated: false }
+  const aggregates: UsageAggregate[] = [aggregateUsageAcrossSessions([card])]
+  for (const childID of card.childIDs || []) aggregates.push(walkUsageAggregate(childID))
+  return combineUsageAggregates(aggregates)
+}
+
 function forEachStoreBackedCard(callback: (card: any) => void): void {
   for (const card of Object.values(cardTreeStore.cards)) {
     if (!card) continue
@@ -146,8 +169,10 @@ function expectCacheMatchesWalk(): void {
     const fresh = walkCounts(card.id)
     expect(card.subtreeCounts).toEqual(fresh)
     expect(card.subtreeScreenshotItems).toEqual(walkScreenshotItems(card.id))
+    expect(card.subtreeUsageAggregate).toEqual(walkUsageAggregate(card.id))
   })
   expect(cardTreeStore.screenshotItems).toEqual(walkTopLevelScreenshotItems())
+  expect(cardTreeStore.usageAggregate).toEqual(aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards)))
 }
 
 // ── Cases ──
@@ -393,6 +418,53 @@ test("resetWriter clears the top-level screenshot cache", () => {
 
   expect(cardTreeStore.order).toEqual([])
   expect(cardTreeStore.screenshotItems).toEqual([])
+  expect(cardTreeStore.usageAggregate).toEqual({ tokens: 0, costUSD: 0, estimated: false })
+})
+
+test("usage aggregate cache tracks own card usage and context estimates", () => {
+  bootstrap()
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: MSG_ID_A,
+        sessionID: SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        channel: "assistant",
+        time: { created: 1_777_000_000_000 },
+        tokens: { input: 1_200, output: 150, reasoning: 0, total: 1_350, cache: { read: 0, write: 0 } },
+        cost: 0.031,
+      },
+    },
+  })
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: MSG_ID_B,
+        sessionID: SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        channel: "assistant",
+        time: { created: 1_777_000_001_000 },
+        tokens: { input: 2_000, output: 400, reasoning: 0, total: 2_400, cache: { read: 0, write: 0 } },
+        cost: 0.052,
+      },
+    },
+  })
+  setCardTreeStore("cards", `assistant:session:${SID}:message:${MSG_ID_B}`, "usage", undefined)
+  setCardTreeStore("cards", `assistant:session:${SID}:message:${MSG_ID_B}`, "contextTokens", 2_000)
+  setCardTreeStore("cards", `assistant:session:${SID}:message:${MSG_ID_B}`, "contextTokensEstimated", true)
+  markCardStatsDirty(`assistant:session:${SID}:message:${MSG_ID_B}`)
+  flushCardStats()
+
+  expectCacheMatchesWalk()
+  expect(cardTreeStore.usageAggregate).toEqual({ tokens: 3_350, costUSD: 0.031, estimated: true })
 })
 
 test("top-level screenshot cache bounds many roots before the panel reads it", () => {
@@ -427,6 +499,7 @@ test("top-level screenshot cache bounds many roots before the panel reads it", (
             childIDs: [],
             subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
             subtreeScreenshotItems: [item],
+            subtreeUsageAggregate: { tokens: 0, costUSD: 0, estimated: false },
           },
         ]
       }),
