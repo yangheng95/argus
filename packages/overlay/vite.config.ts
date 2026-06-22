@@ -45,6 +45,7 @@ function injectOverlayVersion(): Plugin {
 }
 
 export default defineConfig({
+  base: "./",
   plugins: [solidPlugin(), injectOverlayVersion(), copyStaticAssets(["i18n"])],
   define: {
     __OPENCORVUS_OVERLAY_VERSION__: JSON.stringify(overlayVersion),
