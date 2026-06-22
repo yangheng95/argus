@@ -474,15 +474,15 @@ describe("task message routes", () => {
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
-            text: "继续，但切换后端专家团。",
+            text: "继续，但切换测试专家团。",
             source: "panel",
-            promptProfile: "backend",
+            promptProfile: "testing",
           }),
         })
 
         expect(response.status).toBe(200)
         expect((await Session.get(root.id)).metadata?.configOverlay).toMatchObject({
-          prompt_profile: { active: "backend" },
+          prompt_profile: { active: "testing" },
         })
       },
     })
@@ -1094,7 +1094,6 @@ describe("task message routes", () => {
           appended: boolean
           orchestratorWoken: boolean
           executorResumed: boolean
-          resumed: boolean
           status: string
         }
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -1102,7 +1101,6 @@ describe("task message routes", () => {
           appended: true,
           orchestratorWoken: true,
           executorResumed: false,
-          resumed: false,
           status: "queued",
         })
         expect(runTaskLoop).not.toHaveBeenCalled()

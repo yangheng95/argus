@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File | Title |
 | --- | --- |
+| [2026-06-22-testing-expert-squad-profile.md](2026-06-22-testing-expert-squad-profile.md) | Testing Expert Squad Profile |
 | [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md) | Browser Preview Evidence Previewable Image |
 | [2026-06-22-browser-preview-selected-target-probe.md](2026-06-22-browser-preview-selected-target-probe.md) | Browser Preview Selected Target Probe |
 | [2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md](2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md) | Center Workbench Deferred Reveal Single Layout Owner |

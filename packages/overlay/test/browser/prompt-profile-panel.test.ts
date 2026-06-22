@@ -100,6 +100,18 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
         },
       },
       {
+        id: "testing",
+        label: "Testing",
+        description: "Bias toward reproducible verification, regression coverage, and acceptance evidence.",
+        built_in: true,
+        editable: false,
+        agents: {
+          requirements: "State behavior under test, fixtures, assertions, and negative cases.",
+          build: "Add or update focused tests and report the commands that prove the behavior.",
+          orchestrator: "Accept only evidence that can be rerun against the behavior under review.",
+        },
+      },
+      {
         id: "custom-squad",
         label: "Custom Squad",
         description: "User-authored profile stored in config.prompt_profile.profiles.",
@@ -261,7 +273,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       const promptCards = document.querySelectorAll("[data-prompt-entry]").length
       return { list, readonly, editors, promptCards }
     })
-    assert.deepEqual(builtInState.list, ["General", "Frontend", "Custom Squad"])
+    assert.deepEqual(builtInState.list, ["General", "Frontend", "Testing", "Custom Squad"])
     assert.match(builtInState.readonly, /read-only/i)
     assert.equal(builtInState.editors, 0)
     assert.equal(builtInState.promptCards, 0)
@@ -292,9 +304,9 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       }
     })
     assert.deepEqual(selectedProfileListItem, {
-      labels: ["General", "Frontend", "Custom Squad"],
-      primitiveRows: 3,
-      rowTags: ["BUTTON", "BUTTON", "BUTTON"],
+      labels: ["General", "Frontend", "Testing", "Custom Squad"],
+      primitiveRows: 4,
+      rowTags: ["BUTTON", "BUTTON", "BUTTON", "BUTTON"],
       legacyRows: 0,
       currentLabels: ["Custom Squad"],
       selectedLabel: "Custom Squad",

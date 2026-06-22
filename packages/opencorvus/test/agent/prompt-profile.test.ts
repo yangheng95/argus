@@ -44,6 +44,25 @@ const requiredBuiltInTargetMatrix = {
     "integrity",
     "orchestrator",
   ],
+  testing: [
+    "coding",
+    "coding-assistant",
+    "mission",
+    "intent-analysis",
+    "requirements",
+    "architect",
+    "frontend-design",
+    "frontend-research",
+    "build",
+    "visual-qa",
+    "deep-research",
+    "fact-check",
+    "goal-workload-analyst",
+    "integrity",
+    "orchestrator",
+    "general",
+    "explore",
+  ],
 } as const
 
 function expectConfigRejected(input: unknown, expectedMessage: string) {
@@ -81,6 +100,7 @@ describe("prompt profiles", () => {
     expect(PromptProfile.builtIns.frontend.agents["orchestrator"]).toContain("exact surface")
     expect(PromptProfile.builtIns.backend.agents["deep-research"]).toContain("API behavior")
     expect(PromptProfile.builtIns.algorithm.agents["goal-workload-analyst"]).toContain("hidden complexity")
+    expect(PromptProfile.builtIns.testing.agents["visual-qa"]).toContain("screenshots")
     expect(PromptProfile.builtIns.algorithm.agents.orchestrator).not.toContain("Prioritize these tools")
     expect(PromptProfile.builtIns.frontend.agents.build).not.toContain("Active prompt profile:")
     expect(PromptProfile.builtIns.frontend.agents.mission).not.toContain("Coordinate frontend work")
@@ -92,6 +112,14 @@ describe("prompt profiles", () => {
     expect(PromptProfile.overlayFor("coding", config)).toContain("responsive behavior")
     expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("frontend questions")
     expect(PromptProfile.overlayFor("mission", config)).toContain("target surface")
+  })
+
+  test("testing profile reaches direct session agents and test-owned specialists", () => {
+    const config = Config.Info.parse({ prompt_profile: { active: "testing" } })
+    expect(PromptProfile.overlayFor("coding", config)).toContain("testable behavior")
+    expect(PromptProfile.overlayFor("coding-assistant", config)).toContain("verification path")
+    expect(PromptProfile.overlayFor("build", config)).toContain("focused verification")
+    expect(PromptProfile.overlayFor("integrity", config)).toContain("targeted tests")
   })
 
   test("target catalog covers every built-in overlay target", () => {
@@ -108,7 +136,7 @@ describe("prompt profiles", () => {
   })
 
   test("built-in registry pressure covers required target matrices without noncanonical targets", () => {
-    expect(Object.keys(PromptProfile.builtIns)).toEqual(["general", "frontend", "backend", "algorithm"])
+    expect(Object.keys(PromptProfile.builtIns)).toEqual(["general", "frontend", "backend", "algorithm", "testing"])
     const targetIDs = new Set(PromptProfile.targets.map((target) => target.id))
     expect(PromptProfile.targets).toHaveLength(targetIDs.size)
 
@@ -119,6 +147,8 @@ describe("prompt profiles", () => {
         expect(profile.agents[targetID]?.trim().length ?? 0).toBeGreaterThan(0)
       }
     }
+
+    expect(new Set(Object.keys(PromptProfile.builtIns.testing.agents))).toEqual(targetIDs)
 
     for (const [profileID, profile] of Object.entries(PromptProfile.builtIns)) {
       for (const targetID of Object.keys(profile.agents)) {
