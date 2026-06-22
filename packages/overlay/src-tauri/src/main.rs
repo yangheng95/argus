@@ -1269,6 +1269,7 @@ fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<
     Ok(true)
 }
 
+#[cfg(any(not(windows), test))]
 fn badge_count_value(count: i64) -> Option<i64> {
     if count > 0 {
         Some(count)
