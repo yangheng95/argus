@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { resolve } from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -19,6 +21,26 @@ function send(value: unknown, init?: ResponseInit) {
       ...(init?.headers || {}),
     },
   })
+}
+
+function promptProfileCatalog() {
+  return {
+    active: "frontend",
+    project_active: "frontend",
+    session_active: null,
+    default: "frontend",
+    targets: [],
+    profiles: [
+      {
+        id: "frontend",
+        label: "Frontend",
+        description: "Frontend profile.",
+        built_in: true,
+        editable: false,
+        agents: {},
+      },
+    ],
+  }
 }
 
 test(
@@ -54,6 +76,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config" && req.method === "PATCH") return send({ model: "" })
       if (path === "/config") return send({ model: "", version: "1.2.3" })
+      if (path === "/config/prompt-profile") return send(promptProfileCatalog())
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
       if (path === "/agent") return send([])
@@ -149,6 +172,14 @@ test(
         (previous) => document.querySelector<HTMLElement>("#configSidebar")!.getBoundingClientRect().width > previous,
         before,
       )
+      const notifications = await page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>('.app-notification[role="alert"]')).map((node) =>
+          node.textContent?.replace(/\s+/g, " ").trim(),
+        ),
+      )
+      assert.deepEqual(notifications, [])
+      mkdirSync(resolve(".scratch"), { recursive: true })
+      writeFileSync(resolve(".scratch/config-dialog-resizer.png"), await page.screenshot({ fullPage: false }))
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()

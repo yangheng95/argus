@@ -5,13 +5,14 @@ import {
   clampConfigSidebarWidth,
   configSidebarResizeBounds,
   nextConfigSidebarKeyboardWidth,
-} from "../src/components/settings/config-resizer"
+} from "../src/utils/config-sidebar-resizer"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
 const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "settings.css"), "utf8")
 const FIELD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "field.css"), "utf8")
 const SETTINGS_COMPONENTS_DIR = join(OVERLAY_ROOT, "src", "components", "settings")
 const CONFIG_DIALOG_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "ConfigDialogHost.tsx"), "utf8")
+const DIALOG_SERVICE = readFileSync(join(OVERLAY_ROOT, "src", "services", "dialog.ts"), "utf8")
 const CHANNELS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ChannelsPanel.tsx"), "utf8")
 const HEADER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "header.css"), "utf8")
 const PROVIDERS_TSX = readFileSync(join(OVERLAY_ROOT, "src", "components", "settings", "ProvidersPanel.tsx"), "utf8")
@@ -93,6 +94,18 @@ describe("config panel sizing", () => {
     expect(nextConfigSidebarKeyboardWidth(400, "Home", bounds)).toBe(280)
     expect(nextConfigSidebarKeyboardWidth(400, "End", bounds)).toBe(640)
     expect(nextConfigSidebarKeyboardWidth(400, "Enter", bounds)).toBeUndefined()
+  })
+
+  test("config sidebar style and ARIA share the clamped width source", () => {
+    expect(DIALOG_SERVICE).toContain('import { currentUIScale } from "./pane"')
+    expect(DIALOG_SERVICE).toContain(
+      'setDialogStore("config", "sidebarWidth", clampConfigSidebarWidth(width, configSidebarResizeBounds(currentUIScale())))',
+    )
+    expect(CONFIG_DIALOG_TSX).toContain("const configuredSidebarWidth = createMemo")
+    expect(CONFIG_DIALOG_TSX).toContain("return clampConfigSidebarWidth(width, resizeBounds())")
+    expect(CONFIG_DIALOG_TSX).toContain("const width = configuredSidebarWidth()")
+    expect(CONFIG_DIALOG_TSX).toContain("if (width != null) return width")
+    expect(CONFIG_DIALOG_TSX).not.toContain('const width = dialogStore.config.sidebarWidth\n    if (typeof width === "number"')
   })
 
   test("settings panels keep a flat borderless owner surface", () => {

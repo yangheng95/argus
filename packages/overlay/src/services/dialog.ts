@@ -14,6 +14,8 @@ import { describeToolPart } from "../utils/tool"
 import { dialogStore, setDialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog"
 import { panelMessage } from "./chat"
 import { OPENCORVUS_VERSION_LABEL, OVERLAY_VERSION } from "../utils/version"
+import { clampConfigSidebarWidth, configSidebarResizeBounds } from "../utils/config-sidebar-resizer"
+import { currentUIScale } from "./pane"
 
 let sessionDialogSeq = 0
 const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>(CONFIG_SECTIONS.map((section) => section.id))
@@ -129,7 +131,7 @@ export function closeConfigDialog(): void {
 
 export function setConfigSidebarWidth(width: number): void {
   if (!Number.isFinite(width) || width <= 0) return
-  setDialogStore("config", "sidebarWidth", Math.round(width))
+  setDialogStore("config", "sidebarWidth", clampConfigSidebarWidth(width, configSidebarResizeBounds(currentUIScale())))
 }
 
 export function openGoalDialog(goalID = "", title = "", acceptance = ""): void {

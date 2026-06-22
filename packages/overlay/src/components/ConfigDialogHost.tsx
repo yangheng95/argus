@@ -26,7 +26,7 @@ import {
   clampConfigSidebarWidth,
   configSidebarResizeBounds,
   nextConfigSidebarKeyboardWidth,
-} from "./settings/config-resizer"
+} from "../utils/config-sidebar-resizer"
 
 interface ConfigTabDef {
   id: ConfigDialogTab
@@ -149,22 +149,23 @@ function useResizable(opts: ResizableOptions) {
 }
 
 export function ConfigDialogHost() {
-  const sidebarStyle = createMemo<Record<string, string>>(() => {
+  const resizeBounds = createMemo(() => configSidebarResizeBounds(currentUIScale()))
+  const configuredSidebarWidth = createMemo(() => {
     const width = dialogStore.config.sidebarWidth
-    if (typeof width !== "number" || !Number.isFinite(width) || width <= 0) {
-      return {}
-    }
+    if (typeof width !== "number" || !Number.isFinite(width) || width <= 0) return null
+    return clampConfigSidebarWidth(width, resizeBounds())
+  })
+  const sidebarStyle = createMemo<Record<string, string>>(() => {
+    const width = configuredSidebarWidth()
+    if (width == null) return {}
     return {
       width: `${width}px`,
       "min-width": `${width}px`,
     }
   })
-  const resizeBounds = createMemo(() => configSidebarResizeBounds(currentUIScale()))
   const currentSidebarWidth = () => {
-    const width = dialogStore.config.sidebarWidth
-    if (typeof width === "number" && Number.isFinite(width) && width > 0) {
-      return clampConfigSidebarWidth(width, resizeBounds())
-    }
+    const width = configuredSidebarWidth()
+    if (width != null) return width
     const rendered = document.getElementById("configSidebar")?.getBoundingClientRect().width
     if (typeof rendered === "number" && Number.isFinite(rendered) && rendered > 0) {
       return clampConfigSidebarWidth(rendered, resizeBounds())
