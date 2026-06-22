@@ -42,6 +42,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-retire-solid-changes-panel-empty-state.md](2026-06-22-retire-solid-changes-panel-empty-state.md) | Retire Solid Changes Panel Empty State |
 | [2026-06-22-screenshot-browser-bounded-card-collector.md](2026-06-22-screenshot-browser-bounded-card-collector.md) | Screenshot Browser Bounded Card Collector |
 | [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md) | Screenshot Browser Open Jank |
+| [2026-06-22-section-phase-solid-owner.md](2026-06-22-section-phase-solid-owner.md) | Section Phase Solid Owner |
 
 ## 2026-06-21
 
