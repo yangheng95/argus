@@ -44,6 +44,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md) | Screenshot Browser Open Jank |
 | [2026-06-22-section-phase-solid-owner.md](2026-06-22-section-phase-solid-owner.md) | Section Phase Solid Owner |
 | [2026-06-22-task-switch-directory-source.md](2026-06-22-task-switch-directory-source.md) | Task Switch Directory Source |
+| [2026-06-22-task-switch-stable-request-keys.md](2026-06-22-task-switch-stable-request-keys.md) | Task Switch Stable Request Keys |
 
 ## 2026-06-21
 

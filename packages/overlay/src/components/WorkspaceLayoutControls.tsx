@@ -24,8 +24,9 @@ export function WorkspaceLayoutControls() {
   const [open, setOpen] = createSignal(false)
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal("")
+  const directory = createMemo(() => activeDirectory().trim())
 
-  const disabled = () => !activeDirectory() || loading() || terminalProfiles().length === 0
+  const disabled = () => !directory() || loading() || terminalProfiles().length === 0
   const selectedProfile = createMemo(
     () =>
       terminalProfiles().find((profile) => profile.id === selectedTerminalProfileID()) ??
@@ -45,9 +46,8 @@ export function WorkspaceLayoutControls() {
     return value
   }
 
-  async function reloadProfiles() {
-    const directory = activeDirectory()
-    if (!directory) {
+  async function reloadProfiles(nextDirectory: string) {
+    if (!nextDirectory) {
       clearTerminalProfileSelection()
       return
     }
@@ -55,7 +55,7 @@ export function WorkspaceLayoutControls() {
     setError("")
     try {
       await reloadTerminalProfileSelection({
-        directory,
+        directory: nextDirectory,
         defaultProfileMissingMessage: t("terminal.default_profile_missing"),
       })
     } catch (reason) {
@@ -71,7 +71,7 @@ export function WorkspaceLayoutControls() {
   }
 
   async function openProfile(profileID: string) {
-    const cwd = activeDirectory()
+    const cwd = activeDirectory().trim()
     if (!cwd) throw new Error("Workspace directory is required")
     selectTerminalProfileID(profileID)
     close()
@@ -83,10 +83,12 @@ export function WorkspaceLayoutControls() {
     }
   }
 
-  createEffect(() => {
-    activeDirectory()
-    void reloadProfiles()
-  })
+  createEffect<string>((previous) => {
+    const next = directory()
+    if (next === previous) return previous
+    void reloadProfiles(next)
+    return next
+  }, "")
 
   return (
     <WorkspaceSplitLauncher

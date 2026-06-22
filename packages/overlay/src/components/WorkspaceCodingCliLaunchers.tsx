@@ -20,8 +20,9 @@ export function WorkspaceCodingCliLaunchers() {
   const [open, setOpen] = createSignal(false)
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal("")
+  const directory = createMemo(() => activeDirectory().trim())
 
-  const disabled = () => !activeDirectory() || loading() || profiles().length === 0 || !currentTerminalProfileID()
+  const disabled = () => !directory() || loading() || profiles().length === 0 || !currentTerminalProfileID()
   const title = () => error() || t("coding_cli.open")
   const selectedProfile = createMemo(
     () => profiles().find((profile) => profile.id === selectedCliID()) ?? profiles()[0] ?? null,
@@ -31,9 +32,8 @@ export function WorkspaceCodingCliLaunchers() {
     return profile ? CLI_ICONS[profile.icon] : "coding-cli"
   })
 
-  async function reloadProfiles() {
-    const directory = activeDirectory()
-    if (!directory) {
+  async function reloadProfiles(nextDirectory: string) {
+    if (!nextDirectory) {
       setProfiles([])
       return
     }
@@ -41,9 +41,9 @@ export function WorkspaceCodingCliLaunchers() {
     setError("")
     try {
       const [response] = await Promise.all([
-        listCodingCliProfiles(directory),
+        listCodingCliProfiles(nextDirectory),
         reloadTerminalProfileSelection({
-          directory,
+          directory: nextDirectory,
           defaultProfileMissingMessage: t("terminal.default_profile_missing"),
         }),
       ])
@@ -67,7 +67,7 @@ export function WorkspaceCodingCliLaunchers() {
   }
 
   async function launch(profile: CodingCliProfile) {
-    const directory = activeDirectory()
+    const directory = activeDirectory().trim()
     if (!directory) throw new Error("Workspace directory is required")
     const terminalProfileID = currentTerminalProfileID()
     if (!terminalProfileID) throw new Error("Terminal profile is required")
@@ -85,10 +85,12 @@ export function WorkspaceCodingCliLaunchers() {
     }
   }
 
-  createEffect(() => {
-    activeDirectory()
-    void reloadProfiles()
-  })
+  createEffect<string>((previous) => {
+    const next = directory()
+    if (next === previous) return previous
+    void reloadProfiles(next)
+    return next
+  }, "")
 
   return (
     <WorkspaceSplitLauncher

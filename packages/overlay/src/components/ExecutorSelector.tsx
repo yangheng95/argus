@@ -69,6 +69,24 @@ interface ExecutorModelOption {
   providerName: string
 }
 
+interface TaskOperatorContextResourceKey {
+  taskID: string
+  directory: string
+  refresh: number
+}
+
+interface HexinBudgetBaseResourceKey {
+  directory: string
+  model: string
+  providerAuthRefresh: number
+  refresh: number
+  taskID: string
+}
+
+interface HexinBudgetResourceKey extends HexinBudgetBaseResourceKey {
+  tick: number
+}
+
 const INTERNAL_EXECUTOR_ID = "opencorvus"
 const EXTERNAL_DISABLED_TAB_ID = "disabled"
 const EXTERNAL_EXECUTOR_IDS = ["codex", "claude-code"]
@@ -198,6 +216,75 @@ function budgetErrorMessage(error: unknown): string {
   return String(error || "")
 }
 
+function parseResourceKey(value: string, label: string): Record<string, unknown> {
+  const parsed = JSON.parse(value) as unknown
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${label} must be a JSON object`)
+  }
+  return parsed as Record<string, unknown>
+}
+
+function readResourceKeyString(value: unknown, label: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${label} must be a non-empty string`)
+  }
+  return value
+}
+
+function readResourceKeyNumber(value: unknown, label: string): number {
+  if (!Number.isFinite(value)) {
+    throw new Error(`${label} must be a finite number`)
+  }
+  return value as number
+}
+
+function encodeTaskOperatorContextKey(input: TaskOperatorContextResourceKey): string {
+  return JSON.stringify(input)
+}
+
+function parseTaskOperatorContextKey(key: string): TaskOperatorContextResourceKey {
+  const value = parseResourceKey(key, "task operator context key")
+  return {
+    taskID: readResourceKeyString(value.taskID, "task operator context key taskID"),
+    directory: readResourceKeyString(value.directory, "task operator context key directory"),
+    refresh: readResourceKeyNumber(value.refresh, "task operator context key refresh"),
+  }
+}
+
+function encodeHexinBudgetBaseKey(input: HexinBudgetBaseResourceKey): string {
+  return JSON.stringify(input)
+}
+
+function parseHexinBudgetBaseKey(key: string): HexinBudgetBaseResourceKey {
+  const value = parseResourceKey(key, "Hexin budget base key")
+  return {
+    directory: readResourceKeyString(value.directory, "Hexin budget base key directory"),
+    model: readResourceKeyString(value.model, "Hexin budget base key model"),
+    providerAuthRefresh: readResourceKeyNumber(
+      value.providerAuthRefresh,
+      "Hexin budget base key providerAuthRefresh",
+    ),
+    refresh: readResourceKeyNumber(value.refresh, "Hexin budget base key refresh"),
+    taskID: typeof value.taskID === "string" ? value.taskID : "",
+  }
+}
+
+function encodeHexinBudgetKey(input: HexinBudgetResourceKey): string {
+  return JSON.stringify(input)
+}
+
+function parseHexinBudgetKey(key: string): HexinBudgetResourceKey {
+  const value = parseResourceKey(key, "Hexin budget key")
+  return {
+    directory: readResourceKeyString(value.directory, "Hexin budget key directory"),
+    model: readResourceKeyString(value.model, "Hexin budget key model"),
+    providerAuthRefresh: readResourceKeyNumber(value.providerAuthRefresh, "Hexin budget key providerAuthRefresh"),
+    refresh: readResourceKeyNumber(value.refresh, "Hexin budget key refresh"),
+    taskID: typeof value.taskID === "string" ? value.taskID : "",
+    tick: readResourceKeyNumber(value.tick, "Hexin budget key tick"),
+  }
+}
+
 function HexinBudgetInline(props: { response: HexinBudgetResponse | undefined; loading: boolean; error: unknown }) {
   const budget = createMemo(() => (props.response?.ok ? props.response.budget : undefined))
   const lowBudget = createMemo(() => {
@@ -263,17 +350,18 @@ export function ExecutorSelector() {
   const externalActiveID = createMemo(() => (isExternalActive() ? activeID() : ""))
   const taskID = createMemo(() => activeTaskID().trim())
 
-  const taskOperatorContextKey = createMemo((): { taskID: string; directory: string; refresh: number } | null => {
+  const taskOperatorContextKey = createMemo((): string | null => {
     if (!appStore.connected) return null
     const id = taskID()
     if (!id) return null
     const directory = activeDirectory().trim()
     if (!directory) return null
-    return { taskID: id, directory, refresh: sessionConfigRefreshToken() }
+    return encodeTaskOperatorContextKey({ taskID: id, directory, refresh: sessionConfigRefreshToken() })
   })
   const [taskOperatorContext, { mutate: mutateTaskOperatorContext, refetch: refetchTaskOperatorContext }] =
     createResource(taskOperatorContextKey, async (key): Promise<TaskOperatorModelContext> => {
-      return await getTaskOperatorModelContext({ taskID: key.taskID, directory: key.directory })
+      const input = parseTaskOperatorContextKey(key)
+      return await getTaskOperatorModelContext({ taskID: input.taskID, directory: input.directory })
     })
 
   const currentTaskOperatorContext = createMemo(() => {
@@ -297,13 +385,13 @@ export function ExecutorSelector() {
     if (parts.provider !== "hexin" || !parts.name) return null
     const directory = activeDirectory().trim()
     if (!directory) return null
-    return {
+    return encodeHexinBudgetBaseKey({
       directory,
       model: parts.name,
       providerAuthRefresh: appStore.providerAuthRefreshRevision,
       refresh: sessionConfigRefreshToken(),
       taskID: taskID(),
-    }
+    })
   })
   createEffect(() => {
     if (!hexinBudgetBaseKey()) return
@@ -312,10 +400,10 @@ export function ExecutorSelector() {
   })
   const hexinBudgetKey = createMemo(() => {
     const key = hexinBudgetBaseKey()
-    return key ? { ...key, tick: hexinBudgetRefreshTick() } : null
+    return key ? encodeHexinBudgetKey({ ...parseHexinBudgetBaseKey(key), tick: hexinBudgetRefreshTick() }) : null
   })
   const [hexinBudget] = createResource(hexinBudgetKey, async (key) => {
-    return await getHexinBudget({ directory: key.directory })
+    return await getHexinBudget({ directory: parseHexinBudgetKey(key).directory })
   })
   const openCorvusModelPlaceholder = createMemo(() => {
     if (!hasSelectedTask()) return t("agent_models.option_not_set")
