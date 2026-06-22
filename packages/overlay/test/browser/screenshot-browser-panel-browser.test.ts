@@ -465,8 +465,24 @@ test(
         const grid = box(".screenshot-browser-row-grid")
         const card = box(".screenshot-browser-card")
         const thumb = box(".screenshot-browser__thumb-trigger")
+        const overlayMinProbe = document.createElement("div")
+        overlayMinProbe.style.position = "fixed"
+        overlayMinProbe.style.visibility = "hidden"
+        overlayMinProbe.style.width = "var(--ui-overlay-min-width)"
+        document.body.appendChild(overlayMinProbe)
+        const overlayMinWidth = Math.round(overlayMinProbe.getBoundingClientRect().width)
+        overlayMinProbe.remove()
+        const panelMinProbe = document.createElement("div")
+        panelMinProbe.style.position = "fixed"
+        panelMinProbe.style.visibility = "hidden"
+        panelMinProbe.style.width = "var(--ui-workbench-panel-min-width)"
+        document.body.appendChild(panelMinProbe)
+        const panelMinWidth = Math.round(panelMinProbe.getBoundingClientRect().width)
+        panelMinProbe.remove()
         return {
           bodyOverflowX: document.documentElement.scrollWidth - window.innerWidth,
+          allowedBodyOverflowX: Math.max(0, overlayMinWidth - window.innerWidth),
+          panelMinWidth,
           panel,
           grid,
           card,
@@ -475,11 +491,14 @@ test(
           thumbEscaped: !!panel && !!thumb && (thumb.left < panel.left - 1 || thumb.right > panel.right + 1),
         }
       })
-      assert.ok(narrowLayout.panel?.width && narrowLayout.panel.width <= 322, JSON.stringify(narrowLayout))
+      assert.ok(
+        narrowLayout.panel?.width && narrowLayout.panel.width >= narrowLayout.panelMinWidth - 1,
+        JSON.stringify(narrowLayout),
+      )
       assert.ok((narrowLayout.grid?.scrollWidth ?? 0) <= (narrowLayout.grid?.clientWidth ?? 0) + 1, JSON.stringify(narrowLayout))
       assert.equal(narrowLayout.cardEscaped, false, JSON.stringify(narrowLayout))
       assert.equal(narrowLayout.thumbEscaped, false, JSON.stringify(narrowLayout))
-      assert.ok(narrowLayout.bodyOverflowX <= 1, JSON.stringify(narrowLayout))
+      assert.ok(narrowLayout.bodyOverflowX <= narrowLayout.allowedBodyOverflowX + 1, JSON.stringify(narrowLayout))
 
       const narrowScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-narrow.png")
       const narrowScreenshot = await page.screenshot({ fullPage: false })

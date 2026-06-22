@@ -222,6 +222,9 @@ test(
             const copyblock = document.querySelector<HTMLElement>(".brand-guide-copyblock")
             const copyblockRect = copyblock?.getBoundingClientRect()
             const badge = document.querySelector<HTMLElement>("#connBadge")
+            const workspaceMain = document.querySelector<HTMLElement>("#workspaceMain")
+            const rightToolbarMount = document.querySelector<HTMLElement>("#solidRightActivityToolbar")
+            const rightToolbarRect = rightToolbarMount?.getBoundingClientRect()
             const triggers = Array.from(document.querySelectorAll<HTMLElement>("[data-menu-trigger]"))
               .filter((node) => getComputedStyle(node).display !== "none")
               .map((node) => node.dataset.menuTrigger || "")
@@ -253,6 +256,9 @@ test(
               badgeText: badge?.textContent || "",
               badgeTitle: badge?.getAttribute("title") || "",
               titlebarHeight: titlebar.getBoundingClientRect().height,
+              workspaceMainFlexDirection: workspaceMain ? getComputedStyle(workspaceMain).flexDirection : "",
+              rightToolbarWidth: rightToolbarRect?.width || 0,
+              rightToolbarHeight: rightToolbarRect?.height || 0,
               triggers,
               triggerMetrics,
             }
@@ -273,6 +279,14 @@ test(
           assert.ok(geometry.badgeTitle.includes(String(server.port)))
           assert.ok(geometry.badgeTitle.includes("12345"))
           assert.ok(geometry.titlebarHeight > 24)
+          if (width === 1120) {
+            assert.equal(geometry.workspaceMainFlexDirection, "row")
+            assert.ok(geometry.rightToolbarHeight > geometry.rightToolbarWidth * 4)
+          }
+          if (width === 700) {
+            assert.equal(geometry.workspaceMainFlexDirection, "column")
+            assert.ok(geometry.rightToolbarWidth > geometry.rightToolbarHeight * 4)
+          }
           if (locale === "en-US" && width === 1440) {
             const titlebarElement = await page.$("#titlebar")
             assert.ok(titlebarElement)

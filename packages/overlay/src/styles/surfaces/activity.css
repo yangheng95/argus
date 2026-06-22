@@ -661,7 +661,7 @@
   --oc-button-color: var(--bad);
 }
 
-@media (max-width: 1120px) {
+@media (width < 1120px) {
   /* breakpoint: --ui-breakpoint-xl */
   #solidRightActivityToolbar.side-activity-toolbar-mount {
     flex: 0 0 var(--ui-collapsed-pane-width);
