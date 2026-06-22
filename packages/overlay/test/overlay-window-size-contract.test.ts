@@ -20,14 +20,16 @@ describe("overlay window and pane size contract", () => {
     expect(mainWindow.minHeight).toBe(720)
   })
 
-  test("Rust startup and resize use the configured minimum instead of a second size source", () => {
+  test("Rust startup uses the configured minimum without a live resize feedback loop", () => {
     const main = readOverlay("src-tauri/src/main.rs")
 
     expect(main).toContain("fn overlay_main_min_size(config: &tauri::utils::config::Config) -> OverlayWindowSize")
     expect(main).toContain("overlay_main_min_size(app.config())")
+    expect(main).toContain("window.set_min_size(Some(tauri::LogicalSize::new(")
     expect(main).toContain("fn constrain_overlay_window_size(")
     expect(main).toContain("fn startup_overlay_window_size(")
-    expect(main).toContain("tauri::WindowEvent::Resized(size)")
+    expect(main).not.toContain("tauri::WindowEvent::Resized")
+    expect(main).not.toContain("fn overlay_window_needs_resize(")
     expect(main).not.toContain(".clamp(760.0, 1600.0)")
     expect(main).not.toContain(".clamp(480.0, 920.0)")
   })
