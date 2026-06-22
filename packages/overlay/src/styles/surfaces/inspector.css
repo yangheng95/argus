@@ -585,7 +585,13 @@
   padding: 0 var(--file-explorer-row-padding-end) 0
     calc(var(--file-explorer-row-padding-start) + var(--file-explorer-row-depth) * var(--file-explorer-row-indent));
   font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-body);
   text-align: left;
+}
+
+.file-explorer-row > svg {
+  width: var(--file-explorer-row-icon-width);
+  height: var(--file-explorer-row-icon-width);
 }
 
 .file-explorer-row:hover {

@@ -178,6 +178,7 @@ test("file explorer current file and directory expansion are exposed on the row 
     await page.evaluateOnNewDocument((serverUrl) => {
       ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
       localStorage.setItem("oc_locale", "en-US")
+      localStorage.setItem("oc_theme", "dark")
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", serverUrl)
       localStorage.setItem("oc_right_panel_collapsed", "false")
@@ -186,9 +187,18 @@ test("file explorer current file and directory expansion are exposed on the row 
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
+    await page.waitForFunction(
+      () => document.documentElement.dataset.theme === "dark" && document.body.dataset.theme === "dark",
+    )
     await page.evaluate(() => document.documentElement.style.setProperty("--ui-scale", "1.25"))
     await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
     await page.waitForSelector('.file-explorer-row[title="README.md"]', { visible: true })
+
+    const darkDensityScreenshotPath = resolve(".scratch/file-explorer-dark-row-density.png")
+    mkdirSync(dirname(darkDensityScreenshotPath), { recursive: true })
+    const explorerElementForDarkDensity = await page.$("#centerWorkbenchExplorer")
+    assert.ok(explorerElementForDarkDensity)
+    writeFileSync(darkDensityScreenshotPath, await explorerElementForDarkDensity.screenshot({}))
 
     await page.focus(".file-explorer-search-input")
     const searchFocusState = await page.$eval(".file-explorer-search-input", (node) => {
@@ -229,15 +239,21 @@ test("file explorer current file and directory expansion are exposed on the row 
       const item = row.closest(".file-explorer-virtual-item") as HTMLElement | null
       const list = row.closest(".file-explorer-list") as HTMLElement | null
       const rowBox = row.getBoundingClientRect()
+      const directIconBox = row.querySelector(":scope > svg")?.getBoundingClientRect()
       const itemBox = item?.getBoundingClientRect()
       const style = getComputedStyle(row)
+      const rootStyle = getComputedStyle(document.documentElement)
       return {
         rowClass: row.className,
         dataUi: row.dataset.ui ?? "",
         variant: row.dataset.variant ?? "",
         virtualized: list?.dataset.virtualized ?? "",
-        rootScale: Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")),
+        rootScale: Number.parseFloat(rootStyle.getPropertyValue("--ui-scale")),
+        bodyWeightToken: rootStyle.getPropertyValue("--ui-font-weight-body").trim(),
+        rowFontWeight: style.fontWeight,
         rowHeight: rowBox.height,
+        directIconWidth: directIconBox?.width ?? 0,
+        directIconHeight: directIconBox?.height ?? 0,
         itemHeight: itemBox?.height ?? 0,
         computedHeight: style.height,
         depth: style.getPropertyValue("--file-explorer-row-depth").trim(),
@@ -250,6 +266,15 @@ test("file explorer current file and directory expansion are exposed on the row 
     assert.equal(virtualGeometry.depth, "0")
     assert.ok(virtualGeometry.rootScale > 1.2, JSON.stringify(virtualGeometry))
     assert.ok(Math.abs(virtualGeometry.rowHeight - 26 * virtualGeometry.rootScale) < 0.5, JSON.stringify(virtualGeometry))
+    assert.equal(virtualGeometry.rowFontWeight, virtualGeometry.bodyWeightToken)
+    assert.ok(
+      Math.abs(virtualGeometry.directIconWidth - 16 * virtualGeometry.rootScale) < 0.5,
+      JSON.stringify(virtualGeometry),
+    )
+    assert.ok(
+      Math.abs(virtualGeometry.directIconHeight - 16 * virtualGeometry.rootScale) < 0.5,
+      JSON.stringify(virtualGeometry),
+    )
     assert.ok(Math.abs(virtualGeometry.itemHeight - virtualGeometry.rowHeight) < 0.5, JSON.stringify(virtualGeometry))
 
     await page.$eval(".file-explorer-search-input", (node) => {
