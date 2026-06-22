@@ -1111,7 +1111,7 @@ function assertNoLiveGoalRunForBuild(input: { taskID: string; goalID: string; ac
   if (!liveGoalRun) return
   throw new Error(
     `${input.action}: goal ${input.goalID} already has live goal_run ${liveGoalRun.id} ` +
-      `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}); wait for terminal refill evidence or abort the live attempt explicitly.`,
+      `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}); do not call wait for this internal live build. Park this wake until terminal refill evidence appears, or abort the live attempt explicitly.`,
   )
 }
 
@@ -6716,7 +6716,7 @@ export function createOrchestratorTools(input: {
     steer_subagent: tool({
       description:
         "Send a scoped steering message to a child agent session and wake that session, OR — for a live build child — return a read-only activity snapshot (status, last_activity_at, age_ms, ownership when available). " +
-        "Build sessions cannot accept injected steering; the snapshot lets you decide between waiting and cancel_subagent mode='recover_stale'. " +
+        "Build sessions cannot accept injected steering; the snapshot lets you distinguish healthy live progress from cancel_subagent mode='recover_stale'. Healthy live build progress means park this orchestrator wake, not wait-tool polling. " +
         "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly.",
       inputSchema: z
         .object({
@@ -6778,7 +6778,7 @@ export function createOrchestratorTools(input: {
               `  owner_ownership=${liveOwner?.ownershipID ?? "n/a"}`,
               `  goal_run=${target.goalRunID ?? liveOwner?.payload.goal_run_id ?? liveGoalRun?.id ?? "n/a"}`,
               `Reason recorded: ${reason}`,
-              'Note: build sessions cannot accept injected steering messages. To act on this snapshot, either keep waiting, or if age_ms is large AND status indicates no progress, call cancel_subagent with mode="recover_stale".',
+              'Note: build sessions cannot accept injected steering messages. If this snapshot shows healthy live progress, stop this wake and let terminal goal refill facts wake the next decision; do not call wait to poll it. If age_ms is large AND status indicates no progress, call cancel_subagent with mode="recover_stale".',
             ].join("\n")
           }
           return (
@@ -6893,7 +6893,7 @@ export function createOrchestratorTools(input: {
             if (currentStatus.type === "streaming" || currentStatus.type === "retry") {
               return (
                 `Error: cancel_subagent refused stale recovery because build session ${target.sessionID} is ${currentStatus.type}. ` +
-                "Wait for it to settle or use mode='cancel' for explicit operator cancellation."
+                "Leave the live child running and return to this orchestration only after terminal refill or operator evidence, or use mode='cancel' for explicit operator cancellation."
               )
             }
           }
@@ -8597,7 +8597,8 @@ export function createOrchestratorTools(input: {
               `- worktreeDir: ${started.worktreeDir ?? "n/a"}\n` +
               `- worktreeBranch: ${started.worktreeBranch ?? "n/a"}\n\n` +
               `### Next step\n` +
-              `This build is now running asynchronously. Do not wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
+              `This build is now running asynchronously. Do not call wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
+              `If no next dispatchable, failed, or refill facts exist, stop this wake; terminal goal refill will wake the next decision. ` +
               `When a goal reaches terminal status, read_context will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from those facts. ` +
               `Call integrity only after all blocking builds are terminal.`
             )
@@ -8756,7 +8757,7 @@ export function createOrchestratorTools(input: {
     wait: tool({
       description:
         WaitToolDescription +
-        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or `read_context` (refreshing task evidence). After wait returns, re-read evidence with `read_context` before deciding the next dispatch.",
+        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or `read_context` (refreshing task evidence). Never use wait for live build completion, live sibling goal completion, or terminal refill polling. After wait returns, re-read evidence with `read_context` before deciding the next dispatch.",
       inputSchema: WaitToolParameters,
       execute: async ({ duration_ms, reason }) => {
         const result = await executeWait({
