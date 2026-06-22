@@ -206,6 +206,14 @@ function createScreenshotBrowserCollector(): ScreenshotBrowserCollector {
   return { seen: new Set<string>(), items: [] }
 }
 
+export function mergeScreenshotBrowserItemSets(itemSets: Iterable<readonly ScreenshotBrowserItem[]>): ScreenshotBrowserItem[] {
+  const collector = createScreenshotBrowserCollector()
+  for (const items of itemSets) {
+    for (const item of items) pushUnique(collector, item)
+  }
+  return collector.items
+}
+
 function collectScreenshotBrowserMessage(collector: ScreenshotBrowserCollector, message: any): void {
   const role = messageRole(message)
   const time = messageTime(message)
@@ -254,21 +262,8 @@ function cardMessage(card: CardNode): any {
   }
 }
 
-function collectCardTreeScreenshots(
-  order: readonly string[],
-  cards: Readonly<Record<string, CardNode | undefined>>,
-  visited: Set<string>,
-  collector: ScreenshotBrowserCollector,
-): void {
-  for (const id of order) {
-    if (visited.has(id)) continue
-    visited.add(id)
-    const card = cards[id]
-    if (!card) continue
-    collectScreenshotBrowserMessage(collector, cardMessage(card))
-    const childIDs = Array.isArray(card.childIDs) ? card.childIDs : []
-    collectCardTreeScreenshots(childIDs, cards, visited, collector)
-  }
+export function collectScreenshotBrowserItemsFromCard(card: CardNode): ScreenshotBrowserItem[] {
+  return collectScreenshotBrowserItems([cardMessage(card)])
 }
 
 export function collectScreenshotBrowserItemsFromCardTree(
@@ -276,7 +271,18 @@ export function collectScreenshotBrowserItemsFromCardTree(
   cards: Readonly<Record<string, CardNode | undefined>>,
 ): ScreenshotBrowserItem[] {
   const collector = createScreenshotBrowserCollector()
-  collectCardTreeScreenshots(Array.isArray(order) ? order : [], cards, new Set<string>(), collector)
+  const visited = new Set<string>()
+  for (const id of order) {
+    if (visited.has(id)) continue
+    visited.add(id)
+    const card = cards[id]
+    if (!card) throw new Error(`screenshot browser card tree order references missing card ${id}`)
+    const cached = card.subtreeScreenshotItems
+    if (!Array.isArray(cached)) {
+      throw new Error(`screenshot browser card ${id} is missing subtreeScreenshotItems cache`)
+    }
+    for (const item of cached) pushUnique(collector, item)
+  }
   return collector.items
 }
 

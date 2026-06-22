@@ -44,6 +44,7 @@
 // fine-grained reactivity handles the rest.
 
 import { createStore, produce, reconcile } from "solid-js/store"
+import type { ScreenshotBrowserItem } from "../utils/screenshot-browser"
 
 export type CardKind =
   | "agent" // per-session agent card (orchestrator, build worker, planner, ...)
@@ -356,6 +357,11 @@ export interface CardNode {
    *  derives the user-facing `TodoSummary` from this via
    *  `collectTodoSummary`. */
   subtreeTodoHit?: TodoActivityHit
+  /** Cached bounded screenshot items for this card's subtree. Maintained by
+   *  the same stats kernel as subtreeCounts / subtreeLatestHit /
+   *  subtreeTodoHit, so the screenshot browser can read top-level subtree
+   *  aggregates without walking every child card on toolbar open. */
+  subtreeScreenshotItems?: ScreenshotBrowserItem[]
 }
 
 export interface CardTreeStore {
@@ -418,6 +424,19 @@ export function setHydratedRewindCursor(cursorTime: number | null): void {
   markCardTreeVisibleChanged()
 }
 
+let pruneStatsHandler: (() => void) | undefined
+
+export function registerCardTreePruneStatsHandler(handler: () => void): void {
+  pruneStatsHandler = handler
+}
+
+function flushPrunedCardTreeStats(): void {
+  if (!pruneStatsHandler) {
+    throw new Error("pruneCardsAfterCursor requires the card-tree stats kernel to be registered")
+  }
+  pruneStatsHandler()
+}
+
 /**
  * Prune all top-level cards (and their orphaned children) whose `time` is
  * strictly greater than `cursorTime`. Called when the backend emits
@@ -457,5 +476,6 @@ export function pruneCardsAfterCursor(cursorTime: number) {
       }
     }),
   )
+  flushPrunedCardTreeStats()
   markCardTreeVisibleChanged()
 }
