@@ -12,7 +12,7 @@
 
 import { saveSettings, settingsStore, setSettingsStore } from "../store/settings"
 import { applyTasks, boardStore, setBoardStore, activeTaskID } from "../store/board"
-import { clearMessages } from "../store/messages"
+import { clearMessages, setSelectedTaskID } from "../store/messages"
 import { setAppStore } from "../store/app"
 import { AppLog } from "../utils/log"
 import { t } from "../utils/i18n"
@@ -399,6 +399,24 @@ function joinPath(base: string, value: string): string {
   return `${base}${sep}${value}`
 }
 
+function clearSelectionForDirectorySwitch(): void {
+  setSelectedTaskID("")
+  clearMessages()
+  setBoardStore("selectEpoch", (n: number) => n + 1)
+  setBoardStore({
+    selectedSource: null,
+    board: null,
+    loading: false,
+    taskSwitching: false,
+    taskSequence: 0,
+    boardEtag: "",
+    boardSyncPending: false,
+    boardQueued: false,
+    boardUpdatedAt: 0,
+    snapshotVersion: "",
+  })
+}
+
 // ── Tauri file / directory pickers ──
 
 /** Open a native directory picker. Returns the selected path, or an empty string when cancelled. */
@@ -527,6 +545,13 @@ export interface ApplyDirectoryOptions {
    * Defaults to true.
    */
   restoreWorkspace?: boolean
+  /**
+   * Internal task-selection handoff: selectTask owns the target task hydrate
+   * after a cross-directory switch, so it keeps selection lifecycle control.
+   * Manual directory switches must leave this unset so stale task ids cannot
+   * survive after project projections are cleared.
+   */
+  preserveSelection?: boolean
 }
 
 /**
@@ -548,6 +573,9 @@ export async function applyDirectory(next: string, options: ApplyDirectoryOption
 
   stopSSE()
   stopTaskListSSE()
+  if (options.preserveSelection !== true) {
+    clearSelectionForDirectorySwitch()
+  }
   setSettingsStore("directoryEpoch", (n: number) => n + 1)
   setSettingsStore("directory", next)
   if (save !== null) setSettingsStore("savedDirectory", save)
@@ -573,7 +601,8 @@ export async function applyDirectory(next: string, options: ApplyDirectoryOption
 
   if (options.persist !== false) {
     // Persist through the active host settings source.
-    const persistFn = (window as any).persistOverlaySettings
+    const persistFn =
+      typeof globalThis.window === "object" ? (globalThis.window as any).persistOverlaySettings : undefined
     if (typeof persistFn === "function") await persistFn()
   }
 

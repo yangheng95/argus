@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, mock, test } from "bun:test"
 const hydrateCalls: Array<{ taskID: string; options: any }> = []
 const startedStreams: Array<{ kind: string; id: string; sequence: number }> = []
 let stoppedStreams = 0
+const DEFAULT_TEST_DIRECTORY = "D:/repo/current"
 
 mock.module("../src/services/conversation", () => ({
   cancelConversationReplay: () => undefined,
+  conversationSourceDirectory: () => "",
   hydrateTaskConversation: async (taskID: string, options: any) => {
     hydrateCalls.push({ taskID, options })
     return 0
@@ -27,6 +29,9 @@ mock.module("../src/services/sse", () => ({
 const { deleteTask, selectTask } = await import("../src/services/task")
 const { activeTaskID, boardStore, setBoardStore } = await import("../src/store/board")
 const { __setHostTransportForTest, HOST_CAPABILITIES } = await import("../src/services/host-transport")
+const { setSettingsStore } = await import("../src/store/settings")
+const { configure } = await import("../src/services/api")
+const { taskOwningDirectory } = await import("../src/services/task-directory")
 
 beforeEach(() => {
   hydrateCalls.length = 0
@@ -38,12 +43,26 @@ beforeEach(() => {
   setBoardStore("selectedSource", null)
   setBoardStore("taskSwitching", false)
   setBoardStore("selectEpoch", 0)
+  setSettingsStore({
+    directory: DEFAULT_TEST_DIRECTORY,
+    savedDirectory: DEFAULT_TEST_DIRECTORY,
+    workspaceTaskID: "",
+    workspaceDirectory: "",
+    directoryEpoch: 0,
+    autoServer: false,
+  })
+  configure({ directory: DEFAULT_TEST_DIRECTORY })
   __setHostTransportForTest(undefined)
 })
 
 describe("task selection initial hydrate", () => {
   test("task selection hydrates with a small initial tail", async () => {
-    setBoardStore("tasks", [{ task: { id: "tsk_dead", status: "cancelled", directory: "" }, pending_interactions: 0 }])
+    setBoardStore("tasks", [
+      {
+        task: { id: "tsk_dead", status: "cancelled", directory: DEFAULT_TEST_DIRECTORY },
+        pending_interactions: 0,
+      },
+    ])
 
     await selectTask("tsk_dead")
 
@@ -54,13 +73,82 @@ describe("task selection initial hydrate", () => {
   })
 
   test("active tasks use the same bounded initial hydrate and still start SSE", async () => {
-    setBoardStore("tasks", [{ task: { id: "tsk_live", status: "active", directory: "" }, pending_interactions: 0 }])
+    setBoardStore("tasks", [
+      {
+        task: { id: "tsk_live", status: "active", directory: DEFAULT_TEST_DIRECTORY },
+        pending_interactions: 0,
+      },
+    ])
 
     await selectTask("tsk_live")
 
     expect(hydrateCalls).toHaveLength(1)
     expect(hydrateCalls[0].options.tailLimit).toBe(8)
     expect(startedStreams).toEqual([{ kind: "task", id: "tsk_live", sequence: 0 }])
+  })
+
+  test("cross-directory task selection preserves the clicked task owning directory while project data reloads", async () => {
+    const currentDirectory = "D:/repo/current"
+    const nextDirectory = "D:/repo/next"
+    setSettingsStore({
+      directory: currentDirectory,
+      savedDirectory: currentDirectory,
+      directoryEpoch: 0,
+    })
+    configure({ directory: currentDirectory })
+    setBoardStore("tasks", [
+      {
+        task: {
+          id: "tsk_cross",
+          status: "active",
+          directory: nextDirectory,
+          time: { created: 1, updated: 1 },
+        },
+        pending_interactions: 0,
+      },
+    ])
+    __setHostTransportForTest({
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      async request(req: any) {
+        if (req.path === "global/health") {
+          return {
+            status: 200,
+            ok: true,
+            headers: {},
+            body: { paths: { database: "db.sqlite", data: "data", home: "home" } },
+          }
+        }
+        if (req.path === "config") return { status: 200, ok: true, headers: {}, body: { model: "" } }
+        if (req.path === "channel") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "skill/installed") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "mcp") return { status: 200, ok: true, headers: {}, body: {} }
+        if (req.path === "path") return { status: 200, ok: true, headers: {}, body: { directory: nextDirectory } }
+        if (req.path === "vcs") return { status: 200, ok: true, headers: {}, body: { branch: "main" } }
+        if (req.path === "global/tasks") return { status: 200, ok: true, headers: {}, body: { tasks: [] } }
+        if (req.path === "executor") return { status: 200, ok: true, headers: {}, body: [] }
+        return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+      },
+      openStream() {
+        return { close() {} }
+      },
+      async native(input: unknown) {
+        const kind = (input as { kind?: string }).kind
+        if (kind === "settings.save" || kind === "badge.set" || kind === "tray.attention.set") return true
+        throw new Error(`unexpected native call: ${JSON.stringify(input)}`)
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    } as any)
+
+    await selectTask("tsk_cross")
+
+    expect(activeTaskID()).toBe("tsk_cross")
+    expect(boardStore.selectedSource).toEqual({ kind: "task", id: "tsk_cross", directory: nextDirectory })
+    expect(taskOwningDirectory("tsk_cross")).toBe(nextDirectory)
+    expect(hydrateCalls).toHaveLength(1)
+    expect(hydrateCalls[0].options.directory).toBe(nextDirectory)
   })
 
   test("deselect advances the selection epoch so stale task loads cannot win", async () => {
@@ -91,7 +179,10 @@ describe("task selection initial hydrate", () => {
 
   test("deleting the selected task clears selection before the delete response", async () => {
     setBoardStore("tasks", [
-      { task: { id: "tsk_deleted", status: "cancelled", directory: "" }, pending_interactions: 0 },
+      {
+        task: { id: "tsk_deleted", status: "cancelled", directory: DEFAULT_TEST_DIRECTORY },
+        pending_interactions: 0,
+      },
     ])
     setBoardStore("selectedSource", { kind: "task", id: "tsk_deleted" })
     let requested = false
@@ -141,7 +232,10 @@ describe("task selection initial hydrate", () => {
 
   test("deleting a missing selected task surfaces task-list refresh failures", async () => {
     setBoardStore("tasks", [
-      { task: { id: "tsk_refresh_fail", status: "cancelled", directory: "" }, pending_interactions: 0 },
+      {
+        task: { id: "tsk_refresh_fail", status: "cancelled", directory: DEFAULT_TEST_DIRECTORY },
+        pending_interactions: 0,
+      },
     ])
     setBoardStore("selectedSource", { kind: "task", id: "tsk_refresh_fail" })
     const requests: string[] = []

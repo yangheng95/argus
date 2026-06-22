@@ -10,7 +10,7 @@ import { t } from "../utils/i18n"
 
 // ── Store ──
 
-export type BoardSource = { kind: "task" | "session"; id: string }
+export type BoardSource = { kind: "task"; id: string; directory?: string } | { kind: "session"; id: string }
 
 export const [boardStore, setBoardStore] = createStore({
   board: null as any,
@@ -157,10 +157,16 @@ function selectedTaskOwningDirectory(taskID: string): string {
     boardTask?.id === taskID && typeof boardTask.directory === "string" ? boardTask.directory.trim() : ""
   const row = boardStore.tasks.find((item: any) => item?.task?.id === taskID)
   const rowDirectory = typeof row?.task?.directory === "string" ? row.task.directory.trim() : ""
-  if (boardDirectory && rowDirectory && boardDirectory !== rowDirectory) {
+  const selectedSource = boardStore.selectedSource
+  const sourceDirectory =
+    selectedSource?.kind === "task" && selectedSource.id === taskID && typeof selectedSource.directory === "string"
+      ? selectedSource.directory.trim()
+      : ""
+  const directories = [boardDirectory, rowDirectory, sourceDirectory].filter(Boolean)
+  if (new Set(directories).size > 1) {
     throw new Error(`selected task ${taskID} has inconsistent project directories`)
   }
-  const directory = boardDirectory || rowDirectory
+  const directory = boardDirectory || rowDirectory || sourceDirectory
   if (!directory) throw new Error(`selected task ${taskID} has no owning project directory`)
   return directory
 }

@@ -229,6 +229,9 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     return
   }
 
+  const taskItem = nextTaskID ? taskByID(nextTaskID) : null
+  const taskDirectory =
+    explicitDirectory || (typeof taskItem?.task?.directory === "string" ? taskItem.task.directory.trim() : "")
   const epoch = boardStore.selectEpoch + 1
 
   // ── Synchronous phase ────────────────────────────────────────────────
@@ -251,7 +254,10 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
   // masked the leak until the new writer became source-of-truth.
   resetWriter({ scrollIntent: "bottom", cause: "task-switch" })
   setSelectedTaskID(nextTaskID)
-  setBoardStore("selectedSource", nextTaskID ? { kind: "task", id: nextTaskID } : null)
+  setBoardStore(
+    "selectedSource",
+    nextTaskID ? { kind: "task", id: nextTaskID, ...(taskDirectory ? { directory: taskDirectory } : {}) } : null,
+  )
   setBoardStore("selectEpoch", epoch)
 
   if (!nextTaskID) {
@@ -275,11 +281,8 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     // Cross-project switch: apply the new directory so every project-scoped
     // API (config, permissions, meta, executors) targets the correct
     // backend Instance before we load the new task's board.
-    const taskItem = taskByID(nextTaskID)
-    const taskDirectory =
-      explicitDirectory || (typeof taskItem?.task?.directory === "string" ? taskItem.task.directory : "")
     if (taskDirectory && taskDirectory !== settingsStore.directory) {
-      await applyDirectory(taskDirectory, { save: true })
+      await applyDirectory(taskDirectory, { save: true, preserveSelection: true })
       if (stale()) return
     }
 

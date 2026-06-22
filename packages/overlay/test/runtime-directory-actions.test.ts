@@ -69,6 +69,35 @@ test("taskOwningDirectory rejects task IDs without a frozen row or board directo
   expect(() => taskOwningDirectory("tsk_missing")).toThrow("owning project directory")
 })
 
+test("taskOwningDirectory keeps the selected task source directory through project-scope reloads", () => {
+  configure({ directory: SETTINGS_DIRECTORY })
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_selected", directory: TASK_DIRECTORY })
+
+  expect(taskOwningDirectory("tsk_selected")).toBe(TASK_DIRECTORY)
+})
+
+test("taskOwningDirectory rejects inconsistent selected source and task row directories", () => {
+  configure({ directory: SETTINGS_DIRECTORY })
+  setTasksData([
+    {
+      task: {
+        id: "tsk_inconsistent",
+        directory: TASK_DIRECTORY,
+        status: "active",
+        time: { created: 1, updated: 1 },
+      },
+      updated_at: 1,
+    },
+  ])
+  setBoardStore("selectedSource", {
+    kind: "task",
+    id: "tsk_inconsistent",
+    directory: "D:/repo/other-task-row",
+  })
+
+  expect(() => taskOwningDirectory("tsk_inconsistent")).toThrow("inconsistent project directories")
+})
+
 test("panelMessage sends task messages with the task row directory", async () => {
   const captures: TransportRequest[] = []
   configure({ directory: SETTINGS_DIRECTORY })
