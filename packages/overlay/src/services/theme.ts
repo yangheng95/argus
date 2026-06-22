@@ -9,6 +9,7 @@
 // applyOpacity(opacity) — writes --ui-window-opacity CSS variable
 
 import { MIN_WINDOW_OPACITY, sanitizeOpacity, settingsStore } from "../store/settings"
+import { overlayLayoutFrameSize } from "../utils/overlay-layout-frame"
 import { getHostTransport } from "./host-transport"
 import { readInitialVsCodeHostTheme } from "./host-theme"
 import { sanitizeThemeForHost, type OverlayThemeID } from "./theme-registry"
@@ -105,11 +106,10 @@ export function applyOpacity(opacity: number): void {
 export function applyZoom(zoom: number): void {
   if (typeof document === "undefined") return
   const sanitized = sanitizeZoom(zoom)
-  // width / height from visualViewport, scale = min(w/1040, h/820),
+  // width / height from the legal overlay layout frame, scale = min(w/1040, h/820),
   // base = clamp(scale, 0.82, 1.04), next = base * state.zoom
-  const width = window.visualViewport?.width ?? window.innerWidth ?? 900
-  const height = window.visualViewport?.height ?? window.innerHeight ?? 760
-  const scale = Math.min(width / 1040, height / 820)
+  const frame = overlayLayoutFrameSize()
+  const scale = Math.min(frame.width / 1040, frame.height / 820)
   const base = Math.max(0.82, Math.min(1.04, scale))
   const next = base * sanitized
   document.documentElement.style.setProperty("--ui-scale", next.toFixed(3))
@@ -136,9 +136,8 @@ export function stepZoom(delta: number): void {
   // dependency, so we use the value stored in the CSS variable instead.
   const current = Number.parseFloat(document.documentElement.style.getPropertyValue("--ui-scale") || "1") || 1
   // current = base * zoom; we only want to nudge zoom so we normalise first.
-  const width = window.visualViewport?.width ?? window.innerWidth ?? 900
-  const height = window.visualViewport?.height ?? window.innerHeight ?? 760
-  const scale = Math.min(width / 1040, height / 820)
+  const frame = overlayLayoutFrameSize()
+  const scale = Math.min(frame.width / 1040, frame.height / 820)
   const base = Math.max(0.82, Math.min(1.04, scale))
   const currentZoom = base > 0 ? current / base : 1
   const next = Math.round((currentZoom + delta) * 100) / 100

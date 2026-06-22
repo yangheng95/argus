@@ -51,6 +51,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-prompt-profile-task-session-owner.md](2026-06-22-prompt-profile-task-session-owner.md) | Prompt Profile Task Session Owner |
 | [2026-06-22-screenshot-browser-virtual-row-measurement.md](2026-06-22-screenshot-browser-virtual-row-measurement.md) | Screenshot Browser Virtual Row Measurement |
 | [2026-06-22-center-workbench-panel-min-size-contract.md](2026-06-22-center-workbench-panel-min-size-contract.md) | Center Workbench Panel Min Size Contract |
+| [2026-06-22-overlay-layout-aspect-frame.md](2026-06-22-overlay-layout-aspect-frame.md) | Overlay Layout Aspect Frame |
 | [2026-06-22-native-resize-no-set-size-loop.md](2026-06-22-native-resize-no-set-size-loop.md) | Native Resize No Set Size Loop |
 | [2026-06-22-overlay-viewport-size-contract.md](2026-06-22-overlay-viewport-size-contract.md) | Overlay Viewport Size Contract |
 | [2026-06-22-pane-semantics-layout-frame.md](2026-06-22-pane-semantics-layout-frame.md) | Pane Semantics Layout Frame |

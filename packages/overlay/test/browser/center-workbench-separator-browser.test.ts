@@ -204,6 +204,91 @@ async function collectCenterWorkbenchResizeEvents(page: OverlayPage) {
   })
 }
 
+async function threeCenterWorkbenchPanelLayout(page: OverlayPage) {
+  return await page.evaluate(async () => {
+    await new Promise<void>((resolveFrame) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()))
+    })
+    const tokenProbe = document.createElement("div")
+    tokenProbe.style.position = "fixed"
+    tokenProbe.style.visibility = "hidden"
+    tokenProbe.style.width = "var(--ui-workbench-panel-min-width)"
+    document.body.appendChild(tokenProbe)
+    const minWidth = tokenProbe.getBoundingClientRect().width
+    tokenProbe.remove()
+
+    const body = document.querySelector<HTMLElement>(".center-workbench-body")!
+    const panels = [
+      document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!,
+      document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")!,
+      document.querySelector<HTMLElement>("#centerWorkbenchInspector")!,
+    ].map((panel) => {
+      const rect = panel.getBoundingClientRect()
+      return {
+        id: panel.id,
+        open: panel.dataset.open,
+        width: rect.width,
+        left: rect.left,
+        right: rect.right,
+      }
+    })
+    const widthProbe = document.createElement("div")
+    widthProbe.style.position = "fixed"
+    widthProbe.style.visibility = "hidden"
+    widthProbe.style.width = "var(--ui-overlay-min-width)"
+    const heightProbe = document.createElement("div")
+    heightProbe.style.position = "fixed"
+    heightProbe.style.visibility = "hidden"
+    heightProbe.style.height = "var(--ui-overlay-min-height)"
+    document.body.append(widthProbe, heightProbe)
+    const minimumWidth = widthProbe.getBoundingClientRect().width
+    const minimumHeight = heightProbe.getBoundingClientRect().height
+    widthProbe.remove()
+    heightProbe.remove()
+    const shell = document.body.getBoundingClientRect()
+    const aspectRatio = minimumWidth / minimumHeight
+    return {
+      minWidth,
+      bodyClientWidth: body.clientWidth,
+      bodyScrollWidth: body.scrollWidth,
+      shellWidth: shell.width,
+      shellHeight: shell.height,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      aspectRatio,
+      panels,
+    }
+  })
+}
+
+function assertThreeCenterWorkbenchPanelMinWidths(
+  layout: Awaited<ReturnType<typeof threeCenterWorkbenchPanelLayout>>,
+  label: string,
+) {
+  assert.deepEqual(
+    layout.panels.map((panel) => [panel.id, panel.open]),
+    [
+      ["centerWorkbenchWorkflow", "true"],
+      ["centerWorkbenchScreenshots", "true"],
+      ["centerWorkbenchInspector", "true"],
+    ],
+    `${label}: expected workflow, screenshots, and inspector to be open`,
+  )
+  for (const panel of layout.panels) {
+    assert.ok(
+      panel.width >= layout.minWidth - 1,
+      `${label}: expected ${panel.id} width ${panel.width} to stay above ${layout.minWidth}`,
+    )
+  }
+  for (let index = 1; index < layout.panels.length; index += 1) {
+    assert.ok(
+      layout.panels[index - 1].right <= layout.panels[index].left + 2,
+      `${label}: expected open panels not to overlap: ${JSON.stringify(layout.panels)}`,
+    )
+  }
+  assert.ok(layout.bodyScrollWidth >= layout.bodyClientWidth, `${label}: workbench body should scroll, not compress`)
+}
+
 test(
   "center workbench panel separator owns pointer and keyboard resizing",
   async () => {
@@ -309,66 +394,37 @@ test(
 
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
-      const threePanelLayout = await page.evaluate(async () => {
-        await new Promise<void>((resolveFrame) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()))
-        })
-        const tokenProbe = document.createElement("div")
-        tokenProbe.style.position = "fixed"
-        tokenProbe.style.visibility = "hidden"
-        tokenProbe.style.width = "var(--ui-workbench-panel-min-width)"
-        document.body.appendChild(tokenProbe)
-        const minWidth = tokenProbe.getBoundingClientRect().width
-        tokenProbe.remove()
-
-        const body = document.querySelector<HTMLElement>(".center-workbench-body")!
-        const panels = [
-          document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!,
-          document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")!,
-          document.querySelector<HTMLElement>("#centerWorkbenchInspector")!,
-        ].map((panel) => {
-          const rect = panel.getBoundingClientRect()
-          return {
-            id: panel.id,
-            open: panel.dataset.open,
-            width: rect.width,
-            left: rect.left,
-            right: rect.right,
-          }
-        })
-        return {
-          minWidth,
-          bodyClientWidth: body.clientWidth,
-          bodyScrollWidth: body.scrollWidth,
-          panels,
-        }
-      })
-      assert.deepEqual(
-        threePanelLayout.panels.map((panel) => [panel.id, panel.open]),
-        [
-          ["centerWorkbenchWorkflow", "true"],
-          ["centerWorkbenchScreenshots", "true"],
-          ["centerWorkbenchInspector", "true"],
-        ],
-      )
-      for (const panel of threePanelLayout.panels) {
-        assert.ok(
-          panel.width >= threePanelLayout.minWidth - 1,
-          `expected ${panel.id} width ${panel.width} to stay above ${threePanelLayout.minWidth}`,
-        )
-      }
-      for (let index = 1; index < threePanelLayout.panels.length; index += 1) {
-        assert.ok(
-          threePanelLayout.panels[index - 1].right <= threePanelLayout.panels[index].left + 2,
-          `expected open panels not to overlap: ${JSON.stringify(threePanelLayout.panels)}`,
-        )
-      }
-      assert.ok(threePanelLayout.bodyScrollWidth >= threePanelLayout.bodyClientWidth)
+      const threePanelLayout = await threeCenterWorkbenchPanelLayout(page)
+      assertThreeCenterWorkbenchPanelMinWidths(threePanelLayout, "1280x760 three-panel layout")
       await mkdir(resolve(".scratch"), { recursive: true })
       await writeFile(
         resolve(".scratch", "center-workbench-three-panel-min-width.png"),
         await page.screenshot({ fullPage: true }),
       )
+      await page.setViewport({ width: 1120, height: 720 })
+      await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
+      const minimumThreePanelLayout = await threeCenterWorkbenchPanelLayout(page)
+      assertThreeCenterWorkbenchPanelMinWidths(minimumThreePanelLayout, "1120x720 three-panel layout")
+      await writeFile(
+        resolve(".scratch", "center-workbench-three-panel-min-width-1120.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+      await page.setViewport({ width: 1120, height: 1000 })
+      await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
+      const illegalTallLayout = await threeCenterWorkbenchPanelLayout(page)
+      assertThreeCenterWorkbenchPanelMinWidths(illegalTallLayout, "1120x1000 illegal-tall three-panel layout")
+      assert.equal(illegalTallLayout.viewportHeight, 1000)
+      assert.ok(illegalTallLayout.aspectRatio > 1.5)
+      assert.ok(
+        Math.abs(illegalTallLayout.shellHeight - illegalTallLayout.shellWidth / illegalTallLayout.aspectRatio) <= 1,
+        `expected illegal tall shell height to be aspect-clamped: ${JSON.stringify(illegalTallLayout)}`,
+      )
+      await writeFile(
+        resolve(".scratch", "center-workbench-illegal-tall-aspect-frame.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+      await page.setViewport({ width: 1280, height: 760 })
+      await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForFunction(
         () => document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open === "false",
