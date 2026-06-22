@@ -21,6 +21,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const HTML = readFileSync(path.resolve(import.meta.dir, "..", "src", "index.html"), "utf8")
+const VITE_CONFIG = readFileSync(path.resolve(import.meta.dir, "..", "vite.config.ts"), "utf8")
 const BRAND_GUIDE = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "components", "titlebar", "TitlebarBrandGuide.tsx"),
   "utf8",
@@ -49,6 +50,7 @@ describe("titlebar brand wordmark is gone", () => {
     expect(BRAND_GUIDE).toContain('import brandLogoUrl from "../../opencorvus-logo-dark.svg"')
     expect(BRAND_GUIDE).toContain("src={brandLogoUrl}")
     expect(BRAND_GUIDE).not.toContain('src="opencorvus-logo-dark.svg"')
+    expect(VITE_CONFIG).toContain('base: "./"')
   })
 })
 
