@@ -382,15 +382,33 @@ function focusedLeftActivityOwnsPrimaryPanel(
   return isPrimaryLeftActivity(activity)
 }
 
+let pendingCenterWorkbenchRevealPanel: CenterWorkbenchPanel | null = null
+
+function revealPendingCenterWorkbenchPanel(): void {
+  const panel = pendingCenterWorkbenchRevealPanel
+  pendingCenterWorkbenchRevealPanel = null
+  if (!panel) return
+  getCenterWorkbenchViews()[panel]?.scrollIntoView({ block: "nearest", inline: "nearest" })
+}
+
+const revealCenterWorkbenchPanelOnFrame = createAnimationFrameScheduler(revealPendingCenterWorkbenchPanel)
+disposers.push(() => {
+  revealCenterWorkbenchPanelOnFrame.cancel()
+  pendingCenterWorkbenchRevealPanel = null
+})
+
+function scheduleCenterWorkbenchPanelReveal(panel: CenterWorkbenchPanel): void {
+  pendingCenterWorkbenchRevealPanel = panel
+  revealCenterWorkbenchPanelOnFrame.schedule()
+}
+
 function resetCenterWorkbenchToFocusedPanel(activity: PrimaryLeftActivity): void {
   const panel = leftActivityCenterPanel(activity)
   setWorkspaceOpen(false)
   closeFileEditor()
   setPrimaryCenterPanel(panel)
   setCenterWorkbenchPanels(["workflow"])
-  queueMicrotask(() => {
-    getCenterWorkbenchViews().workflow?.scrollIntoView({ block: "nearest", inline: "nearest" })
-  })
+  scheduleCenterWorkbenchPanelReveal("workflow")
 }
 
 function hasWorkspaceDiffTarget(): boolean {
@@ -548,9 +566,7 @@ function selectTaskFromTaskList(taskID: string): void {
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
   setCenterWorkbenchPanels((current) => (current.includes(panel) ? current : [...current, panel]))
-  queueMicrotask(() => {
-    getCenterWorkbenchViews()[panel]?.scrollIntoView({ block: "nearest", inline: "nearest" })
-  })
+  scheduleCenterWorkbenchPanelReveal(panel)
 }
 
 function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
@@ -585,6 +601,15 @@ function selectedCenterWorkbenchPanel(panels = centerWorkbenchPanels()): CenterW
 function centerWorkbenchPanelWeight(panel: CenterWorkbenchPanel): number {
   const weight = Number(settingsStore.centerWorkbenchPanelWeights?.[panel])
   return Number.isFinite(weight) && weight > 0 ? weight : 1
+}
+
+function centerWorkbenchPanelWeightsSignature(): string {
+  const weights = settingsStore.centerWorkbenchPanelWeights
+  if (!weights) return ""
+  return CENTER_WORKBENCH_PANEL_ORDER.map((panel) => {
+    const weight = Number(weights[panel])
+    return Number.isFinite(weight) && weight > 0 ? `${panel}:${weight}` : `${panel}:`
+  }).join("|")
 }
 
 function renderCenterWorkbenchPanelWeights(): void {
@@ -1679,9 +1704,8 @@ disposers.push(
     })
 
     createEffect(() => {
-      settingsStore.centerWorkbenchPanelWeights
-      renderCenterWorkbenchPanelWeights()
-      renderCenterWorkbenchPanelSeparators()
+      centerWorkbenchPanelWeightsSignature()
+      untrack(renderCenterWorkbenchPanelLayout)
     })
 
     createEffect(() => {
@@ -1820,7 +1844,6 @@ function applyPendingCenterWorkbenchPanelResize(): void {
   pendingCenterWorkbenchPanelResizeClientX = null
   if (!drag || clientX == null) return
   updateCenterWorkbenchPanelWeights(drag, clientX - drag.leftRect.left)
-  renderCenterWorkbenchPanelSeparators()
 }
 
 const applyCenterWorkbenchPanelResizeOnFrame = createAnimationFrameScheduler(applyPendingCenterWorkbenchPanelResize)
@@ -1867,8 +1890,6 @@ function resizeCenterWorkbenchPanelByKeyboard(event: KeyboardEvent, leftPanel: C
   }
   event.preventDefault()
   updateCenterWorkbenchPanelWeights(metrics, leftWidth)
-  renderCenterWorkbenchPanelWeights()
-  renderCenterWorkbenchPanelSeparators()
   saveSettings()
 }
 
