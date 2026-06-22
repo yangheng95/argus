@@ -369,6 +369,11 @@ export interface CardTreeStore {
   order: string[]
   /** Every card by id, flat. Includes cards referenced from any `childIDs`. */
   cards: Record<string, CardNode>
+  /** Bounded newest screenshots for the visible top-level card tree.
+   *  Maintained by `card-tree-stats.ts` from per-card
+   *  `subtreeScreenshotItems`; UI surfaces read this directly so opening the
+   *  screenshot browser does not scan top-level roots. */
+  screenshotItems: ScreenshotBrowserItem[]
   /** Monotonic transcript-generation counter. Increments only when the whole
    *  visible tree is replaced, so scroll owners can drop follow-lock from the
    *  previous transcript instance without guessing from DOM emptiness. */
@@ -394,6 +399,7 @@ export interface CardTreeStore {
 export const [cardTreeStore, setCardTreeStore] = createStore<CardTreeStore>({
   order: [],
   cards: {},
+  screenshotItems: [],
   treeEpoch: 0,
   treeReplacementScrollIntent: "preserve",
   treeReplacementCause: "init",
@@ -425,9 +431,14 @@ export function setHydratedRewindCursor(cursorTime: number | null): void {
 }
 
 let pruneStatsHandler: (() => void) | undefined
+let orderStatsHandler: (() => void) | undefined
 
 export function registerCardTreePruneStatsHandler(handler: () => void): void {
   pruneStatsHandler = handler
+}
+
+export function registerCardTreeOrderStatsHandler(handler: () => void): void {
+  orderStatsHandler = handler
 }
 
 function flushPrunedCardTreeStats(): void {
@@ -435,6 +446,32 @@ function flushPrunedCardTreeStats(): void {
     throw new Error("pruneCardsAfterCursor requires the card-tree stats kernel to be registered")
   }
   pruneStatsHandler()
+}
+
+function notifyCardTreeOrderStats(): void {
+  if (!orderStatsHandler) {
+    throw new Error("card tree order changes require the card-tree stats kernel to be registered")
+  }
+  orderStatsHandler()
+}
+
+function equalCardTreeOrder(a: readonly string[], b: readonly string[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let index = 0; index < b.length; index += 1) {
+    if (a[index] !== b[index]) return false
+  }
+  return true
+}
+
+export function replaceCardTreeOrder(nextOrder: readonly string[] | ((order: readonly string[]) => readonly string[])): void {
+  let changed = false
+  setCardTreeStore("order", (current) => {
+    const next = typeof nextOrder === "function" ? Array.from(nextOrder(current)) : Array.from(nextOrder)
+    changed = !equalCardTreeOrder(current, next)
+    return next
+  })
+  if (changed) notifyCardTreeOrderStats()
 }
 
 /**
@@ -448,7 +485,7 @@ function flushPrunedCardTreeStats(): void {
  */
 export function pruneCardsAfterCursor(cursorTime: number) {
   setCardTreeStore("rewindCursor", cursorTime)
-  setCardTreeStore("order", (order) =>
+  replaceCardTreeOrder((order) =>
     order.filter((id) => {
       const card = cardTreeStore.cards[id]
       if (!card) return false

@@ -23,6 +23,7 @@ import {
   cardTreeStore,
   markCardTreeReplaced,
   markCardTreeVisibleChanged,
+  replaceCardTreeOrder,
   setCardTreeStore,
   type CardNode,
   type CardStatus,
@@ -333,7 +334,7 @@ export function resetWriter(
   standaloneQuestionInteractions.clear()
   // Drop every key explicitly — plain assignment on a store merges instead of
   // replacing (see setMessages's messagesBySession fix in store/messages.ts).
-  setCardTreeStore("order", [])
+  replaceCardTreeOrder([])
   setCardTreeStore(
     "cards",
     produce((c: Record<string, CardNode>) => {
@@ -341,6 +342,7 @@ export function resetWriter(
     }),
   )
   setCardTreeStore("rewindCursor", null)
+  flushCardStats()
   markCardTreeReplaced({
     scrollIntent: options.scrollIntent ?? "preserve",
     cause: options.cause ?? "writer-reset",
@@ -1000,8 +1002,7 @@ function handlePartDelta(event: any): void {
 
 function removeCardReferences(cardID: string): void {
   if (cardTreeStore.order.includes(cardID)) {
-    setCardTreeStore(
-      "order",
+    replaceCardTreeOrder(
       cardTreeStore.order.filter((id) => id !== cardID),
     )
   }
@@ -3317,7 +3318,7 @@ function rebuildTopLevelOrder(): void {
     return ca.time - cb.time
   })
 
-  setCardTreeStore("order", order)
+  replaceCardTreeOrder(order)
 }
 
 // ── Board projection hook ──

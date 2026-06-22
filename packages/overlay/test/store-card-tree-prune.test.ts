@@ -70,6 +70,7 @@ test("pruneCardsAfterCursor drops dangling childIDs from surviving parent cards"
     expect(cardTreeStore.cards[interactionID]).toBeUndefined()
     expect(cardTreeStore.cards[sessionID]?.childIDs).toEqual([])
     expect(cardTreeStore.cards[sessionID]?.subtreeScreenshotItems).toEqual([])
+    expect(cardTreeStore.screenshotItems).toEqual([])
     expect(cardTreeStore.visibleVersion).toBeGreaterThan(before)
   } finally {
     resetWriter()
