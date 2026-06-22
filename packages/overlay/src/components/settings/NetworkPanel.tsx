@@ -1,4 +1,4 @@
-import { createEffect, createSignal } from "solid-js"
+import { createEffect, createMemo, createSignal } from "solid-js"
 import { appStore } from "../../store/app"
 import {
   patchConfig,
@@ -7,6 +7,7 @@ import {
   type NetworkProxyTestResult,
 } from "../../services/config"
 import { t } from "../../utils/i18n"
+import { Icon } from "../Icon"
 import { Button } from "../ui/Button"
 import { SettingsGroup, SettingsPanel, SettingsRow } from "./primitives"
 
@@ -56,10 +57,13 @@ export default function NetworkPanel() {
   const [username, setUsername] = createSignal("")
   const [password, setPassword] = createSignal("")
   const [saving, setSaving] = createSignal(false)
+  const [deleting, setDeleting] = createSignal(false)
   const [testing, setTesting] = createSignal(false)
   const [saved, setSaved] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
+  const [statusMessage, setStatusMessage] = createSignal<string | null>(null)
   const [testResult, setTestResult] = createSignal<NetworkProxyTestResult | null>(null)
+  const proxyConfigured = createMemo(() => !!(appStore.config as any)?.network?.proxy)
 
   createEffect(() => {
     const proxy = configuredProxy()
@@ -74,6 +78,7 @@ export default function NetworkPanel() {
   function clearFeedback() {
     setError(null)
     setSaved(false)
+    setStatusMessage(null)
     setTestResult(null)
   }
 
@@ -131,7 +136,7 @@ export default function NetworkPanel() {
   }
 
   async function saveProxy() {
-    if (saving()) return
+    if (saving() || deleting()) return
     clearFeedback()
     const input = readProxyInput()
     if (!validateProxyInput(input, false)) return
@@ -151,8 +156,33 @@ export default function NetworkPanel() {
     }
   }
 
+  async function deleteProxy() {
+    if (deleting() || saving() || testing() || !proxyConfigured()) return
+    clearFeedback()
+
+    setDeleting(true)
+    try {
+      const savedConfig = await patchConfig({ network: { proxy: null } })
+      if (!savedConfig) {
+        setError(t("network.proxy.delete_failed", { reason: t("network.proxy.save_failed") }))
+        return
+      }
+      setLlmProvider(false)
+      setWebResearch(false)
+      setUrl("")
+      setUsername("")
+      setPassword("")
+      setStatusMessage(t("network.proxy.deleted"))
+      setTimeout(() => setStatusMessage(null), 1800)
+    } catch (err) {
+      setError(t("network.proxy.delete_failed", { reason: describeFailure(err) }))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   async function testProxy() {
-    if (testing()) return
+    if (testing() || deleting()) return
     clearFeedback()
     const input = readProxyInput()
     if (!validateProxyInput(input, true)) return
@@ -266,6 +296,12 @@ export default function NetworkPanel() {
           </div>
         ) : null}
 
+        {statusMessage() ? (
+          <div class="provider-test-result" data-ok="true" role="status" aria-live="polite">
+            <span class="provider-test-result-msg">{statusMessage()}</span>
+          </div>
+        ) : null}
+
         {testResult() ? (
           <div
             class="provider-test-result"
@@ -288,10 +324,24 @@ export default function NetworkPanel() {
                 size="sm"
                 tone="neutral"
                 onClick={() => void testProxy()}
-                disabled={testing() || saving()}
+                disabled={testing() || saving() || deleting()}
                 title={t("network.proxy.test_button_title")}
               >
                 {testing() ? t("network.proxy.test_testing") : t("network.proxy.test_button")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                tone="danger"
+                onClick={() => void deleteProxy()}
+                disabled={deleting() || saving() || testing() || !proxyConfigured()}
+                title={t("network.proxy.delete_button_title")}
+                aria-label={t("network.proxy.delete_button_title")}
+                data-ui="network-proxy-delete"
+              >
+                <Icon name="delete" size={14} decorative />
+                {deleting() ? t("network.proxy.deleting") : t("common.delete")}
               </Button>
               <Button
                 type="button"
@@ -299,7 +349,7 @@ export default function NetworkPanel() {
                 size="sm"
                 tone="accent"
                 onClick={() => void saveProxy()}
-                disabled={saving() || testing()}
+                disabled={saving() || testing() || deleting()}
               >
                 {saving() ? t("common.saving") : saved() ? t("common.saved") : t("common.save")}
               </Button>
