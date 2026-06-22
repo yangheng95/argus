@@ -17,10 +17,14 @@ if (typeof globalThis.requestAnimationFrame === "undefined") {
   ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
 }
 
+const { installRealOverlayI18n } = await import("./fixtures/i18n")
+installRealOverlayI18n()
+
 const { setBoardStore } = await import("../src/store/board")
 const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
 const cardTreeUtils = await import("../src/utils/card-tree")
+const screenshotBrowserUtils = await import("../src/utils/screenshot-browser")
 
 const TASK_ID = "tsk_stats"
 const SID = "ses_stats"
@@ -106,6 +110,14 @@ function walkCounts(cardID: string): { messages: number; tools: number; agents: 
   return out
 }
 
+function walkScreenshotItems(cardID: string): Array<import("../src/utils/screenshot-browser").ScreenshotBrowserItem> {
+  const card = cardTreeStore.cards[cardID]
+  if (!card) return []
+  const itemSets = [screenshotBrowserUtils.collectScreenshotBrowserItemsFromCard(card as any)]
+  for (const childID of card.childIDs || []) itemSets.push(walkScreenshotItems(childID))
+  return screenshotBrowserUtils.mergeScreenshotBrowserItemSets(itemSets)
+}
+
 function forEachStoreBackedCard(callback: (card: any) => void): void {
   for (const card of Object.values(cardTreeStore.cards)) {
     if (!card) continue
@@ -121,6 +133,7 @@ function expectCacheMatchesWalk(): void {
   forEachStoreBackedCard((card) => {
     const fresh = walkCounts(card.id)
     expect(card.subtreeCounts).toEqual(fresh)
+    expect(card.subtreeScreenshotItems).toEqual(walkScreenshotItems(card.id))
   })
 }
 
@@ -242,6 +255,94 @@ test("part removal updates the cache to reflect the new totals", () => {
   })
   flushBufferedPartDeltas()
   expectCacheMatchesWalk()
+})
+
+test("screenshot file, browser evidence, and tool attachment items are cached and removed with parts", () => {
+  bootstrap()
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: "part_screenshot_file",
+        messageID: MSG_ID_A,
+        sessionID: SID,
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "file",
+        url: "/attachment/project/file.png",
+        mime: "image/png",
+        filename: "file.png",
+      },
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: "part_screenshot_browser",
+        messageID: MSG_ID_A,
+        sessionID: SID,
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "tool",
+        tool: "browser_observe",
+        state: {
+          metadata: {
+            browser: {
+              url: "https://example.test",
+              title: "Browser evidence",
+              screenshot: { attachmentUrl: "/attachment/project/browser.png" },
+            },
+          },
+        },
+      },
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: "part_screenshot_attachment",
+        messageID: MSG_ID_A,
+        sessionID: SID,
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "tool",
+        tool: "visual_check",
+        state: {
+          attachments: [{ url: "/attachment/project/tool.webp", mime: "image/webp", filename: "tool.webp" }],
+        },
+      },
+    },
+  })
+  flushBufferedPartDeltas()
+  expectCacheMatchesWalk()
+
+  const card = cardTreeStore.cards[`assistant:session:${SID}:message:${MSG_ID_A}`]
+  expect(card?.subtreeScreenshotItems?.map((item) => item.src)).toEqual([
+    "/attachment/project/file.png",
+    "/attachment/project/browser.png",
+    "/attachment/project/tool.webp",
+  ])
+
+  applyEvent({
+    type: "message.part.removed",
+    properties: {
+      taskID: TASK_ID,
+      sessionID: SID,
+      messageID: MSG_ID_A,
+      partID: "part_screenshot_browser",
+    },
+  })
+  flushBufferedPartDeltas()
+  expectCacheMatchesWalk()
+  expect(cardTreeStore.cards[`assistant:session:${SID}:message:${MSG_ID_A}`]?.subtreeScreenshotItems?.map((item) => item.src)).toEqual([
+    "/attachment/project/file.png",
+    "/attachment/project/tool.webp",
+  ])
 })
 
 test("subtree latest-hit cache equals the fresh recursive pick", () => {

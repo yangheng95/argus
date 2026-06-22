@@ -3,17 +3,53 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import {
   buildScreenshotBrowserRows,
+  collectScreenshotBrowserItemsFromCard,
   collectScreenshotBrowserItemsFromCardTree,
   collectScreenshotBrowserItems,
   groupScreenshotBrowserItems,
   isStoredAttachmentUrl,
+  mergeScreenshotBrowserItemSets,
   SCREENSHOT_BROWSER_ITEM_LIMIT,
+  type ScreenshotBrowserItem,
 } from "../src/utils/screenshot-browser"
+import type { CardNode } from "../src/store/card-tree"
 
 const ROOT = path.resolve(import.meta.dir, "..")
 
 function read(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8")
+}
+
+function withScreenshotCaches<T extends Record<string, CardNode>>(cards: T): T {
+  const fill = (id: string, visiting = new Set<string>()): ScreenshotBrowserItem[] => {
+    const card = cards[id]
+    if (!card) return []
+    if (visiting.has(id)) throw new Error(`cycle in screenshot cache fixture at ${id}`)
+    visiting.add(id)
+    const itemSets: ScreenshotBrowserItem[][] = [collectScreenshotBrowserItemsFromCard(card)]
+    for (const childID of card.childIDs ?? []) itemSets.push(fill(childID, visiting))
+    visiting.delete(id)
+    card.subtreeScreenshotItems = mergeScreenshotBrowserItemSets(itemSets)
+    return card.subtreeScreenshotItems
+  }
+  for (const id of Object.keys(cards)) fill(id)
+  return cards
+}
+
+function screenshotItem(input: Partial<ScreenshotBrowserItem> & Pick<ScreenshotBrowserItem, "src" | "time">): ScreenshotBrowserItem {
+  const src = input.src
+  return {
+    id: input.id ?? `file:${src}`,
+    role: input.role ?? "visual-qa",
+    src,
+    alt: input.alt ?? src,
+    title: input.title ?? src,
+    detail: input.detail ?? "image/png",
+    time: input.time,
+    messageID: input.messageID ?? `msg:${src}`,
+    partID: input.partID ?? `part:${src}`,
+    source: input.source ?? "file",
+  }
 }
 
 describe("screenshot browser panel", () => {
@@ -156,82 +192,83 @@ describe("screenshot browser panel", () => {
   })
 
   test("collects screenshots from hydrated card tree as the panel source", () => {
-    const items = collectScreenshotBrowserItemsFromCardTree(
-      ["card_visual", "card_build"],
-      {
-        card_visual: {
-          id: "card_visual",
-          kind: "agent",
-          sessionID: "ses_visual",
-          messageID: "msg_visual",
-          role: "visual-qa",
-          stage: "visual-qa",
-          title: "Visual QA",
-          time: 200,
-          parts: [
-            {
-              id: "part_visual",
-              type: "file",
-              messageID: "msg_visual",
-              sessionID: "ses_visual",
-              url: "/attachment/project/visual.png",
-              mime: "image/png",
-              filename: "visual.png",
-            },
-          ],
-          childIDs: ["card_child"],
-        },
-        card_child: {
-          id: "card_child",
-          kind: "tool",
-          sessionID: "ses_visual",
-          messageID: "msg_tool",
-          role: "visual-qa",
-          stage: "visual-qa",
-          title: "Browser observe",
-          time: 250,
-          parts: [
-            {
-              id: "part_browser",
-              type: "tool",
-              messageID: "msg_tool",
-              tool: "browser_observe",
-              state: {
-                metadata: {
-                  browser: {
-                    url: "https://example.test",
-                    title: "Observed page",
-                    screenshot: { attachmentUrl: "/attachment/project/browser.png" },
-                  },
+    const cards = withScreenshotCaches({
+      card_visual: {
+        id: "card_visual",
+        kind: "agent",
+        sessionID: "ses_visual",
+        messageID: "msg_visual",
+        role: "visual-qa",
+        stage: "visual-qa",
+        title: "Visual QA",
+        time: 200,
+        parts: [
+          {
+            id: "part_visual",
+            type: "file",
+            messageID: "msg_visual",
+            sessionID: "ses_visual",
+            url: "/attachment/project/visual.png",
+            mime: "image/png",
+            filename: "visual.png",
+          },
+        ],
+        childIDs: ["card_child"],
+      },
+      card_child: {
+        id: "card_child",
+        kind: "tool",
+        sessionID: "ses_visual",
+        messageID: "msg_tool",
+        role: "visual-qa",
+        stage: "visual-qa",
+        title: "Browser observe",
+        time: 250,
+        parts: [
+          {
+            id: "part_browser",
+            type: "tool",
+            messageID: "msg_tool",
+            tool: "browser_observe",
+            state: {
+              metadata: {
+                browser: {
+                  url: "https://example.test",
+                  title: "Observed page",
+                  screenshot: { attachmentUrl: "/attachment/project/browser.png" },
                 },
               },
             },
-          ],
-          childIDs: [],
-        },
-        card_build: {
-          id: "card_build",
-          kind: "agent",
-          sessionID: "ses_build",
-          messageID: "msg_build",
-          role: "build",
-          stage: "build",
-          title: "Build",
-          time: 100,
-          parts: [
-            {
-              id: "part_build",
-              type: "file",
-              messageID: "msg_build",
-              sessionID: "ses_build",
-              url: "/attachment/project/build.png",
-              mime: "image/png",
-              filename: "build.png",
-            },
-          ],
-          childIDs: [],
-        },
+          },
+        ],
+        childIDs: [],
       },
+      card_build: {
+        id: "card_build",
+        kind: "agent",
+        sessionID: "ses_build",
+        messageID: "msg_build",
+        role: "build",
+        stage: "build",
+        title: "Build",
+        time: 100,
+        parts: [
+          {
+            id: "part_build",
+            type: "file",
+            messageID: "msg_build",
+            sessionID: "ses_build",
+            url: "/attachment/project/build.png",
+            mime: "image/png",
+            filename: "build.png",
+          },
+        ],
+        childIDs: [],
+      },
+    })
+    const items = collectScreenshotBrowserItemsFromCardTree(
+      ["card_visual", "card_build"],
+      cards,
     )
 
     expect(items.map((item) => item.src)).toEqual([
@@ -270,47 +307,113 @@ describe("screenshot browser panel", () => {
   test("card tree collection keeps a bounded newest set without full message materialization", () => {
     const count = 5_000
     const order = Array.from({ length: count }, (_item, index) => `card_${index}`)
-    const cards = Object.fromEntries(
-      order.map((id, index) => [
+    const entries: Array<[string, CardNode]> = order.map((id, index) => [
+      id,
+      {
         id,
-        {
-          id,
-          kind: "agent",
-          sessionID: "ses_visual",
-          messageID: `msg_${index}`,
-          role: "visual-qa",
-          stage: "visual-qa",
-          title: `Visual ${index}`,
-          time: index + 1,
-          parts:
-            index % 10 === 0
-              ? [
-                  {
-                    id: `part_${index}`,
-                    type: "file",
-                    messageID: `msg_${index}`,
-                    sessionID: "ses_visual",
-                    url: `/attachment/project/${index}.png`,
-                    mime: "image/png",
-                    filename: `${index}.png`,
-                  },
-                ]
-              : [],
-          childIDs: [],
-        },
-      ]),
-    )
+        kind: "agent",
+        sessionID: "ses_visual",
+        messageID: `msg_${index}`,
+        role: "visual-qa",
+        stage: "visual-qa",
+        title: `Visual ${index}`,
+        time: index + 1,
+        parts:
+          index % 10 === 0
+            ? [
+                {
+                  id: `part_${index}`,
+                  type: "file",
+                  messageID: `msg_${index}`,
+                  sessionID: "ses_visual",
+                  url: `/attachment/project/${index}.png`,
+                  mime: "image/png",
+                  filename: `${index}.png`,
+                },
+              ]
+            : [],
+        childIDs: [],
+      },
+    ])
+    const cards = withScreenshotCaches(Object.fromEntries(entries))
 
     const items = collectScreenshotBrowserItemsFromCardTree(order, cards)
     const source = read("src/utils/screenshot-browser.ts")
+    const statsSource = read("src/store/card-tree-stats.ts")
 
     expect(items).toHaveLength(SCREENSHOT_BROWSER_ITEM_LIMIT)
     expect(items[0].src).toBe("/attachment/project/4990.png")
     expect(items.at(-1)?.src).toBe("/attachment/project/3800.png")
     expect(source).toContain("function insertBoundedNewestFirst")
-    expect(source).toContain("function collectCardTreeScreenshots")
+    expect(source).toContain("subtreeScreenshotItems")
+    expect(statsSource).toContain("collectScreenshotBrowserItemsFromCard(card)")
+    expect(source).not.toContain("function collectCardTreeScreenshots")
+    expect(source).not.toContain("collectCardTreeScreenshots(")
     expect(source).not.toContain("const messages: any[] = []")
     expect(source).not.toContain("items.sort(")
+  })
+
+  test("card tree collection reads cached subtree screenshots without walking parts or childIDs", () => {
+    let partsReads = 0
+    let childIDReads = 0
+    const cached = Array.from({ length: SCREENSHOT_BROWSER_ITEM_LIMIT }, (_item, index) =>
+      screenshotItem({
+        src: `/attachment/project/cached-${index}.png`,
+        time: SCREENSHOT_BROWSER_ITEM_LIMIT - index,
+      }),
+    )
+    const root = new Proxy(
+      {
+        id: "root",
+        kind: "agent",
+        role: "visual-qa",
+        stage: "visual-qa",
+        title: "Root",
+        time: 1,
+        subtreeScreenshotItems: cached,
+      } as CardNode,
+      {
+        get(target, property, receiver) {
+          if (property === "parts") partsReads += 1
+          if (property === "childIDs") childIDReads += 1
+          return Reflect.get(target, property, receiver)
+        },
+      },
+    )
+    const cards = new Proxy(
+      { root },
+      {
+        get(target, property, receiver) {
+          if (typeof property === "string" && property !== "root") {
+            throw new Error(`collector read unexpected card ${property}`)
+          }
+          return Reflect.get(target, property, receiver)
+        },
+      },
+    )
+
+    const items = collectScreenshotBrowserItemsFromCardTree(["root"], cards)
+
+    expect(items.map((item) => item.src)).toEqual(cached.map((item) => item.src))
+    expect(partsReads).toBe(0)
+    expect(childIDReads).toBe(0)
+  })
+
+  test("card tree collection fails when writer-maintained screenshot cache is missing", () => {
+    expect(() =>
+      collectScreenshotBrowserItemsFromCardTree(["uncached"], {
+        uncached: {
+          id: "uncached",
+          kind: "agent",
+          role: "visual-qa",
+          stage: "visual-qa",
+          title: "Uncached",
+          time: 1,
+          parts: [],
+          childIDs: [],
+        },
+      }),
+    ).toThrow("missing subtreeScreenshotItems cache")
   })
 
   test("builds virtual rows with group headers and bounded column chunks", () => {
