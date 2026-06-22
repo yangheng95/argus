@@ -6,6 +6,7 @@ import { processOwner } from "@/engine/lease"
 export type StageContinuationFailureName = "TerminalToolMissingError" | "StructuredOutputError"
 export type StageContinuationKind = "protocol-finalizer-miss"
 export type StageContinuationStage =
+  | "build"
   | "requirements"
   | "architect"
   | "frontend-design"
@@ -337,6 +338,7 @@ function normalizeStageContinuationPayload(payload: unknown): StageContinuationR
 
 function isStageContinuationStage(value: unknown): value is StageContinuationStage {
   return (
+    value === "build" ||
     value === "requirements" ||
     value === "architect" ||
     value === "frontend-design" ||

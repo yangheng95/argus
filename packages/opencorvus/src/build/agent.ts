@@ -25,6 +25,7 @@
  */
 
 import z from "zod"
+import { createHash } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { $ } from "bun"
@@ -46,6 +47,7 @@ import { Worktree } from "@/worktree"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 import { AgentSemaphore } from "@/engine/agent-semaphore"
 import { Ownership } from "@/engine/ownership"
+import { createStageContinuationRequest, type AgentSessionContinuation } from "@/engine/stage-continuation"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { EngineConfig } from "@/engine/config"
 import { ExecutorRegistry } from "@/executor/registry"
@@ -922,54 +924,68 @@ export namespace BuildAgent {
       // in the worktree on its own, then BuildAgent runs merge_back itself
       // because the SDK has no way to call our merge_back tool.
       const executor = input.task.executor ?? "opencorvus"
+      const runOpenCorvusBuildSession = async (continuation?: AgentSessionContinuation) =>
+        await runAgentSession({
+          kind: "build",
+          core: withFactCheckRegistration(composeBuildCore(autoIteration)),
+          sessionTitle: buildSessionTitle(input.target),
+          sessionDirectory: worktreeDir!,
+          existingSessionID: buildSession.id,
+          parentSessionID: input.parentSessionID,
+          // Goal-scoped builds need goalID on the session row so the
+          // protocol bridge stamps it onto every part event; without it
+          // the overlay's tree-writer cannot route the session card to
+          // the goal's build phase and the parts orphan as a top-level
+          // "构建" card. Direct-shape builds pass kind="task" → undefined.
+          goalID: input.target.kind === "goal" ? input.target.id : undefined,
+          taskID: input.task.id,
+          model: input.model,
+          signal: input.signal,
+          toolKit: buildToolKit,
+          buildUserPrompt: buildPromptText,
+          buildUserParts: buildUserPartsFn,
+          runtimeContract: {
+            goalRunID: runtimeGoalRunID,
+            attemptID: runtimeGoalRunID,
+            contractKind: "stage-attempt",
+            includeMcpTools: input.includeMcpTools,
+            exactTools: input.exactRuntimeTools,
+          },
+          toolSwitches: input.toolSwitches,
+          continuation,
+          terminalTool: {
+            toolName: "report_build_result",
+            isSatisfied: (collector) => Boolean(collector.result),
+            // Never restrict the toolset to just the terminal tool. Even
+            // after merge_back succeeds the LLM might want to revise tests
+            // or commit additional fixes; forcing a terminal-only scope is
+            // host-side flow control (CLAUDE.md rule 13). The LLM decides
+            // when it's done by calling report_build_result of its own
+            // accord. Spec architecture-rework-loosening-plan-2026-05-06.md (B5).
+            shouldExposeOnlyTerminalTool: () => false,
+          },
+        })
       try {
         if (executor === "opencorvus") {
-          out = await runAgentSession({
-            kind: "build",
-            core: withFactCheckRegistration(composeBuildCore(autoIteration)),
-            sessionTitle: buildSessionTitle(input.target),
-            sessionDirectory: worktreeDir!,
-            existingSessionID: buildSession.id,
-            parentSessionID: input.parentSessionID,
-            // Goal-scoped builds need goalID on the session row so the
-            // protocol bridge stamps it onto every part event; without it
-            // the overlay's tree-writer cannot route the session card to
-            // the goal's build phase and the parts orphan as a top-level
-            // "构建" card. Direct-shape builds pass kind="task" → undefined.
-            goalID: input.target.kind === "goal" ? input.target.id : undefined,
-            taskID: input.task.id,
-            model: input.model,
-            signal: input.signal,
-            toolKit: buildToolKit,
-            buildUserPrompt: buildPromptText,
-            buildUserParts: buildUserPartsFn,
-            runtimeContract: {
-              goalRunID: runtimeGoalRunID,
-              attemptID: runtimeGoalRunID,
-              contractKind: "stage-attempt",
-              includeMcpTools: input.includeMcpTools,
-              exactTools: input.exactRuntimeTools,
-            },
-            toolSwitches: input.toolSwitches,
-            terminalTool: {
-              toolName: "report_build_result",
-              isSatisfied: (collector) => Boolean(collector.result),
-              // Never restrict the toolset to just the terminal tool. Even
-              // after merge_back succeeds the LLM might want to revise tests
-              // or commit additional fixes; forcing a terminal-only scope is
-              // host-side flow control (CLAUDE.md rule 13). The LLM decides
-              // when it's done by calling report_build_result of its own
-              // accord. Spec architecture-rework-loosening-plan-2026-05-06.md (B5).
-              shouldExposeOnlyTerminalTool: () => false,
-              // No recovery loop. Auto-retrying with a synthetic user prompt
-              // when the LLM forgets to call report_build_result is a host-
-              // side fallback (rule 7) that masks LLM failures with three
-              // hard-coded turns (rule 13). When the agent doesn't terminate
-              // properly, throw missing_terminal_report and let the
-              // orchestrator LLM decide whether to retry the whole build or
-              // change strategy. Spec ...md (B10).
-            },
-          })
+          try {
+            out = await runOpenCorvusBuildSession()
+          } catch (err) {
+            const contractErr = convertMissingTerminalToolError(err, {
+              sessionID: buildSession.id,
+              lastMergeBackOutcome: lastMergeBackOutcome ?? null,
+            })
+            if (!contractErr) throw err
+            const continuation = createBuildTerminalContinuationRequest({
+              taskID: input.task.id,
+              parentSessionID: input.parentSessionID,
+              buildSessionID: buildSession.id,
+              target: input.target,
+              runtimeGoalRunID,
+              worktreeDir,
+              failureMessage: contractErr.message,
+            })
+            out = await runOpenCorvusBuildSession(continuation)
+          }
           const report = buildToolKit.getCollector()
           out = { ...out, collector: report }
           parsed = BuildResultSchema.safeParse(report.result)
@@ -1480,6 +1496,54 @@ export function convertMissingTerminalToolError(
       "this turn MUST read/glob what is there and complete the build per the " +
       "standard build-agent contract (structured terminal report, not turn-final prose).",
   )
+}
+
+export function createBuildTerminalContinuationRequest(input: {
+  taskID: string
+  parentSessionID?: string
+  buildSessionID: string
+  target: BuildTarget
+  runtimeGoalRunID?: string
+  worktreeDir?: string
+  failureMessage: string
+}): AgentSessionContinuation {
+  const normalizedStageInput = {
+    target:
+      input.target.kind === "goal"
+        ? {
+            kind: "goal",
+            id: input.target.id,
+            acceptance_specs: input.target.acceptance_specs,
+            owned_paths: input.target.owned_paths,
+            depends_on: input.target.depends_on,
+          }
+        : { kind: "request", text: input.target.text },
+    build_session_id: input.buildSessionID,
+    goal_run_id: input.runtimeGoalRunID ?? null,
+    worktree_dir: input.worktreeDir ?? null,
+    finalizer_name: "report_build_result",
+  }
+  const request = createStageContinuationRequest({
+    taskID: input.taskID,
+    stage: "build",
+    sessionID: input.buildSessionID,
+    parentSessionID: input.parentSessionID,
+    normalizedStageInput,
+    inputDigest: createHash("sha256").update(JSON.stringify(normalizedStageInput)).digest("hex"),
+    failureName: "TerminalToolMissingError",
+    failureMessage: input.failureMessage,
+    finalizerName: "report_build_result",
+    reason:
+      "Continue build after missing report_build_result for the same build session, goal-run contract, and worktree.",
+  })
+  return {
+    sessionID: input.buildSessionID,
+    artifactID: request.artifactID,
+    reason: request.payload.reason,
+    kind: request.payload.kind,
+    finalizerName: request.payload.finalizer_name,
+    failedAssistantMessageID: request.payload.failed_assistant_message_id,
+  }
 }
 
 export function externalToolProtocolErrorMessage(input: {
