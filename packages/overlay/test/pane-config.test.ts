@@ -59,6 +59,8 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(css).toContain("outline: var(--oc-border-width) solid var(--accent)")
   expect(css).not.toContain('body[data-resizing="row"]')
   expect(css).not.toContain("row-resize")
+  expect(css).not.toContain('body[data-resizing="true"] .pane-resizer::before')
+  expect(css).toContain('body[data-resizing="true"] .pane-resizer::after')
   expect(pane).toContain('document.body.dataset.resizing = "true"')
   expect(pane).not.toContain('document.body.dataset.resizing = "row"')
   expect(main).not.toContain("leftResizer.dataset.disabled")
