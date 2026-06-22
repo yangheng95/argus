@@ -57,7 +57,7 @@ import { isGoalRunOrphaned } from "./orphan"
 import { taskIDForSession } from "@/orchestrator/task-event"
 import { Project } from "@/project/project"
 import { Instance } from "@/project/instance"
-import { cancelSessionPromptByID, cancelSessionPromptInScope } from "./cancellation-scope"
+import { cancelSessionPromptInScope, terminateSessionPromptInScope } from "./cancellation-scope"
 
 const log = Log.create({ service: "engine-writer" })
 
@@ -408,10 +408,9 @@ async function terminateTaskOwnedSessionsAndFail(input: {
     const ids = await Session.treeInProject({ sessionID: task.session_id, projectID: task.project_id })
     for (const sessionID of ids.slice().reverse()) {
       toolParts += await abortOpenToolParts(sessionID, input.reason)
-      await cancelSessionPromptByID({
-        sessionID,
-        taskID: task.id,
-        handle: "terminateTaskOwnedSessionsAndFail",
+      terminateSessionPromptInScope({
+        session: await Session.get(sessionID),
+        reason: input.reason,
       })
       sessions += 1
     }

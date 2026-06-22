@@ -25,6 +25,18 @@ export function cancelSessionPromptInScope(input: {
   return cancelled
 }
 
+export function terminateSessionPromptInScope(input: {
+  session: Pick<SessionInfo, "id" | "directory">
+  reason: string
+}): boolean {
+  const cancelled = SessionPrompt.cancel(input.session.id, input.session.directory)
+  const status = SessionStatus.get(input.session.id)
+  if (status.type !== "terminal") {
+    SessionStatus.set(input.session.id, { type: "terminal", reason: "aborted", error: input.reason })
+  }
+  return cancelled
+}
+
 export async function cancelSessionPromptByID(input: {
   sessionID: string
   taskID?: string
