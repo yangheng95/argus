@@ -87,3 +87,23 @@ test("ResizeObserver callbacks never run layout-affecting work synchronously", (
   expect(screenshotBrowser).not.toContain("new ResizeObserver(measure)")
   expect(taskProgress).not.toContain("new ResizeObserver(remeasure)")
 })
+
+test("window and center workbench resize paths use the shared frame scheduler", () => {
+  const main = readFileSync(join(repoRoot, "packages/overlay/src/main.tsx"), "utf8")
+
+  expect(main).toContain('import { createAnimationFrameScheduler } from "./utils/animation-frame"')
+  expect(main).toContain("const applyWindowResizeOnFrame = createAnimationFrameScheduler(applyWindowResize)")
+  expect(main).toContain('window.addEventListener("resize", applyWindowResizeOnFrame.schedule')
+  expect(main).toContain('window.visualViewport.addEventListener("resize", applyWindowResizeOnFrame.schedule')
+  expect(main).not.toContain('window.addEventListener("resize", onResize')
+  expect(main).not.toContain("window.visualViewport.addEventListener(\"resize\", onResize")
+
+  expect(main).toContain(
+    "const applyCenterWorkbenchPanelResizeOnFrame = createAnimationFrameScheduler(applyPendingCenterWorkbenchPanelResize)",
+  )
+  expect(main).toContain("pendingCenterWorkbenchPanelResizeClientX = event.clientX")
+  expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.schedule()")
+  expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.cancel()")
+  expect(main).toContain("applyPendingCenterWorkbenchPanelResize()")
+  expect(main).not.toContain("updateCenterWorkbenchPanelWeights(drag, event.clientX")
+})
