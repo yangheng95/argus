@@ -21,6 +21,20 @@ export interface ScreenshotBrowserGroup {
   items: ScreenshotBrowserItem[]
 }
 
+export type ScreenshotBrowserRow =
+  | {
+      kind: "group"
+      key: string
+      role: AgentRole
+      count: number
+    }
+  | {
+      kind: "items"
+      key: string
+      role: AgentRole
+      items: ScreenshotBrowserItem[]
+    }
+
 function isRecord(value: unknown): value is Record<string, any> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
@@ -257,4 +271,29 @@ export function groupScreenshotBrowserItems(items: readonly ScreenshotBrowserIte
     group.items.push(item)
   }
   return [...groups.values()]
+}
+
+export function buildScreenshotBrowserRows(
+  groups: readonly ScreenshotBrowserGroup[],
+  columnCount: number,
+): ScreenshotBrowserRow[] {
+  const columns = Number.isFinite(columnCount) ? Math.max(1, Math.floor(columnCount)) : 1
+  const rows: ScreenshotBrowserRow[] = []
+  for (const group of groups) {
+    rows.push({
+      kind: "group",
+      key: `group:${group.role}`,
+      role: group.role,
+      count: group.items.length,
+    })
+    for (let index = 0; index < group.items.length; index += columns) {
+      rows.push({
+        kind: "items",
+        key: `items:${group.role}:${index}`,
+        role: group.role,
+        items: group.items.slice(index, index + columns),
+      })
+    }
+  }
+  return rows
 }

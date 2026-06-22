@@ -9,6 +9,7 @@ import {
 } from "../utils/image-preview-scale"
 import { imagePreviewTriggerClass, imagePreviewTriggerContract } from "../utils/image-preview-trigger"
 import { t } from "../utils/i18n"
+import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
@@ -85,6 +86,10 @@ export function ImagePreviewHost() {
   let bodyRef: HTMLDivElement | undefined
   let imageRef: HTMLImageElement | undefined
   let resizeObserver: ResizeObserver | undefined
+  const applyOpenScaleOnFrame = createAnimationFrameScheduler(() => {
+    const openScale = previewOpenScale()
+    if (imagePreviewState().open && imageSize().width > 0 && scale() < openScale) setScale(openScale)
+  })
 
   createEffect(() => {
     const state = imagePreviewState()
@@ -103,14 +108,14 @@ export function ImagePreviewHost() {
     const body = bodyRef
     if (!body) return
     resizeObserver?.disconnect()
-    resizeObserver = new ResizeObserver(() => {
-      const openScale = previewOpenScale()
-      if (imagePreviewState().open && imageSize().width > 0 && scale() < openScale) setScale(openScale)
-    })
+    resizeObserver = new ResizeObserver(applyOpenScaleOnFrame.schedule)
     resizeObserver.observe(body)
   })
 
-  onCleanup(() => resizeObserver?.disconnect())
+  onCleanup(() => {
+    resizeObserver?.disconnect()
+    applyOpenScaleOnFrame.cancel()
+  })
 
   const renderedSize = createMemo(() => {
     const size = imageSize()

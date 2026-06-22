@@ -38,3 +38,12 @@ test("visual capture scripts launch a headed Node-sidecar browser", () => {
 
   expect(readOverlay("test/goal-group-benchmark.ts")).not.toContain("run headless")
 })
+
+test("Node sidecar screenshot wrappers pass explicit option objects", () => {
+  const launch = readOverlay("test/launch.ts")
+
+  expect(launch).toContain('screenshot: async (options = {}) => decodeBuffer(await remote("screenshot", [options]))')
+  expect(launch).toContain("screenshot: async (options = {}) =>")
+  expect(launch).not.toContain('screenshot: async (options) => decodeBuffer(await remote("screenshot", [options]))')
+  expect(launch).not.toContain("screenshot: async (options) =>\n        decodeBuffer")
+})

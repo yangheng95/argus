@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import {
+  buildScreenshotBrowserRows,
   collectScreenshotBrowserItemsFromCardTree,
   collectScreenshotBrowserItems,
   groupScreenshotBrowserItems,
@@ -266,11 +267,37 @@ describe("screenshot browser panel", () => {
     expect(items.at(-1)?.src).toBe("/attachment/project/10.png")
   })
 
+  test("builds virtual rows with group headers and bounded column chunks", () => {
+    const messages = Array.from({ length: 5 }, (_item, index) => ({
+      info: {
+        id: `m${index}`,
+        agent: "visual-qa",
+        time: { created: index + 1 },
+      },
+      parts: [
+        {
+          id: `p${index}`,
+          type: "file",
+          url: `/attachment/project/${index}.png`,
+          mime: "image/png",
+          filename: `${index}.png`,
+        },
+      ],
+    }))
+    const groups = groupScreenshotBrowserItems(collectScreenshotBrowserItems(messages))
+    const rows = buildScreenshotBrowserRows(groups, 2)
+
+    expect(rows.map((row) => row.kind)).toEqual(["group", "items", "items", "items"])
+    expect(rows[0]).toMatchObject({ kind: "group", role: "visual-qa", count: 5 })
+    expect(rows.slice(1).map((row) => (row.kind === "items" ? row.items.length : 0))).toEqual([2, 2, 1])
+  })
+
   test("component reuses shared image resource and preview paths without local screenshot storage", () => {
     const component = read("src/components/ScreenshotBrowserPanel.tsx")
     const main = read("src/main.tsx")
     const html = read("src/index.html")
     const css = read("src/styles/surfaces/activity.css")
+    const normalizedCss = css.replace(/\r\n/g, "\n")
     const icon = read("src/components/Icon.tsx")
     const en = read("src/i18n/en-US.json")
     const zh = read("src/i18n/zh-CN.json")
@@ -285,10 +312,19 @@ describe("screenshot browser panel", () => {
     expect(component).toContain("cardTreeStore")
     expect(component).toContain("collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)")
     expect(component).not.toContain("messageStore.messages")
+    expect(component).toContain('from "virtua/solid"')
+    expect(component).toContain("<Virtualizer")
+    expect(component).toContain("buildScreenshotBrowserRows(groups(), columnCount())")
+    expect(component).toContain("IntersectionObserver")
+    expect(component).toContain("SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME")
+    expect(component).toContain("enqueueScreenshotThumbnailLoad")
+    expect(component).toContain("createAnimationFrameScheduler(measure)")
+    expect(component).toContain("new ResizeObserver(measureOnFrame.schedule)")
     expect(component).toContain("groupScreenshotBrowserItems")
     expect(component).toContain("fetchResourceAsObjectUrl")
     expect(component).toContain("peekResourceObjectUrl")
     expect(component).toContain("<PreviewableImage")
+    expect(component).not.toContain("<For each={group.items}>")
     expect(component).not.toContain("URL.createObjectURL")
     expect(component).not.toContain("URL.revokeObjectURL")
     expect(component).not.toContain("new EventSource")
@@ -297,9 +333,20 @@ describe("screenshot browser panel", () => {
     expect(component).not.toContain("localStorage")
     expect(component).not.toContain("sessionStorage")
     expect(css).toContain(".screenshot-browser-panel")
-    expect(css).toContain(".screenshot-browser-grid")
-    expect(css).toContain("grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(132px * var(--ui-scale))), 1fr))")
+    expect(normalizedCss).toContain(
+      '.screenshot-browser-groups[data-virtualized="true"] {\n  display: block;\n  gap: 0;\n  overflow-x: hidden;\n  overflow-y: auto;\n}',
+    )
+    expect(normalizedCss).toContain(
+      ".screenshot-browser-virtual-window {\n  width: 100%;\n  min-width: 0;\n  max-width: 100%;\n}",
+    )
+    expect(css).toContain(".screenshot-browser-virtual-item")
+    expect(css).toContain(".screenshot-browser-row-grid")
+    expect(css).toContain("grid-template-columns: repeat(var(--screenshot-browser-columns), minmax(0, 1fr))")
+    expect(css).not.toContain(".screenshot-browser-grid")
     expect(css).toContain("grid-template-rows: calc(86px * var(--ui-scale))")
+    expect(css).toContain(".screenshot-browser__thumb-trigger .screenshot-browser__thumb-image")
+    expect(css).toContain("max-width: none")
+    expect(css).toContain("max-height: none")
     for (const key of [
       "screenshots.title",
       "screenshots.empty",
