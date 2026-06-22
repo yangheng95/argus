@@ -4,7 +4,7 @@ export interface ComposerTextareaResizeBounds {
   step: number
 }
 
-const COMPOSER_TEXTAREA_MIN_HEIGHT = 56
+const COMPOSER_TEXTAREA_MIN_HEIGHT = 72
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 260
 const COMPOSER_TEXTAREA_KEYBOARD_STEP = 16
 

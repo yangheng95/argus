@@ -72,10 +72,10 @@
    The parent layout owns outer spacing, so this shell stays marginless
    while carrying its own radius token and inner padding. */
 .chat-input {
-  /* Compact density: textarea floor is 56px so the composer reads
-     visibly tighter than the surrounding canvas. Pinned by
+  /* Compact density: textarea floor is 72px so the composer reads
+     taller while staying tighter than the surrounding canvas. Pinned by
      workspace-composer-density.test.ts. */
-  --chat-textarea-height: calc(56px * var(--ui-scale));
+  --chat-textarea-height: calc(72px * var(--ui-scale));
   --chat-compose-scale: 1;
   position: relative;
   display: flex;
@@ -113,7 +113,7 @@
 }
 
 /* Composer textarea wrap and inner field: the wrap is the flex slot that
-   anchors the textarea to its 62px floor; the textarea is the actual
+   anchors the textarea to its height token; the textarea is the actual
    editable surface. After iter17 / iter20 both render flat (no radius,
    no shadow) so they read as a single slice of the chat-input shell. */
 .chat-textarea-wrap {

@@ -183,7 +183,7 @@ test("chat composer resize separator supports keyboard focus and height adjustme
       const factor = Number.isFinite(scale) && scale > 0 ? scale : 1
       const clamp = (value: number) => Math.round(value)
       return {
-        min: String(clamp(56 * factor)),
+        min: String(clamp(72 * factor)),
         max: String(clamp(260 * factor)),
         step: 16 * factor,
       }
