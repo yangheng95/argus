@@ -9,8 +9,10 @@ import { Flag } from "../flag/flag"
 import { lazy } from "../util/lazy"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { Instance } from "../project/instance"
+import { Project } from "../project/project"
 import { websocket } from "hono/bun"
 import z from "zod"
+import { mkdir } from "node:fs/promises"
 import { AuthRoutes } from "./routes/auth"
 import { AppDocumentation } from "./routes/documentation"
 import { GlobalRoutes } from "./routes/global"
@@ -22,6 +24,8 @@ import { requestID, serverErrorResponse } from "./error-handler"
 import { configureCorsOrigins, isAllowedCorsOrigin, isAllowedRequestOrigin } from "./cors"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 import { selectProjectDirectory } from "./directory"
+import { Filesystem } from "@/util/filesystem"
+import { Worktree } from "@/worktree"
 
 muteAISdkWarnings()
 
@@ -47,6 +51,13 @@ export namespace Server {
       message: z.string(),
       origin: z.string(),
       host: z.string().optional(),
+    }),
+  )
+  export const InvalidInitGitParameterError = NamedError.create(
+    "InvalidInitGitParameterError",
+    z.object({
+      value: z.string(),
+      message: z.string(),
     }),
   )
 
@@ -127,8 +138,23 @@ export namespace Server {
       type: "string",
     },
   } as const
+  const TASK_CREATE_INIT_GIT_QUERY_PARAMETER = {
+    name: "init-git",
+    in: "query",
+    required: false,
+    description:
+      "POST /task only. Defaults to true. When true, the selected directory is created when missing and initialized as Git when needed before task creation.",
+    schema: {
+      type: "boolean",
+      default: true,
+    },
+  } as const
 
   const OPENAPI_OPERATION_METHODS = ["get", "post", "put", "patch", "delete"] as const
+
+  function hasQueryParameter(operation: OpenAPIOperation, name: string) {
+    return (operation.parameters ?? []).some((parameter) => parameter.in === "query" && parameter.name === name)
+  }
 
   function addDirectoryQueryParameter<T extends OpenAPISpecWithPaths>(spec: T) {
     for (const [routePath, pathItem] of Object.entries(spec.paths ?? {})) {
@@ -139,11 +165,22 @@ export namespace Server {
         const rawOperation = operations[method]
         if (!rawOperation || typeof rawOperation !== "object") continue
         const operation = rawOperation as OpenAPIOperation
-        const existing = operation.parameters ?? []
-        if (existing.some((parameter) => parameter.in === "query" && parameter.name === "directory")) continue
-        operation.parameters = [DIRECTORY_QUERY_PARAMETER satisfies OpenAPIParameter, ...existing]
+        if (hasQueryParameter(operation, "directory")) continue
+        operation.parameters = [DIRECTORY_QUERY_PARAMETER satisfies OpenAPIParameter, ...(operation.parameters ?? [])]
       }
     }
+    return spec
+  }
+
+  function addTaskCreateInitGitQueryParameter<T extends OpenAPISpecWithPaths>(spec: T) {
+    const pathItem = spec.paths?.["/task"]
+    if (!pathItem || typeof pathItem !== "object") return spec
+    const operations = pathItem as Record<string, unknown>
+    const rawOperation = operations.post
+    if (!rawOperation || typeof rawOperation !== "object") return spec
+    const operation = rawOperation as OpenAPIOperation
+    if (hasQueryParameter(operation, "init-git")) return spec
+    operation.parameters = [...(operation.parameters ?? []), TASK_CREATE_INIT_GIT_QUERY_PARAMETER]
     return spec
   }
 
@@ -168,6 +205,31 @@ export namespace Server {
       }
     }
     return spec
+  }
+
+  function isTaskCreateRequest(routePath: string, method: string) {
+    return method.toUpperCase() === "POST" && routePath === "/task"
+  }
+
+  function parseTaskCreateInitGit(value: string | undefined) {
+    if (value === undefined) return true
+    if (value === "true") return true
+    if (value === "false") return false
+    throw new InvalidInitGitParameterError({
+      value,
+      message: `Invalid init-git query parameter "${value}". Use "true" or "false".`,
+    })
+  }
+
+  async function prepareTaskCreateDirectory(input: { directory: string; initGit: boolean }) {
+    if (Project.isGitRepo(input.directory)) return
+    if (!input.initGit) {
+      throw new Worktree.NotGitError({
+        message: `Cannot create a task in ${input.directory}: the directory is not a git repository and init-git=false.`,
+      })
+    }
+    await mkdir(input.directory, { recursive: true })
+    await Project.initGit(input.directory)
   }
 
   const app = new Hono()
@@ -253,13 +315,20 @@ export namespace Server {
           if (!routeRequiresProjectDirectory(c.req.path, c.req.method)) {
             return next()
           }
-          const directory = selectProjectDirectory({
+          const selectedDirectory = selectProjectDirectory({
             queryDirectory: c.req.query("directory"),
             headerDirectory: c.req.header("x-opencorvus-directory"),
           })
-          if (!directory) {
+          if (!selectedDirectory) {
             throw new DirectoryRequiredError({
               message: `Project-scoped route ${c.req.path} requires ?directory= query parameter or x-opencorvus-directory header`,
+            })
+          }
+          const directory = Filesystem.resolve(selectedDirectory)
+          if (isTaskCreateRequest(c.req.path, c.req.method)) {
+            await prepareTaskCreateDirectory({
+              directory,
+              initGit: parseTaskCreateInitGit(c.req.query("init-git")),
             })
           }
           return Instance.provide({
@@ -282,7 +351,7 @@ export namespace Server {
       const result = await generateSpecs(await routeInventoryApp(), {
         documentation: AppDocumentation,
       })
-      return markRequiredJsonRequestBodies(addDirectoryQueryParameter(result))
+      return markRequiredJsonRequestBodies(addTaskCreateInitGitQueryParameter(addDirectoryQueryParameter(result)))
     } finally {
       resetAppRouteFactoriesForOpenApi()
       GlobalRoutes.reset()

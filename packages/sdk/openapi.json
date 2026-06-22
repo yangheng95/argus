@@ -19190,6 +19190,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "init-git",
+            "in": "query",
+            "required": false,
+            "description": "POST /task only. Defaults to true. When true, the selected directory is created when missing and initialized as Git when needed before task creation.",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
           }
         ],
         "x-codeSamples": [
