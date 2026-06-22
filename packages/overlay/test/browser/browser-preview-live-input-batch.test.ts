@@ -13,6 +13,18 @@ const SCREENSHOT_PATH = fileURLToPath(new URL("../../.scratch/browser-preview-li
 
 await ensureOverlayDist()
 
+type OverlayPage = Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>
+
+interface LiveInputLayoutProbeSummary {
+  totalRectReads: number
+  inputEventRectReads: number
+  rafRectReads: number
+  events: Array<{
+    inInputEvent: boolean
+    inRaf: boolean
+  }>
+}
+
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
 }
@@ -125,7 +137,7 @@ async function waitForFixtureActivity(predicate: () => boolean, label: string, d
 }
 
 async function openBrowserPreviewFromTask(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
+  page: OverlayPage,
   taskID: string,
   diagnostics: () => unknown,
 ) {
@@ -148,16 +160,91 @@ async function openBrowserPreviewFromTask(
   await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
 }
 
-async function dispatchMixedInput(page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>) {
+async function installLiveInputLayoutProbe(page: OverlayPage) {
+  await page.evaluate(() => {
+    const win = window as any
+    if (win.__browserPreviewLiveInputLayoutProbeInstalled) return
+    const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window)
+    const originalGetBoundingClientRect = HTMLImageElement.prototype.getBoundingClientRect
+    const probe = {
+      inputEventDepth: 0,
+      rafDepth: 0,
+      events: [] as Array<{ inInputEvent: boolean; inRaf: boolean }>,
+      reset() {
+        this.events = []
+      },
+      enterInputEvent() {
+        this.inputEventDepth += 1
+      },
+      exitInputEvent() {
+        this.inputEventDepth = Math.max(0, this.inputEventDepth - 1)
+      },
+      summary(): LiveInputLayoutProbeSummary {
+        const inputEventRectReads = this.events.filter((event) => event.inInputEvent).length
+        const rafRectReads = this.events.filter((event) => event.inRaf).length
+        return {
+          totalRectReads: this.events.length,
+          inputEventRectReads,
+          rafRectReads,
+          events: this.events.slice(),
+        }
+      },
+    }
+    win.__browserPreviewLiveInputLayoutProbe = probe
+    win.__browserPreviewLiveInputLayoutProbeInstalled = true
+    window.requestAnimationFrame = (callback: FrameRequestCallback) =>
+      originalRequestAnimationFrame((time) => {
+        probe.rafDepth += 1
+        try {
+          callback(time)
+        } finally {
+          probe.rafDepth = Math.max(0, probe.rafDepth - 1)
+        }
+      })
+    HTMLImageElement.prototype.getBoundingClientRect = function getBoundingClientRectWithLiveInputProbe() {
+      if ((this as HTMLElement).dataset.ui === "browser-preview-live-screenshot") {
+        probe.events.push({
+          inInputEvent: probe.inputEventDepth > 0,
+          inRaf: probe.rafDepth > 0,
+        })
+      }
+      return originalGetBoundingClientRect.call(this)
+    }
+  })
+}
+
+async function liveInputLayoutProbeSummary(page: OverlayPage): Promise<LiveInputLayoutProbeSummary> {
+  return await page.evaluate(() => (window as any).__browserPreviewLiveInputLayoutProbe.summary())
+}
+
+function assertNoLiveInputEventLayoutReads(summary: LiveInputLayoutProbeSummary, label: string) {
+  assert.equal(
+    summary.inputEventRectReads,
+    0,
+    `${label}: live input event handler read screenshot layout: ${JSON.stringify(summary.events)}`,
+  )
+}
+
+async function dispatchMixedInput(page: OverlayPage) {
   await page.evaluate(() => {
     const frame = document.querySelector<HTMLElement>(".browser-preview-live-frame")
     const image = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
     if (!frame || !image) throw new Error("Browser preview live frame is missing")
+    const probe = (window as any).__browserPreviewLiveInputLayoutProbe
+    probe?.reset()
     const rect = image.getBoundingClientRect()
     const clientX = rect.left + rect.width / 2
     const clientY = rect.top + rect.height / 2
+    const dispatchInput = (event: Event) => {
+      probe?.enterInputEvent()
+      try {
+        frame.dispatchEvent(event)
+      } finally {
+        probe?.exitInputEvent()
+      }
+    }
     frame.focus()
-    frame.dispatchEvent(
+    dispatchInput(
       new PointerEvent("pointerdown", {
         bubbles: true,
         button: 0,
@@ -168,7 +255,7 @@ async function dispatchMixedInput(page: Awaited<ReturnType<Awaited<ReturnType<ty
         pointerType: "mouse",
       }),
     )
-    frame.dispatchEvent(
+    dispatchInput(
       new WheelEvent("wheel", {
         bubbles: true,
         cancelable: true,
@@ -178,24 +265,31 @@ async function dispatchMixedInput(page: Awaited<ReturnType<Awaited<ReturnType<ty
         deltaY: 24,
       }),
     )
-    frame.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "a" }))
+    dispatchInput(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "a" }))
   })
 }
 
-async function dispatchWheelBurst(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof launchBrowser>>["newPage"]>>,
-  count: number,
-) {
+async function dispatchWheelBurst(page: OverlayPage, count: number) {
   await page.evaluate((eventCount) => {
     const frame = document.querySelector<HTMLElement>(".browser-preview-live-frame")
     const image = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
     if (!frame || !image) throw new Error("Browser preview live frame is missing")
+    const probe = (window as any).__browserPreviewLiveInputLayoutProbe
+    probe?.reset()
     const rect = image.getBoundingClientRect()
     const clientX = rect.left + rect.width / 2
     const clientY = rect.top + rect.height / 2
+    const dispatchInput = (event: Event) => {
+      probe?.enterInputEvent()
+      try {
+        frame.dispatchEvent(event)
+      } finally {
+        probe?.exitInputEvent()
+      }
+    }
     frame.focus()
     for (let index = 0; index < Number(eventCount); index += 1) {
-      frame.dispatchEvent(
+      dispatchInput(
         new WheelEvent("wheel", {
           bubbles: true,
           cancelable: true,
@@ -453,7 +547,9 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     )
     assert.equal(captureBodies.length, 0, "opening live preview must not auto-capture evidence")
 
+    await installLiveInputLayoutProbe(page)
     await dispatchMixedInput(page)
+    assertNoLiveInputEventLayoutReads(await liveInputLayoutProbeSummary(page), "mixed click wheel key live input")
     await waitForFixtureActivity(
       () => liveInputBodies.length >= 1,
       "mixed click wheel key live input batch",
@@ -466,6 +562,7 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     const beforeBurstCount = liveInputBodies.length
     const wheelEventCount = 20
     await dispatchWheelBurst(page, wheelEventCount)
+    assertNoLiveInputEventLayoutReads(await liveInputLayoutProbeSummary(page), "wheel burst live input")
     await waitForFixtureActivity(
       () => liveInputBodies.length > beforeBurstCount,
       "wheel burst live input batch",
