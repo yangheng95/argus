@@ -88,8 +88,10 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toContain("const HEXIN_BUDGET_LOW_USD = 20")
     expect(SRC).toMatch(/const hexinBudgetBaseKey = createMemo/)
     expect(SRC).toMatch(/const hexinBudgetKey = createMemo/)
+    expect(SRC).toMatch(/function encodeHexinBudgetBaseKey/)
+    expect(SRC).toMatch(/function parseHexinBudgetKey/)
     expect(SRC).toMatch(/parts\.provider !== "hexin" \|\| !parts\.name/)
-    expect(SRC).toMatch(/directory: activeDirectory\(\)\.trim\(\)/)
+    expect(SRC).toMatch(/return encodeHexinBudgetBaseKey\(\{[\s\S]*?directory,[\s\S]*?model: parts\.name/)
     expect(SRC).toMatch(/providerAuthRefresh: appStore\.providerAuthRefreshRevision/)
     expect(APP_STORE_SRC).toMatch(/providerAuthRefreshRevision: number/)
     expect(INIT_SRC).toMatch(/providerAuthRefreshRevision: appStore\.providerAuthRefreshRevision \+ 1/)
@@ -139,11 +141,14 @@ describe("ExecutorSelector dual chip bar", () => {
   test("mirror selection writes task root session config before project config", () => {
     expect(SRC).toMatch(/import \{ activeTaskID, hasSelectedTask \} from "\.\.\/store\/board"/)
     expect(SRC).toMatch(/import \{[\s\S]*?getTaskOperatorModelContext,[\s\S]*?patchConfig,[\s\S]*?patchSessionConfig/)
+    expect(SRC).toMatch(/function encodeTaskOperatorContextKey/)
+    expect(SRC).toMatch(/function parseTaskOperatorContextKey/)
     expect(SRC).toMatch(/const \[taskOperatorContext/)
     expect(SRC).toMatch(
-      /const taskOperatorContextKey = createMemo\([\s\S]*?if \(!appStore\.connected\) return null[\s\S]*?const directory = activeDirectory\(\)\.trim\(\)[\s\S]*?return \{ taskID: id, directory, refresh: sessionConfigRefreshToken\(\) \}/,
+      /const taskOperatorContextKey = createMemo\([\s\S]*?if \(!appStore\.connected\) return null[\s\S]*?const directory = activeDirectory\(\)\.trim\(\)[\s\S]*?return encodeTaskOperatorContextKey\(\{ taskID: id, directory, refresh: sessionConfigRefreshToken\(\) \}\)/,
     )
-    expect(SRC).toMatch(/return await getTaskOperatorModelContext\(\{ taskID: key\.taskID, directory: key\.directory \}\)/)
+    expect(SRC).toMatch(/const input = parseTaskOperatorContextKey\(key\)/)
+    expect(SRC).toMatch(/return await getTaskOperatorModelContext\(\{ taskID: input\.taskID, directory: input\.directory \}\)/)
     expect(SRC).toMatch(
       /await patchSessionConfig\(\{[\s\S]*?sessionID: ctx\.sessionID,[\s\S]*?directory,[\s\S]*?diff: \{[\s\S]*?agent: \{[\s\S]*?\[ctx\.agent\]: \{[\s\S]*?model: value \? value : null/,
     )

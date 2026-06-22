@@ -7,6 +7,8 @@ const [selectedTerminalProfileID, setSelectedTerminalProfileID] = createSignal("
 
 export { terminalProfiles, defaultTerminalProfileID, selectedTerminalProfileID }
 
+let pendingTerminalProfileReload: { directory: string; promise: Promise<void> } | null = null
+
 export function currentTerminalProfileID(): string {
   return selectedTerminalProfileID() || defaultTerminalProfileID()
 }
@@ -28,13 +30,27 @@ export async function reloadTerminalProfileSelection(input: {
   directory: string
   defaultProfileMissingMessage: string
 }): Promise<void> {
-  const response = await listTerminalProfiles(input.directory)
-  if (!response.profiles.some((profile) => profile.id === response.defaultProfileID)) {
-    throw new Error(input.defaultProfileMissingMessage)
+  const directory = input.directory.trim()
+  if (pendingTerminalProfileReload?.directory === directory) {
+    return pendingTerminalProfileReload.promise
   }
-  const current = selectedTerminalProfileID()
-  const selected = response.profiles.some((profile) => profile.id === current) ? current : response.defaultProfileID
-  setTerminalProfiles(response.profiles)
-  setDefaultTerminalProfileID(response.defaultProfileID)
-  setSelectedTerminalProfileID(selected)
+  const promise = (async () => {
+    const response = await listTerminalProfiles(directory)
+    if (!response.profiles.some((profile) => profile.id === response.defaultProfileID)) {
+      throw new Error(input.defaultProfileMissingMessage)
+    }
+    const current = selectedTerminalProfileID()
+    const selected = response.profiles.some((profile) => profile.id === current) ? current : response.defaultProfileID
+    setTerminalProfiles(response.profiles)
+    setDefaultTerminalProfileID(response.defaultProfileID)
+    setSelectedTerminalProfileID(selected)
+  })()
+  pendingTerminalProfileReload = { directory, promise }
+  try {
+    return await promise
+  } finally {
+    if (pendingTerminalProfileReload?.promise === promise) {
+      pendingTerminalProfileReload = null
+    }
+  }
 }
