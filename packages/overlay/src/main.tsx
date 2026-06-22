@@ -4,7 +4,7 @@
 // Self-sufficient — no external script dependencies.
 
 import { render } from "solid-js/web"
-import { createEffect, createRoot, createSignal, untrack } from "solid-js"
+import { createEffect, createMemo, createRoot, createSignal, untrack } from "solid-js"
 import { App } from "./components/App"
 import { Icon, LUCIDE_ICON_NAMES, REGISTERED_ICONS, type IconName } from "./components/Icon"
 import { Conversation } from "./components/Conversation"
@@ -61,7 +61,12 @@ import {
   PANEL_PANE_CONFIG,
 } from "./services/pane"
 import { panelMessage } from "./services/chat"
-import { loadPromptProfileCatalog, resetDatabase, type PromptProfileOption } from "./services/config"
+import {
+  loadPromptProfileCatalog,
+  resetDatabase,
+  type PromptProfileCatalogScope,
+  type PromptProfileOption,
+} from "./services/config"
 import { NotificationCenter } from "./components/NotificationCenter"
 import { waitForLogDrain, AppLog } from "./utils/log"
 import { teardownApp } from "./services/init"
@@ -95,6 +100,7 @@ import { buildChatDebugBlob, buildTaskDebugBlob, writeDebugClipboard } from "./u
 import { taskOwningDirectory } from "./services/task-directory"
 import { taskScopedPath } from "./services/task-path"
 import { createAnimationFrameScheduler } from "./utils/animation-frame"
+import { promptProfileCatalogRequestKey, promptProfileCatalogScope } from "./services/prompt-profile-scope"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -1232,36 +1238,51 @@ const [activePromptProfile, setActivePromptProfile] = createSignal("frontend")
 let lastTaskBusy = false
 let lastSuggestionTaskID: string | null = null
 let promptProfileLoadSequence = 0
+let promptProfileInFlightRequestKey = ""
+let promptProfileLoadedRequestKey = ""
+const promptProfileRequestKey = createMemo(() => promptProfileCatalogRequestKey())
 
-async function refreshPromptProfiles(): Promise<void> {
-  if (!appStore.connected || !settingsStore.directory) return
+async function refreshPromptProfiles(scope: PromptProfileCatalogScope, requestKey: string): Promise<void> {
+  if (requestKey === promptProfileInFlightRequestKey || requestKey === promptProfileLoadedRequestKey) return
   const sequence = ++promptProfileLoadSequence
-  const sessionID = rootTaskSessionID() || activeSessionID() || undefined
-  const catalog = await loadPromptProfileCatalog(sessionID)
-  if (sequence !== promptProfileLoadSequence) return
-  setPromptProfiles(catalog.profiles)
-  setActivePromptProfile((current) =>
-    catalog.profiles.some((profile) => profile.id === current) ? current : catalog.active,
-  )
+  promptProfileInFlightRequestKey = requestKey
+  try {
+    const catalog = await loadPromptProfileCatalog(scope)
+    if (sequence !== promptProfileLoadSequence) return
+    setPromptProfiles(catalog.profiles)
+    setActivePromptProfile((current) =>
+      catalog.profiles.some((profile) => profile.id === current) ? current : catalog.active,
+    )
+    promptProfileLoadedRequestKey = requestKey
+  } finally {
+    if (promptProfileInFlightRequestKey === requestKey) promptProfileInFlightRequestKey = ""
+  }
 }
 
 createEffect(() => {
-  const connected = appStore.connected
-  const directoryEpoch = settingsStore.directoryEpoch
   const selectedTaskSessionID = rootTaskSessionID()
   const selectedSessionID = activeSessionID()
-  const promptProfileConfigVersion = JSON.stringify(appStore.config?.prompt_profile ?? null)
   const configuredActive = appStore.config?.prompt_profile?.active
-  void promptProfileConfigVersion
   if (!selectedTaskSessionID && !selectedSessionID && typeof configuredActive === "string" && configuredActive.trim()) {
     setActivePromptProfile(configuredActive)
   }
-  if (!connected) return
-  void directoryEpoch
-  void selectedTaskSessionID
-  void selectedSessionID
-  void refreshPromptProfiles().catch((error) => reportOverlayRuntimeError("prompt-profile", error))
 })
+
+createEffect<string>((previousKey) => {
+  const requestKey = promptProfileRequestKey()
+  if (requestKey === previousKey) return previousKey
+  const scope = promptProfileCatalogScope()
+  if (scope.kind === "pending") {
+    promptProfileLoadSequence++
+    promptProfileInFlightRequestKey = ""
+    promptProfileLoadedRequestKey = ""
+    setPromptProfiles([])
+    return requestKey
+  }
+  if (scope.kind === "unavailable") return requestKey
+  void refreshPromptProfiles(scope, requestKey).catch((error) => reportOverlayRuntimeError("prompt-profile", error))
+  return requestKey
+}, "")
 
 const panelComposerDraftKey = () => {
   if (missionSubmitActive()) {

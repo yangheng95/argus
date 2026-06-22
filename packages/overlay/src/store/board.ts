@@ -653,10 +653,11 @@ export function scheduleBoard(delay = 0): void {
  * "do not write /config" (never silently fall back to the project config).
  */
 export function rootTaskSessionID(): string {
-  const boardSession = boardStore.board?.task?.sessionID
-  if (typeof boardSession === "string" && boardSession) return boardSession
   const taskID = activeTaskID()
   if (!taskID) return ""
+  const boardTask = boardStore.board?.task
+  const boardSession = boardTask?.id === taskID ? boardTask?.sessionID : ""
+  if (typeof boardSession === "string" && boardSession) return boardSession
   const entry = boardStore.tasks.find((item: any) => item?.task?.id === taskID)
   return typeof entry?.task?.sessionID === "string" ? entry.task.sessionID : ""
 }
