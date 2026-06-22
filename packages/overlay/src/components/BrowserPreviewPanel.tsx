@@ -113,17 +113,15 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const targetTransitionPending = createMemo(
     () => Boolean(pendingSelectedTargetID() && !currentTarget() && !currentTargetError()),
   )
-  const [latestEvidence] = createResource(
-    () => {
-      const taskID = props.taskID()
-      const targetID = currentTarget()?.id
-      const evidenceID = currentTarget()?.latestEvidenceIDs?.[viewportID()]
-      const directory = props.directory()
-      if (!taskID || !directory || !targetID || !evidenceID) return undefined
-      return { taskID, directory, evidenceID, targetID, viewportID: viewportID() }
-    },
-    (scope) => loadTaskBrowserPreviewEvidence(scope),
-  )
+  const latestEvidenceScope = createMemo(() => {
+    const taskID = props.taskID()
+    const targetID = currentTarget()?.id
+    const evidenceID = currentTarget()?.latestEvidenceIDs?.[viewportID()]
+    const directory = props.directory()
+    if (!taskID || !directory || !targetID || !evidenceID) return undefined
+    return { taskID, directory, evidenceID, targetID, viewportID: viewportID() }
+  })
+  const [latestEvidence] = createResource(latestEvidenceScope, (scope) => loadTaskBrowserPreviewEvidence(scope))
   const candidates = createMemo(() => currentTarget()?.candidates ?? [])
   const selectedCandidate = createMemo(
     () =>
@@ -162,6 +160,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const resolved = currentTarget()
     const viewport = selectedViewport()
     if (!panelActive() || !taskID || !directory || resolved?.status !== "ready" || !resolved.id || !viewport) {
+      return undefined
+    }
+    if (latestEvidenceScope() || currentVerificationRequest()) {
       return undefined
     }
     return { taskID, directory, targetID: resolved.id, viewportID: viewport.id, viewport }
