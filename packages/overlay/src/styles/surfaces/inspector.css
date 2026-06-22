@@ -287,21 +287,37 @@
 }
 
 .browser-preview-evidence-shot {
+  --oc-button-height: auto;
+  --oc-button-padding-x: 0;
+  --oc-button-padding-y: 0;
+  --oc-button-gap: 0;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
   margin: 0;
   display: flex;
   justify-content: center;
   overflow: visible;
   border: var(--oc-border-width) solid var(--border);
+  border-radius: 0;
   background: var(--surface-inset);
+  cursor: zoom-in;
+  white-space: normal;
 }
 
-.browser-preview-evidence-shot img {
+.browser-preview-evidence-shot .browser-preview-evidence-image {
   width: 100%;
   max-width: 100%;
   height: auto;
+  max-height: none;
   display: block;
   object-fit: contain;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
 }
 
 .browser-preview-live {

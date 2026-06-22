@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
+import type { JSX } from "solid-js"
 import { closeImagePreview, imagePreviewState, openImagePreview } from "../services/image-preview"
 import {
   calculateImagePreviewFitScale,
@@ -34,6 +35,9 @@ type CopyFeedback = {
   key: ImageCopyFeedbackKey
 }
 
+type PreviewableImageAttributes = JSX.ImgHTMLAttributes<HTMLImageElement> &
+  Partial<Record<`data-${string}`, string | undefined>>
+
 class ImageCopyError extends Error {
   constructor(readonly key: ImageCopyFeedbackKey) {
     super(key)
@@ -41,11 +45,19 @@ class ImageCopyError extends Error {
   }
 }
 
-export function PreviewableImage(props: { src: string; alt?: string; triggerClass?: string; imageClass?: string }) {
+export function PreviewableImage(props: {
+  src: string
+  alt?: string
+  triggerClass?: string
+  imageClass?: string
+  imageDataUI?: string
+  imageAttributes?: PreviewableImageAttributes
+}) {
   const alt = () => props.alt || ""
   const trigger = createMemo(() => imagePreviewTriggerContract({ src: props.src, alt: alt() }))
   const triggerClass = () => imagePreviewTriggerClass(props.triggerClass)
   const imageClass = () => ["md-img", props.imageClass].filter(Boolean).join(" ")
+  const imageAttributes = () => props.imageAttributes ?? {}
 
   return (
     <Button
@@ -66,7 +78,14 @@ export function PreviewableImage(props: { src: string; alt?: string; triggerClas
         openImagePreview(props.src, alt())
       }}
     >
-      <img class={imageClass()} src={props.src} alt={alt()} loading="lazy" />
+      <img
+        {...imageAttributes()}
+        class={imageClass()}
+        src={props.src}
+        alt={alt()}
+        loading="lazy"
+        data-ui={props.imageDataUI}
+      />
     </Button>
   )
 }

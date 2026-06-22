@@ -569,6 +569,8 @@ test(
         "primary browser preview evidence screenshot rendered in the stage",
         () => ({ errors, requestLog }),
       )
+      const evidenceScreenshotPath = resolve(".scratch/browser-preview-evidence-previewable-image.png")
+      writeFileSync(evidenceScreenshotPath, await previewPanel.screenshot({}))
       await page.click('[data-ui="browser-preview-candidate-trigger"]')
       await page.waitForSelector(`[data-ui="browser-preview-candidate-option"][data-target-id="${failingTargetID}"]`)
       await page.click(`[data-ui="browser-preview-candidate-option"][data-target-id="${failingTargetID}"]`)

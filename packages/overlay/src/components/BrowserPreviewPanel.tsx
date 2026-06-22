@@ -16,6 +16,7 @@ import {
 } from "../services/browser-preview"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
+import { PreviewableImage } from "./ImagePreview"
 import { Button } from "./ui/Button"
 import { SelectControl } from "./ui/SelectControl"
 import { SegmentedControl } from "./ui/SegmentedControl"
@@ -728,15 +729,17 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 <p>{evidence().summary}</p>
                 <Show when={currentCaptureImage()}>
                   {(image) => (
-                    <figure class="browser-preview-evidence-shot">
-                      <img
-                        src={image().url}
-                        alt={evidence().summary}
-                        data-ui="browser-preview-screenshot"
-                        data-evidence-id={image().evidenceID}
-                        decoding="async"
-                      />
-                    </figure>
+                    <PreviewableImage
+                      src={image().url}
+                      alt={evidence().summary}
+                      triggerClass="browser-preview-evidence-shot"
+                      imageClass="browser-preview-evidence-image"
+                      imageDataUI="browser-preview-screenshot"
+                      imageAttributes={{
+                        "data-evidence-id": image().evidenceID,
+                        decoding: "async",
+                      }}
+                    />
                   )}
                 </Show>
                 <dl class="browser-preview-evidence-facts">
