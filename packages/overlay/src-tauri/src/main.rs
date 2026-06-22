@@ -1269,7 +1269,7 @@ fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<
     Ok(true)
 }
 
-#[cfg(any(not(target_os = "windows"), test))]
+#[cfg(any(not(windows), test))]
 fn badge_count_value(count: i64) -> Option<i64> {
     if count > 0 {
         Some(count)
@@ -1893,8 +1893,8 @@ mod tests {
         assert!(
             EMBEDDED_SERVER_FILES
                 .iter()
-                .any(|file| file.path == "browser-mcp-node/stdio.mjs"),
-            "embedded sidecar payload must include browser-mcp-node/stdio.mjs"
+                .any(|file| file.path == "browser-mcp-node/browser.mjs"),
+            "embedded sidecar payload must include browser-mcp-node/browser.mjs"
         );
         let node_entry = EMBEDDED_SERVER_FILES
             .iter()

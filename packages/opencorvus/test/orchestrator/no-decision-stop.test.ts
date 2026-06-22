@@ -69,6 +69,21 @@ describe("orchestrator no-decision stop classifier", () => {
     expect(reason).toContain("following the latest task decision")
   })
 
+  test("rejects stop when a same-wake build decision is followed by wait", () => {
+    const reason = classifyOrchestratorDecisionStop({
+      taskTerminal: false,
+      finish: "stop",
+      finalText: "Build is running, so I waited for it.",
+      providerVisiblePartCount: 1,
+      wakeTools: [
+        { name: "build", decisionEffect: "decision" },
+        { name: "wait", decisionEffect: "observation" },
+      ],
+    })
+
+    expect(reason).toContain("following the latest task decision")
+  })
+
   test("rejects prose stop with no tool calls on an active task", () => {
     const reason = classifyOrchestratorDecisionStop({
       taskTerminal: false,

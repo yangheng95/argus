@@ -18,12 +18,13 @@ export const VisualRegionEvidenceSchema = z.object({
       width: z.number(),
       height: z.number(),
     })
+    .strict()
     .optional(),
   required: z.boolean(),
   status: z.enum(["passing", "failing", "deferred"]),
   evidenceRefs: z.array(z.string().min(1)),
   notes: z.string(),
-})
+}).strict()
 
 export const VisualEvidenceBundleSchema = z.object({
   id: z.string().min(1),
@@ -34,7 +35,7 @@ export const VisualEvidenceBundleSchema = z.object({
     sha256: z.string().min(1),
     width: z.number().int().positive(),
     height: z.number().int().positive(),
-  }),
+  }).strict(),
   rendered: z.object({
     path: z.string().min(1),
     sha256: z.string().min(1),
@@ -45,20 +46,20 @@ export const VisualEvidenceBundleSchema = z.object({
       width: z.number().int().positive(),
       height: z.number().int().positive(),
       deviceScaleFactor: z.number().positive().optional(),
-    }),
+    }).strict(),
     appURL: z.string().min(1),
     projectDirectory: z.string().min(1),
     commitRef: z.string().min(1).optional(),
-  }),
+  }).strict(),
   inspection: z.object({
     path: z.string().min(1).optional(),
     reviewedAt: z.string().min(1),
     status: z.enum(["passing", "failing", "incomplete"]),
     blockerCount: z.number().int().min(0),
     notes: z.string().min(1),
-  }),
+  }).strict(),
   regions: z.array(VisualRegionEvidenceSchema),
-})
+}).strict()
 
 export const VisualEvidenceBundleListSchema = z.array(VisualEvidenceBundleSchema)
 

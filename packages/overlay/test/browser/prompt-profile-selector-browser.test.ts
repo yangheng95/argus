@@ -90,17 +90,27 @@ const promptProfileScenarios = [
         editable: false,
         agents: {},
       },
+      {
+        id: "testing",
+        label: "Testing",
+        description: "Regression and evidence squad.",
+        built_in: true,
+        editable: false,
+        agents: {},
+      },
     ],
     expectedLabels: [
       "General Baseline prompt set.",
       "Frontend Visual UI verification squad.",
       "Backend Contract and data integrity squad.",
       "Algorithm Correctness and benchmark squad.",
+      "Testing Regression and evidence squad.",
     ],
     expectedUnselectedLabels: [
       "General Baseline prompt set.",
       "Backend Contract and data integrity squad.",
       "Algorithm Correctness and benchmark squad.",
+      "Testing Regression and evidence squad.",
     ],
   },
   {
@@ -140,17 +150,27 @@ const promptProfileScenarios = [
         editable: false,
         agents: {},
       },
+      {
+        id: "testing",
+        label: "测试",
+        description: "回归和证据专家团。",
+        built_in: true,
+        editable: false,
+        agents: {},
+      },
     ],
     expectedLabels: [
       "通用 基础提示词集合。",
       "前端 视觉界面验证专家团。",
       "后端 契约和数据完整性专家团。",
       "算法 正确性和基准回归专家团。",
+      "测试 回归和证据专家团。",
     ],
     expectedUnselectedLabels: [
       "通用 基础提示词集合。",
       "后端 契约和数据完整性专家团。",
       "算法 正确性和基准回归专家团。",
+      "测试 回归和证据专家团。",
     ],
   },
 ] satisfies Array<{
@@ -535,7 +555,7 @@ for (const scenario of promptProfileScenarios) {
       )
       assert.deepEqual(
         result.options.map((option) => option.selectedAttribute),
-        ["false", "true", "false", "false"],
+        ["false", "true", "false", "false", "false"],
       )
       assert.equal(
         result.options.every((option) => option.role === "option"),

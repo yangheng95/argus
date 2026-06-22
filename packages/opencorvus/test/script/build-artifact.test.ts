@@ -118,6 +118,22 @@ describe("build-artifact", () => {
     )
   })
 
+  test("overlay-server build emits a single payload stamp for Tauri rerun detection", () => {
+    const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
+    const tauriBuildSource = readFileSync(resolve(import.meta.dir, "../../../overlay/src-tauri/build.rs"), "utf8")
+
+    expect(buildSource).toContain('const OVERLAY_PAYLOAD_STAMP_FILE = ".opencorvus-overlay-payload.stamp"')
+    expect(buildSource).toContain("async function writeOverlayPayloadStamp")
+    expect(buildSource).toContain('if (buildFlavor === "overlay-server")')
+    expect(buildSource).toContain('await writeOverlayPayloadStamp(path.join(dir, "dist", name))')
+
+    expect(tauriBuildSource).toContain('const OVERLAY_PAYLOAD_STAMP_FILE: &str = ".opencorvus-overlay-payload.stamp";')
+    expect(tauriBuildSource).toContain("fn require_payload_stamp")
+    expect(tauriBuildSource).toContain('println!("cargo:rerun-if-changed={}", stamp.display())')
+    expect(tauriBuildSource).not.toContain("for rel in collect_payload_files(&embed_path)")
+    expect(tauriBuildSource).not.toContain('println!("cargo:rerun-if-changed={}", root.join(rel).display())')
+  })
+
   test("overlay-server flavor compiles only the overlay launcher entrypoint", () => {
     expect(artifactEntrypoints("overlay-server")).toEqual(["./src/overlay-launcher.ts"])
   })

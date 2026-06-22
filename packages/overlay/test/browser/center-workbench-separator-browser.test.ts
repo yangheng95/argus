@@ -91,6 +91,117 @@ async function separatorState(page: OverlayPage) {
   })
 }
 
+type CenterWorkbenchResizeEvent = {
+  type: "resize-style-write" | "center-workbench-rect-read"
+  frameID: number
+  inRaf: boolean
+  name?: string
+  id?: string
+}
+
+function assertCenterWorkbenchResizeReadsAreDeferred(events: CenterWorkbenchResizeEvent[], label: string) {
+  const writeFrameIDs = new Set(
+    events.filter((event) => event.type === "resize-style-write").map((event) => event.frameID),
+  )
+  const conflictingReads = events.filter(
+    (event) => event.type === "center-workbench-rect-read" && writeFrameIDs.has(event.frameID),
+  )
+  assert.ok(writeFrameIDs.size > 0, `${label}: expected resize style writes, got ${JSON.stringify(events)}`)
+  assert.ok(
+    events.some((event) => event.type === "center-workbench-rect-read" && event.inRaf),
+    `${label}: expected center workbench geometry reads in RAF, got ${JSON.stringify(events)}`,
+  )
+  assert.deepEqual(
+    conflictingReads,
+    [],
+    `${label}: center workbench rect reads shared the resize style-write RAF callback: ${JSON.stringify(events)}`,
+  )
+}
+
+async function installCenterWorkbenchResizeInstrumentation(page: OverlayPage) {
+  await page.evaluate(() => {
+    const win = window as any
+    win.__centerWorkbenchResizeRestoreInstrumentation?.()
+    const originalRequestAnimationFrame = window.requestAnimationFrame
+    const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect
+    const originalSetProperty = CSSStyleDeclaration.prototype.setProperty
+    let activeFrameID = 0
+    let frameDepth = 0
+    let nextFrameID = 1
+    const resizeStyleNames = new Set(["--ui-scale", "--ui-sidebar-width", "--ui-sections-width"])
+    win.__centerWorkbenchResizeEvents = []
+    win.__centerWorkbenchResizePhase = "idle"
+    window.requestAnimationFrame = function requestAnimationFrameWithCenterWorkbenchProbe(callback) {
+      return originalRequestAnimationFrame.call(window, (time) => {
+        const previousFrameID = activeFrameID
+        const previousFrameDepth = frameDepth
+        activeFrameID = nextFrameID++
+        frameDepth = previousFrameDepth + 1
+        try {
+          callback(time)
+        } finally {
+          activeFrameID = previousFrameID
+          frameDepth = previousFrameDepth
+        }
+      })
+    }
+    Element.prototype.getBoundingClientRect = function getBoundingClientRectWithCenterWorkbenchProbe() {
+      const rect = originalGetBoundingClientRect.call(this)
+      if (
+        win.__centerWorkbenchResizePhase === "resize" &&
+        this instanceof HTMLElement &&
+        (this.id.startsWith("centerWorkbench") ||
+          this.dataset.centerWorkbenchView !== undefined ||
+          this.dataset.centerWorkbenchSeparator !== undefined)
+      ) {
+        win.__centerWorkbenchResizeEvents.push({
+          type: "center-workbench-rect-read",
+          frameID: activeFrameID,
+          inRaf: frameDepth > 0,
+          id: this.id,
+        })
+      }
+      return rect
+    }
+    CSSStyleDeclaration.prototype.setProperty = function setPropertyWithCenterWorkbenchProbe(name, value, priority) {
+      if (win.__centerWorkbenchResizePhase === "resize" && resizeStyleNames.has(name)) {
+        win.__centerWorkbenchResizeEvents.push({
+          type: "resize-style-write",
+          frameID: activeFrameID,
+          inRaf: frameDepth > 0,
+          name,
+        })
+      }
+      return originalSetProperty.call(this, name, value, priority)
+    }
+    win.__centerWorkbenchResizeRestoreInstrumentation = () => {
+      window.requestAnimationFrame = originalRequestAnimationFrame
+      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect
+      CSSStyleDeclaration.prototype.setProperty = originalSetProperty
+      win.__centerWorkbenchResizePhase = "idle"
+    }
+  })
+}
+
+async function beginCenterWorkbenchResizeInstrumentation(page: OverlayPage) {
+  await page.evaluate(() => {
+    const win = window as any
+    win.__centerWorkbenchResizeEvents = []
+    win.__centerWorkbenchResizePhase = "resize"
+  })
+}
+
+async function collectCenterWorkbenchResizeEvents(page: OverlayPage) {
+  return await page.evaluate<CenterWorkbenchResizeEvent[]>(async () => {
+    await new Promise<void>((resolveFrame) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()))
+    })
+    const win = window as any
+    win.__centerWorkbenchResizePhase = "idle"
+    return Array.from(win.__centerWorkbenchResizeEvents ?? [])
+  })
+}
+
 test(
   "center workbench panel separator owns pointer and keyboard resizing",
   async () => {
@@ -178,6 +289,7 @@ test(
       await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]', {
         visible: true,
       })
+      await installCenterWorkbenchResizeInstrumentation(page)
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
       await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
 
@@ -261,13 +373,44 @@ test(
 
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
       await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
+      await beginCenterWorkbenchResizeInstrumentation(page)
+      await page.setViewport({ width: 1180, height: 720 })
+      await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
+      const desktopResizeEvents = await collectCenterWorkbenchResizeEvents(page)
+      assertCenterWorkbenchResizeReadsAreDeferred(desktopResizeEvents, "desktop viewport resize")
+      await writeFile(
+        resolve(".scratch", "center-workbench-separator-desktop-resize.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+      await beginCenterWorkbenchResizeInstrumentation(page)
       await page.setViewport({ width: 500, height: 720 })
       await page.waitForFunction(() => document.querySelector<HTMLElement>("#centerWorkbenchSeparatorWorkflow")?.hidden)
+      const narrowResizeEvents = await collectCenterWorkbenchResizeEvents(page)
+      assertCenterWorkbenchResizeReadsAreDeferred(narrowResizeEvents, "narrow viewport resize")
+      await writeFile(
+        resolve(".scratch", "center-workbench-separator-narrow-resize.png"),
+        await page.screenshot({ fullPage: true }),
+      )
       const compact = await separatorState(page)
       assert.equal(compact.hidden, true)
       assert.equal(compact.disabled, "true")
       assert.equal(compact.tabIndex, -1)
 
+      await beginCenterWorkbenchResizeInstrumentation(page)
+      await page.setViewport({ width: 1280, height: 760 })
+      await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
+      const restoredResizeEvents = await collectCenterWorkbenchResizeEvents(page)
+      assertCenterWorkbenchResizeReadsAreDeferred(restoredResizeEvents, "restored desktop viewport resize")
+      const restored = await separatorState(page)
+      assert.equal(restored.hidden, false)
+      assert.equal(restored.disabled, "false")
+      assert.equal(restored.tabIndex, 0)
+      await writeFile(
+        resolve(".scratch", "center-workbench-separator-restored-desktop-resize.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+
+      await page.evaluate(() => (window as any).__centerWorkbenchResizeRestoreInstrumentation?.())
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)

@@ -11,6 +11,7 @@ import {
   primaryWebpageSourcePackageArtifacts,
 } from "@/orchestrator/webpage-evidence"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
+import { isHttpWebpageUrl } from "@/util/web-url"
 
 const EXCERPT_MAX_CHARS = 2_400
 export const WEBPAGE_REFERENCE_IMAGE_EVIDENCE_ID = "ev_webpage_reference_image"
@@ -87,7 +88,7 @@ export async function prepareWebpagePrdEvidence(input: {
   signal?: AbortSignal
   pipeline?: LiveWebpageEvidencePipeline
 }): Promise<WebpagePrdEvidence | undefined> {
-  const url = input.sourceUrls.find((item) => /^https?:\/\//i.test(item))
+  const url = input.sourceUrls.find(isHttpWebpageUrl)
   if (!url) return undefined
 
   const evidence = await ensureLiveWebpageEvidence({

@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test"
 import { asSchema } from "ai"
-import { buildFrontendTemplateReport, createFrontendTemplateOutputTools } from "../../src/frontend-design/output-tools"
+import { createHash } from "node:crypto"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import {
+  buildFrontendTemplateReport,
+  createFrontendTemplateOutputTools,
+  renderVisualHtmlSkeletonScreenshotForValidation,
+} from "../../src/frontend-design/output-tools"
 
 const materialInventoryItems = [
   {
@@ -9,6 +17,188 @@ const materialInventoryItems = [
     source_refs: ["web-clone-source/reference.png"],
   },
 ]
+
+const implementationPhaseOutcomes = [
+  {
+    id: "phase-evidence-lock",
+    phase: "evidence_lock" as const,
+    title: "Evidence lock",
+    deliverable: "Lock source screenshots, source IR, component inventory, and package evidence before implementation.",
+    source_refs: ["web-clone-source/reference.png", "web-clone-source/source-ir/component-tree.json"],
+    acceptance: "Final implementation work cites the locked source evidence instead of re-extracting or guessing.",
+  },
+  {
+    id: "phase-implementation-scaffold",
+    phase: "implementation_scaffold" as const,
+    title: "Implementation scaffold",
+    deliverable: "Bind the maintainable implementation to a real project scaffold and runtime entrypoints.",
+    source_refs: ["package.json", "src/main.tsx"],
+    acceptance: "The implementation target root and entrypoints resolve to real project files.",
+  },
+  {
+    id: "phase-data-component-transcription",
+    phase: "data_component_transcription" as const,
+    title: "Data and component transcription",
+    deliverable: "Transcribe repeated source content into data modules and semantic component families.",
+    source_refs: ["web-clone-source/source-ir/content-model.json"],
+    acceptance: "Rows, cards, controls, and charts render from structured data and component props.",
+  },
+  {
+    id: "phase-runtime-visual-verification",
+    phase: "runtime_visual_verification" as const,
+    title: "Runtime and visual verification",
+    deliverable: "Verify the running project against reference screenshots and interaction-state evidence.",
+    source_refs: ["web-clone-source/reference.png", "web-clone-source/reference-mobile.png"],
+    acceptance: "Reference-vs-implementation visual evidence is captured for desktop and mobile.",
+  },
+  {
+    id: "phase-source-quality-cleanup",
+    phase: "source_quality_cleanup" as const,
+    title: "Source quality cleanup",
+    deliverable: "Remove generated/static skeleton debt and verify design-system component usage.",
+    source_refs: ["web-clone-source/web-clone-implementation-contract.json"],
+    acceptance: "No screenshot wrappers, primitive substitutes, raw generated DOM dumps, or unverified library claims remain.",
+  },
+]
+
+const sourceReferenceSha = "b".repeat(64)
+const sourceReferencePng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNgYGD4DwABBAEAghnFoQAAAABJRU5ErkJggg==",
+  "base64",
+)
+
+function forgedPngHeader(): Buffer {
+  const bytes = Buffer.alloc(33)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write("IHDR", 12, "ascii")
+  bytes.writeUInt32BE(1, 16)
+  bytes.writeUInt32BE(1, 20)
+  bytes[24] = 8
+  bytes[25] = 6
+  return bytes
+}
+
+function sha256(bytes: Buffer | string): string {
+  return createHash("sha256").update(bytes).digest("hex")
+}
+
+async function createVisualEvidenceFixture(overrides: Record<string, unknown> = {}) {
+  const artifactRoot = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-visual-evidence-"))
+  const diffBytes = Buffer.from('{"mismatchPixels":0}\n', "utf8")
+
+  await fs.mkdir(path.join(artifactRoot, "visual-html-skeleton", "screenshots"), { recursive: true })
+  await fs.mkdir(path.join(artifactRoot, "visual-html-skeleton"), { recursive: true })
+  await fs.mkdir(path.join(artifactRoot, "web-clone-source"), { recursive: true })
+  const entrypoint = path.join(artifactRoot, "visual-html-skeleton", "index.html")
+  await fs.writeFile(
+    entrypoint,
+    [
+      "<!doctype html>",
+      '<meta charset="utf-8">',
+      "<style>",
+      "html, body { margin: 0; width: 100%; height: 100%; background: rgb(8, 22, 37); }",
+      "main { width: 100vw; height: 100vh; background: linear-gradient(135deg, rgb(8, 22, 37), rgb(34, 92, 126)); }",
+      "</style>",
+      "<main></main>",
+    ].join("\n"),
+  )
+  const renderedScreenshotPng = await renderVisualHtmlSkeletonScreenshotForValidation({
+    entrypointFile: entrypoint,
+    viewport: { width: 320, height: 180 },
+  })
+  await fs.writeFile(path.join(artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), renderedScreenshotPng)
+  await fs.writeFile(path.join(artifactRoot, "web-clone-source", "reference.png"), sourceReferencePng)
+  await fs.writeFile(path.join(artifactRoot, "visual-html-skeleton", "visual-diff.json"), diffBytes)
+
+  return {
+    artifactRoot,
+    evidence: visualValidationEvidence({
+      screenshot_sha256: sha256(renderedScreenshotPng),
+      source_reference_sha256: sha256(sourceReferencePng),
+      ...overrides,
+    }),
+  }
+}
+
+async function createImplementationProjectFixture(dependencies: Record<string, string> = {}) {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-implementation-target-"))
+  const projectRoot = "app"
+  const projectDir = path.join(workspaceRoot, projectRoot)
+  await fs.mkdir(path.join(projectDir, "src"), { recursive: true })
+  await fs.writeFile(
+    path.join(projectDir, "package.json"),
+    JSON.stringify({ dependencies }, null, 2),
+  )
+  await fs.writeFile(path.join(projectDir, "src", "main.tsx"), "export const app = true\n")
+  return { workspaceRoot, projectRoot }
+}
+
+function maintainableImplementationPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    design_system: "AInvest component system",
+    tech_stack: ["React", "Vite"],
+    final_acceptance_mode: "maintainable_replacement_required",
+    frontend_template: "Production-mergeable page using real components.",
+    fillable_modules: "Implementation modules.",
+    component_inventory: "Data table and page shell components.",
+    component_reuse_plan: [
+      {
+        family_id: "comp-table",
+        name: "Data table",
+        observed_surface: "Main data table",
+        source_refs: ["web-clone-source/reference.png"],
+        implementation_strategy: "project_specific_component",
+        reuse_source: "src/components/DataTable.tsx",
+        mature_library_candidates: [],
+        props_states: "rows, columns, hover",
+        replacement_boundary: "table region",
+        parity_guard: "visual diff",
+        project_specific_reason: "No installed mature library is required for this minimal fixture.",
+      },
+    ],
+    baseline_replacement_plan: [],
+    implementation_phase_outcomes: implementationPhaseOutcomes,
+    material_inventory: "AInvest tokens and source data.",
+    material_inventory_items: materialInventoryItems,
+    visual_consistency_contract: "Match the reference visual density and component states.",
+    ui_data_contract: "Static fixture data.",
+    frontend_project: {
+      status: "created",
+      role: "source_baseline_input",
+      project_root: "frontend-design-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+      generation_tool: "host-prepared:create_frontend_skeleton_project",
+      notes: ["source baseline ready"],
+    },
+    template_iteration_notes: ["checked production handoff"],
+    completeness_review: "complete enough",
+    reference_artifacts: ["web-clone-source/reference.png"],
+    open_questions: [],
+    ...overrides,
+  }
+}
+
+function visualValidationEvidence(overrides: Record<string, unknown> = {}) {
+  return [
+    {
+      id: "visual-render-desktop",
+      render_target: "visual-html-skeleton",
+      rendered_entrypoint: "visual-html-skeleton/index.html",
+      screenshot_artifact: "visual-html-skeleton/screenshots/desktop.png",
+      source_reference_artifact: "web-clone-source/reference.png",
+      renderer: "node_playwright_static_file",
+      viewport: "desktop-320x180",
+      screenshot_sha256: "a".repeat(64),
+      source_reference_sha256: sourceReferenceSha,
+      diff_artifact: "visual-html-skeleton/visual-diff.json",
+      review_status: "reviewed_no_blocking_debt",
+      review_summary: "Rendered skeleton screenshot was compared against the source reference with no blocking debt.",
+      ...overrides,
+    },
+  ]
+}
 
 test("submit_frontend_template defaults missing fact_check_items during direct execution", async () => {
   const kit = createFrontendTemplateOutputTools()
@@ -103,6 +293,7 @@ test("submit_frontend_template tolerates missing review fields from provider too
           project_specific_reason: "not applicable",
         },
       ],
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       material_inventory: "materials",
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
@@ -147,6 +338,7 @@ test("submit_frontend_template normalizes markdown open questions", async () => 
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
       ui_data_contract: "data contract",
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       frontend_project: {
         status: "created",
         role: "source_baseline_input",
@@ -197,6 +389,7 @@ test("submit_frontend_template rebuilds flattened frontend_project provider args
         },
       ],
       baseline_replacement_plan: [],
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       material_inventory: "materials",
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
@@ -287,6 +480,7 @@ test("submit_frontend_template renders compact structured fields into markdown h
           project_specific_reason: "not applicable",
         },
       ],
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       material_inventory_items: [
         {
           title: "Reference",
@@ -323,6 +517,7 @@ test("submit_frontend_template renders compact structured fields into markdown h
           source_refs: ["web-clone-source/reference.png"],
         },
       ],
+      visual_validation_evidence: visualValidationEvidence(),
       ui_data_contract_items: [
         {
           title: "Rows",
@@ -360,7 +555,8 @@ test("submit_frontend_template renders compact structured fields into markdown h
 })
 
 test("submit_frontend_template renders visual HTML skeleton as non-implementation baseline", async () => {
-  const kit = createFrontendTemplateOutputTools()
+  const fixture = await createVisualEvidenceFixture()
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
   const submit = kit.tools.submit_frontend_template as any
 
   await submit.execute(
@@ -421,6 +617,7 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
         generation_tool: "source-ir-static-html-skeleton",
         notes: [
           "Derived from source IR and source skeleton; not a final app.",
+          "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
           "Future project work transcribes this visual skeleton into semantic source.",
         ],
       },
@@ -431,6 +628,7 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
           source_refs: ["web-clone-source/reference.png"],
         },
       ],
+      visual_validation_evidence: fixture.evidence,
       ui_data_contract_items: [
         {
           title: "Static content",
@@ -457,21 +655,1527 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
   expect(report).toContain("Current workflow deliverable")
   expect(report).toContain("Requirements, Architect, Build, and Integrity")
   expect(report).toContain("transcribe the accepted HTML skeleton")
-  expect(report).toContain("visual_quality_status: evidence_missing")
+  expect(report).toContain("visual_quality_status: visual_evidence_reported")
   expect(report).not.toContain("maintainable_status: incomplete_source_baseline")
 })
 
-test("visual baseline report marks screenshot-reviewed skeleton with remaining debt as incomplete fidelity", async () => {
+test("submit_frontend_template rejects text files masquerading as visual baseline screenshots", async () => {
+  const fakeScreenshot = Buffer.from("rendered visual skeleton screenshot", "utf8")
+  const fixture = await createVisualEvidenceFixture({ screenshot_sha256: sha256(fakeScreenshot) })
+  await fs.writeFile(path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), fakeScreenshot)
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Skeleton screenshots must be compared against source reference.png.",
+        visual_validation_evidence: fixture.evidence,
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: [
+            "visual-html-skeleton/index.html",
+            "visual-html-skeleton/styles/tokens.css",
+            "visual-html-skeleton/screenshots/desktop.png",
+          ],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Derived from source IR and source skeleton; not a final app."],
+        },
+        template_iteration_notes: ["checked visual skeleton source authority"],
+        completeness_review: "Rendered screenshot review evidence was recorded.",
+        reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects forged image headers as visual baseline screenshots", async () => {
+  const fakeScreenshot = forgedPngHeader()
+  const fixture = await createVisualEvidenceFixture({ screenshot_sha256: sha256(fakeScreenshot) })
+  await fs.writeFile(path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), fakeScreenshot)
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Skeleton screenshots must be compared against source reference.png.",
+        visual_validation_evidence: fixture.evidence,
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: [
+            "visual-html-skeleton/index.html",
+            "visual-html-skeleton/styles/tokens.css",
+            "visual-html-skeleton/screenshots/desktop.png",
+          ],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Derived from source IR and source skeleton; not a final app."],
+        },
+        template_iteration_notes: ["checked visual skeleton source authority"],
+        completeness_review: "Rendered screenshot review evidence was recorded.",
+        reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects valid screenshots not rendered from the current entrypoint", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  await fs.writeFile(
+    path.join(fixture.artifactRoot, "visual-html-skeleton", "index.html"),
+    [
+      "<!doctype html>",
+      '<meta charset="utf-8">',
+      "<style>",
+      "html, body { margin: 0; width: 100%; height: 100%; background: rgb(45, 16, 18); }",
+      "main { width: 100vw; height: 100vh; background: rgb(45, 16, 18); }",
+      "</style>",
+      "<main></main>",
+    ].join("\n"),
+  )
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Skeleton screenshots must be compared against source reference.png.",
+        visual_validation_evidence: fixture.evidence,
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: [
+            "visual-html-skeleton/index.html",
+            "visual-html-skeleton/styles/tokens.css",
+            "visual-html-skeleton/screenshots/desktop.png",
+          ],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Derived from source IR and source skeleton; not a final app."],
+        },
+        template_iteration_notes: ["checked stale rendered screenshot"],
+        completeness_review: "Rendered screenshot evidence was stale relative to the current entrypoint.",
+        reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects visual baseline without rendered screenshot evidence", async () => {
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
 
-  await submit.execute(
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Skeleton screenshots must be compared against source reference.png.",
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Derived from source IR and source skeleton; not a final app."],
+        },
+        template_iteration_notes: ["checked visual skeleton source authority"],
+        completeness_review: "No rendered screenshot review evidence was recorded.",
+        reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects reference screenshot paths as visual baseline render evidence", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Reference screenshot artifact path web-clone-source/reference.png was reviewed as the visual source.",
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Derived from source IR and source skeleton; not a final app."],
+        },
+        template_iteration_notes: ["checked source reference screenshot"],
+        completeness_review: "Screenshot artifact path web-clone-source/reference.png was recorded.",
+        reference_artifacts: ["web-clone-source/reference.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects copied reference screenshots under visual skeleton as render evidence", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "Rendered screenshot review evidence recorded for visual-html-skeleton/reference.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Rendered screenshot review evidence recorded for visual-html-skeleton/reference.png.",
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/reference.png"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Rendered screenshot review evidence recorded for visual-html-skeleton/reference.png."],
+        },
+        template_iteration_notes: ["checked copied reference screenshot"],
+        completeness_review: "Rendered screenshot artifact path visual-html-skeleton/reference.png was recorded.",
+        reference_artifacts: ["visual-html-skeleton/reference.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects renamed copied reference screenshots by digest", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard:
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+        visual_validation_evidence: visualValidationEvidence({
+          screenshot_artifact: "visual-html-skeleton/screenshots/desktop.png",
+          source_reference_artifact: "web-clone-source/reference.png",
+          screenshot_sha256: sourceReferenceSha,
+          source_reference_sha256: sourceReferenceSha,
+          review_summary: "The copied source reference was renamed into the screenshot directory.",
+        }),
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/screenshots/desktop.png"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png."],
+        },
+        template_iteration_notes: ["checked renamed reference screenshot"],
+        completeness_review:
+          "Rendered screenshot artifact path visual-html-skeleton/screenshots/desktop.png was recorded.",
+        reference_artifacts: ["visual-html-skeleton/screenshots/desktop.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects maintainable mode downgraded to visual baseline role", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "AInvest component system",
+        tech_stack: ["React", "AInvest UI"],
+        final_acceptance_mode: "maintainable_replacement_required",
+        frontend_template: "Production-mergeable page using real AInvest components.",
+        fillable_modules: "Implementation modules.",
+        component_inventory: "AInvest components.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-table",
+            name: "AInvest table",
+            observed_surface: "Main data table",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "existing_project_component",
+            reuse_source: "@ainvest/table",
+            mature_library_candidates: [],
+            props_states: "rows, columns, hover",
+            replacement_boundary: "table region",
+            parity_guard:
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "AInvest tokens and source data.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+        ui_data_contract: "Static fixture data.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/screenshots/desktop.png"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png."],
+        },
+        template_iteration_notes: ["checked visual skeleton"],
+        completeness_review: "Production implementation is still missing.",
+        reference_artifacts: ["visual-html-skeleton/screenshots/desktop.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("maintainable_replacement_required cannot submit frontend_project.role=visual_baseline_input")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects maintainable mode without structured implementation phase outcomes", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  const payload = maintainableImplementationPayload({ implementation_phase_outcomes: [] })
+
+  await expect(submit.execute(payload, {})).rejects.toThrow(
+    "maintainable_replacement_required requires structured implementation_phase_outcomes",
+  )
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects implementation target with missing real entrypoint", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-missing-entrypoint-"))
+  const projectRoot = "app"
+  await fs.mkdir(path.join(workspaceRoot, projectRoot), { recursive: true })
+  await fs.writeFile(path.join(workspaceRoot, projectRoot, "package.json"), JSON.stringify({ dependencies: {} }))
+  const kit = createFrontendTemplateOutputTools({ workspaceRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      maintainableImplementationPayload({
+        frontend_project: {
+          status: "created",
+          role: "implementation_target",
+          project_root: projectRoot,
+          source_package: "web-clone-source",
+          entrypoints: ["src/main.tsx"],
+          generation_tool: "existing-project",
+          notes: ["implementation scaffold inspected"],
+        },
+      }),
+      {},
+    ),
+  ).rejects.toThrow("requires every entrypoint to be a real project-root-relative file")
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects implementation target claiming an uninstalled mature library", async () => {
+  const fixture = await createImplementationProjectFixture({})
+  const kit = createFrontendTemplateOutputTools({ workspaceRoot: fixture.workspaceRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      maintainableImplementationPayload({
+        component_reuse_plan: [
+          {
+            family_id: "comp-map",
+            name: "Industrial map",
+            observed_surface: "Interactive map",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "mature_library",
+            reuse_source: "echarts",
+            mature_library_candidates: ["echarts"],
+            props_states: "regions, tooltip, hover state",
+            replacement_boundary: "map region",
+            parity_guard: "visual diff and keyboard tooltip check",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        frontend_project: {
+          status: "created",
+          role: "implementation_target",
+          project_root: fixture.projectRoot,
+          source_package: "web-clone-source",
+          entrypoints: ["src/main.tsx"],
+          generation_tool: "existing-project",
+          notes: ["implementation scaffold inspected"],
+        },
+      }),
+      {},
+    ),
+  ).rejects.toThrow("reuse sources must bind to an installed package")
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template accepts implementation target with installed mature library and real entrypoint", async () => {
+  const fixture = await createImplementationProjectFixture({ echarts: "^5.5.0" })
+  const kit = createFrontendTemplateOutputTools({ workspaceRoot: fixture.workspaceRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  const out = await submit.execute(
+    maintainableImplementationPayload({
+      component_reuse_plan: [
+        {
+          family_id: "comp-map",
+          name: "Industrial map",
+          observed_surface: "Interactive map",
+          source_refs: ["web-clone-source/reference.png"],
+          implementation_strategy: "mature_library",
+          reuse_source: "echarts",
+          mature_library_candidates: ["echarts"],
+          props_states: "regions, tooltip, hover state",
+          replacement_boundary: "map region",
+          parity_guard: "visual diff and keyboard tooltip check",
+          project_specific_reason: "not applicable",
+        },
+      ],
+      frontend_project: {
+        status: "created",
+        role: "implementation_target",
+        project_root: fixture.projectRoot,
+        source_package: "web-clone-source",
+        entrypoints: ["src/main.tsx"],
+        generation_tool: "existing-project",
+        notes: ["implementation scaffold inspected"],
+      },
+    }),
+    {},
+  )
+
+  expect(out).toContain("OK")
+  expect(kit.getCollector().final?.frontend_project.role).toBe("implementation_target")
+})
+
+test("submit_frontend_template accepts implementation target rooted at the workspace", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-workspace-root-target-"))
+  await fs.mkdir(path.join(workspaceRoot, "src"), { recursive: true })
+  await fs.writeFile(path.join(workspaceRoot, "package.json"), JSON.stringify({ dependencies: { echarts: "^5.5.0" } }))
+  await fs.writeFile(path.join(workspaceRoot, "src", "main.tsx"), "export const app = true\n")
+  const kit = createFrontendTemplateOutputTools({ workspaceRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  const out = await submit.execute(
+    maintainableImplementationPayload({
+      component_reuse_plan: [
+        {
+          family_id: "comp-map",
+          name: "Industrial map",
+          observed_surface: "Interactive map",
+          source_refs: ["web-clone-source/reference.png"],
+          implementation_strategy: "mature_library",
+          reuse_source: "echarts",
+          mature_library_candidates: ["echarts"],
+          props_states: "regions, tooltip, hover state",
+          replacement_boundary: "map region",
+          parity_guard: "visual diff and keyboard tooltip check",
+          project_specific_reason: "not applicable",
+        },
+      ],
+      frontend_project: {
+        status: "created",
+        role: "implementation_target",
+        project_root: ".",
+        source_package: "web-clone-source",
+        entrypoints: ["src/main.tsx"],
+        generation_tool: "existing-project",
+        notes: ["implementation scaffold inspected at workspace root"],
+      },
+    }),
+    {},
+  )
+
+  expect(out).toContain("OK")
+  expect(kit.getCollector().final?.frontend_project.project_root).toBe(".")
+})
+
+test("submit_frontend_template rejects visual HTML skeleton masquerading as implementation target", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "AInvest component system",
+        tech_stack: ["React", "AInvest UI"],
+        final_acceptance_mode: "maintainable_replacement_required",
+        frontend_template: "Production-mergeable page using real AInvest components.",
+        fillable_modules: "Implementation modules.",
+        component_inventory: "AInvest components.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-table",
+            name: "AInvest table",
+            observed_surface: "Main data table",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "existing_project_component",
+            reuse_source: "@ainvest/table",
+            mature_library_candidates: [],
+            props_states: "rows, columns, hover",
+            replacement_boundary: "table region",
+            parity_guard:
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "AInvest tokens and source data.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Blocking visual debt: placeholder table and map remain in visual-html-skeleton/screenshots/desktop.png.",
+        ui_data_contract: "Static fixture data.",
+        frontend_project: {
+          status: "created",
+          role: "implementation_target",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/screenshots/desktop.png"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Blocking visual debt: placeholders remain."],
+        },
+        template_iteration_notes: ["checked production target"],
+        completeness_review: "Blocking visual debt remains, but the skeleton was incorrectly named as implementation.",
+        reference_artifacts: ["visual-html-skeleton/screenshots/desktop.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("implementation_target cannot point at visual-html-skeleton")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects aliased visual HTML skeleton implementation target roots", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "AInvest component system",
+        tech_stack: ["React", "AInvest UI"],
+        final_acceptance_mode: "maintainable_replacement_required",
+        frontend_template: "Production-mergeable page using real AInvest components.",
+        fillable_modules: "Implementation modules.",
+        component_inventory: "AInvest components.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-table",
+            name: "AInvest table",
+            observed_surface: "Main data table",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "existing_project_component",
+            reuse_source: "@ainvest/table",
+            mature_library_candidates: [],
+            props_states: "rows, columns, hover",
+            replacement_boundary: "table region",
+            parity_guard: "visual diff",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "AInvest tokens and source data.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Blocking visual debt: placeholders remain.",
+        ui_data_contract: "Static fixture data.",
+        frontend_project: {
+          status: "created",
+          role: "implementation_target",
+          project_root: "visual-html-skeleton/.",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/./index.html"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Blocking visual debt: placeholders remain."],
+        },
+        template_iteration_notes: ["checked production target"],
+        completeness_review: "Blocking visual debt remains, but the skeleton was incorrectly named as implementation.",
+        reference_artifacts: ["visual-html-skeleton/screenshots/desktop.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("implementation_target cannot point at visual-html-skeleton")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects case-aliased visual HTML skeleton implementation target roots", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "AInvest component system",
+        tech_stack: ["React", "AInvest UI"],
+        final_acceptance_mode: "maintainable_replacement_required",
+        frontend_template: "Production-mergeable page using real AInvest components.",
+        fillable_modules: "Implementation modules.",
+        component_inventory: "AInvest components.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-table",
+            name: "AInvest table",
+            observed_surface: "Main data table",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "existing_project_component",
+            reuse_source: "@ainvest/table",
+            mature_library_candidates: [],
+            props_states: "rows, columns, hover",
+            replacement_boundary: "table region",
+            parity_guard: "visual diff",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "AInvest tokens and source data.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Blocking visual debt: placeholders remain.",
+        ui_data_contract: "Static fixture data.",
+        frontend_project: {
+          status: "created",
+          role: "implementation_target",
+          project_root: "Visual-Html-Skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["Visual-Html-Skeleton/index.html"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Blocking visual debt: placeholders remain."],
+        },
+        template_iteration_notes: ["checked production target"],
+        completeness_review: "Windows case aliases must not turn the static visual skeleton into implementation.",
+        reference_artifacts: ["visual-html-skeleton/screenshots/desktop.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("implementation_target cannot point at visual-html-skeleton")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects visual HTML skeleton subpaths as implementation target roots", async () => {
+  for (const projectRoot of [
+    "visual-html-skeleton/src",
+    ".opencorvus/r/t/TS/KX/fd/visual-html-skeleton/src",
+    "visual-html-skeleton.",
+    "visual-html-skeleton./src",
+    "visual-html-skeleton /src",
+    ".opencorvus/r/t/TS/KX/fd/visual-html-skeleton./src",
+  ]) {
+    const kit = createFrontendTemplateOutputTools()
+    const submit = kit.tools.submit_frontend_template as any
+
+    await expect(
+      submit.execute(
+        {
+          design_system: "AInvest component system",
+          tech_stack: ["React", "AInvest UI"],
+          final_acceptance_mode: "maintainable_replacement_required",
+          frontend_template: "Production-mergeable page using real AInvest components.",
+          fillable_modules: "Implementation modules.",
+          component_inventory: "AInvest components.",
+          component_reuse_plan: [
+            {
+              family_id: "comp-table",
+              name: "AInvest table",
+              observed_surface: "Main data table",
+              source_refs: ["web-clone-source/reference.png"],
+              implementation_strategy: "existing_project_component",
+              reuse_source: "@ainvest/table",
+              mature_library_candidates: [],
+              props_states: "rows, columns, hover",
+              replacement_boundary: "table region",
+              parity_guard: "visual diff",
+              project_specific_reason: "not applicable",
+            },
+          ],
+          material_inventory: "AInvest tokens and source data.",
+          material_inventory_items: materialInventoryItems,
+          visual_consistency_contract: "Blocking visual debt: placeholders remain.",
+          ui_data_contract: "Static fixture data.",
+          frontend_project: {
+            status: "created",
+            role: "implementation_target",
+            project_root: projectRoot,
+            source_package: "web-clone-source",
+            entrypoints: [`${projectRoot}/App.tsx`],
+            generation_tool: "source-ir-static-html-skeleton",
+            notes: ["Blocking visual debt: placeholders remain."],
+          },
+          template_iteration_notes: ["checked production target"],
+          completeness_review: "Visual skeleton subpaths must not become implementation targets.",
+          reference_artifacts: ["visual-html-skeleton/screenshots/desktop.png"],
+          open_questions: [],
+        },
+        {},
+      ),
+    ).rejects.toThrow("implementation_target cannot point at visual-html-skeleton")
+
+    expect(kit.getCollector().final).toBeUndefined()
+  }
+})
+
+test("submit_frontend_template rejects self-attested screenshot evidence without artifact files", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard:
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/nonexistent-desktop.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/nonexistent-desktop.png.",
+        visual_validation_evidence: visualValidationEvidence({
+          screenshot_artifact: "visual-html-skeleton/screenshots/nonexistent-desktop.png",
+          screenshot_sha256: "a".repeat(64),
+          source_reference_sha256: sourceReferenceSha,
+          review_summary: "Self-attested screenshot path and arbitrary hashes without real artifact files.",
+        }),
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/screenshots/nonexistent-desktop.png"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: [
+            "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/nonexistent-desktop.png.",
+          ],
+        },
+        template_iteration_notes: ["checked self-attested screenshot"],
+        completeness_review:
+          "Rendered screenshot artifact path visual-html-skeleton/screenshots/nonexistent-desktop.png was recorded.",
+        reference_artifacts: ["visual-html-skeleton/screenshots/nonexistent-desktop.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects traversed visual validation artifacts even when files exist", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  const traversedEntrypointBytes = Buffer.from("<!doctype html><p>source</p>\n", "utf8")
+  const traversedScreenshotBytes = Buffer.from("rendered screenshot outside visual skeleton", "utf8")
+  await fs.mkdir(path.join(fixture.artifactRoot, "web-clone-source", "source-skeleton"), { recursive: true })
+  await fs.mkdir(path.join(fixture.artifactRoot, "web-clone-source", "renders"), { recursive: true })
+  await fs.writeFile(
+    path.join(fixture.artifactRoot, "web-clone-source", "source-skeleton", "index.html"),
+    traversedEntrypointBytes,
+  )
+  await fs.writeFile(
+    path.join(fixture.artifactRoot, "web-clone-source", "renders", "desktop.png"),
+    traversedScreenshotBytes,
+  )
+
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard:
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract: "Rendered screenshot review evidence recorded for traversed files.",
+        visual_validation_evidence: visualValidationEvidence({
+          rendered_entrypoint: "visual-html-skeleton/../web-clone-source/source-skeleton/index.html",
+          screenshot_artifact: "visual-html-skeleton/screenshots/../../web-clone-source/renders/desktop.png",
+          screenshot_sha256: sha256(traversedScreenshotBytes),
+          source_reference_sha256: fixture.evidence[0].source_reference_sha256,
+          review_summary: "Traversal points at existing files outside the visual skeleton root.",
+        }),
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Rendered screenshot review evidence recorded for traversed files."],
+        },
+        template_iteration_notes: ["checked traversed screenshot"],
+        completeness_review: "Traversal should not satisfy visual skeleton evidence.",
+        reference_artifacts: ["web-clone-source/reference.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects traversed visual baseline project roots", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard:
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+        visual_validation_evidence: fixture.evidence,
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton/../web-clone-source",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png."],
+        },
+        template_iteration_notes: ["checked traversed project root"],
+        completeness_review: "A traversed source package root must not become the visual baseline.",
+        reference_artifacts: ["web-clone-source/reference.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("project_root to point at visual-html-skeleton")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects parent-traversed visual baseline project roots", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard:
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+        visual_validation_evidence: fixture.evidence,
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "../visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png."],
+        },
+        template_iteration_notes: ["checked parent-traversed project root"],
+        completeness_review: "A parent traversal must not satisfy the visual baseline project root contract.",
+        reference_artifacts: ["web-clone-source/reference.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("project_root to point at visual-html-skeleton")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects parent traversal that still ends in fd visual baseline root", async () => {
+  const fixture = await createVisualEvidenceFixture()
+
+  for (const projectRoot of [
+    "../fd/visual-html-skeleton",
+    "tmp/../../fd/visual-html-skeleton",
+    "C:\\tmp\\fd\\visual-html-skeleton",
+  ]) {
+    const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+    const submit = kit.tools.submit_frontend_template as any
+
+    await expect(
+      submit.execute(
+        {
+          design_system: "source-derived static visual baseline",
+          tech_stack: ["static HTML", "CSS"],
+          final_acceptance_mode: "visual_baseline_allowed",
+          frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+          fillable_modules: "Static visual skeleton regions.",
+          component_inventory: "Static visual skeleton regions.",
+          component_reuse_plan: [
+            {
+              family_id: "comp-static-skeleton",
+              name: "Static visual skeleton",
+              observed_surface: "Full captured page first viewport",
+              source_refs: ["web-clone-source/reference.png"],
+              implementation_strategy: "extracted_baseline_defer",
+              reuse_source: "visual-html-skeleton/index.html",
+              mature_library_candidates: [],
+              props_states: "static representative visual states only",
+              replacement_boundary: "visual skeleton root",
+              parity_guard:
+                "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+              project_specific_reason: "not applicable",
+            },
+          ],
+          material_inventory: "source IR, CSS, assets, and reference pixels.",
+          material_inventory_items: materialInventoryItems,
+          visual_consistency_contract:
+            "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+          visual_validation_evidence: fixture.evidence,
+          ui_data_contract: "Static visible source content only.",
+          frontend_project: {
+            status: "created",
+            role: "visual_baseline_input",
+            project_root: projectRoot,
+            source_package: "web-clone-source",
+            entrypoints: ["visual-html-skeleton/index.html"],
+            generation_tool: "source-ir-static-html-skeleton",
+            notes: ["Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png."],
+          },
+          template_iteration_notes: ["checked parent-traversed fd project root"],
+          completeness_review: "A parent traversal must not satisfy the visual baseline project root contract.",
+          reference_artifacts: ["web-clone-source/reference.png"],
+          open_questions: [],
+        },
+        {},
+      ),
+    ).rejects.toThrow("project_root to point at visual-html-skeleton")
+
+    expect(kit.getCollector().final).toBeUndefined()
+  }
+})
+
+test("submit_frontend_template rejects Windows-equivalent dotted visual baseline roots", async () => {
+  const fixture = await createVisualEvidenceFixture()
+
+  for (const projectRoot of ["visual-html-skeleton.", "visual-html-skeleton /src"]) {
+    const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+    const submit = kit.tools.submit_frontend_template as any
+
+    await expect(
+      submit.execute(
+        {
+          design_system: "source-derived static visual baseline",
+          tech_stack: ["static HTML", "CSS"],
+          final_acceptance_mode: "visual_baseline_allowed",
+          frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+          fillable_modules: "Static visual skeleton regions.",
+          component_inventory: "Static visual skeleton regions.",
+          component_reuse_plan: [
+            {
+              family_id: "comp-static-skeleton",
+              name: "Static visual skeleton",
+              observed_surface: "Full captured page first viewport",
+              source_refs: ["web-clone-source/reference.png"],
+              implementation_strategy: "extracted_baseline_defer",
+              reuse_source: "visual-html-skeleton/index.html",
+              mature_library_candidates: [],
+              props_states: "static representative visual states only",
+              replacement_boundary: "visual skeleton root",
+              parity_guard:
+                "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+              project_specific_reason: "not applicable",
+            },
+          ],
+          material_inventory: "source IR, CSS, assets, and reference pixels.",
+          material_inventory_items: materialInventoryItems,
+          visual_consistency_contract:
+            "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+          visual_validation_evidence: fixture.evidence,
+          ui_data_contract: "Static visible source content only.",
+          frontend_project: {
+            status: "created",
+            role: "visual_baseline_input",
+            project_root: projectRoot,
+            source_package: "web-clone-source",
+            entrypoints: ["visual-html-skeleton/index.html"],
+            generation_tool: "source-ir-static-html-skeleton",
+            notes: ["Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png."],
+          },
+          template_iteration_notes: ["checked dotted visual baseline project root"],
+          completeness_review: "Windows-equivalent dotted aliases must not be submitted as the visual baseline root.",
+          reference_artifacts: ["web-clone-source/reference.png"],
+          open_questions: [],
+        },
+        {},
+      ),
+    ).rejects.toThrow("project_root to point at visual-html-skeleton")
+
+    expect(kit.getCollector().final).toBeUndefined()
+  }
+})
+
+test("submit_frontend_template rejects symlinked visual validation artifacts outside the fd root", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "outside-fd-root-"))
+  const outsideScreenshotBytes = Buffer.from("outside fd rendered screenshot", "utf8")
+  const screenshotsDir = path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots")
+  await fs.rm(screenshotsDir, { recursive: true, force: true })
+  await fs.writeFile(path.join(outsideRoot, "desktop.png"), outsideScreenshotBytes)
+  await fs.symlink(outsideRoot, screenshotsDir, process.platform === "win32" ? "junction" : "dir")
+
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "source-derived static visual baseline",
+        tech_stack: ["static HTML", "CSS"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        fillable_modules: "Static visual skeleton regions.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard:
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        material_inventory: "source IR, CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+        visual_validation_evidence: visualValidationEvidence({
+          screenshot_sha256: sha256(outsideScreenshotBytes),
+          source_reference_sha256: fixture.evidence[0].source_reference_sha256,
+          review_summary: "The screenshot path is a junction to a file outside the fd root.",
+        }),
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: ["visual-html-skeleton/index.html"],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: ["Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png."],
+        },
+        template_iteration_notes: ["checked symlinked screenshot"],
+        completeness_review: "Symlinked artifacts outside the fd root must not satisfy visual evidence.",
+        reference_artifacts: ["web-clone-source/reference.png"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("requires artifact-backed rendered screenshot review evidence")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template accepts task-runtime-prefixed visual evidence paths under the same fd root", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  const runtimeRoot = ".opencorvus/r/t/TS/KX/fd"
+  const kit = createFrontendTemplateOutputTools({
+    artifactRoot: fixture.artifactRoot,
+    artifactRootRelative: runtimeRoot,
+  })
+  const submit = kit.tools.submit_frontend_template as any
+
+  const out = await submit.execute(
+    {
+      design_system: "source-derived static visual baseline",
+      tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+      final_acceptance_mode: "visual_baseline_allowed",
+      frontend_template: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+      fillable_modules: "Static visual skeleton regions.",
+      component_inventory: "Static visual skeleton regions.",
+      component_reuse_plan: [
+        {
+          family_id: "comp-static-skeleton",
+          name: "Static visual skeleton",
+          observed_surface: "Full captured page first viewport",
+          source_refs: [`${runtimeRoot}/web-clone-source/reference.png`],
+          implementation_strategy: "extracted_baseline_defer",
+          reuse_source: `${runtimeRoot}/visual-html-skeleton/index.html`,
+          mature_library_candidates: [],
+          props_states: "static representative visual states only",
+          replacement_boundary: "visual skeleton root",
+          parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+          project_specific_reason: "not applicable",
+        },
+      ],
+      material_inventory: "source IR, CSS, assets, and reference pixels.",
+      material_inventory_items: materialInventoryItems,
+      visual_consistency_contract:
+        "Rendered screenshot review evidence recorded for task-runtime-prefixed visual skeleton paths.",
+      visual_validation_evidence: visualValidationEvidence({
+        rendered_entrypoint: `${runtimeRoot}/visual-html-skeleton/index.html`,
+        screenshot_artifact: `${runtimeRoot}/visual-html-skeleton/screenshots/desktop.png`,
+        source_reference_artifact: `${runtimeRoot}/web-clone-source/reference.png`,
+        diff_artifact: `${runtimeRoot}/visual-html-skeleton/visual-diff.json`,
+        screenshot_sha256: fixture.evidence[0].screenshot_sha256,
+        source_reference_sha256: fixture.evidence[0].source_reference_sha256,
+      }),
+      ui_data_contract: "Static visible source content only.",
+      frontend_project: {
+        status: "created",
+        role: "visual_baseline_input",
+        project_root: `${runtimeRoot}/visual-html-skeleton`,
+        source_package: `${runtimeRoot}/web-clone-source`,
+        entrypoints: [
+          `${runtimeRoot}/visual-html-skeleton/index.html`,
+          `${runtimeRoot}/visual-html-skeleton/screenshots/desktop.png`,
+        ],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: ["Rendered screenshot review evidence recorded for task-runtime-prefixed visual skeleton paths."],
+      },
+      template_iteration_notes: ["checked runtime-prefixed visual evidence"],
+      completeness_review: "Artifact-backed runtime-prefixed evidence was verified.",
+      reference_artifacts: [`${runtimeRoot}/web-clone-source/reference.png`],
+      open_questions: [],
+    },
+    {},
+  )
+
+  expect(out).toContain("OK")
+  expect(kit.getCollector().final?.frontend_project.role).toBe("visual_baseline_input")
+})
+
+test("submit_frontend_template rejects visual baseline with blocking screenshot debt", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      {
+        design_system: "TradingView source-derived visual baseline",
+        tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+        final_acceptance_mode: "visual_baseline_allowed",
+        frontend_template: "Restore the source-derived page into visual-html-skeleton/index.html.",
+        fillable_modules: "All visible regions are represented, but map and icon fidelity still need repair.",
+        component_inventory: "Static visual skeleton regions.",
+        component_reuse_plan: [
+          {
+            family_id: "comp-static-skeleton",
+            name: "Static visual skeleton",
+            observed_surface: "Full captured page first viewport",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "extracted_baseline_defer",
+            reuse_source: "visual-html-skeleton/index.html",
+            mature_library_candidates: [],
+            props_states: "static representative visual states only",
+            replacement_boundary: "visual skeleton root",
+            parity_guard: "task-scoped preview screenshot inspection against reference.png",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        baseline_replacement_plan: [],
+        material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
+        material_inventory_items: materialInventoryItems,
+        visual_consistency_contract:
+          "Rendered screenshot review against reference.png reports map, table, legend, logo, and social icon visual debt.",
+        visual_validation_evidence: visualValidationEvidence({
+          review_status: "reviewed_with_blocking_debt",
+          review_summary: "Rendered skeleton screenshot still shows blocking map, table, legend, logo, and icon debt.",
+        }),
+        ui_data_contract: "Static visible source content only.",
+        frontend_project: {
+          status: "created",
+          role: "visual_baseline_input",
+          project_root: "visual-html-skeleton",
+          source_package: "web-clone-source",
+          entrypoints: [
+            "visual-html-skeleton/index.html",
+            "visual-html-skeleton/styles/tokens.css",
+            "visual-html-skeleton/screenshots/desktop.png",
+          ],
+          generation_tool: "source-ir-static-html-skeleton",
+          notes: [
+            "Rendered screenshot review recorded remaining visual debt for visual-html-skeleton/screenshots/desktop.png.",
+            "Blocking visual debt: canvas map, table heat colors, simplified legend SVG, logo path, and social icons.",
+            "The skeleton is a usable visual baseline for downstream transcription work.",
+          ],
+        },
+        template_iteration_notes: ["checked rendered screenshot evidence and remaining debt"],
+        completeness_review: "Rendered screenshot evidence still shows blocking visual debt.",
+        reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+        open_questions: [],
+      },
+      {},
+    ),
+  ).rejects.toThrow("cannot be submitted with blocking visual debt")
+
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects visual baseline when debt remains phrasing is reversed", async () => {
+  const fixture = await createVisualEvidenceFixture()
+
+  for (const completenessReview of [
+    "Visual debt remains: map, table, legend, logo, and social icons.",
+    "Mismatches remain: map, table, legend, logo, and social icons.",
+  ]) {
+    const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+    const submit = kit.tools.submit_frontend_template as any
+
+    await expect(
+      submit.execute(
+        {
+          design_system: "TradingView source-derived visual baseline",
+          tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+          final_acceptance_mode: "visual_baseline_allowed",
+          frontend_template: "Restore the source-derived page into visual-html-skeleton/index.html.",
+          fillable_modules: "All visible regions are represented, but map and icon fidelity still need repair.",
+          component_inventory: "Static visual skeleton regions.",
+          component_reuse_plan: [
+            {
+              family_id: "comp-static-skeleton",
+              name: "Static visual skeleton",
+              observed_surface: "Full captured page first viewport",
+              source_refs: ["web-clone-source/reference.png"],
+              implementation_strategy: "extracted_baseline_defer",
+              reuse_source: "visual-html-skeleton/index.html",
+              mature_library_candidates: [],
+              props_states: "static representative visual states only",
+              replacement_boundary: "visual skeleton root",
+              parity_guard: "task-scoped preview screenshot inspection against reference.png",
+              project_specific_reason: "not applicable",
+            },
+          ],
+          baseline_replacement_plan: [],
+          material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
+          material_inventory_items: materialInventoryItems,
+          visual_consistency_contract:
+            "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+          visual_validation_evidence: fixture.evidence,
+          ui_data_contract: "Static visible source content only.",
+          frontend_project: {
+            status: "created",
+            role: "visual_baseline_input",
+            project_root: "visual-html-skeleton",
+            source_package: "web-clone-source",
+            entrypoints: [
+              "visual-html-skeleton/index.html",
+              "visual-html-skeleton/styles/tokens.css",
+              "visual-html-skeleton/screenshots/desktop.png",
+            ],
+            generation_tool: "source-ir-static-html-skeleton",
+            notes: [
+              "Rendered screenshot review evidence recorded for visual-html-skeleton/screenshots/desktop.png.",
+              "The skeleton is a usable visual baseline only after visual debt is resolved.",
+            ],
+          },
+          template_iteration_notes: ["checked rendered screenshot evidence and remaining debt phrasing"],
+          completeness_review: completenessReview,
+          reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+          open_questions: [],
+        },
+        {},
+      ),
+    ).rejects.toThrow("cannot be submitted with blocking visual debt")
+
+    expect(kit.getCollector().final).toBeUndefined()
+  }
+})
+
+test("submit_frontend_template accepts explicit no-blocking-debt screenshot review wording", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  const out = await submit.execute(
     {
       design_system: "TradingView source-derived visual baseline",
       tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
       final_acceptance_mode: "visual_baseline_allowed",
       frontend_template: "Restore the source-derived page into visual-html-skeleton/index.html.",
-      fillable_modules: "All visible regions are represented, but map and icon fidelity still need repair.",
+      fillable_modules: "All visible regions are represented in the validated visual skeleton.",
       component_inventory: "Static visual skeleton regions.",
       component_reuse_plan: [
         {
@@ -492,33 +2196,32 @@ test("visual baseline report marks screenshot-reviewed skeleton with remaining d
       material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract:
-        "Rendered screenshot review against reference.png reports map, table, legend, logo, and social icon visual debt.",
+        "Rendered screenshot review found no blocking visual debt in visual-html-skeleton/screenshots/desktop.png.",
+      visual_validation_evidence: fixture.evidence,
       ui_data_contract: "Static visible source content only.",
       frontend_project: {
         status: "created",
         role: "visual_baseline_input",
         project_root: "visual-html-skeleton",
         source_package: "web-clone-source",
-        entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
-        generation_tool: "source-ir-static-html-skeleton",
-        notes: [
-          "Rendered screenshot review recorded remaining visual debt.",
-          "Remaining visual debt: canvas map, table heat colors, simplified legend SVG, logo path, and social icons.",
-          "The skeleton is a usable visual baseline for downstream transcription work.",
+        entrypoints: [
+          "visual-html-skeleton/index.html",
+          "visual-html-skeleton/styles/tokens.css",
+          "visual-html-skeleton/screenshots/desktop.png",
         ],
+        generation_tool: "source-ir-static-html-skeleton",
+        notes: ["Rendered screenshot review found no blocking visual debt."],
       },
-      template_iteration_notes: ["checked rendered screenshot evidence and remaining debt"],
-      completeness_review: "Rendered screenshot evidence still shows blocking visual debt.",
+      template_iteration_notes: ["checked rendered screenshot evidence and no blocking debt wording"],
+      completeness_review: "Rendered screenshot review found no blocking visual debt.",
       reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
       open_questions: [],
     },
     {},
   )
 
-  const report = buildFrontendTemplateReport(kit.getCollector()).detail
-  expect(report).toContain("visual_quality_status: incomplete_visual_fidelity")
-  expect(report).toContain("Remaining visual debt is present")
-  expect(report).toContain("must not be treated as ready for downstream transcription")
+  expect(out).toContain("OK")
+  expect(kit.getCollector().final?.frontend_project.role).toBe("visual_baseline_input")
 })
 
 test("visual baseline workflow reports source baseline submissions as incomplete frontend_design work", async () => {
@@ -581,7 +2284,7 @@ test("visual baseline workflow reports source baseline submissions as incomplete
   expect(report).toContain("frontend-design-skeleton is captured source evidence only")
 })
 
-test("component reuse plan accepts provider naming and incomplete library hints without schema rejection", async () => {
+test("component reuse plan accepts canonical provider fields and incomplete library hints without schema rejection", async () => {
   const submit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
   const base = {
     design_system: "custom dashboard",
@@ -594,6 +2297,7 @@ test("component reuse plan accepts provider naming and incomplete library hints 
     material_inventory_items: materialInventoryItems,
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
+    implementation_phase_outcomes: implementationPhaseOutcomes,
     frontend_project: {
       status: "created",
       role: "source_baseline_input",
@@ -623,7 +2327,7 @@ test("component reuse plan accepts provider naming and incomplete library hints 
           mature_library_candidates: [],
           props_states: "rows and sort state",
           replacement_boundary: "table region",
-          replacement_guard: "visual diff",
+          parity_guard: "visual diff",
           project_specific_reason: "not applicable",
         },
       ],
@@ -638,7 +2342,7 @@ test("component reuse plan accepts provider naming and incomplete library hints 
           mature_library_candidates: [],
           deletion_rule: "Keep baseline until visual parity is proven.",
           source_refs: [],
-          replacement_guard: "visual diff",
+          parity_guard: "visual diff",
         },
       ],
     },
@@ -722,6 +2426,7 @@ test("maintainable acceptance does not synthesize a whole-page source baseline r
     material_inventory_items: materialInventoryItems,
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
+    implementation_phase_outcomes: implementationPhaseOutcomes,
     frontend_project: {
       status: "created",
       role: "source_baseline_input",
@@ -816,6 +2521,7 @@ test("baseline replacement project-specific reason is optional provider detail",
           parity_guard: "Run visual diff and source audit.",
         },
       ],
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       material_inventory: "materials",
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",

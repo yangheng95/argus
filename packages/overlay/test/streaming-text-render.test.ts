@@ -1,9 +1,17 @@
 import { expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import {
   STREAMING_ACTIVE_TEXT_LIMIT,
   StreamingTextPartController,
   visibleStreamingText,
 } from "../src/components/text-part-model"
+
+const OVERLAY_ROOT = join(import.meta.dir, "..")
+
+function readText(path: string): string {
+  return readFileSync(join(OVERLAY_ROOT, path), "utf8")
+}
 
 test("streaming appends keep the active block raw and render completed blocks once", () => {
   const renderMarkdown = mock((source: string) => `<p>${source}</p>`)
@@ -85,4 +93,19 @@ test("streaming active block renders a bounded tail for long uninterrupted outpu
   const completed = model.update(longText, false)
   expect(completed.activeText).toBe("")
   expect(renderMarkdown).toHaveBeenCalledTimes(1)
+})
+
+test("streaming active text CSS follows the current TextPart producer", () => {
+  const textPart = readText("src/components/TextPart.tsx")
+  const cardCss = readText("src/styles/surfaces/card.css")
+  const inspectorCss = readText("src/styles/surfaces/inspector.css")
+  const css = `${cardCss}\n${inspectorCss}`
+
+  expect(textPart).toContain('class="md-active-text"')
+  expect(textPart).not.toContain("md-active-block")
+  expect(css).toContain(".card__goal-desc-text .md-active-text")
+  expect(css).toContain(".gwg-objective-text .md-active-text")
+  expect(css).toContain(".gwg-done-definition-text .md-active-text")
+  expect(css).toContain(".gwg-eval-summary .md-active-text")
+  expect(css).not.toContain(".md-active-block")
 })

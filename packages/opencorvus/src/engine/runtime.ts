@@ -69,16 +69,26 @@ export namespace EngineRuntime {
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) return false
 
-    const { dispatchTaskLoop } = await import("@/engine/queue")
-    let dispatched = false
+    const refillFacts: Array<{
+      fingerprint: string
+      terminalGoalRun: { id: string; goal_id: string; status: string }
+      liveSiblingGoalRuns: Array<{ id: string; goal_id: string; status: string }>
+    }> = []
     for (const terminalGoalRun of goalRuns.filter((goalRun) => !isLiveGoalRunStatus(goalRun.status))) {
       const fingerprint = terminalGoalRefillFingerprint(terminalGoalRun)
       if (hasTerminalGoalRefillWakeFact({ taskID: run.task_id, runID: run.id, fingerprint })) continue
       const liveSiblingGoalRuns = goalRuns.filter(
         (goalRun) => goalRun.id !== terminalGoalRun.id && isLiveGoalRunStatus(goalRun.status),
       )
-      const dispatchResult = await dispatchTaskLoop({ taskID: run.task_id })
-      if (dispatchResult !== "started" && dispatchResult !== "queued") continue
+      refillFacts.push({ fingerprint, terminalGoalRun, liveSiblingGoalRuns })
+    }
+    if (refillFacts.length === 0) return false
+
+    const { dispatchTaskLoop } = await import("@/engine/queue")
+    const dispatchResult = await dispatchTaskLoop({ taskID: run.task_id })
+    if (dispatchResult !== "started" && dispatchResult !== "queued") return false
+
+    for (const { fingerprint, terminalGoalRun, liveSiblingGoalRuns } of refillFacts) {
       recordTerminalGoalRefillWakeFact({
         taskID: run.task_id,
         runID: run.id,
@@ -87,9 +97,8 @@ export namespace EngineRuntime {
         liveSiblingGoalRuns,
         dispatchResult,
       })
-      dispatched = true
     }
-    return dispatched
+    return true
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {

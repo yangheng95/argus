@@ -620,6 +620,7 @@ export function routeSSEEvent(event: any): boolean {
     if (evtTaskID === activeTaskID() && cursorTime > 0) {
       // Idempotent — duplicate task.rewound events keep the same cursor.
       void (async () => {
+        await import("../store/card-tree-stats")
         const { pruneCardsAfterCursor } = await import("../store/card-tree")
         pruneCardsAfterCursor(cursorTime)
         if (resetWorktree) scheduleBoard(0)

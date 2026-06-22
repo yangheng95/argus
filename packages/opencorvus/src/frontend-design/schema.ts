@@ -103,7 +103,7 @@ export const ComponentReusePlanItemSchema = z.object({
     .describe(
       "Optional reason when implementation_strategy=project_specific_component; explain why existing components and mature libraries do not fit when known.",
     ),
-})
+}).strict()
 
 export const BaselineReplacementPlanItemSchema = z.object({
   boundary_id: z
@@ -162,7 +162,7 @@ export const BaselineReplacementPlanItemSchema = z.object({
     .describe(
       "Optional reason when replacement_strategy=project_specific_component; explain why no project component or mature library fits when known.",
     ),
-})
+}).strict()
 
 export const CompactTemplateItemSchema = z.object({
   title: z.string().min(1).describe("Short stable heading for this template item."),
@@ -178,7 +178,7 @@ export const CompactTemplateItemSchema = z.object({
     .describe(
       "Evidence anchors such as web-clone-source paths, source-ir paths, skeleton slots, or screenshot regions.",
     ),
-})
+}).strict()
 
 export const MaterialInventoryItemSchema = z.object({
   title: z
@@ -198,8 +198,78 @@ export const MaterialInventoryItemSchema = z.object({
     .default([])
     .describe(
       "Evidence anchors or file/path ids for this material group. Reference paths/ids instead of dense payloads.",
-    ),
-})
+  ),
+}).strict()
+
+export const ImplementationPhase = z.enum([
+  "evidence_lock",
+  "implementation_scaffold",
+  "data_component_transcription",
+  "runtime_visual_verification",
+  "source_quality_cleanup",
+])
+export type ImplementationPhase = z.infer<typeof ImplementationPhase>
+
+export const ImplementationPhaseOutcomeSchema = z.object({
+  id: z.string().min(1).describe("Stable phase outcome id, e.g. phase-evidence-lock."),
+  phase: ImplementationPhase.describe(
+    "Required maintainable handoff phase: evidence lock, implementation scaffold, transcription, runtime/visual verification, or source-quality cleanup.",
+  ),
+  title: z.string().min(1).describe("Short phase outcome title."),
+  deliverable: z
+    .string()
+    .min(1)
+    .describe("Concrete output downstream agents must create, preserve, verify, or audit for this phase."),
+  source_refs: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe("Evidence, project, screenshot, package, or source-file refs that bind this phase."),
+  acceptance: z
+    .string()
+    .min(1)
+    .describe("Observable acceptance condition for this phase, not a component checklist item."),
+}).strict()
+export type ImplementationPhaseOutcome = z.infer<typeof ImplementationPhaseOutcomeSchema>
+
+export const VisualValidationEvidenceSchema = z.object({
+  id: z.string().min(1).describe("Stable visual validation evidence id, e.g. visual-render-desktop."),
+  render_target: z
+    .enum(["visual-html-skeleton"])
+    .describe("The rendered source surface. Visual baseline acceptance only supports the visual HTML skeleton target."),
+  rendered_entrypoint: z
+    .string()
+    .min(1)
+    .describe("Rendered HTML entrypoint, normally visual-html-skeleton/index.html."),
+  screenshot_artifact: z
+    .string()
+    .min(1)
+    .describe("Task-scoped rendered screenshot artifact produced from rendered_entrypoint, not a copied reference image."),
+  source_reference_artifact: z
+    .string()
+    .min(1)
+    .describe("Original source reference screenshot compared against the rendered skeleton screenshot."),
+  renderer: z
+    .enum(["task_scoped_backend_browser", "node_playwright_static_file", "preview_target_browser"])
+    .describe("Renderer/provenance used to produce screenshot_artifact from rendered_entrypoint."),
+  viewport: z.string().min(1).describe("Viewport/device state rendered, e.g. desktop-1440x900."),
+  screenshot_sha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, "screenshot_sha256 must be a 64 character hex digest")
+    .describe("SHA-256 of the rendered skeleton screenshot artifact."),
+  source_reference_sha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, "source_reference_sha256 must be a 64 character hex digest")
+    .describe("SHA-256 of the source reference screenshot artifact."),
+  diff_artifact: z
+    .string()
+    .default("")
+    .describe("Optional visual diff or comparison manifest artifact produced from screenshot_artifact and source_reference_artifact."),
+  review_status: z
+    .enum(["reviewed_no_blocking_debt", "reviewed_with_blocking_debt"])
+    .describe("Whether screenshot review found blocking visual debt."),
+  review_summary: z.string().min(1).describe("Concrete summary of the screenshot review and comparison result."),
+}).strict()
+export type VisualValidationEvidence = z.infer<typeof VisualValidationEvidenceSchema>
 
 const OptionalMarkdownField = (description: string) =>
   z
@@ -227,7 +297,7 @@ export const FrontendTemplateFinalSchema = z.object({
   final_acceptance_mode: z
     .enum(["visual_baseline_allowed", "maintainable_replacement_required"])
     .describe(
-      "Explicit acceptance mode. For webpage replica first workflows, use visual_baseline_allowed with frontend_project.role=visual_baseline_input; reserve maintainable_replacement_required for a later or explicitly combined skeleton-to-project transcription workflow. This field selects implementation expectations; it is not a standalone pass/fail mechanism.",
+      "Explicit acceptance mode. For webpage replica first workflows, use visual_baseline_allowed with frontend_project.role=visual_baseline_input only when the visual skeleton has rendered screenshot review evidence. Use maintainable_replacement_required when the operator explicitly asks for production-mergeable implementation, target design-system/component reuse, accessibility/component semantics, no primitive/static-image substitutes, or replacement of generated/mechanical output in the same task.",
     ),
   frontend_template: OptionalMarkdownField(
     "Authoritative frontend template for the frontend_design-delivered visual HTML skeleton: static route/file, layout slots, source-package entrypoints, visible regions, states, viewport matrix, and acceptance anchors.",
@@ -261,13 +331,19 @@ export const FrontendTemplateFinalSchema = z.object({
       "Optional source-region evolution plan. Use it only when a specific raw/generated skeleton region should be replaced, deleted, or deferred during in-place refinement. It is diagnostic/planning evidence, not a schema requirement and not a requirement to delete the whole skeleton.",
     ),
   quality_project_contract: OptionalMarkdownField(
-    "The skeleton-to-project transcription contract for the later workflow. It explains how the accepted visual HTML skeleton plus source IR/content/style/token evidence becomes maintainable project source with semantic components, data modules, styling, asset ownership, runtime entrypoints, and verification evidence. The current skeleton is not the implementation target or acceptance app root.",
+    "The skeleton-to-project transcription contract for the later workflow. It explains how the screenshot-validated visual HTML skeleton plus source IR/content/style/token evidence becomes maintainable project source with semantic components, data modules, styling, asset ownership, runtime entrypoints, and verification evidence; if screenshot validation is missing, it must name the blocker instead. The current skeleton is not the implementation target or acceptance app root.",
   ),
   quality_project_items: z
     .array(CompactTemplateItemSchema)
     .default([])
     .describe(
       "Preferred compact replacement for a long quality_project_contract string. Use one item per source module, component group, data module, style module, asset strategy, or verification requirement.",
+    ),
+  implementation_phase_outcomes: z
+    .array(ImplementationPhaseOutcomeSchema)
+    .default([])
+    .describe(
+      "Structured phase outcomes for maintainable replacement. Required when final_acceptance_mode=maintainable_replacement_required and must cover evidence_lock, implementation_scaffold, data_component_transcription, runtime_visual_verification, and source_quality_cleanup. Architect consumes this before component_inventory/component_reuse_plan.",
     ),
   material_inventory: OptionalMarkdownField(
     "Material and asset inventory: CSS/tokens, sidecar SVG/image/canvas assets, data fixtures, text samples, icons, fonts, and dense resources.",
@@ -290,6 +366,7 @@ export const FrontendTemplateFinalSchema = z.object({
       generation_tool: z.string().default(""),
       notes: z.array(z.string().min(1)).default([]),
     })
+    .strict()
     .default({
       status: "not_created",
       role: "source_baseline_input",
@@ -311,6 +388,12 @@ export const FrontendTemplateFinalSchema = z.object({
     .describe(
       "Preferred compact replacement for a long visual_consistency_contract string. Use one item per viewport, region, or visual rule.",
     ),
+  visual_validation_evidence: z
+    .array(VisualValidationEvidenceSchema)
+    .default([])
+    .describe(
+      "Structured rendered-screenshot evidence for visual-html-skeleton acceptance. Required when frontend_project.role=visual_baseline_input. Each item must tie the rendered skeleton entrypoint to a task-scoped renderer, rendered screenshot artifact, source reference screenshot, hashes, viewport, review status, and optional diff artifact. Text-only screenshot paths do not satisfy visual baseline acceptance.",
+    ),
   ui_data_contract: OptionalMarkdownField(
     "UI data contract required to reproduce the frontend: local mock/static data, observable endpoints when present, state transitions, and error/loading behavior.",
   ),
@@ -324,8 +407,8 @@ export const FrontendTemplateFinalSchema = z.object({
     .array(z.string().min(1))
     .min(1)
     .default([
-      "Host accepted the submitted frontend template after the model completed its available review pass; downstream visual/source review remains authoritative.",
-      "Host accepted the submitted maintainability contract after checking that the payload includes component reuse, source-region planning where needed, visual consistency, and UI data sections.",
+      "Host recorded the submitted frontend template after the model completed its available review pass; downstream visual/source review remains authoritative.",
+      "Host recorded the submitted maintainability contract after checking that the payload includes component reuse, source-region planning where needed, visual consistency, and UI data sections.",
     ])
     .describe(
       "frontend template review-pass notes completed before handoff. One note is enough when assistant.auto_iteration=false; " +
@@ -336,7 +419,7 @@ export const FrontendTemplateFinalSchema = z.object({
     .string()
     .min(1)
     .default(
-      "Host accepted the submitted frontend template as structurally complete enough for downstream requirements, architecture, build, source audit, and visual diff validation.",
+      "Host recorded the submitted frontend template as structurally complete enough for downstream requirements, architecture, build, source audit, and visual diff validation; screenshot-backed visual validation still controls whether a visual baseline can be consumed.",
     )
     .describe(
       "Final completeness audit and primary human-readable problem/handoff section. Cover known implementation risks, visual/source gaps, extraction-vs-rewrite uncertainty, project source organization, component/library reuse constraints, reference artifacts, and remaining open questions. Do not finalize until this audit says the frontend template is complete enough to hand off.",
@@ -357,20 +440,29 @@ export const FrontendTemplateFinalSchema = z.object({
   fact_check_items: FactCheckItemListSchema.default([]).describe(
     "Every factual claim (third-party design system name, API behaviour, library version) you have NOT verified via tool calls in this session. Empty when only design observations or in-session-verified statements.",
   ),
-})
+}).strict()
 export type FrontendTemplateFinal = z.infer<typeof FrontendTemplateFinalSchema>
 
 export const ToolCompactTemplateItemSchema = z.object({
   title: z.string().min(1),
   detail: z.string().min(1),
   source_refs: z.array(z.string().min(1)).default([]),
-})
+}).strict()
 
 export const ToolMaterialInventoryItemSchema = z.object({
   title: z.string().min(1),
   detail: z.string().min(1),
   source_refs: z.array(z.string().min(1)).default([]),
-})
+}).strict()
+
+export const ToolImplementationPhaseOutcomeSchema = z.object({
+  id: z.string().min(1),
+  phase: ImplementationPhase,
+  title: z.string().min(1),
+  deliverable: z.string().min(1),
+  source_refs: z.array(z.string().min(1)).min(1),
+  acceptance: z.string().min(1),
+}).strict()
 
 export const ToolComponentReusePlanItemSchema = z.object({
   family_id: z.string().min(1),
@@ -389,7 +481,7 @@ export const ToolComponentReusePlanItemSchema = z.object({
   replacement_boundary: z.string().min(1),
   parity_guard: z.string().min(1),
   project_specific_reason: z.string().default(""),
-})
+}).strict()
 
 export const ToolBaselineReplacementPlanItemSchema = z.object({
   boundary_id: z.string().min(1),
@@ -408,7 +500,24 @@ export const ToolBaselineReplacementPlanItemSchema = z.object({
   source_refs: z.array(z.string().min(1)).default([]),
   parity_guard: z.string().min(1),
   project_specific_reason: z.string().default(""),
-})
+}).strict()
+
+export const ToolVisualValidationEvidenceSchema = z.object({
+  id: z.string().min(1),
+  render_target: z.enum(["visual-html-skeleton"]),
+  rendered_entrypoint: z.string().min(1),
+  screenshot_artifact: z.string().min(1),
+  source_reference_artifact: z.string().min(1),
+  renderer: z.enum(["task_scoped_backend_browser", "node_playwright_static_file", "preview_target_browser"]),
+  viewport: z.string().min(1),
+  screenshot_sha256: z.string().regex(/^[a-f0-9]{64}$/i, "screenshot_sha256 must be a 64 character hex digest"),
+  source_reference_sha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, "source_reference_sha256 must be a 64 character hex digest"),
+  diff_artifact: z.string().default(""),
+  review_status: z.enum(["reviewed_no_blocking_debt", "reviewed_with_blocking_debt"]),
+  review_summary: z.string().min(1),
+}).strict()
 
 export const FrontendTemplateToolInputSchema = z.object({
   design_system: z.string().min(1),
@@ -423,6 +532,7 @@ export const FrontendTemplateToolInputSchema = z.object({
   baseline_replacement_plan: z.array(ToolBaselineReplacementPlanItemSchema).default([]),
   quality_project_contract: z.string().default(""),
   quality_project_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  implementation_phase_outcomes: z.array(ToolImplementationPhaseOutcomeSchema).default([]),
   material_inventory: z.string().default(""),
   material_inventory_items: z.array(ToolMaterialInventoryItemSchema).min(1),
   frontend_project: z
@@ -437,6 +547,7 @@ export const FrontendTemplateToolInputSchema = z.object({
       generation_tool: z.string().default(""),
       notes: z.array(z.string().min(1)).default([]),
     })
+    .strict()
     .default({
       status: "not_created",
       role: "source_baseline_input",
@@ -448,13 +559,14 @@ export const FrontendTemplateToolInputSchema = z.object({
     }),
   visual_consistency_contract: z.string().default(""),
   visual_consistency_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  visual_validation_evidence: z.array(ToolVisualValidationEvidenceSchema).default([]),
   ui_data_contract: z.string().default(""),
   ui_data_contract_items: z.array(ToolCompactTemplateItemSchema).default([]),
   template_iteration_notes: z.array(z.string().min(1)).default([]),
   completeness_review: z.string().default(""),
   reference_artifacts: z.array(z.string().min(1)).default([]),
   open_questions: FlexibleStringListSchema,
-})
+}).strict()
 
 const IdField = z
   .string()

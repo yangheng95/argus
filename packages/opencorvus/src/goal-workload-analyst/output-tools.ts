@@ -116,6 +116,14 @@ export function createGoalWorkloadOutputTools(input: { knownGoalIDs: string[]; k
     if (collector.briefs.length === 0) {
       issues.push("No workload briefs registered — call register_workload_brief at least once before submitting.")
     }
+    const coveredGoals = new Set(collector.briefs.map((brief) => brief.goal_id))
+    const missingGoals = [...knownGoals].filter((goalID) => !coveredGoals.has(goalID))
+    if (missingGoals.length > 0) {
+      issues.push(
+        `Missing workload brief(s) for ${missingGoals.length} architect goal(s): ${missingGoals.join(", ")}. ` +
+          "Call register_workload_brief for every known goal before submitting.",
+      )
+    }
     return issues
   }
 
@@ -152,8 +160,9 @@ export function createGoalWorkloadOutputTools(input: { knownGoalIDs: string[]; k
 
     submit_workload_analysis: tool({
       description:
-        "Finalize the workload analysis. Requires at least one workload brief. Reports goals flagged with a " +
-        "decomposition_concern so the orchestrator can decide whether to send the graph back to Architect.",
+        "Finalize the workload analysis. Requires one workload brief for every known architect goal. Reports goals " +
+        "flagged with a decomposition_concern so the orchestrator can decide whether to send the graph back to " +
+        "Architect.",
       inputSchema: z.object({
         summary: z
           .string()
@@ -173,14 +182,12 @@ export function createGoalWorkloadOutputTools(input: { knownGoalIDs: string[]; k
         }
         collector.finalized = true
         const flagged = collector.briefs.filter((b) => b.decomposition_concern?.trim())
-        const uncovered = [...knownGoals].filter((g) => !collector.briefs.some((b) => b.goal_id === g))
         return [
           "PASS: workload analysis finalized.",
           `  ${collector.briefs.length} goal brief(s); ${flagged.length} flagged with decomposition_concern.`,
           flagged.length > 0
             ? `  Flagged (consider Architect re-sizing): ${flagged.map((b) => b.goal_id).join(", ")}`
             : "",
-          uncovered.length > 0 ? `  Note: ${uncovered.length} goal(s) without a brief: ${uncovered.join(", ")}` : "",
         ]
           .filter(Boolean)
           .join("\n")

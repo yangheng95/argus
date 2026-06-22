@@ -24,6 +24,7 @@ import { Log } from "../../util/log"
 import { extractPage } from "@/browser/webpage/extract"
 import { resolveWebpageEvidenceOutputDir, DEFAULT_WEBPAGE_EVIDENCE_SUBDIR } from "./output-dir"
 import { resolveFrontendDesignBrowserProxy } from "../browser-proxy"
+import { isHttpWebpageUrl } from "@/util/web-url"
 
 const log = Log.create({ service: "webpage-evidence.tool.webpage_extract" })
 
@@ -78,7 +79,7 @@ Use this only when URL evidence is missing for the requested output directory. D
       .optional(),
   }),
   async execute(params, ctx) {
-    if (!params.url.startsWith("http://") && !params.url.startsWith("https://")) {
+    if (!isHttpWebpageUrl(params.url)) {
       throw new Error("url must start with http:// or https://")
     }
 

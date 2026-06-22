@@ -693,6 +693,10 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("do not synthesize a parallel token catalog")
     expect(normalized).toContain("Treat `webpage_contract` as an investigation partition contract")
     expect(normalized).toContain("Build the brief with small registration tools")
+    expect(normalized).toContain(
+      "Fields named `fact_ids`, `based_on_fact_ids`, or `related_fact_ids` may cite only ids previously registered through `register_research_fact`",
+    )
+    expect(normalized).toContain("do not cite evidence ids, risk ids, packet ids, webpage contract ids")
     expect(normalized).toContain("Do not submit raw markdown or JSON documents as string fields")
     expect(normalized).toContain("Do not submit a final PRD or a raw artifact list")
     expect(normalized).toContain("Classify likely real component kinds explicitly")
@@ -1111,6 +1115,10 @@ describe("core prompt hygiene", () => {
       "dispatch `build({ goalID })` for the first eligible pending goal",
     )
     expect(normalized).toContain("Read context on terminal goal refill wakes")
+    expect(normalized).toContain("Do not call `wait` for live build completion")
+    expect(normalized).toContain("terminal goal refill polling; those are internal engine facts")
+    expect(normalized).toContain("stop this wake; terminal goal refill facts will wake the next decision")
+    expect(normalized).not.toContain("decide between waiting and")
     expect(normalized).not.toContain("After a `build` batch returns")
     expect(normalized).not.toContain("current eligible wave")
     expect(normalized).toContain(
@@ -1138,11 +1146,13 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("decide whether `frontend_design`, `frontend_research`, both, or neither are needed")
     expect(normalized).toContain("UI replication from visual reference")
-    expect(normalized).toContain("These tools are one-time evidence producers, not fixed lifecycle gates")
+    expect(normalized).toContain("These tools are bounded evidence producers, not fixed lifecycle gates")
     expect(normalized).toContain("not repeatable repair tools")
-    expect(normalized).toContain("do not rerun that agent as a repair loop, retry loop, crawler")
+    expect(normalized).toContain("do not rerun frontend_research for that same page")
+    expect(normalized).toContain("additional source page URLs that still need their own prepared evidence")
     expect(normalized).not.toContain("`frontend_design` and any needed `frontend_research` MUST be first")
     expect(normalized).not.toContain("`frontend_design` and `frontend_research` in parallel")
+    expect(normalized).not.toContain("frontend_research brief exists for the relevant scope, do not rerun that agent")
     expect(normalized).not.toContain("Typical shape")
     expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
@@ -1152,7 +1162,7 @@ describe("core prompt hygiene", () => {
     )
   })
 
-  test("frontend design and frontend research prompts advertise one-shot handoff semantics", async () => {
+  test("frontend design and frontend research prompts advertise bounded handoff semantics", async () => {
     const frontendDesign = (await readPrompt("frontendDesign")).replace(/\s+/g, " ")
     const frontendResearch = (await readPrompt("frontendResearch")).replace(/\s+/g, " ")
     const orchestratorTools = await readSource("orchestrator/tools.ts")
@@ -1160,12 +1170,14 @@ describe("core prompt hygiene", () => {
     expect(frontendDesign).toContain("single-shot task-scope handoff agent")
     expect(frontendDesign).toContain("without independent webpage extraction, alternate reference interpretation")
     expect(frontendDesign).toContain("or repeated repair/retry/implementation iteration through frontend_design")
-    expect(frontendResearch).toContain("single-shot task-scope investigation publisher")
+    expect(frontendResearch).toContain("source-page-scoped investigation publisher")
+    expect(frontendResearch).toContain("additional source page URLs require separate frontend_research sessions")
     expect(frontendResearch).toContain("not a repeated crawler, repair, retry, or implementation iteration agent")
     expect(orchestratorTools).toContain("Single-shot task-scope handoff producer")
     expect(orchestratorTools).toContain("Do not use frontend_design as a repeated repair")
-    expect(orchestratorTools).toContain("Single-shot task-scope brief producer")
-    expect(orchestratorTools).toContain("Do not use frontend_research as a repeated crawler")
+    expect(orchestratorTools).toContain("Source-page-scoped brief producer")
+    expect(orchestratorTools).toContain("call frontend_research separately for additional pages")
+    expect(orchestratorTools).not.toContain("dispatch once for the relevant webpage investigation scope")
   })
 
   test("orchestrator prompt documents freshContext per-goal retry triggers and cost", async () => {

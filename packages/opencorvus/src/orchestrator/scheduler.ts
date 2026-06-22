@@ -38,7 +38,7 @@ export function restartStagePlan(stage: RestartStage, hasActivePlan: boolean) {
         resetGoalStatuses: true,
         retireGoalRuns: true,
         queueFreshRun: hasActivePlan,
-        nextAction: hasActivePlan ? ("submit_execution" as const) : ("create_run" as const),
+        nextAction: hasActivePlan ? ("build" as const) : ("architect" as const),
       }
   }
 }

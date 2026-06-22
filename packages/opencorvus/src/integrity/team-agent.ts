@@ -1,6 +1,7 @@
 import { tool, type ToolSet } from "ai"
 import TEAM_CORE from "@/prompt/core/integrity-team-core.txt"
 import { runAgentSession } from "@/agent/runner"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
@@ -240,6 +241,7 @@ export async function reviewIntegrity(input: {
   taskID?: string
   task?: TaskRow
   parentSessionID?: string
+  continuation?: AgentSessionContinuation
   onSessionCreated?: (sessionID: string) => void
 }): Promise<IntegrityResult & { sessionID: string }> {
   if (!input.replayContext) {
@@ -258,7 +260,9 @@ export async function reviewIntegrity(input: {
   }
   const promptInput: ReviewPromptInput = { ...input, replayContext }
   const startedAt = Date.now()
-  let activeReviewID: string | undefined
+  let activeReviewID: string | undefined = input.continuation
+    ? reviewIDForIntegrity(input.continuation.sessionID)
+    : undefined
 
   const collector: ConsensusCollector = {}
   const out = await runAgentSession<ConsensusCollector>({
@@ -268,6 +272,7 @@ export async function reviewIntegrity(input: {
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
     signal: input.signal,
+    continuation: input.continuation,
     toolKit: await createSingleSessionIntegrityToolKit({
       collector,
       taskID: input.taskID,

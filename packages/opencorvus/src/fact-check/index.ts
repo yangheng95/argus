@@ -14,6 +14,7 @@
 
 import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { createReadonlyRetrievalTools } from "@/agent/retrieval-tools"
 import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
@@ -160,6 +161,7 @@ export namespace FactCheckAgent {
      *  session via runAgentSession internals. */
     taskID?: string
     signal?: AbortSignal
+    continuation?: AgentSessionContinuation
     onSessionCreated?: (sessionID: string) => void
   }
 
@@ -184,8 +186,12 @@ export namespace FactCheckAgent {
       sessionID: input.orchestratorSessionID,
     })
     const outputToolKit = createFactCheckOutputTools()
-    // Load target message text up-front so the prompt builder has it.
-    const targetMessageText = await loadTargetMessageText(input.targetSessionID, input.targetMessageID)
+    // Continuation mode appends a visible same-session recovery prompt from
+    // runAgentSession, so buildUserPrompt is not called and the stale target
+    // snapshot must not become an extra preflight dependency.
+    const targetMessageText = input.continuation
+      ? ""
+      : await loadTargetMessageText(input.targetSessionID, input.targetMessageID)
 
     let runErrored = false
     try {
@@ -197,6 +203,7 @@ export namespace FactCheckAgent {
         parentSessionID: input.orchestratorSessionID,
         taskID: input.taskID,
         signal: input.signal,
+        continuation: input.continuation,
         onSessionCreated: input.onSessionCreated
           ? (session) => {
               input.onSessionCreated!(session.id)

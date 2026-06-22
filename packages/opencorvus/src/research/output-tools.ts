@@ -2,6 +2,7 @@ import { tool } from "ai"
 import { z } from "zod"
 import { limitSummary, markdownList } from "@/agent/report"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
+import { isHttpWebpageUrl } from "@/util/web-url"
 import {
   ResearchBriefSchema,
   ResearchBundleCitationEntrySchema,
@@ -60,9 +61,9 @@ export const ResearchFinalizeSchema = z
   .strict()
 
 const WebpageContractSourceInputSchema = z.object({
-  source_url: z.string().min(1),
+  source_url: z.string().min(1).refine(isHttpWebpageUrl, "source_url must be an HTTP(S) webpage URL"),
   reference_image_evidence_ids: z.array(z.string().min(1)).default([]),
-})
+}).strict()
 
 const ResearchBriefDraftSchema = ResearchBriefSchema.omit({
   metadata: true,
@@ -296,6 +297,22 @@ function upsertByID<T extends { id: string }>(items: T[], item: T): "registered"
   return "registered"
 }
 
+function knownFactIDs(collector: ResearchCollector): Set<string> {
+  return new Set(collector.facts.map((fact) => fact.id))
+}
+
+function unknownFactIDError(collector: ResearchCollector, label: string, ids: readonly string[]): string | undefined {
+  const known = knownFactIDs(collector)
+  const missing = [...new Set(ids.filter((id) => !known.has(id)))]
+  if (missing.length === 0) return undefined
+  const knownList = [...known].sort()
+  return (
+    `Error: ${label} references unknown fact id(s): ${missing.join(", ")}. ` +
+    `Register or correct the fact ids first; known fact ids: ${knownList.length ? knownList.join(", ") : "(none)"}. ` +
+    "Collector unchanged."
+  )
+}
+
 function upsertBundleSection(
   collector: ResearchCollector,
   section: z.infer<typeof ResearchBundleMarkdownSectionSchema>,
@@ -348,7 +365,7 @@ export function buildResearchReport(collector: ResearchCollector) {
   }
 }
 
-export function createResearchOutputTools() {
+export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: string } = {}) {
   let collector = emptyCollector()
   const tools = {
     set_research_scope: tool({
@@ -404,6 +421,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchInferenceSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `inference "${parsed.id}".based_on_fact_ids`, parsed.based_on_fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.inferences, parsed)
         return `OK: inference "${parsed.id}" ${mode} (${collector.inferences.length} total)`
       },
@@ -416,6 +435,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchProblemStatementSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `problem "${parsed.id}".fact_ids`, parsed.fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.problem_statements, parsed)
         return `OK: problem "${parsed.id}" ${mode} (${collector.problem_statements.length} total)`
       },
@@ -428,6 +449,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchUserNeedSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `need "${parsed.id}".fact_ids`, parsed.fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.user_needs, parsed)
         return `OK: need "${parsed.id}" ${mode} (${collector.user_needs.length} total)`
       },
@@ -440,6 +463,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchConstraintSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `constraint "${parsed.id}".fact_ids`, parsed.fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.constraints, parsed)
         return `OK: constraint "${parsed.id}" ${mode} (${collector.constraints.length} total)`
       },
@@ -463,7 +488,14 @@ export function createResearchOutputTools() {
       execute: async (input) => {
         const closed = rejectFinalized(collector)
         if (closed) return closed
-        collector.webpage_contract_source = WebpageContractSourceInputSchema.parse(input)
+        const parsed = WebpageContractSourceInputSchema.parse(input)
+        if (options.expectedWebpageSourceUrl && parsed.source_url !== options.expectedWebpageSourceUrl) {
+          return (
+            "Error: webpage_contract.source_url must match the prepared frontend_research source URL " +
+            `${options.expectedWebpageSourceUrl}; received ${parsed.source_url}.`
+          )
+        }
+        collector.webpage_contract_source = parsed
         return "OK: webpage contract source set"
       },
     }),
@@ -571,6 +603,8 @@ export function createResearchOutputTools() {
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchOpenQuestionSchema.parse(input)
+        const factErr = unknownFactIDError(collector, `open_question "${parsed.id}".related_fact_ids`, parsed.related_fact_ids)
+        if (factErr) return factErr
         const mode = upsertByID(collector.open_questions, parsed)
         return `OK: open question "${parsed.id}" ${mode} (${collector.open_questions.length} total)`
       },

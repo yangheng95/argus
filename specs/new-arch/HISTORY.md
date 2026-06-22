@@ -16,14 +16,36 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File | Title |
 | --- | --- |
+| [2026-06-22-testing-expert-squad-profile.md](2026-06-22-testing-expert-squad-profile.md) | Testing Expert Squad Profile |
+| [2026-06-22-read-context-output-budget.md](2026-06-22-read-context-output-budget.md) | Read Context Output Budget |
+| [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md) | Browser Preview Evidence Previewable Image |
+| [2026-06-22-browser-preview-selected-target-probe.md](2026-06-22-browser-preview-selected-target-probe.md) | Browser Preview Selected Target Probe |
+| [2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md](2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md) | Center Workbench Deferred Reveal Single Layout Owner |
+| [2026-06-22-center-workbench-open-layout-frame.md](2026-06-22-center-workbench-open-layout-frame.md) | Center Workbench Open Layout Frame |
+| [2026-06-22-default-network-proxy.md](2026-06-22-default-network-proxy.md) | Default Network Proxy |
+| [2026-06-22-overlay-resize-frame-coalescing.md](2026-06-22-overlay-resize-frame-coalescing.md) | Overlay Resize Frame Coalescing |
+| [2026-06-22-overlay-ui-serving-source.md](2026-06-22-overlay-ui-serving-source.md) | Overlay UI Serving Source |
+| [2026-06-22-packaged-overlay-ui-asset-parity.md](2026-06-22-packaged-overlay-ui-asset-parity.md) | Packaged Overlay UI Asset Parity |
+| [2026-06-22-orchestrator-live-build-park-prompt.md](2026-06-22-orchestrator-live-build-park-prompt.md) | Orchestrator Live Build Park Prompt Repair |
+| [2026-06-22-screenshot-browser-defer-initial-measure.md](2026-06-22-screenshot-browser-defer-initial-measure.md) | Screenshot Browser Defer Initial Measure |
+| [2026-06-22-screenshot-browser-card-tree-cache.md](2026-06-22-screenshot-browser-card-tree-cache.md) | Screenshot Browser Card Tree Cache |
 | [2026-06-22-taskbar-badge-count-cfg.md](2026-06-22-taskbar-badge-count-cfg.md) | Taskbar Badge Count CFG |
+| [2026-06-22-window-resize-center-layout-frame.md](2026-06-22-window-resize-center-layout-frame.md) | Window Resize Center Layout Frame |
+| [2026-06-22-retire-md-active-block-residue.md](2026-06-22-retire-md-active-block-residue.md) | Retire Markdown Active Block Residue |
+| [2026-06-22-retire-dialog-subtitle-residue.md](2026-06-22-retire-dialog-subtitle-residue.md) | Retire Dialog Subtitle Residue |
+| [2026-06-22-retire-solid-changes-panel-empty-state.md](2026-06-22-retire-solid-changes-panel-empty-state.md) | Retire Solid Changes Panel Empty State |
+| [2026-06-22-screenshot-browser-bounded-card-collector.md](2026-06-22-screenshot-browser-bounded-card-collector.md) | Screenshot Browser Bounded Card Collector |
+| [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md) | Screenshot Browser Open Jank |
 
 ## 2026-06-21
 
 | File | Title |
 | --- | --- |
 | [2026-06-21-frontend-research-context-digest.md](2026-06-21-frontend-research-context-digest.md) | Frontend Research Context Digest |
+| [2026-06-21-overlay-payload-stamp-rerun-discipline.md](2026-06-21-overlay-payload-stamp-rerun-discipline.md) | Overlay Payload Stamp Rerun Discipline |
 | [2026-06-21-operator-message-live-goal-abort-audit.md](2026-06-21-operator-message-live-goal-abort-audit.md) | Operator Message Live Goal Abort Audit |
+| [2026-06-21-orchestrator-tool-only-trace-summary.md](2026-06-21-orchestrator-tool-only-trace-summary.md) | Orchestrator Tool-Only Trace Summary Repair |
+| [2026-06-21-world-economy-stuck-adversarial-goal-review.md](2026-06-21-world-economy-stuck-adversarial-goal-review.md) | World Economy Stuck Adversarial Goal Review |
 
 ## 2026-06-20
 

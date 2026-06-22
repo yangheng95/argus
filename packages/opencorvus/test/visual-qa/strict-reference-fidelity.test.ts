@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
+import { deriveVisualQaReferenceParityContext } from "../../src/visual-qa/reference-parity-context"
 import { VisualQaTestHooks } from "../../src/visual-qa"
 import { renderVisualQaFrontendDesignContext, renderVisualQaFrontendResearchContext } from "../../src/visual-qa/context"
+import { VisualEvidenceBundleSchema } from "../../src/acceptance/visual-evidence"
 import type { ResearchBrief } from "../../src/research/schema"
 
 describe("visual-qa final blocker-based acceptance", () => {
@@ -99,14 +101,144 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(withReference).toContain("Enforce reference/parity fidelity only when")
   })
 
-  test("frontend research reference image ids trigger strict context", () => {
-    const context = renderVisualQaFrontendResearchContext(researchBriefWithReference())
+  test("reference artifacts alone do not require authoritative region parity", () => {
+    const artifactOnly = deriveVisualQaReferenceParityContext({
+      taskID: "tsk_visual_ref",
+      goals: [],
+      frontendDesignEntries: [
+        {
+          key: "reference_artifacts",
+          value: "- web-clone-source/reference.png",
+        },
+      ],
+    })
+    const evidenceBundle = deriveVisualQaReferenceParityContext({
+      taskID: "tsk_visual_ref",
+      goals: [],
+      visualEvidence: [
+        {
+          id: "bundle_1",
+          taskID: "tsk_visual_ref",
+          source: "frontend_design",
+          reference: { path: "reference.png", sha256: "ref", width: 1440, height: 900 },
+          rendered: {
+            path: "rendered.png",
+            sha256: "rendered",
+            width: 1440,
+            height: 900,
+            capturedAt: "2026-06-21T00:00:00.000Z",
+            viewport: { width: 1440, height: 900 },
+            appURL: "http://127.0.0.1:4173/",
+            projectDirectory: "/tmp/project",
+          },
+          inspection: {
+            reviewedAt: "2026-06-21T00:00:00.000Z",
+            status: "passing",
+            blockerCount: 0,
+            notes: "Reviewed.",
+          },
+          regions: [
+            {
+              id: "region_header",
+              label: "Header",
+              requirementIDs: ["REQ-1"],
+              acceptanceSpecIDs: ["acc-1"],
+              sourceRefs: ["reference.png"],
+              viewport: "desktop",
+              required: true,
+              status: "passing",
+              evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
+              notes: "Compared.",
+            },
+          ],
+        },
+      ],
+    })
 
-    expect(context).toContain("reference_image_evidence_ids: ev_ref")
+    expect(artifactOnly).toEqual({ required: false, regions: [] })
+    expect(evidenceBundle).toEqual({ required: true, regions: ["region_header@desktop"] })
+  })
+
+  test("frontend research reference image ids trigger strict context", () => {
+    const context = renderVisualQaFrontendResearchContext({
+      artifactID: "art_frontend_reference",
+      brief: researchBriefWithReference(),
+    })
+
+    expect(context).toContain("reference_image_evidence_ids: frontend_research:art_frontend_reference:ev_ref")
     expect(context).toContain("Reference Evidence Scope")
     expect(context).toContain("not an automatic universal clone requirement")
   })
+
+  test("VisualEvidenceBundle schema rejects unknown fields instead of stripping parallel evidence sources", () => {
+    const bundle = visualEvidenceBundle()
+
+    expect(VisualEvidenceBundleSchema.safeParse(bundle).success).toBe(true)
+    expect(VisualEvidenceBundleSchema.safeParse({ ...bundle, sourceUrl: "https://example.com" }).success).toBe(false)
+    expect(
+      VisualEvidenceBundleSchema.safeParse({
+        ...bundle,
+        rendered: { ...bundle.rendered, appUrl: "http://127.0.0.1:4173/" },
+      }).success,
+    ).toBe(false)
+    expect(
+      VisualEvidenceBundleSchema.safeParse({
+        ...bundle,
+        regions: [{ ...bundle.regions[0], screenshotArtifact: "standalone.png" }],
+      }).success,
+    ).toBe(false)
+    expect(
+      VisualEvidenceBundleSchema.safeParse({
+        ...bundle,
+        regions: [
+          {
+            ...bundle.regions[0],
+            bounds: { x: 0, y: 0, width: 100, height: 60, sourceUrl: "https://example.com" },
+          },
+        ],
+      }).success,
+    ).toBe(false)
+  })
 })
+
+function visualEvidenceBundle() {
+  return {
+    id: "bundle_1",
+    taskID: "tsk_visual_ref",
+    source: "frontend_design",
+    reference: { path: "reference.png", sha256: "ref", width: 1440, height: 900 },
+    rendered: {
+      path: "rendered.png",
+      sha256: "rendered",
+      width: 1440,
+      height: 900,
+      capturedAt: "2026-06-21T00:00:00.000Z",
+      viewport: { width: 1440, height: 900 },
+      appURL: "http://127.0.0.1:4173/",
+      projectDirectory: "/tmp/project",
+    },
+    inspection: {
+      reviewedAt: "2026-06-21T00:00:00.000Z",
+      status: "passing",
+      blockerCount: 0,
+      notes: "Reviewed.",
+    },
+    regions: [
+      {
+        id: "region_header",
+        label: "Header",
+        requirementIDs: ["REQ-1"],
+        acceptanceSpecIDs: ["acc-1"],
+        sourceRefs: ["reference.png"],
+        viewport: "desktop",
+        required: true,
+        status: "passing",
+        evidenceRefs: ["browser_preview_evidence:art_ref_cmp"],
+        notes: "Compared.",
+      },
+    ],
+  }
+}
 
 function researchBriefWithReference(): ResearchBrief {
   return {

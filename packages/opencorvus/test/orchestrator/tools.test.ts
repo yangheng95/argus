@@ -18,7 +18,7 @@ import {
 import { createDecisionLog } from "../../src/decision-log"
 import { Identifier } from "../../src/id/id"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
-import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { createOrchestratorTools, READ_CONTEXT_OUTPUT_CHAR_BUDGET } from "../../src/orchestrator/tools"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -28,6 +28,8 @@ import { SessionTable } from "../../src/session/session.sql"
 import {
   beginBuildAttempt,
   insertRequirements,
+  persistTaskFrontendResearchBrief,
+  persistTaskResearchBrief,
   recordIntegrityAttempt,
   startNewAttempt,
   updateGoalRun,
@@ -82,14 +84,25 @@ import { ExecutorRegistry } from "../../src/executor/registry"
 import type { ExecutorAdapter } from "../../src/executor/contract"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
-import { findStageContinuationRequest } from "../../src/engine/stage-continuation"
+import {
+  claimStageContinuationRequest,
+  createStageContinuationRequest,
+  findStageContinuationRequest,
+  markStageContinuationClaimFailed,
+  markStageContinuationConsumed,
+} from "../../src/engine/stage-continuation"
+import { researchSourceDigest } from "../../src/research/schema"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let computeRequirementStatusSnapshotImpl: ((input: any) => any[]) | undefined
+let requirementsRunImpl: ((input: any) => Promise<any>) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
 let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let frontendResearchRunImpl: ((input: any) => Promise<any>) | undefined
+let deepResearchRunImpl: ((input: any) => Promise<any>) | undefined
+let goalWorkloadAnalyzeImpl: ((input: any) => Promise<any>) | undefined
+let visualQaAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
 let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
 
@@ -126,6 +139,379 @@ function toolText(result: unknown): string {
     return (result as { output: string }).output
   }
   throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
+}
+
+function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string; sourceURL: string }) {
+  const evidence = [
+    {
+      id: "ev_page_reference",
+      kind: "web" as const,
+      pointer: "web-clone-source/reference.png",
+      title: "Rendered webpage reference",
+      retrieved_at: "2026-06-21T00:00:00.000Z",
+      reliability: "primary" as const,
+      excerpt: "Rendered webpage reference evidence for frontend investigation.",
+      volatile: false,
+    },
+  ]
+  const paths = ProjectRuntimePaths.frontendResearchPaths(process.cwd(), input.taskID, input.sessionID)
+  return {
+    metadata: {
+      research_session_id: input.sessionID,
+      created_for_message_id: "msg_frontend_research_recovered",
+      request_hash: "frontend-research-request-hash",
+      source_digest: researchSourceDigest(evidence),
+      created_at: "2026-06-21T00:00:00.000Z",
+    },
+    scope: {
+      user_goal: "Investigate the webpage before implementation.",
+      deliverable_type: "implementation_input" as const,
+      audience: "downstream frontend agents",
+      explicit_non_goals: [],
+      assumed_non_goals: [],
+    },
+    bundle: {
+      full_markdown_path: `${paths.relativeDir}/research-bundle.md`,
+      evidence_json_path: `${paths.relativeDir}/evidence.json`,
+      citation_map_path: `${paths.relativeDir}/citation-map.json`,
+    },
+    summary: "Recovered frontend research brief.",
+    evidence_index: evidence,
+    facts: [
+      {
+        id: "fact_reference_exists",
+        statement: "A rendered webpage reference exists for investigation.",
+        evidence_ids: ["ev_page_reference"],
+      },
+    ],
+    inferences: [
+      {
+        id: "inf_downstream_needs_reference",
+        inference: "Downstream agents must use the rendered reference as visual evidence.",
+        based_on_fact_ids: ["fact_reference_exists"],
+        confidence: "high" as const,
+      },
+    ],
+    problem_statements: [
+      {
+        id: "problem_visual_parity",
+        statement: "Implementation must preserve the captured visual layout.",
+        fact_ids: ["fact_reference_exists"],
+      },
+    ],
+    user_needs: [
+      {
+        id: "need_source_backed_packets",
+        need: "Downstream agents need source-backed investigation packets.",
+        fact_ids: ["fact_reference_exists"],
+      },
+    ],
+    constraints: [
+      {
+        id: "constraint_reference_backed",
+        constraint: "Do not replace reference-backed observations with unsupported guesses.",
+        fact_ids: ["fact_reference_exists"],
+      },
+    ],
+    document_outline: [
+      {
+        id: "section_visual_contract",
+        title: "Visual contract",
+        purpose: "Summarize visual evidence for downstream work.",
+        evidence_ids: ["ev_page_reference"],
+      },
+    ],
+    webpage_contract: {
+      source_url: input.sourceURL,
+      reference_image_evidence_ids: ["ev_page_reference"],
+      functional_surfaces: [
+        {
+          id: "surface_page",
+          evidence_ids: ["ev_page_reference"],
+          title: "Page surface",
+          user_visible_behavior: "The page renders a visible webpage surface.",
+          required_interactions: [],
+        },
+      ],
+      visual_layout: [
+        {
+          id: "layout_page",
+          evidence_ids: ["ev_page_reference"],
+          viewport: "desktop" as const,
+          region: "page",
+          layout_contract: "Preserve the rendered page layout.",
+          spacing_and_alignment: "Spacing and alignment come from rendered evidence.",
+        },
+      ],
+      style_requirements: [
+        {
+          id: "style_page",
+          evidence_ids: ["ev_page_reference"],
+          token_or_selector: "page",
+          requirement: "Use rendered evidence for visible styling.",
+        },
+      ],
+      interaction_states: [],
+      data_content_inventory: [
+        {
+          id: "data_page",
+          evidence_ids: ["ev_page_reference"],
+          surface: "page",
+          content_contract: "Use visible captured content as evidence.",
+        },
+      ],
+      fidelity_acceptance: [
+        {
+          id: "accept_page",
+          evidence_ids: ["ev_page_reference"],
+          target: "page",
+          criterion: "Compare implementation against rendered reference evidence.",
+        },
+      ],
+      fidelity_risks: [],
+    },
+    subpage_research_tasks: [],
+    open_questions: [],
+  }
+}
+
+function minimalFrontendDesignAnalysis() {
+  return {
+    specs: [],
+    designSystem: "Reference design system",
+    techStack: ["React"],
+    frontendTemplate: "Frontend design continuation recovered from the existing child session.",
+    finalAcceptanceMode: "maintainable_replacement_required",
+    fillableModules: "Recovered fillable modules from visual reference evidence.",
+    componentInventory: "Recovered component inventory.",
+    qualityProjectContract: "Recovered quality contract for downstream implementation.",
+    componentReusePlan: [
+      {
+        family_id: "comp-recovered-shell",
+        name: "Recovered shell",
+        observed_surface: "Reference shell",
+        source_refs: ["attachment://original-reference.png"],
+        implementation_strategy: "existing_project_component",
+        reuse_source: "src/components/Shell.tsx",
+        mature_library_candidates: [],
+        props_states: "default",
+        replacement_boundary: "page shell",
+        parity_guard: "compare against visual reference",
+      },
+    ],
+    materialInventory: "Recovered material inventory.",
+    frontendProject: {
+      status: "not_created",
+      role: "source_baseline_input",
+      project_root: "",
+      source_package: "",
+      entrypoints: [],
+      generation_tool: "",
+      notes: [],
+    },
+    visualConsistencyContract: "Match the visual reference.",
+    uiDataContract: "Use captured visible data only.",
+    templateIterationNotes: ["Recovered existing review pass."],
+    completenessReview: "Recovered frontend design handoff.",
+    referenceArtifacts: ["attachment://original-reference.png"],
+    openQuestions: [],
+    report: {
+      summary: "Recovered frontend design handoff.",
+      detail: "Recovered frontend design handoff.",
+      commands: [],
+      changed_files: [],
+      open_questions: [],
+      fact_check_items: [],
+    },
+  }
+}
+
+function minimalArchitectResult(goalID = "goal_recovered_app_shell") {
+  return {
+    summary: "Recovered architecture.",
+    goals: [
+      {
+        id: goalID,
+        title: "Recovered app shell",
+        objective: "Implement a typed app shell after continuing the prior architect session.",
+        acceptance_specs: [
+          {
+            id: `acc-${goalID}`,
+            source_requirement_id: "REQ-1",
+            goal_id: goalID,
+            title: "typecheck passes",
+            scorers: [
+              {
+                type: "llm_judge",
+                name: "typecheck evidence",
+                criteria: "The app shell typechecks.",
+              },
+            ],
+            severity: "essential",
+          },
+        ],
+        owned_paths: ["src/App.tsx"],
+        depends_on: [],
+        exports: ["AppShell"],
+        imports: [],
+        kind: "bootstrap",
+        requirement_ids: ["REQ-1"],
+        priority: "blocking",
+      },
+    ],
+    removedGoalIDs: [],
+    traceability: [{ requirementID: "REQ-1", goalIDs: [goalID] }],
+    fidelity: { sourceCoverage: [], referenceCoverage: [], assemblyOwners: [] },
+    contractGraph: { version: 1, contracts: [], dependency_contracts: [] },
+    validationFindings: [],
+  }
+}
+
+function minimalDeepResearchBrief(input: { taskID: string; sessionID: string }) {
+  const evidence = [
+    {
+      id: "ev_deep_source",
+      kind: "web" as const,
+      pointer: "https://example.com/source",
+      title: "Deep research source",
+      retrieved_at: "2026-06-21T00:00:00.000Z",
+      reliability: "primary" as const,
+      excerpt: "Deep research evidence for the target task.",
+      volatile: false,
+    },
+  ]
+  const paths = ProjectRuntimePaths.deepResearchPaths(process.cwd(), input.taskID, input.sessionID)
+  return {
+    metadata: {
+      research_session_id: input.sessionID,
+      created_for_message_id: "msg_deep_research_recovered",
+      request_hash: "deep-research-request-hash",
+      source_digest: researchSourceDigest(evidence),
+      created_at: "2026-06-21T00:00:00.000Z",
+    },
+    scope: {
+      user_goal: "Collect source-backed research for implementation planning.",
+      deliverable_type: "research_report" as const,
+      audience: "orchestrator and downstream agents",
+      explicit_non_goals: [],
+      assumed_non_goals: [],
+    },
+    bundle: {
+      full_markdown_path: `${paths.relativeDir}/research-bundle.md`,
+      evidence_json_path: `${paths.relativeDir}/evidence.json`,
+      citation_map_path: `${paths.relativeDir}/citation-map.json`,
+    },
+    summary: "Recovered deep research brief.",
+    evidence_index: evidence,
+    facts: [
+      {
+        id: "fact_deep_source_exists",
+        statement: "A source-backed research item exists.",
+        evidence_ids: ["ev_deep_source"],
+      },
+    ],
+    inferences: [
+      {
+        id: "inf_deep_source_is_useful",
+        inference: "The source-backed item can inform implementation planning.",
+        based_on_fact_ids: ["fact_deep_source_exists"],
+        confidence: "high" as const,
+      },
+    ],
+    problem_statements: [
+      {
+        id: "problem_need_source_backing",
+        statement: "Planning must use source-backed evidence.",
+        fact_ids: ["fact_deep_source_exists"],
+      },
+    ],
+    user_needs: [
+      {
+        id: "need_research_report",
+        need: "Downstream agents need a durable research report.",
+        fact_ids: ["fact_deep_source_exists"],
+      },
+    ],
+    constraints: [
+      {
+        id: "constraint_source_backed",
+        constraint: "Do not replace source-backed facts with guesses.",
+        fact_ids: ["fact_deep_source_exists"],
+      },
+    ],
+    document_outline: [
+      {
+        id: "section_sources",
+        title: "Sources",
+        purpose: "Summarize source-backed implementation context.",
+        evidence_ids: ["ev_deep_source"],
+      },
+    ],
+    subpage_research_tasks: [],
+    open_questions: [],
+  }
+}
+
+function minimalWorkloadBrief(goalID: string) {
+  return {
+    goal_id: goalID,
+    why_not_smaller: ["This goal crosses visible UI and verification surfaces."],
+    underestimation_traps: ["Do not report success without running the acceptance check."],
+    execution_inventory: {
+      surfaces: 1,
+      states: 1,
+      data_contracts: 1,
+      verification_points: 1,
+    },
+    verification_inventory: ["Run the targeted acceptance command."],
+    references: {
+      contract_ids: [],
+      reference_coverage_ids: [],
+      acceptance_spec_ids: ["acc-workload"],
+      visual_spec_ids: [],
+      prd_sections: ["Implementation"],
+    },
+  }
+}
+
+function minimalVisualQaReport() {
+  return {
+    accepted: true,
+    summary: "Recovered visual QA report.",
+    coverage: [
+      {
+        region: "main surface",
+        viewports: [{ width: 1280, height: 720 }],
+        states: ["default"],
+        source_refs: ["build evidence"],
+        evidence_refs: ["visual-qa-evidence"],
+        notes: "Main surface was checked.",
+      },
+    ],
+    findings: [],
+    production_blockers: [],
+    follow_up_task: null,
+    repairs: [],
+    evidence: [
+      {
+        type: "command" as const,
+        ref: "bun test visual-qa",
+        state: "default",
+        note: "Visual QA recovery test evidence.",
+      },
+    ],
+    reference_parity: {
+      required: false,
+      required_regions: [],
+      reference_comparison_evidence_refs: [],
+      missing_regions: [],
+      blocker_ids: [],
+    },
+    commands: [],
+    changed_files: [],
+    open_questions: [],
+    fact_check_items: [],
+  }
 }
 
 function successfulAbortAdapter(): ExecutorAdapter {
@@ -359,6 +745,15 @@ mock.module("@/architect/agent", () => ({
   },
 }))
 
+mock.module("@/requirements", () => ({
+  RequirementsAgent: {
+    run: (input: any) => {
+      if (!requirementsRunImpl) throw new Error("RequirementsAgent.run mock not configured")
+      return requirementsRunImpl(input)
+    },
+  },
+}))
+
 mock.module("@/frontend-design", () => ({
   FrontendDesignAgent: {
     analyze: (input: any) => {
@@ -373,6 +768,34 @@ mock.module("@/frontend-research", () => ({
     run: (input: any) => {
       if (!frontendResearchRunImpl) throw new Error("FrontendResearchAgent.run mock not configured")
       return frontendResearchRunImpl(input)
+    },
+  },
+}))
+
+mock.module("@/research", () => ({
+  DeepResearchAgent: {
+    run: (input: any) => {
+      if (!deepResearchRunImpl) throw new Error("DeepResearchAgent.run mock not configured")
+      return deepResearchRunImpl(input)
+    },
+  },
+  researchSourceDigest,
+}))
+
+mock.module("@/goal-workload-analyst", () => ({
+  GoalWorkloadAnalystAgent: {
+    analyze: (input: any) => {
+      if (!goalWorkloadAnalyzeImpl) throw new Error("GoalWorkloadAnalystAgent.analyze mock not configured")
+      return goalWorkloadAnalyzeImpl(input)
+    },
+  },
+}))
+
+mock.module("@/visual-qa", () => ({
+  VisualQaAgent: {
+    analyze: (input: any) => {
+      if (!visualQaAnalyzeImpl) throw new Error("VisualQaAgent.analyze mock not configured")
+      return visualQaAnalyzeImpl(input)
     },
   },
 }))
@@ -625,12 +1048,10 @@ async function writePassingSourceSkeletonHandoff(projectDir: string) {
 }
 
 function minimalPngBytes(): Uint8Array {
-  return Uint8Array.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
-    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49,
-    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
-    0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-  ])
+  return Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8//8/AwAI/AL+KDv4AAAAAElFTkSuQmCC",
+    "base64",
+  )
 }
 
 async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<void> {
@@ -789,7 +1210,13 @@ describe("orchestrator tools", () => {
   beforeEach(async () => {
     await resetDatabase()
     tmp = await tmpdir()
+    requirementsRunImpl = undefined
     architectCoordinateImpl = undefined
+    designAnalyzeImpl = undefined
+    frontendResearchRunImpl = undefined
+    deepResearchRunImpl = undefined
+    goalWorkloadAnalyzeImpl = undefined
+    visualQaAnalyzeImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
     reviewIntegrityImpl = async () => integrityTeamResult({ sessionID: "ses_integrity_default" })
@@ -799,9 +1226,13 @@ describe("orchestrator tools", () => {
     buildAgentRunImpl = undefined
     reviewIntegrityImpl = undefined
     computeRequirementStatusSnapshotImpl = undefined
+    requirementsRunImpl = undefined
     architectCoordinateImpl = undefined
     designAnalyzeImpl = undefined
     frontendResearchRunImpl = undefined
+    deepResearchRunImpl = undefined
+    goalWorkloadAnalyzeImpl = undefined
+    visualQaAnalyzeImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
     ExecutorRegistry.reset()
@@ -1263,7 +1694,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "build uptake goal test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -1277,6 +1708,7 @@ describe("orchestrator tools", () => {
           now,
           specID,
           requirementIDs: ["REQ-settings"],
+          insertProject: false,
         })
         seedSettingsRequirement({ taskID, specID, now })
         seedBuildUptakeIntegrityHistory({ taskID, specID, now })
@@ -1305,10 +1737,13 @@ describe("orchestrator tools", () => {
           }
         }
 
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         const result = await tools.build.execute(
@@ -1393,10 +1828,13 @@ describe("orchestrator tools", () => {
       directory: tmp.path,
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "contract audit drift predispatch" })
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
         })
 
         await expect(
@@ -1482,6 +1920,1400 @@ describe("orchestrator tools", () => {
           reason: "error",
           error: "rendered webpage evidence capture failed",
         })
+      },
+    })
+  })
+
+  test("frontend_research terminal finalizer miss returns same-session continuation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_frontend_research_continue_${stamp}`
+    const taskID = `tsk_frontend_research_continue_${stamp}`
+    const failedSessionID = `ses_frontend_research_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend research continuation parent" })
+        Database.use((db) => {
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Frontend research continuation project",
+              sandboxes: "[]",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend research continuation task",
+              request: "Investigate a webpage before implementation.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        frontendResearchRunImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("frontend-research", "missing terminal submit_research_brief", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Frontend research ended without submit_research_brief.",
+                toolName: "submit_research_brief",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_research_brief",
+          })
+          expect(input.sourceUrls).toEqual(["https://example.com/page"])
+          expect(input.focus).toBeUndefined()
+          return {
+            brief: minimalFrontendResearchBrief({
+              taskID,
+              sessionID: failedSessionID,
+              sourceURL: "https://example.com/page",
+            }),
+            bundle: {
+              full_markdown: "# Frontend research\n- recovered",
+              evidence_json: "{}",
+              citation_map_json: "{}",
+            },
+            factCheckItems: [],
+            sessionID: failedSessionID,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_research.execute(
+          {
+            reason: "Need webpage investigation packets.",
+            source_urls: ["https://example.com/page"],
+          },
+          buildToolOptions("frontend_research"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("frontend_research({")
+        expect(firstText).toContain('"reason":"Continue after missing submit_research_brief: Need webpage investigation packets."')
+        expect(firstText).not.toContain("frontend-research({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("frontend-research")
+        expect(continuation?.payload.finalizer_name).toBe("submit_research_brief")
+
+        const second = await tools.frontend_research.execute(
+          {
+            reason: "Continue previous frontend research finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_research"),
+        )
+        expect(toolText(second)).toContain("Frontend research brief persisted")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("frontend_research unavailable continuation artifacts return visible recovery results", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_research_unavailable_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend research unavailable continuation parent" })
+        const projectID = Instance.project.id
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend research unavailable continuation task",
+              request: "Collect webpage packets.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let calls = 0
+        frontendResearchRunImpl = async () => {
+          calls += 1
+          throw new Error("unavailable continuation should not reach child agent")
+        }
+
+        const consumed = createStageContinuationRequest({
+          taskID,
+          stage: "frontend-research",
+          sessionID: `ses_frontend_research_consumed_${stamp}`,
+          parentSessionID: parent.id,
+          normalizedStageInput: { task: { id: taskID } },
+          inputDigest: "digest-consumed",
+          failureName: "TerminalToolMissingError",
+          failureMessage: "missing submit_research_brief",
+          finalizerName: "submit_research_brief",
+        })
+        const consumedClaim = claimStageContinuationRequest({
+          taskID,
+          artifactID: consumed.artifactID,
+          sessionID: `ses_frontend_research_consumed_${stamp}`,
+          finalizerName: "submit_research_brief",
+        })
+        markStageContinuationConsumed({
+          taskID,
+          artifactID: consumed.artifactID,
+          claimID: consumedClaim.claimID,
+          messageID: "msg_consumed_continuation",
+        })
+
+        const claimFailed = createStageContinuationRequest({
+          taskID,
+          stage: "frontend-research",
+          sessionID: `ses_frontend_research_claim_failed_${stamp}`,
+          parentSessionID: parent.id,
+          normalizedStageInput: { task: { id: taskID } },
+          inputDigest: "digest-claim-failed",
+          failureName: "TerminalToolMissingError",
+          failureMessage: "missing submit_research_brief",
+          finalizerName: "submit_research_brief",
+        })
+        const failedClaim = claimStageContinuationRequest({
+          taskID,
+          artifactID: claimFailed.artifactID,
+          sessionID: `ses_frontend_research_claim_failed_${stamp}`,
+          finalizerName: "submit_research_brief",
+        })
+        markStageContinuationClaimFailed({
+          taskID,
+          artifactID: claimFailed.artifactID,
+          claimID: failedClaim.claimID,
+          error: "append recovery prompt failed",
+        })
+
+        const staleClaim = createStageContinuationRequest({
+          taskID,
+          stage: "frontend-research",
+          sessionID: `ses_frontend_research_stale_claim_${stamp}`,
+          parentSessionID: parent.id,
+          normalizedStageInput: { task: { id: taskID } },
+          inputDigest: "digest-stale-claim",
+          failureName: "TerminalToolMissingError",
+          failureMessage: "missing submit_research_brief",
+          finalizerName: "submit_research_brief",
+        })
+        claimStageContinuationRequest({
+          taskID,
+          artifactID: staleClaim.artifactID,
+          sessionID: `ses_frontend_research_stale_claim_${stamp}`,
+          finalizerName: "submit_research_brief",
+        })
+        const staleClaimRow = findStageContinuationRequest({ taskID, artifactID: staleClaim.artifactID })
+        Database.use((db) =>
+          db
+            .update(EngineArtifactTable)
+            .set({
+              payload: {
+                ...staleClaimRow!.payload,
+                claim_owner: "previous-process",
+              },
+            })
+            .where(eq(EngineArtifactTable.id, staleClaim.artifactID))
+            .run(),
+        )
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        const consumedResult = await tools.frontend_research.execute(
+          {
+            reason: "try consumed continuation",
+            continuation_artifact_id: consumed.artifactID,
+          },
+          buildToolOptions("frontend_research_consumed"),
+        )
+        const consumedText = toolText(consumedResult)
+        expect(consumedText).toContain("continuation artifact is no longer pending")
+        expect(consumedText).toContain("consumed")
+        expect(consumedText).toContain("msg_consumed_continuation")
+
+        const claimFailedResult = await tools.frontend_research.execute(
+          {
+            reason: "try claim-failed continuation",
+            continuation_artifact_id: claimFailed.artifactID,
+          },
+          buildToolOptions("frontend_research_claim_failed"),
+        )
+        const claimFailedText = toolText(claimFailedResult)
+        expect(claimFailedText).toContain("continuation artifact is no longer pending")
+        expect(claimFailedText).toContain("claim_failed")
+        expect(claimFailedText).toContain("append recovery prompt failed")
+
+        const staleClaimResult = await tools.frontend_research.execute(
+          {
+            reason: "try claimed continuation from previous process",
+            continuation_artifact_id: staleClaim.artifactID,
+          },
+          buildToolOptions("frontend_research_stale_claim"),
+        )
+        const staleClaimText = toolText(staleClaimResult)
+        expect(staleClaimText).toContain("continuation artifact is no longer pending")
+        expect(staleClaimText).toContain("claim_failed")
+        expect(staleClaimText).toContain("previous-process")
+        expect(calls).toBe(0)
+        const statuses = Database.use((db) =>
+          db
+            .select({ payload: ProtocolEventTable.payload })
+            .from(ProtocolEventTable)
+            .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+            .all()
+            .filter((event) => event.payload?.stepID === "frontend_research")
+            .map((event) => String(event.payload?.status ?? "")),
+        )
+        expect(statuses).toEqual(["running", "completed", "running", "completed", "running", "completed"])
+      },
+    })
+  })
+
+  test("deep_research terminal finalizer miss returns same-session continuation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_deep_research_continue_${stamp}`
+    const failedSessionID = `ses_deep_research_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "deep research continuation parent" })
+        const projectID = Instance.project.id
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Deep research continuation task",
+              request: "Collect source-backed research.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        deepResearchRunImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("deep-research", "missing terminal submit_research_brief", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Deep research ended without submit_research_brief.",
+                toolName: "submit_research_brief",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_research_brief",
+          })
+          expect(input.sourceUrls).toBeUndefined()
+          return {
+            brief: minimalDeepResearchBrief({
+              taskID,
+              sessionID: failedSessionID,
+            }),
+            bundle: {
+              full_markdown: "# Deep research\n- recovered",
+              evidence_json: "{}",
+              citation_map_json: "{}",
+            },
+            factCheckItems: [],
+            sessionID: failedSessionID,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.deep_research.execute(
+          {
+            reason: "Need source-backed research.",
+            source_urls: ["https://example.com/source"],
+          },
+          buildToolOptions("deep_research"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("deep_research({")
+        expect(firstText).not.toContain("continuation_call: research({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("deep-research")
+        expect(continuation?.payload.finalizer_name).toBe("submit_research_brief")
+
+        const second = await tools.deep_research.execute(
+          {
+            reason: "Continue previous deep research finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("deep_research"),
+        )
+        expect(toolText(second)).toContain("Deep research brief persisted")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("requirements continuation rejects stale frontend design evidence before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_requirements_stale_fd_${stamp}`
+    const failedSessionID = `ses_requirements_stale_fd_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "requirements stale frontend design parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Requirements stale frontend design task",
+              request: "Extract requirements before frontend design evidence changes.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        requirementsRunImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("requirements", "missing terminal submit_requirements", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Requirements ended without submit_requirements.",
+              toolName: "submit_requirements",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.requirements.execute(
+          {
+            reason: "Need requirements.",
+          },
+          buildToolOptions("requirements_stale_fd"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        createDecisionLog(taskID).append({
+          phase: "frontend_design",
+          key: "public_report",
+          value: "Frontend design evidence became available after the requirements continuation was created.",
+          reason: "test evidence changed after continuation capture",
+        })
+
+        const staleResult = await tools.requirements.execute(
+          {
+            reason: "Continue previous requirements finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("requirements_stale_fd"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh requirements")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("frontend_design continuation rejects stale visual artifacts before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_stale_visual_${stamp}`
+    const failedSessionID = `ses_frontend_design_stale_visual_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design stale visual parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend design stale visual task",
+              request: "Analyze the visual reference before it changes.",
+              kind: "workflow",
+              priority: "normal",
+              attachments: [
+                {
+                  sha: "sha-original-reference",
+                  url: "attachment://original-reference.png",
+                  mime: "image/png",
+                  size: 42,
+                  filename: "original-reference.png",
+                  intent: "visual_reference",
+                  source: "user-upload",
+                },
+              ],
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        designAnalyzeImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("frontend-design", "missing terminal submit_frontend_template", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Frontend design ended without submit_frontend_template.",
+              toolName: "submit_frontend_template",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_design.execute(
+          {
+            reason: "Need frontend design handoff.",
+          },
+          buildToolOptions("frontend_design_stale_visual"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineTaskTable)
+            .set({
+              system_artifacts: [
+                {
+                  sha: "sha-new-reference",
+                  url: "attachment://new-reference.png",
+                  mime: "image/png",
+                  size: 84,
+                  filename: "new-reference.png",
+                  intent: "visual_reference",
+                  source: "url-screenshot",
+                },
+              ],
+              time_updated: now + 1,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+        })
+
+        const staleResult = await tools.frontend_design.execute(
+          {
+            reason: "Continue previous frontend design finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_design_stale_visual"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh frontend_design")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("frontend_design continuation rejects stale host-prepared source evidence before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_stale_host_evidence_${stamp}`
+    const failedSessionID = `ses_frontend_design_stale_host_evidence_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design stale host evidence parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend design stale host evidence task",
+              request: "Analyze the host-prepared source evidence before it changes.",
+              kind: "workflow",
+              priority: "normal",
+              attachments: [
+                {
+                  sha: "sha-original-reference",
+                  url: "attachment://original-reference.png",
+                  mime: "image/png",
+                  size: 42,
+                  filename: "original-reference.png",
+                  intent: "visual_reference",
+                  source: "user-upload",
+                },
+              ],
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        const sourceDataDir = path.join(paths.skeletonProjectAbsolute, "src", "data")
+        await fs.mkdir(paths.sourcePackageAbsolute, { recursive: true })
+        await fs.mkdir(sourceDataDir, { recursive: true })
+        await fs.writeFile(path.join(paths.sourcePackageAbsolute, "reference.png"), minimalPngBytes())
+        await fs.writeFile(
+          path.join(sourceDataDir, "sourceDomReplacementPlan.ts"),
+          "export const sourceDomReplacementPlan = [] as const\n",
+          "utf8",
+        )
+        await fs.writeFile(
+          path.join(sourceDataDir, "sourceDomIterationState.ts"),
+          'export const sourceDomIterationState = {"generatedRegionCount":1,"semanticReplacementCount":0,"remainingRegionCount":1} as const\n',
+          "utf8",
+        )
+        const writeSourceManifest = async (referenceImage: string, regionCount: number) => {
+          await fs.writeFile(
+            path.join(sourceDataDir, "sourceProjectManifest.json"),
+            JSON.stringify(
+              {
+                visualIteration: {
+                  referenceImage,
+                  evidenceMethod: "test-source-package",
+                  viewportMatrix: [
+                    {
+                      name: "desktop",
+                      width: 1440,
+                      height: 900,
+                      evidenceRole: "reference",
+                      comparison: "captured-source",
+                    },
+                  ],
+                  rule: "Use host-prepared source evidence as the visual baseline.",
+                },
+                sourceDomRegions: {
+                  count: regionCount,
+                  largestBytes: 128,
+                  highPriorityCount: 1,
+                  replacementPlanCount: 0,
+                  iterationStateModule: "sourceDomIterationState.ts",
+                  semanticReplacementCount: 0,
+                },
+              },
+              null,
+              2,
+            ),
+            "utf8",
+          )
+        }
+        await writeSourceManifest("reference.png", 1)
+
+        let continuationArtifactID = ""
+        let calls = 0
+        designAnalyzeImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("frontend-design", "missing terminal submit_frontend_template", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Frontend design ended without submit_frontend_template.",
+              toolName: "submit_frontend_template",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_design.execute(
+          {
+            reason: "Need frontend design handoff from host-prepared source evidence.",
+          },
+          buildToolOptions("frontend_design_stale_host_evidence"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        await writeSourceManifest("reference-updated.png", 2)
+
+        const staleResult = await tools.frontend_design.execute(
+          {
+            reason: "Continue previous frontend design finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_design_stale_host_evidence"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh frontend_design")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("frontend_design continuation ignores unrelated task metadata changes", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_metadata_resume_${stamp}`
+    const failedSessionID = `ses_frontend_design_metadata_resume_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design metadata resume parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend design metadata resume task",
+              request: "Analyze the visual reference before unrelated metadata changes.",
+              kind: "workflow",
+              priority: "normal",
+              attachments: [
+                {
+                  sha: "sha-original-reference",
+                  url: "attachment://original-reference.png",
+                  mime: "image/png",
+                  size: 42,
+                  filename: "original-reference.png",
+                  intent: "visual_reference",
+                  source: "user-upload",
+                },
+              ],
+              metadata: { unrelated_counter: 1 },
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        designAnalyzeImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("frontend-design", "missing terminal submit_frontend_template", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Frontend design ended without submit_frontend_template.",
+                toolName: "submit_frontend_template",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_frontend_template",
+          })
+          return minimalFrontendDesignAnalysis()
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_design.execute(
+          {
+            reason: "Need frontend design handoff.",
+          },
+          buildToolOptions("frontend_design_metadata_resume"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineTaskTable)
+            .set({
+              metadata: { unrelated_counter: 2 },
+              time_updated: now + 1,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run()
+        })
+
+        const second = await tools.frontend_design.execute(
+          {
+            reason: "Continue previous frontend design finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_design_metadata_resume"),
+        )
+        expect(toolText(second)).toContain("SUCCESS: frontend_design public report")
+        expect(toolText(second)).not.toContain("scope_mismatch")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("workload_analysis terminal finalizer miss returns same-session continuation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_workload_continue_${stamp}`
+    const goalID = `goal_workload_continue_${stamp}`
+    const failedSessionID = `ses_workload_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "workload continuation parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Workload continuation project",
+          taskTitle: "Workload continuation task",
+          request: "Size the active architecture goals.",
+          goalTitle: "Sized goal",
+          goalSlug: "sized-goal",
+          objective: "Implement and verify one surface.",
+          now,
+          specID: `spec_workload_continue_${stamp}`,
+          requirementIDs: ["REQ-workload"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        goalWorkloadAnalyzeImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("goal-workload-analyst", "missing terminal submit_workload_analysis", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Workload analyst ended without submit_workload_analysis.",
+                toolName: "submit_workload_analysis",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_workload_analysis",
+          })
+          return {
+            briefs: [minimalWorkloadBrief(goalID)],
+            specSnapshotID: `spec_workload_continue_${stamp}`,
+            summary: "Recovered workload analysis.",
+            sessionID: failedSessionID,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.workload_analysis.execute(
+          {
+            reason: "Need an independent workload review.",
+          },
+          buildToolOptions("workload_analysis"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("workload_analysis({")
+        expect(firstText).not.toContain("goal_workload_analyst({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("goal-workload-analyst")
+        expect(continuation?.payload.finalizer_name).toBe("submit_workload_analysis")
+
+        const second = await tools.workload_analysis.execute(
+          {
+            reason: "Continue previous workload finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("workload_analysis"),
+        )
+        expect(toolText(second)).toContain("Workload analysis complete")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("workload_analysis continuation rejects stale goal graph before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_workload_stale_scope_${stamp}`
+    const goalID = `goal_workload_stale_scope_${stamp}`
+    const failedSessionID = `ses_workload_stale_scope_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "workload stale continuation parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Workload stale continuation project",
+          taskTitle: "Workload stale continuation task",
+          request: "Size the active architecture goals before the graph changes.",
+          goalTitle: "Sized goal",
+          goalSlug: "sized-goal",
+          objective: "Implement and verify one surface.",
+          now,
+          specID: `spec_workload_stale_scope_${stamp}`,
+          requirementIDs: ["REQ-workload"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        goalWorkloadAnalyzeImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("goal-workload-analyst", "missing terminal submit_workload_analysis", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Workload analyst ended without submit_workload_analysis.",
+              toolName: "submit_workload_analysis",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.workload_analysis.execute(
+          {
+            reason: "Need an independent workload review.",
+          },
+          buildToolOptions("workload_analysis"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineGoalTable)
+            .set({
+              objective: "Implement and verify a changed surface after graph mutation.",
+              time_updated: now + 1,
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run()
+        })
+
+        const staleResult = await tools.workload_analysis.execute(
+          {
+            reason: "Continue previous workload finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("workload_analysis"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh workload_analysis")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("visual_qa terminal finalizer miss returns same-session continuation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_visual_qa_continue_${stamp}`
+    const failedSessionID = `ses_visual_qa_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "visual QA continuation parent" })
+        const projectID = Instance.project.id
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Visual QA continuation task",
+              request: "Review the finished visible product.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        visualQaAnalyzeImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("visual-qa", "missing terminal submit_visual_qa_report", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Visual QA ended without submit_visual_qa_report.",
+                toolName: "submit_visual_qa_report",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_visual_qa_report",
+          })
+          return {
+            report: minimalVisualQaReport(),
+            sessionID: failedSessionID,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.visual_qa.execute(
+          {
+            reason: "Need final GUI review.",
+          },
+          buildToolOptions("visual_qa"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("visual_qa({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("visual-qa")
+        expect(continuation?.payload.finalizer_name).toBe("submit_visual_qa_report")
+
+        const second = await tools.visual_qa.execute(
+          {
+            reason: "Continue previous visual QA finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("visual_qa"),
+        )
+        expect(toolText(second)).toContain("visual_qa complete: accepted=true")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("visual_qa continuation rejects stale frontend evidence before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_visual_qa_stale_evidence_${stamp}`
+    const failedSessionID = `ses_visual_qa_stale_evidence_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "visual QA stale evidence parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Visual QA stale evidence task",
+              request: "Review the finished visible product after frontend evidence changes.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        visualQaAnalyzeImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("visual-qa", "missing terminal submit_visual_qa_report", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Visual QA ended without submit_visual_qa_report.",
+                toolName: "submit_visual_qa_report",
+                retries: 0,
+              }),
+            })
+          }
+          throw new Error("stale visual_qa continuation reached child agent")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.visual_qa.execute(
+          {
+            reason: "Need final GUI review.",
+          },
+          buildToolOptions("visual_qa_stale_evidence"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        createDecisionLog(taskID).append({
+          phase: "frontend_design",
+          key: "public_report",
+          value: "New frontend design report materialized after the visual QA continuation was created.",
+          reason: "test evidence changed after continuation capture",
+        })
+
+        const staleResult = await tools.visual_qa.execute(
+          {
+            reason: "Continue stale visual QA after evidence changed.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("visual_qa_stale_evidence"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh visual_qa")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("integrity terminal finalizer miss returns same-session continuation with ownership closed", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_integrity_continue_${stamp}`
+    const goalID = `goal_integrity_continue_${stamp}`
+    const specID = `spec_integrity_continue_${stamp}`
+    const failedSessionID = `ses_integrity_continue_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity continuation parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity continuation project",
+          taskTitle: "Integrity continuation task",
+          request: "Review the active architecture graph.",
+          goalTitle: "Reviewable goal",
+          goalSlug: "reviewable-goal",
+          objective: "Provide one reviewable goal.",
+          now,
+          specID,
+          requirementIDs: ["REQ-integrity"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        reviewIntegrityImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("integrity", "missing terminal submit_integrity_consensus", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Integrity ended without submit_integrity_consensus.",
+                toolName: "submit_integrity_consensus",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_integrity_consensus",
+          })
+          return integrityTeamResult({
+            verdict: "pass",
+            summary: "Recovered integrity pass.",
+            sessionID: failedSessionID,
+          })
+        }
+
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        const first = await tools.integrity.execute(
+          {
+            reason: "Need an independent integrity review.",
+          },
+          buildToolOptions("integrity"),
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("integrity({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        const continuation = findStageContinuationRequest({ taskID, artifactID: continuationArtifactID })
+        expect(continuation?.payload.session_id).toBe(failedSessionID)
+        expect(continuation?.payload.stage).toBe("integrity")
+        expect(continuation?.payload.finalizer_name).toBe("submit_integrity_consensus")
+        expect(continuation?.payload.normalized_stage_input).toMatchObject({
+          active_spec_snapshot_id: specID,
+          phase: "pre_build",
+          goal_ids: [goalID],
+        })
+        expect(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })).toBeUndefined()
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+
+        const second = await tools.integrity.execute(
+          {
+            reason: "Continue previous integrity finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("integrity"),
+        )
+        expect(toolText(second)).toContain("Integrity verdict: pass")
+        expect(calls).toBe(2)
+        const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
+        expect(artifact?.payload.session_id).toBe(failedSessionID)
+        const attempts = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "integrity_attempt")))
+            .all(),
+        )
+        expect(attempts).toHaveLength(1)
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+        const statuses = Database.use((db) =>
+          db
+            .select({ payload: ProtocolEventTable.payload })
+            .from(ProtocolEventTable)
+            .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+            .all()
+            .filter((event) => event.payload?.stepID === "integrity")
+            .map((event) => String(event.payload?.status ?? "")),
+        )
+        expect(statuses).toEqual(["running", "failed", "running", "failed"])
+      },
+    })
+  })
+
+  test("integrity continuation rejects stale visual QA evidence before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_integrity_stale_evidence_${stamp}`
+    const goalID = `goal_integrity_stale_evidence_${stamp}`
+    const specID = `spec_integrity_stale_evidence_${stamp}`
+    const failedSessionID = `ses_integrity_stale_evidence_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "integrity stale evidence parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Integrity stale evidence project",
+          taskTitle: "Integrity stale evidence task",
+          request: "Reject integrity continuation after review evidence changes.",
+          goalTitle: "Reviewable stale evidence goal",
+          goalSlug: "reviewable-stale-evidence-goal",
+          objective: "Provide one reviewable goal.",
+          now,
+          specID,
+          requirementIDs: ["REQ-integrity-stale"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        reviewIntegrityImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("integrity", "missing terminal submit_integrity_consensus", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Integrity ended without submit_integrity_consensus.",
+                toolName: "submit_integrity_consensus",
+                retries: 0,
+              }),
+            })
+          }
+          throw new Error("stale integrity continuation reached child agent")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.integrity.execute(
+          {
+            reason: "Need an independent integrity review.",
+          },
+          buildToolOptions("integrity_stale_evidence"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        createDecisionLog(taskID).append({
+          phase: "visual_qa",
+          key: "latest_summary",
+          value: "New visual QA evidence appeared after the integrity continuation was created.",
+          reason: "test evidence changed after continuation capture",
+        })
+
+        const staleResult = await tools.integrity.execute(
+          {
+            reason: "Continue stale integrity after visual QA changed.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("integrity_stale_evidence"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh integrity")
+        expect(calls).toBe(1)
+        expect(findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })).toBeUndefined()
       },
     })
   })
@@ -2041,6 +3873,75 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("live goal_run without tool ownership blocks contract mutation", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_live_goal_run_guard_${stamp}`
+    const taskID = `tsk_live_goal_run_guard_${stamp}`
+    const goalID = `gol_live_goal_run_guard_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "live goal_run guard",
+      taskTitle: "live goal_run guard",
+      request: "Do not mutate a goal while its async build goal_run is live",
+      goalTitle: "Async build goal",
+      goalSlug: "async-build-goal",
+      objective: "Guard live goal_run facts",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "live goal_run parent" })
+        const child = await Session.create({
+          kind: "build",
+          parentID: parent.id,
+          goalID,
+          title: "live goal_run child",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const runID = await createAbortableCoordinatorRun({ taskID, sessionID: child.id, now })
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          runID,
+          sessionID: child.id,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const modifyResult = toolText(
+          await tools.modify_goal.execute(
+            {
+              goalID,
+              updates: { objective: "Mutated while live goal_run exists" },
+              reason: "should be rejected while async build is live",
+            },
+            buildToolOptions(),
+          ),
+        )
+
+        expect(modifyResult).toContain("Error: modify_goal refused")
+        expect(modifyResult).toContain(`live goal_run ${goalRunID}`)
+        expect(findGoal(goalID)?.objective).toBe("Guard live goal_run facts")
+        expect(findGoalRun(goalRunID)?.status).toBe("running")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
   test("add_goal appends a new operator instruction goal to the active plan", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
@@ -2453,6 +4354,249 @@ describe("orchestrator tools", () => {
 
         expect(toolText(result)).toContain("No live build ownership found")
         expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("read_context surfaces multiple frontend research briefs", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_frontend_research_${stamp}`
+    const taskID = `tsk_read_context_frontend_research_${stamp}`
+    const goalID = `gol_read_context_frontend_research_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read context frontend research",
+      taskTitle: "read context frontend research",
+      request: "Surface every frontend research page in read_context",
+      goalTitle: "Read context goal",
+      goalSlug: "read-context-goal",
+      objective: "Show all frontend research briefs",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read context frontend research parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const firstArtifactID = persistTaskFrontendResearchBrief({
+          taskID,
+          brief: minimalFrontendResearchBrief({
+            taskID,
+            sessionID: `ses_frontend_research_first_${stamp}`,
+            sourceURL: "https://example.com/first",
+          }),
+          now: now + 1,
+        })
+        const secondArtifactID = persistTaskFrontendResearchBrief({
+          taskID,
+          brief: minimalFrontendResearchBrief({
+            taskID,
+            sessionID: `ses_frontend_research_second_${stamp}`,
+            sourceURL: "https://example.com/second",
+          }),
+          now: now + 2,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+
+        expect(result).toContain("Frontend Research Brief 1/2")
+        expect(result).toContain("Frontend Research Brief 2/2")
+        expect(result).toContain(firstArtifactID)
+        expect(result).toContain(secondArtifactID)
+        expect(result).toContain("https://example.com/first")
+        expect(result).toContain("https://example.com/second")
+      },
+    })
+  })
+
+  test("read_context surfaces multiple deep research briefs", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_deep_research_${stamp}`
+    const taskID = `tsk_read_context_deep_research_${stamp}`
+    const goalID = `gol_read_context_deep_research_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read context deep research",
+      taskTitle: "read context deep research",
+      request: "Surface every deep research brief in read_context",
+      goalTitle: "Read context deep goal",
+      goalSlug: "read-context-deep-goal",
+      objective: "Show all deep research briefs",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read context deep research parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const firstArtifactID = persistTaskResearchBrief({
+          taskID,
+          brief: minimalDeepResearchBrief({
+            taskID,
+            sessionID: `ses_deep_research_first_${stamp}`,
+          }),
+          now: now + 1,
+        })
+        const secondArtifactID = persistTaskResearchBrief({
+          taskID,
+          brief: minimalDeepResearchBrief({
+            taskID,
+            sessionID: `ses_deep_research_second_${stamp}`,
+          }),
+          now: now + 2,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+
+        expect(result).toContain("Deep Research Brief 1/2")
+        expect(result).toContain("Deep Research Brief 2/2")
+        expect(result).toContain(firstArtifactID)
+        expect(result).toContain(secondArtifactID)
+        expect(result).toContain(`ses_deep_research_first_${stamp}`)
+        expect(result).toContain(`ses_deep_research_second_${stamp}`)
+      },
+    })
+  })
+
+  test("read_context scope all bounds large persisted context while preserving pointers", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_budget_${stamp}`
+    const taskID = `tsk_read_context_budget_${stamp}`
+    const goalID = `gol_read_context_budget_${stamp}`
+    const specID = `spec_read_context_budget_${stamp}`
+    const giantReportEnd = `GIANT_INTEGRITY_REPORT_END_${stamp}`
+    const giantDeepSummaryEnd = `GIANT_DEEP_SUMMARY_END_${stamp}`
+    const giantFrontendSummaryEnd = `GIANT_FRONTEND_SUMMARY_END_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read context budget",
+      taskTitle: "read context budget",
+      request: "Keep read_context under its output budget",
+      goalTitle: "Read context budget goal",
+      goalSlug: "read-context-budget-goal",
+      objective: "Expose bounded read_context state without large raw artifacts",
+      now,
+      specID,
+      requirementIDs: ["REQ-BUDGET"],
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read context budget parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+
+        const integrityArtifactID = recordIntegrityAttempt({
+          taskID,
+          sessionID: `ses_integrity_budget_${stamp}`,
+          lineage: activeOnlyLineage(taskID, specID),
+          verdict: "needs_correction",
+          phase: "post_build",
+          reviewers: [{ reviewerID: "rev_budget", scope: "Read context budget", verdict: "needs_correction" }],
+          findings: [
+            integrityFinding({
+              id: `finding_read_context_budget_${stamp}`,
+              description: "read_context must not inline full integrity reports.",
+              repair: "Render a bounded excerpt and point at the integrity artifact.",
+              filePaths: ["src/index.ts"],
+              requirementIDs: ["REQ-BUDGET"],
+              reviewers: ["rev_budget"],
+            }),
+          ],
+          teamReportMarkdown: `GIANT_INTEGRITY_REPORT_START_${stamp}\n${"integrity report body ".repeat(5_000)}\n${giantReportEnd}`,
+          now: now + 1,
+        })
+
+        const deepBrief: any = minimalDeepResearchBrief({
+          taskID,
+          sessionID: `ses_deep_budget_${stamp}`,
+        })
+        deepBrief.summary = `GIANT_DEEP_SUMMARY_START_${stamp} ${"deep summary body ".repeat(2_000)} ${giantDeepSummaryEnd}`
+        const deepArtifactID = persistTaskResearchBrief({
+          taskID,
+          brief: deepBrief,
+          now: now + 2,
+        })
+
+        const frontendBrief: any = minimalFrontendResearchBrief({
+          taskID,
+          sessionID: `ses_frontend_budget_${stamp}`,
+          sourceURL: "https://example.com/budget",
+        })
+        frontendBrief.summary = `GIANT_FRONTEND_SUMMARY_START_${stamp} ${"frontend summary body ".repeat(2_000)} ${giantFrontendSummaryEnd}`
+        frontendBrief.subpage_research_tasks = Array.from({ length: 20 }, (_, index) => ({
+          id: `subpage_${index}`,
+          parent_url: "https://example.com/budget",
+          url: `https://example.com/budget/${index}/${"long-path-segment-".repeat(20)}`,
+          title: `Subpage ${index}`,
+          reason: "Large task list must stay bounded in read_context.",
+          suggested_focus: "Bounded pointer rendering.",
+          priority: "medium" as const,
+          evidence_ids: ["ev_page_reference"],
+        }))
+        const frontendArtifactID = persistTaskFrontendResearchBrief({
+          taskID,
+          brief: frontendBrief,
+          now: now + 3,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+
+        expect(result.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
+        expect(result).toContain(goalID)
+        expect(result).toContain("REQ-BUDGET")
+        expect(result).toContain(integrityArtifactID)
+        expect(result).toContain(deepArtifactID)
+        expect(result).toContain(frontendArtifactID)
+        expect(result).toContain(`ses_deep_budget_${stamp}`)
+        expect(result).toContain(`ses_frontend_budget_${stamp}`)
+        expect(result).toContain("https://example.com/budget")
+        expect(result).toContain("read_context omitted")
+        expect(result).not.toContain(giantReportEnd)
+        expect(result).not.toContain(giantDeepSummaryEnd)
+        expect(result).not.toContain(giantFrontendSummaryEnd)
       },
     })
   })
@@ -4749,6 +6893,436 @@ describe("orchestrator tools", () => {
     })
   })
 
+  test("architect continuation ignores unrendered unflagged workload brief changes", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_architect_workload_unflagged_${stamp}`
+    const goalID = `goal_architect_workload_unflagged_${stamp}`
+    const specID = `spec_architect_workload_unflagged_${stamp}`
+    const failedSessionID = `ses_architect_workload_unflagged_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect workload unflagged parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Architect workload unflagged project",
+          taskTitle: "Architect workload unflagged task",
+          request: "Refine a goal graph with unflagged workload notes.",
+          goalTitle: "Unflagged workload goal",
+          goalSlug: "unflagged-workload-goal",
+          objective: "Implement the unflagged workload goal contract.",
+          now,
+          specID,
+          requirementIDs: ["REQ-architect"],
+          insertProject: false,
+        })
+        const brief = {
+          goal_id: goalID,
+          decomposition_concern: "",
+          why_not_smaller: ["original unrendered note"],
+          underestimation_traps: ["original trap"],
+          execution_inventory: {
+            surfaces: 1,
+            states: 1,
+            data_contracts: 1,
+            verification_points: 1,
+          },
+          verification_inventory: ["run typecheck"],
+          references: {
+            contract_ids: [],
+            reference_coverage_ids: [],
+            acceptance_spec_ids: [],
+            visual_spec_ids: [],
+            prd_sections: [],
+          },
+        }
+        Database.use((db) => {
+          db.insert(EngineArtifactTable)
+            .values({
+              id: `art_workload_original_${stamp}`,
+              task_id: taskID,
+              run_id: null,
+              goal_run_id: null,
+              acceptance_id: null,
+              kind: "goal_workload",
+              label: "active",
+              payload: {
+                spec_snapshot_id: specID,
+                summary: "No goals flagged.",
+                briefs: [brief],
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        architectCoordinateImpl = async (input: any) => {
+          calls += 1
+          if (calls === 1) {
+            input.onSessionCreated?.(failedSessionID)
+            throw new AgentRunError("architect", "missing terminal submit_architect", {
+              nonRetryable: true,
+              cause: new Message.TerminalToolMissingError({
+                message: "Architect ended without submit_architect.",
+                toolName: "submit_architect",
+                retries: 0,
+              }),
+            })
+          }
+          expect(input.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            artifactID: continuationArtifactID,
+            kind: "protocol-finalizer-miss",
+            finalizerName: "submit_architect",
+          })
+          return minimalArchitectResult(`goal_recovered_workload_${stamp}`)
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.architect.execute({ reason: "refine graph" }, buildToolOptions("architect_workload"))
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.insert(EngineArtifactTable)
+            .values({
+              id: `art_workload_changed_${stamp}`,
+              task_id: taskID,
+              run_id: null,
+              goal_run_id: null,
+              acceptance_id: null,
+              kind: "goal_workload",
+              label: "active",
+              payload: {
+                spec_snapshot_id: specID,
+                summary: "No goals flagged; unrendered notes changed.",
+                briefs: [{ ...brief, why_not_smaller: ["changed unrendered note"] }],
+              },
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
+        })
+
+        const second = await tools.architect.execute(
+          {
+            reason: "continue previous architect finalizer miss",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("architect_workload"),
+        )
+        expect(toolText(second)).toContain("Architect decomposition complete")
+        expect(toolText(second)).not.toContain("scope_mismatch")
+        expect(calls).toBe(2)
+      },
+    })
+  })
+
+  test("architect continuation rejects stale active spec scope before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_architect_stale_scope_${stamp}`
+    const taskID = `tsk_architect_stale_scope_${stamp}`
+    const reqSpecID = `spec_architect_stale_scope_${stamp}`
+    const nextSpecID = `spec_architect_stale_scope_next_${stamp}`
+    const failedSessionID = `ses_architect_stale_scope_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Architect stale continuation test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Architect stale continuation task",
+          request: "Decompose a task after finalizer miss, then change the active spec.",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineSpecSnapshotTable)
+        .values({
+          id: reqSpecID,
+          task_id: taskID,
+          version: 1,
+          status: "ready",
+          summary: "Requirements parsed",
+          content: "# Requirements\n- REQ-1 original scope",
+          scope: "original scope",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      insertRequirements(db, {
+        taskID,
+        specSnapshotID: reqSpecID,
+        now,
+        requirements: [
+          {
+            id: "REQ-1",
+            title: "Original scope",
+            description: "The original active spec is in force.",
+            acceptance: ["original spec accepted"],
+            evidence_refs: ["user request"],
+            non_goals: ["No changed scope."],
+            priority: "blocking",
+          },
+        ],
+      })
+    })
+
+    let continuationArtifactID = ""
+    let coordinateCalls = 0
+    architectCoordinateImpl = async (input: any) => {
+      coordinateCalls += 1
+      await input.onSessionCreated?.(failedSessionID)
+      throw new AgentRunError("architect", "missing terminal submit_architect", {
+        nonRetryable: true,
+        cause: new Message.TerminalToolMissingError({
+          message: "Architect ended without submit_architect.",
+          toolName: "submit_architect",
+          retries: 0,
+        }),
+      })
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect stale continuation test" })
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.architect.execute({ reason: "initial decomposition" }, buildToolOptions())
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineSpecSnapshotTable)
+            .set({ status: "superseded", time_updated: now + 1 })
+            .where(eq(EngineSpecSnapshotTable.id, reqSpecID))
+            .run()
+          db.insert(EngineSpecSnapshotTable)
+            .values({
+              id: nextSpecID,
+              task_id: taskID,
+              version: 2,
+              status: "ready",
+              summary: "Requirements changed",
+              content: "# Requirements\n- REQ-1 changed scope",
+              scope: "changed scope",
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run()
+        })
+
+        const staleResult = await tools.architect.execute(
+          { reason: "continue previous architect finalizer miss", continuation_artifact_id: continuationArtifactID },
+          buildToolOptions(),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh architect")
+        expect(coordinateCalls).toBe(1)
+      },
+    })
+  })
+
+  test("architect continuation rejects stale existing goal graph before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_architect_stale_goals_${stamp}`
+    const goalID = `goal_architect_stale_goals_${stamp}`
+    const specID = `spec_architect_stale_goals_${stamp}`
+    const failedSessionID = `ses_architect_stale_goals_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect stale goal graph parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Architect stale goal graph project",
+          taskTitle: "Architect stale goal graph task",
+          request: "Refine the existing goal graph.",
+          goalTitle: "Original goal",
+          goalSlug: "original-goal",
+          objective: "Implement the original goal contract.",
+          now,
+          specID,
+          requirementIDs: ["REQ-architect"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        architectCoordinateImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("architect", "missing terminal submit_architect", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Architect ended without submit_architect.",
+              toolName: "submit_architect",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.architect.execute({ reason: "refine graph" }, buildToolOptions("architect_goals"))
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        Database.use((db) => {
+          db.update(EngineGoalTable)
+            .set({
+              objective: "Implement a changed goal contract after the continuation was created.",
+              time_updated: now + 1,
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run()
+        })
+
+        const staleResult = await tools.architect.execute(
+          {
+            reason: "continue previous architect finalizer miss",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("architect_goals"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh architect")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("architect continuation rejects stale goal retry labels before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_architect_stale_retry_${stamp}`
+    const goalID = `goal_architect_stale_retry_${stamp}`
+    const specID = `spec_architect_stale_retry_${stamp}`
+    const failedSessionID = `ses_architect_stale_retry_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "architect stale retry parent" })
+        insertWorkflowTaskWithGoal({
+          projectID: Instance.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Architect stale retry project",
+          taskTitle: "Architect stale retry task",
+          request: "Refine the existing goal graph after build retry state changes.",
+          goalTitle: "Retry-sensitive goal",
+          goalSlug: "retry-sensitive-goal",
+          objective: "Implement the retry-sensitive goal contract.",
+          now,
+          specID,
+          requirementIDs: ["REQ-architect"],
+          insertProject: false,
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        architectCoordinateImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("architect", "missing terminal submit_architect", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Architect ended without submit_architect.",
+              toolName: "submit_architect",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.architect.execute({ reason: "refine graph" }, buildToolOptions("architect_retry"))
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        seedGoalRunAttemptWithWorkspace({
+          taskID,
+          goalID,
+          artifactID: `grun_architect_retry_${stamp}`,
+          workspaceDir: tmp.path,
+          workspaceBranch: "codex/retry",
+          retryCount: 1,
+          status: "completed",
+          now: now + 1,
+        })
+
+        const staleResult = await tools.architect.execute(
+          {
+            reason: "continue previous architect finalizer miss",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("architect_retry"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh architect")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
   test("architect promotion keeps requirements attached to the active spec", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
@@ -4911,7 +7485,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal integrity build test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -4923,6 +7497,7 @@ describe("orchestrator tools", () => {
           goalSlug: "build-with-architecture-review",
           objective: "Verify build runs before architecture review feedback is recorded",
           now,
+          insertProject: false,
         })
 
         reviewIntegrityImpl = async () => {
@@ -5008,7 +7583,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal scoped build context test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -5022,6 +7597,7 @@ describe("orchestrator tools", () => {
           now,
           specID,
           requirementIDs: ["REQ-feature"],
+          insertProject: false,
         })
 
         Database.use((db) => {
@@ -5382,7 +7958,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal architecture context test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -5394,6 +7970,7 @@ describe("orchestrator tools", () => {
           goalSlug: "feature-implementation",
           objective: "Implement the feature without breaking sibling architecture contracts",
           now,
+          insertProject: false,
         })
 
         Database.use((db) => {
@@ -6666,7 +9243,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "persisted integrity block test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -6679,6 +9256,7 @@ describe("orchestrator tools", () => {
           objective: "Verify stale review artifacts do not block a capable build agent",
           now,
           specID,
+          insertProject: false,
         })
         recordIntegrityAttempt({
           taskID,
@@ -6762,7 +9340,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "default retry session reuse test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -6774,6 +9352,7 @@ describe("orchestrator tools", () => {
           goalSlug: "reuse-prior-build-session",
           objective: "Verify build retries keep the prior session unless freshContext is requested",
           now,
+          insertProject: false,
         })
         seedTerminalFailedBuildRun({
           taskID,
@@ -6842,7 +9421,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "fresh retry session test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -6854,6 +9433,7 @@ describe("orchestrator tools", () => {
           goalSlug: "fresh-build-session",
           objective: "Verify freshContext skips prior session reuse",
           now,
+          insertProject: false,
         })
         seedTerminalFailedBuildRun({
           taskID,
@@ -6936,7 +9516,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "fresh retry marker cleanup test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -6948,6 +9528,7 @@ describe("orchestrator tools", () => {
           goalSlug: "fresh-marker-cleanup",
           objective: "Verify abandoned prior session ownership is cleared before dispatch",
           now,
+          insertProject: false,
         })
         seedTerminalFailedBuildRun({
           taskID,
@@ -7104,7 +9685,6 @@ describe("orchestrator tools", () => {
 
     const now = Date.now()
     const stamp = now.toString(16)
-    const projectID = `project_goal_build_session_bind_${stamp}`
     const taskID = `tsk_goal_build_session_bind_${stamp}`
     const goalID = `gol_build_session_bind_${stamp}`
     let observedSessionID: string | null | undefined
@@ -7114,8 +9694,10 @@ describe("orchestrator tools", () => {
       directory: tmp.path,
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "build session bind test" })
+        const current = Instance.current()
+        if (!current) throw new Error("Expected current instance while seeding build session bind task")
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: current.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7127,6 +9709,7 @@ describe("orchestrator tools", () => {
           goalSlug: "bind-build-session",
           objective: "Verify live goal_run attempts have a session_id before the build result returns",
           now,
+          insertProject: false,
         })
         buildAgentRunImpl = async (input: any) => {
           expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
@@ -7181,7 +9764,95 @@ describe("orchestrator tools", () => {
         expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe("ses_build_session_bind")
       },
     })
-  })
+  }, { timeout: 15_000 })
+
+  test("goal build background finalize failure does not leave a live goal_run", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_goal_finalize_failure_${stamp}`
+    const goalID = `gol_finalize_failure_${stamp}`
+    const terminal = deferred<void>()
+    const finalize = spyOn(EnginePersist, "finalizeBuildAttempt").mockImplementationOnce(() => {
+      throw new Error("simulated terminal persistence failure")
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "goal finalize failure test" })
+        const current = Instance.current()
+        if (!current) throw new Error("Expected current instance while seeding goal finalize failure task")
+        insertWorkflowTaskWithGoal({
+          projectID: current.project.id,
+          taskID,
+          goalID,
+          sessionID: parent.id,
+          worktree: tmp.path,
+          projectName: "Goal finalize failure test",
+          taskTitle: "Goal finalize failure task",
+          request: "Do not leave live goal_run when finalize persistence fails",
+          goalTitle: "Finalize failure guard",
+          goalSlug: "finalize-failure-guard",
+          objective: "Verify background finalization failure reaches terminal failed state",
+          now,
+          insertProject: false,
+        })
+        buildAgentRunImpl = async (input: any) => {
+          await markBuildSlotAcquired(input, "ses_goal_finalize_failure")
+          await terminal.promise
+          return {
+            result: {
+              status: "passed",
+              summary: "Build completed but persistence will fail.",
+              files_changed: [
+                {
+                  path: "src/index.ts",
+                  summary: "Changed implementation.",
+                  reason: "The test needs a normal passed build result before finalization fails.",
+                },
+              ],
+              tests: [],
+              commit_ref: "abc1234",
+            },
+            sessionID: "ses_goal_finalize_failure",
+            worktreeDir: input.managedWorktree.directory,
+            worktreeBranch: input.managedWorktree.branch,
+            worktreeBaseRef: input.managedWorktree.baseRef,
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.build.execute(
+          {
+            goalID,
+            request: "Implement the goal",
+            reason: "Per-goal pipeline execution.",
+          },
+          buildToolOptions(),
+        )
+
+        expect(toolText(result)).toContain("Build agent started (status=running")
+        expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("running")
+
+        terminal.resolve()
+        await waitForCondition(
+          "background goal build finalization failure",
+          () => listGoalRunsByGoal(goalID)[0]?.status === "failed",
+        )
+        const run = listGoalRunsByGoal(goalID)[0]
+        expect(run?.error).toContain("build finalization failed: simulated terminal persistence failure")
+        expect(finalize).toHaveBeenCalledTimes(1)
+      },
+    })
+  }, { timeout: 15_000 })
 
   test("goal build rejects duplicate dispatch while a live goal_run exists", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
@@ -7258,7 +9929,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "persisted integrity concern block test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7271,6 +9942,7 @@ describe("orchestrator tools", () => {
           objective: "Verify correction counts inform the prompt rather than block dispatch",
           now,
           specID,
+          insertProject: false,
         })
         recordIntegrityAttempt({
           taskID,
@@ -7515,7 +10187,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal cleanup build test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7527,6 +10199,7 @@ describe("orchestrator tools", () => {
           goalSlug: "clean-successful-worktree",
           objective: "Verify completed goal worktrees are removed after a passed build",
           now,
+          insertProject: false,
         })
 
         buildAgentRunImpl = async (input: any) => {
@@ -7603,7 +10276,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal failed build test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7615,6 +10288,7 @@ describe("orchestrator tools", () => {
           goalSlug: "preserve-failed-worktree",
           objective: "Verify failed goal worktrees remain available for diagnosis",
           now,
+          insertProject: false,
         })
 
         buildAgentRunImpl = async (input: any) => {
@@ -7675,7 +10349,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "goal cleanup refused test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7687,6 +10361,7 @@ describe("orchestrator tools", () => {
           goalSlug: "refuse-unsafe-cleanup",
           objective: "Verify unsafe cleanup failures preserve diagnosis pointers",
           now,
+          insertProject: false,
         })
 
         buildAgentRunImpl = async (input: any) => {
@@ -7752,7 +10427,7 @@ describe("orchestrator tools", () => {
       fn: async () => {
         const parent = await Session.create({ kind: "root", title: "retry rendered attachment test" })
         insertWorkflowTaskWithGoal({
-          projectID,
+          projectID: Instance.project.id,
           taskID,
           goalID,
           sessionID: parent.id,
@@ -7764,10 +10439,11 @@ describe("orchestrator tools", () => {
           goalSlug: "visual-goal",
           objective: "Verify retry screenshots keep canonical attachment URLs",
           now,
+          insertProject: false,
         })
 
         const rendered = await AttachmentStore.write(
-          projectID,
+          Instance.project.id,
           Buffer.from([0x89, 0x50, 0x4e, 0x47]),
           "image/png",
           "rendered.png",
@@ -7858,7 +10534,7 @@ describe("orchestrator tools", () => {
         expect(capturedContext?.retryAttachments).toHaveLength(1)
         const retryAttachment = capturedContext.retryAttachments[0]
         expect(retryAttachment.url).toBe(rendered.url)
-        expect(retryAttachment.url).toStartWith(`/attachment/${projectID}/`)
+        expect(retryAttachment.url).toStartWith(`/attachment/${Instance.project.id}/`)
         await expect(AttachmentStore.inlineFileParts([retryAttachment])).resolves.toHaveLength(1)
       },
     })

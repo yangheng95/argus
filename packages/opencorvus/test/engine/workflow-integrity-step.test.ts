@@ -81,6 +81,54 @@ describe("pipeline workflow review topology", () => {
     expect(text).not.toContain("post-integrity 前端 GUI 修复")
   })
 
+  test("projects failed analyze_intent abort decisions as failed after reload", () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `proj_workflow_intent_failed_${stamp}`
+    const taskID = `tsk_workflow_intent_failed_${stamp}`
+
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: "/tmp/workflow-intent-failed",
+          branch: "main",
+          status: "active",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "intent failed",
+          request: "intent analysis throws",
+          priority: "normal",
+          time_started: now,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    })
+
+    createDecisionLog(taskID).append({
+      phase: "intent_analysis",
+      key: "abort_intent_analysis_failed",
+      value: JSON.stringify({
+        reason: "intent_analysis_threw",
+        error: "Intent analysis failed before terminal report.",
+      }),
+      reason: "test",
+    })
+
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const taskSteps = projectTaskSteps(taskID, pipeline)
+    expect(taskSteps.analyze_intent?.status).toBe("failed")
+  })
+
   test("projects frontend_design as completed from frontend template decision log without visual rows", () => {
     const now = Date.now()
     const stamp = now.toString(16)

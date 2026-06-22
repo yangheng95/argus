@@ -81,6 +81,26 @@ describe("goal-workload-analyst output tools", () => {
     expect(kit.getCollector().finalized).toBe(true)
   })
 
+  test("submit blocks until every known architect goal has a workload brief", async () => {
+    const kit = createGoalWorkloadOutputTools({ knownGoalIDs: ["gol_a", "gol_b"] })
+    await callTool(kit.tools, "register_workload_brief", validBrief("gol_a"))
+
+    expect(kit.isReadyToFinalize()).toBe(false)
+    const blocked = await callTool(kit.tools, "submit_workload_analysis", { summary: "only one goal analyzed" })
+
+    expect(blocked).toContain("BLOCKERS")
+    expect(blocked).toContain("gol_b")
+    expect(kit.getCollector().finalized).toBe(false)
+
+    await callTool(kit.tools, "register_workload_brief", validBrief("gol_b"))
+    expect(kit.isReadyToFinalize()).toBe(true)
+
+    const passed = await callTool(kit.tools, "submit_workload_analysis", { summary: "2 goals, none flagged" })
+    expect(passed).toContain("PASS")
+    expect(passed).not.toContain("without a brief")
+    expect(kit.getCollector().finalized).toBe(true)
+  })
+
   test("buildReport fails before terminal submit instead of synthesizing a summary", async () => {
     const kit = createGoalWorkloadOutputTools({ knownGoalIDs: ["gol_a"] })
     await callTool(kit.tools, "register_workload_brief", validBrief("gol_a"))

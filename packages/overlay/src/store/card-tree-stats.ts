@@ -41,7 +41,13 @@
 import { toolNameKey, displayToolIcon, displayToolDetail } from "../utils/tool"
 import { extractTodos } from "../utils/todos"
 import {
+  collectScreenshotBrowserItemsFromCard,
+  mergeScreenshotBrowserItemSets,
+  type ScreenshotBrowserItem,
+} from "../utils/screenshot-browser"
+import {
   cardTreeStore,
+  registerCardTreePruneStatsHandler,
   setCardTreeStore,
   type ActivityCounts,
   type CardNode,
@@ -134,6 +140,7 @@ function ownLevelStats(
   counts: ActivityCounts
   latestHit: LatestActivityHit | undefined
   todoHit: TodoActivityHit | undefined
+  screenshotItems: ScreenshotBrowserItem[]
 } {
   const counts: ActivityCounts = { messages: 0, tools: 0, agents: 0, skills: 0 }
   let latestHit: LatestActivityHit | undefined
@@ -167,7 +174,7 @@ function ownLevelStats(
       todoHit = pickLater(todoHit, { time: baseTime, index: i, todos })
     }
   }
-  return { counts, latestHit, todoHit }
+  return { counts, latestHit, todoHit, screenshotItems: collectScreenshotBrowserItemsFromCard(card) }
 }
 
 /** Goal step cards suppress tool-hits in the LATEST preview (operators want
@@ -200,6 +207,31 @@ function equalTodoHit(a: TodoActivityHit | undefined, b: TodoActivityHit | undef
   // Object identity is enough: we only ever store the original tool-call's
   // todos array; a new hit means a new tool call with a fresh array.
   return a.todos === b.todos
+}
+
+function equalScreenshotItems(a: readonly ScreenshotBrowserItem[] | undefined, b: readonly ScreenshotBrowserItem[]): boolean {
+  if (a === b) return true
+  if (!a || a.length !== b.length) return false
+  for (let index = 0; index < b.length; index += 1) {
+    const left = a[index]
+    const right = b[index]
+    if (
+      !left ||
+      left.id !== right.id ||
+      left.role !== right.role ||
+      left.src !== right.src ||
+      left.alt !== right.alt ||
+      left.title !== right.title ||
+      left.detail !== right.detail ||
+      left.time !== right.time ||
+      left.messageID !== right.messageID ||
+      left.partID !== right.partID ||
+      left.source !== right.source
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 // ── Dirty queue + bubble-up ──
@@ -244,6 +276,7 @@ function recomputeNodeStats(cardID: string): boolean {
   let counts = own.counts
   let latestHit = own.latestHit
   let todoHit = own.todoHit
+  const screenshotItemSets: Array<readonly ScreenshotBrowserItem[]> = [own.screenshotItems]
   for (const childID of card.childIDs ?? []) {
     const child = cardTreeStore.cards[childID]
     if (!child) continue
@@ -266,7 +299,9 @@ function recomputeNodeStats(cardID: string): boolean {
       latestHit = pickLater(latestHit, child.subtreeLatestHit)
     }
     todoHit = pickLater(todoHit, child.subtreeTodoHit)
+    if (child.subtreeScreenshotItems) screenshotItemSets.push(child.subtreeScreenshotItems)
   }
+  const screenshotItems = mergeScreenshotBrowserItemSets(screenshotItemSets)
   let changed = false
   if (!equalCounts(card.subtreeCounts, counts)) {
     setCardTreeStore("cards", cardID, "subtreeCounts", counts)
@@ -278,6 +313,10 @@ function recomputeNodeStats(cardID: string): boolean {
   }
   if (!equalTodoHit(card.subtreeTodoHit, todoHit)) {
     setCardTreeStore("cards", cardID, "subtreeTodoHit", todoHit)
+    changed = true
+  }
+  if (!equalScreenshotItems(card.subtreeScreenshotItems, screenshotItems)) {
+    setCardTreeStore("cards", cardID, "subtreeScreenshotItems", screenshotItems)
     changed = true
   }
   return changed
@@ -315,3 +354,17 @@ export function flushCardStats(): void {
 export function __resetCardStatsForTests(): void {
   dirtyCardIDs.clear()
 }
+
+registerCardTreePruneStatsHandler(() => {
+  for (const [cardID, card] of Object.entries(cardTreeStore.cards)) {
+    const parentID = card?.parentID
+    if (parentID) {
+      const parent = cardTreeStore.cards[parentID]
+      if (!parent || !Array.isArray(parent.childIDs) || !parent.childIDs.includes(cardID)) {
+        unlinkChildFromParent(cardID)
+      }
+    }
+    markCardStatsDirty(cardID)
+  }
+  flushCardStats()
+})

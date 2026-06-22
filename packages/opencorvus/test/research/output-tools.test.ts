@@ -174,6 +174,53 @@ describe("research output tools", () => {
     expect(kit.getCollector().draft).toBeUndefined()
   })
 
+  test("fact-reference registration tools reject unknown fact ids before final submit", async () => {
+    const cases = [
+      {
+        tool: "register_research_inference",
+        input: { id: "inf_bad", inference: "An inference.", based_on_fact_ids: ["risk_api_illusion", "fact_1"] },
+        collectorKey: "inferences",
+      },
+      {
+        tool: "register_research_problem",
+        input: { id: "prob_bad", statement: "A problem with stale risk ids.", fact_ids: ["risk_api_illusion", "fact_1"] },
+        collectorKey: "problem_statements",
+      },
+      {
+        tool: "register_research_need",
+        input: { id: "need_bad", need: "A need with stale risk ids.", fact_ids: ["risk_api_illusion", "fact_1"] },
+        collectorKey: "user_needs",
+      },
+      {
+        tool: "register_research_constraint",
+        input: { id: "constraint_bad", constraint: "A constraint.", fact_ids: ["risk_api_illusion", "fact_1"] },
+        collectorKey: "constraints",
+      },
+      {
+        tool: "register_research_open_question",
+        input: { id: "question_bad", question: "An open question.", related_fact_ids: ["risk_api_illusion", "fact_1"] },
+        collectorKey: "open_questions",
+      },
+    ] as const
+
+    for (const item of cases) {
+      const kit = createResearchOutputTools()
+      await callTool(kit.tools, "register_research_fact", {
+        id: "fact_1",
+        statement: "A registered fact.",
+        evidence_ids: ["ev_1"],
+      })
+
+      const result = await callTool(kit.tools, item.tool, item.input)
+
+      expect(result).toContain("references unknown fact id")
+      expect(result).toContain("risk_api_illusion")
+      expect(result).toContain("known fact ids: fact_1")
+      expect(result).toContain("Collector unchanged")
+      expect(kit.getCollector()[item.collectorKey]).toEqual([])
+    }
+  })
+
   test("researchBundleFromDraft materializes registered structured notes with quotes", async () => {
     const kit = await registerMinimalBrief()
     await callTool(kit.tools, "submit_research_brief", { final: true })
@@ -210,6 +257,48 @@ describe("research output tools", () => {
     expect(kit.getCollector().draft?.webpage_contract?.reference_image_evidence_ids).toEqual([])
     expect(kit.getCollector().draft?.webpage_contract?.functional_surfaces[0]?.title).toBe("Economic trends")
     expect(kit.buildReport().detail).toContain("functional_surfaces=1")
+  })
+
+  test("webpage contract source must match the prepared frontend research source URL", async () => {
+    const kit = await registerMinimalBrief(
+      createResearchOutputTools({ expectedWebpageSourceUrl: "https://example.com/markets/world-economy/" }),
+    )
+
+    const result = await callTool(kit.tools, "set_webpage_contract_source", {
+      source_url: "https://example.com/other-page/",
+      reference_image_evidence_ids: [],
+    })
+
+    expect(result).toContain("must match the prepared frontend_research source URL")
+    expect(result).toContain("https://example.com/markets/world-economy/")
+    expect(kit.getCollector().webpage_contract_source).toBeUndefined()
+  })
+
+  test("webpage contract source rejects non-http URLs", async () => {
+    const kit = await registerMinimalBrief()
+
+    await expect(
+      callTool(kit.tools, "set_webpage_contract_source", {
+        source_url: "file:///tmp/reference.html",
+        reference_image_evidence_ids: [],
+      }),
+    ).rejects.toThrow("source_url must be an HTTP(S) webpage URL")
+
+    expect(kit.getCollector().webpage_contract_source).toBeUndefined()
+  })
+
+  test("webpage contract source rejects unknown fields instead of stripping source contract drift", async () => {
+    const kit = await registerMinimalBrief()
+
+    await expect(
+      callTool(kit.tools, "set_webpage_contract_source", {
+        source_url: "https://example.com/markets/world-economy/",
+        sourceUrl: "https://example.com/other-page/",
+        reference_image_evidence_ids: [],
+      }),
+    ).rejects.toThrow("Unrecognized key")
+
+    expect(kit.getCollector().webpage_contract_source).toBeUndefined()
   })
 
   test("submit_research_brief rejects webpage contract references to unknown evidence", async () => {
