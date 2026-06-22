@@ -185,12 +185,12 @@ export async function loadTaskBrowserPreviewLiveSnapshotObjectUrl(input: {
   )
 }
 
-export async function sendTaskBrowserPreviewLiveInputObjectUrl(input: {
+export async function sendTaskBrowserPreviewLiveInputsObjectUrl(input: {
   taskID: string
   directory: string
   targetID: string
   viewportID: BrowserPreviewViewportID
-  input: BrowserPreviewLiveInput
+  inputs: BrowserPreviewLiveInput[]
   signal?: AbortSignal
 }): Promise<string> {
   return browserPreviewLiveFrameObjectUrl(
@@ -198,7 +198,7 @@ export async function sendTaskBrowserPreviewLiveInputObjectUrl(input: {
     {
       targetID: input.targetID,
       viewportID: input.viewportID,
-      input: input.input,
+      inputs: input.inputs,
     },
     input.signal,
   )

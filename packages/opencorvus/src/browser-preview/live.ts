@@ -41,7 +41,7 @@ export async function interactBrowserPreviewLive(input: {
   taskID: string
   targetID: string
   viewportID: BrowserPreviewViewportID
-  input: BrowserPreviewLiveInput
+  inputs: BrowserPreviewLiveInput[]
   signal?: AbortSignal
 }): Promise<Buffer> {
   const target = browserPreviewLiveTarget(input)
@@ -53,7 +53,7 @@ export async function interactBrowserPreviewLive(input: {
       viewport: browserPreviewViewportByID(input.viewportID),
       navigationTimeoutMs: LIVE_NAVIGATION_TIMEOUT_MILLISECONDS,
       settleMs: LIVE_SETTLE_MILLISECONDS,
-      input: input.input,
+      inputs: input.inputs,
     },
     input.signal,
   )
@@ -93,7 +93,7 @@ type BrowserPreviewLiveCommand =
       viewport: { width: number; height: number }
       navigationTimeoutMs: number
       settleMs: number
-      input: BrowserPreviewLiveInput
+      inputs: BrowserPreviewLiveInput[]
     }
 
 type BrowserPreviewLiveResult = {
@@ -453,9 +453,7 @@ function buttonName(value) {
   return "left";
 }
 
-async function applyInput(command) {
-  const activePage = await ensurePage(command);
-  const input = command.input;
+async function applyInput(activePage, input) {
   if (input.kind === "click") {
     await activePage.mouse.click(input.x, input.y, { button: buttonName(input.button) });
   } else if (input.kind === "wheel") {
@@ -466,12 +464,19 @@ async function applyInput(command) {
   } else {
     throw new Error("Unsupported browser preview live input: " + input.kind);
   }
+}
+
+async function applyInputs(command) {
+  const activePage = await ensurePage(command);
+  for (const input of command.inputs) {
+    await applyInput(activePage, input);
+  }
   return capture(command);
 }
 
 async function handle(message) {
   const command = message.command;
-  const result = command.kind === "input" ? await applyInput(command) : await capture(command);
+  const result = command.kind === "input" ? await applyInputs(command) : await capture(command);
   process.stdout.write(JSON.stringify({ id: message.id, ok: true, result }) + "\n");
 }
 

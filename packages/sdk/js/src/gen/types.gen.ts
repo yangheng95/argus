@@ -10060,7 +10060,7 @@ export type BrowserPreviewLiveInputData = {
   body: {
     targetID: string
     viewportID: "desktop" | "tablet" | "mobile"
-    input:
+    inputs: Array<
       | {
           kind: "click"
           x: number
@@ -10078,6 +10078,7 @@ export type BrowserPreviewLiveInputData = {
           kind: "key"
           key: string
         }
+    >
   }
   path: {
     taskID: string

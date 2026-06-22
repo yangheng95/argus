@@ -995,7 +995,7 @@ describe("browser preview routes", () => {
           body: {
             targetID: target.id,
             viewportID: "desktop",
-            input: { kind: "click", x: 1, y: 1 },
+            inputs: [{ kind: "click", x: 1, y: 1 }],
             url: "http://127.0.0.1:5173/",
           },
           field: "url",
@@ -1005,9 +1005,18 @@ describe("browser preview routes", () => {
           body: {
             targetID: target.id,
             viewportID: "desktop",
-            input: { kind: "click", x: 1, y: 1, outDir: ".opencorvus/other" },
+            inputs: [{ kind: "click", x: 1, y: 1, outDir: ".opencorvus/other" }],
           },
           field: "outDir",
+        },
+        {
+          path: `/task/${taskID}/browser-preview/live/input`,
+          body: {
+            targetID: target.id,
+            viewportID: "desktop",
+            input: { kind: "click", x: 1, y: 1 },
+          },
+          field: "inputs",
         },
       ] as const
 
@@ -1264,7 +1273,7 @@ describe("browser preview routes", () => {
           body: JSON.stringify({
             targetID: target.id,
             viewportID: "desktop",
-            input: { kind: "click", x: 80, y: 40 },
+            inputs: [{ kind: "click", x: 80, y: 40 }],
           }),
         })
         const secondInput = await app.request(`/task/${taskID}/browser-preview/live/input`, {
@@ -1273,7 +1282,7 @@ describe("browser preview routes", () => {
           body: JSON.stringify({
             targetID: target.id,
             viewportID: "desktop",
-            input: { kind: "click", x: 80, y: 40 },
+            inputs: [{ kind: "click", x: 80, y: 40 }],
           }),
         })
 
@@ -1286,6 +1295,73 @@ describe("browser preview routes", () => {
       } finally {
         preview.stop(true)
       }
+    },
+    { timeout: 60_000 },
+  )
+
+  test(
+    "POST /task/:taskID/browser-preview/live/input applies batched inputs in order",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      const target = await persistBrowserPreviewTarget({
+        taskID,
+        url: `data:text/html,${encodeURIComponent(`<!doctype html>
+          <html>
+            <head>
+              <style>
+                html, body { margin: 0; width: 100%; height: 100%; background: rgb(32, 32, 32); }
+                button { position: absolute; top: 0; width: 120px; height: 120px; }
+                #first { left: 0; }
+                #second { left: 150px; }
+              </style>
+              <script>
+                window.firstCompleted = false
+                window.raceDetected = false
+                function paint(value) {
+                  document.body.style.background = value
+                }
+                function firstInput() {
+                  window.firstCompleted = true
+                  if (!window.raceDetected) paint('rgb(255, 0, 0)')
+                }
+                function secondInput() {
+                  if (window.firstCompleted) {
+                    paint('rgb(0, 0, 255)')
+                  } else {
+                    window.raceDetected = true
+                    paint('rgb(255, 0, 255)')
+                  }
+                }
+              </script>
+            </head>
+            <body>
+              <button id="first" onclick="firstInput()">First</button>
+              <button id="second" onclick="secondInput()">Second</button>
+            </body>
+          </html>`)}`,
+      })
+      const app = Server.App()
+      const headers = {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      }
+
+      const response = await app.request(`/task/${taskID}/browser-preview/live/input`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          targetID: target.id,
+          viewportID: "desktop",
+          inputs: [
+            { kind: "click", x: 60, y: 60 },
+            { kind: "click", x: 210, y: 60 },
+          ],
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      expectCenterColor(Buffer.from(await response.arrayBuffer()), "blue")
     },
     { timeout: 60_000 },
   )
@@ -1354,7 +1430,7 @@ describe("browser preview routes", () => {
         body: JSON.stringify({
           targetID: target.id,
           viewportID: "desktop",
-          input: { kind: "click", x: 60, y: 60 },
+          inputs: [{ kind: "click", x: 60, y: 60 }],
         }),
       })
       const blueRequest = app.request(url, {
@@ -1363,7 +1439,7 @@ describe("browser preview routes", () => {
         body: JSON.stringify({
           targetID: target.id,
           viewportID: "desktop",
-          input: { kind: "click", x: 210, y: 60 },
+          inputs: [{ kind: "click", x: 210, y: 60 }],
         }),
       })
 
@@ -1400,7 +1476,7 @@ describe("browser preview routes", () => {
         body: JSON.stringify({
           url: "http://127.0.0.1:5173/",
           viewportID: "desktop",
-          input: { kind: "click", x: 1, y: 1 },
+          inputs: [{ kind: "click", x: 1, y: 1 }],
         }),
       })
       expect(missingTargetID.status).toBe(400)
@@ -1415,7 +1491,7 @@ describe("browser preview routes", () => {
         body: JSON.stringify({
           targetID: "art_previewtarget_missing",
           viewportID: "desktop",
-          input: { kind: "click", x: 1, y: 1 },
+          inputs: [{ kind: "click", x: 1, y: 1 }],
         }),
       })
       expect(unknownTarget.status).toBe(404)

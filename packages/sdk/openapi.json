@@ -17418,96 +17418,100 @@
                       "mobile"
                     ]
                   },
-                  "input": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "properties": {
-                          "kind": {
-                            "type": "string",
-                            "const": "click"
+                  "inputs": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "click"
+                            },
+                            "x": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "y": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "button": {
+                              "type": "string",
+                              "enum": [
+                                "left",
+                                "middle",
+                                "right"
+                              ]
+                            }
                           },
-                          "x": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "y": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "button": {
-                            "type": "string",
-                            "enum": [
-                              "left",
-                              "middle",
-                              "right"
-                            ]
-                          }
+                          "required": [
+                            "kind",
+                            "x",
+                            "y"
+                          ],
+                          "additionalProperties": false
                         },
-                        "required": [
-                          "kind",
-                          "x",
-                          "y"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "kind": {
-                            "type": "string",
-                            "const": "wheel"
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "wheel"
+                            },
+                            "x": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "y": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "deltaX": {
+                              "type": "number"
+                            },
+                            "deltaY": {
+                              "type": "number"
+                            }
                           },
-                          "x": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "y": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "deltaX": {
-                            "type": "number"
-                          },
-                          "deltaY": {
-                            "type": "number"
-                          }
+                          "required": [
+                            "kind",
+                            "x",
+                            "y",
+                            "deltaX",
+                            "deltaY"
+                          ],
+                          "additionalProperties": false
                         },
-                        "required": [
-                          "kind",
-                          "x",
-                          "y",
-                          "deltaX",
-                          "deltaY"
-                        ],
-                        "additionalProperties": false
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "kind": {
-                            "type": "string",
-                            "const": "key"
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "key"
+                            },
+                            "key": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            }
                           },
-                          "key": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 80
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "key"
-                        ],
-                        "additionalProperties": false
-                      }
-                    ]
+                          "required": [
+                            "kind",
+                            "key"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
                   }
                 },
                 "required": [
                   "targetID",
                   "viewportID",
-                  "input"
+                  "inputs"
                 ],
                 "additionalProperties": false
               }
