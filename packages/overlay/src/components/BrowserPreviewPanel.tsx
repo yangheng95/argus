@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch, untrack } from "solid-js"
 import type { JSX } from "solid-js"
 import { ApiError } from "../services/api"
 import {
@@ -401,7 +401,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   }
 
   const clearLiveImageUrl = () => {
-    const previous = liveImage()
+    const previous = untrack(liveImage)
     if (!previous) return
     setLiveImage(undefined)
     disconnectLiveImageElement()

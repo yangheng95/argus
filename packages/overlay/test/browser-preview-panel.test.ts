@@ -75,6 +75,7 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("loadTaskBrowserPreviewLiveSnapshotObjectUrl")
   expect(component).toContain("sendTaskBrowserPreviewLiveInputsObjectUrl")
   expect(component).toContain('import { createAnimationFrameScheduler } from "../utils/animation-frame"')
+  expect(component).toContain("untrack(liveImage)")
   expect(component).toContain("const latestEvidenceScope = createMemo")
   expect(component).toContain("const [latestEvidence] = createResource(latestEvidenceScope")
   expect(component).toContain("renderedEvidence")
@@ -201,9 +202,15 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
     component.indexOf("const livePoint ="),
     component.indexOf("const sendLiveInput =", component.indexOf("const livePoint =")),
   )
+  const clearLiveImageUrlSource = component.slice(
+    component.indexOf("const clearLiveImageUrl ="),
+    component.indexOf("const taskScopeKey =", component.indexOf("const clearLiveImageUrl =")),
+  )
   expect(livePointSource).toContain("browserPreviewLivePoint(event, liveImageRect, viewport)")
   expect(livePointSource).not.toContain("querySelector")
   expect(livePointSource).not.toContain("getBoundingClientRect")
+  expect(clearLiveImageUrlSource).toContain("untrack(liveImage)")
+  expect(clearLiveImageUrlSource).not.toContain("liveImage()")
   const targetStatusSourceStart = component.indexOf('class="browser-preview-status"')
   const targetStatusSource = component.slice(targetStatusSourceStart, component.indexOf("<Switch", targetStatusSourceStart))
   expect(targetStatusSource).toContain('role={target.loading || targetTransitionPending() ? "status" : undefined}')
