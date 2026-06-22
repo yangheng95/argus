@@ -8,6 +8,8 @@
 // This module owns no render-side effects. Callers are responsible for
 // driving UI updates through reactive Solid stores.
 
+import { batch } from "solid-js"
+
 import { apiJson, ApiError } from "./api"
 import { getHostTransport } from "./host-transport"
 import { isSelectedTaskSSEConnected, startSSE, stopSSE } from "./sse"
@@ -266,25 +268,27 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
   setChatAttachments([])
   stopSSE()
   resetSelectedLiveCursor()
-  clearBoard()
-  clearMessages()
-  // Drop cardTreeStore + the writer's internal session/message/integrity
-  // indices so the conversation panel doesn't carry stale cards into the
-  // next task. resetWriter() was documented for task-switch use but had no
-  // production call site — the old pipeline's derivation from messageStore
-  // masked the leak until the new writer became source-of-truth.
-  resetWriter({ scrollIntent: "bottom", cause: "task-switch" })
-  setSelectedTaskID(nextTaskID)
-  setBoardStore(
-    "selectedSource",
-    nextTaskID ? { kind: "task", id: nextTaskID, ...(taskDirectory ? { directory: taskDirectory } : {}) } : null,
-  )
-  setBoardStore("selectEpoch", epoch)
+  batch(() => {
+    setSelectedTaskID(nextTaskID)
+    setBoardStore(
+      "selectedSource",
+      nextTaskID ? { kind: "task", id: nextTaskID, ...(taskDirectory ? { directory: taskDirectory } : {}) } : null,
+    )
+    setBoardStore("selectEpoch", epoch)
+    setBoardStore("taskSwitching", !!nextTaskID)
+    clearBoard()
+    clearMessages()
+    // Drop cardTreeStore + the writer's internal session/message/integrity
+    // indices so the conversation panel doesn't carry stale cards into the
+    // next task. resetWriter() was documented for task-switch use but had no
+    // production call site — the old pipeline's derivation from messageStore
+    // masked the leak until the new writer became source-of-truth.
+    resetWriter({ scrollIntent: "bottom", cause: "task-switch" })
+  })
 
   if (!nextTaskID) {
     // Deselection has no async work; make sure any lingering progress UI
     // from a superseded switch is cleared.
-    setBoardStore("taskSwitching", false)
     // Clear persisted workspace identity so next launch does not resume a
     // task the user just deselected.
     setSettingsStore("workspaceTaskID", "")
@@ -292,8 +296,6 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     saveSettings()
     return
   }
-
-  setBoardStore("taskSwitching", true)
 
   // ── Async phase ──────────────────────────────────────────────────────
   const stale = () => boardStore.selectEpoch !== epoch
