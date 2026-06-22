@@ -453,6 +453,49 @@ describe("startSSE stream error handling", () => {
     })
   })
 
+  test("task-list stream uses the active settings directory instead of a stale selected board directory", () => {
+    const streams: StreamOpenRequest[] = []
+    const transport = {
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
+      openStream: (input: StreamOpenRequest, _h: StreamHandlers) => {
+        streams.push(input)
+        return { close() {} }
+      },
+      native: async () => null,
+      subscribeUiCommand: () => ({ unsubscribe() {} }),
+    } satisfies HostTransport
+
+    try {
+      __setHostTransportForTest(transport)
+      setSettingsStore("directory", "D:/repo/next")
+      setBoardStore("board", {
+        snapshotVersion: "board:old",
+        task: {
+          id: "tsk_old",
+          directory: "D:/repo/old",
+          status: "active",
+          request: "old",
+          sessionID: "ses_old",
+          time: { created: 1_776_000_000_000 },
+          attachments: [],
+        },
+        goalWorkflows: [],
+        interactions: [],
+      })
+
+      startTaskListSSE()
+
+      expect(streams).toEqual([{ path: "task/events", query: { directory: "D:/repo/next" } }])
+    } finally {
+      stopTaskListSSE()
+      __setHostTransportForTest(undefined)
+      setBoardStore("board", null as any)
+      setSettingsStore("directory", "")
+    }
+  })
+
   test("selected task stream watchdog closes a silent stale handle so reconnect can run", () => {
     createRoot((dispose) => {
       const originalSetTimeout = globalThis.setTimeout

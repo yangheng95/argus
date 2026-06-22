@@ -315,7 +315,7 @@ let taskListRefreshTimer: VisibilityInterval | null = null
 export const TASK_LIST_REFRESH_INTERVAL_MS = 30_000
 
 function taskListDirectory(): string {
-  return (boardStore.board?.task?.directory || settingsStore.directory || "").trim()
+  return (settingsStore.directory || "").trim()
 }
 
 function startTaskListRefreshTimer() {

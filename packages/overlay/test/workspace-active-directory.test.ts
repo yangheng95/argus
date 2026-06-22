@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { boardStore, setBoardStore } from "../src/store/board"
-import { setSettingsStore } from "../src/store/settings"
+import { settingsStore, setSettingsStore } from "../src/store/settings"
 import { appStore, setAppStore } from "../src/store/app"
 import { apiUrl, configure } from "../src/services/api"
 import {
@@ -9,6 +9,7 @@ import {
   closeProject,
   pickDirectory,
   pickFiles,
+  setWorkspaceDirectory,
   syncActiveDirectoryApiContext,
 } from "../src/services/workspace"
 import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse"
@@ -84,6 +85,41 @@ describe("workspace active directory", () => {
     expect(new URL(apiUrl("task/task_3/operator-model-context")).searchParams.get("directory")).toBe(
       "D:/repo/from-selected-source",
     )
+  })
+
+  test("task-driven directory switch immediately retargets project-scoped API requests", async () => {
+    __setHostTransportForTest({
+      kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
+      async request(req) {
+        if (req.path === "config") return { status: 200, ok: true, headers: {}, body: { model: "" } }
+        if (req.path === "channel") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "skill/installed") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "mcp") return { status: 200, ok: true, headers: {}, body: {} }
+        if (req.path === "path") return { status: 200, ok: true, headers: {}, body: { directory: "D:/repo/next" } }
+        if (req.path === "vcs") return { status: 200, ok: true, headers: {}, body: { branch: "main" } }
+        if (req.path === "global/tasks") return { status: 200, ok: true, headers: {}, body: { tasks: [] } }
+        if (req.path === "executor") return { status: 200, ok: true, headers: {}, body: [] }
+        return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+      },
+      openStream() {
+        return { close: () => undefined }
+      },
+      async native() {
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe: () => undefined }
+      },
+    } satisfies HostTransport)
+    configure({ directory: "D:/repo/current" })
+    setSettingsStore("directory", "D:/repo/current")
+
+    setWorkspaceDirectory("D:/repo/next", "task")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(settingsStore.directory).toBe("D:/repo/next")
+    expect(new URL(apiUrl("config")).searchParams.get("directory")).toBe("D:/repo/next")
   })
 
   test("selected task source and board directory conflicts fail loudly", () => {
