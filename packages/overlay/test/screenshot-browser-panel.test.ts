@@ -267,6 +267,52 @@ describe("screenshot browser panel", () => {
     expect(items.at(-1)?.src).toBe("/attachment/project/10.png")
   })
 
+  test("card tree collection keeps a bounded newest set without full message materialization", () => {
+    const count = 5_000
+    const order = Array.from({ length: count }, (_item, index) => `card_${index}`)
+    const cards = Object.fromEntries(
+      order.map((id, index) => [
+        id,
+        {
+          id,
+          kind: "agent",
+          sessionID: "ses_visual",
+          messageID: `msg_${index}`,
+          role: "visual-qa",
+          stage: "visual-qa",
+          title: `Visual ${index}`,
+          time: index + 1,
+          parts:
+            index % 10 === 0
+              ? [
+                  {
+                    id: `part_${index}`,
+                    type: "file",
+                    messageID: `msg_${index}`,
+                    sessionID: "ses_visual",
+                    url: `/attachment/project/${index}.png`,
+                    mime: "image/png",
+                    filename: `${index}.png`,
+                  },
+                ]
+              : [],
+          childIDs: [],
+        },
+      ]),
+    )
+
+    const items = collectScreenshotBrowserItemsFromCardTree(order, cards)
+    const source = read("src/utils/screenshot-browser.ts")
+
+    expect(items).toHaveLength(SCREENSHOT_BROWSER_ITEM_LIMIT)
+    expect(items[0].src).toBe("/attachment/project/4990.png")
+    expect(items.at(-1)?.src).toBe("/attachment/project/3800.png")
+    expect(source).toContain("function insertBoundedNewestFirst")
+    expect(source).toContain("function collectCardTreeScreenshots")
+    expect(source).not.toContain("const messages: any[] = []")
+    expect(source).not.toContain("items.sort(")
+  })
+
   test("builds virtual rows with group headers and bounded column chunks", () => {
     const messages = Array.from({ length: 5 }, (_item, index) => ({
       info: {

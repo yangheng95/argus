@@ -21,6 +21,11 @@ export interface ScreenshotBrowserGroup {
   items: ScreenshotBrowserItem[]
 }
 
+interface ScreenshotBrowserCollector {
+  seen: Set<string>
+  items: ScreenshotBrowserItem[]
+}
+
 export type ScreenshotBrowserRow =
   | {
       kind: "group"
@@ -79,12 +84,22 @@ function itemKey(item: ScreenshotBrowserItem): string {
   return `${item.role}:${item.src}:${item.messageID}:${item.partID}:${item.source}`
 }
 
-function pushUnique(items: ScreenshotBrowserItem[], seen: Set<string>, item: ScreenshotBrowserItem): void {
+function insertBoundedNewestFirst(items: ScreenshotBrowserItem[], item: ScreenshotBrowserItem): void {
+  const insertAt = items.findIndex((current) => item.time > current.time)
+  if (insertAt === -1) {
+    if (items.length < SCREENSHOT_BROWSER_ITEM_LIMIT) items.push(item)
+    return
+  }
+  items.splice(insertAt, 0, item)
+  if (items.length > SCREENSHOT_BROWSER_ITEM_LIMIT) items.length = SCREENSHOT_BROWSER_ITEM_LIMIT
+}
+
+function pushUnique(collector: ScreenshotBrowserCollector, item: ScreenshotBrowserItem): void {
   if (!item.src) return
   const key = itemKey(item)
-  if (seen.has(key)) return
-  seen.add(key)
-  items.push(item)
+  if (collector.seen.has(key)) return
+  collector.seen.add(key)
+  insertBoundedNewestFirst(collector.items, item)
 }
 
 function sourceMessageID(message: any, part: any): string {
@@ -187,31 +202,36 @@ function toolAttachmentItems(input: {
     .filter((item) => !!item.src)
 }
 
-export function collectScreenshotBrowserItems(messages: readonly any[]): ScreenshotBrowserItem[] {
-  const seen = new Set<string>()
-  const items: ScreenshotBrowserItem[] = []
-  for (const message of messages) {
-    const role = messageRole(message)
-    const time = messageTime(message)
-    const parts = Array.isArray(message?.parts) ? message.parts : []
-    for (let index = 0; index < parts.length; index += 1) {
-      const part = parts[index]
-      if (!isRecord(part)) continue
-      if (part.type === "file") {
-        const item = fileItem({ message, part, role, time, index })
-        if (item) pushUnique(items, seen, item)
-        continue
-      }
-      if (part.type === "tool") {
-        const browser = browserEvidenceItem({ message, part, role, time, index })
-        if (browser) pushUnique(items, seen, browser)
-        for (const attachment of toolAttachmentItems({ message, part, role, time, index })) {
-          pushUnique(items, seen, attachment)
-        }
+function createScreenshotBrowserCollector(): ScreenshotBrowserCollector {
+  return { seen: new Set<string>(), items: [] }
+}
+
+function collectScreenshotBrowserMessage(collector: ScreenshotBrowserCollector, message: any): void {
+  const role = messageRole(message)
+  const time = messageTime(message)
+  const parts = Array.isArray(message?.parts) ? message.parts : []
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]
+    if (!isRecord(part)) continue
+    if (part.type === "file") {
+      const item = fileItem({ message, part, role, time, index })
+      if (item) pushUnique(collector, item)
+      continue
+    }
+    if (part.type === "tool") {
+      const browser = browserEvidenceItem({ message, part, role, time, index })
+      if (browser) pushUnique(collector, browser)
+      for (const attachment of toolAttachmentItems({ message, part, role, time, index })) {
+        pushUnique(collector, attachment)
       }
     }
   }
-  return items.sort((a, b) => b.time - a.time).slice(0, SCREENSHOT_BROWSER_ITEM_LIMIT)
+}
+
+export function collectScreenshotBrowserItems(messages: readonly any[]): ScreenshotBrowserItem[] {
+  const collector = createScreenshotBrowserCollector()
+  for (const message of messages) collectScreenshotBrowserMessage(collector, message)
+  return collector.items
 }
 
 function cardMessage(card: CardNode): any {
@@ -234,20 +254,20 @@ function cardMessage(card: CardNode): any {
   }
 }
 
-function collectCardMessages(
+function collectCardTreeScreenshots(
   order: readonly string[],
   cards: Readonly<Record<string, CardNode | undefined>>,
   visited: Set<string>,
-  messages: any[],
+  collector: ScreenshotBrowserCollector,
 ): void {
   for (const id of order) {
     if (visited.has(id)) continue
     visited.add(id)
     const card = cards[id]
     if (!card) continue
-    messages.push(cardMessage(card))
+    collectScreenshotBrowserMessage(collector, cardMessage(card))
     const childIDs = Array.isArray(card.childIDs) ? card.childIDs : []
-    collectCardMessages(childIDs, cards, visited, messages)
+    collectCardTreeScreenshots(childIDs, cards, visited, collector)
   }
 }
 
@@ -255,9 +275,9 @@ export function collectScreenshotBrowserItemsFromCardTree(
   order: readonly string[],
   cards: Readonly<Record<string, CardNode | undefined>>,
 ): ScreenshotBrowserItem[] {
-  const messages: any[] = []
-  collectCardMessages(Array.isArray(order) ? order : [], cards, new Set<string>(), messages)
-  return collectScreenshotBrowserItems(messages)
+  const collector = createScreenshotBrowserCollector()
+  collectCardTreeScreenshots(Array.isArray(order) ? order : [], cards, new Set<string>(), collector)
+  return collector.items
 }
 
 export function groupScreenshotBrowserItems(items: readonly ScreenshotBrowserItem[]): ScreenshotBrowserGroup[] {
