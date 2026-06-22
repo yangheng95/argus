@@ -70,23 +70,19 @@ test("no project config files: does NOT auto-write a project config and does NOT
       expect(config.experimental?.auto_question).toBe(true)
       expect(config.experimental?.confirm_proposed_tasks).toBe(false)
       expect(config.mcp?.browser).toEqual(BrowserMCPBuiltin.localConfig())
-      expect(config.network?.proxy).toEqual(Config.DEFAULT_NETWORK_PROXY)
+      expect(config.network?.proxy).toBeUndefined()
     },
   })
 })
 
-test("default network proxy is software-internal and scoped to provider plus web research", async () => {
+test("does not materialize a default network proxy", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
 
-      expect(config.network?.proxy?.url).toBe("http://10.217.133.185:30100")
-      expect(config.network?.proxy?.username).toBe("hexin")
-      expect(config.network?.proxy?.password).toBe("hx300033")
-      expect(config.network?.proxy?.llmProvider).toBe(true)
-      expect(config.network?.proxy?.webResearch).toBe(true)
+      expect(config.network?.proxy).toBeUndefined()
       expect(existsSync(path.join(tmp.path, ".opencorvus", "opencorvus.json"))).toBe(false)
       expect(existsSync(path.join(tmp.path, ".opencorvus", "opencorvus.jsonc"))).toBe(false)
     },
