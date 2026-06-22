@@ -41,6 +41,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-window-resize-center-layout-frame.md](2026-06-22-window-resize-center-layout-frame.md) | Window Resize Center Layout Frame |
 | [2026-06-22-retire-md-active-block-residue.md](2026-06-22-retire-md-active-block-residue.md) | Retire Markdown Active Block Residue |
 | [2026-06-22-retire-dialog-subtitle-residue.md](2026-06-22-retire-dialog-subtitle-residue.md) | Retire Dialog Subtitle Residue |
+| [2026-06-22-retire-row-resize-css.md](2026-06-22-retire-row-resize-css.md) | Retire Row Resize CSS |
 | [2026-06-22-retire-solid-changes-panel-empty-state.md](2026-06-22-retire-solid-changes-panel-empty-state.md) | Retire Solid Changes Panel Empty State |
 | [2026-06-22-screenshot-browser-bounded-card-collector.md](2026-06-22-screenshot-browser-bounded-card-collector.md) | Screenshot Browser Bounded Card Collector |
 | [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md) | Screenshot Browser Open Jank |

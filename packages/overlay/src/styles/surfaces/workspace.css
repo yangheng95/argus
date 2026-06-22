@@ -456,17 +456,6 @@ body[data-center-workbench-panel-resizing="true"] .center-workbench-panel-separa
   cursor: default;
 }
 
-body[data-resizing="row"] {
-  cursor: row-resize;
-  user-select: none;
-}
-body[data-resizing="row"] *,
-body[data-resizing="row"] .pane-resizer,
-body[data-resizing="row"] .pane-resizer::before,
-body[data-resizing="row"] .pane-resizer::after {
-  cursor: row-resize;
-}
-
 body[data-resizing="true"] {
   cursor: col-resize;
   user-select: none;

@@ -57,6 +57,10 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(pane).toContain('addEventListener("keydown"')
   expect(css).toContain(".pane-resizer:focus-visible")
   expect(css).toContain("outline: var(--oc-border-width) solid var(--accent)")
+  expect(css).not.toContain('body[data-resizing="row"]')
+  expect(css).not.toContain("row-resize")
+  expect(pane).toContain('document.body.dataset.resizing = "true"')
+  expect(pane).not.toContain('document.body.dataset.resizing = "row"')
   expect(main).not.toContain("leftResizer.dataset.disabled")
 })
 
