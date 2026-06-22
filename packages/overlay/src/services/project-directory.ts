@@ -1,7 +1,12 @@
 import { boardStore } from "../store/board"
 import { settingsStore } from "../store/settings"
+import { taskOwningDirectory } from "./task-directory"
 
 export function activeProjectDirectory(): string {
+  const selectedSource = boardStore.selectedSource
+  if (selectedSource?.kind === "task") {
+    return taskOwningDirectory(selectedSource.id)
+  }
   return (boardStore.board?.task?.directory || settingsStore.directory || "").trim()
 }
 

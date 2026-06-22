@@ -3,7 +3,14 @@ import { boardStore, setBoardStore } from "../src/store/board"
 import { setSettingsStore } from "../src/store/settings"
 import { appStore, setAppStore } from "../src/store/app"
 import { apiUrl, configure } from "../src/services/api"
-import { activeDirectory, applyDirectory, closeProject, pickDirectory, pickFiles } from "../src/services/workspace"
+import {
+  activeDirectory,
+  applyDirectory,
+  closeProject,
+  pickDirectory,
+  pickFiles,
+  syncActiveDirectoryApiContext,
+} from "../src/services/workspace"
 import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse"
 import { __setHostTransportForTest, HOST_CAPABILITIES, type HostTransport } from "../src/services/host-transport"
 import { activeTaskID } from "../src/store/board"
@@ -65,6 +72,44 @@ describe("workspace active directory", () => {
     })
 
     expect(activeDirectory()).toBe("D:/repo/from-task")
+  })
+
+  test("selected task source directory owns project-scoped controls before board loads", () => {
+    setSettingsStore("directory", "D:/repo/from-settings")
+    setBoardStore("selectedSource", { kind: "task", id: "task_3", directory: "D:/repo/from-selected-source" })
+    setBoardStore("board", null)
+
+    expect(activeDirectory()).toBe("D:/repo/from-selected-source")
+    expect(syncActiveDirectoryApiContext()).toBe("D:/repo/from-selected-source")
+    expect(new URL(apiUrl("task/task_3/operator-model-context")).searchParams.get("directory")).toBe(
+      "D:/repo/from-selected-source",
+    )
+  })
+
+  test("selected task source and board directory conflicts fail loudly", () => {
+    setSettingsStore("directory", "D:/repo/from-settings")
+    setBoardStore("selectedSource", { kind: "task", id: "task_conflict", directory: "D:/repo/from-selected-source" })
+    setBoardStore("board", {
+      task: {
+        id: "task_conflict",
+        directory: "D:/repo/from-board",
+      },
+    })
+
+    expect(() => activeDirectory()).toThrow("task task_conflict has inconsistent project directories")
+  })
+
+  test("selected task without an owning directory rejects stale board directory reuse", () => {
+    setSettingsStore("directory", "D:/repo/from-settings")
+    setBoardStore("selectedSource", { kind: "task", id: "task_missing_directory" })
+    setBoardStore("board", {
+      task: {
+        id: "task_previous",
+        directory: "D:/repo/from-previous-board",
+      },
+    })
+
+    expect(() => activeDirectory()).toThrow("task task_missing_directory has no owning project directory")
   })
 
   test("closeProject clears selected directory and project-scoped projections", () => {
