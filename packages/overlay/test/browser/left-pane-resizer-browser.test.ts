@@ -73,6 +73,98 @@ async function leftPaneState(page: OverlayPage) {
 
 type LeftPaneState = Awaited<ReturnType<typeof leftPaneState>>
 
+interface PaneDragProbeSummary {
+  frame: number
+  rafCallbacks: number
+  rectReadsTotal: number
+  rectReadsBeforeFrame: number
+  styleWritesTotal: number
+  styleWritesBeforeFrame: number
+  styleWriteFrames: number
+  ariaWritesTotal: number
+  ariaWritesBeforeFrame: number
+  ariaWriteFrames: number
+}
+
+async function installPaneDragProbe(page: OverlayPage) {
+  await page.evaluate(() => {
+    const w = window as any
+    if (w.__paneDragProbeInstalled) return
+    w.__paneDragProbeInstalled = true
+    const probe = {
+      frame: 0,
+      rafCallbacks: 0,
+      rectReadsByFrame: {} as Record<string, number>,
+      styleWritesByFrame: {} as Record<string, number>,
+      ariaWritesByFrame: {} as Record<string, number>,
+      reset() {
+        this.frame = 0
+        this.rafCallbacks = 0
+        this.rectReadsByFrame = {}
+        this.styleWritesByFrame = {}
+        this.ariaWritesByFrame = {}
+      },
+      bump(bucket: Record<string, number>) {
+        const key = String(this.frame)
+        bucket[key] = (bucket[key] ?? 0) + 1
+      },
+      summary(): PaneDragProbeSummary {
+        const total = (bucket: Record<string, number>) => Object.values(bucket).reduce((sum, value) => sum + value, 0)
+        const frames = (bucket: Record<string, number>) => Object.keys(bucket).filter((key) => (bucket[key] ?? 0) > 0).length
+        return {
+          frame: this.frame,
+          rafCallbacks: this.rafCallbacks,
+          rectReadsTotal: total(this.rectReadsByFrame),
+          rectReadsBeforeFrame: this.rectReadsByFrame["0"] ?? 0,
+          styleWritesTotal: total(this.styleWritesByFrame),
+          styleWritesBeforeFrame: this.styleWritesByFrame["0"] ?? 0,
+          styleWriteFrames: frames(this.styleWritesByFrame),
+          ariaWritesTotal: total(this.ariaWritesByFrame),
+          ariaWritesBeforeFrame: this.ariaWritesByFrame["0"] ?? 0,
+          ariaWriteFrames: frames(this.ariaWritesByFrame),
+        }
+      },
+    }
+    w.__paneDragProbe = probe
+
+    const requestAnimationFrameOriginal = window.requestAnimationFrame.bind(window)
+    window.requestAnimationFrame = (callback: FrameRequestCallback) =>
+      requestAnimationFrameOriginal((time) => {
+        probe.frame += 1
+        probe.rafCallbacks += 1
+        callback(time)
+      })
+
+    const rectOriginal = Element.prototype.getBoundingClientRect
+    Element.prototype.getBoundingClientRect = function () {
+      if (this instanceof HTMLElement && (this.id === "panelBody" || this.id === "leftPaneResizer")) {
+        probe.bump(probe.rectReadsByFrame)
+      }
+      return rectOriginal.call(this)
+    }
+
+    const setPropertyOriginal = CSSStyleDeclaration.prototype.setProperty
+    CSSStyleDeclaration.prototype.setProperty = function (propertyName: string, value?: string | null, priority?: string) {
+      if (propertyName === "--ui-sidebar-width" || propertyName === "--ui-sections-width") {
+        probe.bump(probe.styleWritesByFrame)
+      }
+      return setPropertyOriginal.call(this, propertyName, value, priority)
+    }
+
+    const setAttributeOriginal = Element.prototype.setAttribute
+    Element.prototype.setAttribute = function (name: string, value: string) {
+      if (this instanceof HTMLElement && this.id === "leftPaneResizer" && name.startsWith("aria-value")) {
+        probe.bump(probe.ariaWritesByFrame)
+      }
+      return setAttributeOriginal.call(this, name, value)
+    }
+  })
+}
+
+async function paneDragProbeSummary(page: OverlayPage): Promise<PaneDragProbeSummary> {
+  return await page.evaluate(() => (window as any).__paneDragProbe.summary())
+}
+
 async function waitForLeftPaneState(
   page: OverlayPage,
   label: string,
@@ -198,6 +290,7 @@ test(
       }, server.origin)
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
       await page.waitForSelector("#leftPaneResizer", { visible: true })
+      await installPaneDragProbe(page)
 
       const initial = await leftPaneState(page)
       assert.equal(initial.hidden, false)
@@ -244,6 +337,84 @@ test(
         (state) => state.nowValue === state.maxValue,
       )
       assert.equal(atMax.sidebarWidth, atMax.maxValue)
+
+      const afterMoveBurst = await page.$eval("#leftPaneResizer", (node) => {
+        const probe = (window as any).__paneDragProbe
+        const separator = node as HTMLElement
+        const rect = separator.getBoundingClientRect()
+        const startX = rect.left + rect.width / 2
+        const clientY = rect.top + rect.height / 2
+        separator.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            button: 0,
+            clientX: startX,
+            clientY,
+            pointerId: 5,
+            pointerType: "mouse",
+          }),
+        )
+        probe.reset()
+        for (let index = 0; index < 30; index += 1) {
+          window.dispatchEvent(
+            new PointerEvent("pointermove", {
+              bubbles: true,
+              clientX: startX - 160 - index,
+              clientY,
+              pointerId: 5,
+              pointerType: "mouse",
+            }),
+          )
+        }
+        return probe.summary() as PaneDragProbeSummary
+      })
+      assert.equal(afterMoveBurst.rectReadsBeforeFrame, 0)
+      assert.equal(afterMoveBurst.styleWritesBeforeFrame, 0)
+      assert.equal(afterMoveBurst.ariaWritesBeforeFrame, 0)
+
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+      const afterDragFrame = await paneDragProbeSummary(page)
+      assert.ok(afterDragFrame.rectReadsTotal > 0)
+      assert.ok(afterDragFrame.styleWritesTotal > 0)
+      assert.ok(afterDragFrame.ariaWritesTotal > 0)
+      assert.equal(afterDragFrame.styleWriteFrames, 1)
+      assert.equal(afterDragFrame.ariaWriteFrames, 1)
+
+      const afterPointerUp = await page.$eval("#leftPaneResizer", (node) => {
+        const probe = (window as any).__paneDragProbe
+        const separator = node as HTMLElement
+        const rect = separator.getBoundingClientRect()
+        const clientY = rect.top + rect.height / 2
+        probe.reset()
+        window.dispatchEvent(
+          new PointerEvent("pointermove", {
+            bubbles: true,
+            clientX: rect.left + rect.width / 2 - 220,
+            clientY,
+            pointerId: 5,
+            pointerType: "mouse",
+          }),
+        )
+        window.dispatchEvent(
+          new PointerEvent("pointerup", {
+            bubbles: true,
+            button: 0,
+            clientX: rect.left + rect.width / 2 - 220,
+            clientY,
+            pointerId: 5,
+            pointerType: "mouse",
+          }),
+        )
+        return probe.summary() as PaneDragProbeSummary
+      })
+      assert.ok(afterPointerUp.styleWritesBeforeFrame > 0)
+      assert.ok(afterPointerUp.ariaWritesBeforeFrame > 0)
+      const afterDrag = await waitForLeftPaneState(
+        page,
+        "pointerup flush to persist final sidebar width",
+        (state) => state.sidebarWidth < atMax.sidebarWidth - 100,
+      )
+      assert.ok(afterDrag.nowValue! < atMax.nowValue!)
 
       await mkdir(resolve(".scratch"), { recursive: true })
       await writeFile(
