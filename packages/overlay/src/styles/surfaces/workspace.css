@@ -462,7 +462,6 @@ body[data-resizing="true"] {
 }
 body[data-resizing="true"] *,
 body[data-resizing="true"] .pane-resizer,
-body[data-resizing="true"] .pane-resizer::before,
 body[data-resizing="true"] .pane-resizer::after {
   cursor: col-resize;
 }

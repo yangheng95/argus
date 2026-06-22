@@ -741,6 +741,28 @@ test(
         notificationTitle: "Notifications",
         workbenchStartsAtWorkspace: true,
       })
+      const legalLeftShellLayout = await page.evaluate(() => {
+        const shell = document.querySelector<HTMLElement>("#leftActivityShell")!
+        const probe = document.createElement("div")
+        probe.style.position = "fixed"
+        probe.style.visibility = "hidden"
+        probe.style.width = "calc(var(--ui-collapsed-pane-width) + var(--ui-rail-min-width))"
+        document.body.appendChild(probe)
+        const tokenMinWidth = probe.getBoundingClientRect().width
+        probe.remove()
+        const shellRect = shell.getBoundingClientRect()
+        const shellStyle = getComputedStyle(shell)
+        return {
+          shellWidth: Math.round(shellRect.width),
+          tokenMinWidth: Math.round(tokenMinWidth),
+          minWidth: shellStyle.minWidth,
+        }
+      })
+      assert.notEqual(legalLeftShellLayout.minWidth, "0px", JSON.stringify(legalLeftShellLayout))
+      assert.ok(
+        legalLeftShellLayout.shellWidth >= legalLeftShellLayout.tokenMinWidth - 1,
+        JSON.stringify(legalLeftShellLayout),
+      )
       const leftToolbarElement = await page.$("#solidLeftActivityToolbar")
       assert.ok(leftToolbarElement, "left activity toolbar should exist before screenshot")
       const leftActivityScreenshotPath = resolve(".scratch/left-activity-toolbar-current-page.png")
@@ -797,6 +819,13 @@ test(
           const items = toolbar.querySelector<HTMLElement>(".side-activity-toolbar__items")!
           const workspaceRect = workspace.getBoundingClientRect()
           const toolbarRect = toolbarMount.getBoundingClientRect()
+          const overlayMinProbe = document.createElement("div")
+          overlayMinProbe.style.position = "fixed"
+          overlayMinProbe.style.visibility = "hidden"
+          overlayMinProbe.style.width = "var(--ui-overlay-min-width)"
+          document.body.appendChild(overlayMinProbe)
+          const overlayMinWidth = overlayMinProbe.getBoundingClientRect().width
+          overlayMinProbe.remove()
           const buttons = Array.from(
             toolbarMount.querySelectorAll<HTMLElement>('[data-ui="side-activity-button"][data-side="right"]'),
           )
@@ -842,28 +871,49 @@ test(
             toolbarWidth: toolbarRect.width,
             toolbarHeight: toolbarRect.height,
             workspaceWidth: workspaceRect.width,
+            viewportWidth: window.innerWidth,
+            overlayMinWidth,
             clippedButtons,
             hitMisses,
           }
         })
       }
-      for (const viewport of [
-        { width: 960, height: 720 },
-        { width: 390, height: 760 },
-      ]) {
-        const layout = await rightToolbarResponsiveLayout(viewport)
-        assertMatchObject(layout, {
-          workspaceDirection: "column",
-          toolbarDirection: "row",
-          itemsDirection: "row",
-          buttonCount: 7,
-          toolbarWithinWorkspace: true,
-        })
-        assert.ok(layout.toolbarWidth >= viewport.width - 2, JSON.stringify({ viewport, layout }))
-        assert.ok(layout.toolbarHeight <= 48, JSON.stringify({ viewport, layout }))
-        assert.deepEqual(layout.clippedButtons, [], JSON.stringify({ viewport, layout }))
-        assert.deepEqual(layout.hitMisses, [], JSON.stringify({ viewport, layout }))
-      }
+      const responsiveToolbarLayout = await rightToolbarResponsiveLayout({ width: 960, height: 720 })
+      assertMatchObject(responsiveToolbarLayout, {
+        workspaceDirection: "column",
+        toolbarDirection: "row",
+        itemsDirection: "row",
+        buttonCount: 7,
+        toolbarWithinWorkspace: true,
+      })
+      assert.ok(responsiveToolbarLayout.toolbarWidth >= 960 - 2, JSON.stringify(responsiveToolbarLayout))
+      assert.ok(responsiveToolbarLayout.toolbarHeight <= 48, JSON.stringify(responsiveToolbarLayout))
+      assert.deepEqual(responsiveToolbarLayout.clippedButtons, [], JSON.stringify(responsiveToolbarLayout))
+      assert.deepEqual(responsiveToolbarLayout.hitMisses, [], JSON.stringify(responsiveToolbarLayout))
+
+      const illegalNarrowToolbarLayout = await rightToolbarResponsiveLayout({ width: 390, height: 760 })
+      assertMatchObject(illegalNarrowToolbarLayout, {
+        workspaceDirection: "column",
+        toolbarDirection: "row",
+        itemsDirection: "row",
+        buttonCount: 7,
+        toolbarWithinWorkspace: true,
+      })
+      assert.ok(
+        illegalNarrowToolbarLayout.viewportWidth < illegalNarrowToolbarLayout.overlayMinWidth,
+        JSON.stringify(illegalNarrowToolbarLayout),
+      )
+      assert.ok(
+        illegalNarrowToolbarLayout.workspaceWidth >= illegalNarrowToolbarLayout.overlayMinWidth - 1,
+        JSON.stringify(illegalNarrowToolbarLayout),
+      )
+      assert.ok(
+        illegalNarrowToolbarLayout.toolbarWidth >= illegalNarrowToolbarLayout.overlayMinWidth - 1,
+        JSON.stringify(illegalNarrowToolbarLayout),
+      )
+      assert.ok(illegalNarrowToolbarLayout.toolbarHeight <= 48, JSON.stringify(illegalNarrowToolbarLayout))
+      assert.deepEqual(illegalNarrowToolbarLayout.clippedButtons, [], JSON.stringify(illegalNarrowToolbarLayout))
+      await page.evaluate(() => window.scrollTo({ left: 0, top: 0, behavior: "auto" }))
       await page.setViewport({ width: 1440, height: 900 })
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
@@ -1457,6 +1507,10 @@ test(
         rightInspector: "false",
         chatTitle: "Task",
       })
+      await page.setViewport({ width: 2000, height: 1200 })
+      await page.waitForFunction(
+        () => getComputedStyle(document.querySelector<HTMLElement>("#workspaceMain")!).flexDirection === "row",
+      )
       const previewWidth = async () =>
         await page.evaluate(() =>
           Math.round(document.querySelector<HTMLElement>("#centerWorkbenchBrowser")!.getBoundingClientRect().width),
@@ -1473,14 +1527,20 @@ test(
       await page.mouse.move(previewEdge.x - 80, previewEdge.y, { steps: 8 })
       await page.mouse.up()
       const previewWidthAfterWiden = await previewWidth()
-      assert.ok(previewWidthAfterWiden - previewWidthBeforeDrag > 50)
+      assert.ok(
+        previewWidthAfterWiden - previewWidthBeforeDrag > 50,
+        JSON.stringify({ previewWidthBeforeDrag, previewWidthAfterWiden }),
+      )
       previewEdge = await previewLeftEdge()
       await page.mouse.move(previewEdge.x, previewEdge.y)
       await page.mouse.down()
       await page.mouse.move(previewEdge.x + 80, previewEdge.y, { steps: 8 })
       await page.mouse.up()
       const previewWidthAfterNarrow = await previewWidth()
-      assert.ok(previewWidthAfterWiden - previewWidthAfterNarrow > 50)
+      assert.ok(
+        previewWidthAfterWiden - previewWidthAfterNarrow > 50,
+        JSON.stringify({ previewWidthAfterWiden, previewWidthAfterNarrow }),
+      )
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')
       assertMatchObject(await activeState(), {
