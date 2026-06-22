@@ -38,6 +38,24 @@ function hasEmbeddedOverlayUi(): boolean {
   return EMBEDDED_OVERLAY_UI_BY_PATH.has("/index.html")
 }
 
+export type OverlayUiServingSource =
+  | { kind: "directory"; dir: string }
+  | { kind: "embedded" }
+  | { kind: "missing" }
+
+export interface OverlayUiServingSourceInput {
+  dirOverride?: string
+  resolvedDir?: string
+  embeddedAvailable: boolean
+}
+
+export function selectOverlayUiServingSource(input: OverlayUiServingSourceInput): OverlayUiServingSource {
+  if (input.dirOverride) return { kind: "directory", dir: input.dirOverride }
+  if (input.resolvedDir) return { kind: "directory", dir: input.resolvedDir }
+  if (input.embeddedAvailable) return { kind: "embedded" }
+  return { kind: "missing" }
+}
+
 function normalizeOverlayReqPath(reqPath: string): string | null {
   if (reqPath.includes("\0")) return null
   const normalized = reqPath === "/" ? "/index.html" : reqPath
@@ -164,18 +182,24 @@ export namespace OverlayUI {
         return c.redirect("ui/", 308)
       }
 
-      if (!dirOverride && hasEmbeddedOverlayUi()) {
+      const source = selectOverlayUiServingSource({
+        dirOverride,
+        resolvedDir: dirOverride ? undefined : resolveOverlayDir(),
+        embeddedAvailable: hasEmbeddedOverlayUi(),
+      })
+
+      if (source.kind === "embedded") {
         return serveEmbedded(c)
       }
 
-      const dir = dirOverride ?? resolveOverlayDir()
-      if (!dir) {
+      if (source.kind === "missing") {
         return c.text(
           "Overlay UI not found. Run `bun run --cwd packages/overlay build:vite` or package with bundled UI assets.",
           404,
         )
       }
 
+      const dir = source.dir
       let reqPath = c.req.path.replace(/^\/ui/, "") || "/"
       if (reqPath === "/") reqPath = "/index.html"
 
