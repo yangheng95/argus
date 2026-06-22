@@ -28,6 +28,17 @@ async function writeConfig(dir: string, config: object, name = "opencorvus.json"
   await Filesystem.write(path.join(dir, name), JSON.stringify(config))
 }
 
+async function withGlobalConfigDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
+  const previous = process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
+  process.env.OPENCORVUS_GLOBAL_CONFIG_DIR = dir
+  try {
+    return await fn()
+  } finally {
+    if (previous === undefined) delete process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
+    else process.env.OPENCORVUS_GLOBAL_CONFIG_DIR = previous
+  }
+}
+
 const NATIVE_AGENT_IDS = Object.keys(AgentRoleContract.all)
 
 test("documented default model declaration is gpt-5.5", () => {
@@ -974,15 +985,6 @@ test("merges plugin arrays from global and local configs", async () => {
       const opencorvusDir = path.join(projectDir, ".opencorvus")
       await fs.mkdir(opencorvusDir, { recursive: true })
 
-      // Global config with plugins
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          plugin: ["global-plugin-1", "global-plugin-2"],
-        }),
-      )
-
       // Local .opencorvus config with different plugins
       await Filesystem.write(
         path.join(opencorvusDir, "opencorvus.json"),
@@ -993,22 +995,32 @@ test("merges plugin arrays from global and local configs", async () => {
       )
     },
   })
-
-  await Instance.provide({
-    directory: path.join(tmp.path, "project"),
-    fn: async () => {
-      const config = await Config.get()
-      const plugins = config.plugin ?? []
-
-      // Should contain both global and local plugins
-      expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(true)
-      expect(plugins.some((p) => p.includes("global-plugin-2"))).toBe(true)
-      expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(true)
-
-      // Should have all 3 plugins (not replaced, but merged)
-      const pluginNames = plugins.filter((p) => p.includes("global-plugin") || p.includes("local-plugin"))
-      expect(pluginNames.length).toBeGreaterThanOrEqual(3)
+  await using globalTmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        plugin: ["global-plugin-1", "global-plugin-2"],
+      })
     },
+  })
+
+  await withGlobalConfigDir(globalTmp.path, async () => {
+    await Instance.provide({
+      directory: path.join(tmp.path, "project"),
+      fn: async () => {
+        const config = await Config.get()
+        const plugins = config.plugin ?? []
+
+        // Should contain both global and local plugins
+        expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(true)
+        expect(plugins.some((p) => p.includes("global-plugin-2"))).toBe(true)
+        expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(true)
+
+        // Should have all 3 plugins (not replaced, but merged)
+        const pluginNames = plugins.filter((p) => p.includes("global-plugin") || p.includes("local-plugin"))
+        expect(pluginNames.length).toBeGreaterThanOrEqual(3)
+      },
+    })
   })
 })
 
@@ -1052,14 +1064,6 @@ test("merges instructions arrays from global and local configs", async () => {
       await fs.mkdir(opencorvusDir, { recursive: true })
 
       await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          instructions: ["global-instructions.md", "shared-rules.md"],
-        }),
-      )
-
-      await Filesystem.write(
         path.join(opencorvusDir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencorvus.ai/config.json",
@@ -1068,18 +1072,28 @@ test("merges instructions arrays from global and local configs", async () => {
       )
     },
   })
-
-  await Instance.provide({
-    directory: path.join(tmp.path, "project"),
-    fn: async () => {
-      const config = await Config.get()
-      const instructions = config.instructions ?? []
-
-      expect(instructions).toContain("global-instructions.md")
-      expect(instructions).toContain("shared-rules.md")
-      expect(instructions).toContain("local-instructions.md")
-      expect(instructions.length).toBe(3)
+  await using globalTmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        instructions: ["global-instructions.md", "shared-rules.md"],
+      })
     },
+  })
+
+  await withGlobalConfigDir(globalTmp.path, async () => {
+    await Instance.provide({
+      directory: path.join(tmp.path, "project"),
+      fn: async () => {
+        const config = await Config.get()
+        const instructions = config.instructions ?? []
+
+        expect(instructions).toContain("global-instructions.md")
+        expect(instructions).toContain("shared-rules.md")
+        expect(instructions).toContain("local-instructions.md")
+        expect(instructions.length).toBe(3)
+      },
+    })
   })
 })
 
@@ -1091,14 +1105,6 @@ test("deduplicates duplicate instructions from global and local configs", async 
       await fs.mkdir(opencorvusDir, { recursive: true })
 
       await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          instructions: ["duplicate.md", "global-only.md"],
-        }),
-      )
-
-      await Filesystem.write(
         path.join(opencorvusDir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencorvus.ai/config.json",
@@ -1107,21 +1113,31 @@ test("deduplicates duplicate instructions from global and local configs", async 
       )
     },
   })
-
-  await Instance.provide({
-    directory: path.join(tmp.path, "project"),
-    fn: async () => {
-      const config = await Config.get()
-      const instructions = config.instructions ?? []
-
-      expect(instructions).toContain("global-only.md")
-      expect(instructions).toContain("local-only.md")
-      expect(instructions).toContain("duplicate.md")
-
-      const duplicates = instructions.filter((i) => i === "duplicate.md")
-      expect(duplicates.length).toBe(1)
-      expect(instructions.length).toBe(3)
+  await using globalTmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        instructions: ["duplicate.md", "global-only.md"],
+      })
     },
+  })
+
+  await withGlobalConfigDir(globalTmp.path, async () => {
+    await Instance.provide({
+      directory: path.join(tmp.path, "project"),
+      fn: async () => {
+        const config = await Config.get()
+        const instructions = config.instructions ?? []
+
+        expect(instructions).toContain("global-only.md")
+        expect(instructions).toContain("local-only.md")
+        expect(instructions).toContain("duplicate.md")
+
+        const duplicates = instructions.filter((i) => i === "duplicate.md")
+        expect(duplicates.length).toBe(1)
+        expect(instructions.length).toBe(3)
+      },
+    })
   })
 })
 
@@ -1133,15 +1149,6 @@ test("deduplicates duplicate plugins from global and local configs", async () =>
       const opencorvusDir = path.join(projectDir, ".opencorvus")
       await fs.mkdir(opencorvusDir, { recursive: true })
 
-      // Global config with plugins
-      await Filesystem.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-          plugin: ["duplicate-plugin", "global-plugin-1"],
-        }),
-      )
-
       // Local .opencorvus config with some overlapping plugins
       await Filesystem.write(
         path.join(opencorvusDir, "opencorvus.json"),
@@ -1152,28 +1159,38 @@ test("deduplicates duplicate plugins from global and local configs", async () =>
       )
     },
   })
-
-  await Instance.provide({
-    directory: path.join(tmp.path, "project"),
-    fn: async () => {
-      const config = await Config.get()
-      const plugins = config.plugin ?? []
-
-      // Should contain all unique plugins
-      expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(true)
-      expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(true)
-      expect(plugins.some((p) => p.includes("duplicate-plugin"))).toBe(true)
-
-      // Should deduplicate the duplicate plugin
-      const duplicatePlugins = plugins.filter((p) => p.includes("duplicate-plugin"))
-      expect(duplicatePlugins.length).toBe(1)
-
-      // Should have exactly 3 unique plugins
-      const pluginNames = plugins.filter(
-        (p) => p.includes("global-plugin") || p.includes("local-plugin") || p.includes("duplicate-plugin"),
-      )
-      expect(pluginNames.length).toBe(3)
+  await using globalTmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        plugin: ["duplicate-plugin", "global-plugin-1"],
+      })
     },
+  })
+
+  await withGlobalConfigDir(globalTmp.path, async () => {
+    await Instance.provide({
+      directory: path.join(tmp.path, "project"),
+      fn: async () => {
+        const config = await Config.get()
+        const plugins = config.plugin ?? []
+
+        // Should contain all unique plugins
+        expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(true)
+        expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(true)
+        expect(plugins.some((p) => p.includes("duplicate-plugin"))).toBe(true)
+
+        // Should deduplicate the duplicate plugin
+        const duplicatePlugins = plugins.filter((p) => p.includes("duplicate-plugin"))
+        expect(duplicatePlugins.length).toBe(1)
+
+        // Should have exactly 3 unique plugins
+        const pluginNames = plugins.filter(
+          (p) => p.includes("global-plugin") || p.includes("local-plugin") || p.includes("duplicate-plugin"),
+        )
+        expect(pluginNames.length).toBe(3)
+      },
+    })
   })
 })
 
@@ -1330,11 +1347,13 @@ test("project config can override MCP server enabled status", async () => {
             jira: {
               type: "remote",
               url: "https://jira.example.com/mcp",
+              transport: "streamable-http",
               enabled: false,
             },
             wiki: {
               type: "remote",
               url: "https://wiki.example.com/mcp",
+              transport: "streamable-http",
               enabled: false,
             },
           },
@@ -1349,6 +1368,7 @@ test("project config can override MCP server enabled status", async () => {
             jira: {
               type: "remote",
               url: "https://jira.example.com/mcp",
+              transport: "streamable-http",
               enabled: true,
             },
           },
@@ -1364,12 +1384,14 @@ test("project config can override MCP server enabled status", async () => {
       expect(config.mcp?.jira).toEqual({
         type: "remote",
         url: "https://jira.example.com/mcp",
+        transport: "streamable-http",
         enabled: true,
       })
       // wiki should still be disabled (not overridden)
       expect(config.mcp?.wiki).toEqual({
         type: "remote",
         url: "https://wiki.example.com/mcp",
+        transport: "streamable-http",
         enabled: false,
       })
     },
@@ -1388,6 +1410,7 @@ test("MCP config deep merges preserving base config properties", async () => {
             myserver: {
               type: "remote",
               url: "https://myserver.example.com/mcp",
+              transport: "streamable-http",
               enabled: false,
               headers: {
                 "X-Custom-Header": "value",
@@ -1405,6 +1428,7 @@ test("MCP config deep merges preserving base config properties", async () => {
             myserver: {
               type: "remote",
               url: "https://myserver.example.com/mcp",
+              transport: "streamable-http",
               enabled: true,
             },
           },
@@ -1419,6 +1443,7 @@ test("MCP config deep merges preserving base config properties", async () => {
       expect(config.mcp?.myserver).toEqual({
         type: "remote",
         url: "https://myserver.example.com/mcp",
+        transport: "streamable-http",
         enabled: true,
         headers: {
           "X-Custom-Header": "value",
@@ -1440,6 +1465,7 @@ test("local .opencorvus config can override MCP from project config", async () =
             docs: {
               type: "remote",
               url: "https://docs.example.com/mcp",
+              transport: "streamable-http",
               enabled: false,
             },
           },
@@ -1456,6 +1482,7 @@ test("local .opencorvus config can override MCP from project config", async () =
             docs: {
               type: "remote",
               url: "https://docs.example.com/mcp",
+              transport: "streamable-http",
               enabled: true,
             },
           },
@@ -1532,6 +1559,7 @@ test("project config overrides remote well-known config", async () => {
                 jira: {
                   type: "remote",
                   url: "https://jira.example.com/mcp",
+                  transport: "streamable-http",
                   enabled: false,
                 },
               },
@@ -1569,6 +1597,7 @@ test("project config overrides remote well-known config", async () => {
               jira: {
                 type: "remote",
                 url: "https://jira.example.com/mcp",
+                transport: "streamable-http",
                 enabled: true,
               },
             },
