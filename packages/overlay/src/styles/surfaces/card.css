@@ -806,7 +806,7 @@ body {
 
 .card__goal-desc-text .msg-text,
 .card__goal-desc-text .md-frozen-block,
-.card__goal-desc-text .md-active-block {
+.card__goal-desc-text .md-active-text {
   margin: 0;
 }
 
