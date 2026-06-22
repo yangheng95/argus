@@ -1,7 +1,7 @@
 # Taskbar Badge Count CFG
 
 Date: 2026-06-22
-Status: Implemented
+Status: Verified
 
 ## Acronyms
 
@@ -52,3 +52,15 @@ implementation in this file.
 - The existing unit test still proves positive counts are preserved and
   zero/negative counts clear the badge.
 - No change to `overlay_badge_set` behavior on Windows or non-Windows.
+
+## Verification
+
+- `RUSTFLAGS=-Dwarnings cargo check --manifest-path packages/overlay/src-tauri/Cargo.toml`
+- `cargo test --manifest-path packages/overlay/src-tauri/Cargo.toml badge_count_value`
+
+## Self Review
+
+- The helper is still compiled for non-Windows production and for tests.
+- Windows production still uses the taskbar overlay icon path directly.
+- No fallback, alternate badge source, or behavior compatibility branch was
+  introduced.
