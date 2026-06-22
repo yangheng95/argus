@@ -60,11 +60,11 @@ describe("task creation route", () => {
         "x-opencorvus-directory": tmp.path,
       },
       body: JSON.stringify({
-        request: "create with backend profile",
+        request: "create with testing profile",
         executor: "opencorvus",
         requestID: "route-create-profile",
         source: "panel",
-        promptProfile: "backend",
+        promptProfile: "testing",
       }),
     })
 
@@ -74,7 +74,7 @@ describe("task creation route", () => {
     expect(task?.session_id).toBeTruthy()
     const session = await Session.get(task!.session_id!)
     expect(session.metadata?.configOverlay).toMatchObject({
-      prompt_profile: { active: "backend" },
+      prompt_profile: { active: "testing" },
     })
   }, 15_000)
 })
