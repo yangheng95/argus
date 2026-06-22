@@ -118,6 +118,18 @@ describe("build-artifact", () => {
     )
   })
 
+  test("overlay UI generated module stays empty in source form", () => {
+    const generatedSource = readFileSync(
+      resolve(import.meta.dir, "../../src/server/overlay-ui-embedded.generated.ts"),
+      "utf8",
+    )
+
+    expect(generatedSource).toContain("export const EMBEDDED_OVERLAY_UI: readonly EmbeddedOverlayUiFile[] = []")
+    expect(generatedSource).not.toContain('with { type: "file" }')
+    expect(generatedSource).not.toContain("import file")
+    expect(generatedSource).not.toContain("dist-vite")
+  })
+
   test("overlay-server build emits a single payload stamp for Tauri rerun detection", () => {
     const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
     const tauriBuildSource = readFileSync(resolve(import.meta.dir, "../../../overlay/src-tauri/build.rs"), "utf8")

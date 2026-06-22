@@ -34,6 +34,7 @@ owned minimum widths when toolbar panels open or the window is resized.
 | --- | --- | --- |
 | Overlay aspect frame | `base.css` and `overlay-layout-frame.ts` already derive layout height from `--ui-overlay-min-width` and `--ui-overlay-min-height`. | Keep the single source; this round does not add a second aspect constant. |
 | Center workbench panel minimum | `workspace.css` gives open center panels `min-width: var(--ui-workbench-panel-min-width)`. | Keep; tests already cover three open panels. |
+| Center workbench separator range | `main.tsx` used `Math.min(Math.max(raw, min), totalWidth - min)`, which can produce a value below `min` when `totalWidth < min * 2`. | Add a pure legal range helper and disable separator writes when adjacent panels cannot both satisfy the token minimum. |
 | Left activity shell minimum | `activity.css` declares `min-width: min(100%, calc(var(--ui-collapsed-pane-width) + var(--ui-rail-min-width)))` and then overrides it with `min-width: 0` in the same rule. | Remove the overriding declaration; this is the concrete illegal small-panel source. |
 | Pane drag cursor CSS | `workspace.css` still targets `body[data-resizing="true"] .pane-resizer::before`, but no `.pane-resizer::before` pseudo element exists. | Delete only that selector branch and keep the live `::after` hit area. |
 | Static tests | `left-activity-toolbar.test.ts` and `pane-config.test.ts` inspect these CSS contracts. | Extend them to guard the token minimum and dead selector removal. |
@@ -52,6 +53,13 @@ The pane-resizer `::before` selector is separate dead CSS. Leaving it in the
 active resize cursor group preserves a non-existent pseudo-element contract and
 weakens future audits of resize styling.
 
+Follow-up 2026-06-23: the center workbench separator math still had an
+impossible-range edge case. If stale CSS or a constrained fixture produced an
+adjacent pair whose `totalWidth` was smaller than `2 * --ui-workbench-panel-min-width`,
+the clamp expression selected `totalWidth - minWidth`, which is below the
+minimum. That could persist illegal `centerWorkbenchPanelWeights` instead of
+refusing the resize.
+
 ## Fix Plan
 
 1. Remove the overriding `min-width: 0` from `.left-activity-shell`.
@@ -61,7 +69,11 @@ weakens future audits of resize styling.
    width and no same-rule zero override.
 4. Add static tests that pane resize keeps the live `::after` selector and has
    no `::before` branch.
-5. Run focused unit/static tests, overlay typecheck, browser visual tests,
+5. Add a pure center workbench legal range helper and tests for unsatisfiable
+   adjacent panel widths.
+6. Disable center workbench separators when no legal range exists, and reject
+   weight writes for that case.
+7. Run focused unit/static tests, overlay typecheck, browser visual tests,
    screenshot review, self-review, commit, and push.
 
 ## Acceptance
@@ -69,6 +81,8 @@ weakens future audits of resize styling.
 - `.left-activity-shell` cannot override its token minimum width with
   `min-width: 0`.
 - Pane and center workbench minimums continue to come from layout tokens.
+- Adjacent center workbench separators cannot write weights when both panels
+  cannot satisfy `--ui-workbench-panel-min-width`.
 - Overlay aspect-ratio handling remains the existing legal layout-frame source;
   no alternate size source is added.
 - The dead pane-resizer `::before` cursor selector is gone.
@@ -77,13 +91,19 @@ weakens future audits of resize styling.
 ## Verification
 
 - PASS: `bun test packages/overlay/test/left-activity-toolbar.test.ts packages/overlay/test/pane-config.test.ts packages/overlay/test/pane-resizer-css.test.ts --timeout 30000`.
+- PASS: `bun test packages/overlay/test/center-workbench-size.test.ts packages/overlay/test/pane-config.test.ts packages/overlay/test/overlay-layout-frame.test.ts packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/workspace-surface-consistency.test.ts --timeout 30000`.
 - PASS: `bun run --cwd packages/overlay typecheck`.
 - PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/side-activity-toolbar-browser.test.ts packages/overlay/test/browser/left-pane-resizer-browser.test.ts`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
 - Visual QA reviewed:
   `.scratch/left-activity-toolbar-current-page.png`,
   `.scratch/left-pane-resizer-desktop-resize.png`,
   `.scratch/left-pane-resizer-component-compact-resize.png`, and
   `.scratch/left-pane-resizer-restored-desktop-resize.png`.
+- Follow-up visual QA reviewed:
+  `.scratch/center-workbench-three-panel-min-width-1120.png`,
+  `.scratch/center-workbench-illegal-tall-aspect-frame.png`, and
+  `.scratch/center-workbench-separator-restored-desktop-resize.png`.
 
 ## Self Review
 
@@ -102,3 +122,6 @@ weakens future audits of resize styling.
   resize assertion across four open center panels. The test now verifies that
   non-workflow separator dragging works in a wider normal-ratio desktop
   viewport without compressing panels below their token minimum.
+- Rechecked the follow-up range helper; it receives the token-resolved minimum
+  and returns `null` instead of inventing a smaller emergency minimum, so it
+  does not add a fallback size source.

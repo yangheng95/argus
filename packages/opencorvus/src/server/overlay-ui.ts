@@ -14,6 +14,29 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
 }
 
+export const OVERLAY_UI_SOURCE_HEADER = "X-Opencorvus-Overlay-Ui-Source"
+export const OVERLAY_UI_ASSETS_HEADER = "X-Opencorvus-Overlay-Ui-Assets"
+
+type OverlayUiConcreteSource = "directory" | "embedded"
+
+export function overlayUiAssetRefs(html: string): string[] {
+  return Array.from(
+    new Set(
+      Array.from(
+        html.matchAll(/\b(?:src|href)=["'](?:\.?\/)?(assets\/[^"']+\.(?:js|css))["']/g),
+        (match) => match[1],
+      ),
+    ),
+  ).sort()
+}
+
+function overlayUiFingerprintHeaders(source: OverlayUiConcreteSource, html: string): Record<string, string> {
+  return {
+    [OVERLAY_UI_SOURCE_HEADER]: source,
+    [OVERLAY_UI_ASSETS_HEADER]: overlayUiAssetRefs(html).join(","),
+  }
+}
+
 function resolveOverlayDir(): string | undefined {
   // 1. Compiled binary: look for ui/ next to the executable
   const binDir = path.dirname(process.execPath)
@@ -78,6 +101,10 @@ function overlayRelativeBase(reqPath: string): string {
   const parts = suffix.split("/").filter(Boolean)
   const directoryDepth = reqPath.endsWith("/") ? parts.length : Math.max(0, parts.length - 1)
   return directoryDepth === 0 ? "." : Array.from({ length: directoryDepth }, () => "..").join("/")
+}
+
+function isOverlayStaticRequest(reqPath: string): boolean {
+  return reqPath.startsWith("/assets/") || reqPath.startsWith("/i18n/")
 }
 
 function overlayPublicBase(c: Context): string {
@@ -158,7 +185,9 @@ export namespace OverlayUI {
       const requested = normalizeOverlayReqPath(c.req.path.replace(/^\/ui/, "") || "/")
       if (requested === null) return c.text("Forbidden", 403)
 
-      const entry = EMBEDDED_OVERLAY_UI_BY_PATH.get(requested) ?? EMBEDDED_OVERLAY_UI_BY_PATH.get("/index.html")
+      const entry =
+        EMBEDDED_OVERLAY_UI_BY_PATH.get(requested) ??
+        (isOverlayStaticRequest(requested) ? undefined : EMBEDDED_OVERLAY_UI_BY_PATH.get("/index.html"))
       if (!entry) return c.text("Not Found", 404)
 
       const ext = path.extname(entry.path)
@@ -169,6 +198,7 @@ export namespace OverlayUI {
         return c.body(rewriteHtmlAssets(c, html), 200, {
           "Content-Type": contentType,
           "Cache-Control": "no-cache",
+          ...overlayUiFingerprintHeaders("embedded", html),
         })
       }
       return c.body(await file.arrayBuffer(), 200, {
@@ -211,10 +241,14 @@ export namespace OverlayUI {
       try {
         const file = Bun.file(filePath)
         if (!(await file.exists())) {
+          if (isOverlayStaticRequest(reqPath)) {
+            return c.text("Not Found", 404)
+          }
           // SPA fallback — always serves the (rewritten) index.html
           const indexHtml = await Bun.file(path.join(dir, "index.html")).text()
           return c.body(rewriteHtmlAssets(c, indexHtml), 200, {
             "Content-Type": "text/html; charset=utf-8",
+            ...overlayUiFingerprintHeaders("directory", indexHtml),
           })
         }
         const ext = path.extname(filePath)
@@ -224,6 +258,7 @@ export namespace OverlayUI {
           return c.body(rewriteHtmlAssets(c, html), 200, {
             "Content-Type": contentType,
             "Cache-Control": "no-cache",
+            ...overlayUiFingerprintHeaders("directory", html),
           })
         }
         return c.body(await file.arrayBuffer(), 200, {
