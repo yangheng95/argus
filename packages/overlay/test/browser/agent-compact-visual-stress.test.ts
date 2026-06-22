@@ -843,7 +843,6 @@ test(
         localStorage.setItem("oc_locale", "en-US")
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_auto_server", "false")
-        localStorage.setItem("oc_right_panel_collapsed", "true")
         localStorage.setItem("oc_directory", "D:/overlay/workspace/compact-stress")
         localStorage.setItem("oc_directory_mode", "custom")
         localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/compact-stress")

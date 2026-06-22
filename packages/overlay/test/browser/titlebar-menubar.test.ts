@@ -1184,7 +1184,6 @@ test(
         localStorage.setItem("oc_locale", "en-US")
         localStorage.setItem("oc_theme", "dark")
         localStorage.removeItem("oc_sidebar_width")
-        localStorage.removeItem("oc_sections_width")
         window.__TAURI__ = {
           core: {
             invoke: async (command: string) => {
@@ -1195,7 +1194,6 @@ test(
                   locale: "en-US",
                   theme: "dark",
                   directory: "D:/overlay/workspace/app",
-                  rightPanelCollapsed: false,
                 }
               }
               if (command === "overlay_settings_save") return true
@@ -1484,7 +1482,6 @@ test(
 
       await page.evaluate(() => {
         localStorage.removeItem("oc_sidebar_width")
-        localStorage.removeItem("oc_sections_width")
       })
       await page.reload({ waitUntil: "load" })
       await page.waitForSelector("#leftPaneResizer", { visible: true })

@@ -211,7 +211,6 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
-      localStorage.setItem("oc_right_panel_collapsed", "false")
     }, server.port)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })

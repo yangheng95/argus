@@ -31,9 +31,7 @@ export interface OverlaySettings {
   projectEditor: ProjectEditorID
   initGit: boolean
   sidebarCollapsed: boolean
-  rightPanelCollapsed: boolean
   sidebarWidth: number | null
-  sectionsWidth: number | null
   centerWorkbenchPanelWeights: Record<string, number> | null
   opacity: number
   zoom: number
@@ -148,9 +146,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   projectEditor: "vscode",
   initGit: true,
   sidebarCollapsed: false,
-  rightPanelCollapsed: false,
   sidebarWidth: null,
-  sectionsWidth: null,
   centerWorkbenchPanelWeights: null,
   opacity: 0.99,
   zoom: 1,
@@ -204,12 +200,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     initGit: true,
     sidebarCollapsed:
       typeof input?.sidebarCollapsed === "boolean" ? input.sidebarCollapsed : DEFAULT_SETTINGS.sidebarCollapsed,
-    rightPanelCollapsed:
-      typeof input?.rightPanelCollapsed === "boolean"
-        ? input.rightPanelCollapsed
-        : DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
-    sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
     centerWorkbenchPanelWeights: sanitizePanelWeights(input?.centerWorkbenchPanelWeights),
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
@@ -283,7 +274,6 @@ export function bootstrapOverlaySettings(input: Partial<OverlaySettings> = setti
 > & {
   directory?: string
   sidebarWidth?: number
-  sectionsWidth?: number
   centerWorkbenchPanelWeights?: Record<string, number>
   preferredProjectEditor?: ProjectEditorID
   workspaceTaskID?: string
@@ -300,9 +290,7 @@ export function bootstrapOverlaySettings(input: Partial<OverlaySettings> = setti
     projectEditor: sanitizeProjectEditor(input.projectEditor),
     initGit: true,
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
-    rightPanelCollapsed: input.rightPanelCollapsed ?? DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
-    sectionsWidth: input.sectionsWidth || undefined,
     centerWorkbenchPanelWeights: input.centerWorkbenchPanelWeights || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,

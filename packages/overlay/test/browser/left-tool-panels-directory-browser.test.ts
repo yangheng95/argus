@@ -180,7 +180,6 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
         localStorage.setItem("oc_workspace_directory", directory)
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_workspace_task", TASK_ID)
-        localStorage.setItem("oc_right_panel_collapsed", "false")
       },
       { serverUrl: server.origin, directory: WORKSPACE_DIR },
     )

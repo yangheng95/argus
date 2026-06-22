@@ -130,7 +130,7 @@ async function installCenterWorkbenchResizeInstrumentation(page: OverlayPage) {
     let activeFrameID = 0
     let frameDepth = 0
     let nextFrameID = 1
-    const resizeStyleNames = new Set(["--ui-scale", "--ui-sidebar-width", "--ui-sections-width"])
+    const resizeStyleNames = new Set(["--ui-scale", "--ui-sidebar-width"])
     win.__centerWorkbenchResizeEvents = []
     win.__centerWorkbenchResizePhase = "idle"
     window.requestAnimationFrame = function requestAnimationFrameWithCenterWorkbenchProbe(callback) {

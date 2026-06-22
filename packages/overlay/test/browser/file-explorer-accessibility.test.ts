@@ -181,7 +181,6 @@ test("file explorer current file and directory expansion are exposed on the row 
       localStorage.setItem("oc_theme", "dark")
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.setItem("oc_right_panel_collapsed", "false")
       document.documentElement.style.setProperty("--ui-scale", "1.25")
     }, server.origin)
 
@@ -622,7 +621,6 @@ test("file explorer load-failed retry uses the shared button primitive", async (
       localStorage.setItem("oc_theme", "light")
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.setItem("oc_right_panel_collapsed", "false")
     }, server.origin)
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })

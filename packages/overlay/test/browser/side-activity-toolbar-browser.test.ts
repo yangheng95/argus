@@ -448,7 +448,6 @@ test(
         localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_workspace_task", "tsk_side_activity")
         localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
-        localStorage.setItem("oc_right_panel_collapsed", "false")
       }, server.origin)
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
