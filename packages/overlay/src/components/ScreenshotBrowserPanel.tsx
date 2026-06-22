@@ -21,7 +21,6 @@ const SCREENSHOT_BROWSER_ROW_OVERSCAN = 1
 const SCREENSHOT_BROWSER_CARD_MIN_WIDTH = 132
 const SCREENSHOT_BROWSER_MAX_COLUMNS = 3
 const SCREENSHOT_BROWSER_GRID_GAP = 8
-const ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT = 152
 const SCREENSHOT_BROWSER_LAZY_ROOT_MARGIN = "96px"
 const SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 3
 
@@ -226,7 +225,6 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
           <Virtualizer
             data={rows()}
             overscan={SCREENSHOT_BROWSER_ROW_OVERSCAN}
-            itemSize={ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT}
             as={ScreenshotVirtualWindow}
             item={ScreenshotVirtualItem}
           >

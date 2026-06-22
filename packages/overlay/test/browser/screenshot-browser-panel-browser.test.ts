@@ -214,6 +214,7 @@ test(
         localStorage.setItem("oc_workspace_task", "tsk_screenshot_browser")
         localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
         localStorage.setItem("oc_right_panel_collapsed", "false")
+        localStorage.setItem("oc_zoom", "1.6")
       }, server.origin)
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
@@ -337,6 +338,7 @@ test(
         cardCount: document.querySelectorAll(".screenshot-browser-card").length,
         virtualized: document.querySelector<HTMLElement>(".screenshot-browser-groups")?.dataset.virtualized,
         virtualWindow: !!document.querySelector(".screenshot-browser-virtual-window"),
+        uiScale: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
       }))
 
       assert.equal(state.screenshotsOpen, "true")
@@ -347,6 +349,7 @@ test(
       assert.equal(state.cardTitle, "visual-check-119.png")
       assert.equal(state.virtualized, "true")
       assert.equal(state.virtualWindow, true)
+      assert.ok(Number.parseFloat(state.uiScale) >= 1.55, JSON.stringify(state))
       assert.ok(state.cardCount > 0, JSON.stringify(state))
       assert.ok(state.cardCount < SCREENSHOT_COUNT, JSON.stringify(state))
       const openAttachmentRequests = attachmentRequests.length - requestsBeforeOpen
@@ -370,7 +373,7 @@ test(
         }
       })
       assert.ok(thumbLayout.triggerWidth >= 120, JSON.stringify(thumbLayout))
-      assert.ok(thumbLayout.triggerHeight >= 80, JSON.stringify(thumbLayout))
+      assert.ok(thumbLayout.triggerHeight >= 130, JSON.stringify(thumbLayout))
       assert.ok(thumbLayout.imageWidth >= thumbLayout.triggerWidth - 1, JSON.stringify(thumbLayout))
       assert.ok(thumbLayout.imageHeight >= thumbLayout.triggerHeight - 1, JSON.stringify(thumbLayout))
 
@@ -386,6 +389,8 @@ test(
       const screenshot = await page.screenshot({ fullPage: false })
       assert.ok(screenshot.length > 0)
       writeFileSync(screenshotPath, screenshot)
+      const highZoomScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-high-zoom.png")
+      writeFileSync(highZoomScreenshotPath, screenshot)
 
       await page.$eval(".screenshot-browser-groups[data-virtualized=\"true\"]", (node) => {
         const scroll = node as HTMLElement
@@ -422,15 +427,27 @@ test(
         `scrolling should not materialize the full screenshot history: ${attachmentRequests.length - requestsBeforeOpen}`,
       )
 
+      await page.setViewport({ width: 960, height: 1000 })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
       await page.evaluate(() => {
         const workbench = document.getElementById("centerWorkbench")
         const screenshots = document.getElementById("centerWorkbenchScreenshots")
-        workbench?.style.setProperty("flex", "0 0 128px")
-        workbench?.style.setProperty("width", "128px")
-        screenshots?.style.setProperty("flex", "0 0 128px")
-        screenshots?.style.setProperty("width", "128px")
+        workbench?.style.setProperty("flex", "0 0 320px")
+        workbench?.style.setProperty("width", "320px")
+        screenshots?.style.setProperty("flex", "0 0 320px")
+        screenshots?.style.setProperty("width", "320px")
       })
       await new Promise((resolve) => setTimeout(resolve, 100))
+      await page.$eval(".screenshot-browser-panel", (node: HTMLElement) => {
+        node.scrollIntoView({ block: "center", inline: "center" })
+      })
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          }),
+      )
       const narrowLayout = await page.evaluate(() => {
         const box = (selector: string) => {
           const node = document.querySelector<HTMLElement>(selector)
@@ -458,7 +475,7 @@ test(
           thumbEscaped: !!panel && !!thumb && (thumb.left < panel.left - 1 || thumb.right > panel.right + 1),
         }
       })
-      assert.ok(narrowLayout.panel?.width && narrowLayout.panel.width <= 130, JSON.stringify(narrowLayout))
+      assert.ok(narrowLayout.panel?.width && narrowLayout.panel.width <= 322, JSON.stringify(narrowLayout))
       assert.ok((narrowLayout.grid?.scrollWidth ?? 0) <= (narrowLayout.grid?.clientWidth ?? 0) + 1, JSON.stringify(narrowLayout))
       assert.equal(narrowLayout.cardEscaped, false, JSON.stringify(narrowLayout))
       assert.equal(narrowLayout.thumbEscaped, false, JSON.stringify(narrowLayout))
@@ -468,10 +485,66 @@ test(
       const narrowScreenshot = await page.screenshot({ fullPage: false })
       assert.ok(narrowScreenshot.length > 0)
       writeFileSync(narrowScreenshotPath, narrowScreenshot)
-      const narrowPanel = await page.$("#centerWorkbenchScreenshots")
-      assert.ok(narrowPanel)
       const narrowPanelScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-narrow-panel.png")
-      const narrowPanelScreenshot = await narrowPanel.screenshot()
+      const narrowPanelRect = await page.$eval(".screenshot-browser-panel", (node: HTMLElement) => {
+        const panelRect = node.getBoundingClientRect()
+        const titleNode = node.querySelector<HTMLElement>(".oc-surface-header__title")
+        const listNode = node.querySelector<HTMLElement>(".screenshot-browser-groups")
+        const titleRect = titleNode?.getBoundingClientRect()
+        const listRect = listNode?.getBoundingClientRect()
+        if (!titleRect || !listRect) {
+          return {
+            x: 0,
+            y: 0,
+            width: 1,
+            height: 1,
+            title: titleNode?.textContent ?? "",
+            cardCount: node.querySelectorAll(".screenshot-browser-card").length,
+            visibleTitle: false,
+            visibleList: false,
+          }
+        }
+        const left = Math.min(titleRect.left, listRect.left)
+        const top = Math.min(titleRect.top, listRect.top)
+        const right = Math.max(titleRect.right, listRect.right)
+        const bottom = Math.max(titleRect.bottom, listRect.bottom)
+        const clipLeft = Math.max(0, Math.floor(left - 8))
+        const clipTop = Math.max(0, Math.floor(top - 8))
+        const clipRight = Math.min(window.innerWidth, Math.ceil(right + 8))
+        const clipBottom = Math.min(window.innerHeight, Math.ceil(bottom + 8))
+        return {
+          panelLeft: Math.round(panelRect.left),
+          panelRight: Math.round(panelRect.right),
+          x: clipLeft,
+          y: clipTop,
+          width: Math.max(1, clipRight - clipLeft),
+          height: Math.max(1, clipBottom - clipTop),
+          title: node.querySelector(".oc-surface-header__title")?.textContent ?? "",
+          cardCount: node.querySelectorAll(".screenshot-browser-card").length,
+          visibleTitle:
+            titleRect.right > 0 &&
+            titleRect.left < window.innerWidth &&
+            titleRect.bottom > 0 &&
+            titleRect.top < window.innerHeight,
+          visibleList:
+            listRect.right > 0 &&
+            listRect.left < window.innerWidth &&
+            listRect.bottom > 0 &&
+            listRect.top < window.innerHeight,
+        }
+      })
+      assert.equal(narrowPanelRect.title, "Screenshots", JSON.stringify(narrowPanelRect))
+      assert.ok(narrowPanelRect.cardCount > 0, JSON.stringify(narrowPanelRect))
+      assert.equal(narrowPanelRect.visibleTitle, true, JSON.stringify(narrowPanelRect))
+      assert.equal(narrowPanelRect.visibleList, true, JSON.stringify(narrowPanelRect))
+      const narrowPanelScreenshot = await page.screenshot({
+        clip: {
+          x: narrowPanelRect.x,
+          y: narrowPanelRect.y,
+          width: narrowPanelRect.width,
+          height: narrowPanelRect.height,
+        },
+      })
       assert.ok(narrowPanelScreenshot.length > 0)
       writeFileSync(narrowPanelScreenshotPath, narrowPanelScreenshot)
       assert.deepEqual(unexpectedRequests, [])
