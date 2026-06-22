@@ -862,3 +862,113 @@ test("runAgentSession writes child agent report while called from parent session
     },
   })
 }, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
+
+test("runAgentSessionWithRetry writes exhausted retry report under child session context", async () => {
+  mock.module("@/agent/model", () => ({
+    resolveAgentModel: async () => ({
+      providerID: "test",
+      api: { id: "mock" },
+    }),
+  }))
+  const { AgentRunError, runAgentSessionWithRetry } = await import("../../src/agent/runner")
+  const { AgentTrace } = await import("../../src/trace")
+  const { Session } = await import("../../src/session")
+  const { SessionContext } = await import("../../src/session/context")
+
+  await using tmp = await tmpdir({ git: true })
+
+  spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+    return {
+      info: {
+        id: `msg_retry_exhausted_${input.sessionID}`,
+        sessionID: input.sessionID,
+        role: "assistant",
+        parentID: input.messageID,
+        time: { created: Date.now() },
+        agent: input.agent ?? "build",
+        providerID: input.model?.providerID ?? "test",
+        modelID: input.model?.modelID ?? "mock",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { cwd: tmp.path, root: tmp.path },
+      },
+      parts: [
+        {
+          id: `prt_retry_exhausted_${input.sessionID}`,
+          sessionID: input.sessionID,
+          messageID: `msg_retry_exhausted_${input.sessionID}`,
+          type: "text",
+          text: "incomplete",
+        },
+      ],
+    } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+  })
+
+  const toolKitFactory = (): AgentToolKit<Record<string, never>> => ({
+    tools: {},
+    getCollector: () => ({}),
+    buildReport: () => ({ summary: "retry exhausted", detail: "retry exhausted" }),
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const parent = await Session.createNext({
+        kind: "orchestrator",
+        title: "Parent orchestrator",
+        directory: tmp.path,
+      })
+      const now = Date.now()
+      Database.use((db) =>
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: "tsk_retry_trace_context",
+            project_id: Instance.project.id,
+            session_id: parent.id,
+            source: "test",
+            title: "retry trace context",
+            request: "exercise retry final trace context",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          })
+          .run(),
+      )
+
+      let thrown: unknown
+      await SessionContext.provide(parent, async () => {
+        try {
+          await runAgentSessionWithRetry({
+            kind: "build",
+            core: BUILD_CORE,
+            sessionTitle: "retry child build",
+            parentSessionID: parent.id,
+            taskID: "tsk_retry_trace_context",
+            maxRetries: 1,
+            toolKitFactory,
+            buildUserPrompt: () => "implement the request",
+            isComplete: () => ({ ok: false, terminal: false, reason: "missing terminal report" }),
+          })
+        } catch (err) {
+          thrown = err
+        }
+      })
+
+      expect(thrown).toBeInstanceOf(AgentRunError)
+      expect((thrown as Error).message).toContain("missing terminal report")
+      const childEvents = AgentTrace.readTaskEvents("tsk_retry_trace_context").filter(
+        (event) => event.kind === "agent_report_retry_final",
+      )
+      expect(childEvents).toHaveLength(1)
+      expect(childEvents[0]?.sessionID).not.toBe(parent.id)
+      expect(childEvents[0]?.parentSessionID).toBe(parent.id)
+      expect(
+        AgentTrace.readSessionEvents(parent.id, "tsk_retry_trace_context").some(
+          (event) => event.kind === "agent_report_retry_final",
+        ),
+      ).toBe(false)
+    },
+  })
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
