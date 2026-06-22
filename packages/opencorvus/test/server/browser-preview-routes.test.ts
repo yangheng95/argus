@@ -139,7 +139,7 @@ describe("browser preview routes", () => {
           { url: liveUrl, selected: true },
           { url: "http://127.0.0.1:9/dead", selected: false },
         ])
-        expect(JSON.stringify(body)).toContain("Saved browser preview target is unreachable")
+        expect(JSON.stringify(body)).not.toContain("Saved browser preview target is unreachable")
 
         const artifact = Database.use((db) =>
           db

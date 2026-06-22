@@ -7,12 +7,12 @@ import path from "node:path"
  *
  * Re-opening the overlay after an OpenCorvus process restart must restore
  * visible task context without restoring old executor/status polling. The
- * only periodic runtime wake allowed here is the narrow no-live-goal liveness
- * check for a non-terminal task whose active run has no live child goal runs.
+ * only periodic runtime observer allowed here is the narrow engine liveness
+ * tick that projects interaction blockers and terminal-goal refill facts.
  */
 
 describe("EngineRuntime — passive restart resume", () => {
-  test("monitorRuns keeps only the no-live-goal liveness wake", async () => {
+  test("monitorRuns keeps only terminal-refill liveness facts", async () => {
     const runtimeSrc = await fs.readFile(path.join(import.meta.dir, "..", "..", "src", "engine", "runtime.ts"), "utf8")
     const taskApiSrc = await fs.readFile(path.join(import.meta.dir, "..", "..", "src", "task-api", "index.ts"), "utf8")
     expect(runtimeSrc).not.toMatch(/async function reviveZombieTasks\b/)
@@ -22,7 +22,11 @@ describe("EngineRuntime — passive restart resume", () => {
     expect(runtimeSrc).not.toMatch(/hasExplicitOrchestratorStreamErrorSinceTaskStart/)
     const monitorBody = runtimeSrc.match(/export async function monitorRuns[\s\S]*?\n  }\n\n  \/\*\*/)?.[0] ?? ""
     expect(monitorBody).toContain("syncRun(")
-    expect(runtimeSrc).toContain("noLiveGoalWakeFingerprint")
+    expect(runtimeSrc).toContain("syncTerminalGoalRefills")
+    expect(runtimeSrc).toContain('"goal_refill_notification"')
+    expect(runtimeSrc).toContain("terminalGoalRefillFingerprint")
+    expect(runtimeSrc).not.toContain("noLiveGoalWakeFingerprint")
+    expect(runtimeSrc).not.toContain("syncNoLiveGoalRuns")
     expect(runtimeSrc).not.toMatch(/ExecutorRegistry/)
     expect(runtimeSrc).not.toMatch(/executor\.status/)
     expect(runtimeSrc).not.toMatch(/queue\.status/)

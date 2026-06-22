@@ -53,6 +53,74 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.build.description).not.toContain("After build returns, read the build report")
   })
 
+  test("wait description excludes internal live build polling", () => {
+    expect(tools.wait.description).toContain("Never use wait for live build completion")
+    expect(tools.wait.description).toContain("terminal refill polling")
+    expect(tools.steer_subagent.description).toContain("park this orchestrator wake")
+    expect(tools.steer_subagent.description).toContain("not wait-tool polling")
+    expect(tools.steer_subagent.description).not.toContain("decide between waiting")
+  })
+
+  test("build schema rejects misspelled goal scope instead of stripping it into direct build", () => {
+    expect(Object.keys(tools.build.inputSchema!.shape)).toEqual([
+      "request",
+      "reason",
+      "goalID",
+      "directBuildIntent",
+      "freshContext",
+      "userConfirmedStaleIntegrityData",
+    ])
+    expect(
+      tools.build.inputSchema!.safeParse({
+        reason: "Run the scoped goal build.",
+        goalID: "gol_valid_scope",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.build.inputSchema!.safeParse({
+        reason: "Run the scoped goal build.",
+        goal_id: "gol_typo_scope",
+        request: "Implement the scoped goal.",
+        directBuildIntent: "modify_files",
+      }).success,
+    ).toBe(false)
+  })
+
+  test("analyze_intent schema rejects unknown continuation-like fields", () => {
+    expect(Object.keys(tools.analyze_intent.inputSchema!.shape)).toEqual(["reason"])
+    expect(
+      tools.analyze_intent.inputSchema!.safeParse({
+        reason: "Need a fresh intent read after an operator message.",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.analyze_intent.inputSchema!.safeParse({
+        reason: "Do not strip continuation-like input into a fresh intent session.",
+        continuation_artifact_id: "art_intent_continue",
+      }).success,
+    ).toBe(false)
+  })
+
+  test("continuation-capable stage schemas reject unknown fields instead of stripping them", () => {
+    const validInputsByTool: Record<string, Record<string, unknown>> = {
+      requirements: { reason: "analyze requirements" },
+      architect: { reason: "decompose goals" },
+      workload_analysis: { reason: "size goals" },
+      deep_research: { reason: "collect evidence" },
+      visual_qa: { reason: "review visual product" },
+      integrity: { reason: "review active graph" },
+    }
+    for (const [toolName, validInput] of Object.entries(validInputsByTool)) {
+      expect(tools[toolName].inputSchema!.safeParse(validInput).success).toBe(true)
+      expect(
+        tools[toolName].inputSchema!.safeParse({
+          ...validInput,
+          accidental_scope: "must not be stripped",
+        }).success,
+      ).toBe(false)
+    }
+  })
+
   test("frontend_research and frontend_design descriptions separate investigation division from UI implementation", () => {
     expect(tools.frontend_design.description).toContain("frontend/UI implementation")
     expect(tools.frontend_design.description).toContain(
@@ -70,9 +138,12 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.deep_research.description).toContain("`frontend_research` is a separate candidate")
     expect(tools.deep_research.description).not.toContain("use `frontend_research` instead")
     expect(tools.frontend_research.description).toContain("webpage/UI investigation publisher")
+    expect(tools.frontend_research.description).toContain("exactly one source page URL per fresh call")
+    expect(tools.frontend_research.description).toContain("call frontend_research separately for additional pages")
     expect(tools.frontend_research.description).toContain("host prepares rendered webpage evidence")
     expect(tools.frontend_research.description).toContain("partitions that evidence into source-backed work packets")
     expect(tools.frontend_research.description).toContain("small registration tools")
+    expect(tools.frontend_research.description).not.toContain("dispatch once for the relevant webpage investigation scope")
     expect(tools.frontend_research.description).not.toContain("does not acquire webpage evidence itself")
     expect(tools.frontend_research.description).not.toContain("dispatch `frontend_design` first")
     expect(tools.frontend_research.description).toContain("frontend_research_brief/webpage_contract")
@@ -120,23 +191,195 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
         .success,
     ).toBe(true)
     expect(
+      tools.frontend_design.inputSchema!.safeParse({
+        reason: "ambiguous multi-page live clone reference",
+        urls: ["https://example.com/one", "https://example.com/two"],
+      }).success,
+    ).toBe(false)
+    expect(
       tools.frontend_design.inputSchema!.safeParse({ reason: "old single-url field", url: "https://example.com" })
         .success,
     ).toBe(false)
     expect(tools.frontend_design.inputSchema!.safeParse({ urls: ["https://example.com"] }).success).toBe(false)
+    for (const freshScope of [
+      { urls: ["https://example.com/new"] },
+      { figma_url: "https://www.figma.com/design/example" },
+      { materials: ["design.md"] },
+    ]) {
+      expect(
+        tools.frontend_design.inputSchema!.safeParse({
+          reason: "continue prior frontend design",
+          continuation_artifact_id: "art_frontend_design_continue",
+          ...freshScope,
+        }).success,
+      ).toBe(false)
+    }
 
-    expect(Object.keys(tools.frontend_research.inputSchema!.shape)).toEqual(["reason", "source_urls", "focus"])
+    expect(Object.keys(tools.frontend_research.inputSchema!.shape)).toEqual([
+      "reason",
+      "source_urls",
+      "focus",
+      "continuation_artifact_id",
+    ])
     expect(
       tools.frontend_research.inputSchema!.safeParse({
         reason: "publish investigation packets",
         source_urls: ["https://example.com"],
       }).success,
     ).toBe(true)
-    expect(tools.frontend_research.inputSchema!.safeParse({ reason: "missing urls" }).success).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "ambiguous multi-page frontend research",
+        source_urls: ["https://example.com/a", "https://example.com/b"],
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "local files are not prepared webpage sources",
+        source_urls: ["file:///tmp/source.html"],
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "continue prior frontend research",
+        continuation_artifact_id: "art_frontend_research_continue",
+        focus: "new focus would be ignored by the continuation prompt",
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "continue prior frontend research",
+        continuation_artifact_id: "art_frontend_research_continue",
+      }).success,
+    ).toBe(true)
+    expect(tools.frontend_research.inputSchema!.safeParse({ reason: "missing mode" }).success).toBe(false)
+    expect(
+      tools.frontend_research.inputSchema!.safeParse({
+        reason: "ambiguous frontend research mode",
+        source_urls: ["https://example.com"],
+        continuation_artifact_id: "art_frontend_research_continue",
+      }).success,
+    ).toBe(false)
 
-    expect(Object.keys(tools.visual_qa.inputSchema!.shape)).toEqual(["reason", "focus", "app_url", "preview_command"])
+    expect(Object.keys(tools.visual_qa.inputSchema!.shape)).toEqual([
+      "reason",
+      "focus",
+      "app_url",
+      "preview_command",
+      "continuation_artifact_id",
+    ])
     expect(tools.visual_qa.inputSchema!.safeParse({ reason: "need fresh visual evidence" }).success).toBe(true)
+    expect(
+      tools.visual_qa.inputSchema!.safeParse({
+        reason: "continue prior visual QA",
+        continuation_artifact_id: "art_visual_qa_continue",
+      }).success,
+    ).toBe(true)
+    for (const freshField of ["focus", "app_url", "preview_command"] as const) {
+      expect(
+        tools.visual_qa.inputSchema!.safeParse({
+          reason: "ambiguous visual QA continuation",
+          continuation_artifact_id: "art_visual_qa_continue",
+          [freshField]: freshField === "app_url" ? "http://127.0.0.1:5173" : "fresh scope",
+        }).success,
+      ).toBe(false)
+    }
     expect(tools.visual_qa.inputSchema!.safeParse({ focus: "mobile" }).success).toBe(false)
+
+    expect(Object.keys(tools.workload_analysis.inputSchema!.shape)).toEqual(["reason", "continuation_artifact_id"])
+    expect(tools.workload_analysis.inputSchema!.safeParse({ reason: "size goals" }).success).toBe(true)
+    expect(
+      tools.workload_analysis.inputSchema!.safeParse({
+        reason: "continue prior workload analysis",
+        continuation_artifact_id: "art_workload_continue",
+      }).success,
+    ).toBe(true)
+
+    expect(Object.keys(tools.deep_research.inputSchema!.shape)).toEqual([
+      "reason",
+      "target_deliverable",
+      "source_urls",
+      "focus",
+      "continuation_artifact_id",
+    ])
+    expect(tools.deep_research.inputSchema!.safeParse({ reason: "collect evidence" }).success).toBe(true)
+    expect(
+      tools.deep_research.inputSchema!.safeParse({
+        reason: "continue prior deep research",
+        continuation_artifact_id: "art_deep_research_continue",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.deep_research.inputSchema!.safeParse({
+        reason: "ambiguous deep research continuation",
+        source_urls: ["https://example.com/new-source"],
+        continuation_artifact_id: "art_deep_research_continue",
+      }).success,
+    ).toBe(false)
+    for (const freshField of ["target_deliverable", "focus"] as const) {
+      expect(
+        tools.deep_research.inputSchema!.safeParse({
+          reason: "ambiguous deep research continuation",
+          continuation_artifact_id: "art_deep_research_continue",
+          [freshField]: freshField === "target_deliverable" ? "prd" : "fresh scope",
+        }).success,
+      ).toBe(false)
+    }
+
+    expect(Object.keys(tools.fact_check.inputSchema!.shape)).toEqual([
+      "target_session_id",
+      "target_agent",
+      "fact_check_items",
+      "reason",
+      "continuation_artifact_id",
+    ])
+    expect(
+      tools.fact_check.inputSchema!.safeParse({
+        target_session_id: "ses_worker",
+        target_agent: "build",
+        fact_check_items: [
+          {
+            claim: "React 19 introduced use() for reading promise-backed resources",
+            confidence: "medium",
+            category: "library",
+            source: "model prior",
+          },
+        ],
+        reason: "Verify a worker claim with external documentation.",
+      }).success,
+    ).toBe(true)
+    expect(
+      tools.fact_check.inputSchema!.safeParse({
+        reason: "Continue prior fact-check finalizer miss.",
+        continuation_artifact_id: "art_fact_check_continue",
+      }).success,
+    ).toBe(true)
+    expect(tools.fact_check.inputSchema!.safeParse({ reason: "Missing target fields." }).success).toBe(false)
+    expect(
+      tools.fact_check.inputSchema!.safeParse({
+        target_session_id: "ses_worker",
+        target_agent: "build",
+        fact_check_items: [],
+        reason: "Ambiguous fact-check mode should be rejected.",
+        continuation_artifact_id: "art_fact_check_continue",
+      }).success,
+    ).toBe(false)
+    expect(
+      tools.fact_check.inputSchema!.safeParse({
+        target_agent: "build",
+        reason: "Contradictory target assertion must not be accepted during continuation.",
+        continuation_artifact_id: "art_fact_check_continue",
+      }).success,
+    ).toBe(false)
+
+    expect(Object.keys(tools.integrity.inputSchema!.shape)).toEqual(["reason", "continuation_artifact_id"])
+    expect(tools.integrity.inputSchema!.safeParse({ reason: "review active graph" }).success).toBe(true)
+    expect(
+      tools.integrity.inputSchema!.safeParse({
+        reason: "continue previous integrity finalizer miss",
+        continuation_artifact_id: "art_integrity_continue",
+      }).success,
+    ).toBe(true)
 
     expect(Object.keys(tools.browser_preview.inputSchema!.shape)).toEqual([
       "command",

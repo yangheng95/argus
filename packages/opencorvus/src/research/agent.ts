@@ -12,12 +12,14 @@ import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { Log } from "@/util/log"
 import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
 import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
 import { SkillTool } from "@/tool/skill"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
+import { isHttpWebpageUrl } from "@/util/web-url"
 import {
   buildResearchBriefFromDraft,
   createResearchOutputTools,
@@ -66,6 +68,7 @@ export namespace DeepResearchAgent {
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
+    continuation?: AgentSessionContinuation
     onSessionCreated?: (sessionID: string) => void
   }
 
@@ -97,17 +100,21 @@ export async function runResearchSession(
   config: ResearchSessionConfig,
 ): Promise<DeepResearchAgent.RunResult> {
   const sessionTitle = `${config.sessionTitlePrefix}: ${input.title}`
-  const session = await Session.createNext({
-    kind: config.kind,
-    parentID: input.parentSessionID,
-    title: sessionTitle,
-    directory: Instance.directory,
-  })
-  input.onSessionCreated?.(session.id)
+  const session = input.continuation
+    ? await Session.get(input.continuation.sessionID)
+    : await Session.createNext({
+        kind: config.kind,
+        parentID: input.parentSessionID,
+        title: sessionTitle,
+        directory: Instance.directory,
+      })
+  if (!input.continuation) input.onSessionCreated?.(session.id)
 
   let webpagePrdEvidence: WebpagePrdEvidence | undefined
   try {
-    webpagePrdEvidence = await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
+    webpagePrdEvidence = input.continuation
+      ? undefined
+      : await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
   } catch (err) {
     SessionStatus.set(session.id, {
       type: "terminal",
@@ -127,7 +134,8 @@ export async function runResearchSession(
     taskID: input.taskID,
     signal: input.signal,
   })
-  const outputToolKit = createResearchOutputTools()
+  const expectedWebpageSourceUrl = config.kind === "frontend-research" ? input.sourceUrls?.find(isHttpWebpageUrl) : undefined
+  const outputToolKit = createResearchOutputTools({ expectedWebpageSourceUrl })
 
   log.info(`${config.kind} starting`, {
     title: input.title,
@@ -144,6 +152,7 @@ export async function runResearchSession(
     taskID: input.taskID,
     model: input.model,
     signal: input.signal,
+    continuation: input.continuation,
     onStatus: input.onStatus,
     toolKit: {
       tools: { ...retrievalTools, ...utilityTools, ...outputToolKit.tools },
@@ -240,7 +249,7 @@ async function prepareInputWebpagePrdEvidence(
   mode: ResearchSessionConfig["prepareWebpageEvidence"],
 ): Promise<WebpagePrdEvidence | undefined> {
   const sourceUrls = input.sourceUrls ?? []
-  const hasWebpageSource = sourceUrls.some((url) => /^https?:\/\//i.test(url))
+  const hasWebpageSource = sourceUrls.some(isHttpWebpageUrl)
   if (!hasWebpageSource) return undefined
   if (mode === "none") return undefined
   if (mode === "prd-only" && input.targetDeliverable !== "prd") return undefined
@@ -253,7 +262,7 @@ async function prepareInputWebpagePrdEvidence(
       return await readPreparedWebpagePrdEvidence({
         projectDir,
         taskID: input.taskID,
-        url: sourceUrls.find((url) => /^https?:\/\//i.test(url))!,
+        url: sourceUrls.find(isHttpWebpageUrl)!,
       })
     } catch (err) {
       log.info("frontend-research prepared webpage evidence not yet available", {

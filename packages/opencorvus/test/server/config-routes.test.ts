@@ -208,9 +208,15 @@ describe("config prompt routes", () => {
           "frontend",
           "backend",
           "algorithm",
+          "testing",
           "custom-squad",
         ])
         expect(body.profiles.find((profile) => profile.id === "frontend")).toMatchObject({
+          built_in: true,
+          editable: false,
+        })
+        expect(body.profiles.find((profile) => profile.id === "testing")).toMatchObject({
+          label: "Testing",
           built_in: true,
           editable: false,
         })
@@ -263,6 +269,44 @@ describe("config prompt routes", () => {
         expect(body.active).toBe("algorithm")
         expect(body.project_active).toBe("backend")
         expect(body.session_active).toBe("algorithm")
+      },
+    })
+  })
+
+  test("PATCH /config accepts the built-in testing profile and prompt preview uses it", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const patchResponse = await app.request("/config", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ prompt_profile: { active: "testing" } }),
+        })
+
+        expect(patchResponse.status).toBe(200)
+
+        const response = await app.request("/config/prompt", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as Array<{
+          key: string
+          active_profile: string
+          profile_prompt: string | null
+          effective_prompt: string
+        }>
+        const build = body.find((item) => item.key === "build")
+        expect(build?.active_profile).toBe("testing")
+        expect(build?.profile_prompt).toContain("focused verification")
+        expect(build?.effective_prompt).toContain("focused verification")
       },
     })
   })

@@ -364,12 +364,11 @@ function taskStepStatusByTool(
   tool: string,
 ): GoalStepStatus["status"] {
   switch (tool) {
-    case "analyze_intent":
-      return createDecisionLog(taskID)
-        .read()
-        .some((e) => e.phase === "intent_analysis")
-        ? "completed"
-        : "pending"
+    case "analyze_intent": {
+      const entries = createDecisionLog(taskID).readByPhase("intent_analysis")
+      if (entries.some((entry) => entry.key === "abort_intent_analysis_failed")) return "failed"
+      return entries.length > 0 ? "completed" : "pending"
+    }
     case "frontend_design": {
       const keys = new Set(
         createDecisionLog(taskID)

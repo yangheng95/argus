@@ -63,7 +63,9 @@ import { ORCHESTRATOR_POLL_INTERVAL_MS, budgetRow, deriveTitle, progressStatus }
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
 import {
+  discardQueuedTaskEvent,
   directoryQueueSnapshot,
+  drainPendingQueuedOperatorWakes,
   dispatchTaskLoop,
   reorderQueuedTasksForCwd,
   startQueuedTaskInCwd,
@@ -92,7 +94,6 @@ import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/en
 import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import { cancelSessionPromptByID, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
-import { discardQueuedTaskEvent } from "@/engine/queue"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
 import { Orchestrator } from "@/orchestrator/agent"
@@ -972,24 +973,24 @@ export namespace EngineService {
       EngineInteraction.subscribe(hooks())
       current.booted = true
     }
-    // Narrow liveness tick: if a non-terminal task's active run has no live
-    // goal runs left, wake the task loop once so the orchestrator can inspect
-    // the no-live-goal snapshot. This does not restore executor/status polling.
+    // Narrow runtime observer: project interaction blockers and terminal-goal
+    // refill facts into durable state. This does not restore executor/status
+    // polling or the retired no-live-goal batch wake.
     Scheduler.register({
       id: "engine.liveness",
       interval: ORCHESTRATOR_POLL_INTERVAL_MS,
       scope: "instance",
       run: async () => {
         await EngineRuntime.monitorRuns(hooks())
+        await drainPendingQueuedOperatorWakes()
       },
     })
-    // Phase-7: no aggressive startup recovery. The post-phase-5 build model
-    // is synchronous within a single orchestrator wake — nothing survives
-    // across process restart that needs a dedicated cleanup phase. Orphan
-    // runs surface via describe.ts `run_orphan` on the next wake and the
-    // orchestrator LLM decides whether to retry / restart_from_stage /
-    // drop. OS-level cleanup (worktrees, processes) is owned by the
-    // ownership registry, not by a recovery function.
+    // Phase-7: no aggressive startup recovery. Live build attempts and
+    // terminal refill facts are durable; orphan runs surface via describe.ts
+    // `run_orphan` on the next wake and the orchestrator LLM decides whether
+    // to retry / restart_from_stage / drop. OS-level cleanup (worktrees,
+    // processes) is owned by the ownership registry, not by a recovery
+    // function.
   }
 
   export async function createTask(raw: z.input<typeof CreateTaskInput>) {

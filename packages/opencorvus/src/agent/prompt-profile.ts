@@ -233,6 +233,46 @@ export namespace PromptProfile {
           "Keep algorithm decisions grounded in the exact correctness claim, relevant constraints, and the evidence threshold required to accept the result.",
       },
     },
+    testing: {
+      label: "Testing",
+      description: "Test design, regression coverage, reproducible evidence, and acceptance-risk focused expert squad.",
+      agents: {
+        coding:
+          "Prioritize testable behavior, isolated failure modes, regression coverage, and reproducible verification. Finish changes with evidence that the behavior fails before and passes after.",
+        "coding-assistant":
+          "Explain testing work through observable behavior, test boundaries, fixtures, assertions, and regression risk. Prefer advice that names the verification path the user can run.",
+        general:
+          "Anchor multi-step testing work to explicit behavior claims, failure reproduction, controlled fixtures, regression scope, and evidence that can be rerun.",
+        explore:
+          "Map existing test structure, helpers, fixtures, owners, and uncovered behavior from source evidence. Identify where verification belongs without mutating the workspace.",
+        mission:
+          "Keep testing-focused missions tied to acceptance criteria, reproducible failure cases, verification ownership, and evidence that proves the delivered change stays correct.",
+        "intent-analysis":
+          "Resolve testing requests into behavior under test, failure reproduction, target layer, fixtures, assertions, missing evidence, and acceptance thresholds.",
+        requirements:
+          "Write testing requirements as observable behavior, preconditions, assertions, negative cases, data fixtures, and evidence required to accept the change.",
+        architect:
+          "Turn testing requirements into verification boundaries: unit, integration, runtime, and visual checks mapped to owned paths, contracts, and known failure modes.",
+        "frontend-design":
+          "Define frontend handoff details that make later tests precise: visible states, interaction outcomes, data contracts, breakpoints, and screenshot evidence expectations.",
+        "frontend-research":
+          "Produce frontend investigation packets that make tests actionable: selectors, states, user flows, data dependencies, visual risks, and evidence gaps for each source page.",
+        build:
+          "Convert the approved change into code plus focused verification. Add or update tests that expose the changed behavior and report exact commands and remaining risk.",
+        "visual-qa":
+          "Audit rendered surfaces as executable checks: interactions, layout states, accessibility signals, and screenshots must support any acceptance claim or defect report.",
+        "deep-research":
+          "Research testing tools, framework semantics, environment constraints, and current documentation only when implementation depends on them. Separate facts from assumptions.",
+        "fact-check":
+          "Check testing claims against sources: command results, library behavior, version limits, documented semantics, and whether stated evidence supports the claim.",
+        "goal-workload-analyst":
+          "Challenge goals for missing verification scope, oversized test surfaces, fragile fixtures, hidden runtime dependencies, and unclear acceptance evidence before execution begins.",
+        integrity:
+          "Treat delivery as incomplete when changed behavior lacks targeted tests, reproduced failure evidence, or clear residual-risk notes. Verify claims against code and recorded commands.",
+        orchestrator:
+          "Keep testing decisions grounded in the exact behavior under review, the narrowest responsible owner, and acceptance evidence that can be rerun before final completion.",
+      },
+    },
   }
 
   export const targets: PromptProfileTargetCatalogEntry[] = [

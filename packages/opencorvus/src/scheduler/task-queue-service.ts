@@ -52,12 +52,16 @@ export namespace TaskQueueService {
   const BATCH_SIZE = 10
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
+  type InFlightTask = {
+    promise: Promise<void>
+    cleanup: () => void
+  }
 
   const state = lazyInstanceState(() => ({
     draining: false,
     drainRequested: false,
     activeDrain: undefined as Promise<Promise<void>[]> | undefined,
-    inFlight: new Set<Promise<void>>(),
+    inFlight: new Map<string, InFlightTask>(),
   }))
 
   export function init() {
@@ -240,7 +244,7 @@ export namespace TaskQueueService {
     while (true) {
       const started = await drainReadyTasks("runNow")
       const current = state()
-      const running = [...current.inFlight]
+      const running = [...current.inFlight.values()].map((task) => task.promise)
       if (started.length === 0 && running.length === 0) return
       await Promise.allSettled([...started, ...running])
     }
@@ -283,13 +287,21 @@ export namespace TaskQueueService {
     }
     if (list.length === 0) return []
     const started = list.map((task) => {
+      let cleanup = () => {}
       let running!: Promise<void>
-      running = execute(task)
+      running = execute(task, (nextCleanup) => {
+        cleanup = nextCleanup
+      })
         .catch((error) => fail(task, error))
         .finally(() => {
-          current.inFlight.delete(running)
+          if (current.inFlight.get(task.id)?.promise === running) {
+            current.inFlight.delete(task.id)
+          }
         })
-      current.inFlight.add(running)
+      current.inFlight.set(task.id, {
+        promise: running,
+        cleanup,
+      })
       return running
     })
     return started
@@ -416,7 +428,7 @@ export namespace TaskQueueService {
     )
   }
 
-  async function execute(task: typeof TaskQueueTable.$inferSelect) {
+  async function execute(task: typeof TaskQueueTable.$inferSelect, registerCleanup: (cleanup: () => void) => void) {
     const metadata = RawTaskMetadata.safeParse(task.metadata)
     if (!metadata.success) {
       throw new Error("invalid queue metadata")
@@ -451,6 +463,13 @@ export namespace TaskQueueService {
       }
     }
     GlobalBus.on("event", handler)
+    let cleaned = false
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      GlobalBus.off("event", handler)
+    }
+    registerCleanup(cleanup)
     try {
       if (metadata.data.kind === "session_prompt") {
         await executePrompt({
@@ -462,7 +481,7 @@ export namespace TaskQueueService {
         await executeSessionWake(task.session_id)
       }
     } finally {
-      GlobalBus.off("event", handler)
+      cleanup()
     }
     const now = Date.now()
     const completed = Database.use((db) =>
@@ -523,7 +542,8 @@ export namespace TaskQueueService {
     )
     if (stale.length === 0) return
     for (const task of stale) {
-      Database.use((db) =>
+      const session = await Session.get(task.session_id)
+      const failed = Database.use((db) =>
         db
           .update(TaskQueueTable)
           .set({
@@ -534,12 +554,25 @@ export namespace TaskQueueService {
             time_updated: now,
           })
           .where(and(eq(TaskQueueTable.id, task.id), eq(TaskQueueTable.status, "running")))
-          .run(),
+          .returning({ id: TaskQueueTable.id })
+          .get(),
       )
+      if (!failed) continue
       log.warn("marked stale running task failed after inactivity", {
         id: task.id,
         sessionID: task.session_id,
       })
+      const promptCancelled = SessionPrompt.cancel(session.id, session.directory)
+      log.warn("cancelled stale running session prompt after inactivity", {
+        id: task.id,
+        sessionID: task.session_id,
+        promptCancelled,
+      })
+      const inFlight = state().inFlight.get(task.id)
+      if (inFlight) {
+        inFlight.cleanup()
+        state().inFlight.delete(task.id)
+      }
       publishTerminalTaskError(task.session_id, "task timed out while running")
     }
   }

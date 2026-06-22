@@ -9,7 +9,7 @@
  * surfaces step 6 / 7 own.
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { Database } from "../../src/storage/db"
+import { Database, and, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
@@ -20,6 +20,11 @@ import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { listFactCheckAttempts, recordFactCheckAttempt } from "../../src/fact-check/persist"
 import type { FactCheckReport } from "../../src/fact-check/schema"
 import { createDecisionLog } from "../../src/decision-log"
+import { AgentRunError } from "../../src/agent/runner"
+import { Message } from "../../src/session/message"
+import { findStageContinuationRequest } from "../../src/engine/stage-continuation"
+import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
+import type { MiniWorkflow } from "../../src/engine/workflow"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -62,7 +67,8 @@ const baseReport: FactCheckReport = {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-function seedTask(projectID: string, taskID: string, now: number) {
+async function seedTask(projectID: string, taskID: string, now: number): Promise<string> {
+  const root = await Session.create({ kind: "root", title: "FC e2e task root" })
   Database.use((db) => {
     db.insert(ProjectTable)
       .values({
@@ -78,7 +84,7 @@ function seedTask(projectID: string, taskID: string, now: number) {
       .values({
         id: taskID,
         project_id: projectID,
-        session_id: null,
+        session_id: root.id,
         source: "test",
         title: "FC e2e task",
         request: "Build a thing",
@@ -90,10 +96,15 @@ function seedTask(projectID: string, taskID: string, now: number) {
       })
       .run()
   })
+  return root.id
 }
 
-async function createTerminalSessionWithAssistant(text: string): Promise<{ sessionID: string; messageID: string }> {
-  const session = await Session.create({ kind: "build" })
+async function createTerminalSessionWithAssistant(
+  text: string,
+  parentID: string,
+  kind = "build",
+): Promise<{ sessionID: string; messageID: string }> {
+  const session = await Session.create({ kind, parentID })
   const userID = Identifier.ascending("message")
   await Session.updateMessage({
     id: userID,
@@ -111,7 +122,7 @@ async function createTerminalSessionWithAssistant(text: string): Promise<{ sessi
     parentID: userID,
     modelID: "test",
     providerID: "test",
-    agent: "build",
+    agent: kind,
     path: { cwd: "/tmp/fc-e2e", root: "/tmp/fc-e2e" },
     time: { created: Date.now() },
     cost: 0,
@@ -135,13 +146,65 @@ const SAMPLE_ITEM = {
   source: "model prior",
 }
 
+function toolText(result: unknown): string {
+  if (typeof result === "string") return result
+  if (
+    result &&
+    typeof result === "object" &&
+    (result as { type?: unknown }).type === "final" &&
+    typeof (result as { output?: unknown }).output === "string"
+  ) {
+    return (result as { output: string }).output
+  }
+  if (
+    result &&
+    typeof result === "object" &&
+    typeof (result as { output?: unknown }).output === "string" &&
+    typeof (result as { title?: unknown }).title === "string" &&
+    typeof (result as { metadata?: unknown }).metadata === "object"
+  ) {
+    return (result as { output: string }).output
+  }
+  throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
+}
+
+const factCheckWorkflow: MiniWorkflow = {
+  id: "custom_fact_check_only",
+  name: "Custom fact-check only",
+  description: "Test workflow that exposes fact_check as a task-level step.",
+  goalLoopStepIDs: [],
+  steps: [
+    {
+      id: "fact_check",
+      tool: "fact_check",
+      label: "Fact check",
+      hint: "Verify factual claims.",
+      scope: "task",
+      skippable: false,
+      after: [],
+    },
+  ],
+}
+
+function factCheckWorkflowStatuses(taskID: string): string[] {
+  return Database.use((db) =>
+    db
+      .select({ payload: ProtocolEventTable.payload })
+      .from(ProtocolEventTable)
+      .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
+      .all()
+      .filter((event) => event.payload?.stepID === "fact_check")
+      .map((event) => String(event.payload?.status ?? "")),
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe("fact_check orchestrator tool (e2e A–G)", () => {
-  beforeEach(() => {
-    resetDatabase()
+  beforeEach(async () => {
+    await resetDatabase()
     factCheckAgentImpl = undefined
   })
   afterEach(async () => {
@@ -154,9 +217,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_A", "tsk_fc_A", Date.now())
+        const rootSessionID = await seedTask("proj_fc_A", "tsk_fc_A", Date.now())
         const { sessionID: targetSession, messageID: targetMsg } = await createTerminalSessionWithAssistant(
           "Built a component using react 19.",
+          rootSessionID,
         )
 
         factCheckAgentImpl = async (i) => ({
@@ -182,11 +246,14 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           outcome: "completed",
         })
 
-        const { tools } = createOrchestratorTools({ taskID: "tsk_fc_A", agentSessionID: "ses_orch_A" })
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_A",
+          agentSessionID: "ses_orch_A",
+          workflow: factCheckWorkflow,
+        })
         const result = await tools.fact_check.execute(
           {
             target_session_id: targetSession,
-            target_agent: "build",
             fact_check_items: [SAMPLE_ITEM],
             reason: "Worker registered a React-19 claim worth verifying.",
           },
@@ -194,9 +261,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         )
 
         // Yield is markdown — must contain verdict + verified section
-        expect(typeof result).toBe("string")
-        expect(String(result)).toContain("verdict=`clean`")
-        expect(String(result)).toContain("Verified (1)")
+        expect(toolText(result)).toContain("verdict=`clean`")
+        expect(toolText(result)).toContain("Verified (1)")
 
         // Artifact persisted
         const rows = listFactCheckAttempts("tsk_fc_A")
@@ -209,6 +275,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         const entries = createDecisionLog("tsk_fc_A").readByPhase("fact_check")
         expect(entries.length).toBe(1)
         expect(entries[0].value).toContain("verdict=clean")
+        expect(factCheckWorkflowStatuses("tsk_fc_A")).toEqual(["running", "completed"])
       },
     })
   })
@@ -219,15 +286,22 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_D", "tsk_fc_D", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Streaming claim.")
+        const rootSessionID = await seedTask("proj_fc_D", "tsk_fc_D", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Streaming claim.",
+          rootSessionID,
+        )
         SessionStatus.set(targetSession, { type: "streaming" })
 
         factCheckAgentImpl = async () => {
           throw new Error("agent should NOT run — tool must reject before dispatch")
         }
 
-        const { tools } = createOrchestratorTools({ taskID: "tsk_fc_D", agentSessionID: "ses_orch_D" })
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_D",
+          agentSessionID: "ses_orch_D",
+          workflow: factCheckWorkflow,
+        })
         const result = await tools.fact_check.execute(
           {
             target_session_id: targetSession,
@@ -237,12 +311,92 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("rejected")
-        expect(String(result)).toContain("not in a terminal state")
+        expect(toolText(result)).toContain("rejected")
+        expect(toolText(result)).toContain("not in a terminal state")
 
         // No artifact, no decision-log entry
         expect(listFactCheckAttempts("tsk_fc_D").length).toBe(0)
         expect(createDecisionLog("tsk_fc_D").readByPhase("fact_check").length).toBe(0)
+        expect(factCheckWorkflowStatuses("tsk_fc_D")).toEqual(["running", "failed"])
+      },
+    })
+  })
+
+  test("[scope] rejects target sessions outside the current task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await seedTask("proj_fc_scope_current", "tsk_fc_scope_current", Date.now())
+        const otherRootSessionID = await seedTask("proj_fc_scope_other", "tsk_fc_scope_other", Date.now() + 1)
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Other task claim.",
+          otherRootSessionID,
+        )
+
+        factCheckAgentImpl = async () => {
+          throw new Error("agent should NOT run for cross-task target session")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_scope_current",
+          agentSessionID: "ses_orch_scope_current",
+          workflow: factCheckWorkflow,
+        })
+        const result = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Cross-task target should be rejected before fact-check dispatch.",
+          },
+          {} as any,
+        )
+
+        expect(toolText(result)).toContain("fact_check rejected:")
+        expect(toolText(result)).toContain("belongs to task tsk_fc_scope_other")
+        expect(listFactCheckAttempts("tsk_fc_scope_current")).toHaveLength(0)
+        expect(factCheckWorkflowStatuses("tsk_fc_scope_current")).toEqual(["running", "failed"])
+      },
+    })
+  })
+
+  test("[scope] rejects caller target_agent that disagrees with session kind", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const rootSessionID = await seedTask("proj_fc_agent_mismatch", "tsk_fc_agent_mismatch", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Requirements claim.",
+          rootSessionID,
+          "requirements",
+        )
+
+        factCheckAgentImpl = async () => {
+          throw new Error("agent should NOT run for target_agent mismatch")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_agent_mismatch",
+          agentSessionID: "ses_orch_agent_mismatch",
+          workflow: factCheckWorkflow,
+        })
+        const result = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Caller target_agent must not override the target session kind.",
+          },
+          {} as any,
+        )
+
+        expect(toolText(result)).toContain("fact_check rejected:")
+        expect(toolText(result)).toContain("target_agent mismatch")
+        expect(toolText(result)).toContain("session kind is requirements")
+        expect(listFactCheckAttempts("tsk_fc_agent_mismatch")).toHaveLength(0)
+        expect(factCheckWorkflowStatuses("tsk_fc_agent_mismatch")).toEqual(["running", "failed"])
       },
     })
   })
@@ -253,8 +407,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_C", "tsk_fc_C", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Cacheable claim text.")
+        const rootSessionID = await seedTask("proj_fc_C", "tsk_fc_C", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Cacheable claim text.",
+          rootSessionID,
+        )
 
         let runCallCount = 0
         factCheckAgentImpl = async (i) => {
@@ -283,7 +440,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           }
         }
 
-        const { tools } = createOrchestratorTools({ taskID: "tsk_fc_C", agentSessionID: "ses_orch_C" })
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_C",
+          agentSessionID: "ses_orch_C",
+          workflow: factCheckWorkflow,
+        })
         const args = {
           target_session_id: targetSession,
           target_agent: "build",
@@ -292,17 +453,22 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         }
         const first = await tools.fact_check.execute(args, {} as any)
         expect(runCallCount).toBe(1)
-        expect(String(first)).toContain("verdict=`clean`")
-        expect(String(first)).not.toContain("cached")
+        expect(toolText(first)).toContain("verdict=`clean`")
+        expect(toolText(first)).not.toContain("cached")
 
-        const secondTools = createOrchestratorTools({ taskID: "tsk_fc_C", agentSessionID: "ses_orch_C" }).tools
+        const secondTools = createOrchestratorTools({
+          taskID: "tsk_fc_C",
+          agentSessionID: "ses_orch_C",
+          workflow: factCheckWorkflow,
+        }).tools
         const second = await secondTools.fact_check.execute(
           { ...args, reason: "Second call — should hit cache." },
           {} as any,
         )
         expect(runCallCount).toBe(1) // NOT incremented — agent did NOT re-run
-        expect(String(second)).toContain("cached")
-        expect(String(second)).toContain("verdict=`clean`")
+        expect(toolText(second)).toContain("cached")
+        expect(toolText(second)).toContain("verdict=`clean`")
+        expect(factCheckWorkflowStatuses("tsk_fc_C")).toEqual(["running", "completed", "running", "completed"])
       },
     })
   })
@@ -313,8 +479,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_F", "tsk_fc_F", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Network-dependent claim.")
+        const rootSessionID = await seedTask("proj_fc_F", "tsk_fc_F", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Network-dependent claim.",
+          rootSessionID,
+        )
 
         factCheckAgentImpl = async (i) => ({
           sessionID: "ses_fc_run_F",
@@ -346,8 +515,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("verdict=`inconclusive`")
-        expect(String(result)).toContain("tool_failed")
+        expect(toolText(result)).toContain("verdict=`inconclusive`")
+        expect(toolText(result)).toContain("tool_failed")
 
         const row = listFactCheckAttempts("tsk_fc_F")[0]
         expect(row.payload.report.overall_verdict).toBe("inconclusive")
@@ -362,8 +531,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_E", "tsk_fc_E", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Cancelled mid-run.")
+        const rootSessionID = await seedTask("proj_fc_E", "tsk_fc_E", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Cancelled mid-run.",
+          rootSessionID,
+        )
 
         const ac = new AbortController()
         factCheckAgentImpl = async () => {
@@ -386,7 +558,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("aborted")
+        expect(toolText(result)).toContain("aborted")
 
         const rows = listFactCheckAttempts("tsk_fc_E")
         expect(rows.length).toBe(1)
@@ -397,14 +569,149 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     })
   })
 
+  test("[I] terminal finalizer miss persists tool_error before same-session continuation", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const rootSessionID = await seedTask("proj_fc_I", "tsk_fc_I", Date.now())
+        const { sessionID: targetSession, messageID: targetMsg } = await createTerminalSessionWithAssistant(
+          "Terminal finalizer miss claim about React 19.",
+          rootSessionID,
+        )
+        const failedSessionID = "ses_fc_terminal_miss_I"
+        const calls: any[] = []
+        factCheckAgentImpl = async (i) => {
+          calls.push(i)
+          if (calls.length === 1) {
+            i.onSessionCreated?.(failedSessionID)
+            const terminalError = new Message.TerminalToolMissingError({
+              message: "Fact-check ended without report_fact_check_result.",
+              toolName: "report_fact_check_result",
+              retries: 0,
+            })
+            throw new AgentRunError("fact-check", "missing terminal fact-check report", {
+              nonRetryable: true,
+              cause: terminalError,
+            })
+          }
+          expect(i.continuation).toMatchObject({
+            sessionID: failedSessionID,
+            finalizerName: "report_fact_check_result",
+          })
+          return {
+            sessionID: failedSessionID,
+            report: {
+              ...baseReport,
+              scope: {
+                target_session_id: i.targetSessionID,
+                target_agent: i.targetAgent,
+                target_message_id: i.targetMessageID,
+                target_message_content_hash: i.targetMessageContentHash,
+                items_total: 1,
+                items_inspected: 1,
+              },
+              verified: [
+                {
+                  claim: SAMPLE_ITEM.claim,
+                  evidence: [{ kind: "web", pointer: "https://react.dev", excerpt: "React docs" }],
+                },
+              ],
+              overall_verdict: "clean",
+            },
+            outcome: "completed",
+          }
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID: "tsk_fc_I",
+          agentSessionID: "ses_orch_I",
+          workflow: factCheckWorkflow,
+        })
+        const first = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Worker registered a claim and the first fact-check misses its terminal report.",
+          },
+          {} as any,
+        )
+        const firstText = toolText(first)
+        expect(firstText).toContain("same-session continuation is ready")
+        expect(firstText).toContain("fact_check({")
+        const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match).not.toBeNull()
+        const continuationArtifactID = match![1]
+        const request = findStageContinuationRequest({ taskID: "tsk_fc_I", artifactID: continuationArtifactID })
+        expect(request?.payload.stage).toBe("fact-check")
+        expect(request?.payload.finalizer_name).toBe("report_fact_check_result")
+        expect(request?.payload.session_id).toBe(failedSessionID)
+        expect(request?.payload.normalized_stage_input).toMatchObject({
+          target_session_id: targetSession,
+          target_agent: "build",
+          target_message_id: targetMsg,
+          fact_check_items: [SAMPLE_ITEM],
+        })
+
+        const afterMiss = listFactCheckAttempts("tsk_fc_I")
+        expect(afterMiss.length).toBe(1)
+        expect(afterMiss[0].payload.outcome).toBe("tool_error")
+        expect(afterMiss[0].payload.fact_check_session_id).toBe(failedSessionID)
+        expect(afterMiss[0].payload.target_message_id).toBe(targetMsg)
+        expect(factCheckWorkflowStatuses("tsk_fc_I")).toEqual(["running", "failed"])
+
+        const second = await tools.fact_check.execute(
+          {
+            reason: "Continue the previous fact-check terminal report miss in the same session.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          {} as any,
+        )
+        expect(toolText(second)).toContain("verdict=`clean`")
+        expect(calls.length).toBe(2)
+        expect(calls[1].targetSessionID).toBe(targetSession)
+        expect(calls[1].targetMessageID).toBe(targetMsg)
+        expect(calls[1].continuation.artifactID).toBe(continuationArtifactID)
+
+        const afterContinuation = listFactCheckAttempts("tsk_fc_I")
+        expect(afterContinuation.map((row) => row.payload.outcome).sort()).toEqual(["completed", "tool_error"])
+        expect(factCheckWorkflowStatuses("tsk_fc_I")).toEqual(["running", "failed", "running", "completed"])
+
+        const third = await tools.fact_check.execute(
+          {
+            target_session_id: targetSession,
+            target_agent: "build",
+            fact_check_items: [SAMPLE_ITEM],
+            reason: "Fresh repeat should return the completed cached fact-check attempt.",
+          },
+          {} as any,
+        )
+        expect(toolText(third)).toContain("cached")
+        expect(calls.length).toBe(2)
+        expect(factCheckWorkflowStatuses("tsk_fc_I")).toEqual([
+          "running",
+          "failed",
+          "running",
+          "completed",
+          "running",
+          "completed",
+        ])
+      },
+    })
+  })
+
   // e2e H (extra codex impl review §3): scope mismatch — LLM-returned scope doesn't match snapshot
   test("[H] scope-mismatch returns tool_error + persists synthetic inconclusive artifact (codex review §3)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_H", "tsk_fc_H", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Truthful claim.")
+        const rootSessionID = await seedTask("proj_fc_H", "tsk_fc_H", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Truthful claim.",
+          rootSessionID,
+        )
 
         factCheckAgentImpl = async (i) => ({
           sessionID: "ses_fc_run_H",
@@ -434,8 +741,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("tool_error")
-        expect(String(result)).toContain("inconsistent with the host snapshot")
+        expect(toolText(result)).toContain("tool_error")
+        expect(toolText(result)).toContain("inconsistent with the host snapshot")
 
         const rows = listFactCheckAttempts("tsk_fc_H")
         expect(rows.length).toBe(1)
@@ -455,9 +762,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_empty_err", "tsk_fc_empty_err", Date.now())
+        const rootSessionID = await seedTask("proj_fc_empty_err", "tsk_fc_empty_err", Date.now())
         const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
           "Worker output. No structured items registered, but agent errored mid-run.",
+          rootSessionID,
         )
 
         factCheckAgentImpl = async () => {
@@ -477,7 +785,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("tool_error")
+        expect(toolText(result)).toContain("tool_error")
 
         const rows = listFactCheckAttempts("tsk_fc_empty_err")
         expect(rows.length).toBe(1)
@@ -497,8 +805,11 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_stale", "tsk_fc_stale", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Real message.")
+        const rootSessionID = await seedTask("proj_fc_stale", "tsk_fc_stale", Date.now())
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "Real message.",
+          rootSessionID,
+        )
 
         // Bypass the FactCheckAgent mock — force the real run() to fire
         // so loadTargetMessageText() is actually exercised.  We point the
@@ -525,8 +836,8 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("tool_error")
-        expect(String(result)).toContain("snapshot stale")
+        expect(toolText(result)).toContain("tool_error")
+        expect(toolText(result)).toContain("snapshot stale")
 
         const rows = listFactCheckAttempts("tsk_fc_stale")
         expect(rows.length).toBe(1)
@@ -545,9 +856,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        seedTask("proj_fc_G", "tsk_fc_G", Date.now())
+        const rootSessionID = await seedTask("proj_fc_G", "tsk_fc_G", Date.now())
         const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
           "External-executor passed result.",
+          rootSessionID,
         )
 
         factCheckAgentImpl = async (i) => {
@@ -580,7 +892,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           },
           {} as any,
         )
-        expect(String(result)).toContain("verdict=`clean`")
+        expect(toolText(result)).toContain("verdict=`clean`")
         expect(listFactCheckAttempts("tsk_fc_G").length).toBe(1)
       },
     })

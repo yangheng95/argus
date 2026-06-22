@@ -3,11 +3,48 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { Hono } from "hono"
-import { OverlayUI } from "../../src/server/overlay-ui"
+import { OverlayUI, selectOverlayUiServingSource } from "../../src/server/overlay-ui"
 import { Log } from "../../src/util/log"
 import { ensureOverlayDist } from "../../../overlay/test/overlay-dist"
 
 Log.init({ print: false })
+
+describe("OverlayUI serving source selection", () => {
+  test("physical UI bundle wins over embedded UI files", () => {
+    expect(
+      selectOverlayUiServingSource({
+        resolvedDir: "C:/repo/packages/overlay/dist-vite",
+        embeddedAvailable: true,
+      }),
+    ).toEqual({ kind: "directory", dir: "C:/repo/packages/overlay/dist-vite" })
+  })
+
+  test("explicit route directory override wins over every other source", () => {
+    expect(
+      selectOverlayUiServingSource({
+        dirOverride: "D:/fixture/ui",
+        resolvedDir: "C:/repo/packages/overlay/dist-vite",
+        embeddedAvailable: true,
+      }),
+    ).toEqual({ kind: "directory", dir: "D:/fixture/ui" })
+  })
+
+  test("embedded UI is used only when no physical UI bundle is resolved", () => {
+    expect(
+      selectOverlayUiServingSource({
+        embeddedAvailable: true,
+      }),
+    ).toEqual({ kind: "embedded" })
+  })
+
+  test("missing UI stays explicit when no directory or embedded bundle exists", () => {
+    expect(
+      selectOverlayUiServingSource({
+        embeddedAvailable: false,
+      }),
+    ).toEqual({ kind: "missing" })
+  })
+})
 
 /**
  * audit-2026-04-29 W2-G4. Locks the overlay-ui handler's behaviour
@@ -169,7 +206,9 @@ describe("OverlayUI built bundle", () => {
     const script = await scriptRes.text()
     expect(script).toContain("skill/installed")
     expect(script).toContain("panel/knowledge/memory")
-    expect(script).toContain("x-opencorvus-directory")
+    expect(script).toContain("Project-scoped route")
+    expect(script).toContain("requires a configured directory")
+    expect(script).not.toContain("x-opencorvus-directory")
     expect(script).toContain("workspace.no_directory")
   })
 })

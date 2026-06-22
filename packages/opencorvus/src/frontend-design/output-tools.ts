@@ -7,6 +7,13 @@
  * frontend-design no longer depends on registering rows before handoff.
  */
 import { tool } from "ai"
+import { createHash } from "node:crypto"
+import fs from "node:fs"
+import path from "node:path"
+import { pathToFileURL } from "node:url"
+import { BrowserRuntime } from "@/browser/runtime"
+import { runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
+import { requireRuntimePackage } from "@/runtime/package-require"
 import {
   ColorSchema,
   ComponentSchema,
@@ -25,6 +32,41 @@ import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 
 export type { FrontendTemplateFinal } from "./schema"
 
+const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
+
+const StaticHtmlScreenshotScript = String.raw`
+const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
+
+function decodePayload() {
+  const raw = Buffer.from(process.env.OPENCORVUS_FRONTEND_RENDER_PAYLOAD || "", "base64").toString("utf8");
+  return JSON.parse(raw);
+}
+
+(async () => {
+  const payload = decodePayload();
+  let browser;
+  try {
+    browser = await chromium.launch({
+      executablePath: payload.executablePath,
+      headless: true,
+      args: payload.launchArgs,
+      timeout: payload.timeoutMs,
+    });
+    const page = await browser.newPage({
+      viewport: { width: payload.viewport.width, height: payload.viewport.height },
+      deviceScaleFactor: 1,
+    });
+    await page.goto(payload.url, { waitUntil: "networkidle", timeout: payload.timeoutMs });
+    const bytes = await page.screenshot({ type: "png", fullPage: false });
+    process.stdout.write(JSON.stringify({ ok: true, screenshotBase64: bytes.toString("base64") }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+})();
+`
+
 // ---------------------------------------------------------------------------
 // Collector — private. Callers read through getSpecs() / getStats().
 //
@@ -41,6 +83,14 @@ export interface FrontendTemplateOutputCollector {
 }
 
 const VISUAL_ANCHOR_BUDGET = 80
+const REQUIRED_IMPLEMENTATION_PHASES = [
+  "evidence_lock",
+  "implementation_scaffold",
+  "data_component_transcription",
+  "runtime_visual_verification",
+  "source_quality_cleanup",
+] as const
+const artifactValidatedVisualFinals = new WeakSet<FrontendTemplateFinal>()
 
 function emptyCollector(): FrontendTemplateOutputCollector {
   return { specs: [] }
@@ -110,6 +160,23 @@ function renderBaselineReplacementPlan(
     .join("\n")
 }
 
+function renderImplementationPhaseOutcomes(
+  items: readonly FrontendTemplateFinal["implementation_phase_outcomes"][number][],
+): string {
+  if (items.length === 0) return "- no implementation phase outcomes submitted"
+  return items
+    .map((item) =>
+      [
+        `- ${item.id} — ${item.title}`,
+        `  - phase: ${item.phase}`,
+        `  - deliverable: ${item.deliverable}`,
+        `  - acceptance: ${item.acceptance}`,
+        `  - source_refs: ${item.source_refs.join(", ")}`,
+      ].join("\n"),
+    )
+    .join("\n")
+}
+
 function renderNamedItems(
   title: string,
   items: readonly {
@@ -127,6 +194,31 @@ function renderNamedItems(
     }
   }
   return lines.join("\n")
+}
+
+function renderVisualValidationEvidence(
+  items: readonly FrontendTemplateFinal["visual_validation_evidence"][number][],
+): string {
+  if (items.length === 0) return "- no structured rendered screenshot evidence submitted"
+  return items
+    .map((item) =>
+      [
+        `- ${item.id}: ${item.review_status}`,
+        `  - render_target: ${item.render_target}`,
+        `  - rendered_entrypoint: ${item.rendered_entrypoint}`,
+        `  - renderer: ${item.renderer}`,
+        `  - viewport: ${item.viewport}`,
+        `  - screenshot_artifact: ${item.screenshot_artifact}`,
+        `  - source_reference_artifact: ${item.source_reference_artifact}`,
+        `  - screenshot_sha256: ${item.screenshot_sha256}`,
+        `  - source_reference_sha256: ${item.source_reference_sha256}`,
+        item.diff_artifact ? `  - diff_artifact: ${item.diff_artifact}` : undefined,
+        `  - review_summary: ${item.review_summary}`,
+      ]
+        .filter((line): line is string => typeof line === "string")
+        .join("\n"),
+    )
+    .join("\n")
 }
 
 function renderComponentInventoryFromReusePlan(
@@ -219,16 +311,43 @@ function normalizeFrontendProject(
 }
 
 function normalizeProjectRootForReport(projectRoot: string): string {
-  return projectRoot
-    .replaceAll("\\", "/")
-    .replace(/^\.\/+/, "")
-    .replace(/\/+$/, "")
+  return normalizeReportPath(projectRoot)
+}
+
+function normalizeReportPath(value: string): string {
+  const normalized = path.posix.normalize(value.replaceAll("\\", "/").trim())
+  if (normalized === ".") return ""
+  return normalized.replace(/^\.\/+/, "").replace(/\/+$/, "")
 }
 
 function isFrontendDesignSkeletonRoot(normalizedProjectRoot: string): boolean {
+  const root = normalizedProjectRoot.toLowerCase()
+  return root.split("/").includes("frontend-design-skeleton")
+}
+
+function referencesVisualHtmlSkeletonRoot(normalizedProjectRoot: string): boolean {
+  const root = normalizedProjectRoot.toLowerCase()
+  const windowsEquivalentRoot = stripWindowsEquivalentSegmentSuffixes(root)
   return (
-    normalizedProjectRoot === "frontend-design-skeleton" || normalizedProjectRoot.endsWith("/frontend-design-skeleton")
+    root.split("/").includes("visual-html-skeleton") ||
+    windowsEquivalentRoot.split("/").includes("visual-html-skeleton")
   )
+}
+
+function isValidVisualHtmlSkeletonRoot(normalizedProjectRoot: string, artifactRootRelative?: string): boolean {
+  const root = normalizedProjectRoot.toLowerCase()
+  if (root === ".." || root.startsWith("../")) return false
+  if (root === "visual-html-skeleton") return true
+  if (!artifactRootRelative) return false
+  const fdRoot = normalizeReportPath(artifactRootRelative).toLowerCase()
+  return root === `${fdRoot}/visual-html-skeleton`
+}
+
+function stripWindowsEquivalentSegmentSuffixes(normalizedPath: string): string {
+  return normalizedPath
+    .split("/")
+    .map((segment) => segment.replace(/[ .]+$/g, ""))
+    .join("/")
 }
 
 function parseMaybeStringArray(value: unknown): unknown {
@@ -249,18 +368,6 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input
   const source = input as Record<string, unknown>
   const normalized: Record<string, unknown> = { ...source }
-
-  const normalizePlanItems = (value: unknown): unknown => {
-    if (!Array.isArray(value)) return value
-    return value.map((item) => {
-      if (!item || typeof item !== "object" || Array.isArray(item)) return item
-      const record = { ...(item as Record<string, unknown>) }
-      if (record.parity_guard === undefined && typeof record.replacement_guard === "string") {
-        record.parity_guard = record.replacement_guard
-      }
-      return record
-    })
-  }
 
   // Some providers flatten a nested tool object into keys like
   // `frontend_project<arg_key>status`; rebuild that object before Zod parsing.
@@ -283,9 +390,6 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
   if (sawFlattenedFrontendProject || source.frontend_project) {
     normalized.frontend_project = frontendProject
   }
-  normalized.component_reuse_plan = normalizePlanItems(source.component_reuse_plan)
-  normalized.baseline_replacement_plan = normalizePlanItems(source.baseline_replacement_plan)
-
   return normalized
 }
 
@@ -303,12 +407,14 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Final Acceptance Mode\n${collector.final.final_acceptance_mode}`,
       `## Fillable Modules\n${collector.final.fillable_modules}`,
       `## Implementation Problems And Agent Handoff\n${collector.final.completeness_review}`,
+      `## Implementation Phase Outcomes\n${renderImplementationPhaseOutcomes(collector.final.implementation_phase_outcomes)}`,
       `## Reuse Constraints\n${renderComponentReusePlan(collector.final.component_reuse_plan)}`,
       `## Source Region Evolution Plan\n${renderBaselineReplacementPlan(collector.final.baseline_replacement_plan)}`,
       `## Quality Project Contract\n${collector.final.quality_project_contract}`,
       `## Material Inventory\n${collector.final.material_inventory}`,
       `## Frontend Project\n${renderFrontendProjectReport(collector.final)}`,
       `## Visual Consistency Contract\n${collector.final.visual_consistency_contract}`,
+      `## Visual Validation Evidence\n${renderVisualValidationEvidence(collector.final.visual_validation_evidence)}`,
       `## UI Data Contract\n${collector.final.ui_data_contract}`,
       `## Template Iteration Notes\n${markdownList(collector.final.template_iteration_notes)}`,
       `## Reference Artifacts\n${collector.final.reference_artifacts.length ? markdownList(collector.final.reference_artifacts) : "- no reference artifacts submitted"}`,
@@ -318,7 +424,10 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
   }
 }
 
-function assertFrontendTemplateFinal(final: FrontendTemplateFinal): void {
+async function assertFrontendTemplateFinal(
+  final: FrontendTemplateFinal,
+  options: { artifactRoot: string; artifactRootRelative?: string; workspaceRoot: string },
+): Promise<void> {
   const requiredRenderedFields = [
     ["frontend_template", final.frontend_template],
     ["fillable_modules", final.fillable_modules],
@@ -331,6 +440,218 @@ function assertFrontendTemplateFinal(final: FrontendTemplateFinal): void {
     if (!value.trim())
       throw new Error(`${key} is required; provide concise markdown or the matching structured *_items field`)
   }
+  if (
+    final.final_acceptance_mode === "maintainable_replacement_required" &&
+    final.frontend_project.role === "visual_baseline_input"
+  ) {
+    throw new Error(
+      "final_acceptance_mode=maintainable_replacement_required cannot submit frontend_project.role=visual_baseline_input; " +
+        "report a real implementation_target scaffold or role=blocked with the missing implementation/screenshot evidence.",
+    )
+  }
+  const normalizedProjectRoot = normalizeProjectRootForReport(final.frontend_project.project_root)
+  if (
+    final.frontend_project.role === "implementation_target" &&
+    referencesVisualHtmlSkeletonRoot(normalizedProjectRoot)
+  ) {
+    throw new Error(
+      "frontend_project.role=implementation_target cannot point at visual-html-skeleton; " +
+        "visual-html-skeleton is a static visual baseline/source artifact. Use role=visual_baseline_input for a validated visual-baseline workflow, or report a real maintainable implementation target / role=blocked for production tasks.",
+    )
+  }
+  if (
+    final.frontend_project.role === "visual_baseline_input" &&
+    !isValidVisualHtmlSkeletonRoot(normalizedProjectRoot, options.artifactRootRelative)
+  ) {
+    throw new Error(
+      "frontend_project.role=visual_baseline_input requires frontend_project.project_root to point at visual-html-skeleton; " +
+        "do not submit web-clone-source, traversed paths, source skeletons, or other evidence packages as the visual baseline project root.",
+    )
+  }
+  if (final.frontend_project.role === "visual_baseline_input") {
+    const quality = await inspectVisualBaselineQualityForSubmit(final, {
+      ...options,
+      requireArtifactVerification: true,
+    })
+    if (quality.status === "evidence_missing") {
+      throw new Error(
+        "frontend_project.role=visual_baseline_input requires artifact-backed rendered screenshot review evidence for the visual-html-skeleton output; " +
+          "submit structured visual_validation_evidence whose rendered_entrypoint, screenshot_artifact, source_reference_artifact, optional diff_artifact, and sha256 digests match real files under the task artifact root, or report the visual baseline as blocked/incomplete source debt instead of submitting an unproven skeleton.",
+      )
+    }
+    if (quality.status === "incomplete_visual_fidelity") {
+      throw new Error(
+        "frontend_project.role=visual_baseline_input cannot be submitted with blocking visual debt; " +
+          "repair the visual-html-skeleton until structured screenshot review has no blocking debt, or report frontend_project.role=blocked/source_baseline_input with the named unfinished visual debt.",
+      )
+    }
+  }
+  if (final.final_acceptance_mode === "maintainable_replacement_required") {
+    assertMaintainablePhaseOutcomes(final)
+  }
+  if (final.frontend_project.role === "implementation_target") {
+    const projectRoot = assertImplementationTargetEntrypoints(final, options.workspaceRoot)
+    assertConcreteReuseSourceEvidence(final, projectRoot)
+  }
+}
+
+function assertMaintainablePhaseOutcomes(final: FrontendTemplateFinal): void {
+  const present = new Set(final.implementation_phase_outcomes.map((item) => item.phase))
+  const missing = REQUIRED_IMPLEMENTATION_PHASES.filter((phase) => !present.has(phase))
+  if (missing.length > 0) {
+    throw new Error(
+      "final_acceptance_mode=maintainable_replacement_required requires structured implementation_phase_outcomes covering " +
+        `${REQUIRED_IMPLEMENTATION_PHASES.join(", ")}; missing ${missing.join(", ")}. ` +
+        "Do not force Architect to derive phase goals from component_inventory or component_reuse_plan.",
+    )
+  }
+}
+
+function assertImplementationTargetEntrypoints(final: FrontendTemplateFinal, workspaceRoot: string): string {
+  const project = final.frontend_project
+  if (!project.project_root.trim()) {
+    throw new Error("frontend_project.role=implementation_target requires a non-empty project_root.")
+  }
+  if (project.entrypoints.length === 0) {
+    throw new Error("frontend_project.role=implementation_target requires at least one project-root-relative entrypoint.")
+  }
+  const projectRoot = resolveWorkspaceReportPath(workspaceRoot, project.project_root)
+  if (!projectRoot || !isDirectory(projectRoot)) {
+    throw new Error(
+      `frontend_project.role=implementation_target requires project_root to resolve to an existing directory under the workspace: ${project.project_root}`,
+    )
+  }
+  const missingEntrypoints = project.entrypoints.filter((entrypoint) => {
+    const entrypointFile = resolveProjectRootRelativeFile(projectRoot, entrypoint)
+    return !entrypointFile || !isReadableFile(entrypointFile)
+  })
+  if (missingEntrypoints.length > 0) {
+    throw new Error(
+      "frontend_project.role=implementation_target requires every entrypoint to be a real project-root-relative file; missing or invalid: " +
+        missingEntrypoints.join(", "),
+    )
+  }
+  return projectRoot
+}
+
+function assertConcreteReuseSourceEvidence(final: FrontendTemplateFinal, projectRoot: string): void {
+  const packageDeps = readPackageDependencies(projectRoot)
+  const invalid: string[] = []
+  for (const item of final.component_reuse_plan) {
+    if (item.implementation_strategy === "mature_library") {
+      if (!reuseSourceNamesInstalledPackageOrExistingPath(item.reuse_source, projectRoot, packageDeps)) {
+        invalid.push(`component_reuse_plan.${item.family_id}.reuse_source=${item.reuse_source}`)
+      }
+    }
+    if (item.implementation_strategy === "existing_project_component") {
+      if (!reuseSourceNamesInstalledPackageOrExistingPath(item.reuse_source, projectRoot, packageDeps)) {
+        invalid.push(`component_reuse_plan.${item.family_id}.reuse_source=${item.reuse_source}`)
+      }
+    }
+  }
+  for (const item of final.baseline_replacement_plan) {
+    if (item.replacement_strategy === "mature_library" || item.replacement_strategy === "existing_project_component") {
+      if (!reuseSourceNamesInstalledPackageOrExistingPath(item.reuse_source, projectRoot, packageDeps)) {
+        invalid.push(`baseline_replacement_plan.${item.boundary_id}.reuse_source=${item.reuse_source}`)
+      }
+    }
+  }
+  if (invalid.length > 0) {
+    throw new Error(
+      "maintainable implementation reuse sources must bind to an installed package in project_root/package.json or an existing project source file; invalid: " +
+        invalid.join(", "),
+    )
+  }
+}
+
+function resolveWorkspaceReportPath(workspaceRoot: string, reportPath: string): string | undefined {
+  const root = path.resolve(workspaceRoot)
+  if (reportPath.replaceAll("\\", "/").trim().replace(/\/+$/, "") === ".") return root
+  const normalized = normalizeReportPath(reportPath)
+  if (!normalized) return undefined
+  const absolute = path.isAbsolute(reportPath) ? path.resolve(reportPath) : path.resolve(root, ...normalized.split("/"))
+  const relative = path.relative(root, absolute)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined
+  return absolute
+}
+
+function resolveProjectRootRelativeFile(projectRoot: string, reportPath: string): string | undefined {
+  if (path.isAbsolute(reportPath)) return undefined
+  const normalized = normalizeReportPath(reportPath)
+  if (!normalized || normalized === ".." || normalized.startsWith("../")) return undefined
+  const absolute = path.resolve(projectRoot, ...normalized.split("/"))
+  const relative = path.relative(projectRoot, absolute)
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) return undefined
+  return absolute
+}
+
+function isDirectory(file: string): boolean {
+  try {
+    return fs.statSync(file).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function readPackageDependencies(projectRoot: string): Set<string> {
+  const packageFile = path.join(projectRoot, "package.json")
+  if (!isReadableFile(packageFile)) return new Set()
+  try {
+    const parsed = JSON.parse(fs.readFileSync(packageFile, "utf8")) as {
+      dependencies?: Record<string, unknown>
+      devDependencies?: Record<string, unknown>
+      peerDependencies?: Record<string, unknown>
+      optionalDependencies?: Record<string, unknown>
+    }
+    return new Set([
+      ...Object.keys(parsed.dependencies ?? {}),
+      ...Object.keys(parsed.devDependencies ?? {}),
+      ...Object.keys(parsed.peerDependencies ?? {}),
+      ...Object.keys(parsed.optionalDependencies ?? {}),
+    ])
+  } catch {
+    return new Set()
+  }
+}
+
+function reuseSourceNamesInstalledPackageOrExistingPath(
+  reuseSource: string,
+  projectRoot: string,
+  packageDeps: ReadonlySet<string>,
+): boolean {
+  const projectFile = resolveProjectRootRelativeFile(projectRoot, reuseSource)
+  if (projectFile && isReadableFile(projectFile)) return true
+  const packageName = packageNameFromReuseSource(reuseSource)
+  return packageName ? packageDeps.has(packageName) : false
+}
+
+function packageNameFromReuseSource(reuseSource: string): string | undefined {
+  const trimmed = reuseSource.trim()
+  const scoped = /^(@[a-z0-9._-]+\/[a-z0-9._-]+)/i.exec(trimmed)
+  if (scoped) return scoped[1]
+  const bare = /^([a-z0-9._-]+)(?:\/[a-z0-9._-]+)?$/i.exec(trimmed)
+  return bare ? bare[1] : undefined
+}
+
+async function inspectVisualBaselineQualityForSubmit(
+  final: FrontendTemplateFinal,
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): Promise<{
+  status: "high_fidelity_evidence_reported" | "incomplete_visual_fidelity" | "evidence_missing"
+  hasRemainingDebt: boolean
+}> {
+  const text = collectVisualBaselineText(final)
+  const hasRemainingDebt = hasBlockingVisualDebt(text)
+  const hasRenderedScreenshotEvidence = await hasStructuredRenderedScreenshotEvidenceForSubmit(final, options)
+  const hasStructuredDebt = final.visual_validation_evidence.some(
+    (item) => item.review_status === "reviewed_with_blocking_debt",
+  )
+
+  if (hasRemainingDebt || hasStructuredDebt) {
+    return { status: "incomplete_visual_fidelity", hasRemainingDebt: hasRemainingDebt || hasStructuredDebt }
+  }
+  if (hasRenderedScreenshotEvidence) return { status: "high_fidelity_evidence_reported", hasRemainingDebt }
+  return { status: "evidence_missing", hasRemainingDebt }
 }
 
 function renderFrontendProjectReport(final: FrontendTemplateFinal): string {
@@ -392,31 +713,309 @@ function renderFrontendProjectReport(final: FrontendTemplateFinal): string {
 }
 
 function renderVisualBaselineQualityStatus(final: FrontendTemplateFinal): string {
-  const evidence = inspectVisualBaselineQuality(final)
+  const evidence = inspectVisualBaselineQuality(final, {
+    artifactRoot: process.cwd(),
+    requireArtifactVerification: !artifactValidatedVisualFinals.has(final),
+  })
   if (evidence.status === "evidence_missing") {
-    return "- visual_quality_status: evidence_missing. No rendered screenshot review evidence was reported for the visual HTML skeleton; treat the skeleton as unproven until rendered screenshot evidence and visual review are recorded."
+    return "- visual_quality_status: evidence_missing. No structured rendered screenshot review evidence was submitted for the visual HTML skeleton; treat the skeleton as unproven until `visual_validation_evidence` and visual review are recorded."
   }
   if (evidence.status === "incomplete_visual_fidelity") {
     const debt = evidence.hasRemainingDebt ? " Remaining visual debt is present in the submitted contract." : ""
     return `- visual_quality_status: incomplete_visual_fidelity.${debt} This skeleton is unproven and must not be treated as ready for downstream transcription.`
   }
-  return "- visual_quality_status: visual_evidence_reported. Rendered screenshot review evidence was reported; source traceability, screenshot inspection, and placeholder review remain authoritative."
+  return "- visual_quality_status: visual_evidence_reported. Structured rendered screenshot review evidence was submitted; source traceability, screenshot inspection, and placeholder review remain authoritative."
 }
 
-function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
+function inspectVisualBaselineQuality(
+  final: FrontendTemplateFinal,
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): {
   status: "high_fidelity_evidence_reported" | "incomplete_visual_fidelity" | "evidence_missing"
   hasRemainingDebt: boolean
 } {
   const text = collectVisualBaselineText(final)
-  const hasRemainingDebt = /\bremaining visual debt\s*:\s*(?!\s*(?:none|no|0|\(\s*none\s*\))\b)/i.test(text)
-  const hasRenderedScreenshotEvidence =
-    /\b(task-scoped preview|preview evidence|rendered screenshot|screenshot artifact|screenshot review)\b/i.test(text)
+  const hasRemainingDebt = hasBlockingVisualDebt(text)
+  const hasRenderedScreenshotEvidence = hasStructuredRenderedScreenshotEvidence(final, options)
+  const hasStructuredDebt = final.visual_validation_evidence.some(
+    (item) => item.review_status === "reviewed_with_blocking_debt",
+  )
 
-  if (hasRemainingDebt) {
-    return { status: "incomplete_visual_fidelity", hasRemainingDebt }
+  if (hasRemainingDebt || hasStructuredDebt) {
+    return { status: "incomplete_visual_fidelity", hasRemainingDebt: hasRemainingDebt || hasStructuredDebt }
   }
   if (hasRenderedScreenshotEvidence) return { status: "high_fidelity_evidence_reported", hasRemainingDebt }
   return { status: "evidence_missing", hasRemainingDebt }
+}
+
+function hasBlockingVisualDebt(text: string): boolean {
+  const positiveText = text
+    .replace(
+      /\b(?:no|none|without|not|zero|0)\s+(?:blocking|remaining|unresolved|open|deferred)\s+(?:visual\s+)?(?:debt|mismatch(?:es)?|gap(?:s)?|defect(?:s)?|blocker(?:s)?)\b/gi,
+      "",
+    )
+    .replace(
+      /\b(?:no|none|without|not|zero|0)\s+(?:visual\s+)?(?:debt|mismatch(?:es)?|gap(?:s)?|defect(?:s)?|blocker(?:s)?)\s+(?:remain(?:s|ing)?|blocking|unresolved|open|deferred)\b/gi,
+      "",
+    )
+  const labelDebt =
+    /\b(?:remaining|blocking|unresolved|open|deferred)\s+(?:visual\s+)?(?:debt|mismatch(?:es)?|gap(?:s)?|defect(?:s)?|blocker(?:s)?)\s*[:\-]\s*(?!\s*(?:none|no|0|n\/a|\(\s*none\s*\))\b)/i.test(
+      positiveText,
+    )
+  const reversedLabelDebt =
+    /\b(?:visual\s+)?(?:debt|mismatch(?:es)?|gap(?:s)?|defect(?:s)?|blocker(?:s)?)\s+(?:remain(?:s|ing)?|blocking|unresolved|open|deferred)\s*[:\-]\s*(?!\s*(?:none|no|0|n\/a|\(\s*none\s*\))\b)/i.test(
+      positiveText,
+    )
+  const sentenceDebt =
+    /\b(?:rendered screenshot|screenshot review|task-scoped preview|preview evidence|visual diff)\b[^\n.]{0,160}\b(?:blocking|remaining|unresolved|open|deferred)\s+(?:visual\s+)?(?:debt|mismatch(?:es)?|gap(?:s)?|defect(?:s)?|blocker(?:s)?)\b/i.test(
+      positiveText,
+    )
+  const reversedSentenceDebt =
+    /\b(?:rendered screenshot|screenshot review|task-scoped preview|preview evidence|visual diff)\b[^\n.]{0,160}\b(?:visual\s+)?(?:debt|mismatch(?:es)?|gap(?:s)?|defect(?:s)?|blocker(?:s)?)\s+(?:remain(?:s|ing)?|blocking|unresolved|open|deferred)\b/i.test(
+      positiveText,
+    )
+  return labelDebt || reversedLabelDebt || sentenceDebt || reversedSentenceDebt
+}
+
+function hasStructuredRenderedScreenshotEvidence(
+  final: FrontendTemplateFinal,
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): boolean {
+  return final.visual_validation_evidence.some((item) => isUsableRenderedScreenshotEvidence(item, options))
+}
+
+async function hasStructuredRenderedScreenshotEvidenceForSubmit(
+  final: FrontendTemplateFinal,
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): Promise<boolean> {
+  for (const item of final.visual_validation_evidence) {
+    if (await isUsableRenderedScreenshotEvidenceForSubmit(item, options)) return true
+  }
+  return false
+}
+
+function isUsableRenderedScreenshotEvidence(
+  item: FrontendTemplateFinal["visual_validation_evidence"][number],
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): boolean {
+  if (item.render_target !== "visual-html-skeleton") return false
+  if (item.review_status !== "reviewed_no_blocking_debt") return false
+  if (item.screenshot_sha256.toLowerCase() === item.source_reference_sha256.toLowerCase()) return false
+
+  const entrypoint = resolveEvidenceArtifactPath(options, item.rendered_entrypoint, "visual-html-skeleton")
+  const screenshot = resolveEvidenceArtifactPath(options, item.screenshot_artifact, "visual-html-skeleton")
+  const sourceReference = resolveEvidenceArtifactPath(options, item.source_reference_artifact, "web-clone-source")
+  const diff = item.diff_artifact
+    ? resolveEvidenceArtifactPath(options, item.diff_artifact, "visual-html-skeleton")
+    : undefined
+  if (!entrypoint || !screenshot || !sourceReference || (item.diff_artifact && !diff)) return false
+  if (!entrypoint.relativePath.endsWith(".html")) return false
+  if (!isRenderedVisualSkeletonArtifactRelativePath(screenshot.relativePath)) return false
+  if (diff && !isRenderedVisualSkeletonArtifactRelativePath(diff.relativePath)) return false
+  if (options.requireArtifactVerification) return false
+  return true
+}
+
+async function isUsableRenderedScreenshotEvidenceForSubmit(
+  item: FrontendTemplateFinal["visual_validation_evidence"][number],
+  options: { artifactRoot: string; artifactRootRelative?: string; requireArtifactVerification: boolean },
+): Promise<boolean> {
+  if (item.render_target !== "visual-html-skeleton") return false
+  if (item.review_status !== "reviewed_no_blocking_debt") return false
+  if (item.screenshot_sha256.toLowerCase() === item.source_reference_sha256.toLowerCase()) return false
+
+  const entrypoint = resolveEvidenceArtifactPath(options, item.rendered_entrypoint, "visual-html-skeleton")
+  const screenshot = resolveEvidenceArtifactPath(options, item.screenshot_artifact, "visual-html-skeleton")
+  const sourceReference = resolveEvidenceArtifactPath(options, item.source_reference_artifact, "web-clone-source")
+  const diff = item.diff_artifact
+    ? resolveEvidenceArtifactPath(options, item.diff_artifact, "visual-html-skeleton")
+    : undefined
+  if (!entrypoint || !screenshot || !sourceReference || (item.diff_artifact && !diff)) return false
+  if (!entrypoint.relativePath.endsWith(".html")) return false
+  if (!isRenderedVisualSkeletonArtifactRelativePath(screenshot.relativePath)) return false
+  if (diff && !isRenderedVisualSkeletonArtifactRelativePath(diff.relativePath)) return false
+  if (!options.requireArtifactVerification) return true
+
+  const verifiedEntrypoint = verifyEvidenceFile(options.artifactRoot, entrypoint, "visual-html-skeleton")
+  const verifiedScreenshot = verifyEvidenceFile(options.artifactRoot, screenshot, "visual-html-skeleton")
+  const verifiedSourceReference = verifyEvidenceFile(options.artifactRoot, sourceReference, "web-clone-source")
+  if (!verifiedEntrypoint || !verifiedScreenshot || !verifiedSourceReference) return false
+  if (diff && !verifyEvidenceFile(options.artifactRoot, diff, "visual-html-skeleton")) return false
+  if (!(await isDecodedRasterImageFile(verifiedScreenshot))) return false
+  if (!(await isDecodedRasterImageFile(verifiedSourceReference))) return false
+
+  const screenshotSha = sha256File(verifiedScreenshot)
+  const sourceReferenceSha = sha256File(verifiedSourceReference)
+  return (
+    screenshotSha === item.screenshot_sha256.toLowerCase() &&
+    sourceReferenceSha === item.source_reference_sha256.toLowerCase() &&
+    screenshotSha !== sourceReferenceSha &&
+    (await renderedEntrypointMatchesScreenshot({
+      entrypointFile: verifiedEntrypoint,
+      expectedScreenshotSha256: screenshotSha,
+      viewportLabel: item.viewport,
+      fallbackScreenshotFile: verifiedScreenshot,
+    }))
+  )
+}
+
+function isRenderedVisualSkeletonArtifactRelativePath(relativePath: string): boolean {
+  const normalizedPath = normalizeReportPath(relativePath).toLowerCase()
+  const basename = normalizedPath.split("/").pop() ?? normalizedPath
+  if (/(?:^|[-_.])(reference|source|original)(?:[-_.]|$)/i.test(basename)) return false
+  return (
+    /(?:^|\/)(?:screenshots?|previews?|renders?|visual-diffs?|diffs?)(?:\/|$)/i.test(normalizedPath) ||
+    /(?:screenshot|preview|render|visual-diff|diff)/i.test(basename)
+  )
+}
+
+function resolveEvidenceArtifactPath(
+  options: { artifactRoot: string; artifactRootRelative?: string },
+  artifactPath: string,
+  expectedRoot: "visual-html-skeleton" | "web-clone-source",
+): { absolutePath: string; relativePath: string } | undefined {
+  const root = path.resolve(options.artifactRoot)
+  const normalizedArtifactPath = normalizeReportPath(artifactPath)
+  const normalizedArtifactRootRelative = options.artifactRootRelative
+    ? normalizeReportPath(options.artifactRootRelative)
+    : ""
+  const rootRelativePath =
+    normalizedArtifactRootRelative &&
+    (normalizedArtifactPath === normalizedArtifactRootRelative ||
+      normalizedArtifactPath.startsWith(`${normalizedArtifactRootRelative}/`))
+      ? normalizeReportPath(normalizedArtifactPath.slice(normalizedArtifactRootRelative.length).replace(/^\/+/, ""))
+      : normalizedArtifactPath
+  const file = path.isAbsolute(artifactPath)
+    ? path.resolve(artifactPath)
+    : path.resolve(root, ...rootRelativePath.split("/"))
+  const relative = path.relative(root, file)
+  if (relative === "") return undefined
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined
+  const relativePath = normalizeReportPath(relative)
+  if (!isPathInsideExpectedEvidenceRoot(relativePath, expectedRoot)) return undefined
+  return { absolutePath: file, relativePath }
+}
+
+function isPathInsideExpectedEvidenceRoot(relativePath: string, expectedRoot: string): boolean {
+  const normalized = normalizeReportPath(relativePath)
+  return normalized === expectedRoot || normalized.startsWith(`${expectedRoot}/`)
+}
+
+function verifyEvidenceFile(
+  artifactRoot: string,
+  resolved: { absolutePath: string; relativePath: string },
+  expectedRoot: "visual-html-skeleton" | "web-clone-source",
+): string | undefined {
+  if (!isReadableFile(resolved.absolutePath)) return undefined
+  let rootReal: string
+  let fileReal: string
+  try {
+    rootReal = fs.realpathSync(artifactRoot)
+    fileReal = fs.realpathSync(resolved.absolutePath)
+  } catch {
+    return undefined
+  }
+  const realRelativePath = normalizeReportPath(path.relative(rootReal, fileReal))
+  if (!realRelativePath || realRelativePath.startsWith("..") || path.isAbsolute(realRelativePath)) return undefined
+  if (!isPathInsideExpectedEvidenceRoot(realRelativePath, expectedRoot)) return undefined
+  return fileReal
+}
+
+function isReadableFile(file: string): boolean {
+  try {
+    return fs.statSync(file).isFile()
+  } catch {
+    return false
+  }
+}
+
+function sha256File(file: string): string {
+  return createHash("sha256").update(fs.readFileSync(file)).digest("hex")
+}
+
+async function isDecodedRasterImageFile(file: string): Promise<boolean> {
+  try {
+    const metadata = await sharp(file).metadata()
+    return (
+      (metadata.format === "png" || metadata.format === "jpeg" || metadata.format === "webp") &&
+      typeof metadata.width === "number" &&
+      metadata.width > 0 &&
+      typeof metadata.height === "number" &&
+      metadata.height > 0
+    )
+  } catch {
+    return false
+  }
+}
+
+async function renderedEntrypointMatchesScreenshot(input: {
+  entrypointFile: string
+  expectedScreenshotSha256: string
+  viewportLabel: string
+  fallbackScreenshotFile: string
+}): Promise<boolean> {
+  try {
+    const viewport =
+      viewportDimensionsFromLabel(input.viewportLabel) ?? (await rasterDimensions(input.fallbackScreenshotFile))
+    if (!viewport) return false
+    const rendered = await renderVisualHtmlSkeletonScreenshotForValidation({
+      entrypointFile: input.entrypointFile,
+      viewport,
+    })
+    return createHash("sha256").update(rendered).digest("hex") === input.expectedScreenshotSha256
+  } catch {
+    return false
+  }
+}
+
+function viewportDimensionsFromLabel(label: string): { width: number; height: number } | undefined {
+  const match = /(?:^|[^0-9])([1-9][0-9]{1,4})\s*x\s*([1-9][0-9]{1,4})(?:[^0-9]|$)/i.exec(label)
+  if (!match) return undefined
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return undefined
+  return { width, height }
+}
+
+async function rasterDimensions(file: string): Promise<{ width: number; height: number } | undefined> {
+  try {
+    const metadata = await sharp(file).metadata()
+    if (
+      typeof metadata.width === "number" &&
+      metadata.width > 0 &&
+      typeof metadata.height === "number" &&
+      metadata.height > 0
+    ) {
+      return { width: metadata.width, height: metadata.height }
+    }
+  } catch {}
+  return undefined
+}
+
+export async function renderVisualHtmlSkeletonScreenshotForValidation(input: {
+  entrypointFile: string
+  viewport: { width: number; height: number }
+  timeoutMs?: number
+}): Promise<Buffer> {
+  const timeoutMs = input.timeoutMs ?? 60_000
+  const executablePath = await BrowserRuntime.findBrowserExecutable()
+  const sidecar = await runBrowserNodeSidecar<{ ok: true; screenshotBase64: string } | { ok: false; error: string }>({
+    script: StaticHtmlScreenshotScript,
+    payload: {
+      executablePath,
+      launchArgs: BrowserRuntime.defaultLaunchArgs(),
+      timeoutMs,
+      url: pathToFileURL(input.entrypointFile).href,
+      viewport: input.viewport,
+    },
+    payloadEnvName: "OPENCORVUS_FRONTEND_RENDER_PAYLOAD",
+    hardTimeoutMs: timeoutMs + 10_000,
+    label: "frontend visual baseline static render",
+  })
+  if (!sidecar.result.ok) {
+    throw new Error(`frontend visual baseline static render failed: ${sidecar.result.error}`)
+  }
+  return Buffer.from(sidecar.result.screenshotBase64, "base64")
 }
 
 function collectVisualBaselineText(final: FrontendTemplateFinal): string {
@@ -431,6 +1030,7 @@ function collectVisualBaselineText(final: FrontendTemplateFinal): string {
     final.completeness_review,
     ...final.frontend_project.entrypoints,
     ...final.frontend_project.notes,
+    ...final.visual_validation_evidence.map((item) => `${item.review_status}: ${item.review_summary}`),
     ...final.template_iteration_notes,
     ...final.reference_artifacts,
     ...final.open_questions,
@@ -474,8 +1074,18 @@ function buildRequirement(category: VisualSpecCategory, input: Record<string, un
 // Tool factory
 // ---------------------------------------------------------------------------
 
-export function createFrontendTemplateOutputTools(options: { autoIteration?: boolean } = {}) {
+export function createFrontendTemplateOutputTools(
+  options: {
+    autoIteration?: boolean
+    artifactRoot?: string
+    artifactRootRelative?: string
+    workspaceRoot?: string
+  } = {},
+) {
   const autoIteration = options.autoIteration === true
+  const artifactRoot = path.resolve(options.artifactRoot ?? process.cwd())
+  const artifactRootRelative = options.artifactRootRelative
+  const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd())
   let collector = emptyCollector()
 
   function assertIdFree(id: string): string | null {
@@ -625,11 +1235,14 @@ export function createFrontendTemplateOutputTools(options: { autoIteration?: boo
         const final = normalizeFrontendTemplateFinal(
           FrontendTemplateFinalSchema.parse(normalizeFrontendTemplateInput(input)),
         )
-        assertFrontendTemplateFinal(final)
+        await assertFrontendTemplateFinal(final, { artifactRoot, artifactRootRelative, workspaceRoot })
         if (autoIteration && final.template_iteration_notes.length < 2) {
           throw new Error(
             "assistant.auto_iteration=true requires at least two frontend template review-pass notes before submit_frontend_template.",
           )
+        }
+        if (final.frontend_project.role === "visual_baseline_input") {
+          artifactValidatedVisualFinals.add(final)
         }
         collector.final = final
         return "OK: complete frontend design/replica contract submitted for orchestrator handoff."

@@ -1,9 +1,14 @@
-import { createMemo, createResource, For, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { Virtualizer, type CustomContainerComponentProps, type CustomItemComponentProps } from "virtua/solid"
+import { currentUIScale } from "../services/pane"
 import { cardTreeStore } from "../store/card-tree"
+import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import {
+  buildScreenshotBrowserRows,
   collectScreenshotBrowserItemsFromCardTree,
   groupScreenshotBrowserItems,
   type ScreenshotBrowserItem,
+  type ScreenshotBrowserRow,
 } from "../utils/screenshot-browser"
 import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
 import { fullStampWithRelative } from "../utils/time"
@@ -13,36 +18,161 @@ import { Icon } from "./Icon"
 import { PreviewableImage } from "./ImagePreview"
 import { SurfaceHeader } from "./ui/SurfaceHeader"
 
+const SCREENSHOT_BROWSER_ROW_OVERSCAN = 1
+const SCREENSHOT_BROWSER_CARD_MIN_WIDTH = 132
+const SCREENSHOT_BROWSER_MAX_COLUMNS = 3
+const SCREENSHOT_BROWSER_GRID_GAP = 8
+const ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT = 152
+const SCREENSHOT_BROWSER_LAZY_ROOT_MARGIN = "96px"
+const SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 3
+
+const pendingThumbnailLoads: Array<() => void> = []
+let thumbnailLoadFrame = 0
+
+function scheduleThumbnailLoadPump(): void {
+  if (thumbnailLoadFrame) return
+  thumbnailLoadFrame = requestAnimationFrame(() => {
+    thumbnailLoadFrame = 0
+    const batch = pendingThumbnailLoads.splice(0, SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME)
+    for (const load of batch) load()
+    if (pendingThumbnailLoads.length > 0) scheduleThumbnailLoadPump()
+  })
+}
+
+function enqueueScreenshotThumbnailLoad(load: () => void): () => void {
+  let cancelled = false
+  pendingThumbnailLoads.push(() => {
+    if (!cancelled) load()
+  })
+  scheduleThumbnailLoadPump()
+  return () => {
+    cancelled = true
+  }
+}
+
 function needsAuthedFetch(url: string): boolean {
   return url.startsWith("/")
 }
 
+function ScreenshotVirtualWindow(props: CustomContainerComponentProps) {
+  const setRef = (node: HTMLDivElement) => {
+    if (typeof props.ref === "function") props.ref(node)
+  }
+  return (
+    <div ref={setRef} class="screenshot-browser-virtual-window" style={props.style}>
+      {props.children}
+    </div>
+  )
+}
+
+function ScreenshotVirtualItem(props: CustomItemComponentProps) {
+  const setRef = (node: HTMLDivElement) => {
+    if (typeof props.ref === "function") props.ref(node)
+  }
+  return (
+    <div ref={setRef} class="screenshot-browser-virtual-item" style={props.style}>
+      {props.children}
+    </div>
+  )
+}
+
 function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
+  let thumbnailHost: HTMLDivElement | undefined
+  let cancelQueuedLoad: (() => void) | undefined
+  const [loadAllowed, setLoadAllowed] = createSignal(false)
   const authed = () => needsAuthedFetch(props.item.src)
   const [objectUrl] = createResource(
-    () => (authed() ? props.item.src : null),
+    () => (authed() && loadAllowed() ? props.item.src : null),
     (url: string | null) => (url ? fetchResourceAsObjectUrl(url) : null),
     { initialValue: authed() ? (peekResourceObjectUrl(props.item.src) ?? null) : null },
   )
-  const src = () => (authed() ? objectUrl() : resolveResourceUrl(props.item.src))
+  const src = () => (authed() ? objectUrl() : loadAllowed() ? resolveResourceUrl(props.item.src) : null)
+
+  onMount(() => {
+    if (!thumbnailHost) throw new Error("Screenshot thumbnail host was not mounted")
+    if (typeof IntersectionObserver === "undefined") {
+      throw new Error("Screenshot thumbnail lazy loading requires IntersectionObserver")
+    }
+    const root = thumbnailHost.closest<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+    if (!root) throw new Error("Screenshot thumbnail must mount inside the virtual screenshot browser list")
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        cancelQueuedLoad = enqueueScreenshotThumbnailLoad(() => setLoadAllowed(true))
+        observer.disconnect()
+      },
+      { root, rootMargin: SCREENSHOT_BROWSER_LAZY_ROOT_MARGIN },
+    )
+    observer.observe(thumbnailHost)
+    onCleanup(() => {
+      cancelQueuedLoad?.()
+      observer.disconnect()
+    })
+  })
 
   return (
-    <Show when={!objectUrl.error}>
-      <Show when={src()}>
-        {(resolved) => (
-          <PreviewableImage
-            src={resolved()}
-            alt={props.item.alt}
-            triggerClass="screenshot-browser__thumb-trigger"
-            imageClass="screenshot-browser__thumb-image"
-          />
-        )}
+    <div ref={thumbnailHost} class="screenshot-browser__thumb-slot">
+      <Show when={!objectUrl.error}>
+        <Show
+          when={src()}
+          fallback={<div class="screenshot-browser__thumb-trigger screenshot-browser__thumb-placeholder" aria-hidden="true" />}
+        >
+          {(resolved) => (
+            <PreviewableImage
+              src={resolved()}
+              alt={props.item.alt}
+              triggerClass="screenshot-browser__thumb-trigger"
+              imageClass="screenshot-browser__thumb-image"
+            />
+          )}
+        </Show>
       </Show>
-    </Show>
+    </div>
+  )
+}
+
+function ScreenshotBrowserVirtualRow(props: { row: ScreenshotBrowserRow; columns: number }) {
+  if (props.row.kind === "group") {
+    return (
+      <section class="screenshot-browser-group" data-agent-role={props.row.role}>
+        <header class="screenshot-browser-group__header">
+          <span>{roleLabel(props.row.role)}</span>
+          <small>{t("screenshots.group_count", { count: props.row.count })}</small>
+        </header>
+      </section>
+    )
+  }
+  return (
+    <div
+      class="screenshot-browser-row-grid"
+      data-agent-role={props.row.role}
+      style={`--screenshot-browser-columns: ${props.columns}`}
+    >
+      <For each={props.row.items}>
+        {(item) => (
+          <article class="screenshot-browser-card" data-source={item.source}>
+            <ScreenshotThumbnail item={item} />
+            <div class="screenshot-browser-card__body">
+              <strong title={item.title}>{item.title}</strong>
+              <Show when={item.detail}>
+                <span title={item.detail}>{item.detail}</span>
+              </Show>
+              <Show when={item.time > 0}>
+                <time datetime={new Date(item.time).toISOString()} title={fullStampWithRelative(item.time)}>
+                  {fullStampWithRelative(item.time)}
+                </time>
+              </Show>
+            </div>
+          </article>
+        )}
+      </For>
+    </div>
   )
 }
 
 export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
+  const [listEl, setListEl] = createSignal<HTMLDivElement>()
+  const [listWidth, setListWidth] = createSignal(0)
   const active = createMemo(() => props.active())
   const items = createMemo(() => {
     if (!active()) return []
@@ -50,6 +180,29 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
     return collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)
   })
   const groups = createMemo(() => groupScreenshotBrowserItems(items()))
+  const columnCount = createMemo(() => {
+    const scale = currentUIScale()
+    const minWidth = SCREENSHOT_BROWSER_CARD_MIN_WIDTH * scale
+    const gap = SCREENSHOT_BROWSER_GRID_GAP * scale
+    const width = listWidth()
+    if (width <= 0) return 1
+    return Math.min(SCREENSHOT_BROWSER_MAX_COLUMNS, Math.max(1, Math.floor((width + gap) / (minWidth + gap))))
+  })
+  const rows = createMemo(() => buildScreenshotBrowserRows(groups(), columnCount()))
+
+  createEffect(() => {
+    const element = listEl()
+    if (!element) return
+    const measure = () => setListWidth(element.clientWidth)
+    const measureOnFrame = createAnimationFrameScheduler(measure)
+    const observer = new ResizeObserver(measureOnFrame.schedule)
+    observer.observe(element)
+    measureOnFrame.schedule()
+    onCleanup(() => {
+      measureOnFrame.cancel()
+      observer.disconnect()
+    })
+  })
 
   return (
     <section class="screenshot-browser-panel" data-active={String(active())} aria-label={t("screenshots.title")}>
@@ -71,37 +224,21 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
           </div>
         }
       >
-        <div class="screenshot-browser-groups">
-          <For each={groups()}>
-            {(group) => (
-              <section class="screenshot-browser-group" data-agent-role={group.role}>
-                <header class="screenshot-browser-group__header">
-                  <span>{roleLabel(group.role)}</span>
-                  <small>{t("screenshots.group_count", { count: group.items.length })}</small>
-                </header>
-                <div class="screenshot-browser-grid">
-                  <For each={group.items}>
-                    {(item) => (
-                      <article class="screenshot-browser-card" data-source={item.source}>
-                        <ScreenshotThumbnail item={item} />
-                        <div class="screenshot-browser-card__body">
-                          <strong title={item.title}>{item.title}</strong>
-                          <Show when={item.detail}>
-                            <span title={item.detail}>{item.detail}</span>
-                          </Show>
-                          <Show when={item.time > 0}>
-                            <time datetime={new Date(item.time).toISOString()} title={fullStampWithRelative(item.time)}>
-                              {fullStampWithRelative(item.time)}
-                            </time>
-                          </Show>
-                        </div>
-                      </article>
-                    )}
-                  </For>
-                </div>
-              </section>
+        <div ref={setListEl} class="screenshot-browser-groups" data-virtualized="true">
+          <Virtualizer
+            data={rows()}
+            overscan={SCREENSHOT_BROWSER_ROW_OVERSCAN}
+            itemSize={ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT}
+            as={ScreenshotVirtualWindow}
+            item={ScreenshotVirtualItem}
+          >
+            {(row) => (
+              <ScreenshotBrowserVirtualRow
+                row={row}
+                columns={row.kind === "items" ? Math.max(columnCount(), row.items.length) : columnCount()}
+              />
             )}
-          </For>
+          </Virtualizer>
         </div>
       </Show>
     </section>

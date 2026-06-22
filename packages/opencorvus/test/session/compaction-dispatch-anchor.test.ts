@@ -404,7 +404,7 @@ describe("session compaction dispatch anchor", () => {
     expect(wire).not.toContain('"role":"tool"')
   })
 
-  test("compaction transcript keeps a 30k bounded head and tail for large tool output", () => {
+  test("compaction transcript summarizes large completed tool output before summarization", () => {
     const assistant = assistantInfo("m-assistant", "m-user")
     const headMarker = "HEAD-REQUIREMENT-DO-NOT-LOSE"
     const middleMarker = "MIDDLE-SHOULD-BE-OMITTED"
@@ -438,8 +438,181 @@ describe("session compaction dispatch anchor", () => {
 
     expect(transcriptText).toContain(headMarker)
     expect(transcriptText).toContain(tailMarker)
-    expect(transcriptText).toContain("[omitted")
-    expect(transcriptText).toContain("chars from compaction transcript")
+    expect(transcriptText).toContain("compaction_large_text")
+    expect(transcriptText).toContain("sha256")
     expect(transcriptText).not.toContain(middleMarker)
+    expect(transcriptText.length).toBeLessThan(15_000)
+  })
+
+  test("compaction transcript summarizes large historical tool inputs before summarization", () => {
+    const assistant = assistantInfo("m-assistant", "m-user")
+    const headMarker = "TOOL-INPUT-HEAD-KEEP"
+    const middleMarker = "TOOL-INPUT-MIDDLE-OMIT"
+    const tailMarker = "TOOL-INPUT-TAIL-KEEP"
+    const largeInput = [headMarker, "x".repeat(40_000), middleMarker, "y".repeat(40_000), tailMarker].join("\n")
+    const messages: Message.WithParts[] = [
+      textMessage("m-user", "user", "Create a large visual skeleton"),
+      {
+        info: assistant,
+        parts: [
+          {
+            ...basePart(assistant.id, "p-tool"),
+            type: "tool",
+            callID: "call_write",
+            tool: "write",
+            state: {
+              status: "completed",
+              input: {
+                filePath: "visual-html-skeleton/index.html",
+                content: largeInput,
+              },
+              output: "wrote file",
+              title: "Write",
+              metadata: {},
+              time: { start: 1, end: 2 },
+            },
+          },
+        ],
+      },
+    ] as Message.WithParts[]
+
+    const transcript = SessionCompaction.TestHooks.compactionTranscriptMessages(messages)
+    const transcriptText = (transcript[0].content as Array<{ type: "text"; text: string }>)[0].text
+
+    expect(transcriptText).toContain("visual-html-skeleton/index.html")
+    expect(transcriptText).toContain("compaction_large_text")
+    expect(transcriptText).toContain("sha256")
+    expect(transcriptText).toContain(headMarker)
+    expect(transcriptText).toContain(tailMarker)
+    expect(transcriptText).not.toContain(middleMarker)
+    expect(transcriptText.length).toBeLessThan(15_000)
+  })
+
+  test("compaction transcript summarizes pending and running tool state payloads", () => {
+    const assistant = assistantInfo("m-assistant", "m-user")
+    const pendingInputHead = "PENDING-INPUT-HEAD-KEEP"
+    const pendingInputMiddle = "PENDING-INPUT-MIDDLE-OMIT"
+    const pendingInputTail = "PENDING-INPUT-TAIL-KEEP"
+    const pendingRawHead = "PENDING-RAW-HEAD-KEEP"
+    const pendingRawMiddle = "PENDING-RAW-MIDDLE-OMIT"
+    const pendingRawTail = "PENDING-RAW-TAIL-KEEP"
+    const runningInputHead = "RUNNING-INPUT-HEAD-KEEP"
+    const runningInputMiddle = "RUNNING-INPUT-MIDDLE-OMIT"
+    const runningInputTail = "RUNNING-INPUT-TAIL-KEEP"
+    const pendingInput = [pendingInputHead, "x".repeat(30_000), pendingInputMiddle, "y".repeat(30_000), pendingInputTail].join("\n")
+    const pendingRaw = [pendingRawHead, "x".repeat(30_000), pendingRawMiddle, "y".repeat(30_000), pendingRawTail].join("\n")
+    const runningInput = [runningInputHead, "x".repeat(30_000), runningInputMiddle, "y".repeat(30_000), runningInputTail].join("\n")
+    const messages: Message.WithParts[] = [
+      textMessage("m-user", "user", "Compact interrupted tool calls"),
+      {
+        info: assistant,
+        parts: [
+          {
+            ...basePart(assistant.id, "p-pending-tool"),
+            type: "tool",
+            callID: "call_pending_write",
+            tool: "write",
+            state: {
+              status: "pending",
+              input: {
+                filePath: "visual-html-skeleton/index.html",
+                content: pendingInput,
+              },
+              raw: pendingRaw,
+            },
+          },
+          {
+            ...basePart(assistant.id, "p-running-tool"),
+            type: "tool",
+            callID: "call_running_edit",
+            tool: "edit",
+            state: {
+              status: "running",
+              input: {
+                filePath: "visual-html-skeleton/index.html",
+                newString: runningInput,
+              },
+              title: "Edit",
+              metadata: {},
+              time: { start: 1 },
+            },
+          },
+        ],
+      },
+    ] as Message.WithParts[]
+
+    const transcript = SessionCompaction.TestHooks.compactionTranscriptMessages(messages)
+    const transcriptText = (transcript[0].content as Array<{ type: "text"; text: string }>)[0].text
+
+    expect(transcriptText).toContain("compaction_large_text")
+    expect(transcriptText).toContain("compaction_repeated_tool_input")
+    expect(transcriptText).toContain(pendingInputHead)
+    expect(transcriptText).toContain(pendingInputTail)
+    expect(transcriptText).toContain(pendingRawHead)
+    expect(transcriptText).toContain(pendingRawTail)
+    expect(transcriptText).toContain(runningInputHead)
+    expect(transcriptText).toContain(runningInputTail)
+    expect(transcriptText).not.toContain(pendingInputMiddle)
+    expect(transcriptText).not.toContain(pendingRawMiddle)
+    expect(transcriptText).not.toContain(runningInputMiddle)
+    expect(transcriptText.split(runningInputHead)).toHaveLength(2)
+    expect(transcriptText.length).toBeLessThan(20_000)
+  })
+
+  test("compaction transcript bounds high-cardinality tool input and state objects", () => {
+    const assistant = assistantInfo("m-assistant", "m-user")
+    const omittedInputMarker = "OMITTED-INPUT-KEY-VALUE-MUST-NOT-ENTER"
+    const omittedMetadataMarker = "OMITTED-METADATA-KEY-VALUE-MUST-NOT-ENTER"
+    const highCardinalityInput: Record<string, string> = {}
+    const highCardinalityMetadata: Record<string, string> = {}
+    for (let index = 0; index < 600; index++) {
+      highCardinalityInput[`field_${index}`] = index === 320 ? omittedInputMarker : `value_${index}`
+      highCardinalityMetadata[`metadata_${index}`] =
+        index === 340 ? omittedMetadataMarker : `metadata value ${index} ${"x".repeat(120)}`
+    }
+    const messages: Message.WithParts[] = [
+      textMessage("m-user", "user", "Compact high-cardinality tool payloads"),
+      {
+        info: assistant,
+        parts: [
+          {
+            ...basePart(assistant.id, "p-completed-tool"),
+            type: "tool",
+            callID: "call_big_input",
+            tool: "write",
+            state: {
+              status: "completed",
+              input: highCardinalityInput,
+              output: "completed",
+              title: "Write",
+              metadata: {},
+              time: { start: 1, end: 2 },
+            },
+          },
+          {
+            ...basePart(assistant.id, "p-running-tool"),
+            type: "tool",
+            callID: "call_big_state",
+            tool: "edit",
+            state: {
+              status: "running",
+              input: { filePath: "visual-html-skeleton/index.html" },
+              title: "Edit",
+              metadata: highCardinalityMetadata,
+              time: { start: 3 },
+            },
+          },
+        ],
+      },
+    ] as Message.WithParts[]
+
+    const transcript = SessionCompaction.TestHooks.compactionTranscriptMessages(messages)
+    const transcriptText = (transcript[0].content as Array<{ type: "text"; text: string }>)[0].text
+
+    expect(transcriptText).toContain("__compaction_omitted_key_count")
+    expect(transcriptText).toContain("compaction_tool_input_summary")
+    expect(transcriptText).not.toContain(omittedInputMarker)
+    expect(transcriptText).not.toContain(omittedMetadataMarker)
+    expect(transcriptText.length).toBeLessThan(25_000)
   })
 })

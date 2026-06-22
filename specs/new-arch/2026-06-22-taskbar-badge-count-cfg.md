@@ -38,7 +38,7 @@ Keep `badge_count_value` as the single count-normalization helper for
 non-Windows taskbar badge counts, and compile it on Windows only for tests:
 
 ```rust
-#[cfg(any(not(target_os = "windows"), test))]
+#[cfg(any(not(windows), test))]
 fn badge_count_value(...)
 ```
 

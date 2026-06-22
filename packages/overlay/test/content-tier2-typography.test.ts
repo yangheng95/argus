@@ -1,17 +1,12 @@
-// Regression for iter10 of the design-language audit.
+// Regression for iter10 of the design-language audit. Dialog headers now route
+// through the shared Dialog primitive's `.dialog-title`; the old
+// `.dialog-subtitle` selector has no runtime owner and must stay retired.
 //
-// `.dialog-subtitle` (the small line under a modal dialog's main
-// heading) was styled with tier-3 pill typography (uppercase +
-// 0.05em wide letter-spacing) but has none of the pill chrome
-// (no background, no border-radius, no accent color). It's a
-// section subtitle, not a status chip — so the all-caps rendering
-// fought the Title Case used by the surrounding dialog header.
-//
-// `.oc-button[data-ui="reasoning-toggle"]`, by contrast, is a legitimate tier-3 pill
-// (pill chrome — accent-dim background + 999px radius + accent
-// color) and keeps its uppercase styling. The pinned negative
-// control at the bottom guards that distinction so a future
-// "remove all uppercase" sweep can't quietly strip the legit pill.
+// `.oc-button[data-ui="reasoning-toggle"]`, by contrast, is a legitimate
+// tier-3 pill (pill chrome, accent-dim background, pill radius, and accent
+// color) and keeps its uppercase styling. The pinned negative control guards
+// that distinction so a future "remove all uppercase" sweep cannot strip the
+// legit pill.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
@@ -52,9 +47,10 @@ function ruleBody(selector: string): string {
   return STYLES.slice(open + 1, close)
 }
 
-describe(".dialog-subtitle renders Title Case", () => {
-  test(".dialog-subtitle does not force-uppercase", () => {
-    expect(ruleBody(".dialog-subtitle")).not.toContain("text-transform: uppercase")
+describe("dialog title typography uses the live primitive owner", () => {
+  test("retired .dialog-subtitle selector stays absent", () => {
+    expect(STYLES).not.toContain(".dialog-subtitle")
+    expect(ruleBody(".dialog-title")).not.toContain("text-transform: uppercase")
   })
 })
 

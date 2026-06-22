@@ -21,6 +21,7 @@ const catalog = {
   ],
   profiles: [
     { id: "frontend", label: "Frontend", built_in: true, editable: false, agents: {} },
+    { id: "testing", label: "Testing", built_in: true, editable: false, agents: {} },
     { id: "existing-squad", label: "Existing Squad", built_in: false, editable: true, agents: {} },
   ],
 }
@@ -244,8 +245,8 @@ describe("prompt profile config helpers", () => {
         {
           profiles: [
             {
-              id: "frontend",
-              label: "Frontend Override",
+              id: "testing",
+              label: "Testing Override",
               agents: { build: "Custom build guidance." },
             },
           ],

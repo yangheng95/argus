@@ -43,11 +43,11 @@ import {
   findActiveRunForTask,
   findActiveSpecForTask,
   findLatestAcceptanceVerdictArtifact,
-  findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
-  findLatestResearchBriefArtifact,
   findRuns,
   findTask,
+  listFrontendResearchBriefArtifacts,
+  listResearchBriefArtifacts,
   listGoalRefillNotificationArtifacts,
   listGoalRunsByGoal,
   listGoals,
@@ -68,6 +68,7 @@ const AGENT_FAILURE_PROMPT_CAP = 5
 const TOOL_EXECUTE_FAILURE_PROMPT_CAP = 5
 const OPEN_TOOL_CALL_PROMPT_CAP = 5
 const TERMINAL_GOAL_REFILL_PROMPT_CAP = 5
+const RESEARCH_BRIEF_DESC_CAP = 4
 
 const TerminalGoalRefillNotificationPayloadSchema = z.object({
   task_id: z.string(),
@@ -225,8 +226,8 @@ export interface TaskDesc {
    *  architect snapshot (its spec_snapshot_id != the active snapshot). Stale
    *  briefs are not injected downstream; the LLM may re-run workload_analysis. */
   workload_stale?: boolean
-  research?: ResearchBriefDesc
-  frontend_research?: ResearchBriefDesc
+  research?: ResearchBriefDesc[]
+  frontend_research?: ResearchBriefDesc[]
   frontend_design?: FrontendDesignHandoffDesc
   active_run_id?: string
   active_run_status?: string
@@ -287,6 +288,7 @@ export interface ResearchBriefDesc {
   session_id: string
   stale: boolean
   stale_reasons: string[]
+  source_urls: string[]
   source_count: number
   fact_count: number
   blocking_open_question_count: number
@@ -298,8 +300,8 @@ export interface FrontendDesignHandoffDesc {
   is_complete: boolean
   has_public_report: boolean
   has_evidence_source_manifest: boolean
-  frontend_template_path: string
-  source_manifest_path: string
+  frontend_template_path?: string
+  source_manifest_path?: string
   present_keys: string[]
   missing_completion_keys: string[]
   latest_decision_id: string
@@ -337,6 +339,7 @@ function describeResearchBriefArtifact(input: {
     session_id: artifact.payload.metadata.research_session_id,
     stale: staleness.stale,
     stale_reasons: staleness.reasons,
+    source_urls: researchBriefSourceURLs(artifact.payload),
     source_count: artifact.payload.evidence_index.length,
     fact_count: artifact.payload.facts.length,
     blocking_open_question_count: artifact.payload.open_questions.filter((item) => item.blocking).length,
@@ -347,6 +350,11 @@ function describeResearchBriefArtifact(input: {
     ],
     summary: artifact.payload.summary,
   }
+}
+
+function researchBriefSourceURLs(brief: ResearchBriefArtifactRow["payload"]): string[] {
+  const urls = brief.webpage_contract?.source_url ? [brief.webpage_contract.source_url] : []
+  return [...new Set(urls)]
 }
 
 function describeFrontendDesignHandoff(taskID: string): FrontendDesignHandoffDesc | undefined {
@@ -361,13 +369,15 @@ function describeFrontendDesignHandoff(taskID: string): FrontendDesignHandoffDes
     entry.timeCreated >= latest.timeCreated ? entry : latest,
   )
   const paths = frontendDesignArtifactPaths("", taskID)
+  const hasPublicReport = latestByKey.has("public_report")
+  const hasEvidenceSourceManifest = latestByKey.has("evidence_source_manifest")
 
   return {
     is_complete: missingCompletionKeys.length === 0,
-    has_public_report: latestByKey.has("public_report"),
-    has_evidence_source_manifest: latestByKey.has("evidence_source_manifest"),
-    frontend_template_path: paths.templateRelative,
-    source_manifest_path: paths.manifestRelative,
+    has_public_report: hasPublicReport,
+    has_evidence_source_manifest: hasEvidenceSourceManifest,
+    frontend_template_path: hasPublicReport ? paths.templateRelative : undefined,
+    source_manifest_path: hasEvidenceSourceManifest ? paths.manifestRelative : undefined,
     present_keys: [...latestByKey.keys()].sort(),
     missing_completion_keys: [...missingCompletionKeys],
     latest_decision_id: latestEntry.id,
@@ -651,14 +661,18 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const workloadStale =
     workloadArtifact && activeSpec ? workloadArtifact.spec_snapshot_id !== activeSpec.id || undefined : undefined
 
-  const research = describeResearchBriefArtifact({
-    task,
-    artifact: findLatestResearchBriefArtifact(task.id),
-  })
-  const frontendResearch = describeResearchBriefArtifact({
-    task,
-    artifact: findLatestFrontendResearchBriefArtifact(task.id),
-  })
+  const research = listResearchBriefArtifacts(task.id)
+    .slice(0, RESEARCH_BRIEF_DESC_CAP)
+    .flatMap((artifact) => {
+      const desc = describeResearchBriefArtifact({ task, artifact })
+      return desc ? [desc] : []
+    })
+  const frontendResearch = listFrontendResearchBriefArtifacts(task.id)
+    .slice(0, RESEARCH_BRIEF_DESC_CAP)
+    .flatMap((artifact) => {
+      const desc = describeResearchBriefArtifact({ task, artifact })
+      return desc ? [desc] : []
+    })
   const frontendDesign = describeFrontendDesignHandoff(task.id)
 
   let planSummary: string | undefined
@@ -760,7 +774,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     plan_summary: planSummary,
     workload_analyzed: workloadAnalyzed,
     workload_stale: workloadStale,
-    research,
+    research: research.length > 0 ? research : undefined,
     frontend_research: frontendResearch,
     frontend_design: frontendDesign,
     active_run_id: activeRunForTask?.id,
@@ -945,8 +959,8 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   lines.push(renderUserRequestSection({ heading: "## Request", request: desc.request, taskID: desc.id }))
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
-  lines.push(...renderResearchBriefDesc("Deep Research Brief", desc.research))
-  lines.push(...renderResearchBriefDesc("Frontend Research Brief", desc.frontend_research))
+  lines.push(...renderResearchBriefDescs("Deep Research Brief", desc.research))
+  lines.push(...renderResearchBriefDescs("Frontend Research Brief", desc.frontend_research))
   lines.push(...renderFrontendDesignHandoffDesc(desc.frontend_design))
   if (desc.active_run_id) {
     const orphanTag = desc.run_orphan ? " ORPHAN" : ""
@@ -1131,6 +1145,7 @@ function renderResearchBriefDesc(title: string, desc?: ResearchBriefDesc): strin
   if (desc.stale_reasons.length > 0) {
     lines.push(`- stale_reasons: ${desc.stale_reasons.join(", ")}`)
   }
+  if (desc.source_urls.length > 0) lines.push(`- source_urls: ${desc.source_urls.join(", ")}`)
   lines.push(
     `- coverage: sources=${desc.source_count}, facts=${desc.fact_count}, blocking_open_questions=${desc.blocking_open_question_count}`,
   )
@@ -1142,6 +1157,12 @@ function renderResearchBriefDesc(title: string, desc?: ResearchBriefDesc): strin
   return lines
 }
 
+function renderResearchBriefDescs(title: string, descs?: ResearchBriefDesc[]): string[] {
+  if (!descs || descs.length === 0) return []
+  if (descs.length === 1) return renderResearchBriefDesc(title, descs[0]!)
+  return descs.flatMap((desc, index) => renderResearchBriefDesc(`${title} ${index + 1}/${descs.length}`, desc))
+}
+
 function renderFrontendDesignHandoffDesc(desc?: FrontendDesignHandoffDesc): string[] {
   if (!desc) return []
   const lines: string[] = []
@@ -1150,8 +1171,8 @@ function renderFrontendDesignHandoffDesc(desc?: FrontendDesignHandoffDesc): stri
   lines.push(`- is_complete: ${desc.is_complete ? "true" : "false"}`)
   lines.push(`- has_public_report: ${desc.has_public_report ? "true" : "false"}`)
   lines.push(`- has_evidence_source_manifest: ${desc.has_evidence_source_manifest ? "true" : "false"}`)
-  lines.push(`- frontend_template_path: ${desc.frontend_template_path}`)
-  lines.push(`- source_manifest_path: ${desc.source_manifest_path}`)
+  if (desc.frontend_template_path) lines.push(`- frontend_template_path: ${desc.frontend_template_path}`)
+  if (desc.source_manifest_path) lines.push(`- source_manifest_path: ${desc.source_manifest_path}`)
   lines.push(`- latest_decision_id: ${desc.latest_decision_id}`)
   lines.push(`- latest_updated_at: ${new Date(desc.latest_updated_at).toISOString()}`)
   if (desc.public_report_decision_id) lines.push(`- public_report_decision_id: ${desc.public_report_decision_id}`)

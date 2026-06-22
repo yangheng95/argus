@@ -11,6 +11,8 @@ use std::{
 use flate2::{write::GzEncoder, Compression};
 use tar::{Builder, Header};
 
+const OVERLAY_PAYLOAD_STAMP_FILE: &str = ".opencorvus-overlay-payload.stamp";
+
 fn dist_os(target_os: &str) -> &str {
     match target_os {
         "windows" => "windows",
@@ -63,11 +65,14 @@ fn collect_payload_files(source: &Path) -> Vec<PathBuf> {
             if path.is_dir() {
                 visit(root, &path, out);
             } else if path.is_file() {
-                out.push(
-                    path.strip_prefix(root)
-                        .expect("embedded file under root")
-                        .to_path_buf(),
-                );
+                let rel = path
+                    .strip_prefix(root)
+                    .expect("embedded file under root")
+                    .to_path_buf();
+                if rel == Path::new(OVERLAY_PAYLOAD_STAMP_FILE) {
+                    continue;
+                }
+                out.push(rel);
             }
         }
     }
@@ -369,6 +374,20 @@ fn write_embed_module(source: &Path, target_os: &str, out_file: &Path, archive_f
     .expect("write embedded_sidecar.rs");
 }
 
+fn require_payload_stamp(source: &Path, root: &Path) -> Option<PathBuf> {
+    if source.is_file() {
+        return None;
+    }
+    let stamp = root.join(OVERLAY_PAYLOAD_STAMP_FILE);
+    if !stamp.is_file() {
+        panic!(
+            "embedded opencorvus payload stamp not found at {}; rebuild the overlay-server artifact before the Tauri build",
+            stamp.display()
+        );
+    }
+    Some(stamp)
+}
+
 fn write_server_defaults(manifest_dir: &Path, out_file: &Path) {
     let defaults_path = manifest_dir
         .parent()
@@ -431,8 +450,8 @@ fn main() {
         } else {
             embed_path.clone()
         };
-        for rel in collect_payload_files(&embed_path) {
-            println!("cargo:rerun-if-changed={}", root.join(rel).display());
+        if let Some(stamp) = require_payload_stamp(&embed_path, &root) {
+            println!("cargo:rerun-if-changed={}", stamp.display());
         }
     }
     write_embed_module(&embed_path, &target_os, &embed_out, &archive_out);

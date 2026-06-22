@@ -334,7 +334,7 @@ test("architect normalizes frontend-design source baseline owned paths to accept
   expect(kit.getCollector().goals[0]?.owned_paths).toEqual(["package.json", "src/types/api.ts", "src/hooks/useApi.ts"])
 })
 
-test("architect rejects contract evidence_refs outside active research evidence ids", async () => {
+test("architect rejects contract evidence_refs outside active research evidence refs", async () => {
   const kit = createArchitectOutputTools({
     existingGoals: [
       {
@@ -361,7 +361,7 @@ test("architect rejects contract evidence_refs outside active research evidence 
       },
     ],
     workDir: process.cwd(),
-    knownResearchEvidenceIDs: ["ev_1"],
+    knownResearchEvidenceRefs: ["deep_research:art_deep:ev_1"],
   })
 
   const result = await kit.tools.register_contract.execute!(
@@ -373,6 +373,48 @@ test("architect rejects contract evidence_refs outside active research evidence 
   )
 
   expect(result).toContain("unknown or stale research evidence")
+  expect(kit.getCollector().contract_graph.contracts).toEqual([])
+})
+
+test("architect rejects ambiguous bare evidence_refs when research sources share an evidence id", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [
+      {
+        id: "goal_model",
+        title: "Model",
+        objective: "Define the shared model contract and code paths used by downstream rendering work.",
+        acceptance_specs: [acceptance("goal_model")],
+        owned_paths: ["src/model.ts"],
+        depends_on: [],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      },
+      {
+        id: "goal_ui",
+        title: "UI",
+        objective: "Render the UI using only the graph contract produced by the model goal.",
+        acceptance_specs: [acceptance("goal_ui")],
+        owned_paths: ["src/ui.tsx"],
+        depends_on: ["goal_model"],
+        priority: "blocking",
+        kind: "feature",
+        requirement_ids: ["REQ-1"],
+      },
+    ],
+    workDir: process.cwd(),
+    knownResearchEvidenceRefs: ["deep_research:art_deep:ev_1", "frontend_research:art_frontend:ev_1"],
+  })
+
+  const result = await kit.tools.register_contract.execute!(
+    {
+      ...contractRef(),
+      evidence_refs: ["ev_1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(result).toContain("unknown or stale research evidence ref")
   expect(kit.getCollector().contract_graph.contracts).toEqual([])
 })
 
@@ -637,9 +679,8 @@ test("submit_architect reports zero graph contracts as a concern without blockin
   expect(kit.getCollector().finalized).toBe(true)
 })
 
-test("register_goal rejects unknown contract_audit ids without mutating collector goals", async () => {
+test("register_goal accepts forward contract_audit ids and final validation blocks if unresolved", async () => {
   const kit = await registerTwoGoalGraph()
-  const before = JSON.stringify(kit.getCollector().goals)
 
   const out = await kit.tools.register_goal.execute!(
     {
@@ -656,14 +697,30 @@ test("register_goal rejects unknown contract_audit ids without mutating collecto
     {} as any,
   )
 
-  expect(out).toContain("unknown contract id(s): missing_contract")
-  expect(out).toContain("collector unchanged")
-  expect(JSON.stringify(kit.getCollector().goals)).toBe(before)
+  expect(out).toContain('OK: goal "goal_ui" updated in-place')
+  expect(out).toContain("contract_audit forward reference(s) pending registration: missing_contract")
+  expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.acceptance_specs[0]?.scorers[0]).toMatchObject(
+    {
+      type: "contract_audit",
+    },
+  )
+
+  const submitOut = await kit.tools.submit_architect.execute!(
+    {
+      summary: "Graph with unresolved forward contract reference.",
+      decomposition_analysis:
+        "The goal may be registered before its graph contract, but final validation must still reject unresolved contract ids.",
+    } as any,
+    {} as any,
+  )
+
+  expect(submitOut).toContain("BLOCKERS")
+  expect(submitOut).toContain("contract_audit references unknown graph contract missing_contract")
+  expect(kit.getCollector().finalized).toBe(false)
 })
 
-test("modify_goal rejects unknown contract_audit ids without mutating prior goal", async () => {
+test("modify_goal accepts forward contract_audit ids and keeps final validation authoritative", async () => {
   const kit = await registerTwoGoalGraph()
-  const before = JSON.stringify(kit.getCollector().goals.find((goal) => goal.id === "goal_ui"))
 
   const out = await kit.tools.modify_goal.execute!(
     {
@@ -675,9 +732,13 @@ test("modify_goal rejects unknown contract_audit ids without mutating prior goal
     {} as any,
   )
 
-  expect(out).toContain("unknown contract id(s): missing_contract")
-  expect(out).toContain("collector unchanged")
-  expect(JSON.stringify(kit.getCollector().goals.find((goal) => goal.id === "goal_ui"))).toBe(before)
+  expect(out).toContain('OK: goal "goal_ui" fields updated')
+  expect(out).toContain("contract_audit forward reference(s) pending registration: missing_contract")
+  expect(kit.getCollector().goals.find((goal) => goal.id === "goal_ui")?.acceptance_specs[0]?.scorers[0]).toMatchObject(
+    {
+      type: "contract_audit",
+    },
+  )
 })
 
 test("register_goal and modify_goal accept contract_audit ids after contract registration", async () => {
@@ -718,6 +779,168 @@ test("register_goal and modify_goal accept contract_audit ids after contract reg
       spec: { contract_ids: ["contract_order"] },
     },
   )
+})
+
+test("register_visual_evidence_acceptance attaches canonical final visual judge and owns references", async () => {
+  const kit = createArchitectOutputTools({
+    existingGoals: [],
+    workDir: process.cwd(),
+    knownRequirementIDs: ["REQ-1"],
+    requireReferenceCoverage: true,
+  })
+
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_page_impl",
+      title: "Page implementation",
+      objective: "Implement the main page regions and data rendering needed before final visual verification can run.",
+      acceptance_specs: [acceptance("goal_page_impl", [], "REQ-1")],
+      owned_paths: ["src/page.tsx"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_visual_verify",
+      title: "Visual verification",
+      objective: "Verify the completed page against authoritative desktop and mobile reference evidence using rendered visual evidence.",
+      acceptance_specs: [acceptance("goal_visual_verify", [], "REQ-1")],
+      owned_paths: ["tests/visual.spec.ts"],
+      depends_on: ["goal_page_impl"],
+      priority: "blocking",
+      kind: "verification",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  await kit.tools.register_reference_coverage.execute!(
+    {
+      id: "ref-world-economy-desktop",
+      surface: "world-economy full page desktop",
+      goal_ids: ["goal_visual_verify"],
+      visual_spec_ids: ["vis-world-economy-page"],
+      expectation: "Final rendered page must match the desktop reference screenshot and recorded region evidence.",
+    } as any,
+    {} as any,
+  )
+
+  const out = await kit.tools.register_visual_evidence_acceptance.execute!(
+    {
+      goal_id: "goal_visual_verify",
+      source_requirement_id: "REQ-1",
+      title: "Final TradingView reference visual parity",
+      criteria:
+        "Judge whether the implementation's current rendered page matches the authoritative TradingView reference screenshots, DOM evidence, spacing, density, typography, and interaction-state captures.",
+      reference_tokens: [
+        "ref-world-economy-desktop",
+        "world-economy full page desktop",
+        "vis-world-economy-page",
+      ],
+    },
+    {} as any,
+  )
+
+  expect(out).toContain('OK: final visual evidence acceptance registered on goal "goal_visual_verify"')
+  expect(out).toContain("llm_judge:visual_evidence")
+  const goal = kit.getCollector().goals.find((item) => item.id === "goal_visual_verify")
+  expect(goal?.acceptance_specs.some((spec) => spec.trigger === "on_integrity")).toBe(true)
+  expect(goal?.acceptance_specs.at(-1)?.scorers[0]).toMatchObject({
+    type: "llm_judge",
+    inputs: ["visual_evidence"],
+  })
+  const findings = architectValidationFindings(kit.getCollector(), {
+    requireReferenceCoverage: true,
+    knownRequirementIDs: ["REQ-1"],
+  })
+  expect(findings.some((finding) => finding.code === "missing_final_visual_acceptance")).toBe(false)
+  expect(findings.some((finding) => finding.code === "missing_visual_region_acceptance_ownership")).toBe(false)
+})
+
+test("register_visual_evidence_acceptance rejects non-final goal kinds without mutation", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd(), knownRequirementIDs: ["REQ-1"] })
+  await kit.tools.register_goal.execute!(
+    {
+      id: "goal_feature_visual",
+      title: "Feature visual implementation",
+      objective: "Implement the visual regions but leave final reference evidence verification to a final verification goal.",
+      acceptance_specs: [acceptance("goal_feature_visual", [], "REQ-1")],
+      owned_paths: ["src/page.tsx"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "feature",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+  const before = JSON.stringify(kit.getCollector().goals)
+
+  const out = await kit.tools.register_visual_evidence_acceptance.execute!(
+    {
+      goal_id: "goal_feature_visual",
+      source_requirement_id: "REQ-1",
+      title: "Final reference visual parity",
+      criteria:
+        "Judge whether the implementation's rendered page matches the authoritative reference screenshots and interaction evidence.",
+      reference_tokens: ["ref-page"],
+    },
+    {} as any,
+  )
+
+  expect(out).toContain("final visual evidence acceptance must be attached to a verification or integration goal")
+  expect(JSON.stringify(kit.getCollector().goals)).toBe(before)
+})
+
+test("register_goal accepts final visual verification with contract_audit and visual_evidence judge", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
+
+  const out = await kit.tools.register_goal.execute!(
+    {
+      id: "goal_we_verification",
+      title: "World economy final verification",
+      objective:
+        "Verify the finished world economy page against graph contracts and rendered visual evidence for the final assembled route.",
+      acceptance_specs: [
+        {
+          id: "acc-world-economy-final",
+          source_requirement_id: "REQ-1",
+          goal_id: "goal_we_verification",
+          title: "World economy final graph and visual fidelity",
+          severity: "essential",
+          trigger: "on_integrity",
+          scorers: [
+            {
+              type: "contract_audit",
+              name: "audit-contracts",
+              spec: { kind: "contract_graph", contract_ids: ["contract_world_economy_page"] },
+              expect: { status: "passed" },
+            },
+            {
+              type: "llm_judge",
+              name: "judge-visuals",
+              criteria:
+                "Compare current rendered visual evidence against the TradingView reference screenshots, DOM evidence, spacing, density, and interaction captures.",
+              inputs: ["visual_evidence"],
+            },
+          ],
+        },
+      ],
+      owned_paths: ["tests/world-economy.visual.spec.ts"],
+      depends_on: [],
+      priority: "blocking",
+      kind: "verification",
+      requirement_ids: ["REQ-1"],
+    } as any,
+    {} as any,
+  )
+
+  expect(out).toContain('OK: goal "goal_we_verification" registered')
+  expect(out).toContain("contract_audit:contract_world_economy_page")
+  expect(out).toContain("llm_judge:visual_evidence")
+  expect(out).not.toContain("script_ref")
 })
 
 test("register_goal rejects script_ref acceptance specs whose scripts do not exist", async () => {

@@ -308,7 +308,7 @@ class OverlayBrowserSidecar {
       type: (selector, text, options) => remote("type", [selector, text, options]) as Promise<void>,
       focus: (selector) => remote("focus", [selector]) as Promise<void>,
       hover: (selector) => remote("hover", [selector]) as Promise<void>,
-      screenshot: async (options) => decodeBuffer(await remote("screenshot", [options])),
+      screenshot: async (options = {}) => decodeBuffer(await remote("screenshot", [options])),
       close: () => remote("close") as Promise<void>,
       url: () => this.callString("pageUrl", { pageId }),
       content: () => this.callString("pageMethod", { pageId, method: "content", args: [] }),
@@ -352,7 +352,7 @@ class OverlayBrowserSidecar {
     return {
       click: (options) =>
         this.call("elementMethod", { pageId, handleId, method: "click", args: encode([options]) }) as Promise<void>,
-      screenshot: async (options) =>
+      screenshot: async (options = {}) =>
         decodeBuffer(
           await this.call("elementMethod", { pageId, handleId, method: "screenshot", args: encode([options]) }),
         ),

@@ -45,6 +45,7 @@ import { isHostKillingCommand } from "@/tool/bash"
 import { BrowserPreviewTool, BrowserPreviewToolStaticDefinition } from "@/tool/browser-preview"
 import { WAIT_MAX_MS, WAIT_MIN_MS, WaitToolDescription, WaitToolParameters, executeWait } from "@/tool/wait"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { ExploreAgent } from "@/explore/agent"
 import { Event as EngineEvent, type TaskMessageTargetInput } from "@/engine/model"
@@ -52,7 +53,13 @@ import { EngineProtocol } from "@/engine/protocol"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
 import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
-import { findNonStaleFrontendResearchBrief, renderFrontendResearchBuildPromptSection } from "@/research/prompt-section"
+import {
+  findNonStaleFrontendResearchBriefs,
+  renderFrontendResearchArchitectPromptSection,
+  renderFrontendResearchBriefPromptSection,
+  renderFrontendResearchBuildPromptSection,
+  renderResearchBriefPromptSection,
+} from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { readLatestTaskVisualEvidenceBundleSync } from "@/acceptance/visual-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
@@ -99,15 +106,15 @@ import {
   findRequirements,
   findLatestArchitectContractGraph,
   findLatestArchitectContractGraphArtifact,
-  findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
   findLatestIntegrityAttemptArtifact,
-  findLatestResearchBriefArtifact,
   findLatestAcceptanceVerdictArtifact,
   findLatestAcceptanceVerdictArtifactForAcceptance,
   findLatestIntegrityArtifactMissingStatus,
   findLatestTipGoalRun,
   findChildrenOfTask,
+  listResearchBriefArtifacts,
+  listFrontendResearchBriefArtifacts,
   findPlan,
   findRun,
   getGoalRetryCount,
@@ -183,8 +190,10 @@ import type {
 } from "@/integrity"
 import { renderIntegrityMarkdown } from "@/integrity/render-markdown"
 import { AgentRunError } from "@/agent/runner"
+import { isHttpWebpageUrl } from "@/util/web-url"
 import {
   createStageContinuationRequest,
+  failNonCurrentOwnerStageContinuationClaim,
   findStageContinuationRequest,
   type AgentSessionContinuation,
   type StageContinuationStage,
@@ -214,13 +223,232 @@ function stageInputDigest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value ?? null)).digest("hex")
 }
 
+const EvidenceSnapshotEntrySchema = z
+  .object({
+    count: z.number().int().nonnegative(),
+    digest: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict()
+
+const EvidenceSnapshotSchema = z.record(z.string(), EvidenceSnapshotEntrySchema)
+
+function evidenceSnapshotCount(value: unknown): number {
+  if (value === null || value === undefined) return 0
+  if (Array.isArray(value)) return value.length
+  return 1
+}
+
+function continuationEvidenceSnapshot(input: Record<string, unknown>): z.infer<typeof EvidenceSnapshotSchema> {
+  return Object.fromEntries(
+    Object.entries(input)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => [
+        key,
+        {
+          count: evidenceSnapshotCount(value),
+          digest: stageInputDigest(value),
+        },
+      ]),
+  )
+}
+
+function taskContinuationScope(task: { title: string; request: string }) {
+  return {
+    task_title: task.title,
+    task_request_digest: stageInputDigest(task.request),
+  }
+}
+
+function specContinuationScope(
+  spec:
+    | {
+        id: string
+        version: number
+        status: string
+        summary: string | null
+        content: string
+        scope: string | null
+      }
+    | undefined,
+) {
+  if (!spec) return null
+  return {
+    id: spec.id,
+    version: spec.version,
+    status: spec.status,
+    summary_digest: stageInputDigest(spec.summary ?? null),
+    content_digest: stageInputDigest(spec.content),
+    scope_digest: stageInputDigest(spec.scope ?? null),
+  }
+}
+
+function goalsContinuationScope(
+  goals: Array<{
+    id: string
+    spec_snapshot_id: string | null
+    title: string
+    slug: string
+    objective: string
+    acceptance_specs: unknown
+    owned_paths: unknown
+    depends_on: unknown
+    kind: string
+    requirement_ids: unknown
+    priority: string
+    order_index: number
+  }>,
+) {
+  return goals
+    .slice()
+    .sort((a, b) => a.order_index - b.order_index || a.id.localeCompare(b.id))
+    .map((goal) => ({
+      id: goal.id,
+      spec_snapshot_id: goal.spec_snapshot_id,
+      title: goal.title,
+      slug: goal.slug,
+      retry_count: getGoalRetryCount(goal.id),
+      objective_digest: stageInputDigest(goal.objective),
+      acceptance_specs_digest: stageInputDigest(goal.acceptance_specs),
+      owned_paths_digest: stageInputDigest(goal.owned_paths),
+      depends_on_digest: stageInputDigest(goal.depends_on),
+      kind: goal.kind,
+      requirement_ids_digest: stageInputDigest(goal.requirement_ids),
+      priority: goal.priority,
+      order_index: goal.order_index,
+    }))
+}
+
+function taskArrayField(task: { attachments?: unknown; design_specs?: unknown; system_artifacts?: unknown }, key: "attachments" | "design_specs" | "system_artifacts") {
+  const value = task[key]
+  return Array.isArray(value) ? value : []
+}
+
+function frontendDesignMetadataPromptScope(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null
+  const figmaUrl = (metadata as { figma_url?: unknown }).figma_url
+  return typeof figmaUrl === "string" && figmaUrl.trim() ? { figma_url: figmaUrl.trim() } : null
+}
+
+function architectWorkloadPromptScope(workloadBriefs: unknown) {
+  if (!Array.isArray(workloadBriefs)) return []
+  return workloadBriefs
+    .filter((brief) => brief && typeof brief === "object")
+    .map((brief) => brief as Record<string, unknown>)
+    .filter((brief) => typeof brief.decomposition_concern === "string" && brief.decomposition_concern.trim())
+    .map((brief) => {
+      const inventory =
+        brief.execution_inventory && typeof brief.execution_inventory === "object" && !Array.isArray(brief.execution_inventory)
+          ? (brief.execution_inventory as Record<string, unknown>)
+          : {}
+      return {
+        goal_id: typeof brief.goal_id === "string" ? brief.goal_id : "",
+        decomposition_concern: (brief.decomposition_concern as string).trim(),
+        execution_inventory: {
+          surfaces: inventory.surfaces ?? 0,
+          states: inventory.states ?? 0,
+          data_contracts: inventory.data_contracts ?? 0,
+          verification_points: inventory.verification_points ?? 0,
+        },
+      }
+    })
+}
+
+async function hostPreparedFrontendProjectEvidenceSnapshot(taskID: string) {
+  const paths = ProjectRuntimePaths.frontendDesignPaths(
+    taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id }),
+    taskID,
+  )
+  const [sourcePackageStat, skeletonProjectStat] = await Promise.all([
+    fs.stat(paths.sourcePackageAbsolute).catch(() => undefined),
+    fs.stat(paths.skeletonProjectAbsolute).catch(() => undefined),
+  ])
+  if (!sourcePackageStat?.isDirectory() || !skeletonProjectStat?.isDirectory()) return null
+  const { readHostPreparedCompactEvidence, summarizeHostPreparedSourceAudit } = await import(
+    "@/frontend-design/host-prepared-source-project"
+  )
+  const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({
+    sourcePackage: paths.sourcePackageAbsolute,
+    projectRoot: paths.skeletonProjectAbsolute,
+  })
+  const compactEvidence = await readHostPreparedCompactEvidence({
+    sourcePackage: paths.sourcePackageAbsolute,
+    projectRoot: paths.skeletonProjectAbsolute,
+    sourceAuditEvidence,
+  })
+  return {
+    project_root: paths.skeletonProjectRelative,
+    source_package: paths.sourcePackageRelative,
+    compact_evidence_digest: stageInputDigest(compactEvidence),
+  }
+}
+
+function requirementsPromptEvidenceSnapshot(taskID: string, task: TaskRow, frontendDesign: string) {
+  return continuationEvidenceSnapshot({
+    attachments: taskArrayField(task, "attachments"),
+    design_specs: taskArrayField(task, "design_specs"),
+    frontend_design: frontendDesign,
+    clarification_transcript: clarificationTranscriptSection(taskID),
+    operator_notes: operatorNotesSection(taskID),
+    deep_research: renderResearchBriefPromptSection({ taskID, request: task.request }),
+    frontend_research: renderFrontendResearchBriefPromptSection({ taskID, request: task.request }),
+  })
+}
+
+function architectPromptEvidenceSnapshot(input: {
+  taskID: string
+  task: TaskRow
+  requirements: unknown
+  requirementDecisions: unknown
+  frontendDesign: string
+  workloadBriefs: unknown
+  decisionLogPrompt: string
+}) {
+  return continuationEvidenceSnapshot({
+    attachments: taskArrayField(input.task, "attachments"),
+    design_specs: taskArrayField(input.task, "design_specs"),
+    requirements: input.requirements,
+    requirement_decisions: input.requirementDecisions,
+    frontend_design: input.frontendDesign,
+    workload_briefs: architectWorkloadPromptScope(input.workloadBriefs),
+    deep_research: renderResearchBriefPromptSection({ taskID: input.taskID, request: input.task.request }),
+    frontend_research: renderFrontendResearchArchitectPromptSection({
+      taskID: input.taskID,
+      request: input.task.request,
+    }),
+    decision_log: input.decisionLogPrompt,
+  })
+}
+
+async function frontendDesignPromptEvidenceSnapshot(taskID: string, task: TaskRow) {
+  return continuationEvidenceSnapshot({
+    attachments: taskArrayField(task, "attachments"),
+    system_artifacts: taskArrayField(task, "system_artifacts"),
+    design_specs: taskArrayField(task, "design_specs"),
+    metadata: frontendDesignMetadataPromptScope(task.metadata),
+    host_prepared_frontend_project: await hostPreparedFrontendProjectEvidenceSnapshot(taskID),
+  })
+}
+
+function frontendResearchSourceUrlFromStageInput(input: unknown): string | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
+  const value = (input as { source_url?: unknown }).source_url
+  return typeof value === "string" && isHttpWebpageUrl(value) ? value : undefined
+}
+
+function frontendResearchFocusFromStageInput(input: unknown): string | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
+  const value = (input as { focus?: unknown }).focus
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
 function continuationFromArtifact(input: {
   taskID: string
   stage: StageContinuationStage
   artifactID: string
   finalizerName: string
+  expectedNormalizedStageInput?: unknown
 }): AgentSessionContinuation {
-  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  let row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
   if (!row) throw new Error(`stage continuation request not found: ${input.artifactID}`)
   if (row.payload.stage !== input.stage) {
     throw new Error(
@@ -232,6 +460,14 @@ function continuationFromArtifact(input: {
       `stage continuation ${input.artifactID} targets finalizer ${row.payload.finalizer_name}, not ${input.finalizerName}`,
     )
   }
+  if (input.expectedNormalizedStageInput !== undefined) {
+    const expectedDigest = stageInputDigest(input.expectedNormalizedStageInput)
+    if (row.payload.input_digest !== expectedDigest) {
+      throw new Error(
+        `stage continuation ${input.artifactID} scope mismatch for ${input.stage}; stored input_digest=${row.payload.input_digest}, current input_digest=${expectedDigest}. Start a fresh ${continuationToolName(input.stage)} run instead of continuing a stale child session.`,
+      )
+    }
+  }
   return {
     sessionID: row.payload.session_id,
     artifactID: input.artifactID,
@@ -240,6 +476,119 @@ function continuationFromArtifact(input: {
     finalizerName: row.payload.finalizer_name,
     failedAssistantMessageID: row.payload.failed_assistant_message_id,
   }
+}
+
+function stageContinuationUnavailableResult(input: {
+  taskID: string
+  stage: StageContinuationStage
+  artifactID: string
+  finalizerName: string
+  expectedNormalizedStageInput?: unknown
+}): ReturnType<typeof SubAgentProtocol.yieldResult> | undefined {
+  const toolName = continuationToolName(input.stage)
+  let row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!row) {
+    return SubAgentProtocol.yieldResult({
+      headline: `${input.stage}: continuation artifact was not found.`,
+      summary:
+        `No fresh worker session was started because continuation_artifact_id=${input.artifactID} does not exist for this task. ` +
+        `Read the current task context and either use the latest pending continuation artifact or start a fresh ${toolName} run without continuation_artifact_id.`,
+      fields: [
+        ["stage", input.stage],
+        ["continuation_artifact_id", input.artifactID],
+        ["state", "not_found"],
+      ],
+      pointer: `read_context scope=decisions; do not reuse ${input.artifactID}`,
+    })
+  }
+  const mismatch =
+    row.payload.stage !== input.stage
+      ? `stage ${row.payload.stage}, not ${input.stage}`
+      : row.payload.finalizer_name !== input.finalizerName
+        ? `finalizer ${row.payload.finalizer_name}, not ${input.finalizerName}`
+        : undefined
+  if (mismatch) {
+    return SubAgentProtocol.yieldResult({
+      headline: `${input.stage}: continuation artifact belongs to a different recovery contract.`,
+      summary:
+        `No fresh worker session was started because continuation_artifact_id=${input.artifactID} targets ${mismatch}. ` +
+        `Use the continuation call printed by the original terminal-finalizer-miss result, or start a fresh ${toolName} run without continuation_artifact_id.`,
+      fields: [
+        ["stage", input.stage],
+        ["continuation_artifact_id", input.artifactID],
+        ["state", "wrong_contract"],
+        ["actual_stage", row.payload.stage],
+        ["actual_finalizer", row.payload.finalizer_name],
+      ],
+      pointer: `read_context scope=decisions; do not reuse ${input.artifactID} with ${toolName}`,
+    })
+  }
+  row =
+    failNonCurrentOwnerStageContinuationClaim({ taskID: input.taskID, artifactID: input.artifactID }) ?? row
+  const state = row.payload.consumed_at
+    ? "consumed"
+    : row.payload.claim_failed_at
+      ? "claim_failed"
+      : row.payload.claimed_at
+        ? "claimed"
+        : undefined
+  if (state) {
+    const detail =
+      state === "consumed"
+        ? `already consumed by message ${row.payload.continuation_message_id ?? "n/a"}`
+        : state === "claim_failed"
+          ? `has failed claim state: ${row.payload.claim_error ?? "n/a"}`
+          : `already claimed by ${row.payload.claim_id ?? "unknown"}`
+    const nextAction =
+      state === "claimed"
+        ? "wait for the in-flight same-session continuation or inspect the child session before retrying"
+        : `start a fresh ${toolName} run without continuation_artifact_id if the work is still required`
+    return SubAgentProtocol.yieldResult({
+      headline: `${input.stage}: continuation artifact is no longer pending.`,
+      summary:
+        `No fresh worker session was started because continuation_artifact_id=${input.artifactID} ${detail}. ` +
+        `Do not reuse this artifact; ${nextAction}.`,
+      fields: [
+        ["stage", input.stage],
+        ["session_id", row.payload.session_id],
+        ["continuation_artifact_id", input.artifactID],
+        ["state", state],
+        ["detail", detail],
+        ["next_action", nextAction],
+      ],
+      pointer: `read_context scope=decisions; do not reuse ${input.artifactID}`,
+    })
+  }
+  if (input.expectedNormalizedStageInput !== undefined) {
+    const currentDigest = stageInputDigest(input.expectedNormalizedStageInput)
+    if (row.payload.input_digest !== currentDigest) {
+      return SubAgentProtocol.yieldResult({
+        headline: `${input.stage}: continuation artifact scope is stale.`,
+        summary:
+          `No fresh worker session was started because continuation_artifact_id=${input.artifactID} was created for an older ${input.stage} input scope. ` +
+          `Do not reuse this stale artifact; start a fresh ${toolName} run without continuation_artifact_id if the work is still required.`,
+        fields: [
+          ["stage", input.stage],
+          ["session_id", row.payload.session_id],
+          ["continuation_artifact_id", input.artifactID],
+          ["state", "scope_mismatch"],
+          ["stored_input_digest", row.payload.input_digest],
+          ["current_input_digest", currentDigest],
+          ["next_action", `start a fresh ${toolName} run without continuation_artifact_id`],
+        ],
+        pointer: `read_context scope=decisions; start fresh ${toolName}`,
+      })
+    }
+  }
+  return undefined
+}
+
+function continuationFromArtifactOrResult(input: Parameters<typeof continuationFromArtifact>[0]):
+  | { continuation: AgentSessionContinuation }
+  | { result: ReturnType<typeof SubAgentProtocol.yieldResult> } {
+  const result = stageContinuationUnavailableResult(input)
+  if (result) return { result }
+  return { continuation: continuationFromArtifact(input) }
 }
 
 function terminalFinalizerMiss(input: {
@@ -254,6 +603,36 @@ function terminalFinalizerMiss(input: {
   return { failureMessage: data.message ?? input.err.message }
 }
 
+function continuationToolName(stage: StageContinuationStage): string {
+  const explicit: Partial<Record<StageContinuationStage, string>> = {
+    "frontend-design": "frontend_design",
+    "frontend-research": "frontend_research",
+    "deep-research": "deep_research",
+    "visual-qa": "visual_qa",
+    "intent-analysis": "analyze_intent",
+    "fact-check": "fact_check",
+    "goal-workload-analyst": "workload_analysis",
+  }
+  return explicit[stage] ?? stage.replaceAll("-", "_")
+}
+
+function continuationReason(input: {
+  stage: StageContinuationStage
+  finalizerName: string
+  pointerReason?: string | null
+  normalizedStageInput: unknown
+}) {
+  if (typeof input.pointerReason === "string" && input.pointerReason.trim()) {
+    return `Continue after missing ${input.finalizerName}: ${input.pointerReason.trim()}`
+  }
+  const normalized = input.normalizedStageInput
+  if (normalized && typeof normalized === "object" && !Array.isArray(normalized)) {
+    const reason = (normalized as { reason?: unknown }).reason
+    if (typeof reason === "string" && reason.trim()) return `Continue after missing ${input.finalizerName}: ${reason.trim()}`
+  }
+  return `Continue ${input.stage} after missing ${input.finalizerName}.`
+}
+
 function continuationResultForTerminalFinalizerMiss(input: {
   err: unknown
   taskID: string
@@ -262,10 +641,18 @@ function continuationResultForTerminalFinalizerMiss(input: {
   parentSessionID: string
   finalizerName: string
   normalizedStageInput: unknown
+  pointerReason?: string | null
 }): ReturnType<typeof SubAgentProtocol.yieldResult> | undefined {
   const miss = terminalFinalizerMiss({ err: input.err, finalizerName: input.finalizerName })
   if (!miss) return undefined
   if (!input.sessionID) return undefined
+  const toolName = continuationToolName(input.stage)
+  const reason = continuationReason({
+    stage: input.stage,
+    finalizerName: input.finalizerName,
+    pointerReason: input.pointerReason,
+    normalizedStageInput: input.normalizedStageInput,
+  })
   const request = createStageContinuationRequest({
     taskID: input.taskID,
     stage: input.stage,
@@ -276,54 +663,170 @@ function continuationResultForTerminalFinalizerMiss(input: {
     failureName: "TerminalToolMissingError",
     failureMessage: miss.failureMessage,
     finalizerName: input.finalizerName,
+    reason,
   })
+  const pointerPayload = JSON.stringify({ reason, continuation_artifact_id: request.artifactID })
   return SubAgentProtocol.yieldResult({
     headline: `${input.stage}: terminal finalizer missing; same-session continuation is ready.`,
     summary:
       `The ${input.stage} worker session ${input.sessionID} ended without calling ${input.finalizerName}. ` +
-      `No fresh worker session was started. Re-dispatch this same tool with continuation_artifact_id=${request.artifactID} to append a visible recovery message to the same child session.`,
+      `No fresh worker session was started. Re-dispatch ${toolName} with reason and continuation_artifact_id=${request.artifactID} to append a visible recovery message to the same child session.`,
     fields: [
       ["stage", input.stage],
       ["session_id", input.sessionID],
       ["continuation_artifact_id", request.artifactID],
+      ["continuation_call", `${toolName}(${pointerPayload})`],
       ["finalizer", input.finalizerName],
       ["failure", "TerminalToolMissingError"],
     ],
-    pointer: `${input.stage}({ continuation_artifact_id: "${request.artifactID}" })`,
+    pointer: `${toolName}(${pointerPayload})`,
   })
 }
 
 async function appendResearchBriefContext(
-  sections: string[],
+  output: ReadContextOutput,
   title: string,
   artifact: ResearchBriefArtifactRow | undefined,
   request: string,
 ) {
   if (!artifact) return
-  const { researchBriefIsStale } = await import("@/research")
+  const { researchBriefIsStale } = await import("@/research/staleness")
   const stale = researchBriefIsStale({ request, brief: artifact.payload })
   const brief = artifact.payload
   const subpageResearchTasks = brief.subpage_research_tasks ?? []
-  sections.push(
+  const pointer = `research artifact ${artifact.id}; bundle ${brief.bundle.full_markdown_path}`
+  output.add(
     `\n## ${title}`,
     `- artifact: ${artifact.id}`,
     `- session: ${brief.metadata.research_session_id}`,
     `- stale: ${stale.stale ? "true" : "false"}`,
-    stale.reasons.length > 0 ? `- stale_reasons: ${stale.reasons.join(", ")}` : "",
+    stale.reasons.length > 0
+      ? `- stale_reasons: ${readContextCompactList(stale.reasons, pointer, { listCap: 8, itemCap: 160 })}`
+      : "",
+    brief.webpage_contract ? `- source_url: ${brief.webpage_contract.source_url}` : "",
     `- sources: ${brief.evidence_index.length}`,
     `- facts: ${brief.facts.length}`,
     `- subpage_research_tasks: ${subpageResearchTasks.length}`,
     subpageResearchTasks.length > 0
-      ? `- subpage_research_task_refs: ${subpageResearchTasks
-          .slice(0, 5)
-          .map((item) => `${item.id}=${item.url}`)
-          .join("; ")}`
+      ? `- subpage_research_task_refs: ${readContextCompactList(
+          subpageResearchTasks.map((item) => `${item.id}=${item.url}`),
+          pointer,
+          { listCap: 5, itemCap: 180, joiner: "; " },
+        )}`
       : "",
     `- blocking_open_questions: ${brief.open_questions.filter((item) => item.blocking).length}`,
-    `- bundle: ${brief.bundle.full_markdown_path}, ${brief.bundle.evidence_json_path}, ${brief.bundle.citation_map_path}`,
-    `- summary: ${brief.summary.slice(0, 800)}`,
+    `- bundle: ${readContextCompactList(
+      [brief.bundle.full_markdown_path, brief.bundle.evidence_json_path, brief.bundle.citation_map_path],
+      pointer,
+      { listCap: 3, itemCap: 220 },
+    )}`,
+    `- summary: ${readContextCompactInline(brief.summary, pointer, READ_CONTEXT_RESEARCH_SUMMARY_CHAR_CAP)}`,
     `Research is advisory evidence only; it is not a workflow step or next-tool instruction.`,
+    { sectionCap: READ_CONTEXT_RESEARCH_BRIEF_CHAR_CAP, pointer },
   )
+}
+
+export const READ_CONTEXT_OUTPUT_CHAR_BUDGET = SubAgentProtocol.HARD_CHAR_CAP
+const READ_CONTEXT_CLOSURE_CHAR_CAP = 1_500
+const READ_CONTEXT_REFILL_FACTS_CHAR_CAP = 2_000
+const READ_CONTEXT_GOAL_BLOCK_CHAR_CAP = 1_800
+const READ_CONTEXT_EVALUATION_BLOCK_CHAR_CAP = 900
+const READ_CONTEXT_EVALUATION_SUMMARY_CHAR_CAP = 300
+const READ_CONTEXT_EVALUATION_CHECK_EVIDENCE_CHAR_CAP = 200
+const READ_CONTEXT_ARTIFACT_STATUS_CHAR_CAP = 1_200
+const READ_CONTEXT_INTEGRITY_LATEST_CHAR_CAP = 3_200
+const READ_CONTEXT_INTEGRITY_REPORT_CHAR_CAP = 2_400
+const READ_CONTEXT_INTEGRITY_HISTORY_ALL_CHAR_CAP = 4_800
+const READ_CONTEXT_INTEGRITY_HISTORY_DEDICATED_CHAR_CAP = 16_000
+const READ_CONTEXT_DECISION_REVIEW_CHAR_CAP = 3_500
+const READ_CONTEXT_DECISION_GENERAL_CHAR_CAP = 5_500
+const READ_CONTEXT_RESEARCH_BRIEF_CHAR_CAP = 1_200
+const READ_CONTEXT_RESEARCH_SUMMARY_CHAR_CAP = 420
+const READ_CONTEXT_FACT_CHECK_ATTEMPT_CHAR_CAP = 500
+const READ_CONTEXT_DELIVERY_BLOCK_CHAR_CAP = 900
+const READ_CONTEXT_DELIVERY_SUMMARY_CHAR_CAP = 420
+
+type ReadContextAddOptions = {
+  pointer: string
+  sectionCap?: number
+}
+
+type ReadContextOutput = ReturnType<typeof createReadContextOutput>
+
+function createReadContextOutput() {
+  const sections: string[] = []
+  let usedChars = 0
+
+  function add(...input: Array<string | ReadContextAddOptions | undefined>): boolean {
+    const options = input[input.length - 1]
+    if (!options || typeof options !== "object" || !("pointer" in options)) {
+      throw new Error("read_context output block missing pointer")
+    }
+    const rawLines = input.slice(0, -1) as Array<string | undefined>
+    const block = normalizeReadContextBlock(rawLines)
+    if (!block) return true
+    const bounded =
+      typeof options.sectionCap === "number"
+        ? readContextTrimText(block, options.pointer, options.sectionCap)
+        : block
+    if (!bounded) return true
+
+    const separatorChars = sections.length > 0 ? 1 : 0
+    const remaining = READ_CONTEXT_OUTPUT_CHAR_BUDGET - usedChars - separatorChars
+    if (remaining <= 0) return false
+    const fits = bounded.length <= remaining
+    const rendered = fits ? bounded : readContextTrimText(bounded, options.pointer, remaining)
+    if (!rendered) return false
+    sections.push(rendered)
+    usedChars += separatorChars + rendered.length
+    return fits
+  }
+
+  function result(): string {
+    return sections.length > 0 ? sections.join("\n") : "No context available yet."
+  }
+
+  return { add, result }
+}
+
+function normalizeReadContextBlock(lines: Array<string | undefined>): string {
+  return lines
+    .filter((line): line is string => typeof line === "string")
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+function readContextTrimText(text: string, pointer: string, cap: number): string {
+  if (cap <= 0) return ""
+  if (text.length <= cap) return text
+  const marker = `\n[read_context omitted ${text.length - cap} chars; full detail: ${pointer}]`
+  if (marker.length >= cap) return `[read_context output budget reached; full detail: ${pointer}]`.slice(0, cap)
+  const sliceLength = Math.max(0, cap - marker.length)
+  return `${text.slice(0, sliceLength)}${marker}`
+}
+
+function readContextCompactInline(text: string, pointer: string, cap: number): string {
+  return readContextTrimText(text.replace(/\s+/g, " ").trim(), pointer, cap).replace(/\s+/g, " ").trim()
+}
+
+function readContextCompactList(
+  items: string[],
+  pointer: string,
+  options: { listCap: number; itemCap: number; joiner?: string },
+): string {
+  let truncatedItems = 0
+  const shown = items.slice(0, options.listCap).map((item) => {
+    const normalized = item.replace(/\s+/g, " ").trim()
+    if (normalized.length <= options.itemCap) return normalized
+    truncatedItems += 1
+    return `${normalized.slice(0, Math.max(0, options.itemCap - 3))}...`
+  })
+  const tails: string[] = []
+  if (items.length > options.listCap) tails.push(`+${items.length - options.listCap} more`)
+  if (truncatedItems > 0) tails.push(`${truncatedItems} truncated`)
+  const more = tails.length > 0 ? ` (${tails.join("; ")} at ${pointer})` : ""
+  return `${shown.join(options.joiner ?? ", ")}${more}`
 }
 
 type OrchestratorToolExecutionContext = {
@@ -473,6 +976,10 @@ type IntegrityReviewOutcome =
       pointer: string
     }
   | {
+      status: "continuation"
+      result: ReturnType<typeof SubAgentProtocol.yieldResult>
+    }
+  | {
       status: "reviewed"
       specSnapshotID: string
       phase: "pre_build" | "post_build"
@@ -595,12 +1102,16 @@ function scopedFidelityForBuildGoal(input: {
   return { sourceCoverage, referenceCoverage, assemblyOwners }
 }
 
+function findLiveGoalRunByGoalID(goalID: string) {
+  return listGoalRunsByGoal(goalID).find((goalRun) => isLiveGoalRunStatus(goalRun.status))
+}
+
 function assertNoLiveGoalRunForBuild(input: { taskID: string; goalID: string; action: string }): void {
-  const liveGoalRun = listGoalRunsByGoal(input.goalID).find((goalRun) => isLiveGoalRunStatus(goalRun.status))
+  const liveGoalRun = findLiveGoalRunByGoalID(input.goalID)
   if (!liveGoalRun) return
   throw new Error(
     `${input.action}: goal ${input.goalID} already has live goal_run ${liveGoalRun.id} ` +
-      `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}); wait for terminal refill evidence or abort the live attempt explicitly.`,
+      `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}); do not call wait for this internal live build. Park this wake until terminal refill evidence appears, or abort the live attempt explicitly.`,
   )
 }
 
@@ -770,7 +1281,7 @@ const FrontendDesignUrlsField = z
   .array(z.string())
   .optional()
   .describe(
-    "Any number of design-reference URLs: live pages, design-tool share links " +
+    "Design-reference URLs: at most one non-Figma live/page URL plus any Figma design links. Design-tool share links " +
       "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
       "Non-Figma URLs are available to frontend-design for webpage evidence extraction and may also be materialized " +
       "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
@@ -800,16 +1311,45 @@ const FrontendDesignInputSchema = z
   .extend({ materials: FrontendDesignMaterialsField })
   .extend({ continuation_artifact_id: StageContinuationArtifactIDField })
   .strict()
+  .superRefine((input, ctx) => {
+    const hasContinuation = typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const liveUrls = (Array.isArray(input.urls) ? input.urls : []).filter(
+      (url) => typeof url === "string" && url.length > 0 && !isFigmaUrl(url),
+    )
+    if (!hasContinuation && liveUrls.length > 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["urls"],
+        message:
+          "frontend_design accepts at most one non-Figma live/page URL because the task-scoped webpage clone evidence package has one primary source URL.",
+      })
+    }
+    if (!hasContinuation) return
+    const freshFields = [
+      Array.isArray(input.urls) && input.urls.length > 0 ? "urls" : undefined,
+      typeof input.figma_url === "string" && input.figma_url.length > 0 ? "figma_url" : undefined,
+      Array.isArray(input.materials) && input.materials.length > 0 ? "materials" : undefined,
+    ].filter((field): field is string => !!field)
+    for (const field of freshFields) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          "frontend_design continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh visual scope fields.",
+      })
+    }
+  })
 
 const FrontendResearchReasonField = z
   .string()
   .min(1)
   .describe("Why frontend webpage investigation packets are useful for this task.")
 const FrontendResearchSourceUrlsField = z
-  .array(z.string().min(1))
+  .array(z.string().min(1).refine(isHttpWebpageUrl, "frontend_research source_urls entries must be HTTP(S) webpage URLs"))
   .min(1)
+  .max(1)
   .describe(
-    "Source page URLs the frontend-research agent must partition into investigation work packets from prepared evidence.",
+    "Exactly one source page URL the frontend-research agent must partition into investigation work packets from prepared evidence. Call frontend_research separately for additional pages.",
   )
 const FrontendResearchFocusField = z
   .string()
@@ -819,26 +1359,269 @@ const FrontendResearchFocusField = z
 const FrontendResearchInputSchema = z
   .object({})
   .extend({ reason: FrontendResearchReasonField })
-  .extend({ source_urls: FrontendResearchSourceUrlsField })
+  .extend({ source_urls: FrontendResearchSourceUrlsField.optional() })
   .extend({ focus: FrontendResearchFocusField })
+  .extend({ continuation_artifact_id: StageContinuationArtifactIDField })
+  .strict()
+  .superRefine((input, ctx) => {
+    const hasSourceUrls = Array.isArray(input.source_urls) && input.source_urls.length > 0
+    const hasContinuation = typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const hasFocus = typeof input.focus === "string" && input.focus.trim().length > 0
+    if (hasSourceUrls === hasContinuation) {
+      ctx.addIssue({
+        code: "custom",
+        path: hasSourceUrls ? ["continuation_artifact_id"] : ["source_urls"],
+        message:
+          "frontend_research requires exactly one input mode: source_urls for a fresh research session, or continuation_artifact_id for same-session finalizer recovery.",
+      })
+    }
+    if (hasContinuation && hasFocus) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["focus"],
+        message:
+          "frontend_research continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh focus.",
+      })
+    }
+  })
 
-const VisualQaInputSchema = z.object({
-  reason: z
-    .string()
-    .min(1)
-    .describe("Why dedicated frontend visual GUI fidelity and functional testing is useful now."),
-  focus: z.string().optional().describe("Optional narrowed region/state/viewport focus for visual QA."),
-  app_url: z
-    .string()
-    .optional()
-    .describe("Known preview URL to inspect. Omit when the agent should discover/start preview from scripts."),
-  preview_command: z
-    .string()
-    .optional()
-    .describe(
-      "Suggested project command to start the real preview target. Use Node for Playwright/browser automation on Windows.",
+const DeepResearchInputSchema = z
+  .object({
+    reason: z.string().min(1).describe("Why evidence research is needed for this task."),
+    target_deliverable: z
+      .enum(["prd", "spec", "research_report", "implementation_input", "mixed"])
+      .optional()
+      .describe("The likely document/input shape being researched."),
+    source_urls: z
+      .array(z.string().min(1))
+      .default([])
+      .describe("Known source URLs the research agent must webfetch before any broader discovery."),
+    focus: z.string().optional().describe("Optional narrow focus for the research agent."),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    const hasContinuation =
+      typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    if (!hasContinuation) return
+
+    const freshFields = [
+      input.target_deliverable ? "target_deliverable" : undefined,
+      Array.isArray(input.source_urls) && input.source_urls.length > 0 ? "source_urls" : undefined,
+      typeof input.focus === "string" && input.focus.length > 0 ? "focus" : undefined,
+    ].filter((field): field is string => Boolean(field))
+
+    for (const field of freshFields) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          "deep_research continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh research scope fields.",
+      })
+    }
+  })
+
+const VisualQaInputSchema = z
+  .object({
+    reason: z
+      .string()
+      .min(1)
+      .describe("Why dedicated frontend visual GUI fidelity and functional testing is useful now."),
+    focus: z.string().optional().describe("Optional narrowed region/state/viewport focus for visual QA."),
+    app_url: z
+      .string()
+      .optional()
+      .describe("Known preview URL to inspect. Omit when the agent should discover/start preview from scripts."),
+    preview_command: z
+      .string()
+      .optional()
+      .describe(
+        "Suggested project command to start the real preview target. Use Node for Playwright/browser automation on Windows.",
+      ),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    const hasContinuation =
+      typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    if (!hasContinuation) return
+
+    const freshFields = [
+      typeof input.focus === "string" && input.focus.length > 0 ? "focus" : undefined,
+      typeof input.app_url === "string" && input.app_url.length > 0 ? "app_url" : undefined,
+      typeof input.preview_command === "string" && input.preview_command.length > 0 ? "preview_command" : undefined,
+    ].filter((field): field is string => Boolean(field))
+
+    for (const field of freshFields) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          "visual_qa continuation_artifact_id resumes an existing same-session finalizer recovery and cannot be combined with fresh visual QA scope fields.",
+      })
+    }
+  })
+
+const FactCheckInputSchema = z
+  .object({
+    target_session_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Session id of the worker whose terminal report you want fact-checked."),
+    target_agent: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional consistency check for the worker agent name. The host derives the actual value from target_session_id.",
+      ),
+    fact_check_items: FactCheckItemListSchema.optional().describe(
+      "Copy of the fact_check_items[] array from the worker's terminal report. " +
+        "Empty array is allowed only when you also explain `reason` why fact-check is " +
+        "still useful (e.g., load-bearing prose claims the worker didn't register).",
     ),
-})
+    reason: z.string().min(10).describe("Why you decided to dispatch fact-check on this worker output."),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    const hasContinuation =
+      typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const freshFields = [
+      typeof input.target_session_id === "string" && input.target_session_id.length > 0
+        ? "target_session_id"
+        : undefined,
+      typeof input.target_agent === "string" && input.target_agent.length > 0 ? "target_agent" : undefined,
+      Array.isArray(input.fact_check_items) ? "fact_check_items" : undefined,
+    ].filter((field): field is string => !!field)
+    if (hasContinuation) {
+      for (const field of freshFields) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message:
+            "fact_check continuation_artifact_id resumes the original same-session finalizer recovery and cannot be combined with fresh target fields.",
+        })
+      }
+      return
+    }
+    for (const field of ["target_session_id", "fact_check_items"] as const) {
+      if (freshFields.includes(field)) continue
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message: `fact_check fresh mode requires ${field}.`,
+      })
+    }
+  })
+
+const FactCheckStageInputSchema = z
+  .object({
+    target_session_id: z.string().min(1),
+    target_agent: z.string().min(1),
+    fact_check_items: FactCheckItemListSchema,
+    reason: z.string().min(10),
+    target_message_id: z.string().min(1),
+    target_message_content_hash: z.string().min(1),
+  })
+  .strict()
+
+type FactCheckStageInput = z.infer<typeof FactCheckStageInputSchema>
+
+function resolveFactCheckTargetScope(input: {
+  taskID: string
+  targetSessionID: string
+  assertedTargetAgent?: string
+}): { targetAgent: string } | { error: string } {
+  const owningTaskID = taskIDForSession(input.targetSessionID)
+  if (owningTaskID !== input.taskID) {
+    return {
+      error:
+        owningTaskID === undefined
+          ? `target_session_id ${input.targetSessionID} is not owned by any task.`
+          : `target_session_id ${input.targetSessionID} belongs to task ${owningTaskID}, not current task ${input.taskID}.`,
+    }
+  }
+  const targetAgent = sessionRole(input.targetSessionID)
+  if (!targetAgent) {
+    return { error: `target_session_id ${input.targetSessionID} has no session kind to derive target_agent.` }
+  }
+  const asserted = input.assertedTargetAgent?.trim()
+  if (asserted && asserted !== targetAgent) {
+    return {
+      error:
+        `target_agent mismatch for ${input.targetSessionID}: caller asserted ${asserted}, ` +
+        `but the session kind is ${targetAgent}.`,
+    }
+  }
+  return { targetAgent }
+}
+
+const IntegrityInputSchema = z
+  .object({
+    reason: z.string().optional().describe("Why you decided to run integrity review"),
+    continuation_artifact_id: StageContinuationArtifactIDField,
+  })
+  .strict()
+
+type IntegrityToolInput = z.infer<typeof IntegrityInputSchema>
+
+const IntegrityStageInputSchema = z
+  .object({
+    reason: z.string().optional(),
+    active_spec_snapshot_id: z.string().min(1),
+    phase: z.enum(["pre_build", "post_build"]),
+    goal_ids: z.array(z.string().min(1)),
+    evidence_snapshot: EvidenceSnapshotSchema,
+  })
+  .strict()
+
+type IntegrityStageInput = z.infer<typeof IntegrityStageInputSchema>
+
+function integrityContinuationFromArtifact(input: {
+  taskID: string
+  artifactID: string
+}): { continuation: AgentSessionContinuation; normalizedStageInput: IntegrityStageInput } {
+  const finalizerName = "submit_integrity_consensus"
+  const continuation = continuationFromArtifact({
+    taskID: input.taskID,
+    stage: "integrity",
+    artifactID: input.artifactID,
+    finalizerName,
+  })
+  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!row) throw new Error(`stage continuation request not found: ${input.artifactID}`)
+  const parsed = IntegrityStageInputSchema.safeParse(row.payload.normalized_stage_input)
+  if (!parsed.success) {
+    throw new Error(
+      `stage continuation ${input.artifactID} does not contain a valid integrity normalized_stage_input: ${parsed.error.message}`,
+    )
+  }
+  return { continuation, normalizedStageInput: parsed.data }
+}
+
+function factCheckContinuationFromArtifact(input: {
+  taskID: string
+  artifactID: string
+}): { continuation: AgentSessionContinuation; normalizedStageInput: FactCheckStageInput } {
+  const finalizerName = "report_fact_check_result"
+  const continuation = continuationFromArtifact({
+    taskID: input.taskID,
+    stage: "fact-check",
+    artifactID: input.artifactID,
+    finalizerName,
+  })
+  const row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
+  if (!row) throw new Error(`stage continuation request not found: ${input.artifactID}`)
+  const parsed = FactCheckStageInputSchema.safeParse(row.payload.normalized_stage_input)
+  if (!parsed.success) {
+    throw new Error(
+      `stage continuation ${input.artifactID} does not contain a valid fact_check normalized_stage_input: ${parsed.error.message}`,
+    )
+  }
+  return { continuation, normalizedStageInput: parsed.data }
+}
 
 function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string; goalRunID?: string }): {
   sessionID: string
@@ -1886,6 +2669,9 @@ export function createOrchestratorTools(input: {
         pointer: outcome.pointer,
       })
     }
+    if (outcome.status === "continuation") {
+      return outcome.result
+    }
     if (outcome.status === "reviewed") {
       const headline = outcome.artifactMissing
         ? `Integrity session completed but status=artifact_missing — durable integrity_attempt persistence failed. ` +
@@ -1925,7 +2711,10 @@ export function createOrchestratorTools(input: {
     throw new Error(`Unknown integrity outcome: ${(outcome as { status?: string }).status ?? "unknown"}`)
   }
 
-  async function runIntegrityReview(toolExecution: OrchestratorToolExecutionContext): Promise<IntegrityReviewOutcome> {
+  async function runIntegrityReview(
+    toolExecution: OrchestratorToolExecutionContext,
+    toolInput: IntegrityToolInput,
+  ): Promise<IntegrityReviewOutcome> {
     const task = requireTask(taskID)
     const activeSpec = findActiveSpecForTask(task.id)
     if (!activeSpec) {
@@ -1944,11 +2733,13 @@ export function createOrchestratorTools(input: {
       }
     }
 
-    const singleflightKey = `${task.id}:${activeSpec.id}`
+    const singleflightKey = `${task.id}:${activeSpec.id}:${
+      toolInput.continuation_artifact_id ? `continuation:${toolInput.continuation_artifact_id}` : "fresh"
+    }`
     const inflight = integrityReviewSingleflight.get(singleflightKey)
     if (inflight) return inflight
 
-    const reviewPromise = runIntegrityReviewOnce({ task, activeSpec, dbGoals, toolExecution })
+    const reviewPromise = runIntegrityReviewOnce({ task, activeSpec, dbGoals, toolExecution, toolInput })
     integrityReviewSingleflight.set(singleflightKey, reviewPromise)
     try {
       return await reviewPromise
@@ -1964,8 +2755,9 @@ export function createOrchestratorTools(input: {
     activeSpec: NonNullable<ReturnType<typeof findActiveSpecForTask>>
     dbGoals: ReturnType<typeof listGoals>
     toolExecution: OrchestratorToolExecutionContext
+    toolInput: IntegrityToolInput
   }): Promise<IntegrityReviewOutcome> {
-    const { task, activeSpec, dbGoals, toolExecution } = ctx
+    const { task, activeSpec, dbGoals, toolExecution, toolInput } = ctx
 
     const { findDeliveriesForTask, findRequirements, listGoalRunsForTask } = await import("@/engine/store")
     const reqRows = findRequirements(activeSpec.id)
@@ -2071,6 +2863,7 @@ export function createOrchestratorTools(input: {
       taskID,
       activeSpecSnapshotID: activeSpec.id,
     })
+    const goalRunsForReview = listGoalRunsForTask(taskID)
     const replayContext = buildIntegrityReplayContext({
       taskID,
       lineage,
@@ -2078,18 +2871,23 @@ export function createOrchestratorTools(input: {
       goals: goalsForReview,
       requirements,
       buildRecords: deliveriesForAcceptance,
-      goalRuns: listGoalRunsForTask(taskID),
+      goalRuns: goalRunsForReview,
     })
     const frontendDesignEntries = decisionLog.readByPhase("frontend_design")
+    const visualQaEntries = decisionLog.readByPhase("visual_qa")
     const frontendDesignContract = frontendDesignEntries
       .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
       .join("\n\n")
-    const visualQaContract = decisionLog
-      .readByPhase("visual_qa")
+    const visualQaContract = visualQaEntries
       .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
       .join("\n\n")
     const projectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
     const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir, taskID })
+    const latestIntegrityAttempt = findLatestIntegrityAttemptArtifact({
+      taskID,
+      specSnapshotID: activeSpec.id,
+      phase,
+    })
     const referenceParity = deriveVisualQaReferenceParityContext({
       taskID,
       specSnapshotID: activeSpec.id,
@@ -2097,9 +2895,103 @@ export function createOrchestratorTools(input: {
       frontendDesignEntries,
       visualEvidence,
     })
+    const normalizedStageInput = IntegrityStageInputSchema.parse({
+      reason: toolInput.reason,
+      active_spec_snapshot_id: activeSpec.id,
+      phase,
+      goal_ids: dbGoals.map((goal) => goal.id).sort(),
+      evidence_snapshot: continuationEvidenceSnapshot({
+        acceptance_deliveries: deliveriesForAcceptance,
+        acceptance_changed_files: acceptanceChangedFiles,
+        acceptance_diffs: acceptanceDiffs,
+        frontend_design_decisions: frontendDesignEntries,
+        goal_runs: goalRunsForReview,
+        latest_integrity_attempt: latestIntegrityAttempt,
+        latest_visual_evidence_bundle: visualEvidence,
+        requirement_decisions: requirementDecisions,
+        requirement_status: requirementStatus,
+        requirements,
+        replay_context: replayContext,
+        visual_qa_decisions: visualQaEntries,
+      }),
+    })
+    const unavailableContinuation = toolInput.continuation_artifact_id
+      ? stageContinuationUnavailableResult({
+          taskID: task.id,
+          stage: "integrity",
+          artifactID: toolInput.continuation_artifact_id,
+          finalizerName: "submit_integrity_consensus",
+        })
+      : undefined
+    if (unavailableContinuation) return { status: "continuation", result: unavailableContinuation }
+    const continuationInput = toolInput.continuation_artifact_id
+      ? integrityContinuationFromArtifact({ taskID: task.id, artifactID: toolInput.continuation_artifact_id })
+      : undefined
+    const continuation = continuationInput?.continuation
+    if (continuationInput) {
+      const expected = normalizedStageInput
+      const actual = continuationInput.normalizedStageInput
+      const sameGoalIDs =
+        actual.goal_ids.length === expected.goal_ids.length &&
+        actual.goal_ids.every((goalID, index) => goalID === expected.goal_ids[index])
+      if (
+        actual.active_spec_snapshot_id !== expected.active_spec_snapshot_id ||
+        actual.phase !== expected.phase ||
+        !sameGoalIDs ||
+        stageInputDigest(actual.evidence_snapshot) !== stageInputDigest(expected.evidence_snapshot)
+      ) {
+        const continuationArtifactID = continuationInput.continuation.artifactID
+        return {
+          status: "continuation",
+          result: SubAgentProtocol.yieldResult({
+            headline: "integrity: continuation artifact scope is stale.",
+            summary:
+              `No fresh integrity session was started because continuation_artifact_id=${continuationArtifactID} was created for an older integrity review scope. ` +
+              "Do not reuse this stale artifact; start a fresh integrity run without continuation_artifact_id if the review is still required.",
+            fields: [
+              ["stage", "integrity"],
+              ["session_id", continuationInput.continuation.sessionID],
+              ["continuation_artifact_id", continuationArtifactID],
+              ["state", "scope_mismatch"],
+              ["stored_active_spec_snapshot_id", actual.active_spec_snapshot_id],
+              ["current_active_spec_snapshot_id", expected.active_spec_snapshot_id],
+              ["stored_phase", actual.phase],
+              ["current_phase", expected.phase],
+              ["stored_goal_ids", actual.goal_ids],
+              ["current_goal_ids", expected.goal_ids],
+              ["stored_evidence_digest", stageInputDigest(actual.evidence_snapshot)],
+              ["current_evidence_digest", stageInputDigest(expected.evidence_snapshot)],
+              ["next_action", "start a fresh integrity run without continuation_artifact_id"],
+            ],
+            pointer: "read_context scope=decisions; start fresh integrity",
+          }),
+        }
+      }
+    }
 
     let activeOwnership: OrchestratorToolOwnershipPayload | undefined
     let ownershipClosed = false
+    const openIntegrityOwnership = (sessionID: string) => {
+      if (activeOwnership) return
+      const ownershipPayload = createOrchestratorToolOwnershipPayload({
+        taskID,
+        orchestratorSessionID: toolExecution.orchestratorSessionID,
+        orchestratorMessageID: toolExecution.orchestratorMessageID,
+        toolCallID: toolExecution.toolCallID,
+        toolPartID: toolExecution.toolPartID,
+        childSessionID: sessionID,
+        toolName: "integrity",
+        scope: "task",
+      })
+      insertOrchestratorToolOwnershipArtifact({
+        taskID,
+        runID: findActiveRunForTask(taskID)?.id ?? null,
+        goalRunID: null,
+        label: "tool-ownership-start",
+        payload: ownershipPayload,
+      })
+      activeOwnership = ownershipPayload
+    }
     const closeIntegrityOwnership = (outcome: "completed" | "failed" | "cancelled", error?: string) => {
       if (!activeOwnership || ownershipClosed) return
       ownershipClosed = true
@@ -2112,7 +3004,9 @@ export function createOrchestratorTools(input: {
     }
 
     let verdict: Awaited<ReturnType<typeof reviewIntegrity>>
+    let runnerSessionID = continuation?.sessionID
     try {
+      if (runnerSessionID) openIntegrityOwnership(runnerSessionID)
       verdict = await reviewIntegrity({
         userRequest: task.request,
         taskTitle: task.title,
@@ -2136,31 +3030,28 @@ export function createOrchestratorTools(input: {
         taskID,
         task,
         parentSessionID: input.agentSessionID,
+        continuation,
         onSessionCreated: (sessionID) => {
-          if (activeOwnership) return
-          const ownershipPayload = createOrchestratorToolOwnershipPayload({
-            taskID,
-            orchestratorSessionID: toolExecution.orchestratorSessionID,
-            orchestratorMessageID: toolExecution.orchestratorMessageID,
-            toolCallID: toolExecution.toolCallID,
-            toolPartID: toolExecution.toolPartID,
-            childSessionID: sessionID,
-            toolName: "integrity",
-            scope: "task",
-          })
-          insertOrchestratorToolOwnershipArtifact({
-            taskID,
-            runID: findActiveRunForTask(taskID)?.id ?? null,
-            goalRunID: null,
-            label: "tool-ownership-start",
-            payload: ownershipPayload,
-          })
-          activeOwnership = ownershipPayload
+          runnerSessionID = sessionID
+          openIntegrityOwnership(sessionID)
         },
       })
       closeIntegrityOwnership("completed")
     } catch (err) {
       closeIntegrityOwnership("failed", err instanceof Error ? err.message : String(err))
+      const continuationResult = continuationResultForTerminalFinalizerMiss({
+        err,
+        taskID: task.id,
+        stage: "integrity",
+        sessionID: runnerSessionID,
+        parentSessionID: input.agentSessionID,
+        finalizerName: "submit_integrity_consensus",
+        normalizedStageInput,
+        pointerReason: toolInput.reason ?? null,
+      })
+      if (continuationResult) {
+        return { status: "continuation", result: continuationResult }
+      }
       throw err
     }
 
@@ -2420,7 +3311,7 @@ export function createOrchestratorTools(input: {
       .filter(Boolean)
       .join(", ")
 
-    return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} Candidate continuation fact: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
+    return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} Candidate continuation fact: ${plan.nextAction}.`
   }
 
   // Agents that need to ask the user a question do so directly via
@@ -2543,7 +3434,7 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
         continuation_artifact_id: StageContinuationArtifactIDField,
-      }),
+      }).strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         let task = requireTask(taskID)
         log.info("requirements guard check", { taskID, hasSpec: !!findActiveSpecForTask(task.id) })
@@ -2563,25 +3454,29 @@ export function createOrchestratorTools(input: {
         let runnerSessionID: string | undefined
         const decisionLog = createDecisionLog(taskID)
         const maturityScopePendingBeforeID = decisionLog.readByKey("maturity_scope_pending")?.id
+        const frontendDesign = renderFrontendDesignHandoffReference(taskID)
         const normalizedStageInput = {
-          reason: reason ?? null,
-          task_title: task.title,
-          task_request_digest: stageInputDigest(task.request),
-          continuation_artifact_id: continuation_artifact_id ?? null,
+          task: taskContinuationScope(task),
+          evidence_snapshot: requirementsPromptEvidenceSnapshot(taskID, task, frontendDesign),
         }
         let continuation: AgentSessionContinuation | undefined
         try {
-          continuation = continuation_artifact_id
-            ? continuationFromArtifact({
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
                 taskID,
                 stage: "requirements",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_requirements",
+                expectedNormalizedStageInput: normalizedStageInput,
               })
-            : undefined
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("requirements")
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
           runnerSessionID = continuation?.sessionID
           const { RequirementsAgent } = await import("@/requirements")
-          const frontendDesign = renderFrontendDesignHandoffReference(taskID)
 
           // Stage-level retry was removed in step 5/7 (rule 8 — single
           // source). Transient LLM-call failures are now retried inside
@@ -2786,6 +3681,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_requirements",
             normalizedStageInput,
+            pointerReason: reason ?? null,
           })
           if (continuationResult) return continuationResult
           // P4 (rule 4 — same systemic shape as analyze_intent / frontend_design
@@ -2794,11 +3690,11 @@ export function createOrchestratorTools(input: {
           // requirements set. Without this the abort surfaces only as a
           // thrown tool result the orchestrator may swallow during recovery.
           const { createDecisionLog } = await import("@/decision-log")
-          const reason = err instanceof Error ? err.message : String(err)
+          const failureReason = err instanceof Error ? err.message : String(err)
           createDecisionLog(taskID).append({
             phase: "requirements",
             key: "abort_requirements_failed",
-            value: `Requirements stage aborted: ${reason.slice(0, 400)}`,
+            value: `Requirements stage aborted: ${failureReason.slice(0, 400)}`,
             reason: "requirements_threw",
           })
           throw err
@@ -2837,14 +3733,7 @@ export function createOrchestratorTools(input: {
       inputSchema: FrontendDesignInputSchema,
       execute: async ({ reason, urls, figma_url, materials, continuation_artifact_id }) => {
         const task = requireTask(taskID)
-        const continuation = continuation_artifact_id
-          ? continuationFromArtifact({
-              taskID,
-              stage: "frontend-design",
-              artifactID: continuation_artifact_id,
-              finalizerName: "submit_frontend_template",
-            })
-          : undefined
+        const hasContinuation = typeof continuation_artifact_id === "string" && continuation_artifact_id.length > 0
 
         // Guard: skip if no visual input available. Figma URL counts as visual.
         const hasAttachments = Array.isArray(task.attachments) && task.attachments.length > 0
@@ -2853,23 +3742,32 @@ export function createOrchestratorTools(input: {
         const meta = (task.metadata as Record<string, unknown> | null) ?? {}
         const metaFigma = typeof meta.figma_url === "string" ? meta.figma_url : undefined
         const rawInputUrls = (Array.isArray(urls) ? urls : []).filter((u) => typeof u === "string" && u.length > 0)
-        const inputUrls = continuation ? [] : rawInputUrls
+        const inputUrls = hasContinuation ? [] : rawInputUrls
         const figmaUrls = [
           ...(figma_url ? [figma_url] : []),
           ...(metaFigma ? [metaFigma] : []),
           ...inputUrls.filter((u) => isFigmaUrl(u)),
-        ].filter(() => !continuation)
+        ].filter(() => !hasContinuation)
         const liveUrls = inputUrls.filter((u) => !isFigmaUrl(u))
         const rawMaterialPaths = Array.isArray(materials)
           ? materials.filter((m) => typeof m === "string" && m.length > 0)
           : []
-        const materialPaths = continuation ? [] : rawMaterialPaths
-        const normalizedStageInput = {
-          reason: reason ?? null,
-          urls: rawInputUrls,
-          figma_url: figma_url ?? metaFigma ?? null,
-          materials: rawMaterialPaths,
-          continuation_artifact_id: continuation_artifact_id ?? null,
+        const materialPaths = hasContinuation ? [] : rawMaterialPaths
+        let normalizedStageInput = {
+          task: taskContinuationScope(task),
+          evidence_snapshot: await frontendDesignPromptEvidenceSnapshot(taskID, task),
+        }
+        let continuation: AgentSessionContinuation | undefined
+        if (hasContinuation) {
+          const resolvedContinuation = continuationFromArtifactOrResult({
+              taskID,
+              stage: "frontend-design",
+              artifactID: continuation_artifact_id,
+              finalizerName: "submit_frontend_template",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
+          if ("result" in resolvedContinuation) return resolvedContinuation.result
+          continuation = resolvedContinuation.continuation
         }
         if (
           !continuation &&
@@ -3164,6 +4062,10 @@ export function createOrchestratorTools(input: {
           ...(Array.isArray(enrichedTask.system_artifacts) ? (enrichedTask.system_artifacts as any[]) : []),
         ]
         const enrichedHasAttachments = designVisuals.length > 0
+        normalizedStageInput = {
+          task: taskContinuationScope(enrichedTask),
+          evidence_snapshot: await frontendDesignPromptEvidenceSnapshot(taskID, enrichedTask),
+        }
 
         // Fail-fast if frontend_design was invoked on the strength of URLs /
         // materials but every source failed to materialize. Running
@@ -3363,6 +4265,13 @@ export function createOrchestratorTools(input: {
           })
           decisionLog.append({
             phase: "frontend_design",
+            key: "implementation_phase_outcomes",
+            value: JSON.stringify(analysis.implementationPhaseOutcomes ?? [], null, 2),
+            reason:
+              "Structured maintainable replacement phase outcomes. Architect should consume this before component inventory or region lists.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
             key: "quality_project_contract",
             value: analysis.qualityProjectContract,
             reason:
@@ -3485,6 +4394,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_frontend_template",
             normalizedStageInput,
+            pointerReason: reason ?? null,
           })
           if (continuationResult) return continuationResult
           throw err instanceof Error ? err : new Error(msg)
@@ -3519,7 +4429,7 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
         continuation_artifact_id: StageContinuationArtifactIDField,
-      }),
+      }).strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
@@ -3534,6 +4444,17 @@ export function createOrchestratorTools(input: {
           })
         }
         const existingGoals = listGoals(taskID)
+        const decisionLog = createDecisionLog(taskID)
+        const reqRows = findRequirements(activeSpec.id)
+        const requirements = reqRows.map(parsedRequirementFromRow)
+        const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
+          key: d.key,
+          value: d.value,
+          reason: d.reason,
+        }))
+        const frontendDesign = renderFrontendDesignHandoffReference(taskID)
+        const workloadArtifact = findLatestGoalWorkloadArtifact(taskID)
+        const decisionLogPrompt = decisionLog.toPromptSection()
 
         await trackStepStart("architect")
 
@@ -3541,45 +4462,46 @@ export function createOrchestratorTools(input: {
         // creates the runner session internally.
         let runnerSessionID: string | undefined
         const normalizedStageInput = {
-          reason: reason ?? null,
-          task_title: task.title,
-          task_request_digest: stageInputDigest(task.request),
-          active_spec_id: activeSpec.id,
-          continuation_artifact_id: continuation_artifact_id ?? null,
+          task: taskContinuationScope(task),
+          active_spec: specContinuationScope(activeSpec),
+          existing_goals: goalsContinuationScope(existingGoals),
+          evidence_snapshot: architectPromptEvidenceSnapshot({
+            taskID,
+            task,
+            requirements,
+            requirementDecisions,
+            frontendDesign,
+            workloadBriefs: workloadArtifact?.briefs,
+            decisionLogPrompt,
+          }),
         }
         let continuation: AgentSessionContinuation | undefined
         try {
-          continuation = continuation_artifact_id
-            ? continuationFromArtifact({
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
                 taskID,
                 stage: "architect",
                 artifactID: continuation_artifact_id,
                 finalizerName: "submit_architect",
+                expectedNormalizedStageInput: normalizedStageInput,
               })
-            : undefined
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("architect")
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
           runnerSessionID = continuation?.sessionID
-          const { createDecisionLog } = await import("@/decision-log")
-          const decisionLog = createDecisionLog(taskID)
 
           // Load Requirements output straight from the DB so the Architect
           // sees the same REQ-N list the overlay does. Decisions come from
           // the decision log phase=requirements section the Requirements
           // agent already seeded.
-          const { findRequirements } = await import("@/engine/store")
-          const reqRows = findRequirements(activeSpec.id)
-          const requirements = reqRows.map(parsedRequirementFromRow)
-          const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
-            key: d.key,
-            value: d.value,
-            reason: d.reason,
-          }))
-          const frontendDesign = renderFrontendDesignHandoffReference(taskID)
           // Goal Workload Analyst sizing feedback (advisory). On the first
           // architect pass this is undefined (no analyst has run yet); on a
           // re-dispatch it carries the analyst's per-goal briefs so architect
           // can act on decomposition_concern. Architect re-decomposes, so all
           // briefs are acceptable input — no snapshot filter here.
-          const workloadArtifact = findLatestGoalWorkloadArtifact(taskID)
 
           const { ArchitectAgent } = await import("@/architect/agent")
           const { copyRequirementsToSpecSnapshot, persistArchitectContractGraph, upsertGoalsFromArchitect } =
@@ -3866,6 +4788,7 @@ export function createOrchestratorTools(input: {
             parentSessionID: input.agentSessionID,
             finalizerName: "submit_architect",
             normalizedStageInput,
+            pointerReason: reason ?? null,
           })
           if (continuationResult) return continuationResult
           createDecisionLog(taskID).append({
@@ -3913,8 +4836,9 @@ export function createOrchestratorTools(input: {
         "new structure (a split). Briefs feed the next per-goal `build` automatically.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run workload analysis"),
-      }),
-      execute: async () => {
+        continuation_artifact_id: StageContinuationArtifactIDField,
+      }).strict(),
+      execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
         if (!activeSpec) {
@@ -3938,7 +4862,30 @@ export function createOrchestratorTools(input: {
 
         await trackStepStart("workload_analysis")
         let runnerSessionID: string | undefined
+        const contractGraphArtifact = findLatestArchitectContractGraphArtifact(taskID)
+        const normalizedStageInput = {
+          task: taskContinuationScope(task),
+          active_spec: specContinuationScope(activeSpec),
+          goals: goalsContinuationScope(goals),
+          architect_contract_graph_artifact_id: contractGraphArtifact?.id ?? null,
+        }
         try {
+          let continuation: AgentSessionContinuation | undefined
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
+                taskID,
+                stage: "goal-workload-analyst",
+                artifactID: continuation_artifact_id,
+                finalizerName: "submit_workload_analysis",
+                expectedNormalizedStageInput: normalizedStageInput,
+              })
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("workload_analysis")
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
+          runnerSessionID = continuation?.sessionID
           const { findRequirements } = await import("@/engine/store")
           const requirements = findRequirements(activeSpec.id).map(parsedRequirementFromRow)
           const frontendDesign = renderFrontendDesignHandoffReference(taskID)
@@ -4007,6 +4954,7 @@ export function createOrchestratorTools(input: {
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
             onSessionCreated: (id) => {
               runnerSessionID = id
             },
@@ -4051,12 +4999,23 @@ export function createOrchestratorTools(input: {
               error: trackErr instanceof Error ? trackErr.message : String(trackErr),
             })
           }
+          const continuationResult = continuationResultForTerminalFinalizerMiss({
+            err,
+            taskID,
+            stage: "goal-workload-analyst",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "submit_workload_analysis",
+            normalizedStageInput,
+            pointerReason: reason ?? null,
+          })
+          if (continuationResult) return continuationResult
           const { createDecisionLog } = await import("@/decision-log")
-          const reason = err instanceof Error ? err.message : String(err)
+          const failureReason = err instanceof Error ? err.message : String(err)
           createDecisionLog(taskID).append({
             phase: "architect",
             key: "abort_workload_analysis_failed",
-            value: `Workload analysis stage aborted: ${reason.slice(0, 400)}`,
+            value: `Workload analysis stage aborted: ${failureReason.slice(0, 400)}`,
             reason: "workload_analysis_threw",
           })
           throw err
@@ -4079,10 +5038,11 @@ export function createOrchestratorTools(input: {
         "It may use skills, bash/edit/write/apply_patch, and task-scoped browser_preview evidence. " +
         "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final. Visual QA and integrity are peer review agents; visual_qa does not replace integrity and is not integrity's workflow prerequisite.",
       inputSchema: VisualQaInputSchema,
-      execute: async ({ reason, focus, app_url, preview_command }) => {
+      execute: async ({ reason, focus, app_url, preview_command, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         await trackStepStart("visual_qa")
         let closed = false
+        let runnerSessionID: string | undefined
         const close = async (failed = false) => {
           if (closed) return
           closed = true
@@ -4090,36 +5050,67 @@ export function createOrchestratorTools(input: {
         }
 
         const decisionLog = createDecisionLog(taskID)
-        const frontendDesign = renderVisualQaFrontendDesignContext(decisionLog.readByPhase("frontend_design"))
-        const frontendResearch = renderVisualQaFrontendResearchContext(
-          findNonStaleFrontendResearchBrief({
-            taskID,
-            request: task.request,
-          }),
-        )
-        const buildEvidence = renderVisualQaBuildEvidenceContext(findDeliveriesForTask(taskID))
-        const priorVisualQa = renderVisualQaPriorReportContext(decisionLog.readByPhase("visual_qa"))
+        const frontendDesignEntries = decisionLog.readByPhase("frontend_design")
+        const frontendResearchBriefs = findNonStaleFrontendResearchBriefs({
+          taskID,
+          request: task.request,
+        })
+        const buildDeliveries = findDeliveriesForTask(taskID)
+        const priorVisualQaEntries = decisionLog.readByPhase("visual_qa")
+        const frontendDesign = renderVisualQaFrontendDesignContext(frontendDesignEntries)
+        const frontendResearch = renderVisualQaFrontendResearchContext(frontendResearchBriefs)
+        const buildEvidence = renderVisualQaBuildEvidenceContext(buildDeliveries)
+        const priorVisualQa = renderVisualQaPriorReportContext(priorVisualQaEntries)
         const activeSpec = findActiveSpecForTask(taskID)
+        const activeGoals = listGoals(taskID)
         const projectRoot = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
         const visualEvidence = readLatestTaskVisualEvidenceBundleSync({ projectDir: projectRoot, taskID })
-        const integrityContext = renderVisualQaIntegrityContext(
-          activeSpec
-            ? findLatestIntegrityAttemptArtifact({
-                taskID,
-                specSnapshotID: activeSpec.id,
-                phase: "post_build",
-              })
-            : undefined,
-        )
+        const latestIntegrityAttempt = activeSpec
+          ? findLatestIntegrityAttemptArtifact({
+              taskID,
+              specSnapshotID: activeSpec.id,
+              phase: "post_build",
+            })
+          : undefined
+        const integrityContext = renderVisualQaIntegrityContext(latestIntegrityAttempt)
         const referenceParity = deriveVisualQaReferenceParityContext({
           taskID,
           specSnapshotID: activeSpec?.id,
-          goals: listGoals(taskID),
-          frontendDesignEntries: decisionLog.readByPhase("frontend_design"),
+          goals: activeGoals,
+          frontendDesignEntries,
           visualEvidence,
         })
+        const normalizedStageInput = {
+          task: taskContinuationScope(task),
+          active_spec: specContinuationScope(activeSpec),
+          goals: goalsContinuationScope(activeGoals),
+          evidence_snapshot: continuationEvidenceSnapshot({
+            frontend_design_decisions: frontendDesignEntries,
+            frontend_research_briefs: frontendResearchBriefs,
+            build_deliveries: buildDeliveries,
+            prior_visual_qa_decisions: priorVisualQaEntries,
+            latest_visual_evidence_bundle: visualEvidence,
+            latest_integrity_attempt: latestIntegrityAttempt,
+          }),
+        }
 
         try {
+          let continuation: AgentSessionContinuation | undefined
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
+                taskID,
+                stage: "visual-qa",
+                artifactID: continuation_artifact_id,
+                finalizerName: "submit_visual_qa_report",
+                expectedNormalizedStageInput: normalizedStageInput,
+              })
+            if ("result" in resolvedContinuation) {
+              await close(false)
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
+          runnerSessionID = continuation?.sessionID
           const { VisualQaAgent } = await import("@/visual-qa")
           const result = await VisualQaAgent.analyze({
             taskTitle: task.title,
@@ -4139,6 +5130,10 @@ export function createOrchestratorTools(input: {
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
           })
 
           decisionLog.append({
@@ -4187,6 +5182,17 @@ export function createOrchestratorTools(input: {
         } catch (err) {
           await close(true)
           const msg = err instanceof Error ? err.message : String(err)
+          const continuationResult = continuationResultForTerminalFinalizerMiss({
+            err,
+            taskID,
+            stage: "visual-qa",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "submit_visual_qa_report",
+            normalizedStageInput,
+            pointerReason: reason,
+          })
+          if (continuationResult) return continuationResult
           log.error("visual_qa: failed", { taskID, error: msg })
           decisionLog.append({
             phase: "visual_qa",
@@ -4233,47 +5239,56 @@ export function createOrchestratorTools(input: {
         "matches the user request, OR you already ran integrity for this spec " +
         "snapshot and have no new signal. Requires architect goals on the active " +
         "spec snapshot.",
-      inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to run integrity review"),
-      }),
-      execute: async (_input, options) => {
+      inputSchema: IntegrityInputSchema,
+      execute: async (toolInput, options) => {
         const toolExecution = requireOrchestratorToolExecutionContext(options, "integrity")
-        const outcome = await runIntegrityReview(toolExecution)
-        if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
-          await blockActiveRunForTask(taskID, {
-            blockingReason: "integrity artifact_missing",
-            error: outcome.artifactMissing.error,
-            summary: "Run blocked by missing integrity attempt artifact",
-          })
-        } else if (outcome.status === "reviewed" && outcome.verdict === "pass" && outcome.phase === "post_build") {
-          const task = requireTask(taskID)
-          const completed = Date.now()
-          const activeRun = findActiveRunForTask(taskID)
-          if (activeRun) {
-            await updateRun(
-              activeRun,
-              {
-                status: "completed",
-                blocking_reason: null,
-                error: null,
-                time_completed: completed,
-              },
-              "Run completed by passing integrity gate",
-            )
-          }
-          await updateTask(
-            task,
-            { status: "completed", error: null, time_completed: completed },
-            "Task completed by passing integrity gate",
+        await trackStepStart("integrity")
+        let integrityStepFailed = true
+        try {
+          const outcome = await runIntegrityReview(toolExecution, toolInput)
+          integrityStepFailed = !(
+            outcome.status === "reviewed" &&
+            outcome.verdict === "pass" &&
+            outcome.phase === "post_build"
           )
-        } else if (outcome.status === "reviewed" && outcome.phase === "post_build") {
-          await blockActiveRunForTask(taskID, {
-            blockingReason: `integrity verdict ${outcome.verdict}`,
-            error: outcome.summary,
-            summary: "Run blocked by non-pass integrity gate",
-          })
+          if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
+            await blockActiveRunForTask(taskID, {
+              blockingReason: "integrity artifact_missing",
+              error: outcome.artifactMissing.error,
+              summary: "Run blocked by missing integrity attempt artifact",
+            })
+          } else if (outcome.status === "reviewed" && outcome.verdict === "pass" && outcome.phase === "post_build") {
+            const task = requireTask(taskID)
+            const completed = Date.now()
+            const activeRun = findActiveRunForTask(taskID)
+            if (activeRun) {
+              await updateRun(
+                activeRun,
+                {
+                  status: "completed",
+                  blocking_reason: null,
+                  error: null,
+                  time_completed: completed,
+                },
+                "Run completed by passing integrity gate",
+              )
+            }
+            await updateTask(
+              task,
+              { status: "completed", error: null, time_completed: completed },
+              "Task completed by passing integrity gate",
+            )
+          } else if (outcome.status === "reviewed" && outcome.phase === "post_build") {
+            await blockActiveRunForTask(taskID, {
+              blockingReason: `integrity verdict ${outcome.verdict}`,
+              error: outcome.summary,
+              summary: "Run blocked by non-pass integrity gate",
+            })
+          }
+          return renderIntegrityOutcome(outcome)
+        } finally {
+          await trackStepComplete("integrity", undefined, integrityStepFailed)
         }
-        return renderIntegrityOutcome(outcome)
       },
     }),
 
@@ -4296,6 +5311,8 @@ export function createOrchestratorTools(input: {
         "Use when (1) integrity verdict=pass AND (2) the worker's terminal report has " +
         "non-empty fact_check_items OR makes load-bearing factual claims about external " +
         "systems (APIs, library versions, third-party protocols, numbers, paths). " +
+        "Pass target_session_id from the current task; target_agent is derived from that session " +
+        "and an explicit target_agent is only a consistency assertion. " +
         "The tool dedupes automatically across repeated calls — you do NOT need to " +
         "track 'already checked'.  If the target session is still streaming, the tool " +
         "will reject; retry after it finishes.\n" +
@@ -4308,50 +5325,77 @@ export function createOrchestratorTools(input: {
         "- verdict=needs_orchestrator_action → invoke modify_goal / restart_from_stage / " +
         "fail_task per the corrected[i].recommended_action.\n" +
         "- verdict=inconclusive → retry fact_check or proceed with a caveat note.",
-      inputSchema: z.object({
-        target_session_id: z.string().describe("Session id of the worker whose terminal report you want fact-checked."),
-        target_agent: z
-          .string()
-          .describe(
-            "Worker agent name: build / requirements / architect / frontend-design / intent-analysis / integrity.",
-          ),
-        fact_check_items: FactCheckItemListSchema.describe(
-          "Copy of the fact_check_items[] array from the worker's terminal report. " +
-            "Empty array is allowed only when you also explain `reason` why fact-check is " +
-            "still useful (e.g., load-bearing prose claims the worker didn't register).",
-        ),
-        reason: z.string().min(10).describe("Why you decided to dispatch fact-check on this worker output."),
-      }),
+      inputSchema: FactCheckInputSchema,
       execute: async (args) => {
         const task = requireTask(taskID)
         await trackStepStart("fact_check")
         const { FactCheckAgent } = await import("@/fact-check")
         const { findFactCheckAttempt, recordFactCheckAttempt } = await import("@/fact-check/persist")
         const { Session } = await import("@/session")
+        let factCheckStepFailed = true
+        try {
+        const unavailableContinuation = args.continuation_artifact_id
+          ? stageContinuationUnavailableResult({
+              taskID: task.id,
+              stage: "fact-check",
+              artifactID: args.continuation_artifact_id,
+              finalizerName: "report_fact_check_result",
+            })
+          : undefined
+        if (unavailableContinuation) {
+          factCheckStepFailed = false
+          return unavailableContinuation
+        }
+        const continuationInput = args.continuation_artifact_id
+          ? factCheckContinuationFromArtifact({ taskID: task.id, artifactID: args.continuation_artifact_id })
+          : undefined
+        const continuation = continuationInput?.continuation
 
         // Step 1: snapshot — also acts as the terminal-state precondition.
-        const snap = await Session.snapshotLatestAssistant(args.target_session_id)
-        if (!snap.finished) {
-          return (
-            `fact_check rejected: target session is not in a terminal state ` +
-            `(reason=${snap.reason ?? "unknown"}). Retry after the worker finishes streaming.`
-          )
-        }
-        if (!snap.messageID || !snap.contentHash) {
-          return (
-            "fact_check rejected: target session has no terminal assistant message. " +
-            "Confirm you passed the correct target_session_id."
-          )
+        let resolvedArgs: FactCheckStageInput
+        if (continuationInput) {
+          resolvedArgs = continuationInput.normalizedStageInput
+        } else {
+          const targetScope = resolveFactCheckTargetScope({
+            taskID: task.id,
+            targetSessionID: args.target_session_id!,
+            assertedTargetAgent: args.target_agent,
+          })
+          if ("error" in targetScope) {
+            return `fact_check rejected: ${targetScope.error}`
+          }
+          const snap = await Session.snapshotLatestAssistant(args.target_session_id!)
+          if (!snap.finished) {
+            return (
+              `fact_check rejected: target session is not in a terminal state ` +
+              `(reason=${snap.reason ?? "unknown"}). Retry after the worker finishes streaming.`
+            )
+          }
+          if (!snap.messageID || !snap.contentHash) {
+            return (
+              "fact_check rejected: target session has no terminal assistant message. " +
+              "Confirm you passed the correct target_session_id."
+            )
+          }
+          resolvedArgs = FactCheckStageInputSchema.parse({
+            target_session_id: args.target_session_id,
+            target_agent: targetScope.targetAgent,
+            fact_check_items: args.fact_check_items,
+            reason: args.reason,
+            target_message_id: snap.messageID,
+            target_message_content_hash: snap.contentHash,
+          })
         }
 
         // Step 2: idempotency cache.
         const cached = findFactCheckAttempt({
           invokedByOrchestratorSessionID: input.agentSessionID,
-          targetSessionID: args.target_session_id,
-          targetMessageID: snap.messageID,
-          targetMessageContentHash: snap.contentHash,
+          targetSessionID: resolvedArgs.target_session_id,
+          targetMessageID: resolvedArgs.target_message_id,
+          targetMessageContentHash: resolvedArgs.target_message_content_hash,
         })
         if (cached) {
+          factCheckStepFailed = false
           return (
             `fact_check (cached, no LLM work) — verdict=\`${cached.payload.report.overall_verdict}\`\n\n` +
             renderFactCheckReport(cached.payload.report)
@@ -4360,20 +5404,22 @@ export function createOrchestratorTools(input: {
 
         // Step 3: run agent.
         const timeStarted = Date.now()
+        let runnerSessionID = continuation?.sessionID
         try {
           const result = await FactCheckAgent.run({
-            targetSessionID: args.target_session_id,
-            targetAgent: args.target_agent,
-            targetMessageID: snap.messageID,
-            targetMessageContentHash: snap.contentHash,
-            factCheckItems: args.fact_check_items,
-            reason: args.reason,
+            targetSessionID: resolvedArgs.target_session_id,
+            targetAgent: resolvedArgs.target_agent,
+            targetMessageID: resolvedArgs.target_message_id,
+            targetMessageContentHash: resolvedArgs.target_message_content_hash,
+            factCheckItems: resolvedArgs.fact_check_items,
+            reason: resolvedArgs.reason,
             orchestratorSessionID: input.agentSessionID,
             taskID: task.id,
             signal: input.signal,
-            // No onSessionCreated hook needed at this layer — the runner
-            // creates the child session under parentSessionID for overlay
-            // nesting automatically.
+            continuation,
+            onSessionCreated: (sessionID) => {
+              runnerSessionID = sessionID
+            },
           })
           // Step 3a: scope consistency check (codex impl review §3).  The
           // LLM populates report.scope itself; we must assert it matches
@@ -4384,27 +5430,30 @@ export function createOrchestratorTools(input: {
           // retry (rule 7: no silent fallback).
           const scope = result.report.scope
           const scopeMismatch =
-            scope.target_session_id !== args.target_session_id ||
-            scope.target_agent !== args.target_agent ||
-            scope.target_message_id !== snap.messageID ||
-            scope.target_message_content_hash !== snap.contentHash
+            scope.target_session_id !== resolvedArgs.target_session_id ||
+            scope.target_agent !== resolvedArgs.target_agent ||
+            scope.target_message_id !== resolvedArgs.target_message_id ||
+            scope.target_message_content_hash !== resolvedArgs.target_message_content_hash
           if (scopeMismatch) {
             const synthetic = synthesizeToolErrorReport({
-              snap,
-              args,
+              snap: {
+                messageID: resolvedArgs.target_message_id,
+                contentHash: resolvedArgs.target_message_content_hash,
+              },
+              args: resolvedArgs,
               reason:
                 `fact-check returned a report.scope inconsistent with the host snapshot ` +
-                `(expected target_session=${args.target_session_id} agent=${args.target_agent} ` +
-                `message_id=${snap.messageID}; got session=${scope.target_session_id} ` +
+                `(expected target_session=${resolvedArgs.target_session_id} agent=${resolvedArgs.target_agent} ` +
+                `message_id=${resolvedArgs.target_message_id}; got session=${scope.target_session_id} ` +
                 `agent=${scope.target_agent} message_id=${scope.target_message_id})`,
             })
             recordFactCheckAttempt({
               taskID: task.id,
               factCheckSessionID: result.sessionID,
-              targetSessionID: args.target_session_id,
-              targetAgent: args.target_agent,
-              targetMessageID: snap.messageID,
-              targetMessageContentHash: snap.contentHash,
+              targetSessionID: resolvedArgs.target_session_id,
+              targetAgent: resolvedArgs.target_agent,
+              targetMessageID: resolvedArgs.target_message_id,
+              targetMessageContentHash: resolvedArgs.target_message_content_hash,
               invokedByOrchestratorSessionID: input.agentSessionID,
               report: synthetic,
               timeStarted,
@@ -4415,10 +5464,10 @@ export function createOrchestratorTools(input: {
           recordFactCheckAttempt({
             taskID: task.id,
             factCheckSessionID: result.sessionID,
-            targetSessionID: args.target_session_id,
-            targetAgent: args.target_agent,
-            targetMessageID: snap.messageID,
-            targetMessageContentHash: snap.contentHash,
+            targetSessionID: resolvedArgs.target_session_id,
+            targetAgent: resolvedArgs.target_agent,
+            targetMessageID: resolvedArgs.target_message_id,
+            targetMessageContentHash: resolvedArgs.target_message_content_hash,
             invokedByOrchestratorSessionID: input.agentSessionID,
             report: result.report,
             timeStarted,
@@ -4430,14 +5479,15 @@ export function createOrchestratorTools(input: {
           const { createDecisionLog } = await import("@/decision-log")
           createDecisionLog(task.id).append({
             phase: "fact_check",
-            key: `fact_check:${args.target_session_id}:${snap.messageID}`,
+            key: `fact_check:${resolvedArgs.target_session_id}:${resolvedArgs.target_message_id}`,
             value:
               `verdict=${result.report.overall_verdict} ` +
               `verified=${result.report.verified.length} ` +
               `corrected=${result.report.corrected.length} ` +
               `unresolved=${result.report.unresolved.length}`,
-            reason: `fact-check on ${args.target_agent} (${args.reason.slice(0, 200)})`,
+            reason: `fact-check on ${resolvedArgs.target_agent} (${resolvedArgs.reason.slice(0, 200)})`,
           })
+          factCheckStepFailed = result.outcome !== "completed"
           return (
             `fact_check completed — verdict=\`${result.report.overall_verdict}\`\n\n` +
             renderFactCheckReport(result.report)
@@ -4458,26 +5508,42 @@ export function createOrchestratorTools(input: {
           const outcome: "aborted" | "tool_error" = input.signal?.aborted ? "aborted" : "tool_error"
           const errMessage = err instanceof Error ? err.message : String(err)
           const synthetic = synthesizeToolErrorReport({
-            snap,
-            args,
+            snap: {
+              messageID: resolvedArgs.target_message_id,
+              contentHash: resolvedArgs.target_message_content_hash,
+            },
+            args: resolvedArgs,
             reason: `fact-check ${outcome}: ${errMessage}`,
           })
           recordFactCheckAttempt({
             taskID: task.id,
-            // No child session id available — the run threw before
-            // returning a session reference.  Mark explicitly so
-            // listFactCheckAttempts consumers can distinguish.
-            factCheckSessionID: `(no-session:${outcome})`,
-            targetSessionID: args.target_session_id,
-            targetAgent: args.target_agent,
-            targetMessageID: snap.messageID,
-            targetMessageContentHash: snap.contentHash,
+            factCheckSessionID: runnerSessionID ?? `(no-session:${outcome})`,
+            targetSessionID: resolvedArgs.target_session_id,
+            targetAgent: resolvedArgs.target_agent,
+            targetMessageID: resolvedArgs.target_message_id,
+            targetMessageContentHash: resolvedArgs.target_message_content_hash,
             invokedByOrchestratorSessionID: input.agentSessionID,
             report: synthetic,
             timeStarted,
             outcome,
           })
+          if (outcome === "tool_error") {
+            const continuationResult = continuationResultForTerminalFinalizerMiss({
+              err,
+              taskID: task.id,
+              stage: "fact-check",
+              sessionID: runnerSessionID,
+              parentSessionID: input.agentSessionID,
+              finalizerName: "report_fact_check_result",
+              normalizedStageInput: resolvedArgs,
+              pointerReason: resolvedArgs.reason,
+            })
+            if (continuationResult) return continuationResult
+          }
           return `fact_check ${outcome}: ${errMessage}`
+        }
+        } finally {
+          await trackStepComplete("fact_check", undefined, factCheckStepFailed)
         }
       },
     }),
@@ -4518,7 +5584,7 @@ export function createOrchestratorTools(input: {
           .string()
           .optional()
           .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
-      }),
+      }).strict(),
       execute: async () => {
         const task = requireTask(taskID)
         await trackStepStart("analyze_intent")
@@ -4629,24 +5695,54 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL webpage/UI investigation publisher. Single-shot task-scope brief producer: dispatch once for the relevant webpage investigation scope, persist the brief, then send later repair/refinement through downstream agents that consume the brief. Do not use frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after its frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It persists a frontend_research_brief/webpage_contract artifact built from small registration tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+        "OPTIONAL webpage/UI investigation publisher. Source-page-scoped brief producer: pass exactly one source page URL per fresh call, let the host prepare rendered evidence for that page, persist the brief, and call frontend_research separately for additional pages. Do not reuse frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after the same page scope's frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It persists a frontend_research_brief/webpage_contract artifact built from small registration tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: FrontendResearchInputSchema,
-      execute: async ({ reason, source_urls, focus }) => {
+      execute: async ({ reason, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         await trackStepStart("frontend_research")
+        const continuationRow = continuation_artifact_id
+          ? findStageContinuationRequest({ taskID, artifactID: continuation_artifact_id })
+          : undefined
+        const storedContinuationSourceUrl = frontendResearchSourceUrlFromStageInput(
+          continuationRow?.payload.normalized_stage_input,
+        )
+        const storedContinuationFocus = frontendResearchFocusFromStageInput(continuationRow?.payload.normalized_stage_input)
+        const sourceUrl = continuation_artifact_id ? storedContinuationSourceUrl : source_urls?.find(isHttpWebpageUrl)
+        const normalizedStageInput = {
+          task: taskContinuationScope(task),
+          source_url: sourceUrl ?? null,
+          focus: continuation_artifact_id ? (storedContinuationFocus ?? null) : focus?.trim() || null,
+        }
+        let continuation: AgentSessionContinuation | undefined
         let runnerSessionID: string | undefined
         try {
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
+                taskID,
+                stage: "frontend-research",
+                artifactID: continuation_artifact_id,
+                finalizerName: "submit_research_brief",
+                expectedNormalizedStageInput: normalizedStageInput,
+              })
+            if ("result" in resolvedContinuation) {
+              await trackStepComplete("frontend_research")
+              return resolvedContinuation.result
+            }
+            continuation = resolvedContinuation.continuation
+          }
+          runnerSessionID = continuation?.sessionID
           const { FrontendResearchAgent } = await import("@/frontend-research")
           const result = await FrontendResearchAgent.run({
             title: task.title,
             request: task.request,
             targetDeliverable: "implementation_input",
-            sourceUrls: source_urls,
-            focus,
+            sourceUrls: sourceUrl ? [sourceUrl] : undefined,
+            focus: continuation ? undefined : focus,
             reason,
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
             onStatus: () => {},
             onSessionCreated: (id) => {
               runnerSessionID = id
@@ -4693,6 +5789,17 @@ export function createOrchestratorTools(input: {
             })
           }
           const msg = err instanceof Error ? err.message : String(err)
+          const continuationResult = continuationResultForTerminalFinalizerMiss({
+            err,
+            taskID,
+            stage: "frontend-research",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "submit_research_brief",
+            normalizedStageInput,
+            pointerReason: reason,
+          })
+          if (continuationResult) return continuationResult
           if (runnerSessionID) {
             SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
           }
@@ -4703,7 +5810,7 @@ export function createOrchestratorTools(input: {
             fields: [
               ["session", runnerSessionID ?? "not-created"],
               ["status", "failed"],
-              ["source_urls", source_urls],
+              ["source_urls", source_urls ?? []],
               ["focus", focus?.trim() ? focus : "none"],
               ["artifact_id", "none"],
             ],
@@ -4718,33 +5825,39 @@ export function createOrchestratorTools(input: {
     deep_research: tool({
       description:
         "OPTIONAL deep evidence side-tool agent. Use when the task depends on multi-source external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, `frontend_research` is a separate candidate; for implementation-template/source handoff, `frontend_design` is a separate candidate. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up deep research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a acceptance path.",
-      inputSchema: z.object({
-        reason: z.string().min(1).describe("Why evidence research is needed for this task."),
-        target_deliverable: z
-          .enum(["prd", "spec", "research_report", "implementation_input", "mixed"])
-          .optional()
-          .describe("The likely document/input shape being researched."),
-        source_urls: z
-          .array(z.string().min(1))
-          .default([])
-          .describe("Known source URLs the research agent must webfetch before any broader discovery."),
-        focus: z.string().optional().describe("Optional narrow focus for the research agent."),
-      }),
-      execute: async ({ reason, target_deliverable, source_urls, focus }) => {
+      inputSchema: DeepResearchInputSchema,
+      execute: async ({ reason, target_deliverable, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         let runnerSessionID: string | undefined
+        const normalizedStageInput = {
+          task: taskContinuationScope(task),
+        }
         try {
+          let continuation: AgentSessionContinuation | undefined
+          if (continuation_artifact_id) {
+            const resolvedContinuation = continuationFromArtifactOrResult({
+                taskID,
+                stage: "deep-research",
+                artifactID: continuation_artifact_id,
+                finalizerName: "submit_research_brief",
+                expectedNormalizedStageInput: normalizedStageInput,
+              })
+            if ("result" in resolvedContinuation) return resolvedContinuation.result
+            continuation = resolvedContinuation.continuation
+          }
+          runnerSessionID = continuation?.sessionID
           const { DeepResearchAgent } = await import("@/research")
           const result = await DeepResearchAgent.run({
             title: task.title,
             request: task.request,
             targetDeliverable: target_deliverable,
-            sourceUrls: source_urls,
+            sourceUrls: continuation ? undefined : source_urls,
             focus,
             reason,
             taskID,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            continuation,
             onStatus: () => {},
             onSessionCreated: (id) => {
               runnerSessionID = id
@@ -4777,6 +5890,17 @@ export function createOrchestratorTools(input: {
           })
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
+          const continuationResult = continuationResultForTerminalFinalizerMiss({
+            err,
+            taskID,
+            stage: "deep-research",
+            sessionID: runnerSessionID,
+            parentSessionID: input.agentSessionID,
+            finalizerName: "submit_research_brief",
+            normalizedStageInput,
+            pointerReason: reason,
+          })
+          if (continuationResult) return continuationResult
           if (runnerSessionID) {
             SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
           }
@@ -4999,6 +6123,14 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find((g) => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
+        const liveGoalRun = findLiveGoalRunByGoalID(goalID)
+        if (liveGoalRun) {
+          return (
+            `Error: modify_goal refused because goal ${goalID} already has live goal_run ${liveGoalRun.id} ` +
+            `(status=${liveGoalRun.status}, session ${liveGoalRun.session_id ?? "n/a"}). ` +
+            `Wait for terminal refill evidence or cancel the live attempt before changing the goal contract.`
+          )
+        }
         const liveOwner = findLiveBuildOwnershipByGoal({ taskID, goalID })
         if (liveOwner) {
           return (
@@ -5175,7 +6307,7 @@ export function createOrchestratorTools(input: {
       }),
       execute: async ({ scope }) => {
         const task = requireTask(taskID)
-        const sections: string[] = []
+        const output = createReadContextOutput()
         const autoIteration = (await EngineConfig.get()).auto_iteration === true
         // Source-level caps on read_context output. Rationale: this tool is
         // called every orchestrator turn; tool results live forever in session
@@ -5185,27 +6317,43 @@ export function createOrchestratorTools(input: {
         // Caps below preserve the LATEST state per goal rather than history.
         // The decision-log cap is the shared DECISION_LOG_PROMPT_LIMIT (single
         // source — see decision-log/index.ts), consumed at the call site below.
-        const EVAL_CHECK_EVIDENCE_CAP = 200
-
         if (scope === "goals" || scope === "all") {
           const desc = await describeTask(taskID)
           const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals, { autoIteration })
           if (closureLines.length > 0) {
-            sections.push(closureLines.join("\n"))
+            output.add(closureLines.join("\n"), {
+              pointer: "read_context scope=goals",
+              sectionCap: READ_CONTEXT_CLOSURE_CHAR_CAP,
+            })
           }
           const terminalGoalRefillLines = renderTerminalGoalRefillNotifications(desc.recent_terminal_goal_refills)
           if (terminalGoalRefillLines.length > 0) {
-            sections.push(terminalGoalRefillLines.join("\n"))
+            output.add(terminalGoalRefillLines.join("\n"), {
+              pointer: "read_context scope=goals terminal refill facts",
+              sectionCap: READ_CONTEXT_REFILL_FACTS_CHAR_CAP,
+            })
           }
           if (desc.goals.length === 0) {
-            sections.push("## Goals (none authored yet)")
+            output.add("## Goals (none authored yet)", { pointer: "read_context scope=goals" })
           } else {
-            sections.push(`## Goals (${desc.goals.length})`)
+            output.add(`## Goals (${desc.goals.length})`, { pointer: "read_context scope=goals" })
             if (desc.active_bootstrap_goal_id) {
-              sections.push(`Bootstrap-first goal: ${desc.active_bootstrap_goal_id}`)
+              output.add(`Bootstrap-first goal: ${desc.active_bootstrap_goal_id}`, {
+                pointer: "read_context scope=goals",
+              })
             }
+            let omittedGoals = 0
             for (const g of desc.goals) {
-              sections.push(renderGoal(g).join("\n"))
+              const added = output.add(renderGoal(g).join("\n"), {
+                pointer: `read_context scope=goals goal=${g.id}`,
+                sectionCap: READ_CONTEXT_GOAL_BLOCK_CHAR_CAP,
+              })
+              if (!added) omittedGoals += 1
+            }
+            if (omittedGoals > 0) {
+              output.add(`- ${omittedGoals} goal blocks omitted by read_context output budget.`, {
+                pointer: "read_context scope=goals",
+              })
             }
           }
         }
@@ -5234,16 +6382,39 @@ export function createOrchestratorTools(input: {
               omitted > 0
                 ? `\n## Evaluations (latest ${latestPerGoal.length} of ${evals.length}; ${omitted} superseded omitted)`
                 : `\n## Evaluations (${latestPerGoal.length})`
-            sections.push(header)
+            output.add(header, { pointer: "read_context scope=evaluations" })
+            let omittedEvals = 0
             for (const e of latestPerGoal) {
-              sections.push(`- [${e.verdict}] ${e.summary}`)
+              const lines = [
+                `- [${e.verdict}] ${readContextCompactInline(
+                  e.summary,
+                  "read_context scope=evaluations",
+                  READ_CONTEXT_EVALUATION_SUMMARY_CHAR_CAP,
+                )}`,
+              ]
               const checks = e.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
               if (checks) {
                 for (const c of checks.slice(0, 5)) {
-                  const evidence = c.evidence ? c.evidence.slice(0, EVAL_CHECK_EVIDENCE_CAP) : ""
-                  sections.push(`  - ${c.name}: ${c.status}${evidence ? ` — ${evidence}` : ""}`)
+                  const evidence = c.evidence
+                    ? readContextCompactInline(
+                        c.evidence,
+                        "read_context scope=evaluations",
+                        READ_CONTEXT_EVALUATION_CHECK_EVIDENCE_CHAR_CAP,
+                      )
+                    : ""
+                  lines.push(`  - ${c.name}: ${c.status}${evidence ? ` — ${evidence}` : ""}`)
                 }
               }
+              const added = output.add(lines.join("\n"), {
+                pointer: "read_context scope=evaluations",
+                sectionCap: READ_CONTEXT_EVALUATION_BLOCK_CHAR_CAP,
+              })
+              if (!added) omittedEvals += 1
+            }
+            if (omittedEvals > 0) {
+              output.add(`- ${omittedEvals} evaluation blocks omitted by read_context output budget.`, {
+                pointer: "read_context scope=evaluations",
+              })
             }
           }
         }
@@ -5256,13 +6427,17 @@ export function createOrchestratorTools(input: {
           const { findLatestIntegrityArtifactMissingStatus } = await import("@/engine/store")
           const missingStatus = findLatestIntegrityArtifactMissingStatus(taskID)
           if (missingStatus) {
-            sections.push(
+            output.add(
               `\n## Integrity artifact status`,
               `- session: ${missingStatus.sessionID}`,
               `- status: artifact_missing`,
               `- recorded_at: ${new Date(missingStatus.emittedAt).toISOString()}`,
               `- detail: the completed integrity session has no durable integrity_attempt artifact yet; the prior artifact is not the current result.`,
               missingStatus.error ? `- error: ${missingStatus.error}` : "",
+              {
+                pointer: "read_context scope=integrity_history artifact status",
+                sectionCap: READ_CONTEXT_ARTIFACT_STATUS_CHAR_CAP,
+              },
             )
           }
           if (activeSpec) {
@@ -5278,13 +6453,33 @@ export function createOrchestratorTools(input: {
               const latest = history.attempts.at(-1)
               if (scope === "all" && latest) {
                 const teamReportMarkdown = latest.teamReportMarkdown ?? ""
-                sections.push(
+                const latestLines = [
                   `\n## Integrity (latest)`,
                   `- verdict: ${latest.verdict ?? "unknown"} — issues=${latest.blockingFindings.length} corrections=${latest.requiredRepairs.length} missing=${latest.unresolvedDisagreements.length} (spec snapshot lineage)`,
-                )
-                if (teamReportMarkdown) sections.push("", teamReportMarkdown)
+                ]
+                if (teamReportMarkdown) {
+                  latestLines.push(
+                    "",
+                    "Team report excerpt:",
+                    readContextTrimText(
+                      teamReportMarkdown,
+                      `integrity_attempt artifact ${latest.artifactID}`,
+                      READ_CONTEXT_INTEGRITY_REPORT_CHAR_CAP,
+                    ),
+                  )
+                }
+                output.add(latestLines.join("\n"), {
+                  pointer: `integrity_attempt artifact ${latest.artifactID}`,
+                  sectionCap: READ_CONTEXT_INTEGRITY_LATEST_CHAR_CAP,
+                })
               }
-              sections.push(`\n${renderIntegrityRootHistoryBlock(history)}`)
+              output.add(renderIntegrityRootHistoryBlock(history), {
+                pointer: "read_context scope=integrity_history",
+                sectionCap:
+                  scope === "integrity_history"
+                    ? READ_CONTEXT_INTEGRITY_HISTORY_DEDICATED_CHAR_CAP
+                    : READ_CONTEXT_INTEGRITY_HISTORY_ALL_CHAR_CAP,
+              })
             }
           }
         }
@@ -5301,27 +6496,41 @@ export function createOrchestratorTools(input: {
           // signal that drives architect re-run / fail_task per
           // orchestrator-core.txt's repair ladder).
           const reviewSection = log.phasePromptSection("review", "Architecture review history", { limit: 5 })
-          if (reviewSection) sections.push(`\n${reviewSection}`)
+          if (reviewSection)
+            output.add(reviewSection, {
+              pointer: "read_context scope=decisions review history",
+              sectionCap: READ_CONTEXT_DECISION_REVIEW_CHAR_CAP,
+            })
           const section = log.toPromptSection({
             limit: DECISION_LOG_PROMPT_LIMIT,
             excludePhases: ["review"],
           })
-          if (section) sections.push(`\n${section}`)
+          if (section)
+            output.add(section, {
+              pointer: "read_context scope=decisions",
+              sectionCap: READ_CONTEXT_DECISION_GENERAL_CHAR_CAP,
+            })
         }
 
         if (scope === "all") {
-          await appendResearchBriefContext(
-            sections,
-            "Deep Research Brief",
-            findLatestResearchBriefArtifact(taskID),
-            task.request,
-          )
-          await appendResearchBriefContext(
-            sections,
-            "Frontend Research Brief",
-            findLatestFrontendResearchBriefArtifact(taskID),
-            task.request,
-          )
+          const researchBriefs = listResearchBriefArtifacts(taskID).slice(0, 4)
+          for (const [index, artifact] of researchBriefs.entries()) {
+            await appendResearchBriefContext(
+              output,
+              researchBriefs.length === 1 ? "Deep Research Brief" : `Deep Research Brief ${index + 1}/${researchBriefs.length}`,
+              artifact,
+              task.request,
+            )
+          }
+          const frontendResearchBriefs = listFrontendResearchBriefArtifacts(taskID).slice(0, 4)
+          for (const [index, artifact] of frontendResearchBriefs.entries()) {
+            await appendResearchBriefContext(
+              output,
+              `Frontend Research Brief ${index + 1}/${frontendResearchBriefs.length}`,
+              artifact,
+              task.request,
+            )
+          }
 
           // Fact-check attempts (one-line per row) — specs/fact-check-agent-2026-05-25.md
           // §6.1.2 step 7. Integrity replay reads this same artifact stream
@@ -5338,15 +6547,19 @@ export function createOrchestratorTools(input: {
               omitted > 0
                 ? `\n## Fact-check attempts (latest ${latest.length} of ${fcRows.length}; ${omitted} older omitted)`
                 : `\n## Fact-check attempts (${latest.length})`
-            sections.push(header)
+            output.add(header, { pointer: "read_context scope=all fact-check attempts" })
             for (const row of latest) {
               const r = row.payload.report
-              sections.push(
+              output.add(
                 `- [${r.overall_verdict}] target=\`${row.payload.target_agent}\` ` +
                   `session=\`${row.payload.target_session_id.slice(0, 16)}…\` ` +
                   `verified=${r.verified.length} corrected=${r.corrected.length} ` +
                   `unresolved=${r.unresolved.length} ` +
                   `(${row.payload.outcome})`,
+                {
+                  pointer: "read_context scope=all fact-check attempts",
+                  sectionCap: READ_CONTEXT_FACT_CHECK_ATTEMPT_CHAR_CAP,
+                },
               )
             }
           }
@@ -5373,16 +6586,43 @@ export function createOrchestratorTools(input: {
             deliveries.push({ goalRunID: gr.id, goalID: gr.goal_id, status: gr.status, acceptance })
           }
           if (deliveries.length > 0) {
-            sections.push(`\n## Deliveries (${deliveries.length} — latest per goal)`)
+            output.add(`\n## Deliveries (${deliveries.length} — latest per goal)`, {
+              pointer: "read_context scope=deliveries",
+            })
+            let omittedDeliveries = 0
             for (const d of deliveries) {
               const diffs = (d.acceptance!.result as any)?.diffs as Array<{ file: string }> | undefined
-              sections.push(`- goal_run ${d.goalRunID} [${d.status}]: ${d.acceptance!.summary}`)
-              if (diffs?.length) sections.push(`  files: ${diffs.map((f) => f.file).join(", ")}`)
+              const lines = [
+                `- goal_run ${d.goalRunID} [${d.status}]: ${readContextCompactInline(
+                  d.acceptance!.summary,
+                  `acceptance for goal_run ${d.goalRunID}`,
+                  READ_CONTEXT_DELIVERY_SUMMARY_CHAR_CAP,
+                )}`,
+              ]
+              if (diffs?.length) {
+                lines.push(
+                  `  files: ${readContextCompactList(
+                    diffs.map((f) => f.file),
+                    `acceptance for goal_run ${d.goalRunID}`,
+                    { listCap: 12, itemCap: 180 },
+                  )}`,
+                )
+              }
+              const added = output.add(lines.join("\n"), {
+                pointer: `read_context scope=deliveries goal_run=${d.goalRunID}`,
+                sectionCap: READ_CONTEXT_DELIVERY_BLOCK_CHAR_CAP,
+              })
+              if (!added) omittedDeliveries += 1
+            }
+            if (omittedDeliveries > 0) {
+              output.add(`- ${omittedDeliveries} delivery blocks omitted by read_context output budget.`, {
+                pointer: "read_context scope=deliveries",
+              })
             }
           }
         }
 
-        const result = sections.length > 0 ? sections.join("\n") : "No context available yet."
+        const result = output.result()
         // Telemetry: read_context is structurally bounded by the per-section
         // caps above, but if a future change blows through the budget the
         // protocol layer surfaces it instead of letting it slip silently.
@@ -5476,7 +6716,7 @@ export function createOrchestratorTools(input: {
     steer_subagent: tool({
       description:
         "Send a scoped steering message to a child agent session and wake that session, OR — for a live build child — return a read-only activity snapshot (status, last_activity_at, age_ms, ownership when available). " +
-        "Build sessions cannot accept injected steering; the snapshot lets you decide between waiting and cancel_subagent mode='recover_stale'. " +
+        "Build sessions cannot accept injected steering; the snapshot lets you distinguish healthy live progress from cancel_subagent mode='recover_stale'. Healthy live build progress means park this orchestrator wake, not wait-tool polling. " +
         "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly.",
       inputSchema: z
         .object({
@@ -5538,7 +6778,7 @@ export function createOrchestratorTools(input: {
               `  owner_ownership=${liveOwner?.ownershipID ?? "n/a"}`,
               `  goal_run=${target.goalRunID ?? liveOwner?.payload.goal_run_id ?? liveGoalRun?.id ?? "n/a"}`,
               `Reason recorded: ${reason}`,
-              'Note: build sessions cannot accept injected steering messages. To act on this snapshot, either keep waiting, or if age_ms is large AND status indicates no progress, call cancel_subagent with mode="recover_stale".',
+              'Note: build sessions cannot accept injected steering messages. If this snapshot shows healthy live progress, stop this wake and let terminal goal refill facts wake the next decision; do not call wait to poll it. If age_ms is large AND status indicates no progress, call cancel_subagent with mode="recover_stale".',
             ].join("\n")
           }
           return (
@@ -5653,7 +6893,7 @@ export function createOrchestratorTools(input: {
             if (currentStatus.type === "streaming" || currentStatus.type === "retry") {
               return (
                 `Error: cancel_subagent refused stale recovery because build session ${target.sessionID} is ${currentStatus.type}. ` +
-                "Wait for it to settle or use mode='cancel' for explicit operator cancellation."
+                "Leave the live child running and return to this orchestration only after terminal refill or operator evidence, or use mode='cancel' for explicit operator cancellation."
               )
             }
           }
@@ -6107,53 +7347,55 @@ export function createOrchestratorTools(input: {
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
         "per-goal build → integrity (the pipeline workflow). Frontend evidence tools are available candidates " +
         "when the full task context needs visual/reference material for build dispatch.",
-      inputSchema: z.object({
-        request: z
-          .string()
-          .optional()
-          .describe(
-            "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt, including dependency materialization, worktree MERGING resolution, package/script/toolchain fixes, port selection, or product behavior fixes proven by verification. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
-          ),
-        reason: z
-          .string()
-          .describe(
-            "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
-          ),
-        goalID: z
-          .string()
-          .optional()
-          .describe(
-            "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
-          ),
-        directBuildIntent: z
-          .literal("modify_files")
-          .optional()
-          .describe(
-            "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
-          ),
-        freshContext: z
-          .boolean()
-          .optional()
-          .describe(
-            "Optional escape hatch for context-wedged per-goal retries. When true AND `goalID` is set, " +
-              "skip the prior goal_run.session_id reuse and dispatch this build into a brand-new build session " +
-              "with zero accumulated context. Use ONLY after a same-context retry approach is demonstrably " +
-              "stuck - typical evidence: (a) the goal has already failed >=2 times on this contract with the " +
-              "same root error class and `read_context` shows the build session near or over its context cap; " +
-              "(b) `compaction` returned `nothing-to-compress` or `post-compaction-still-over`; (c) the prior " +
-              "session_id is unrecoverable (deletion / DB lineage gap). Burns the prior session's reasoning " +
-              "history - the goal contract (objective / acceptance_specs / owned_paths) is preserved by the " +
-              "engine_goal row, and you MUST restate every concrete lesson the prior attempts produced inside " +
-              "`request`, because the new session will not see them. Has no effect on task-level direct builds " +
-              "(no goalID); the host ignores it in that path.",
-          ),
-        userConfirmedStaleIntegrityData: z
-          .boolean()
-          .optional()
-          .describe(
-            "Set true only after the user explicitly confirmed continuing while the latest completed integrity session is status=artifact_missing and its durable integrity_attempt artifact could not be recovered.",
-          ),
-      }),
+      inputSchema: z
+        .object({
+          request: z
+            .string()
+            .optional()
+            .describe(
+              "For per-goal builds: optional retry/rework guidance for THIS attempt, rendered as a separate 'Retry Guidance From Orchestrator' section in the build prompt. Does NOT replace the goal's objective / acceptance_specs / owned_paths — populate freely whenever you have concrete advice for the next attempt, including dependency materialization, worktree MERGING resolution, package/script/toolchain fixes, port selection, or product behavior fixes proven by verification. For task-level direct builds (no goalID): required; include the user's request plus concise rejected acceptance details the build agent must address.",
+            ),
+          reason: z
+            .string()
+            .describe(
+              "One sentence explaining why this build is valid now: explicit kind=build, per-goal pipeline execution, post-acceptance whole-task rework, or a conscious direct-build decision for this workflow task.",
+            ),
+          goalID: z
+            .string()
+            .optional()
+            .describe(
+              "Optional goal id this build is scoped to. Set when build is invoked as a per-goal worker inside the pipeline workflow. Omit for task-level direct builds.",
+            ),
+          directBuildIntent: z
+            .literal("modify_files")
+            .optional()
+            .describe(
+              "Required for task-level direct builds on kind=workflow tasks. The only valid direct intent is modify_files: a scoped implementation/rework build. Build is not a repository investigation endpoint.",
+            ),
+          freshContext: z
+            .boolean()
+            .optional()
+            .describe(
+              "Optional escape hatch for context-wedged per-goal retries. When true AND `goalID` is set, " +
+                "skip the prior goal_run.session_id reuse and dispatch this build into a brand-new build session " +
+                "with zero accumulated context. Use ONLY after a same-context retry approach is demonstrably " +
+                "stuck - typical evidence: (a) the goal has already failed >=2 times on this contract with the " +
+                "same root error class and `read_context` shows the build session near or over its context cap; " +
+                "(b) `compaction` returned `nothing-to-compress` or `post-compaction-still-over`; (c) the prior " +
+                "session_id is unrecoverable (deletion / DB lineage gap). Burns the prior session's reasoning " +
+                "history - the goal contract (objective / acceptance_specs / owned_paths) is preserved by the " +
+                "engine_goal row, and you MUST restate every concrete lesson the prior attempts produced inside " +
+                "`request`, because the new session will not see them. Has no effect on task-level direct builds " +
+                "(no goalID); the host ignores it in that path.",
+            ),
+          userConfirmedStaleIntegrityData: z
+            .boolean()
+            .optional()
+            .describe(
+              "Set true only after the user explicitly confirmed continuing while the latest completed integrity session is status=artifact_missing and its durable integrity_attempt artifact could not be recovered.",
+            ),
+        })
+        .strict(),
       execute: async (
         { request = "", reason, goalID, directBuildIntent, freshContext = false, userConfirmedStaleIntegrityData },
         options,
@@ -7091,6 +8333,7 @@ export function createOrchestratorTools(input: {
           // state instead of orphaning at attempt-running.
           let goalRunInvalidatedLine = ""
           let goalRunInvalidated = false
+          let goalRunFinalizationFailedLine = ""
           if (attachedGoalID && goalRunID) {
             try {
               const { finalizeBuildAttempt } = await import("@/engine/persist")
@@ -7149,16 +8392,33 @@ export function createOrchestratorTools(input: {
                 })
               }
             } catch (persistErr) {
-              // Failing to record the attempt does NOT abort the build —
-              // the LLM still gets the tool_result text. Log loudly so
-              // it's visible during benchmarks; if persists are silently
-              // dropped the orchestrator will see the goal as still pending
-              // on its next wake and decide what to do.
+              const persistMessage = persistErr instanceof Error ? persistErr.message : String(persistErr)
               log.error("build: finalizeBuildAttempt failed", {
                 taskID,
                 goalID: attachedGoalID,
-                error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+                goalRunID,
+                error: persistMessage,
               })
+              const currentGoalRun = findGoalRun(goalRunID)
+              if (currentGoalRun && isLiveGoalRunStatus(currentGoalRun.status)) {
+                const error = `build finalization failed: ${persistMessage}`
+                updateGoalRun(goalRunID, {
+                  status: "failed",
+                  error,
+                  time_completed: Date.now(),
+                })
+                goalRunFinalizationFailedLine =
+                  `\n- build_finalization_failed: goal_run ${goalRunID} was marked failed because terminal persistence failed: ` +
+                  `${persistMessage}`
+                if (buildOutcome.kind === "ok") {
+                  buildOutcome.result.result = {
+                    ...buildOutcome.result.result,
+                    status: "failed",
+                    error,
+                    summary: `${buildOutcome.result.result.summary}\n\nGoal run finalization failed after the build report returned.`,
+                  }
+                }
+              }
             }
           }
 
@@ -7296,7 +8556,7 @@ export function createOrchestratorTools(input: {
             `### Build report\n` +
             `- summary: ${result.summary}\n` +
             `- files_changed:\n${fileLines}\n` +
-            `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}\n` +
+            `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}${goalRunFinalizationFailedLine}\n` +
             `- repair_report:\n${repairReportLines}\n` +
             `- tests:\n${testLines}` +
             `${factBlock}\n\n` +
@@ -7337,7 +8597,8 @@ export function createOrchestratorTools(input: {
               `- worktreeDir: ${started.worktreeDir ?? "n/a"}\n` +
               `- worktreeBranch: ${started.worktreeBranch ?? "n/a"}\n\n` +
               `### Next step\n` +
-              `This build is now running asynchronously. Do not wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
+              `This build is now running asynchronously. Do not call wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
+              `If no next dispatchable, failed, or refill facts exist, stop this wake; terminal goal refill will wake the next decision. ` +
               `When a goal reaches terminal status, read_context will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from those facts. ` +
               `Call integrity only after all blocking builds are terminal.`
             )
@@ -7496,7 +8757,7 @@ export function createOrchestratorTools(input: {
     wait: tool({
       description:
         WaitToolDescription +
-        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or `read_context` (refreshing task evidence). After wait returns, re-read evidence with `read_context` before deciding the next dispatch.",
+        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or `read_context` (refreshing task evidence). Never use wait for live build completion, live sibling goal completion, or terminal refill polling. After wait returns, re-read evidence with `read_context` before deciding the next dispatch.",
       inputSchema: WaitToolParameters,
       execute: async ({ duration_ms, reason }) => {
         const result = await executeWait({

@@ -2693,31 +2693,19 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).not.toContain(".workspace-toggle")
   })
 
-  test("right-panel empty hint density is canonical, not theme scoped", () => {
+  test("empty-state surface keeps live card selectors without retired right-panel ids", () => {
     // Canonical extracted to surfaces/empty-state.css 2026-05-04.
     const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/empty-state.css")))
+    const indexHtml = readText(join(OVERLAY_ROOT, "src/index.html"))
 
-    for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1] ?? ""
-      const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
-      const hasRightPanelEmptyHint = /#solidChangesPanel\s*>\s*\.empty-hint\b/.test(selector)
-      if (!isThemeSelector || !hasRightPanelEmptyHint) continue
-
-      expect(body).not.toMatch(/\b(?:gap|padding(?:-[a-z]+)?|border(?:-[a-z]+)?|border-radius)\s*:/)
-    }
-
+    expect(indexHtml).toContain("solidFileChangesMount")
+    expect(indexHtml).not.toContain("solidChangesPanel")
+    expect(styles).not.toContain("#solidChangesPanel")
+    expect(styles).toContain(".sidebar-list-cluster > .empty-hint")
+    expect(styles).toContain(".diff-preview-empty .empty-hint")
+    expect(styles).toContain(".empty-hint--card")
     expect(styles).not.toMatch(new RegExp("(?:^|[\\s,])\\.section" + "-body\\s*>"))
     expect(styles).not.toMatch(/\.oc-section__body\s*>\s*\.empty-hint/)
-    const body = soloRuleBody(styles, "#solidChangesPanel > .empty-hint")
-    for (const declaration of [
-      "gap: calc(4px * var(--ui-scale))",
-      "padding: calc(6px * var(--ui-scale))",
-      "border: 0",
-      "border-radius: var(--oc-radius-soft)",
-    ]) {
-      expect(body).toContain(declaration)
-    }
   })
 
   test("conversation agent rail is canonical, not theme scoped", () => {

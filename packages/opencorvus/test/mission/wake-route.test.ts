@@ -226,14 +226,14 @@ describe("POST /mission/wake — happy path", () => {
         const res = await post("/mission/wake", tmp.path, {
           missionID: "profiled-mission",
           text: "go",
-          promptProfile: "backend",
+          promptProfile: "testing",
         })
         expect(res.status).toBe(200)
         const body = (await res.json()) as { sessionID: string }
         const session = await Session.get(body.sessionID)
         const overlay = (session.metadata as { configOverlay?: { prompt_profile?: { active?: string } } } | undefined)
           ?.configOverlay
-        expect(overlay?.prompt_profile?.active).toBe("backend")
+        expect(overlay?.prompt_profile?.active).toBe("testing")
         expect(wakeSpy).toHaveBeenCalledTimes(1)
         expect(wakeSpy.mock.calls[0]?.[0]?.sessionID).toBe(body.sessionID)
       },

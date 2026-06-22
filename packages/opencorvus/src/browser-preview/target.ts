@@ -49,23 +49,16 @@ export async function resolveBrowserPreviewTarget(input: {
   const taskID = input.taskID.trim()
   const persistedTargets = findRecentBrowserPreviewTargets(taskID)
   if (persistedTargets.length === 0) return missingBrowserPreviewTarget({ projectRoot, taskID })
-  const assessed = await assessBrowserPreviewTargets(persistedTargets, input.isVisible)
   const selected = persistedTargets[0]!
-  const selectedAssessment = assessed.find((item) => item.target.id === selected.id)
-  const unreachableDiagnostics = assessed
-    .filter((item) => !item.visible)
-    .map((item) => `Saved browser preview target is unreachable: ${item.target.url}`)
-  if (!selectedAssessment?.visible) {
+  const selectedVisible = await isSelectedBrowserPreviewTargetVisible(selected, input.isVisible)
+  if (!selectedVisible) {
     return failedBrowserPreviewTarget({
       projectRoot,
       taskID,
       id: selected.id,
       url: selected.url,
       source: selected.source,
-      diagnostics:
-        unreachableDiagnostics.length > 0
-          ? unreachableDiagnostics
-          : ["Saved browser preview targets are not reachable."],
+      diagnostics: [`Saved browser preview target is unreachable: ${selected.url}`],
       candidates: browserPreviewCandidates(persistedTargets, selected.id),
     })
   }
@@ -75,7 +68,7 @@ export async function resolveBrowserPreviewTarget(input: {
     id: selected.id,
     url: selected.url,
     candidates: browserPreviewCandidates(persistedTargets, selected.id),
-    diagnostics: [`Using task browser preview target ${selected.id}.`, ...unreachableDiagnostics],
+    diagnostics: [`Using task browser preview target ${selected.id}.`],
     latestEvidenceIDs: await latestBrowserPreviewEvidenceIDs({ projectRoot, taskID, targetID: selected.id }),
   })
 }
@@ -167,21 +160,12 @@ function normalizeSchemeLessLoopbackUrl(text: string): string | undefined {
   return `http://${match[1]}:${port}${match[3] ?? "/"}`
 }
 
-async function assessBrowserPreviewTargets(
-  targets: PersistedBrowserPreviewTarget[],
+async function isSelectedBrowserPreviewTargetVisible(
+  target: PersistedBrowserPreviewTarget,
   isVisible: ((url: string) => Promise<boolean>) | undefined,
-): Promise<Array<{ target: PersistedBrowserPreviewTarget; visible: boolean }>> {
+): Promise<boolean> {
   const probe = isVisible ?? ((url: string) => isBrowserPreviewTargetVisible({ url }))
-  const result: Array<{ target: PersistedBrowserPreviewTarget; visible: boolean }> = []
-  const concurrency = 4
-  for (let index = 0; index < targets.length; index += concurrency) {
-    const batch = targets.slice(index, index + concurrency)
-    const visible = await Promise.all(batch.map((target) => probe(target.url)))
-    for (let offset = 0; offset < batch.length; offset++) {
-      result.push({ target: batch[offset], visible: visible[offset] === true })
-    }
-  }
-  return result
+  return (await probe(target.url)) === true
 }
 
 function browserPreviewCandidates(

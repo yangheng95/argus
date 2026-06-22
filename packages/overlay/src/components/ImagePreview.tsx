@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
+import type { JSX } from "solid-js"
 import { closeImagePreview, imagePreviewState, openImagePreview } from "../services/image-preview"
 import {
   calculateImagePreviewFitScale,
@@ -9,6 +10,7 @@ import {
 } from "../utils/image-preview-scale"
 import { imagePreviewTriggerClass, imagePreviewTriggerContract } from "../utils/image-preview-trigger"
 import { t } from "../utils/i18n"
+import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
@@ -33,6 +35,9 @@ type CopyFeedback = {
   key: ImageCopyFeedbackKey
 }
 
+type PreviewableImageAttributes = JSX.ImgHTMLAttributes<HTMLImageElement> &
+  Partial<Record<`data-${string}`, string | undefined>>
+
 class ImageCopyError extends Error {
   constructor(readonly key: ImageCopyFeedbackKey) {
     super(key)
@@ -40,11 +45,19 @@ class ImageCopyError extends Error {
   }
 }
 
-export function PreviewableImage(props: { src: string; alt?: string; triggerClass?: string; imageClass?: string }) {
+export function PreviewableImage(props: {
+  src: string
+  alt?: string
+  triggerClass?: string
+  imageClass?: string
+  imageDataUI?: string
+  imageAttributes?: PreviewableImageAttributes
+}) {
   const alt = () => props.alt || ""
   const trigger = createMemo(() => imagePreviewTriggerContract({ src: props.src, alt: alt() }))
   const triggerClass = () => imagePreviewTriggerClass(props.triggerClass)
   const imageClass = () => ["md-img", props.imageClass].filter(Boolean).join(" ")
+  const imageAttributes = () => props.imageAttributes ?? {}
 
   return (
     <Button
@@ -65,7 +78,14 @@ export function PreviewableImage(props: { src: string; alt?: string; triggerClas
         openImagePreview(props.src, alt())
       }}
     >
-      <img class={imageClass()} src={props.src} alt={alt()} loading="lazy" />
+      <img
+        {...imageAttributes()}
+        class={imageClass()}
+        src={props.src}
+        alt={alt()}
+        loading="lazy"
+        data-ui={props.imageDataUI}
+      />
     </Button>
   )
 }
@@ -85,6 +105,10 @@ export function ImagePreviewHost() {
   let bodyRef: HTMLDivElement | undefined
   let imageRef: HTMLImageElement | undefined
   let resizeObserver: ResizeObserver | undefined
+  const applyOpenScaleOnFrame = createAnimationFrameScheduler(() => {
+    const openScale = previewOpenScale()
+    if (imagePreviewState().open && imageSize().width > 0 && scale() < openScale) setScale(openScale)
+  })
 
   createEffect(() => {
     const state = imagePreviewState()
@@ -103,14 +127,14 @@ export function ImagePreviewHost() {
     const body = bodyRef
     if (!body) return
     resizeObserver?.disconnect()
-    resizeObserver = new ResizeObserver(() => {
-      const openScale = previewOpenScale()
-      if (imagePreviewState().open && imageSize().width > 0 && scale() < openScale) setScale(openScale)
-    })
+    resizeObserver = new ResizeObserver(applyOpenScaleOnFrame.schedule)
     resizeObserver.observe(body)
   })
 
-  onCleanup(() => resizeObserver?.disconnect())
+  onCleanup(() => {
+    resizeObserver?.disconnect()
+    applyOpenScaleOnFrame.cancel()
+  })
 
   const renderedSize = createMemo(() => {
     const size = imageSize()

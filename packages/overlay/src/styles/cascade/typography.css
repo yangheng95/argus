@@ -20,14 +20,6 @@
   line-height: 1.2;
 }
 
-.dialog-subtitle {
-  color: var(--text-strong);
-  font-size: var(--ui-font-meta);
-  font-weight: var(--ui-font-weight-strong);
-  letter-spacing: 0.03em;
-  margin-top: var(--ui-gap-xs);
-}
-
 .field-label,
 .knowledge-item-meta,
 .config-status-box {

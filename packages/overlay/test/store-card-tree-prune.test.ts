@@ -30,12 +30,36 @@ test("pruneCardsAfterCursor drops dangling childIDs from surviving parent cards"
       title: "Question",
       role: "assistant",
       time: 200,
-      parts: [{ type: "interaction-question", prompt: "Need input" }],
+      parts: [
+        {
+          id: "old-file",
+          type: "file",
+          messageID: "old-message",
+          url: "/attachment/project/old.png",
+          mime: "image/png",
+        },
+      ],
     })
 
     setCardTreeStore("order", [sessionID])
     setCardTreeStore("cards", {
-      [sessionID]: session,
+      [sessionID]: {
+        ...session,
+        subtreeScreenshotItems: [
+          {
+            id: "file:old-message:old-file",
+            role: "assistant",
+            src: "/attachment/project/old.png",
+            alt: "old.png",
+            title: "old.png",
+            detail: "image/png",
+            time: 200,
+            messageID: "old-message",
+            partID: "old-file",
+            source: "file",
+          },
+        ],
+      },
       [interactionID]: interaction,
     })
     const before = cardTreeStore.visibleVersion
@@ -45,6 +69,7 @@ test("pruneCardsAfterCursor drops dangling childIDs from surviving parent cards"
     expect(cardTreeStore.order).toEqual([sessionID])
     expect(cardTreeStore.cards[interactionID]).toBeUndefined()
     expect(cardTreeStore.cards[sessionID]?.childIDs).toEqual([])
+    expect(cardTreeStore.cards[sessionID]?.subtreeScreenshotItems).toEqual([])
     expect(cardTreeStore.visibleVersion).toBeGreaterThan(before)
   } finally {
     resetWriter()

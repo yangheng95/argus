@@ -47,6 +47,9 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("visual_baseline_allowed")
     expect(prompt).toContain("`frontend_project.role=visual_baseline_input`")
     expect(prompt).toContain("maintainable_replacement_required")
+    expect(prompt).toContain("implementation_phase_outcomes")
+    expect(prompt).toContain("evidence_lock")
+    expect(prompt).toContain("runtime_visual_verification")
     expect(prompt).toContain("Pre-selection browsing is only for choosing the next source region")
     expect(prompt).toContain("The candidate component read is the last source component read before selection")
     expect(prompt).toContain("reading a second `src/components/source-dom/*` file")
@@ -201,12 +204,17 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "frontend_design's first workflow deliverable is a source-editable static HTML/CSS visual skeleton",
     )
-    expect(prompt).toContain("Report it as `submit_frontend_template.frontend_project.role=visual_baseline_input`")
+    expect(prompt).toContain("Report visual-only work as `submit_frontend_template.frontend_project.role=visual_baseline_input`")
+    expect(prompt).toContain("For production/component-system tasks, set `final_acceptance_mode=maintainable_replacement_required`")
+    expect(prompt).toContain("submit `implementation_phase_outcomes`")
+    expect(prompt).toContain("package.json or source imports prove it")
     expect(prompt).toContain("not the implementation target or acceptance app root")
     expect(prompt).toContain(
       "if the skeleton conflicts with those artifacts or visible pixels, the original source evidence wins",
     )
-    expect(prompt).toContain("Later workflow stages transcribe this HTML skeleton into project source")
+    expect(prompt).toContain(
+      "Later workflow stages transcribe this HTML skeleton into project source only after the skeleton is screenshot-validated",
+    )
     expect(prompt).toContain("Do not pass `web-clone-target`")
     const webClonePaths = ProjectRuntimePaths.frontendDesignPaths("", "tsk_web_clone")
     const visualSkeleton = ProjectRuntimePaths.taskRelative("tsk_web_clone", "fd", "visual-html-skeleton")
@@ -275,7 +283,7 @@ describe("frontend-design prompt assembly", () => {
     )
     expect(prompt).toContain("Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence")
     expect(prompt).toContain(
-      "the skeleton is source-editable static HTML/CSS, not compiled output, not raw source DOM replay",
+      "A visual baseline must explicitly say it is source-editable static HTML/CSS, not compiled output, not raw source DOM replay",
     )
     expect(prompt).toContain(
       "Put later React/Vue/etc. project transcription constraints into `quality_project_contract`, not into the current skeleton source",
@@ -483,6 +491,47 @@ describe("frontend-design prompt assembly", () => {
       await Instance.disposeAll()
       await resetDatabase()
     }
+  }, 30_000)
+
+  test("task-scoped skeleton project tool rejects output outside frontend-design-skeleton evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_frontend_skeleton_output_guard"
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedFrontendPromptTask(taskID)
+        const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+        await writeAuditFixtureSourcePackage(path.dirname(paths.sourcePackageAbsolute))
+        const tools = createFrontendSkeletonProjectTool({ taskID })
+        const outsideName = `outside-${Date.now().toString(36)}`
+
+        await expect(
+          (tools.create_frontend_skeleton_project as any).execute(
+            {
+              outputDir: "web-clone-target",
+              overwrite: true,
+            },
+            {},
+          ),
+        ).rejects.toThrow("outputDir must be the frontend-design-skeleton evidence directory")
+        await expect(
+          (tools.create_frontend_skeleton_project as any).execute(
+            {
+              outputDir: `../${outsideName}`,
+              overwrite: true,
+            },
+            {},
+          ),
+        ).rejects.toThrow("outputDir must be the frontend-design-skeleton evidence directory")
+
+        expect(await Filesystem.exists(path.join(tmp.path, "web-clone-target"))).toBe(false)
+        expect(await Filesystem.exists(path.resolve(tmp.path, "..", outsideName))).toBe(false)
+
+        const result = await (tools.create_frontend_skeleton_project as any).execute({ overwrite: true }, {})
+        expect(result.metadata.outputDir).toBe(paths.skeletonProjectAbsolute)
+      },
+    })
   }, 30_000)
 
   test("frontend_design runtime tool groups are static and complete", async () => {
@@ -914,6 +963,7 @@ describe("frontend-design prompt assembly", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        seedFrontendPromptTask(taskID)
         const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
         await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-ir"), { recursive: true })
         await fs.mkdir(path.join(paths.sourcePackageAbsolute, "source-skeleton"), { recursive: true })

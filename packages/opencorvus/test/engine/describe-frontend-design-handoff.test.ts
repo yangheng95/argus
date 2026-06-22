@@ -123,9 +123,45 @@ describe("describe frontend_design handoff projection", () => {
     const markdown = renderTaskDescription(desc)
     expect(markdown).toContain("## Frontend Design Handoff")
     expect(markdown).toContain("- is_complete: false")
+    expect(markdown).toContain("- frontend_template_path:")
+    expect(markdown).not.toContain("- source_manifest_path:")
     expect(markdown).toContain("missing_completion_keys:")
     expect(markdown).toContain("frontend_template")
     expect(markdown).toContain("evidence_source_manifest")
     expect(markdown).toContain("Frontend design is partial durable task-scope evidence")
+  })
+
+  test("does not synthesize materialized paths from abort-only frontend_design evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { taskID } = seedTask("abort", tmp.path)
+    createDecisionLog(taskID).append({
+      phase: "frontend_design",
+      key: "abort_no_visual_input",
+      value:
+        "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
+      reason: "frontend_design pre-agent guard",
+    })
+
+    const desc = await Instance.provide({
+      directory: tmp.path,
+      fn: () => describeTask(taskID),
+    })
+    const handoff = desc.frontend_design
+    expect(handoff).toBeDefined()
+    expect(handoff?.is_complete).toBe(false)
+    expect(handoff?.has_public_report).toBe(false)
+    expect(handoff?.has_evidence_source_manifest).toBe(false)
+    expect(handoff?.frontend_template_path).toBeUndefined()
+    expect(handoff?.source_manifest_path).toBeUndefined()
+    expect(handoff?.present_keys).toContain("abort_no_visual_input")
+
+    const paths = ProjectRuntimePaths.frontendDesignPaths("", taskID)
+    const markdown = renderTaskDescription(desc)
+    expect(markdown).toContain("## Frontend Design Handoff")
+    expect(markdown).toContain("abort_no_visual_input")
+    expect(markdown).not.toContain("- frontend_template_path:")
+    expect(markdown).not.toContain("- source_manifest_path:")
+    expect(markdown).not.toContain(paths.templateRelative)
+    expect(markdown).not.toContain(paths.manifestRelative)
   })
 })

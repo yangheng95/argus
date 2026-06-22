@@ -52,10 +52,15 @@ describe("visual-qa context rendering", () => {
   })
 
   test("frontend-research context omits full research JSON and non-QA sections", () => {
-    const context = renderVisualQaFrontendResearchContext(validResearchBrief())
+    const context = renderVisualQaFrontendResearchContext({
+      artifactID: "art_frontend_page",
+      brief: validResearchBrief(),
+    })
 
     expect(context).toContain("Frontend Research Pointers")
     expect(context).toContain("https://example.com/page")
+    expect(context).toContain("artifact_id: art_frontend_page")
+    expect(context).toContain("frontend_research:art_frontend_page:ev_ref")
     expect(context).toContain("functional_surfaces")
     expect(context).toContain("Primary search")
     expect(context).toContain("visual_layout")
@@ -69,6 +74,35 @@ describe("visual-qa context rendering", () => {
     expect(context).not.toContain("SHOULD_NOT_APPEAR_RESEARCH_FACT")
     expect(context).not.toContain("SHOULD_NOT_APPEAR_OPEN_QUESTION")
     expect(context).not.toContain('"webpage_contract"')
+  })
+
+  test("frontend-research context includes multiple page briefs", () => {
+    const context = renderVisualQaFrontendResearchContext([
+      { artifactID: "art_frontend_first", brief: validResearchBrief("https://example.com/first") },
+      { artifactID: "art_frontend_second", brief: validResearchBrief("https://example.com/second") },
+    ])
+
+    expect(context).toContain("https://example.com/first")
+    expect(context).toContain("https://example.com/second")
+    expect(context).toContain("frontend_research:art_frontend_first:ev_ref")
+    expect(context).toContain("frontend_research:art_frontend_second:ev_ref")
+    expect(context.match(/functional_surfaces/g)?.length).toBe(2)
+    expect(context).not.toContain("```json")
+    expect(context).not.toContain("SHOULD_NOT_APPEAR_RESEARCH_FACT")
+  })
+
+  test("frontend-research context preserves artifact-qualified evidence refs across page briefs", () => {
+    const context = renderVisualQaFrontendResearchContext([
+      { artifactID: "art_frontend_first", brief: validResearchBrief("https://example.com/first") },
+      { artifactID: "art_frontend_second", brief: validResearchBrief("https://example.com/second") },
+    ])
+
+    expect(context).toContain("artifact_id: art_frontend_first")
+    expect(context).toContain("artifact_id: art_frontend_second")
+    expect(context).toContain("frontend_research:art_frontend_first:ev_ref")
+    expect(context).toContain("frontend_research:art_frontend_second:ev_ref")
+    expect(context).not.toContain("reference_image_evidence_ids: ev_ref")
+    expect(context).not.toContain("evidence=ev_ref")
   })
 
   test("build evidence context keeps summaries and changed files instead of diffs", () => {
@@ -145,7 +179,7 @@ describe("visual-qa context rendering", () => {
   })
 })
 
-function validResearchBrief(): ResearchBrief {
+function validResearchBrief(sourceURL = "https://example.com/page"): ResearchBrief {
   return {
     metadata: {
       research_session_id: "ses_research",
@@ -186,7 +220,7 @@ function validResearchBrief(): ResearchBrief {
     constraints: [],
     document_outline: [],
     webpage_contract: {
-      source_url: "https://example.com/page",
+      source_url: sourceURL,
       reference_image_evidence_ids: ["ev_ref"],
       functional_surfaces: [
         {

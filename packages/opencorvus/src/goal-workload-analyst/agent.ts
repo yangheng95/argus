@@ -13,6 +13,7 @@
  * whole point (spec §0).
  */
 import { runAgentSession } from "@/agent/runner"
+import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
@@ -35,6 +36,7 @@ export namespace GoalWorkloadAnalystAgent {
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
     onSessionCreated?: (sessionID: string) => void
+    continuation?: AgentSessionContinuation
   }
 
   export interface AnalyzeResult {
@@ -67,6 +69,7 @@ export namespace GoalWorkloadAnalystAgent {
       taskID: input.taskID,
       model: input.model,
       signal: input.signal,
+      continuation: input.continuation,
       onStatus: input.onStatus ?? (() => {}),
       onSessionCreated: input.onSessionCreated
         ? (session) => {

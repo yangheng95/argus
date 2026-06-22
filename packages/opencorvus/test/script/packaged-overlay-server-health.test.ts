@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
-import { mkdtemp } from "node:fs/promises"
+import { mkdtemp, readFile } from "node:fs/promises"
 import net from "node:net"
 import os from "node:os"
 import path from "node:path"
@@ -39,6 +39,30 @@ async function freePort() {
 async function collect(stream: ReadableStream<Uint8Array> | null) {
   if (!stream) return ""
   return await new Response(stream).text()
+}
+
+type OverlayAssetRefs = {
+  scripts: string[]
+  styles: string[]
+}
+
+function overlayAssetRefs(html: string): OverlayAssetRefs {
+  const scripts = Array.from(
+    new Set(Array.from(html.matchAll(/\bsrc=["'](?:\.?\/)?(assets\/[^"']+\.js)["']/g), (match) => match[1])),
+  ).sort()
+  const styles = Array.from(
+    new Set(Array.from(html.matchAll(/\bhref=["'](?:\.?\/)?(assets\/[^"']+\.css)["']/g), (match) => match[1])),
+  ).sort()
+  if (scripts.length === 0) throw new Error(`overlay index has no script asset reference: ${html.slice(0, 240)}`)
+  if (styles.length === 0) throw new Error(`overlay index has no stylesheet asset reference: ${html.slice(0, 240)}`)
+  return {
+    scripts,
+    styles,
+  }
+}
+
+async function currentDistAssetRefs(): Promise<OverlayAssetRefs> {
+  return overlayAssetRefs(await readFile(path.join(overlayRoot, "dist-vite", "index.html"), "utf8"))
 }
 
 async function buildPackagedOverlayServerArtifact() {
@@ -92,11 +116,13 @@ describe("packaged overlay-server health", () => {
     expect(buildOutput).not.toContain("@parcel/watcher/wrapper")
     expect(buildOutput).not.toContain("ERR_MODULE_NOT_FOUND")
     expect(buildOutput).toContain("Embedded overlay UI files:")
+    const expectedAssetRefs = await currentDistAssetRefs()
 
     const name = `opencorvus-overlay-server-${overlayPlatform()}-${overlayArch()}`
     const artifactDir = path.resolve(packageRoot, "dist", name)
     const executable = path.join(artifactDir, process.platform === "win32" ? "opencorvus.exe" : "opencorvus")
     expect(existsSync(executable)).toBe(true)
+    expect(existsSync(path.join(artifactDir, "ui"))).toBe(false)
     expect(existsSync(path.join(artifactDir, "package.json"))).toBe(true)
     expect(existsSync(path.join(artifactDir, "node_modules", "sharp", "package.json"))).toBe(true)
     expect(existsSync(path.join(artifactDir, "node_modules", "@parcel", "watcher", "wrapper.js"))).toBe(true)
@@ -148,16 +174,6 @@ describe("packaged overlay-server health", () => {
       }
     }
 
-    proc.kill()
-    const [stdout, stderr] = await Promise.all([collect(proc.stdout), collect(proc.stderr)])
-    const output = `${stdout}\n${stderr}`
-
-    expect(output).not.toContain("B:/~BUN/root")
-    expect(output).not.toContain("Cannot find module")
-    expect(output).not.toContain("Cannot find package")
-    expect(output).not.toContain("@parcel/watcher/wrapper")
-    expect(output).not.toContain("ERR_MODULE_NOT_FOUND")
-
     expect(healthStatus).toBe(200)
     expect(healthBody).toBeDefined()
     const body = healthBody!
@@ -169,6 +185,41 @@ describe("packaged overlay-server health", () => {
     expect(uiStatus).toBe(200)
     expect(uiContentType).toContain("text/html")
     expect(uiHtml).toContain('data-page="overlay"')
-    expect(uiHtml).toContain("./assets/")
+    expect(overlayAssetRefs(uiHtml)).toEqual(expectedAssetRefs)
+
+    for (const script of expectedAssetRefs.scripts) {
+      const assetResponse = await fetch(`http://127.0.0.1:${port}/ui/${script}`)
+      expect(assetResponse.status).toBe(200)
+      expect(assetResponse.headers.get("content-type")).toContain("application/javascript")
+      const assetText = await assetResponse.text()
+      expect(assetText.length).toBeGreaterThan(0)
+      expect(assetText).not.toContain('data-page="overlay"')
+      expect(assetText).not.toContain('"/assets/opencorvus-logo')
+      const brandLogo = assetText.match(/\bopencorvus-logo-dark-[A-Za-z0-9_-]+\.svg\b/)?.[0]
+      expect(brandLogo).toBeDefined()
+      const logoResponse = await fetch(`http://127.0.0.1:${port}/ui/assets/${brandLogo}`)
+      expect(logoResponse.status).toBe(200)
+      expect(logoResponse.headers.get("content-type")).toContain("image/svg+xml")
+      expect((await logoResponse.text()).length).toBeGreaterThan(0)
+    }
+
+    for (const style of expectedAssetRefs.styles) {
+      const assetResponse = await fetch(`http://127.0.0.1:${port}/ui/${style}`)
+      expect(assetResponse.status).toBe(200)
+      expect(assetResponse.headers.get("content-type")).toContain("text/css")
+      const assetText = await assetResponse.text()
+      expect(assetText.length).toBeGreaterThan(0)
+      expect(assetText).not.toContain('data-page="overlay"')
+    }
+
+    proc.kill()
+    const [stdout, stderr] = await Promise.all([collect(proc.stdout), collect(proc.stderr)])
+    const output = `${stdout}\n${stderr}`
+
+    expect(output).not.toContain("B:/~BUN/root")
+    expect(output).not.toContain("Cannot find module")
+    expect(output).not.toContain("Cannot find package")
+    expect(output).not.toContain("@parcel/watcher/wrapper")
+    expect(output).not.toContain("ERR_MODULE_NOT_FOUND")
   }, 180_000)
 })
