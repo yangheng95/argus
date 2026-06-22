@@ -1438,16 +1438,16 @@ export async function runAgentSessionWithRetry<C>(
     })
   }
 
-  if (AgentTrace.isEnabled() && input.taskID) {
-    AgentTrace.recordAgentReport({
-      sessionID: lastOutput?.session.id ?? "no-session",
+  if (AgentTrace.isEnabled() && input.taskID && lastOutput) {
+    recordAgentTraceReportForSession(lastOutput.session, {
+      sessionID: lastOutput.session.id,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,
       agentName: agentLabel,
       kind: "agent_report_retry_final",
-      collector: lastOutput?.collector,
-      structured: lastOutput?.structured,
-      streamErrors: lastOutput?.streamErrors,
+      collector: lastOutput.collector,
+      structured: lastOutput.structured,
+      streamErrors: lastOutput.streamErrors,
       attempts: input.maxRetries,
       error: lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`,
       report:
