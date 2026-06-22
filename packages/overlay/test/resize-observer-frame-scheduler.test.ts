@@ -92,6 +92,13 @@ test("ResizeObserver callbacks never run layout-affecting work synchronously", (
 
 test("window and center workbench resize paths use the shared frame scheduler", () => {
   const main = readFileSync(join(repoRoot, "packages/overlay/src/main.tsx"), "utf8")
+  const windowResizeStart = main.indexOf("function applyWindowResize(): void")
+  const windowResizeEnd = main.indexOf("const applyWindowResizeOnFrame", windowResizeStart)
+
+  expect(windowResizeStart).toBeGreaterThan(0)
+  expect(windowResizeEnd).toBeGreaterThan(windowResizeStart)
+
+  const windowResizeFunction = main.slice(windowResizeStart, windowResizeEnd)
 
   expect(main).toContain('import { createAnimationFrameScheduler } from "./utils/animation-frame"')
   expect(main).toContain("const applyWindowResizeOnFrame = createAnimationFrameScheduler(applyWindowResize)")
@@ -103,6 +110,12 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   expect(main).toContain(
     "const applyCenterWorkbenchPanelResizeOnFrame = createAnimationFrameScheduler(applyPendingCenterWorkbenchPanelResize)",
   )
+  expect(main).not.toContain("createAnimationFrameScheduler(renderCenterWorkbenchPanelSeparators)")
+  expect(windowResizeFunction).toContain("applyZoom(settingsStore.zoom)")
+  expect(windowResizeFunction).toContain("renderPaneLayout(paneCallbacks.getState(), PANEL_PANE_CONFIG)")
+  expect(windowResizeFunction).toContain("renderCenterWorkbenchPanelLayoutOnFrame.schedule()")
+  expect(windowResizeFunction).not.toContain("renderCenterWorkbenchPanelLayout()")
+  expect(windowResizeFunction).not.toContain("renderCenterWorkbenchPanelSeparators()")
   expect(main).toContain("pendingCenterWorkbenchPanelResizeClientX = event.clientX")
   expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.schedule()")
   expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.cancel()")

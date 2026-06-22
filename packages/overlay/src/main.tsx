@@ -1951,7 +1951,7 @@ window.addEventListener(
 function applyWindowResize(): void {
   applyZoom(settingsStore.zoom)
   renderPaneLayout(paneCallbacks.getState(), PANEL_PANE_CONFIG)
-  renderCenterWorkbenchPanelSeparators()
+  renderCenterWorkbenchPanelLayoutOnFrame.schedule()
 }
 
 const applyWindowResizeOnFrame = createAnimationFrameScheduler(applyWindowResize)
