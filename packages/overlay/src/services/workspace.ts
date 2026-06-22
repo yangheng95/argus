@@ -137,6 +137,7 @@ export function setWorkspaceDirectory(value: string, source: "manual" | "task" |
   } else {
     setSettingsStore("directory", next)
   }
+  configureApi({ directory: next })
 
   if (source === "task" && next && next !== prev) {
     setSettingsStore("directoryEpoch", (n: number) => n + 1)
