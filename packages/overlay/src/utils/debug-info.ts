@@ -55,6 +55,7 @@ export function buildTaskDebugBlob(board: any): string {
     `task.id:        ${id}`,
     `task.title:     ${String(task?.title ?? "-")}`,
     `task.status:    ${String(task?.status ?? "-")}`,
+    `task.terminal:  ${String(task?.terminalReason ?? "-")}`,
     `task.directory: ${taskDirectory}`,
     `server.url:     ${serverUrl}`,
     `task.session:   ${String(task?.sessionID ?? "-")}`,

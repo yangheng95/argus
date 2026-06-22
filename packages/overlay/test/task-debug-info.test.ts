@@ -14,6 +14,7 @@ test("task debug info keeps the concise workflow identity header", () => {
 
   expect(debugInfo).toContain("# Task Debug Info (double-click 任务 → clipboard)")
   expect(debugInfo).toContain("task.id:")
+  expect(debugInfo).toContain("task.terminal:")
   expect(debugInfo).toContain("task.directory:")
   expect(debugInfo).toContain("server.url:")
   expect(debugInfo).toContain("task.session:")

@@ -1997,6 +1997,7 @@ export namespace EngineService {
         ? { ...(task.metadata as Record<string, unknown>) }
         : {}
     delete metadata.cancelled
+    delete metadata.interrupted
     const liveRun = findActiveRunForTask(task.id)
     const label = intent === "retry" ? "Retry" : "Replan"
     if (intent === "replan") {

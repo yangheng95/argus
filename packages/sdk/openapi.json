@@ -19368,6 +19368,15 @@
                                   "cancelled"
                                 ]
                               },
+                              "terminalReason": {
+                                "type": "string",
+                                "enum": [
+                                  "completed",
+                                  "failed",
+                                  "cancelled",
+                                  "interrupted"
+                                ]
+                              },
                               "priority": {
                                 "type": "string",
                                 "enum": [
@@ -20175,6 +20184,15 @@
                                   "completed",
                                   "failed",
                                   "cancelled"
+                                ]
+                              },
+                              "terminalReason": {
+                                "type": "string",
+                                "enum": [
+                                  "completed",
+                                  "failed",
+                                  "cancelled",
+                                  "interrupted"
                                 ]
                               },
                               "priority": {
@@ -21025,6 +21043,15 @@
                             "cancelled"
                           ]
                         },
+                        "terminalReason": {
+                          "type": "string",
+                          "enum": [
+                            "completed",
+                            "failed",
+                            "cancelled",
+                            "interrupted"
+                          ]
+                        },
                         "priority": {
                           "type": "string",
                           "enum": [
@@ -21437,6 +21464,15 @@
                         "completed",
                         "failed",
                         "cancelled"
+                      ]
+                    },
+                    "terminalReason": {
+                      "type": "string",
+                      "enum": [
+                        "completed",
+                        "failed",
+                        "cancelled",
+                        "interrupted"
                       ]
                     },
                     "priority": {
@@ -22472,6 +22508,15 @@
                             "completed",
                             "failed",
                             "cancelled"
+                          ]
+                        },
+                        "terminalReason": {
+                          "type": "string",
+                          "enum": [
+                            "completed",
+                            "failed",
+                            "cancelled",
+                            "interrupted"
                           ]
                         },
                         "priority": {
@@ -23700,6 +23745,15 @@
                                 "completed",
                                 "failed",
                                 "cancelled"
+                              ]
+                            },
+                            "terminalReason": {
+                              "type": "string",
+                              "enum": [
+                                "completed",
+                                "failed",
+                                "cancelled",
+                                "interrupted"
                               ]
                             },
                             "priority": {
@@ -27212,6 +27266,15 @@
                             "completed",
                             "failed",
                             "cancelled"
+                          ]
+                        },
+                        "terminalReason": {
+                          "type": "string",
+                          "enum": [
+                            "completed",
+                            "failed",
+                            "cancelled",
+                            "interrupted"
                           ]
                         },
                         "priority": {

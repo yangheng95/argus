@@ -393,7 +393,7 @@ function listActiveTasks(): TaskRow[] {
   )
 }
 
-async function terminateTaskOwnedSessionsAndFail(input: {
+async function terminateTaskOwnedSessionsAndMarkInterrupted(input: {
   task: TaskRow
   reason: string
 }): Promise<AbortActiveTasksResult> {
@@ -420,6 +420,12 @@ async function terminateTaskOwnedSessionsAndFail(input: {
     {
       status: "failed",
       error: input.reason,
+      metadata: {
+        ...((task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+          ? task.metadata
+          : {}) as Record<string, unknown>),
+        interrupted: true,
+      },
     },
     input.reason,
     project ? { projectDir: project.worktree } : undefined,
@@ -452,7 +458,7 @@ export async function abortActiveTasksForProject(input: {
   let toolParts = 0
   const activeTasks = listActiveTasksForProject(input.projectID)
   for (const task of activeTasks) {
-    const result = await terminateTaskOwnedSessionsAndFail({ task, reason: input.reason })
+    const result = await terminateTaskOwnedSessionsAndMarkInterrupted({ task, reason: input.reason })
     tasks += result.tasks
     sessions += result.sessions
     toolParts += result.toolParts
@@ -567,7 +573,7 @@ export async function abortCurrentProcessLiveExecution(input: {
       const affectedRuns = affectedRunsForGoalRuns(task.id, [...ownedGoalRunsBefore, ...ownedGoalRunsAfter])
       runs += await abortRunsForRows(affectedRuns, input.reason)
 
-      const taskResult = await terminateTaskOwnedSessionsAndFail({
+      const taskResult = await terminateTaskOwnedSessionsAndMarkInterrupted({
         task: findTask(task.id) ?? task,
         reason: input.reason,
       })
@@ -651,7 +657,7 @@ export async function abortDeadOwnerLiveExecutionForTasks(input: {
       const affectedRuns = affectedRunsForGoalRuns(task.id, orphanGoalRuns)
       goalRuns += await abortGoalRunsForRows(orphanGoalRuns, input.reason)
       runs += await abortRunsForRows(affectedRuns, input.reason)
-      const taskResult = await terminateTaskOwnedSessionsAndFail({
+      const taskResult = await terminateTaskOwnedSessionsAndMarkInterrupted({
         task: findTask(task.id) ?? task,
         reason: input.reason,
       })
