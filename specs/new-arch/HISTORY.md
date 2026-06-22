@@ -19,6 +19,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md) | Browser Preview Evidence Previewable Image |
 | [2026-06-22-overlay-resize-frame-coalescing.md](2026-06-22-overlay-resize-frame-coalescing.md) | Overlay Resize Frame Coalescing |
 | [2026-06-22-overlay-ui-serving-source.md](2026-06-22-overlay-ui-serving-source.md) | Overlay UI Serving Source |
+| [2026-06-22-retire-solid-changes-panel-empty-state.md](2026-06-22-retire-solid-changes-panel-empty-state.md) | Retire Solid Changes Panel Empty State |
 | [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md) | Screenshot Browser Open Jank |
 
 ## 2026-06-21
