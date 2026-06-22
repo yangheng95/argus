@@ -160,6 +160,16 @@ async function openBrowserPreviewFromTask(
   await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
 }
 
+async function clickBrowserPreviewViewport(page: OverlayPage, viewportID: "desktop" | "tablet" | "mobile") {
+  const selector = `[data-ui="browser-preview-viewport"][data-viewport-id="${viewportID}"]`
+  await page.waitForSelector(selector, { visible: true })
+  await page.evaluate((value) => {
+    const node = document.querySelector<HTMLElement>(String(value))
+    if (!node) throw new Error(`Browser preview viewport trigger is missing: ${value}`)
+    node.click()
+  }, selector)
+}
+
 async function installLiveInputLayoutProbe(page: OverlayPage) {
   await page.evaluate(() => {
     const win = window as any
@@ -546,6 +556,14 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
       () => ({ errors, requestLog, liveSnapshotBodies, liveInputBodies }),
     )
     assert.equal(captureBodies.length, 0, "opening live preview must not auto-capture evidence")
+    assert.equal(
+      liveSnapshotBodies.filter(
+        (body) => (body as { targetID?: unknown; viewportID?: unknown }).targetID === targetID,
+      ).length,
+      1,
+      `initial live scope should request exactly one snapshot: ${JSON.stringify(liveSnapshotBodies)}`,
+    )
+    assert.deepEqual(liveSnapshotBodies[0], { targetID, viewportID: "desktop" })
 
     await installLiveInputLayoutProbe(page)
     await dispatchMixedInput(page)
@@ -599,11 +617,36 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     const colorRange = stats.channels.slice(0, 3).reduce((total, channel) => total + channel.max - channel.min, 0)
     assert.ok(colorRange > 80, `live input batch screenshot should be nonblank, color range ${colorRange}`)
 
-    assert.equal(captureBodies.length, 0, "live input interactions must not trigger hidden evidence capture")
-    assert.ok(
-      liveSnapshotBodies.some((body) => (body as { targetID?: unknown }).targetID === targetID),
-      "initial live snapshot should be requested through the task-scoped target",
+    await clickBrowserPreviewViewport(page, "tablet")
+    await waitForFixtureActivity(
+      () =>
+        liveSnapshotBodies.filter(
+          (body) =>
+            (body as { targetID?: unknown; viewportID?: unknown }).targetID === targetID &&
+            (body as { viewportID?: unknown }).viewportID === "tablet",
+        ).length === 1,
+      "tablet live snapshot exact count",
+      () => ({ requestLog, liveSnapshotBodies }),
     )
+    assert.equal(
+      liveSnapshotBodies.filter(
+        (body) =>
+          (body as { targetID?: unknown; viewportID?: unknown }).targetID === targetID &&
+          (body as { viewportID?: unknown }).viewportID === "desktop",
+      ).length,
+      1,
+      `desktop live scope should not repeat after load: ${JSON.stringify(liveSnapshotBodies)}`,
+    )
+    assert.equal(
+      liveSnapshotBodies.filter(
+        (body) =>
+          (body as { targetID?: unknown; viewportID?: unknown }).targetID === targetID &&
+          (body as { viewportID?: unknown }).viewportID === "tablet",
+      ).length,
+      1,
+      `tablet live scope should request exactly one snapshot: ${JSON.stringify(liveSnapshotBodies)}`,
+    )
+    assert.equal(captureBodies.length, 0, "live input interactions must not trigger hidden evidence capture")
     assert.deepEqual(unexpectedRequests, [])
     assert.equal(errors.length, 0, errors.join("\n"))
   } finally {
