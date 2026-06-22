@@ -677,6 +677,7 @@ test(
     const requestLog: string[] = []
     const errors: string[] = []
     const captureBodies: unknown[] = []
+    const liveSnapshotBodies: unknown[] = []
     const pngBytes = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAABACAYAAADbER1AAAAAdElEQVR4AQXBAQ3AIAADsGaqEDMxFzMvyOKt892XqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZSk6nUZCo1mUpNplKTqdRkKjWZSk2mUpOp1GQqNZlKTaZ+SrVB/bxIzVQAAAAASUVORK5CYII=",
       "base64",
@@ -840,6 +841,7 @@ test(
         })
       }
       if (path === `/task/${taskID}/browser-preview/live/snapshot` && req.method === "POST") {
+        liveSnapshotBodies.push(await req.json())
         return new Response(pngBytes, { headers: { "content-type": "image/png" } })
       }
       const evidenceMatch = path.match(new RegExp(`^/task/${taskID}/browser-preview/evidence/([^/]+)$`))
@@ -955,6 +957,10 @@ test(
         "desktop persisted evidence screenshot rendered in the stage",
         () => ({ errors, requestLog }),
       )
+      const persistedPreviewScreenshotPath = resolve(".scratch/browser-preview-persisted-evidence-no-live.png")
+      const persistedPreviewPanel = await page.$(".browser-preview-panel")
+      assert.ok(persistedPreviewPanel)
+      writeFileSync(persistedPreviewScreenshotPath, await persistedPreviewPanel.screenshot({}))
       let text = await page.evaluate(
         () => document.querySelector(".browser-preview-evidence-status")?.textContent || "",
       )
@@ -1004,6 +1010,7 @@ test(
       assert.match(text, /persisted mobile evidence passed/)
       assert.doesNotMatch(text, /persisted desktop evidence passed/)
       assert.deepEqual(captureBodies, [])
+      assert.deepEqual(liveSnapshotBodies, [])
     } finally {
       await browser.close().catch(() => undefined)
       await server.close()
