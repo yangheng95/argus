@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { boardStore, setBoardStore } from "../src/store/board"
 import { setSettingsStore } from "../src/store/settings"
 import { appStore, setAppStore } from "../src/store/app"
-import { apiUrl } from "../src/services/api"
-import { activeDirectory, closeProject, pickDirectory, pickFiles } from "../src/services/workspace"
+import { apiUrl, configure } from "../src/services/api"
+import { activeDirectory, applyDirectory, closeProject, pickDirectory, pickFiles } from "../src/services/workspace"
 import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse"
 import { __setHostTransportForTest, HOST_CAPABILITIES, type HostTransport } from "../src/services/host-transport"
 import { activeTaskID } from "../src/store/board"
@@ -12,6 +12,7 @@ describe("workspace active directory", () => {
   afterEach(() => {
     stopTaskListSSE()
     __setHostTransportForTest(undefined)
+    configure({ directory: "" })
     setBoardStore({
       board: null,
       tasks: [],
@@ -169,6 +170,80 @@ describe("workspace active directory", () => {
     closeProject()
 
     expect(closeCalls).toBe(1)
+  })
+
+  test("manual applyDirectory clears selected task state before reloading the new project", async () => {
+    const requests: string[] = []
+    __setHostTransportForTest({
+      kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
+      async request(req) {
+        requests.push(`${req.method ?? "GET"} ${req.path} ${String(req.query?.directory ?? "")}`)
+        if (req.path === "global/health") {
+          return {
+            status: 200,
+            ok: true,
+            headers: {},
+            body: { paths: { database: "db.sqlite", data: "data", home: "home" } },
+          }
+        }
+        if (req.path === "config") return { status: 200, ok: true, headers: {}, body: { model: "" } }
+        if (req.path === "channel") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "skill/installed") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "mcp") return { status: 200, ok: true, headers: {}, body: {} }
+        if (req.path === "path") {
+          return { status: 200, ok: true, headers: {}, body: { directory: "D:/repo/next" } }
+        }
+        if (req.path === "vcs") return { status: 200, ok: true, headers: {}, body: { branch: "main" } }
+        if (req.path === "global/tasks") return { status: 200, ok: true, headers: {}, body: { tasks: [] } }
+        if (req.path === "executor") return { status: 200, ok: true, headers: {}, body: [] }
+        return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+      },
+      openStream() {
+        return { close: () => undefined }
+      },
+      async native() {
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe: () => undefined }
+      },
+    } satisfies HostTransport)
+
+    setSettingsStore({
+      directory: "D:/repo/current",
+      savedDirectory: "D:/repo/current",
+      workspaceTaskID: "tsk_current",
+      workspaceDirectory: "D:/repo/current",
+      directoryEpoch: 0,
+    })
+    configure({ directory: "D:/repo/current" })
+    setBoardStore({
+      selectedSource: { kind: "task", id: "tsk_current", directory: "D:/repo/current" },
+      board: {
+        snapshotVersion: "board:current",
+        task: {
+          id: "tsk_current",
+          directory: "D:/repo/current",
+          time: { created: 1, updated: 1 },
+        },
+      },
+      tasks: [{ task: { id: "tsk_current", directory: "D:/repo/current", time: { created: 1, updated: 1 } } }],
+      taskSwitching: true,
+    })
+
+    await applyDirectory("D:/repo/next", { persist: false, save: false, restoreWorkspace: false })
+
+    expect(activeTaskID()).toBe("")
+    expect(boardStore.selectedSource).toBeNull()
+    expect(boardStore.board).toBeNull()
+    expect(boardStore.taskSwitching).toBe(false)
+    expect(boardStore.tasks).toEqual([])
+    expect(activeDirectory()).toBe("D:/repo/next")
+    expect(requests).toContain("GET config D:/repo/next")
+    expect(requests).toContain("GET path D:/repo/next")
+    expect(requests).toContain("GET executor D:/repo/next")
+    expect(requests).toContain("GET global/tasks ")
   })
 
   test("native pickers preserve cancel but reject malformed host payloads", async () => {
