@@ -188,7 +188,11 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(bodyOf(inspectorCss, ".file-explorer-row")).toContain("height: var(--file-explorer-row-height)")
   expect(bodyOf(inspectorCss, ".file-explorer-row")).toContain("min-height: var(--file-explorer-row-height)")
   expect(bodyOf(inspectorCss, ".file-explorer-row")).toContain("var(--file-explorer-row-depth) * var(--file-explorer-row-indent)")
+  expect(bodyOf(inspectorCss, ".file-explorer-row")).toContain("font-weight: var(--ui-font-weight-body)")
   expect(bodyOf(inspectorCss, ".file-explorer-row")).not.toContain("height: calc(26px * var(--ui-scale))")
+  expect(bodyOf(inspectorCss, ".file-explorer-row > svg")).toContain("width: var(--file-explorer-row-icon-width)")
+  expect(bodyOf(inspectorCss, ".file-explorer-row > svg")).toContain("height: var(--file-explorer-row-icon-width)")
+  expect(bodyOf(inspectorCss, ".file-explorer-row > svg")).not.toContain("--oc-density-chip-height")
   expect(inspectorCss).not.toContain(".file-explorer-search-input.field-input")
   expect(inspectorCss).not.toContain(".file-explorer-row:hover,\n.file-explorer-row:focus-visible")
   expect(bodyOf(inspectorCss, ".file-explorer-row:focus-visible")).toMatch(
