@@ -37,7 +37,7 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(main).toContain("function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void")
   expect(main).toContain("const panel = selectedCenterWorkbenchPanel()")
   expect(main).toContain("scheduleCenterWorkbenchPanelReveal(panel)")
-  expect(main).toContain("revealCenterWorkbenchPanelOnFrame.schedule()")
+  expect(main).toContain("renderCenterWorkbenchPanelLayoutAndReveal")
   expect(main).toContain('onReady={() => openRightActivity("browser")}')
   expect(main).toContain("function focusTaskPanel(): void")
   expect(main).toContain("function selectTaskFromTaskList(taskID: string): void")
