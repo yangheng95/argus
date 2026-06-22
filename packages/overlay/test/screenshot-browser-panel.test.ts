@@ -468,6 +468,8 @@ describe("screenshot browser panel", () => {
     expect(component).not.toContain("messageStore.messages")
     expect(component).toContain('from "virtua/solid"')
     expect(component).toContain("<Virtualizer")
+    expect(component).not.toContain("ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT")
+    expect(component).not.toContain("itemSize={")
     expect(component).toContain("buildScreenshotBrowserRows(groups(), columnCount())")
     expect(component).toContain("IntersectionObserver")
     expect(component).toContain("SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME")
