@@ -18,7 +18,7 @@ import { SessionTable } from "@/session/session.sql"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
-import { findTask, type TaskRow } from "./store"
+import { findActiveRunForTask, findTask, type TaskRow } from "./store"
 import { isTaskActive, isTaskQueued } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
 import { Identifier } from "@/id/id"
@@ -232,6 +232,16 @@ function loopInFlightFor(taskID: string): boolean {
   return (loopInFlight.get(taskID) ?? 0) > 0
 }
 
+function isOperatorWakeEvent(event: OrchestratorEvent | undefined): boolean {
+  return Boolean(event?.operatorIntent || event?.operatorMessage)
+}
+
+function suppressPassiveStreamErrorWake(taskID: string, event: OrchestratorEvent | undefined): boolean {
+  if (isOperatorWakeEvent(event)) return false
+  const run = findActiveRunForTask(taskID)
+  return run?.status === "blocked" && run.blocking_reason === "orchestrator_stream_error"
+}
+
 function retainLoop(taskID: string): void {
   loopInFlight.set(taskID, (loopInFlight.get(taskID) ?? 0) + 1)
 }
@@ -424,6 +434,10 @@ export async function drainQueuedTaskEventIfUnowned(taskID: string): Promise<boo
 
   const queuedEvent = takeQueuedTaskEvent(taskID)
   if (!queuedEvent) return false
+  if (suppressPassiveStreamErrorWake(taskID, queuedEvent)) {
+    log.info("discarded queued passive wake for stream-error blocked run", { taskID })
+    return hasQueuedTaskEvent(taskID) ? drainQueuedTaskEventIfUnowned(taskID) : false
+  }
   attachLoopCompletion(taskID, cwd, launchTaskLoop(taskID, queuedEvent))
   log.info("drained queued wake after orchestrator tool ownership cleared", { taskID })
   return true
@@ -708,6 +722,10 @@ export async function dispatchTaskLoop(input: {
   const cwd = taskCwd(task.id)
   if (!cwd) {
     log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })
+    return "ignored"
+  }
+  if (suppressPassiveStreamErrorWake(task.id, input.event)) {
+    log.info("dispatchTaskLoop: ignoring passive wake for stream-error blocked run", { taskID: task.id })
     return "ignored"
   }
   if (isTaskQueued(task)) {

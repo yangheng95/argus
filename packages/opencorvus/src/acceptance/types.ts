@@ -76,7 +76,7 @@ const LlmJudgeScorerSchema = z.object({
     .describe("Which parts of the acceptance to feed the judge. Default: acceptance_summary."),
 })
 
-const PREBUILT_SCORER_NAMES = [
+export const PREBUILT_SCORER_NAMES = [
   "factuality",
   "relevance",
   "contains",

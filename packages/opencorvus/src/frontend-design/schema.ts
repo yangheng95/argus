@@ -201,6 +201,36 @@ export const MaterialInventoryItemSchema = z.object({
   ),
 }).strict()
 
+export const ImplementationPhase = z.enum([
+  "evidence_lock",
+  "implementation_scaffold",
+  "data_component_transcription",
+  "runtime_visual_verification",
+  "source_quality_cleanup",
+])
+export type ImplementationPhase = z.infer<typeof ImplementationPhase>
+
+export const ImplementationPhaseOutcomeSchema = z.object({
+  id: z.string().min(1).describe("Stable phase outcome id, e.g. phase-evidence-lock."),
+  phase: ImplementationPhase.describe(
+    "Required maintainable handoff phase: evidence lock, implementation scaffold, transcription, runtime/visual verification, or source-quality cleanup.",
+  ),
+  title: z.string().min(1).describe("Short phase outcome title."),
+  deliverable: z
+    .string()
+    .min(1)
+    .describe("Concrete output downstream agents must create, preserve, verify, or audit for this phase."),
+  source_refs: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe("Evidence, project, screenshot, package, or source-file refs that bind this phase."),
+  acceptance: z
+    .string()
+    .min(1)
+    .describe("Observable acceptance condition for this phase, not a component checklist item."),
+}).strict()
+export type ImplementationPhaseOutcome = z.infer<typeof ImplementationPhaseOutcomeSchema>
+
 export const VisualValidationEvidenceSchema = z.object({
   id: z.string().min(1).describe("Stable visual validation evidence id, e.g. visual-render-desktop."),
   render_target: z
@@ -308,6 +338,12 @@ export const FrontendTemplateFinalSchema = z.object({
     .default([])
     .describe(
       "Preferred compact replacement for a long quality_project_contract string. Use one item per source module, component group, data module, style module, asset strategy, or verification requirement.",
+    ),
+  implementation_phase_outcomes: z
+    .array(ImplementationPhaseOutcomeSchema)
+    .default([])
+    .describe(
+      "Structured phase outcomes for maintainable replacement. Required when final_acceptance_mode=maintainable_replacement_required and must cover evidence_lock, implementation_scaffold, data_component_transcription, runtime_visual_verification, and source_quality_cleanup. Architect consumes this before component_inventory/component_reuse_plan.",
     ),
   material_inventory: OptionalMarkdownField(
     "Material and asset inventory: CSS/tokens, sidecar SVG/image/canvas assets, data fixtures, text samples, icons, fonts, and dense resources.",
@@ -419,6 +455,15 @@ export const ToolMaterialInventoryItemSchema = z.object({
   source_refs: z.array(z.string().min(1)).default([]),
 }).strict()
 
+export const ToolImplementationPhaseOutcomeSchema = z.object({
+  id: z.string().min(1),
+  phase: ImplementationPhase,
+  title: z.string().min(1),
+  deliverable: z.string().min(1),
+  source_refs: z.array(z.string().min(1)).min(1),
+  acceptance: z.string().min(1),
+}).strict()
+
 export const ToolComponentReusePlanItemSchema = z.object({
   family_id: z.string().min(1),
   name: z.string().min(1),
@@ -487,6 +532,7 @@ export const FrontendTemplateToolInputSchema = z.object({
   baseline_replacement_plan: z.array(ToolBaselineReplacementPlanItemSchema).default([]),
   quality_project_contract: z.string().default(""),
   quality_project_items: z.array(ToolCompactTemplateItemSchema).default([]),
+  implementation_phase_outcomes: z.array(ToolImplementationPhaseOutcomeSchema).default([]),
   material_inventory: z.string().default(""),
   material_inventory_items: z.array(ToolMaterialInventoryItemSchema).min(1),
   frontend_project: z

@@ -23,7 +23,14 @@ import {
   GoalContractUpdateSchema,
   normalizeGoalContractFields,
 } from "@/pipeline/goal-contract.schema"
-import type { AcceptanceSpec } from "@/acceptance/types"
+import {
+  AcceptanceSeverity,
+  AcceptanceTrigger,
+  LlmJudgeInputKind,
+  PREBUILT_SCORER_NAMES,
+  RubricLevelSchema,
+  type AcceptanceSpec,
+} from "@/acceptance/types"
 import type { VisualSpec } from "@/frontend-design/types"
 import type { TraceabilityEntry } from "./types"
 import {
@@ -71,6 +78,144 @@ const RegisterContractToolInputSchema = ArchitectContractRefSchema.omit({
     )
     .optional(),
 })
+
+const ArchitectHeuristicScorerSchema = z.object({
+  type: z
+    .literal("heuristic")
+    .describe(
+      "heuristic — deterministic inline shell check. Architect exposes only inline shell checks for one-off page checks.",
+    ),
+  name: z.string().min(1),
+  spec: z.object({
+    kind: z.literal("shell").describe("shell — run an inline command. Requires: cmd; optional cwd."),
+    cmd: z.string().min(1).describe("Shell command. Exit 0 = pass unless expect.exit_code set."),
+    cwd: z.string().optional(),
+  }),
+  expect: z
+    .object({
+      exit_code: z.number().int().optional(),
+    })
+    .optional(),
+})
+
+const ArchitectLlmJudgeScorerSchema = z.object({
+  type: z
+    .literal("llm_judge")
+    .describe("llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs."),
+  name: z.string().min(1),
+  criteria: z.string().min(10).describe("Single-criterion evaluation question in natural language."),
+  rubric: z
+    .array(RubricLevelSchema)
+    .min(2)
+    .max(5)
+    .optional()
+    .describe("Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET."),
+  inputs: z
+    .array(LlmJudgeInputKind)
+    .optional()
+    .describe("Which parts of the acceptance to feed the judge. Use visual_evidence for final reference parity."),
+})
+
+const ArchitectPrebuiltScorerSchema = z.object({
+  type: z.literal("prebuilt").describe("prebuilt — a named library metric from the fixed scorer name set."),
+  name: z.enum(PREBUILT_SCORER_NAMES),
+  config: z.record(z.string(), z.unknown()).default({}),
+  spec: z
+    .object({
+      kind: z.literal("visual_evidence_bundle"),
+      viewport: z.string().min(1).optional(),
+    })
+    .optional()
+    .describe("For name=visual-evidence-bundle, identifies the required visual evidence bundle shape."),
+  expect: z
+    .object({
+      status: z.literal("passed"),
+    })
+    .optional()
+    .describe("For name=visual-evidence-bundle, requires a passing current bundle."),
+})
+
+const ArchitectContractAuditScorerSchema = z.object({
+  type: z
+    .literal("contract_audit")
+    .describe(
+      "contract_audit — static audit of typed-contract field literals against registered graph contract_ids.",
+    ),
+  name: z.string().min(1),
+  spec: z.object({
+    kind: z.literal("contract_graph"),
+    contract_ids: z.array(z.string().min(1)).min(1),
+  }),
+  expect: z.object({
+    status: z.literal("passed"),
+  }),
+})
+
+const ArchitectScorerSchema = z.discriminatedUnion("type", [
+  ArchitectHeuristicScorerSchema,
+  ArchitectLlmJudgeScorerSchema,
+  ArchitectPrebuiltScorerSchema,
+  ArchitectContractAuditScorerSchema,
+])
+
+const ArchitectAcceptanceSpecSchema = z.object({
+  id: z.string().min(1).describe("Stable spec ID, e.g. 'acc-final-visual-fidelity'."),
+  source_requirement_id: z.string().min(1).describe("Requirement ID this spec was derived from (REQ-N)."),
+  goal_id: z.string().min(1).describe("Goal ID this spec belongs to. Specs are goal-local."),
+  title: z.string().min(1),
+  scenario: z
+    .object({
+      given: z.array(z.string().min(1)).min(1),
+      when: z.array(z.string().min(1)).min(1),
+      then: z.array(z.string().min(1)).min(1),
+    })
+    .optional()
+    .describe("Gherkin Given/When/Then scenario. Optional — omit for pure code checks."),
+  scorers: z
+    .array(ArchitectScorerSchema)
+    .min(1)
+    .describe(
+      "At least one scorer. Architect-visible scorers are shell, llm_judge, prebuilt visual-evidence-bundle, or contract_audit.",
+    ),
+  severity: AcceptanceSeverity,
+  trigger: AcceptanceTrigger.optional().describe(
+    "Override default trigger. Use on_integrity for final visual evidence acceptance.",
+  ),
+})
+
+const ArchitectGoalContractFieldsSchema = GoalContractFieldsSchema.extend({
+  acceptance_specs: z
+    .array(ArchitectAcceptanceSpecSchema)
+    .min(1)
+    .describe("Architect-visible typed acceptance specs."),
+})
+
+const ArchitectGoalContractUpdateSchema = GoalContractUpdateSchema.extend({
+  acceptance_specs: z
+    .array(ArchitectAcceptanceSpecSchema)
+    .min(1)
+    .describe("Replace the prior acceptance spec list.")
+    .optional(),
+})
+
+const RegisterVisualEvidenceAcceptanceToolInputSchema = z.object({
+  goal_id: z.string().min(1).describe("Existing verification or integration goal that owns final visual parity."),
+  source_requirement_id: z
+    .string()
+    .min(1)
+    .describe("REQ-N claimed by the goal and represented by this final visual acceptance."),
+  title: z.string().min(8).describe("Human-readable final visual acceptance title."),
+  criteria: z
+    .string()
+    .min(40)
+    .describe("Rubric question comparing the implementation's rendered visual evidence against the references."),
+  reference_tokens: z
+    .array(z.string().trim().min(1))
+    .min(1)
+    .describe(
+      "Reference coverage ids, surface names, visual spec ids, screenshot artifact ids, or region ids that the final visual acceptance must own.",
+    ),
+}).strict()
 
 function parseRegisterContractInput(input: unknown): ArchitectContractRef {
   const parsed = RegisterContractToolInputSchema.parse(input)
@@ -566,18 +711,18 @@ export function architectValidationFindings(
         [
           "Missing essential visual evidence acceptance: reference-driven tasks must include a verification/integration goal with an essential on_integrity acceptance spec that consumes a VisualEvidenceBundle.",
           `Reference coverage requirement: ${formatReferenceCoverageReason(input)}`,
-          "Required shape: kind=verification|integration acceptance_specs includes severity=essential trigger=on_integrity and either scorer=prebuilt name=visual-evidence-bundle or llm_judge inputs includes visual_evidence.",
+          "Preferred repair: call register_visual_evidence_acceptance on an existing verification/integration goal, with reference_tokens copied from registered reference coverage ids/surfaces/visual_spec_ids.",
+          "Required stored shape: kind=verification|integration acceptance_specs includes severity=essential trigger=on_integrity and either scorer=prebuilt name=visual-evidence-bundle or llm_judge inputs includes visual_evidence.",
           `Goal candidates: ${formatGoalCandidateList(collector.goals)}`,
         ].join(" "),
         { goal_ids: collector.goals.map((goal) => goal.id) },
-        ["register_goal", "modify_goal"],
+        ["register_visual_evidence_acceptance", "register_goal", "modify_goal"],
       )
     } else {
       const missingRegionOwnership = visualAcceptanceRegionOwnershipFindings(collector, visualAcceptanceOwners)
       for (const missing of missingRegionOwnership) {
         concern("missing_visual_region_acceptance_ownership", missing.message, { goal_ids: missing.goalIDs }, [
-          "register_goal",
-          "modify_goal",
+          "register_visual_evidence_acceptance",
           "register_reference_coverage",
         ])
       }
@@ -685,6 +830,36 @@ function scriptRefError(goalID: string, issues: readonly ScriptRefValidationIssu
     "script_ref is only for existing repo scripts: existing executable script files, not package manifests. contract_audit is a scorer type, not a script_ref path; never use .opencorvus/scripts/contract-audit. " +
     `Use spec.kind="shell" with cmd for inline page checks or package-manager commands, or type="contract_audit" with registered contract_ids for graph-contract checks; collector unchanged.`
   )
+}
+
+function buildFinalVisualEvidenceAcceptanceSpec(input: {
+  goalID: string
+  sourceRequirementID: string
+  title: string
+  criteria: string
+  referenceTokens: readonly string[]
+}): AcceptanceSpec {
+  const referenceTokens = [...new Set(input.referenceTokens.map((token) => token.trim()).filter(Boolean))]
+  const referenceText = referenceTokens.join(", ")
+  return {
+    id: `acc-${input.goalID}-visual-evidence`,
+    source_requirement_id: input.sourceRequirementID,
+    goal_id: input.goalID,
+    title: `${input.title.trim()} [reference anchors: ${referenceText}]`,
+    severity: "essential",
+    trigger: "on_integrity",
+    scorers: [
+      {
+        type: "llm_judge",
+        name: "rendered-reference-fidelity",
+        criteria:
+          `${input.criteria.trim()}\n\n` +
+          `Reference anchors this acceptance owns: ${referenceText}. ` +
+          "Use the current VisualEvidenceBundle, rendered screenshots, reference screenshots, DOM/style evidence, and interaction evidence.",
+        inputs: ["visual_evidence"],
+      },
+    ],
+  }
 }
 
 function isEssentialVisualEvidenceAcceptanceSpec(spec: AcceptanceSpec): boolean {
@@ -796,6 +971,8 @@ export function createArchitectOutputTools(input: {
   const dir = input.workDir ?? Instance.directory
   const knownResearchEvidenceRefs =
     input.knownResearchEvidenceRefs !== undefined ? new Set(input.knownResearchEvidenceRefs) : undefined
+  const knownRequirementIDs =
+    input.knownRequirementIDs !== undefined ? new Set(input.knownRequirementIDs) : undefined
 
   // Single source of truth for "is the architect output complete?". Both the
   // terminal-tool-scoping predicate (`isReadyToFinalize` below) and the
@@ -821,6 +998,61 @@ export function createArchitectOutputTools(input: {
   }
 
   const tools = {
+    register_visual_evidence_acceptance: tool({
+      description:
+        "Attach the canonical final visual evidence acceptance to an existing verification/integration goal. " +
+        "Use this for reference-driven UI/page replica tasks instead of hand-writing the nested llm_judge/prebuilt acceptance spec through modify_goal. " +
+        "It stores an essential on_integrity llm_judge scorer with inputs=[visual_evidence] and embeds the supplied reference tokens for region ownership.",
+      inputSchema: RegisterVisualEvidenceAcceptanceToolInputSchema,
+      execute: async (input) => {
+        const parsed = RegisterVisualEvidenceAcceptanceToolInputSchema.parse(input)
+        const idx = collector.goals.findIndex((goal) => goal.id === parsed.goal_id)
+        if (idx < 0) {
+          return `Error: goal "${parsed.goal_id}" not registered. Register a verification/integration goal before adding final visual evidence acceptance.`
+        }
+        const prior = collector.goals[idx]
+        if (prior.kind !== "verification" && prior.kind !== "integration") {
+          return `Error: goal "${parsed.goal_id}" is kind=${prior.kind}; final visual evidence acceptance must be attached to a verification or integration goal.`
+        }
+        if (knownRequirementIDs && !knownRequirementIDs.has(parsed.source_requirement_id)) {
+          return `Error: source_requirement_id "${parsed.source_requirement_id}" is not a known requirement id; collector unchanged.`
+        }
+        if (!prior.requirement_ids.includes(parsed.source_requirement_id)) {
+          return `Error: goal "${parsed.goal_id}" does not claim source_requirement_id "${parsed.source_requirement_id}" in requirement_ids. Use modify_goal to claim the requirement first; collector unchanged.`
+        }
+        const visualSpec = buildFinalVisualEvidenceAcceptanceSpec({
+          goalID: parsed.goal_id,
+          sourceRequirementID: parsed.source_requirement_id,
+          title: parsed.title,
+          criteria: parsed.criteria,
+          referenceTokens: parsed.reference_tokens,
+        })
+        const next: RegisteredGoal = {
+          ...prior,
+          acceptance_specs: [
+            ...prior.acceptance_specs.filter((spec) => spec.id !== visualSpec.id),
+            visualSpec,
+          ],
+        }
+        const parsedNext = GoalContractFieldsSchema.safeParse(next)
+        if (!parsedNext.success) {
+          const issueLines = parsedNext.error.issues.slice(0, 8).map((issue) => {
+            const pathLabel = issue.path.length > 0 ? issue.path.join(".") : "(root)"
+            return `- ${pathLabel}: ${issue.message}`
+          })
+          return [
+            `Error: register_visual_evidence_acceptance produced an invalid goal after merge; collector unchanged.`,
+            ...issueLines,
+          ].join("\n")
+        }
+        if (isDeepStrictEqual(prior, parsedNext.data)) {
+          return `No changes: goal "${parsed.goal_id}" already has the canonical final visual evidence acceptance.\nCurrent: ${formatGoalSnapshot(prior)}`
+        }
+        collector.goals[idx] = parsedNext.data
+        return `OK: final visual evidence acceptance registered on goal "${parsed.goal_id}".\nCurrent: ${formatGoalSnapshot(parsedNext.data)}`
+      },
+    }),
+
     register_goal: tool({
       description:
         "Register a new goal contract, or overwrite a prior registration with " +
@@ -831,7 +1063,7 @@ export function createArchitectOutputTools(input: {
         "For webpage replicas, prefer phase outcome goals over component-sized goals. " +
         "Persistence preserves existing G numbers and assigns new goals the " +
         "next unused G number.",
-      inputSchema: GoalContractFieldsSchema,
+      inputSchema: ArchitectGoalContractFieldsSchema,
       execute: async (goal) => {
         const normalized = normalizeSourceBaselineOwnedPaths(toRegisteredGoal(goal))
         const parsedGoal = normalized.goal
@@ -884,10 +1116,10 @@ export function createArchitectOutputTools(input: {
         "from a prior run). Supply only the fields you want to change. Unknown " +
         "ids are rejected — use register_goal if you intend a brand-new goal. " +
         "A modified goal keeps its stable G number; the next implementation " +
-        "attempt increments V.",
+        "attempt increments V. Architect-visible acceptance scorer schema does not expose script_ref; use inline shell, llm_judge, prebuilt visual-evidence-bundle, or contract_audit.",
       inputSchema: z.object({
         id: z.string().min(1).describe("Existing goal id to modify."),
-        updates: GoalContractUpdateSchema,
+        updates: ArchitectGoalContractUpdateSchema,
       }),
       execute: async ({ id, updates }) => {
         const idx = collector.goals.findIndex((g) => g.id === id)
