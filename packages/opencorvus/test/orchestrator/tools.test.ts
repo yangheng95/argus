@@ -18,7 +18,7 @@ import {
 import { createDecisionLog } from "../../src/decision-log"
 import { Identifier } from "../../src/id/id"
 import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
-import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { createOrchestratorTools, READ_CONTEXT_OUTPUT_CHAR_BUDGET } from "../../src/orchestrator/tools"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -4482,6 +4482,121 @@ describe("orchestrator tools", () => {
         expect(result).toContain(secondArtifactID)
         expect(result).toContain(`ses_deep_research_first_${stamp}`)
         expect(result).toContain(`ses_deep_research_second_${stamp}`)
+      },
+    })
+  })
+
+  test("read_context scope all bounds large persisted context while preserving pointers", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_read_context_budget_${stamp}`
+    const taskID = `tsk_read_context_budget_${stamp}`
+    const goalID = `gol_read_context_budget_${stamp}`
+    const specID = `spec_read_context_budget_${stamp}`
+    const giantReportEnd = `GIANT_INTEGRITY_REPORT_END_${stamp}`
+    const giantDeepSummaryEnd = `GIANT_DEEP_SUMMARY_END_${stamp}`
+    const giantFrontendSummaryEnd = `GIANT_FRONTEND_SUMMARY_END_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "read context budget",
+      taskTitle: "read context budget",
+      request: "Keep read_context under its output budget",
+      goalTitle: "Read context budget goal",
+      goalSlug: "read-context-budget-goal",
+      objective: "Expose bounded read_context state without large raw artifacts",
+      now,
+      specID,
+      requirementIDs: ["REQ-BUDGET"],
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "read context budget parent" })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+
+        const integrityArtifactID = recordIntegrityAttempt({
+          taskID,
+          sessionID: `ses_integrity_budget_${stamp}`,
+          lineage: activeOnlyLineage(taskID, specID),
+          verdict: "needs_correction",
+          phase: "post_build",
+          reviewers: [{ reviewerID: "rev_budget", scope: "Read context budget", verdict: "needs_correction" }],
+          findings: [
+            integrityFinding({
+              id: `finding_read_context_budget_${stamp}`,
+              description: "read_context must not inline full integrity reports.",
+              repair: "Render a bounded excerpt and point at the integrity artifact.",
+              filePaths: ["src/index.ts"],
+              requirementIDs: ["REQ-BUDGET"],
+              reviewers: ["rev_budget"],
+            }),
+          ],
+          teamReportMarkdown: `GIANT_INTEGRITY_REPORT_START_${stamp}\n${"integrity report body ".repeat(5_000)}\n${giantReportEnd}`,
+          now: now + 1,
+        })
+
+        const deepBrief: any = minimalDeepResearchBrief({
+          taskID,
+          sessionID: `ses_deep_budget_${stamp}`,
+        })
+        deepBrief.summary = `GIANT_DEEP_SUMMARY_START_${stamp} ${"deep summary body ".repeat(2_000)} ${giantDeepSummaryEnd}`
+        const deepArtifactID = persistTaskResearchBrief({
+          taskID,
+          brief: deepBrief,
+          now: now + 2,
+        })
+
+        const frontendBrief: any = minimalFrontendResearchBrief({
+          taskID,
+          sessionID: `ses_frontend_budget_${stamp}`,
+          sourceURL: "https://example.com/budget",
+        })
+        frontendBrief.summary = `GIANT_FRONTEND_SUMMARY_START_${stamp} ${"frontend summary body ".repeat(2_000)} ${giantFrontendSummaryEnd}`
+        frontendBrief.subpage_research_tasks = Array.from({ length: 20 }, (_, index) => ({
+          id: `subpage_${index}`,
+          parent_url: "https://example.com/budget",
+          url: `https://example.com/budget/${index}/${"long-path-segment-".repeat(20)}`,
+          title: `Subpage ${index}`,
+          reason: "Large task list must stay bounded in read_context.",
+          suggested_focus: "Bounded pointer rendering.",
+          priority: "medium" as const,
+          evidence_ids: ["ev_page_reference"],
+        }))
+        const frontendArtifactID = persistTaskFrontendResearchBrief({
+          taskID,
+          brief: frontendBrief,
+          now: now + 3,
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(await tools.read_context.execute({ scope: "all" }, buildToolOptions("read_context")))
+
+        expect(result.length).toBeLessThanOrEqual(READ_CONTEXT_OUTPUT_CHAR_BUDGET)
+        expect(result).toContain(goalID)
+        expect(result).toContain("REQ-BUDGET")
+        expect(result).toContain(integrityArtifactID)
+        expect(result).toContain(deepArtifactID)
+        expect(result).toContain(frontendArtifactID)
+        expect(result).toContain(`ses_deep_budget_${stamp}`)
+        expect(result).toContain(`ses_frontend_budget_${stamp}`)
+        expect(result).toContain("https://example.com/budget")
+        expect(result).toContain("read_context omitted")
+        expect(result).not.toContain(giantReportEnd)
+        expect(result).not.toContain(giantDeepSummaryEnd)
+        expect(result).not.toContain(giantFrontendSummaryEnd)
       },
     })
   })
