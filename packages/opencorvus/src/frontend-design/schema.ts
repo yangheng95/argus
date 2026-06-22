@@ -71,7 +71,7 @@ export const ComponentReusePlanItemSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "Concrete existing file/component/design-system primitive/library/package to reuse, or inspected paths when a project-specific component is justified.",
+      "Concrete reuse target. Name one installed package from package.json, one existing project/source file path, or one design-system primitive identifier the agent actually inspected. Do not write prose such as 'use the table package'; put explanations in project_specific_reason, parity_guard, or notes.",
     ),
   mature_library_candidates: z
     .array(z.string().min(1))
@@ -134,7 +134,7 @@ export const BaselineReplacementPlanItemSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "Concrete project component/design primitive/library package to reuse, or inspected paths plus reason for project-specific/deferred work.",
+      "Concrete reuse target for this replacement boundary. Name one installed package from package.json, one existing project/source file path, or one design-system primitive identifier the agent actually inspected. Do not use prose as the value; explanations belong in project_specific_reason, deletion_rule, parity_guard, or notes.",
     ),
   mature_library_candidates: z
     .array(z.string().min(1))
@@ -362,7 +362,12 @@ export const FrontendTemplateFinalSchema = z.object({
         .default("source_baseline_input"),
       project_root: z.string().default(""),
       source_package: z.string().default(""),
-      entrypoints: z.array(z.string().min(1)).default([]),
+      entrypoints: z
+        .array(z.string().min(1))
+        .default([])
+        .describe(
+          "Role-specific entrypoint paths. For role=implementation_target, every item must be a real project-root-relative file under project_root. For role=visual_baseline_input, name the source-editable visual-html-skeleton files and validation artifacts such as index.html, token/region CSS, screenshots, or diff outputs. Do not put .opencorvus report paths or prose here.",
+        ),
       generation_tool: z.string().default(""),
       notes: z.array(z.string().min(1)).default([]),
     })
@@ -475,7 +480,12 @@ export const ToolComponentReusePlanItemSchema = z.object({
     "extracted_baseline_defer",
     "project_specific_component",
   ]),
-  reuse_source: z.string().min(1),
+  reuse_source: z
+    .string()
+    .min(1)
+    .describe(
+      "Concrete reuse target: installed package, existing project/source file path, or inspected design-system primitive identifier. Explanatory prose belongs in project_specific_reason, parity_guard, or notes.",
+    ),
   mature_library_candidates: z.array(z.string().min(1)).default([]),
   props_states: z.string().min(1),
   replacement_boundary: z.string().min(1),
@@ -494,7 +504,12 @@ export const ToolBaselineReplacementPlanItemSchema = z.object({
     "extracted_baseline_defer",
     "project_specific_component",
   ]),
-  reuse_source: z.string().min(1),
+  reuse_source: z
+    .string()
+    .min(1)
+    .describe(
+      "Concrete reuse target for this boundary: installed package, existing project/source file path, or inspected design-system primitive identifier. Explanatory prose belongs in project_specific_reason, deletion_rule, parity_guard, or notes.",
+    ),
   mature_library_candidates: z.array(z.string().min(1)).default([]),
   deletion_rule: z.string().min(1),
   source_refs: z.array(z.string().min(1)).default([]),
@@ -543,7 +558,12 @@ export const FrontendTemplateToolInputSchema = z.object({
         .default("source_baseline_input"),
       project_root: z.string().default(""),
       source_package: z.string().default(""),
-      entrypoints: z.array(z.string().min(1)).default([]),
+      entrypoints: z
+        .array(z.string().min(1))
+        .default([])
+        .describe(
+          "Role-specific entrypoint paths. For role=implementation_target, every item must be a real project-root-relative file under project_root. For role=visual_baseline_input, name the visual-html-skeleton files and validation artifacts. Do not put .opencorvus report paths or prose here.",
+        ),
       generation_tool: z.string().default(""),
       notes: z.array(z.string().min(1)).default([]),
     })

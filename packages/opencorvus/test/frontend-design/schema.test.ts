@@ -52,11 +52,26 @@ function visualValidationEvidence() {
 }
 
 test("frontend-design schema module owns compact submit schema and visual spec schema", () => {
-  const providerSchema = asSchema(FrontendTemplateToolInputSchema).jsonSchema
+  const providerSchema = asSchema(FrontendTemplateToolInputSchema).jsonSchema as any
 
   expect(providerSchema.required).toContain("final_acceptance_mode")
   expect(providerSchema.required).toContain("material_inventory_items")
   expect(providerSchema.properties?.material_inventory_items).toHaveProperty("minItems", 1)
+  expect(providerSchema.properties?.component_reuse_plan?.items?.properties?.reuse_source?.description).toContain(
+    "Concrete reuse target",
+  )
+  expect(providerSchema.properties?.component_reuse_plan?.items?.properties?.reuse_source?.description).toContain(
+    "installed package",
+  )
+  expect(providerSchema.properties?.baseline_replacement_plan?.items?.properties?.reuse_source?.description).toContain(
+    "Explanatory prose belongs",
+  )
+  expect(providerSchema.properties?.frontend_project?.properties?.entrypoints?.description).toContain(
+    "role=implementation_target",
+  )
+  expect(providerSchema.properties?.frontend_project?.properties?.entrypoints?.description).toContain(
+    "role=visual_baseline_input",
+  )
   expect(JSON.stringify(providerSchema).length).toBeLessThan(12_000)
   expect(
     VisualSpecSchema.parse({

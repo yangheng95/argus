@@ -1276,31 +1276,28 @@ const AddGoalInputSchema = z.object({
     .describe("Evidence that this new goal comes from the latest operator instruction or current task findings."),
 })
 
-const FrontendDesignReasonField = z.string().describe("Why frontend design is needed for this task")
+const FrontendDesignReasonField = z
+  .string()
+  .describe(
+    "Why frontend_design is the right visual implementation-template producer for the current task. Name the requested deliverable, the visual reference source, and why the downstream workflow needs a frontend_design public report/evidence manifest instead of only research notes.",
+  )
 const FrontendDesignUrlsField = z
-  .array(z.string())
+  .array(z.string().min(1).refine(isHttpWebpageUrl, "frontend_design urls entries must be HTTP(S) URLs"))
   .optional()
   .describe(
-    "Design-reference URLs: at most one non-Figma live/page URL plus any Figma design links. Design-tool share links " +
-      "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
-      "Non-Figma URLs are available to frontend-design for webpage evidence extraction and may also be materialized " +
-      "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
+    "Fresh frontend_design visual reference URLs. Use the plural field `urls`; do not send legacy `url`, `source_url`, or `source_urls`. Provide at most one non-Figma live/page URL for the primary webpage clone evidence package, plus any Figma design links. Non-Figma URLs are rendered for webpage evidence extraction and screenshot materialization. Figma URLs use the connected Figma MCP path. Use only when the URL is implementation/clone/visual-parity evidence, not merely PRD/SPEC/report source material.",
   )
 const FrontendDesignFigmaUrlField = z
   .string()
   .optional()
   .describe(
-    "Figma file URL materialized through the connected Figma MCP server (figma.com/file/... or figma.com/design/...). " +
-      "Requires Figma MCP tools get_design_context, get_screenshot, get_metadata, and get_variable_defs.",
+    "Single Figma file URL materialized through the connected Figma MCP server (figma.com/file/... or figma.com/design/...). Use this field or include the Figma URL in `urls`; do not duplicate the same link in both fields. Requires Figma MCP tools get_design_context, get_screenshot, get_metadata, and get_variable_defs.",
   )
 const FrontendDesignMaterialsField = z
   .array(z.string())
   .optional()
   .describe(
-    "Local design-material paths (relative to project root, or absolute under it). " +
-      "Supported: images, PDFs, markdown/text style guides, design-tokens JSON, CSS. " +
-      "Each is read from disk and materialized into the attachment store as a visual_reference " +
-      "so it flows through the same multimodal / read_attachment pipeline as user uploads.",
+    "Fresh frontend_design local visual-material paths, relative to the project root or absolute under it. Supported: images, PDFs, markdown/text style guides, design-tokens JSON, and CSS. Each path is read from disk and materialized as a visual_reference. Do not use this field for generated build output or for webpage source URLs; use `urls` for HTTP(S) visual references.",
   )
 
 const FrontendDesignInputSchema = z
@@ -1343,18 +1340,20 @@ const FrontendDesignInputSchema = z
 const FrontendResearchReasonField = z
   .string()
   .min(1)
-  .describe("Why frontend webpage investigation packets are useful for this task.")
+  .describe(
+    "Why frontend_research should publish source-backed webpage investigation packets now. Name the page scope and the downstream requirement/architect/build coverage need. This is not the frontend implementation template; use frontend_design for that.",
+  )
 const FrontendResearchSourceUrlsField = z
   .array(z.string().min(1).refine(isHttpWebpageUrl, "frontend_research source_urls entries must be HTTP(S) webpage URLs"))
   .min(1)
   .max(1)
   .describe(
-    "Exactly one source page URL the frontend-research agent must partition into investigation work packets from prepared evidence. Call frontend_research separately for additional pages.",
+    "Fresh frontend_research source page URLs. Use the plural field `source_urls`; do not send `url`, `source_url`, or frontend_design's `urls`. Provide exactly one HTTP(S) webpage URL per fresh call so the host prepares rendered evidence for that page and the agent partitions it into source-backed functional, visual, interaction, content, responsive, and fidelity work packets. Call frontend_research separately for additional pages.",
   )
 const FrontendResearchFocusField = z
   .string()
   .optional()
-  .describe("Optional narrow focus for the frontend-research agent.")
+  .describe("Optional fresh-session focus for the frontend_research agent, such as a region, interaction, or coverage concern. Omit during continuation recovery.")
 
 const FrontendResearchInputSchema = z
   .object({})

@@ -25,7 +25,7 @@ show(
 )
 show(
   "goals",
-  `SELECT id, title, kind, plan_version_id, retry_count, order_index, workspace_branch, time_updated FROM engine_goal WHERE task_id = '${TASK}' ORDER BY order_index`,
+  `SELECT id, title, kind, plan_version_id, priority, order_index, time_updated FROM engine_goal WHERE task_id = '${TASK}' ORDER BY order_index`,
 )
 show(
   "milestones",
