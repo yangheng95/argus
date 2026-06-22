@@ -25,6 +25,7 @@ import { ingestPersistedConversationMessage } from "./tree-writer"
 import { conversationSourceDirectory } from "./conversation"
 import { taskOwningDirectory } from "./task-directory"
 import { directoryScopedPath, taskScopedPath } from "./task-path"
+import { activeProjectDirectory } from "./project-directory"
 
 // ── Types ──
 
@@ -465,6 +466,8 @@ export async function panelMessage(
     setChatRequest(request as any)
     // If no task is selected, create a new task via direct API (no LLM round-trip)
     if (!taskID) {
+      const creationDirectory = activeProjectDirectory()
+      if (!creationDirectory) throw new Error("panelMessage: task creation requires a project directory")
       const createdTaskID = await createTask({
         text,
         attachments,
@@ -473,7 +476,7 @@ export async function panelMessage(
         signal: controller.signal,
       })
       if (createdTaskID) {
-        await selectTask(createdTaskID)
+        await selectTask(createdTaskID, { directory: creationDirectory })
         return { task_id: createdTaskID }
       }
       throw new Error("Task creation returned no task_id")
