@@ -20,6 +20,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-22-read-context-output-budget.md](2026-06-22-read-context-output-budget.md) | Read Context Output Budget |
 | [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md) | Browser Preview Evidence Previewable Image |
 | [2026-06-22-browser-preview-evidence-live-snapshot-boundary.md](2026-06-22-browser-preview-evidence-live-snapshot-boundary.md) | Browser Preview Evidence Live Snapshot Boundary |
+| [2026-06-22-browser-preview-live-input-batch-owner.md](2026-06-22-browser-preview-live-input-batch-owner.md) | Browser Preview Live Input Batch Owner |
 | [2026-06-22-browser-preview-selected-target-probe.md](2026-06-22-browser-preview-selected-target-probe.md) | Browser Preview Selected Target Probe |
 | [2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md](2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md) | Center Workbench Deferred Reveal Single Layout Owner |
 | [2026-06-22-center-workbench-open-layout-frame.md](2026-06-22-center-workbench-open-layout-frame.md) | Center Workbench Open Layout Frame |

@@ -48,32 +48,34 @@ const BrowserPreviewTargetSelectionRequest = z
   })
   .strict()
 
+const BrowserPreviewLiveInput = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("click"),
+      x: z.number().finite().nonnegative(),
+      y: z.number().finite().nonnegative(),
+      button: z.enum(["left", "middle", "right"]).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("wheel"),
+      x: z.number().finite().nonnegative(),
+      y: z.number().finite().nonnegative(),
+      deltaX: z.number().finite(),
+      deltaY: z.number().finite(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("key"),
+      key: z.string().min(1).max(80),
+    })
+    .strict(),
+])
+
 const BrowserPreviewLiveInputRequest = BrowserPreviewLiveRequest.extend({
-  input: z.discriminatedUnion("kind", [
-    z
-      .object({
-        kind: z.literal("click"),
-        x: z.number().finite().nonnegative(),
-        y: z.number().finite().nonnegative(),
-        button: z.enum(["left", "middle", "right"]).optional(),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("wheel"),
-        x: z.number().finite().nonnegative(),
-        y: z.number().finite().nonnegative(),
-        deltaX: z.number().finite(),
-        deltaY: z.number().finite(),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("key"),
-        key: z.string().min(1).max(80),
-      })
-      .strict(),
-  ]),
+  inputs: BrowserPreviewLiveInput.array().min(1),
 }).strict()
 
 export const BrowserPreviewRoutes = lazy(() =>
@@ -423,7 +425,7 @@ export const BrowserPreviewRoutes = lazy(() =>
           taskID,
           targetID: body.targetID,
           viewportID: body.viewportID,
-          input: body.input,
+          inputs: body.inputs,
           signal: c.req.raw.signal,
         })
         return new Response(bytes, {

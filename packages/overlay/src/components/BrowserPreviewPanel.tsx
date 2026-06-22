@@ -8,13 +8,14 @@ import {
   loadTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   selectTaskBrowserPreviewTarget,
-  sendTaskBrowserPreviewLiveInputObjectUrl,
+  sendTaskBrowserPreviewLiveInputsObjectUrl,
   type BrowserPreviewEvidence,
   type BrowserPreviewLiveInput,
   type BrowserPreviewTarget,
   type BrowserPreviewViewportID,
 } from "../services/browser-preview"
 import { t } from "../utils/i18n"
+import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import { Icon } from "./Icon"
 import { PreviewableImage } from "./ImagePreview"
 import { Button } from "./ui/Button"
@@ -54,7 +55,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [viewportScopeKey, setViewportScopeKey] = createSignal("")
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
-  const [lastAutoCapturedPreviewKey, setLastAutoCapturedPreviewKey] = createSignal("")
   const [pendingSelectedTargetID, setPendingSelectedTargetID] = createSignal("")
   const [targetSelectionError, setTargetSelectionError] = createSignal("")
   const [liveImage, setLiveImage] = createSignal<BrowserPreviewLiveImage>()
@@ -154,25 +154,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const currentVerification = createMemo(() => (currentVerificationRequest() ? verification() : undefined))
   const currentVerificationError = createMemo(() => (currentVerificationRequest() ? verification.error : undefined))
   const currentVerificationLoading = createMemo(() => Boolean(currentVerificationRequest() && verification.loading))
-  const liveScope = createMemo(() => {
-    const taskID = props.taskID()
-    const directory = props.directory()
-    const resolved = currentTarget()
-    const viewport = selectedViewport()
-    if (!panelActive() || !taskID || !directory || resolved?.status !== "ready" || !resolved.id || !viewport) {
-      return undefined
-    }
-    if (latestEvidenceScope() || currentVerificationRequest()) {
-      return undefined
-    }
-    return { taskID, directory, targetID: resolved.id, viewportID: viewport.id, viewport }
-  })
-  const liveImageUrl = createMemo(() => {
-    const scope = liveScope()
-    const image = liveImage()
-    if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return ""
-    return image.url
-  })
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const resolved = currentTarget()
     if (resolved?.status !== "ready" || !resolved.id) return undefined
@@ -192,6 +173,25 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       return undefined
     }
     return evidence
+  })
+  const liveScope = createMemo(() => {
+    const taskID = props.taskID()
+    const directory = props.directory()
+    const resolved = currentTarget()
+    const viewport = selectedViewport()
+    if (!panelActive() || !taskID || !directory || resolved?.status !== "ready" || !resolved.id || !viewport) {
+      return undefined
+    }
+    if (latestEvidenceScope() || renderedEvidence()) {
+      return undefined
+    }
+    return { taskID, directory, targetID: resolved.id, viewportID: viewport.id, viewport }
+  })
+  const liveImageUrl = createMemo(() => {
+    const scope = liveScope()
+    const image = liveImage()
+    if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return ""
+    return image.url
   })
   const [captureImage] = createResource(
     () => {
@@ -242,13 +242,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     return current
   })
 
-  onCleanup(() => {
-    const current = captureImage()
-    if (current) URL.revokeObjectURL(current.url)
-    const live = liveImage()
-    if (live) URL.revokeObjectURL(live.url)
-  })
-
   createEffect(() => {
     const resolved = currentTarget()
     const taskID = props.taskID()
@@ -281,24 +274,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (viewportScopeKey() === key) return
     setViewportScopeKey(key)
     setViewportID(ids.includes(viewportID()) ? viewportID() : ids[0])
-  })
-
-  createEffect(() => {
-    const taskID = props.taskID()
-    const directory = props.directory()
-    const resolved = currentTarget()
-    const viewportIDs = viewports().map((viewport) => viewport.id)
-    if (!panelActive() || !taskID || !directory || resolved?.status !== "ready" || !resolved.url || !resolved.id) {
-      return
-    }
-    const latestEvidenceIDs = resolved.latestEvidenceIDs ?? {}
-    if (viewportIDs.length === 0 || viewportIDs.every((id) => latestEvidenceIDs[id]) || currentVerificationLoading()) {
-      return
-    }
-    const key = `${directory}:${taskID}:${resolved.id}:${viewportIDs.join(",")}`
-    if (lastAutoCapturedPreviewKey() === key) return
-    setLastAutoCapturedPreviewKey(key)
-    setVerificationRequest({ taskID, directory, targetID: resolved.id, viewportIDs, token: Date.now() })
   })
 
   createEffect(() => {
@@ -339,6 +314,21 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   }
 
   let liveFrameRequestSequence = 0
+  let liveInputRequestInFlight = false
+  let pendingLiveInputScopeKey = ""
+  let pendingLiveInputs: BrowserPreviewLiveInput[] = []
+
+  const flushLiveInputOnFrame = createAnimationFrameScheduler(() => {
+    void flushLiveInputBatch()
+  })
+
+  onCleanup(() => {
+    flushLiveInputOnFrame.cancel()
+    const current = captureImage()
+    if (current) URL.revokeObjectURL(current.url)
+    const live = liveImage()
+    if (live) URL.revokeObjectURL(live.url)
+  })
 
   const replaceLiveImageUrl = (scope: NonNullable<ReturnType<typeof liveScope>>, next: string) => {
     const previous = liveImage()
@@ -382,13 +372,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     return Boolean(current && browserPreviewLiveScopeKey(current) === browserPreviewLiveScopeKey(scope))
   }
 
-  const loadLiveFrame = async (scope: NonNullable<ReturnType<typeof liveScope>>, input?: BrowserPreviewLiveInput) => {
+  const loadLiveFrame = async (scope: NonNullable<ReturnType<typeof liveScope>>, inputs?: BrowserPreviewLiveInput[]) => {
     const sequence = ++liveFrameRequestSequence
     setLiveLoading(true)
     setLiveError("")
     try {
-      const next = input
-        ? await sendTaskBrowserPreviewLiveInputObjectUrl({ ...scope, input })
+      const next = inputs
+        ? await sendTaskBrowserPreviewLiveInputsObjectUrl({ ...scope, inputs })
         : await loadTaskBrowserPreviewLiveSnapshotObjectUrl(scope)
       if (sequence !== liveFrameRequestSequence) {
         URL.revokeObjectURL(next)
@@ -412,6 +402,58 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     }
   }
 
+  const clearPendingLiveInputs = () => {
+    pendingLiveInputs = []
+    pendingLiveInputScopeKey = ""
+    liveInputRequestInFlight = false
+    flushLiveInputOnFrame.cancel()
+  }
+
+  const queueLiveInput = (input: BrowserPreviewLiveInput) => {
+    const previous = pendingLiveInputs[pendingLiveInputs.length - 1]
+    if (input.kind === "wheel" && previous?.kind === "wheel") {
+      pendingLiveInputs[pendingLiveInputs.length - 1] = {
+        kind: "wheel",
+        x: input.x,
+        y: input.y,
+        deltaX: previous.deltaX + input.deltaX,
+        deltaY: previous.deltaY + input.deltaY,
+      }
+      return
+    }
+    pendingLiveInputs.push(input)
+  }
+
+  async function flushLiveInputBatch() {
+    if (liveInputRequestInFlight) return
+    const scope = liveScope()
+    if (!scope) {
+      clearPendingLiveInputs()
+      return
+    }
+    const key = browserPreviewLiveScopeKey(scope)
+    if (pendingLiveInputScopeKey && pendingLiveInputScopeKey !== key) {
+      clearPendingLiveInputs()
+      return
+    }
+    if (pendingLiveInputs.length === 0) return
+    const inputs = pendingLiveInputs
+    pendingLiveInputs = []
+    pendingLiveInputScopeKey = key
+    liveInputRequestInFlight = true
+    try {
+      await loadLiveFrame(scope, inputs)
+    } finally {
+      const current = liveScope()
+      liveInputRequestInFlight = false
+      if (!current || browserPreviewLiveScopeKey(current) !== key) {
+        clearPendingLiveInputs()
+        return
+      }
+      if (pendingLiveInputs.length > 0) flushLiveInputOnFrame.schedule()
+    }
+  }
+
   const livePoint = (event: MouseEvent | WheelEvent, element: HTMLElement) => {
     const viewport = selectedViewport()
     const image = element.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
@@ -424,7 +466,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const scope = liveScope()
     const image = liveImage()
     if (!scope || !image || !browserPreviewLiveImageMatchesScope(image, scope)) return
-    void loadLiveFrame(scope, input)
+    const key = browserPreviewLiveScopeKey(scope)
+    if (pendingLiveInputScopeKey && pendingLiveInputScopeKey !== key) clearPendingLiveInputs()
+    pendingLiveInputScopeKey = key
+    queueLiveInput(input)
+    flushLiveInputOnFrame.schedule()
   }
 
   const handleLiveImageDecodeError = (url: string) => {
@@ -464,10 +510,12 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const scope = liveScope()
     const key = scope ? browserPreviewLiveScopeKey(scope) : undefined
     if (previous !== key) {
+      clearPendingLiveInputs()
       clearLiveImageUrl()
       setLiveError("")
     }
     if (!scope) {
+      clearPendingLiveInputs()
       setLiveLoading(false)
       return key
     }

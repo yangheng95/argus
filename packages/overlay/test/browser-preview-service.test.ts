@@ -8,7 +8,7 @@ import {
   loadTaskBrowserPreviewLiveSnapshotObjectUrl,
   loadTaskBrowserPreviewTarget,
   selectTaskBrowserPreviewTarget,
-  sendTaskBrowserPreviewLiveInputObjectUrl,
+  sendTaskBrowserPreviewLiveInputsObjectUrl,
   type BrowserPreviewEvidence,
   type BrowserPreviewTarget,
 } from "../src/services/browser-preview"
@@ -432,7 +432,7 @@ test("browser preview service decodes JSON error bodies from evidence capture bi
   )
 })
 
-test("browser preview service sends live input without URL bodies", async () => {
+test("browser preview service sends live inputs without URL bodies", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest({
     ...fakePreviewTransport((req) => {
@@ -449,12 +449,12 @@ test("browser preview service sends live input without URL bodies", async () => 
     },
   })
 
-  const objectUrl = await sendTaskBrowserPreviewLiveInputObjectUrl({
+  const objectUrl = await sendTaskBrowserPreviewLiveInputsObjectUrl({
     taskID: TASK_ID,
     directory: SAVED_DIRECTORY,
     targetID: "art_previewtarget000000000001",
     viewportID: "desktop",
-    input: { kind: "wheel", x: 10, y: 20, deltaX: 0, deltaY: 120 },
+    inputs: [{ kind: "wheel", x: 10, y: 20, deltaX: 0, deltaY: 120 }],
   })
 
   expect(objectUrl).toStartWith("blob:")
@@ -468,7 +468,7 @@ test("browser preview service sends live input without URL bodies", async () => 
     value: {
       targetID: "art_previewtarget000000000001",
       viewportID: "desktop",
-      input: { kind: "wheel", x: 10, y: 20, deltaX: 0, deltaY: 120 },
+      inputs: [{ kind: "wheel", x: 10, y: 20, deltaX: 0, deltaY: 120 }],
     },
   })
 })
