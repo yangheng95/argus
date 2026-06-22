@@ -53,6 +53,14 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.build.description).not.toContain("After build returns, read the build report")
   })
 
+  test("wait description excludes internal live build polling", () => {
+    expect(tools.wait.description).toContain("Never use wait for live build completion")
+    expect(tools.wait.description).toContain("terminal refill polling")
+    expect(tools.steer_subagent.description).toContain("park this orchestrator wake")
+    expect(tools.steer_subagent.description).toContain("not wait-tool polling")
+    expect(tools.steer_subagent.description).not.toContain("decide between waiting")
+  })
+
   test("build schema rejects misspelled goal scope instead of stripping it into direct build", () => {
     expect(Object.keys(tools.build.inputSchema!.shape)).toEqual([
       "request",

@@ -8,6 +8,7 @@ import { Agent } from "../../src/agent/agent"
 import { ToolRegistry } from "../../src/tool/registry"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY } from "../../src/orchestrator/stateful-tool-names"
 
 /**
  * Orchestrator `wait` is a one-shot deliberate pause for a NAMED external
@@ -36,6 +37,23 @@ function toolOptions() {
       toolPartID: `prt_wait_${stamp}`,
     },
   } as any
+}
+
+function toolOutput(result: unknown): string {
+  if (typeof result === "string") return result
+  if (result && typeof result === "object") {
+    const output = (result as Record<string, unknown>).output
+    if (typeof output === "string") return output
+  }
+  return String(result ?? "")
+}
+
+function toolMetadata(result: unknown): Record<string, unknown> {
+  if (!result || typeof result !== "object") return {}
+  const metadata = (result as Record<string, unknown>).metadata
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>)
+    : {}
 }
 
 describe("createOrchestratorTools — wait wiring", () => {
@@ -82,18 +100,20 @@ describe("createOrchestratorTools — wait execute", () => {
     const { tools } = createOrchestratorTools(toolFixtureInput())
     const requested = 1_200
     const startedAt = Date.now()
-    const result = (await (tools as any).wait.execute(
+    const result = await (tools as any).wait.execute(
       { duration_ms: requested, reason: "external CI propagation" },
       toolOptions(),
-    )) as string
+    )
     const elapsed = Date.now() - startedAt
+    const output = toolOutput(result)
     // setTimeout fires no earlier than the requested ms in Bun/Node. Allow
     // generous CI jitter on the upper bound; the floor is the load-bearing
     // assertion.
     expect(elapsed).toBeGreaterThanOrEqual(requested - 50)
-    expect(result).toMatch(/^Waited \d+ms/)
-    expect(result).toContain("external CI propagation")
-    expect(result).toMatch(/read_context/)
+    expect(output).toMatch(/^Waited \d+ms/)
+    expect(output).toContain("external CI propagation")
+    expect(output).toMatch(/read_context/)
+    expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("observation")
   })
 
   test("returns immediately and reports `aborted` when the abort signal fires mid-wait", async () => {
@@ -107,7 +127,7 @@ describe("createOrchestratorTools — wait execute", () => {
     const pending = (tools as any).wait.execute(
       { duration_ms: requested, reason: "remote queue draining" },
       toolOptions(),
-    ) as Promise<string>
+    ) as Promise<unknown>
     // Fire abort on the next tick so the wait actually parks on setTimeout
     // first. Without the tick, an aborted-before-await path would short
     // circuit through the pre-loop `signal.aborted` branch instead of the
@@ -115,9 +135,11 @@ describe("createOrchestratorTools — wait execute", () => {
     setTimeout(() => controller.abort("test cancel"), 25)
     const result = await pending
     const elapsed = Date.now() - startedAt
+    const output = toolOutput(result)
     expect(elapsed).toBeLessThan(requested / 2)
-    expect(result).toMatch(/^wait aborted after \d+ms/)
-    expect(result).toContain("remote queue draining")
+    expect(output).toMatch(/^wait aborted after \d+ms/)
+    expect(output).toContain("remote queue draining")
+    expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("observation")
   })
 
   test("short-circuits when the abort signal is already aborted before invocation", async () => {
@@ -128,12 +150,14 @@ describe("createOrchestratorTools — wait execute", () => {
       signal: controller.signal,
     })
     const startedAt = Date.now()
-    const result = (await (tools as any).wait.execute(
+    const result = await (tools as any).wait.execute(
       { duration_ms: 30_000, reason: "dev server warmup" },
       toolOptions(),
-    )) as string
+    )
     const elapsed = Date.now() - startedAt
+    const output = toolOutput(result)
     expect(elapsed).toBeLessThan(500)
-    expect(result).toMatch(/^wait aborted after \d+ms/)
+    expect(output).toMatch(/^wait aborted after \d+ms/)
+    expect(toolMetadata(result)[ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]).toBe("observation")
   })
 })

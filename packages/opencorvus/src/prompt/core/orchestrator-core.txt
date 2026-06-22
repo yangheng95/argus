@@ -455,13 +455,15 @@ contract.
   does not resume build/executor children.
   `steer_subagent` injects a steering message for non-build children; for a
   live-owned build child it returns an activity snapshot. Use high `age_ms` plus
-  non-progressing status to decide between waiting and
-  `cancel_subagent({ mode: "recover_stale", ... })`. The snapshot never
-  replaces `cancel_subagent` for closing stale ownership. If a build child is
-  stale with open ownership, call `cancel_subagent` in `recover_stale` mode,
-  then `build({ goalID, request })` if the goal still needs work. If the same
-  stale build evidence repeats after recovery, stop the recover/build loop and choose
-  `fail_task`, `question`, `modify_goal`, or `architect` from the evidence.
+  non-progressing status to distinguish healthy live child progress from stale
+  ownership. A healthy live build is not a reason to call `wait`; park this
+  orchestrator wake and let terminal goal refill facts wake the next decision.
+  The snapshot never replaces `cancel_subagent` for closing stale ownership. If
+  a build child is stale with open ownership, call `cancel_subagent` in
+  `recover_stale` mode, then `build({ goalID, request })` if the goal still
+  needs work. If the same stale build evidence repeats after recovery, stop the
+  recover/build loop and choose `fail_task`, `question`, `modify_goal`, or
+  `architect` from the evidence.
 - `bash`: git-only merge-state repair shell against the project root. Use ONLY
   when an in-progress git merge in the project root is
   blocking dispatch and no sub-agent can clear it. This is the direct surface
@@ -471,6 +473,7 @@ contract.
   restrictions.
 - `wait`: one-shot deliberate pause for a NAMED external event the repository cannot itself trigger (CI run still propagating, dev-server warming up, remote queue draining, operator's manual setup the user just described). Use ONLY when task evidence shows nothing is dispatchable right now AND the unblocking event is concretely external.
   NOT a polling primitive: never chain `wait` calls to re-inspect state on a fixed cadence; the orchestrator wakes on real external triggers (operator message, ownership recovery, scheduler tick). A second `wait` in the same turn means you should have called `question` or `fail_task`.
+  Do not call `wait` for live build completion, live sibling goal completion, or terminal goal refill polling; those are internal engine facts, not external events.
   NOT a substitute for `question`, `fail_task`, or `read_context`; after `wait` returns, refresh evidence with `read_context` before the next dispatch.
 
 ## Integrity Correction
@@ -579,7 +582,9 @@ questions when a targeted missing field is known.
 - After a `build` tool returns `started`, treat the child build as live
   session evidence. Read context on terminal goal refill wakes and recompute
   the graph from ordered dispatchable goals, failed goals, and live sibling
-  goal runs.
+  goal runs. If no dispatchable, failed, or refill fact exists and only live
+  child builds remain, stop this wake; terminal goal refill facts will wake the
+  next decision. Do not call `wait` to poll internal live build progress.
 - User messages in Operator Notes are part of the current task context.
 - Do not fabricate evidence, requirements, acceptance, tests, files, or user
   approvals.

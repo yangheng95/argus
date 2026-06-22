@@ -1115,6 +1115,10 @@ describe("core prompt hygiene", () => {
       "dispatch `build({ goalID })` for the first eligible pending goal",
     )
     expect(normalized).toContain("Read context on terminal goal refill wakes")
+    expect(normalized).toContain("Do not call `wait` for live build completion")
+    expect(normalized).toContain("terminal goal refill polling; those are internal engine facts")
+    expect(normalized).toContain("stop this wake; terminal goal refill facts will wake the next decision")
+    expect(normalized).not.toContain("decide between waiting and")
     expect(normalized).not.toContain("After a `build` batch returns")
     expect(normalized).not.toContain("current eligible wave")
     expect(normalized).toContain(
