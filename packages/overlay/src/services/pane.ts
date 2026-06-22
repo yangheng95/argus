@@ -97,6 +97,23 @@ interface PaneResizeBounds {
   now: number
 }
 
+const pendingPaneHandleSemantics = new Map<PaneConfig, PaneState>()
+
+function flushPaneHandleSemantics(): void {
+  const entries = Array.from(pendingPaneHandleSemantics.entries())
+  pendingPaneHandleSemantics.clear()
+  for (const [config, state] of entries) {
+    renderPaneHandleSemantics(state, config)
+  }
+}
+
+const renderPaneHandleSemanticsOnFrame = createAnimationFrameScheduler(flushPaneHandleSemantics)
+
+function schedulePaneHandleSemantics(state: PaneState, config: PaneConfig): void {
+  pendingPaneHandleSemantics.set(config, { ...state })
+  renderPaneHandleSemanticsOnFrame.schedule()
+}
+
 // ── Helpers ──
 
 /** Clamp a number to [min, max]. */
@@ -329,7 +346,7 @@ export function renderPaneLayout(state: PaneState, config: PaneConfig): void {
   const widths = resolvedPaneWidths(state, config)
   setPaneWidthProperty(config.sidebarVar, widths.sidebar)
   setPaneWidthProperty(config.sectionsVar, widths.sections)
-  renderPaneHandleSemantics(state, config)
+  schedulePaneHandleSemantics(state, config)
 }
 
 /**

@@ -59,6 +59,7 @@ import {
   currentUIScale,
   renderPaneLayout,
   PANEL_PANE_CONFIG,
+  type PaneState,
 } from "./services/pane"
 import { panelMessage } from "./services/chat"
 import {
@@ -124,6 +125,23 @@ if ((import.meta as any).hot) {
 const listenerOpts = { signal: moduleTeardown.signal } as const
 const REGISTERED_ICON_NAMES = new Set<string>(REGISTERED_ICONS)
 const LUCIDE_ICON_NAME_SET = new Set<string>(LUCIDE_ICON_NAMES)
+
+let pendingPaneLayoutState: PaneState | null = null
+
+function flushPaneLayout(): void {
+  const state = pendingPaneLayoutState
+  pendingPaneLayoutState = null
+  if (!state) return
+  renderPaneLayout(state, PANEL_PANE_CONFIG)
+}
+
+const renderPaneLayoutOnFrame = createAnimationFrameScheduler(flushPaneLayout)
+disposers.push(() => renderPaneLayoutOnFrame.cancel())
+
+function schedulePaneLayout(state: PaneState): void {
+  pendingPaneLayoutState = { ...state }
+  renderPaneLayoutOnFrame.schedule()
+}
 
 function iconHtmlName(name: string): IconName {
   if (!REGISTERED_ICON_NAMES.has(name)) throw new Error(`Unknown icon "${name}"`)
@@ -1788,14 +1806,13 @@ disposers.push(
         sections.hidden = false
       }
 
-      renderPaneLayout(
+      schedulePaneLayout(
         {
           sidebarCollapsed,
           rightPanelCollapsed,
           sidebarWidth: settingsStore.sidebarWidth,
           sectionsWidth: settingsStore.sectionsWidth,
-        },
-        PANEL_PANE_CONFIG,
+        }
       )
     })
 
@@ -1978,7 +1995,7 @@ window.addEventListener(
 )
 function applyWindowResize(): void {
   applyZoom(settingsStore.zoom)
-  renderPaneLayout(paneCallbacks.getState(), PANEL_PANE_CONFIG)
+  schedulePaneLayout(paneCallbacks.getState())
   renderCenterWorkbenchPanelLayoutOnFrame.schedule()
 }
 
