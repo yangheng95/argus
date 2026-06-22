@@ -103,13 +103,15 @@ function assertCenterWorkbenchResizeReadsAreDeferred(events: CenterWorkbenchResi
   const writeFrameIDs = new Set(
     events.filter((event) => event.type === "resize-style-write").map((event) => event.frameID),
   )
+  const rectReads = events.filter((event) => event.type === "center-workbench-rect-read")
   const conflictingReads = events.filter(
     (event) => event.type === "center-workbench-rect-read" && writeFrameIDs.has(event.frameID),
   )
   assert.ok(writeFrameIDs.size > 0, `${label}: expected resize style writes, got ${JSON.stringify(events)}`)
-  assert.ok(
-    events.some((event) => event.type === "center-workbench-rect-read" && event.inRaf),
-    `${label}: expected center workbench geometry reads in RAF, got ${JSON.stringify(events)}`,
+  assert.deepEqual(
+    rectReads.filter((event) => !event.inRaf),
+    [],
+    `${label}: center workbench geometry reads must stay in RAF when they happen: ${JSON.stringify(events)}`,
   )
   assert.deepEqual(
     conflictingReads,
@@ -304,6 +306,74 @@ test(
       assert.ok(initial.nowValue! >= initial.minValue!)
       assert.ok(initial.nowValue! <= initial.maxValue!)
       assert.ok(Math.abs(initial.workflowWidth - initial.inspectorWidth) <= 2)
+
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
+      const threePanelLayout = await page.evaluate(async () => {
+        await new Promise<void>((resolveFrame) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()))
+        })
+        const tokenProbe = document.createElement("div")
+        tokenProbe.style.position = "fixed"
+        tokenProbe.style.visibility = "hidden"
+        tokenProbe.style.width = "var(--ui-workbench-panel-min-width)"
+        document.body.appendChild(tokenProbe)
+        const minWidth = tokenProbe.getBoundingClientRect().width
+        tokenProbe.remove()
+
+        const body = document.querySelector<HTMLElement>(".center-workbench-body")!
+        const panels = [
+          document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!,
+          document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")!,
+          document.querySelector<HTMLElement>("#centerWorkbenchInspector")!,
+        ].map((panel) => {
+          const rect = panel.getBoundingClientRect()
+          return {
+            id: panel.id,
+            open: panel.dataset.open,
+            width: rect.width,
+            left: rect.left,
+            right: rect.right,
+          }
+        })
+        return {
+          minWidth,
+          bodyClientWidth: body.clientWidth,
+          bodyScrollWidth: body.scrollWidth,
+          panels,
+        }
+      })
+      assert.deepEqual(
+        threePanelLayout.panels.map((panel) => [panel.id, panel.open]),
+        [
+          ["centerWorkbenchWorkflow", "true"],
+          ["centerWorkbenchScreenshots", "true"],
+          ["centerWorkbenchInspector", "true"],
+        ],
+      )
+      for (const panel of threePanelLayout.panels) {
+        assert.ok(
+          panel.width >= threePanelLayout.minWidth - 1,
+          `expected ${panel.id} width ${panel.width} to stay above ${threePanelLayout.minWidth}`,
+        )
+      }
+      for (let index = 1; index < threePanelLayout.panels.length; index += 1) {
+        assert.ok(
+          threePanelLayout.panels[index - 1].right <= threePanelLayout.panels[index].left + 2,
+          `expected open panels not to overlap: ${JSON.stringify(threePanelLayout.panels)}`,
+        )
+      }
+      assert.ok(threePanelLayout.bodyScrollWidth >= threePanelLayout.bodyClientWidth)
+      await mkdir(resolve(".scratch"), { recursive: true })
+      await writeFile(
+        resolve(".scratch", "center-workbench-three-panel-min-width.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      await page.waitForFunction(
+        () => document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open === "false",
+      )
+      await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
 
       const separatorPoint = await page.$eval("#centerWorkbenchSeparatorWorkflow", (node) => {
         const rect = (node as HTMLElement).getBoundingClientRect()

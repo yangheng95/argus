@@ -2882,7 +2882,7 @@ describe("overlay architecture guards", () => {
 
   test("narrow overlay layout keeps non-chat panes scrollable", () => {
     const workspace = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
-    const narrowStart = workspace.indexOf("@media (max-width: 1120px)")
+    const narrowStart = workspace.indexOf("@media (width < 1120px)")
     expect(narrowStart).toBeGreaterThan(-1)
     const narrow = workspace.slice(narrowStart)
 
@@ -3239,7 +3239,8 @@ describe("overlay architecture guards", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) => path.endsWith(".css"))
     const rawColorValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i
     const pxLiteral = /(?<![\w-])-?\d+(?:\.\d+)?px\b/g
-    const mediaBreakpoint = /\(\s*(?:min|max)-(?:width|height)\s*:\s*-?\d+(?:\.\d+)?px\s*\)/g
+    const mediaBreakpoint =
+      /\(\s*(?:(?:min|max)-(?:width|height)\s*:\s*-?\d+(?:\.\d+)?px|(?:width|height)\s*(?:<|<=|>|>=)\s*-?\d+(?:\.\d+)?px)\s*\)/g
 
     for (const file of files) {
       const text = withoutComments(readText(file))

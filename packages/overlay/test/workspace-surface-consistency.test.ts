@@ -49,10 +49,16 @@ test("file changes diff close button uses the Button primitive surface", () => {
   expect(WORKSPACE_CSS).not.toContain("file-changes-diff-close")
 })
 
-test("compact center workbench scrolls open panels instead of crushing them", () => {
-  expect(WORKSPACE_CSS).toContain("@media (max-width: 1120px)")
-  expect(WORKSPACE_CSS).toContain(".center-workbench-body {\n    overflow-x: auto;")
-  expect(WORKSPACE_CSS).toContain("overscroll-behavior-x: contain;")
+test("center workbench scrolls open panels instead of crushing them", () => {
+  const baseBody = bodyOf(".center-workbench-body")
+  expect(baseBody).toContain("overflow-x: auto;")
+  expect(baseBody).toContain("overflow-y: hidden;")
+  expect(baseBody).toContain("overscroll-behavior-x: contain;")
+
+  const openView = bodyOf('.center-workbench-view[data-open="true"]')
+  expect(openView).toContain("min-width: var(--ui-workbench-panel-min-width);")
+
+  expect(WORKSPACE_CSS).toContain("@media (width < 1120px)")
   expect(WORKSPACE_CSS).toContain('.center-workbench-view[data-open="true"]')
   expect(WORKSPACE_CSS).toContain("max(var(--ui-workbench-panel-min-width), calc(50vw))")
 })

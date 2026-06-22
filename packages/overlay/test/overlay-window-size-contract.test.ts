@@ -35,12 +35,18 @@ describe("overlay window and pane size contract", () => {
   test("browser shell tokens match the native overlay minimum", () => {
     const tokens = readOverlay("src/styles/tokens/design-language.css")
     const base = readOverlay("src/styles/cascade/base.css")
+    const activity = readOverlay("src/styles/surfaces/activity.css")
+    const workspace = readOverlay("src/styles/surfaces/workspace.css")
 
     expect(tokens).toContain("--ui-breakpoint-xl: 1120px")
     expect(tokens).toContain("--ui-overlay-min-width: 1120px")
     expect(tokens).toContain("--ui-overlay-min-height: 720px")
     expect(base).toContain("min-width: var(--ui-overlay-min-width)")
     expect(base).toContain("min-height: var(--ui-overlay-min-height)")
+    expect(workspace).toContain("@media (width < 1120px)")
+    expect(activity).toContain("@media (width < 1120px)")
+    expect(workspace).not.toContain("@media (max-width: 1120px)")
+    expect(activity).not.toContain("@media (max-width: 1120px)")
   })
 
   test("pane and center workbench minimums are token-owned", () => {

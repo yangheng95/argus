@@ -132,7 +132,9 @@ code .file-link:focus-visible {
   min-width: 0;
   min-height: 0;
   display: flex;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
 }
 
 .center-workbench-view {
@@ -144,6 +146,10 @@ code .file-link:focus-visible {
 
 .center-workbench-view[data-open="false"] {
   display: none;
+}
+
+.center-workbench-view[data-open="true"] {
+  min-width: var(--ui-workbench-panel-min-width);
 }
 
 .center-workbench-view[data-open="true"],
@@ -544,7 +550,7 @@ body[data-resizing="true"] .pane-resizer::after {
   border-bottom: 0;
 }
 
-@media (max-width: 1120px) {
+@media (width < 1120px) {
   /* breakpoint: --ui-breakpoint-xl */
   .panel-body {
     flex-direction: column;
@@ -568,12 +574,6 @@ body[data-resizing="true"] .pane-resizer::after {
     max-width: none;
     border-left: 0;
     border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
-  }
-
-  .center-workbench-body {
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
   }
 
   .center-workbench-view[data-open="true"] {
