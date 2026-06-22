@@ -169,11 +169,15 @@ describe("browser preview target resolver", () => {
         url: "http://127.0.0.1:5174/unreachable",
         now: 200,
       })
+      const probedUrls: string[] = []
 
       const target = await resolveBrowserPreviewTarget({
         projectRoot: tmp.path,
         taskID,
-        isVisible: async (url) => url === reachable.url,
+        isVisible: async (url) => {
+          probedUrls.push(url)
+          return url === reachable.url
+        },
       })
 
       expect(target.id).toBe(unreachable.id)
@@ -185,6 +189,40 @@ describe("browser preview target resolver", () => {
       ])
       expect(target.diagnostics.join("\n")).toContain(unreachable.url)
       expect(target.diagnostics.join("\n")).not.toContain(reachable.url)
+      expect(probedUrls).toEqual([unreachable.url])
+    },
+    { timeout: BROWSER_PREVIEW_TARGET_TEST_TIMEOUT_MILLISECONDS },
+  )
+
+  test(
+    "probes only the selected preview target while keeping older candidates visible",
+    async () => {
+      await using tmp = await tmpdir()
+      const taskID = await seedTask(tmp.path)
+      for (let index = 0; index < 12; index += 1) {
+        await persistBrowserPreviewTarget({
+          taskID,
+          url: `http://127.0.0.1:${5200 + index}/candidate-${index}`,
+          now: 100 + index,
+        })
+      }
+      const selected = findRecentBrowserPreviewTargets(taskID)[0]!
+      const probedUrls: string[] = []
+
+      const target = await resolveBrowserPreviewTarget({
+        projectRoot: tmp.path,
+        taskID,
+        isVisible: async (url) => {
+          probedUrls.push(url)
+          return true
+        },
+      })
+
+      expect(target.status).toBe("ready")
+      expect(target.id).toBe(selected.id)
+      expect(target.candidates).toHaveLength(12)
+      expect(target.candidates[0]).toMatchObject({ id: selected.id, selected: true })
+      expect(probedUrls).toEqual([selected.url])
     },
     { timeout: BROWSER_PREVIEW_TARGET_TEST_TIMEOUT_MILLISECONDS },
   )

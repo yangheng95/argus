@@ -17,6 +17,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | File | Title |
 | --- | --- |
 | [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md) | Browser Preview Evidence Previewable Image |
+| [2026-06-22-browser-preview-selected-target-probe.md](2026-06-22-browser-preview-selected-target-probe.md) | Browser Preview Selected Target Probe |
 | [2026-06-22-center-workbench-open-layout-frame.md](2026-06-22-center-workbench-open-layout-frame.md) | Center Workbench Open Layout Frame |
 | [2026-06-22-overlay-resize-frame-coalescing.md](2026-06-22-overlay-resize-frame-coalescing.md) | Overlay Resize Frame Coalescing |
 | [2026-06-22-overlay-ui-serving-source.md](2026-06-22-overlay-ui-serving-source.md) | Overlay UI Serving Source |
