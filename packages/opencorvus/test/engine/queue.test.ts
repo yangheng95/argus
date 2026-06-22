@@ -3,6 +3,7 @@ import {
   advanceQueue,
   directoryQueueSnapshot,
   dispatchTaskLoop,
+  drainQueuedTaskEventIfUnowned,
   queuedTaskEventStats,
   reorderQueuedTasksForCwd,
   taskCwd,
@@ -91,6 +92,232 @@ describe("engine queue", () => {
           event: { note: "caller-supplied note" },
         })
         expect(taskStatus(taskID)).toBe("active")
+      },
+    })
+  })
+
+  test("passive wake does not restart a stream-error blocked run", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_queue_stream_blocked_${Date.now()}`
+        const runID = `run_queue_stream_blocked_${Date.now()}`
+        const now = Date.now()
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "stream blocked task",
+              request: "do not restart without operator intent",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-blocked",
+              payload: {
+                plan_version_id: null,
+                session_id: null,
+                executor: "opencorvus",
+                status: "blocked",
+                phase: "dispatch",
+                blocking_reason: "orchestrator_stream_error",
+                error: "certificate has expired",
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        const passiveResult = await dispatchTaskLoop({ taskID })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(passiveResult).toBe("ignored")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(findRun(runID)?.status).toBe("blocked")
+
+        const operatorResult = await dispatchTaskLoop({
+          taskID,
+          event: {
+            note: "User requested replan after stream error.",
+            operatorIntent: { kind: "replan" },
+          },
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(operatorResult).toBe("started")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            note: "User requested replan after stream error.",
+            operatorIntent: { kind: "replan" },
+          },
+        })
+      },
+    })
+  })
+
+  test("queued passive wake is discarded after the run becomes stream-error blocked", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_queue_stream_blocked_drain_${Date.now()}`
+        const runID = `run_queue_stream_blocked_drain_${Date.now()}`
+        const goalID = `goal_queue_stream_blocked_drain_${Date.now()}`
+        const childSessionID = `ses_stream_blocked_drain_${Date.now()}`
+        const now = Date.now()
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "stream blocked drain task",
+              request: "discard passive queued wake",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "Live goal",
+              slug: "live-goal",
+              objective: "Hold ownership while a passive wake queues.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-running",
+              payload: {
+                plan_version_id: null,
+                session_id: null,
+                executor: "opencorvus",
+                status: "running",
+                phase: "dispatch",
+                blocking_reason: null,
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        const goalRunID = beginBuildAttempt({ taskID, goalID, sessionID: childSessionID, now })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: `ses_orchestrator_${now}`,
+          orchestratorMessageID: `msg_orchestrator_${now}`,
+          toolCallID: `cal_build_${now}`,
+          toolPartID: `prt_build_${now}`,
+          childSessionID,
+          scope: "goal",
+          goalID,
+          goalRunID,
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+
+        const queuedResult = await dispatchTaskLoop({
+          taskID,
+          event: { note: "terminal goal refill wake queued behind live ownership" },
+        })
+        expect(queuedResult).toBe("queued")
+
+        Database.use((db) =>
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: `${runID}_blocked`,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-blocked",
+              payload: {
+                plan_version_id: null,
+                session_id: null,
+                executor: "opencorvus",
+                status: "blocked",
+                phase: "dispatch",
+                blocking_reason: "orchestrator_stream_error",
+                error: "certificate has expired",
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now + 1,
+              time_updated: now + 1,
+            })
+            .run(),
+        )
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 2,
+        })
+
+        const drained = await drainQueuedTaskEventIfUnowned(taskID)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(drained).toBe(false)
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(findRun(runID)?.status).toBe("blocked")
       },
     })
   })

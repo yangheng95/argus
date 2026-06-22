@@ -47,6 +47,9 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("visual_baseline_allowed")
     expect(prompt).toContain("`frontend_project.role=visual_baseline_input`")
     expect(prompt).toContain("maintainable_replacement_required")
+    expect(prompt).toContain("implementation_phase_outcomes")
+    expect(prompt).toContain("evidence_lock")
+    expect(prompt).toContain("runtime_visual_verification")
     expect(prompt).toContain("Pre-selection browsing is only for choosing the next source region")
     expect(prompt).toContain("The candidate component read is the last source component read before selection")
     expect(prompt).toContain("reading a second `src/components/source-dom/*` file")
@@ -203,6 +206,8 @@ describe("frontend-design prompt assembly", () => {
     )
     expect(prompt).toContain("Report visual-only work as `submit_frontend_template.frontend_project.role=visual_baseline_input`")
     expect(prompt).toContain("For production/component-system tasks, set `final_acceptance_mode=maintainable_replacement_required`")
+    expect(prompt).toContain("submit `implementation_phase_outcomes`")
+    expect(prompt).toContain("package.json or source imports prove it")
     expect(prompt).toContain("not the implementation target or acceptance app root")
     expect(prompt).toContain(
       "if the skeleton conflicts with those artifacts or visible pixels, the original source evidence wins",

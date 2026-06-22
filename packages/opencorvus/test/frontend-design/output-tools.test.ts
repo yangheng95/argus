@@ -18,6 +18,49 @@ const materialInventoryItems = [
   },
 ]
 
+const implementationPhaseOutcomes = [
+  {
+    id: "phase-evidence-lock",
+    phase: "evidence_lock" as const,
+    title: "Evidence lock",
+    deliverable: "Lock source screenshots, source IR, component inventory, and package evidence before implementation.",
+    source_refs: ["web-clone-source/reference.png", "web-clone-source/source-ir/component-tree.json"],
+    acceptance: "Final implementation work cites the locked source evidence instead of re-extracting or guessing.",
+  },
+  {
+    id: "phase-implementation-scaffold",
+    phase: "implementation_scaffold" as const,
+    title: "Implementation scaffold",
+    deliverable: "Bind the maintainable implementation to a real project scaffold and runtime entrypoints.",
+    source_refs: ["package.json", "src/main.tsx"],
+    acceptance: "The implementation target root and entrypoints resolve to real project files.",
+  },
+  {
+    id: "phase-data-component-transcription",
+    phase: "data_component_transcription" as const,
+    title: "Data and component transcription",
+    deliverable: "Transcribe repeated source content into data modules and semantic component families.",
+    source_refs: ["web-clone-source/source-ir/content-model.json"],
+    acceptance: "Rows, cards, controls, and charts render from structured data and component props.",
+  },
+  {
+    id: "phase-runtime-visual-verification",
+    phase: "runtime_visual_verification" as const,
+    title: "Runtime and visual verification",
+    deliverable: "Verify the running project against reference screenshots and interaction-state evidence.",
+    source_refs: ["web-clone-source/reference.png", "web-clone-source/reference-mobile.png"],
+    acceptance: "Reference-vs-implementation visual evidence is captured for desktop and mobile.",
+  },
+  {
+    id: "phase-source-quality-cleanup",
+    phase: "source_quality_cleanup" as const,
+    title: "Source quality cleanup",
+    deliverable: "Remove generated/static skeleton debt and verify design-system component usage.",
+    source_refs: ["web-clone-source/web-clone-implementation-contract.json"],
+    acceptance: "No screenshot wrappers, primitive substitutes, raw generated DOM dumps, or unverified library claims remain.",
+  },
+]
+
 const sourceReferenceSha = "b".repeat(64)
 const sourceReferencePng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNgYGD4DwABBAEAghnFoQAAAABJRU5ErkJggg==",
@@ -75,6 +118,65 @@ async function createVisualEvidenceFixture(overrides: Record<string, unknown> = 
       source_reference_sha256: sha256(sourceReferencePng),
       ...overrides,
     }),
+  }
+}
+
+async function createImplementationProjectFixture(dependencies: Record<string, string> = {}) {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-implementation-target-"))
+  const projectRoot = "app"
+  const projectDir = path.join(workspaceRoot, projectRoot)
+  await fs.mkdir(path.join(projectDir, "src"), { recursive: true })
+  await fs.writeFile(
+    path.join(projectDir, "package.json"),
+    JSON.stringify({ dependencies }, null, 2),
+  )
+  await fs.writeFile(path.join(projectDir, "src", "main.tsx"), "export const app = true\n")
+  return { workspaceRoot, projectRoot }
+}
+
+function maintainableImplementationPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    design_system: "AInvest component system",
+    tech_stack: ["React", "Vite"],
+    final_acceptance_mode: "maintainable_replacement_required",
+    frontend_template: "Production-mergeable page using real components.",
+    fillable_modules: "Implementation modules.",
+    component_inventory: "Data table and page shell components.",
+    component_reuse_plan: [
+      {
+        family_id: "comp-table",
+        name: "Data table",
+        observed_surface: "Main data table",
+        source_refs: ["web-clone-source/reference.png"],
+        implementation_strategy: "project_specific_component",
+        reuse_source: "src/components/DataTable.tsx",
+        mature_library_candidates: [],
+        props_states: "rows, columns, hover",
+        replacement_boundary: "table region",
+        parity_guard: "visual diff",
+        project_specific_reason: "No installed mature library is required for this minimal fixture.",
+      },
+    ],
+    baseline_replacement_plan: [],
+    implementation_phase_outcomes: implementationPhaseOutcomes,
+    material_inventory: "AInvest tokens and source data.",
+    material_inventory_items: materialInventoryItems,
+    visual_consistency_contract: "Match the reference visual density and component states.",
+    ui_data_contract: "Static fixture data.",
+    frontend_project: {
+      status: "created",
+      role: "source_baseline_input",
+      project_root: "frontend-design-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: ["README.md", "src/App.tsx", "src/styles.css"],
+      generation_tool: "host-prepared:create_frontend_skeleton_project",
+      notes: ["source baseline ready"],
+    },
+    template_iteration_notes: ["checked production handoff"],
+    completeness_review: "complete enough",
+    reference_artifacts: ["web-clone-source/reference.png"],
+    open_questions: [],
+    ...overrides,
   }
 }
 
@@ -191,6 +293,7 @@ test("submit_frontend_template tolerates missing review fields from provider too
           project_specific_reason: "not applicable",
         },
       ],
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       material_inventory: "materials",
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
@@ -235,6 +338,7 @@ test("submit_frontend_template normalizes markdown open questions", async () => 
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
       ui_data_contract: "data contract",
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       frontend_project: {
         status: "created",
         role: "source_baseline_input",
@@ -285,6 +389,7 @@ test("submit_frontend_template rebuilds flattened frontend_project provider args
         },
       ],
       baseline_replacement_plan: [],
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       material_inventory: "materials",
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",
@@ -375,6 +480,7 @@ test("submit_frontend_template renders compact structured fields into markdown h
           project_specific_reason: "not applicable",
         },
       ],
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       material_inventory_items: [
         {
           title: "Reference",
@@ -1023,6 +1129,165 @@ test("submit_frontend_template rejects maintainable mode downgraded to visual ba
   ).rejects.toThrow("maintainable_replacement_required cannot submit frontend_project.role=visual_baseline_input")
 
   expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects maintainable mode without structured implementation phase outcomes", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  const payload = maintainableImplementationPayload({ implementation_phase_outcomes: [] })
+
+  await expect(submit.execute(payload, {})).rejects.toThrow(
+    "maintainable_replacement_required requires structured implementation_phase_outcomes",
+  )
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects implementation target with missing real entrypoint", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-missing-entrypoint-"))
+  const projectRoot = "app"
+  await fs.mkdir(path.join(workspaceRoot, projectRoot), { recursive: true })
+  await fs.writeFile(path.join(workspaceRoot, projectRoot, "package.json"), JSON.stringify({ dependencies: {} }))
+  const kit = createFrontendTemplateOutputTools({ workspaceRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      maintainableImplementationPayload({
+        frontend_project: {
+          status: "created",
+          role: "implementation_target",
+          project_root: projectRoot,
+          source_package: "web-clone-source",
+          entrypoints: ["src/main.tsx"],
+          generation_tool: "existing-project",
+          notes: ["implementation scaffold inspected"],
+        },
+      }),
+      {},
+    ),
+  ).rejects.toThrow("requires every entrypoint to be a real project-root-relative file")
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template rejects implementation target claiming an uninstalled mature library", async () => {
+  const fixture = await createImplementationProjectFixture({})
+  const kit = createFrontendTemplateOutputTools({ workspaceRoot: fixture.workspaceRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(
+    submit.execute(
+      maintainableImplementationPayload({
+        component_reuse_plan: [
+          {
+            family_id: "comp-map",
+            name: "Industrial map",
+            observed_surface: "Interactive map",
+            source_refs: ["web-clone-source/reference.png"],
+            implementation_strategy: "mature_library",
+            reuse_source: "echarts",
+            mature_library_candidates: ["echarts"],
+            props_states: "regions, tooltip, hover state",
+            replacement_boundary: "map region",
+            parity_guard: "visual diff and keyboard tooltip check",
+            project_specific_reason: "not applicable",
+          },
+        ],
+        frontend_project: {
+          status: "created",
+          role: "implementation_target",
+          project_root: fixture.projectRoot,
+          source_package: "web-clone-source",
+          entrypoints: ["src/main.tsx"],
+          generation_tool: "existing-project",
+          notes: ["implementation scaffold inspected"],
+        },
+      }),
+      {},
+    ),
+  ).rejects.toThrow("reuse sources must bind to an installed package")
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template accepts implementation target with installed mature library and real entrypoint", async () => {
+  const fixture = await createImplementationProjectFixture({ echarts: "^5.5.0" })
+  const kit = createFrontendTemplateOutputTools({ workspaceRoot: fixture.workspaceRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  const out = await submit.execute(
+    maintainableImplementationPayload({
+      component_reuse_plan: [
+        {
+          family_id: "comp-map",
+          name: "Industrial map",
+          observed_surface: "Interactive map",
+          source_refs: ["web-clone-source/reference.png"],
+          implementation_strategy: "mature_library",
+          reuse_source: "echarts",
+          mature_library_candidates: ["echarts"],
+          props_states: "regions, tooltip, hover state",
+          replacement_boundary: "map region",
+          parity_guard: "visual diff and keyboard tooltip check",
+          project_specific_reason: "not applicable",
+        },
+      ],
+      frontend_project: {
+        status: "created",
+        role: "implementation_target",
+        project_root: fixture.projectRoot,
+        source_package: "web-clone-source",
+        entrypoints: ["src/main.tsx"],
+        generation_tool: "existing-project",
+        notes: ["implementation scaffold inspected"],
+      },
+    }),
+    {},
+  )
+
+  expect(out).toContain("OK")
+  expect(kit.getCollector().final?.frontend_project.role).toBe("implementation_target")
+})
+
+test("submit_frontend_template accepts implementation target rooted at the workspace", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-workspace-root-target-"))
+  await fs.mkdir(path.join(workspaceRoot, "src"), { recursive: true })
+  await fs.writeFile(path.join(workspaceRoot, "package.json"), JSON.stringify({ dependencies: { echarts: "^5.5.0" } }))
+  await fs.writeFile(path.join(workspaceRoot, "src", "main.tsx"), "export const app = true\n")
+  const kit = createFrontendTemplateOutputTools({ workspaceRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  const out = await submit.execute(
+    maintainableImplementationPayload({
+      component_reuse_plan: [
+        {
+          family_id: "comp-map",
+          name: "Industrial map",
+          observed_surface: "Interactive map",
+          source_refs: ["web-clone-source/reference.png"],
+          implementation_strategy: "mature_library",
+          reuse_source: "echarts",
+          mature_library_candidates: ["echarts"],
+          props_states: "regions, tooltip, hover state",
+          replacement_boundary: "map region",
+          parity_guard: "visual diff and keyboard tooltip check",
+          project_specific_reason: "not applicable",
+        },
+      ],
+      frontend_project: {
+        status: "created",
+        role: "implementation_target",
+        project_root: ".",
+        source_package: "web-clone-source",
+        entrypoints: ["src/main.tsx"],
+        generation_tool: "existing-project",
+        notes: ["implementation scaffold inspected at workspace root"],
+      },
+    }),
+    {},
+  )
+
+  expect(out).toContain("OK")
+  expect(kit.getCollector().final?.frontend_project.project_root).toBe(".")
 })
 
 test("submit_frontend_template rejects visual HTML skeleton masquerading as implementation target", async () => {
@@ -2032,6 +2297,7 @@ test("component reuse plan accepts canonical provider fields and incomplete libr
     material_inventory_items: materialInventoryItems,
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
+    implementation_phase_outcomes: implementationPhaseOutcomes,
     frontend_project: {
       status: "created",
       role: "source_baseline_input",
@@ -2160,6 +2426,7 @@ test("maintainable acceptance does not synthesize a whole-page source baseline r
     material_inventory_items: materialInventoryItems,
     visual_consistency_contract: "visual contract",
     ui_data_contract: "data contract",
+    implementation_phase_outcomes: implementationPhaseOutcomes,
     frontend_project: {
       status: "created",
       role: "source_baseline_input",
@@ -2254,6 +2521,7 @@ test("baseline replacement project-specific reason is optional provider detail",
           parity_guard: "Run visual diff and source audit.",
         },
       ],
+      implementation_phase_outcomes: implementationPhaseOutcomes,
       material_inventory: "materials",
       material_inventory_items: materialInventoryItems,
       visual_consistency_contract: "visual contract",

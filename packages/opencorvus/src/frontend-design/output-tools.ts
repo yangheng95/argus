@@ -83,6 +83,13 @@ export interface FrontendTemplateOutputCollector {
 }
 
 const VISUAL_ANCHOR_BUDGET = 80
+const REQUIRED_IMPLEMENTATION_PHASES = [
+  "evidence_lock",
+  "implementation_scaffold",
+  "data_component_transcription",
+  "runtime_visual_verification",
+  "source_quality_cleanup",
+] as const
 const artifactValidatedVisualFinals = new WeakSet<FrontendTemplateFinal>()
 
 function emptyCollector(): FrontendTemplateOutputCollector {
@@ -150,6 +157,23 @@ function renderBaselineReplacementPlan(
       }
       return lines.join("\n")
     })
+    .join("\n")
+}
+
+function renderImplementationPhaseOutcomes(
+  items: readonly FrontendTemplateFinal["implementation_phase_outcomes"][number][],
+): string {
+  if (items.length === 0) return "- no implementation phase outcomes submitted"
+  return items
+    .map((item) =>
+      [
+        `- ${item.id} — ${item.title}`,
+        `  - phase: ${item.phase}`,
+        `  - deliverable: ${item.deliverable}`,
+        `  - acceptance: ${item.acceptance}`,
+        `  - source_refs: ${item.source_refs.join(", ")}`,
+      ].join("\n"),
+    )
     .join("\n")
 }
 
@@ -383,6 +407,7 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Final Acceptance Mode\n${collector.final.final_acceptance_mode}`,
       `## Fillable Modules\n${collector.final.fillable_modules}`,
       `## Implementation Problems And Agent Handoff\n${collector.final.completeness_review}`,
+      `## Implementation Phase Outcomes\n${renderImplementationPhaseOutcomes(collector.final.implementation_phase_outcomes)}`,
       `## Reuse Constraints\n${renderComponentReusePlan(collector.final.component_reuse_plan)}`,
       `## Source Region Evolution Plan\n${renderBaselineReplacementPlan(collector.final.baseline_replacement_plan)}`,
       `## Quality Project Contract\n${collector.final.quality_project_contract}`,
@@ -401,7 +426,7 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
 
 async function assertFrontendTemplateFinal(
   final: FrontendTemplateFinal,
-  options: { artifactRoot: string; artifactRootRelative?: string },
+  options: { artifactRoot: string; artifactRootRelative?: string; workspaceRoot: string },
 ): Promise<void> {
   const requiredRenderedFields = [
     ["frontend_template", final.frontend_template],
@@ -461,6 +486,151 @@ async function assertFrontendTemplateFinal(
       )
     }
   }
+  if (final.final_acceptance_mode === "maintainable_replacement_required") {
+    assertMaintainablePhaseOutcomes(final)
+  }
+  if (final.frontend_project.role === "implementation_target") {
+    const projectRoot = assertImplementationTargetEntrypoints(final, options.workspaceRoot)
+    assertConcreteReuseSourceEvidence(final, projectRoot)
+  }
+}
+
+function assertMaintainablePhaseOutcomes(final: FrontendTemplateFinal): void {
+  const present = new Set(final.implementation_phase_outcomes.map((item) => item.phase))
+  const missing = REQUIRED_IMPLEMENTATION_PHASES.filter((phase) => !present.has(phase))
+  if (missing.length > 0) {
+    throw new Error(
+      "final_acceptance_mode=maintainable_replacement_required requires structured implementation_phase_outcomes covering " +
+        `${REQUIRED_IMPLEMENTATION_PHASES.join(", ")}; missing ${missing.join(", ")}. ` +
+        "Do not force Architect to derive phase goals from component_inventory or component_reuse_plan.",
+    )
+  }
+}
+
+function assertImplementationTargetEntrypoints(final: FrontendTemplateFinal, workspaceRoot: string): string {
+  const project = final.frontend_project
+  if (!project.project_root.trim()) {
+    throw new Error("frontend_project.role=implementation_target requires a non-empty project_root.")
+  }
+  if (project.entrypoints.length === 0) {
+    throw new Error("frontend_project.role=implementation_target requires at least one project-root-relative entrypoint.")
+  }
+  const projectRoot = resolveWorkspaceReportPath(workspaceRoot, project.project_root)
+  if (!projectRoot || !isDirectory(projectRoot)) {
+    throw new Error(
+      `frontend_project.role=implementation_target requires project_root to resolve to an existing directory under the workspace: ${project.project_root}`,
+    )
+  }
+  const missingEntrypoints = project.entrypoints.filter((entrypoint) => {
+    const entrypointFile = resolveProjectRootRelativeFile(projectRoot, entrypoint)
+    return !entrypointFile || !isReadableFile(entrypointFile)
+  })
+  if (missingEntrypoints.length > 0) {
+    throw new Error(
+      "frontend_project.role=implementation_target requires every entrypoint to be a real project-root-relative file; missing or invalid: " +
+        missingEntrypoints.join(", "),
+    )
+  }
+  return projectRoot
+}
+
+function assertConcreteReuseSourceEvidence(final: FrontendTemplateFinal, projectRoot: string): void {
+  const packageDeps = readPackageDependencies(projectRoot)
+  const invalid: string[] = []
+  for (const item of final.component_reuse_plan) {
+    if (item.implementation_strategy === "mature_library") {
+      if (!reuseSourceNamesInstalledPackageOrExistingPath(item.reuse_source, projectRoot, packageDeps)) {
+        invalid.push(`component_reuse_plan.${item.family_id}.reuse_source=${item.reuse_source}`)
+      }
+    }
+    if (item.implementation_strategy === "existing_project_component") {
+      if (!reuseSourceNamesInstalledPackageOrExistingPath(item.reuse_source, projectRoot, packageDeps)) {
+        invalid.push(`component_reuse_plan.${item.family_id}.reuse_source=${item.reuse_source}`)
+      }
+    }
+  }
+  for (const item of final.baseline_replacement_plan) {
+    if (item.replacement_strategy === "mature_library" || item.replacement_strategy === "existing_project_component") {
+      if (!reuseSourceNamesInstalledPackageOrExistingPath(item.reuse_source, projectRoot, packageDeps)) {
+        invalid.push(`baseline_replacement_plan.${item.boundary_id}.reuse_source=${item.reuse_source}`)
+      }
+    }
+  }
+  if (invalid.length > 0) {
+    throw new Error(
+      "maintainable implementation reuse sources must bind to an installed package in project_root/package.json or an existing project source file; invalid: " +
+        invalid.join(", "),
+    )
+  }
+}
+
+function resolveWorkspaceReportPath(workspaceRoot: string, reportPath: string): string | undefined {
+  const root = path.resolve(workspaceRoot)
+  if (reportPath.replaceAll("\\", "/").trim().replace(/\/+$/, "") === ".") return root
+  const normalized = normalizeReportPath(reportPath)
+  if (!normalized) return undefined
+  const absolute = path.isAbsolute(reportPath) ? path.resolve(reportPath) : path.resolve(root, ...normalized.split("/"))
+  const relative = path.relative(root, absolute)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined
+  return absolute
+}
+
+function resolveProjectRootRelativeFile(projectRoot: string, reportPath: string): string | undefined {
+  if (path.isAbsolute(reportPath)) return undefined
+  const normalized = normalizeReportPath(reportPath)
+  if (!normalized || normalized === ".." || normalized.startsWith("../")) return undefined
+  const absolute = path.resolve(projectRoot, ...normalized.split("/"))
+  const relative = path.relative(projectRoot, absolute)
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) return undefined
+  return absolute
+}
+
+function isDirectory(file: string): boolean {
+  try {
+    return fs.statSync(file).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function readPackageDependencies(projectRoot: string): Set<string> {
+  const packageFile = path.join(projectRoot, "package.json")
+  if (!isReadableFile(packageFile)) return new Set()
+  try {
+    const parsed = JSON.parse(fs.readFileSync(packageFile, "utf8")) as {
+      dependencies?: Record<string, unknown>
+      devDependencies?: Record<string, unknown>
+      peerDependencies?: Record<string, unknown>
+      optionalDependencies?: Record<string, unknown>
+    }
+    return new Set([
+      ...Object.keys(parsed.dependencies ?? {}),
+      ...Object.keys(parsed.devDependencies ?? {}),
+      ...Object.keys(parsed.peerDependencies ?? {}),
+      ...Object.keys(parsed.optionalDependencies ?? {}),
+    ])
+  } catch {
+    return new Set()
+  }
+}
+
+function reuseSourceNamesInstalledPackageOrExistingPath(
+  reuseSource: string,
+  projectRoot: string,
+  packageDeps: ReadonlySet<string>,
+): boolean {
+  const projectFile = resolveProjectRootRelativeFile(projectRoot, reuseSource)
+  if (projectFile && isReadableFile(projectFile)) return true
+  const packageName = packageNameFromReuseSource(reuseSource)
+  return packageName ? packageDeps.has(packageName) : false
+}
+
+function packageNameFromReuseSource(reuseSource: string): string | undefined {
+  const trimmed = reuseSource.trim()
+  const scoped = /^(@[a-z0-9._-]+\/[a-z0-9._-]+)/i.exec(trimmed)
+  if (scoped) return scoped[1]
+  const bare = /^([a-z0-9._-]+)(?:\/[a-z0-9._-]+)?$/i.exec(trimmed)
+  return bare ? bare[1] : undefined
 }
 
 async function inspectVisualBaselineQualityForSubmit(
@@ -905,11 +1075,17 @@ function buildRequirement(category: VisualSpecCategory, input: Record<string, un
 // ---------------------------------------------------------------------------
 
 export function createFrontendTemplateOutputTools(
-  options: { autoIteration?: boolean; artifactRoot?: string; artifactRootRelative?: string } = {},
+  options: {
+    autoIteration?: boolean
+    artifactRoot?: string
+    artifactRootRelative?: string
+    workspaceRoot?: string
+  } = {},
 ) {
   const autoIteration = options.autoIteration === true
   const artifactRoot = path.resolve(options.artifactRoot ?? process.cwd())
   const artifactRootRelative = options.artifactRootRelative
+  const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd())
   let collector = emptyCollector()
 
   function assertIdFree(id: string): string | null {
@@ -1059,7 +1235,7 @@ export function createFrontendTemplateOutputTools(
         const final = normalizeFrontendTemplateFinal(
           FrontendTemplateFinalSchema.parse(normalizeFrontendTemplateInput(input)),
         )
-        await assertFrontendTemplateFinal(final, { artifactRoot, artifactRootRelative })
+        await assertFrontendTemplateFinal(final, { artifactRoot, artifactRootRelative, workspaceRoot })
         if (autoIteration && final.template_iteration_notes.length < 2) {
           throw new Error(
             "assistant.auto_iteration=true requires at least two frontend template review-pass notes before submit_frontend_template.",

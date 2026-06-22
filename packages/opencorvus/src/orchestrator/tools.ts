@@ -4153,6 +4153,13 @@ export function createOrchestratorTools(input: {
           })
           decisionLog.append({
             phase: "frontend_design",
+            key: "implementation_phase_outcomes",
+            value: JSON.stringify(analysis.implementationPhaseOutcomes ?? [], null, 2),
+            reason:
+              "Structured maintainable replacement phase outcomes. Architect should consume this before component inventory or region lists.",
+          })
+          decisionLog.append({
+            phase: "frontend_design",
             key: "quality_project_contract",
             value: analysis.qualityProjectContract,
             reason:
