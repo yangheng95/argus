@@ -2,11 +2,17 @@ import { describe, expect, test } from "bun:test"
 import { BuildAgentContractError, BuildResultSchema } from "../../src/build/types"
 import {
   convertMissingTerminalToolError,
+  createBuildTerminalContinuationRequest,
   createMergeBackSingleFlight,
   evaluateBuildReportSubmission,
 } from "../../src/build/agent"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
+import { claimStageContinuationRequest, findStageContinuationRequest } from "../../src/engine/stage-continuation"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { Instance } from "../../src/project/instance"
+import { Database } from "../../src/storage/db"
+import { tmpdir } from "../fixture/fixture"
 
 /**
  * Regression for specs/scheduler-fix-plan-2026-04-30.md P2 (commit
@@ -216,6 +222,80 @@ describe("convertMissingTerminalToolError", () => {
       lastMergeBackOutcome: "conflict on src/components/MessageList.tsx",
     })
     expect(converted!.diagnostics.lastMergeBackOutcome).toBe("conflict on src/components/MessageList.tsx")
+  })
+})
+
+describe("createBuildTerminalContinuationRequest", () => {
+  test("persists a build-scoped same-session finalizer continuation", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = "tsk_build_terminal_continuation"
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "test",
+              title: "build terminal continuation",
+              request: "verify build continuation artifact",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const continuation = createBuildTerminalContinuationRequest({
+          taskID,
+          parentSessionID: "ses_parent",
+          buildSessionID: "ses_build",
+          runtimeGoalRunID: "grun_build_terminal",
+          worktreeDir: tmp.path,
+          failureMessage: "Model did not call terminal tool report_build_result before the turn ended",
+          target: {
+            kind: "goal",
+            id: "gol_build_terminal",
+            title: "Build terminal continuation",
+            objective: "Finish via terminal report",
+            requirement_ids: [],
+            acceptance_specs: ["Must call report_build_result"],
+            owned_paths: ["src/app.ts"],
+            depends_on: [],
+          },
+        })
+
+        expect(continuation.sessionID).toBe("ses_build")
+        expect(continuation.kind).toBe("protocol-finalizer-miss")
+        expect(continuation.finalizerName).toBe("report_build_result")
+
+        const row = findStageContinuationRequest({ taskID, artifactID: continuation.artifactID })
+        expect(row?.payload.stage).toBe("build")
+        expect(row?.payload.session_id).toBe("ses_build")
+        expect(row?.payload.parent_session_id).toBe("ses_parent")
+        expect(row?.payload.finalizer_name).toBe("report_build_result")
+        expect(row?.payload.failure_name).toBe("TerminalToolMissingError")
+        expect(row?.payload.normalized_stage_input).toMatchObject({
+          build_session_id: "ses_build",
+          goal_run_id: "grun_build_terminal",
+          finalizer_name: "report_build_result",
+        })
+
+        const claimed = claimStageContinuationRequest({
+          taskID,
+          artifactID: continuation.artifactID,
+          sessionID: "ses_build",
+          finalizerName: "report_build_result",
+        })
+        expect(claimed.artifactID).toBe(continuation.artifactID)
+        expect(claimed.finalizerName).toBe("report_build_result")
+      },
+    })
   })
 })
 
