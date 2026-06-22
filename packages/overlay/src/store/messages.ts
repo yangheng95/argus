@@ -7,7 +7,6 @@ import { apiJson } from "../services/api"
 import { boardStore, activeTaskID } from "../store/board"
 import { clearConversationUiState, loadConversationUiStateForTask } from "./conversation-ui"
 import { touchReasoningPart as trackReasoningPart } from "./reasoning"
-import { syncSectionPhases } from "../utils/section"
 import { normalizeToolPartRecord } from "../utils/tool"
 
 // ── Types ──
@@ -389,7 +388,6 @@ export async function loadConversation(): Promise<void> {
         parts: Array.isArray(message?.parts) ? message.parts.map((part: any) => touchReasoningPart(part)) : [],
       }))
       setMessages(merged)
-      syncSectionPhases(boardStore.board, boardStore.changes.length)
     } while (_convQueued)
   })()
   _convLoading = loading

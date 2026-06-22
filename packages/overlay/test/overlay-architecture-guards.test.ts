@@ -1943,6 +1943,7 @@ describe("overlay architecture guards", () => {
     // After Step 9.E migration, .section[data-phase-state] → .oc-section[data-phase-state].
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
+    const messagesSource = readText(join(OVERLAY_ROOT, "src/store/messages.ts"))
 
     for (const variant of ["related", "active"]) {
       expect(styles).not.toMatch(new RegExp(`\\.oc-section\\[data-phase-state="${variant}"\\]\\s*\\{`))
@@ -1957,6 +1958,8 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).not.toMatch(/\.oc-section\[data-phase-state="active"\]::after\s*\{/)
     expect(inspectorSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
     expect(inspectorSurface).not.toMatch(/rgba\(10,\s*16,\s*24/)
+    expect(messagesSource).not.toContain("syncSectionPhases")
+    expect(messagesSource).not.toContain("../utils/section")
   })
 
   test("retired conversation goal strip selectors stay absent from production source", () => {
