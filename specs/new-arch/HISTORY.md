@@ -19,6 +19,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-23-screenshot-thumbnail-load-queue-cancellation.md](2026-06-23-screenshot-thumbnail-load-queue-cancellation.md) | Screenshot Thumbnail Load Queue Cancellation |
 | [2026-06-23-overlay-panel-legal-size-contract.md](2026-06-23-overlay-panel-legal-size-contract.md) | Overlay Panel Legal Size Contract |
 | [2026-06-23-overlay-ui-asset-fingerprint.md](2026-06-23-overlay-ui-asset-fingerprint.md) | Overlay UI Asset Fingerprint |
+| [2026-06-23-screenshot-cache-server-time-restamp.md](2026-06-23-screenshot-cache-server-time-restamp.md) | Screenshot Cache Server Time Restamp |
 
 ## 2026-06-22
 

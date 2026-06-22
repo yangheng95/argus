@@ -2138,8 +2138,9 @@ function ensureMessageTurnProjection(
     if (existing) {
       setCardTreeStore("cards", cardID, "sessionID", session.sessionID)
       if (!existing.messageID) setCardTreeStore("cards", cardID, "messageID", messageID)
-      if (opts.stampServerTime && prior && existing.messageID === messageID) {
+      if (opts.stampServerTime && prior && existing.messageID === messageID && existing.time !== opts.time) {
         setCardTreeStore("cards", cardID, "time", opts.time)
+        markCardStatsDirty(cardID)
       }
       if (
         existing.terminalReason !== "completed" &&

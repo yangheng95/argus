@@ -421,6 +421,69 @@ test("resetWriter clears the top-level screenshot cache", () => {
   expect(cardTreeStore.usageAggregate).toEqual({ tokens: 0, costUSD: 0, estimated: false })
 })
 
+test("part-before-message server timestamp refreshes screenshot cache ordering", () => {
+  setBoardStore("board", BOARD)
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID })
+  resetWriter()
+  const originalDateNow = Date.now
+  const partFirstMessageID = "msg_part_first_screenshot_stats"
+  const partFirstSessionID = "ses_part_first_screenshot_stats"
+  const observationTime = 1_777_000_010_000
+  const serverTime = 1_777_000_000_500
+  Date.now = () => observationTime
+  try {
+    applyEvent({
+      type: "message.part.updated",
+      properties: {
+        taskID: TASK_ID,
+        resolvedRole: "assistant",
+        channel: "assistant",
+        part: {
+          id: "part_first_screenshot",
+          messageID: partFirstMessageID,
+          sessionID: partFirstSessionID,
+          resolvedRole: "assistant",
+          channel: "assistant",
+          type: "file",
+          url: "/attachment/project/part-first.png",
+          mime: "image/png",
+          filename: "part-first.png",
+        },
+      },
+    })
+    flushBufferedPartDeltas()
+
+    const cardID = `assistant:session:${partFirstSessionID}:message:${partFirstMessageID}`
+    expect(cardTreeStore.cards[cardID]?.time).toBe(observationTime)
+    expect(cardTreeStore.cards[cardID]?.subtreeScreenshotItems?.[0]?.time).toBe(observationTime)
+    expect(cardTreeStore.screenshotItems[0]?.time).toBe(observationTime)
+
+    applyEvent({
+      type: "message.updated",
+      properties: {
+        taskID: TASK_ID,
+        info: {
+          id: partFirstMessageID,
+          sessionID: partFirstSessionID,
+          role: "assistant",
+          resolvedRole: "assistant",
+          agent: "assistant",
+          channel: "assistant",
+          time: { created: serverTime },
+        },
+      },
+    })
+
+    expect(cardTreeStore.cards[cardID]?.time).toBe(serverTime)
+    expect(cardTreeStore.cards[cardID]?.subtreeScreenshotItems?.[0]?.time).toBe(serverTime)
+    expect(cardTreeStore.screenshotItems[0]?.time).toBe(serverTime)
+    expectCacheMatchesWalk()
+  } finally {
+    Date.now = originalDateNow
+    resetWriter()
+  }
+})
+
 test("usage aggregate cache tracks own card usage and context estimates", () => {
   bootstrap()
   applyEvent({
