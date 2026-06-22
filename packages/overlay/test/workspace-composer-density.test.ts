@@ -40,14 +40,14 @@ describe("workspace header controls share a single density tier", () => {
 })
 
 describe("composer shell stays tighter than the surrounding canvas", () => {
-  test("composer textarea floor is capped at the compact 56px size", () => {
-    // The 56px floor is now declared once as `--chat-textarea-height`
+  test("composer textarea floor is capped at the compact 72px size", () => {
+    // The 72px floor is now declared once as `--chat-textarea-height`
     // on `.chat-input`; both `.chat-textarea-wrap` and `.chat-textarea`
     // read from it via `min-height: var(--chat-textarea-height);`.
     // Pin both: the literal var declaration AND that the consumers
-    // route through the variable rather than re-declaring 56px or
+    // route through the variable rather than re-declaring 72px or
     // any other floor.
-    expect(COMPOSER).toContain("--chat-textarea-height: calc(56px * var(--ui-scale));")
+    expect(COMPOSER).toContain("--chat-textarea-height: calc(72px * var(--ui-scale));")
     expect(COMPOSER).toMatch(/\.chat-textarea\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/)
     expect(COMPOSER).toMatch(/\.chat-textarea-wrap\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/)
   })
