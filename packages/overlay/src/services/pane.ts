@@ -23,6 +23,8 @@
 // controls where those values are stored (Solid store, plain state, etc.)
 // and which DOM handles / CSS variables back them via the PaneConfig.
 
+import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"
+
 // ── Types ──
 
 /**
@@ -81,6 +83,9 @@ export interface PaneCallbacks {
 interface PaneDrag {
   side: "left" | "right"
   config: PaneConfig
+  callbacks: PaneCallbacks
+  pendingClientX: number | null
+  resizeOnFrame: AnimationFrameScheduler
 }
 
 let paneDrag: PaneDrag | null = null
@@ -371,9 +376,18 @@ function resizePane(side: "left" | "right", clientX: number, callbacks: PaneCall
   renderPaneLayout({ ...state, sectionsWidth: newSectionsWidth }, config)
 }
 
-function onPaneResizeMove(event: PointerEvent, callbacks: PaneCallbacks): void {
+function flushPendingPaneResize(): void {
   if (!paneDrag) return
-  resizePane(paneDrag.side, event.clientX, callbacks, paneDrag.config)
+  const clientX = paneDrag.pendingClientX
+  if (clientX === null) return
+  paneDrag.pendingClientX = null
+  resizePane(paneDrag.side, clientX, paneDrag.callbacks, paneDrag.config)
+}
+
+function onPaneResizeMove(event: PointerEvent): void {
+  if (!paneDrag) return
+  paneDrag.pendingClientX = event.clientX
+  paneDrag.resizeOnFrame.schedule()
 }
 
 async function persistRenderedPaneWidths(
@@ -389,12 +403,15 @@ async function persistRenderedPaneWidths(
   await callbacks.onWidthsChanged(side === "left" ? sidebarWidth : null, side === "right" ? sectionsWidth : null)
 }
 
-async function stopPaneResize(callbacks: PaneCallbacks): Promise<void> {
+async function stopPaneResize(): Promise<void> {
   if (!paneDrag) return
+  paneDrag.resizeOnFrame.cancel()
+  flushPendingPaneResize()
   const config = paneDrag.config
   const handle = paneHandleElement(config, paneDrag.side)
   if (handle) delete (handle as HTMLElement).dataset.active
   const side = paneDrag.side
+  const callbacks = paneDrag.callbacks
   paneDrag = null
   delete document.body.dataset.resizing
   await persistRenderedPaneWidths(callbacks, config, side)
@@ -409,20 +426,26 @@ function startPaneResize(
   if (event.button != null && event.button !== 0) return
   const state = callbacks.getState()
   if (!paneHandleEnabled(state, config, side)) return
-  paneDrag = { side, config }
+  paneDrag = {
+    side,
+    config,
+    callbacks,
+    pendingClientX: null,
+    resizeOnFrame: createAnimationFrameScheduler(flushPendingPaneResize),
+  }
   const handle = paneHandleElement(config, side)
   if (handle) (handle as HTMLElement).dataset.active = "true"
   document.body.dataset.resizing = "true"
 
   // Capture listeners with callbacks in closure
   function onMove(ev: PointerEvent) {
-    onPaneResizeMove(ev, callbacks)
+    onPaneResizeMove(ev)
   }
   async function onUp() {
     window.removeEventListener("pointermove", onMove)
     window.removeEventListener("pointerup", onUp)
     window.removeEventListener("pointercancel", onUp)
-    await stopPaneResize(callbacks)
+    await stopPaneResize()
   }
   window.addEventListener("pointermove", onMove)
   window.addEventListener("pointerup", onUp)
@@ -512,6 +535,7 @@ export function initPaneResizers(callbacks: PaneCallbacks, config: PaneConfig): 
  * Call on window blur (
  */
 export async function cancelPaneResize(callbacks: PaneCallbacks): Promise<void> {
+  void callbacks
   if (!paneDrag) return
-  await stopPaneResize(callbacks)
+  await stopPaneResize()
 }
