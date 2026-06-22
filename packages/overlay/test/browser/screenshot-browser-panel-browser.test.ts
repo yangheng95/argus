@@ -18,6 +18,8 @@ const TASK = {
   time: { created: 1_780_000_000_000, updated: 1_780_000_060_000 },
 }
 
+const SCREENSHOT_COUNT = 120
+
 const PNG_BYTES = Buffer.from(
   "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",
   "base64",
@@ -38,6 +40,37 @@ function json(value: unknown, init?: ResponseInit) {
 }
 
 function conversationPayload() {
+  const transcript = Array.from({ length: SCREENSHOT_COUNT }, (_item, index) => ({
+    info: {
+      id: `msg_visual_${index}`,
+      sessionID: "ses_visual",
+      role: "assistant",
+      resolvedRole: "visual-qa",
+      agent: "visual-qa",
+      channel: "visual-qa",
+      time: { created: 1_780_000_010_000 + index, completed: 1_780_000_011_000 + index },
+    },
+    parts: [
+      {
+        id: `part_screenshot_${index}`,
+        messageID: `msg_visual_${index}`,
+        sessionID: "ses_visual",
+        type: "tool",
+        tool: "browser_observe",
+        state: {
+          status: "pending",
+          metadata: {
+            browser: {
+              url: `https://example.test/visual-${index}`,
+              title: `visual-check-${index}.png`,
+              viewport: { width: 1280, height: 720 },
+              screenshot: { attachmentUrl: `/attachment/project/screenshot-${index}.png` },
+            },
+          },
+        },
+      },
+    ],
+  }))
   return {
     lastSequence: 1,
     board: {
@@ -46,30 +79,7 @@ function conversationPayload() {
       goalWorkflows: [],
       interactions: [],
     },
-    transcript: [
-      {
-        info: {
-          id: "msg_visual",
-          sessionID: "ses_visual",
-          role: "assistant",
-          resolvedRole: "visual-qa",
-          agent: "visual-qa",
-          channel: "visual-qa",
-          time: { created: 1_780_000_010_000, completed: 1_780_000_011_000 },
-        },
-        parts: [
-          {
-            id: "part_screenshot",
-            messageID: "msg_visual",
-            sessionID: "ses_visual",
-            type: "file",
-            mime: "image/png",
-            url: "/attachment/project/screenshot.png",
-            filename: "visual-check.png",
-          },
-        ],
-      },
-    ],
+    transcript,
     timeline: [],
     events: [],
     eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
@@ -112,6 +122,7 @@ test(
     assert.equal(typeof globalThis.Bun, "undefined")
 
     const unexpectedRequests: string[] = []
+    const attachmentRequests: string[] = []
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
@@ -119,7 +130,8 @@ test(
       if (path === "/favicon.ico") return new Response(null, { status: 204 })
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
-      if (path === "/attachment/project/screenshot.png") {
+      if (/^\/attachment\/project\/screenshot-\d+\.png$/.test(path)) {
+        attachmentRequests.push(path)
         return new Response(PNG_BYTES, { headers: { "content-type": "image/png" } })
       }
       if (path === "/global/health") return json({ version: "1.2.3" })
@@ -206,6 +218,8 @@ test(
 
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
+      const requestsBeforeOpen = attachmentRequests.length
+      const openStart = Date.now()
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']")
       await page.waitForSelector(".screenshot-browser-card")
@@ -213,6 +227,8 @@ test(
         const img = document.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
         return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
       })
+      const openElapsed = Date.now() - openStart
+      assert.ok(openElapsed < 5_000, `screenshot browser open took ${openElapsed}ms`)
 
       const state = await page.evaluate(() => ({
         screenshotsOpen: document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open,
@@ -224,17 +240,25 @@ test(
         groupTitle: document.querySelector<HTMLElement>(".screenshot-browser-group__header span")?.textContent,
         cardTitle: document.querySelector<HTMLElement>(".screenshot-browser-card__body strong")?.textContent,
         cardCount: document.querySelectorAll(".screenshot-browser-card").length,
+        virtualized: document.querySelector<HTMLElement>(".screenshot-browser-groups")?.dataset.virtualized,
+        virtualWindow: !!document.querySelector(".screenshot-browser-virtual-window"),
       }))
 
-      assert.deepEqual(state, {
-        screenshotsOpen: "true",
-        buttonActive: "true",
-        title: "Screenshots",
-        groupRole: "visual-qa",
-        groupTitle: "Visual QA",
-        cardTitle: "visual-check.png",
-        cardCount: 1,
-      })
+      assert.equal(state.screenshotsOpen, "true")
+      assert.equal(state.buttonActive, "true")
+      assert.equal(state.title, "Screenshots")
+      assert.equal(state.groupRole, "visual-qa")
+      assert.equal(state.groupTitle, "Visual QA")
+      assert.equal(state.cardTitle, "visual-check-119.png")
+      assert.equal(state.virtualized, "true")
+      assert.equal(state.virtualWindow, true)
+      assert.ok(state.cardCount > 0, JSON.stringify(state))
+      assert.ok(state.cardCount < SCREENSHOT_COUNT, JSON.stringify(state))
+      const openAttachmentRequests = attachmentRequests.length - requestsBeforeOpen
+      assert.ok(
+        openAttachmentRequests < 24,
+        `initial screenshot open fetched too many attachments: ${openAttachmentRequests}`,
+      )
 
       const thumbLayout = await page.evaluate(() => {
         const trigger = document.querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
@@ -255,11 +279,53 @@ test(
       assert.ok(thumbLayout.imageWidth >= thumbLayout.triggerWidth - 1, JSON.stringify(thumbLayout))
       assert.ok(thumbLayout.imageHeight >= thumbLayout.triggerHeight - 1, JSON.stringify(thumbLayout))
 
+      await page.setViewport({ width: 960, height: 760 })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      assert.ok(
+        attachmentRequests.length - requestsBeforeOpen < 32,
+        `viewport resize materialized too many screenshots: ${attachmentRequests.length - requestsBeforeOpen}`,
+      )
+
       const screenshotPath = resolve(".scratch/screenshot-browser-panel-browser.png")
       mkdirSync(resolve(".scratch"), { recursive: true })
       const screenshot = await page.screenshot({ fullPage: false })
       assert.ok(screenshot.length > 0)
       writeFileSync(screenshotPath, screenshot)
+
+      await page.$eval(".screenshot-browser-groups[data-virtualized=\"true\"]", (node) => {
+        const scroll = node as HTMLElement
+        scroll.scrollTo({ top: Math.max(0, scroll.scrollHeight - scroll.clientHeight), behavior: "auto" })
+      })
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+          }),
+      )
+      try {
+        await page.waitForFunction(() =>
+          Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card__body strong")).some(
+            (node) => node.textContent === "visual-check-0.png",
+          ),
+        )
+      } catch (error) {
+        const scrollState = await page.evaluate(() => {
+          const scroll = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+          return {
+            scrollTop: scroll?.scrollTop ?? 0,
+            scrollHeight: scroll?.scrollHeight ?? 0,
+            clientHeight: scroll?.clientHeight ?? 0,
+            titles: Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card__body strong")).map(
+              (node) => node.textContent,
+            ),
+          }
+        })
+        assert.fail(`virtual screenshot list did not materialize the oldest row: ${JSON.stringify(scrollState)}`)
+      }
+      assert.ok(
+        attachmentRequests.length - requestsBeforeOpen < 64,
+        `scrolling should not materialize the full screenshot history: ${attachmentRequests.length - requestsBeforeOpen}`,
+      )
 
       await page.evaluate(() => {
         const workbench = document.getElementById("centerWorkbench")
@@ -284,7 +350,7 @@ test(
           }
         }
         const panel = box("#centerWorkbenchScreenshots")
-        const grid = box(".screenshot-browser-grid")
+        const grid = box(".screenshot-browser-row-grid")
         const card = box(".screenshot-browser-card")
         const thumb = box(".screenshot-browser__thumb-trigger")
         return {
@@ -307,6 +373,12 @@ test(
       const narrowScreenshot = await page.screenshot({ fullPage: false })
       assert.ok(narrowScreenshot.length > 0)
       writeFileSync(narrowScreenshotPath, narrowScreenshot)
+      const narrowPanel = await page.$("#centerWorkbenchScreenshots")
+      assert.ok(narrowPanel)
+      const narrowPanelScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-narrow-panel.png")
+      const narrowPanelScreenshot = await narrowPanel.screenshot()
+      assert.ok(narrowPanelScreenshot.length > 0)
+      writeFileSync(narrowPanelScreenshotPath, narrowPanelScreenshot)
       assert.deepEqual(unexpectedRequests, [])
     } finally {
       await browser.close()
