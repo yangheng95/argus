@@ -20,7 +20,7 @@ import { dialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dia
 import { getHostTransport } from "../services/host-transport"
 import { t } from "../utils/i18n"
 import { OVERLAY_VERSION } from "../utils/version"
-import { currentUIScale } from "../services/pane"
+import { currentUIScale } from "../utils/layout-tokens"
 import { Icon, type IconName } from "./Icon"
 import {
   clampConfigSidebarWidth,

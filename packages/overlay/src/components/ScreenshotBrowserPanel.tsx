@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { Virtualizer, type CustomContainerComponentProps, type CustomItemComponentProps } from "virtua/solid"
-import { currentUIScale } from "../services/pane"
+import { currentUIScale } from "../utils/layout-tokens"
 import { cardTreeStore } from "../store/card-tree"
 import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import {

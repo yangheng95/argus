@@ -8,7 +8,6 @@ const BREAKPOINTS = new Map([
   [520, "--ui-breakpoint-sm"],
   [760, "--ui-breakpoint-md"],
   [900, "--ui-breakpoint-lg"],
-  [1120, "--ui-breakpoint-xl"],
 ])
 
 function walkCssFiles(dir: string): string[] {
@@ -39,7 +38,7 @@ function failWithViolations(kind: string, violations: string[], guidance: string
 }
 
 describe("flat-redesign breakpoint coverage", () => {
-  it("surface max-width media queries use the four breakpoint token values and inline token comments", () => {
+  it("surface max-width media queries use the breakpoint token values and inline token comments", () => {
     const violations: string[] = []
     const media = /@media\s*\([^)]*max-width\s*:\s*(\d+)px[^)]*\)/i
     for (const file of walkCssFiles(SURFACES_ROOT).sort()) {
@@ -63,7 +62,7 @@ describe("flat-redesign breakpoint coverage", () => {
     failWithViolations(
       "breakpoint",
       violations,
-      "Surface max-width px queries must map to --ui-breakpoint-{sm,md,lg,xl} and cite the token inline.",
+      "Surface max-width px queries must map to --ui-breakpoint-{sm,md,lg} and cite the token inline.",
     )
   })
 })

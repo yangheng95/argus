@@ -33,6 +33,7 @@ import {
   normalizeComposerDraftKey,
   setComposerDraft,
 } from "../services/composer-draft"
+import { currentUIScale } from "../utils/layout-tokens"
 
 // ── Types ──
 
@@ -469,12 +470,6 @@ export function ChatComposer(props: ChatComposerProps) {
   }
 
   // ── Composer resize ──
-
-  function currentUIScale(): number {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")
-    const value = Number.parseFloat(raw)
-    return Number.isFinite(value) && value > 0 ? value : 1
-  }
 
   function textareaResizeBounds() {
     return composerTextareaResizeBounds(currentUIScale())

@@ -15,7 +15,7 @@ import { dialogStore, setDialogStore, CONFIG_SECTIONS, type ConfigDialogTab } fr
 import { panelMessage } from "./chat"
 import { OPENCORVUS_VERSION_LABEL, OVERLAY_VERSION } from "../utils/version"
 import { clampConfigSidebarWidth, configSidebarResizeBounds } from "../utils/config-sidebar-resizer"
-import { currentUIScale } from "./pane"
+import { currentUIScale } from "../utils/layout-tokens"
 
 let sessionDialogSeq = 0
 const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>(CONFIG_SECTIONS.map((section) => section.id))

@@ -56,7 +56,6 @@ import { bumpWorkspaceEpoch, settingsStore, setSettingsStore, saveSettings } fro
 import {
   initPaneResizers,
   cancelPaneResize,
-  currentUIScale,
   renderPaneLayout,
   PANEL_PANE_CONFIG,
   type PaneState,
@@ -107,7 +106,7 @@ import {
   centerWorkbenchResizeRange,
   type CenterWorkbenchResizeRange,
 } from "./utils/center-workbench-size"
-import { layoutTokenPx } from "./utils/layout-tokens"
+import { currentUIScale, layoutTokenPx } from "./utils/layout-tokens"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.

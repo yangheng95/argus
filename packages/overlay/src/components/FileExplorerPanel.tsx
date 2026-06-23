@@ -12,7 +12,7 @@ import {
 import { Virtualizer, type CustomContainerComponentProps, type CustomItemComponentProps } from "virtua/solid"
 import { apiJson } from "../services/api"
 import { openFileEditor, selectedFilePath, uploadDroppedFiles, type FileNode } from "../services/file-workbench"
-import { currentUIScale } from "../services/pane"
+import { currentUIScale } from "../utils/layout-tokens"
 import { t, tc } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"

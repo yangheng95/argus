@@ -97,10 +97,11 @@ describe("config panel sizing", () => {
   })
 
   test("config sidebar style and ARIA share the clamped width source", () => {
-    expect(DIALOG_SERVICE).toContain('import { currentUIScale } from "./pane"')
+    expect(DIALOG_SERVICE).toContain('import { currentUIScale } from "../utils/layout-tokens"')
     expect(DIALOG_SERVICE).toContain(
       'setDialogStore("config", "sidebarWidth", clampConfigSidebarWidth(width, configSidebarResizeBounds(currentUIScale())))',
     )
+    expect(CONFIG_DIALOG_TSX).toContain('import { currentUIScale } from "../utils/layout-tokens"')
     expect(CONFIG_DIALOG_TSX).toContain("const configuredSidebarWidth = createMemo")
     expect(CONFIG_DIALOG_TSX).toContain("return clampConfigSidebarWidth(width, resizeBounds())")
     expect(CONFIG_DIALOG_TSX).toContain("const width = configuredSidebarWidth()")

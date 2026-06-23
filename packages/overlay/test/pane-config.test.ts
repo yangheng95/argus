@@ -34,7 +34,7 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(pane).toContain("function schedulePaneHandleSemantics")
   expect(pane).toContain("function resizePaneByKeyboard")
   expect(pane).toContain('import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"')
-  expect(pane).toContain('import { layoutTokenPx } from "../utils/layout-tokens"')
+  expect(pane).toContain('import { currentUIScale, layoutTokenPx } from "../utils/layout-tokens"')
   expect(pane).toContain('layoutTokenPx("--ui-rail-width")')
   expect(pane).toContain('layoutTokenPx("--ui-rail-min-width")')
   expect(pane).toContain('layoutTokenPx("--ui-chat-min-width")')

@@ -1,11 +1,21 @@
 import { describe, expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
+import {
+  OVERLAY_SIZE_CONTRACT_MARKER,
+  overlaySizeContractFromTauriConfig,
+  renderOverlaySizeContractStyle,
+} from "../script/overlay-size-contract"
 
 const OVERLAY_ROOT = path.resolve(import.meta.dir, "..")
+const REPO_ROOT = path.resolve(OVERLAY_ROOT, "..", "..")
 
 function readOverlay(rel: string): string {
   return readFileSync(path.join(OVERLAY_ROOT, rel), "utf8")
+}
+
+function readRepo(rel: string): string {
+  return readFileSync(path.join(REPO_ROOT, rel), "utf8")
 }
 
 function readStyleFiles(dir = path.join(OVERLAY_ROOT, "src/styles")): Array<{ file: string; source: string }> {
@@ -25,12 +35,14 @@ describe("overlay window and pane size contract", () => {
   test("native window minimum follows the desktop layout boundary", () => {
     const config = JSON.parse(readOverlay("src-tauri/tauri.conf.json"))
     const mainWindow = config.app.windows.find((window: { label?: string }) => window.label === "main")
+    const contract = overlaySizeContractFromTauriConfig(config)
 
     expect(mainWindow).toBeDefined()
-    expect(mainWindow.width).toBeGreaterThanOrEqual(1120)
-    expect(mainWindow.height).toBeGreaterThanOrEqual(720)
-    expect(mainWindow.minWidth).toBe(1120)
-    expect(mainWindow.minHeight).toBe(720)
+    expect(contract).toEqual({ minWidth: 1120, minHeight: 720 })
+    expect(mainWindow.width).toBeGreaterThanOrEqual(contract.minWidth)
+    expect(mainWindow.height).toBeGreaterThanOrEqual(contract.minHeight)
+    expect(mainWindow.minWidth).toBe(contract.minWidth)
+    expect(mainWindow.minHeight).toBe(contract.minHeight)
   })
 
   test("Rust startup and Windows live sizing use native pre-commit constraints", () => {
@@ -54,17 +66,29 @@ describe("overlay window and pane size contract", () => {
   })
 
   test("browser shell tokens match the native overlay minimum", () => {
+    const config = JSON.parse(readOverlay("src-tauri/tauri.conf.json"))
+    const contract = overlaySizeContractFromTauriConfig(config)
+    const generatedStyle = renderOverlaySizeContractStyle(contract)
+    const index = readOverlay("src/index.html")
+    const vite = readOverlay("vite.config.ts")
     const tokens = readOverlay("src/styles/tokens/design-language.css")
     const base = readOverlay("src/styles/cascade/base.css")
     const activity = readOverlay("src/styles/surfaces/activity.css")
     const workspace = readOverlay("src/styles/surfaces/workspace.css")
 
-    expect(tokens).toContain("--ui-breakpoint-xl: 1120px")
-    expect(tokens).toContain("--ui-overlay-min-width-units: 1120")
-    expect(tokens).toContain("--ui-overlay-min-height-units: 720")
+    expect(index).toContain(OVERLAY_SIZE_CONTRACT_MARKER)
+    expect(vite).toContain("readOverlaySizeContract")
+    expect(vite).toContain("renderOverlaySizeContractStyle")
+    expect(generatedStyle).toContain(`--ui-overlay-min-width-units: ${contract.minWidth};`)
+    expect(generatedStyle).toContain(`--ui-overlay-min-height-units: ${contract.minHeight};`)
+    expect(generatedStyle).toContain("--ui-overlay-min-width: calc(var(--ui-overlay-min-width-units) * 1px)")
+    expect(generatedStyle).toContain("--ui-overlay-min-height: calc(var(--ui-overlay-min-height-units) * 1px)")
+    expect(tokens).not.toContain("--ui-breakpoint-xl")
+    expect(tokens).not.toContain("--ui-overlay-min-width-units")
+    expect(tokens).not.toContain("--ui-overlay-min-height-units")
+    expect(tokens).not.toContain("--ui-overlay-min-width:")
+    expect(tokens).not.toContain("--ui-overlay-min-height:")
     expect(tokens).toContain("--ui-workbench-panel-min-width: calc(280px * var(--ui-scale))")
-    expect(tokens).toContain("--ui-overlay-min-width: calc(var(--ui-overlay-min-width-units) * 1px)")
-    expect(tokens).toContain("--ui-overlay-min-height: calc(var(--ui-overlay-min-height-units) * 1px)")
     expect(tokens).not.toContain("--ui-overlay-min-aspect-ratio")
     expect(base).toContain("--ui-overlay-shell-width: max(100vw, var(--ui-overlay-min-width))")
     expect(base).toContain("--ui-overlay-shell-height: max(")
@@ -107,6 +131,15 @@ describe("overlay window and pane size contract", () => {
     expect(offenders).toEqual([])
   })
 
+  test("superseded center workbench spec no longer claims an active legal-shell compact branch", () => {
+    const spec = readRepo("specs/new-arch/2026-06-22-center-workbench-panel-min-size-contract.md")
+
+    expect(spec).toContain("Status: Superseded 2026-06-23")
+    expect(spec).toContain("removed production")
+    expect(spec).toContain("Current runtime code must follow the 2026-06-23 contract")
+    expect(spec).not.toContain("Status: Verified")
+  })
+
   test("surface width clamps use the legal overlay container instead of raw viewport width", () => {
     const offenders = readStyleFiles()
       .filter(({ file }) => file !== path.join("src", "styles", "cascade", "base.css"))
@@ -141,8 +174,10 @@ describe("overlay window and pane size contract", () => {
     const layoutFrame = readOverlay("src/utils/overlay-layout-frame.ts")
     const layoutTokens = readOverlay("src/utils/layout-tokens.ts")
     const dialog = readOverlay("src/components/primitives/Dialog.tsx")
+    const chatComposer = readOverlay("src/components/ChatComposer.tsx")
+    const screenshotBrowser = readOverlay("src/components/ScreenshotBrowserPanel.tsx")
 
-    expect(pane).toContain('import { layoutTokenPx } from "../utils/layout-tokens"')
+    expect(pane).toContain('import { currentUIScale, layoutTokenPx } from "../utils/layout-tokens"')
     expect(pane).toContain('layoutTokenPx("--ui-rail-min-width")')
     expect(pane).toContain('layoutTokenPx("--ui-chat-min-width")')
     expect(pane).toContain('leftFixedControlIds: ["solidLeftActivityToolbar"]')
@@ -158,9 +193,16 @@ describe("overlay window and pane size contract", () => {
     expect(pane).not.toContain("120 * scale")
     expect(pane).not.toContain("300 * scale")
     expect(pane).not.toContain("window.innerWidth ??")
+    expect(pane).not.toContain("export function currentUIScale")
     expect(main).toContain('layoutTokenPx("--ui-workbench-panel-min-width")')
     expect(main).not.toContain("CENTER_WORKBENCH_MIN_PANEL_WIDTH")
     expect(main).not.toContain("80 * scale")
+    expect(theme).toContain('import { currentUIScale } from "../utils/layout-tokens"')
+    expect(theme).toContain("const current = currentUIScale()")
+    expect(theme).not.toContain('getPropertyValue("--ui-scale") || "1"')
+    expect(chatComposer).toContain('import { currentUIScale } from "../utils/layout-tokens"')
+    expect(chatComposer).not.toContain("function currentUIScale(): number")
+    expect(screenshotBrowser).toContain('import { currentUIScale } from "../utils/layout-tokens"')
     expect(theme).toContain('import { overlayLayoutFrameSize } from "../utils/overlay-layout-frame"')
     expect(theme).toContain("const frame = overlayLayoutFrameSize()")
     expect(theme).not.toContain("visualViewport")
@@ -169,6 +211,11 @@ describe("overlay window and pane size contract", () => {
     expect(layoutFrame).not.toContain("visualViewport")
     expect(layoutTokens).toContain("function tokenSignature(root: HTMLElement, container: HTMLElement): string")
     expect(layoutTokens).toContain('const scale = getComputedStyle(root).getPropertyValue("--ui-scale").trim()')
+    expect(layoutTokens).toContain("export function currentUIScale(): number")
+    expect(layoutTokens).toContain('throw new Error("UI scale cannot be resolved without a document.")')
+    expect(layoutTokens).toContain("throw new Error(`UI scale resolved to invalid value: ${raw}`)")
+    expect(layoutTokens).not.toContain("return 1")
+    expect(layoutTokens).not.toContain("|| 1")
     expect(layoutTokens).toContain("const containerInlineSize = container.getBoundingClientRect().width")
     expect(layoutTokens).toContain("return `${scale}|${containerInlineSize.toFixed(3)}`")
     expect(layoutTokens).toContain("const signature = tokenSignature(root, document.body)")

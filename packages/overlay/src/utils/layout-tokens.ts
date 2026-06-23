@@ -33,6 +33,22 @@ function probeElement(): HTMLElement {
   return probe
 }
 
+export function currentUIScale(): number {
+  if (typeof document === "undefined") {
+    throw new Error("UI scale cannot be resolved without a document.")
+  }
+  const root = document.documentElement
+  if (!root) {
+    throw new Error("UI scale cannot be resolved without documentElement.")
+  }
+  const raw = getComputedStyle(root).getPropertyValue("--ui-scale").trim()
+  const value = Number.parseFloat(raw)
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`UI scale resolved to invalid value: ${raw}`)
+  }
+  return value
+}
+
 export function layoutTokenPx(name: string): number {
   if (typeof document === "undefined") {
     throw new Error(`Layout token ${name} cannot be resolved without a document.`)
