@@ -41,7 +41,7 @@ export function WorkspaceEditorLaunchers() {
     if (!supportedEditorIDs.includes(editor)) return
     close()
     setSettingsStore("projectEditor", editor)
-    saveSettings()
+    await saveSettings()
     await openDirectoryInEditor(editor)
   }
 
@@ -58,7 +58,7 @@ export function WorkspaceEditorLaunchers() {
       menuDataUI="workspace-editor-menu"
       onPrimaryClick={() => {
         const editor = selectedEditor()
-        if (editor) void openEditor(editor)
+        if (editor) return openEditor(editor)
       }}
       onOpenChange={setOpen}
       primaryChildren={

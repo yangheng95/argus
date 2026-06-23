@@ -1,5 +1,7 @@
 import * as DropdownMenu from "@kobalte/core/dropdown-menu"
 import type { JSX } from "solid-js"
+import { formatErrorDetails, notifyError } from "../services/notify"
+import { t } from "../utils/i18n"
 import { Button } from "./ui/Button"
 
 interface WorkspaceSplitLauncherProps {
@@ -22,6 +24,30 @@ interface WorkspaceSplitLauncherProps {
   children: JSX.Element
 }
 
+function launcherErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function runWorkspaceLauncherAction(label: string, action: () => void | Promise<void>): void {
+  try {
+    void Promise.resolve(action()).catch((error) => {
+      notifyError({
+        id: `workspace-launcher:${label}`,
+        title: t("common.error"),
+        message: launcherErrorMessage(error),
+        details: formatErrorDetails(error),
+      })
+    })
+  } catch (error) {
+    notifyError({
+      id: `workspace-launcher:${label}`,
+      title: t("common.error"),
+      message: launcherErrorMessage(error),
+      details: formatErrorDetails(error),
+    })
+  }
+}
+
 export function WorkspaceSplitLauncherItem(props: {
   class: string
   children: JSX.Element
@@ -34,7 +60,7 @@ export function WorkspaceSplitLauncherItem(props: {
       type="button"
       class={props.class}
       {...props.dataAttributes}
-      onSelect={() => void props.onSelect()}
+      onSelect={() => runWorkspaceLauncherAction(props.class, props.onSelect)}
     >
       {props.children}
     </DropdownMenu.Item>
@@ -49,7 +75,7 @@ export function WorkspaceSplitLauncher(props: WorkspaceSplitLauncherProps): JSX.
   function primaryClick(): void {
     if (props.disabled) return
     close()
-    void props.onPrimaryClick()
+    runWorkspaceLauncherAction(props.title, props.onPrimaryClick)
   }
 
   return (
