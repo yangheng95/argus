@@ -22,6 +22,7 @@ const { __setHostTransportForTest } = await import("../src/services/host-transpo
 const { resetWriter } = await import("../src/services/tree-writer")
 const { markSelectedMessageWatermark, resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor")
 const { registerConversationSourceDirectory } = await import("../src/services/conversation")
+const { conversationAgentStore, resetConversationAgentView } = await import("../src/store/conversation-agents")
 const { setLocaleData } = await import("../src/utils/i18n")
 const { __resetConversationRecoveryDiagnosticsSinkForTest, __setConversationRecoveryDiagnosticsSinkForTest } =
   await import("../src/services/refresh-diagnostics")
@@ -103,6 +104,7 @@ afterEach(() => {
   __setHostTransportForTest(undefined)
   __resetConversationRecoveryDiagnosticsSinkForTest()
   resetWriter()
+  resetConversationAgentView()
   resetSelectedLiveCursor()
   setBoardStore("selectedSource", null)
   setBoardStore("taskSequence", 0)
@@ -606,6 +608,16 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
         placement: "top_level",
       },
     ],
+    messages: [
+      {
+        messageID: "msg_db_tail",
+        sessionID: "ses_db_tail",
+        stage: "assistant",
+        time: 1_779_000_000_001,
+        placement: "top_level",
+      },
+    ],
+    topLevelSessionIDs: ["ses_db_tail"],
   }
   __setHostTransportForTest(
     fakeTransport({
@@ -653,6 +665,10 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
   expect(cardTreeStore.visibleVersion).toBeGreaterThan(visibleVersion)
   expect(requests).toEqual(["task/tsk_db_tail_stream/conversation"])
   expect(card).toBeDefined()
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_db_tail"])
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(
+    "assistant:session:ses_db_tail:message:msg_db_tail",
+  )
   expect(
     card?.parts.some(
       (part: any) =>

@@ -215,8 +215,8 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory"',
   )
-  expect(main).toContain(
-    'id: "skill", icon: "config-skill", labelKey: "skill.title", tooltipKey: "activity.tooltip.skill"',
+  expect(main).toMatch(
+    /id:\s*"skill"[\s\S]*?icon:\s*"config-skill"[\s\S]*?labelKey:\s*"skill\.title"[\s\S]*?tooltipKey:\s*"activity\.tooltip\.skill"/,
   )
   expect(main).toContain('id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp"')
   expect(main).toContain(
@@ -248,7 +248,9 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain('render(() => <NotificationCenter surface="toast" />, notificationHost)')
   expect(main).toContain("<CodingAssistantSessionList")
   expect(main).toContain("loadCodingAssistantSessions({ signal: controller.signal })")
-  expect(main).toContain("selectCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || \"\") })")
+  expect(main).toMatch(
+    /selectCodingAssistantSession\(\{[\s\S]*?sessionID:\s*session\.id[\s\S]*?directory:\s*String\(session\.directory \|\| ""\)/,
+  )
   expect(main).toContain('type PrimaryCenterPanel = "task" | "mission" | "chat"')
   expect(main).toContain("leftActivityCenterPanel")
   expect(main).toContain("focusedLeftActivityOwnsPrimaryPanel")
@@ -291,7 +293,7 @@ test("chat usage strip reads the stats-kernel aggregate instead of scanning ever
   const main = await readSrc("src/main.tsx")
   expect(main).toContain("formatUsageStrip(cardTreeStore.usageAggregate)")
   expect(main).not.toContain("aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards))")
-  expect(main).not.toContain('import { aggregateUsageAcrossSessions')
+  expect(main).not.toContain("import { aggregateUsageAcrossSessions")
 })
 
 test("ConversationAgentRail owns workflow navigation without high-energy effects", async () => {
