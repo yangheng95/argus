@@ -658,7 +658,7 @@ export class Terminal extends HeyApiClient {
   public open<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      cwd?: string
+      cwd: string
       profileID?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -865,9 +865,9 @@ export class Attachment extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      filename?: string
-      mime?: string
-      data?: string
+      filename: string
+      mime: string
+      data: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -973,7 +973,7 @@ export class Channel extends HeyApiClient {
   public message<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      platform?:
+      platform:
         | "slack"
         | "telegram"
         | "discord"
@@ -988,9 +988,9 @@ export class Channel extends HeyApiClient {
         | "wecom"
         | "dingtalk"
         | "qq"
-      channel?: string
-      thread?: string
-      text?: string
+      channel: string
+      thread: string
+      text: string
       task_id?: string
       user_id?: string
       request_id?: string
@@ -1138,7 +1138,7 @@ export class Executor extends HeyApiClient {
     parameters: {
       executorID: string
       directory?: string
-      model?: string
+      model: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1390,8 +1390,8 @@ export class Workspace extends HeyApiClient {
     parameters: {
       id: string
       directory?: string
-      branch?: string | null
-      config?: {
+      branch: string | null
+      config: {
         directory: string
         type: "worktree"
       }
@@ -1471,9 +1471,9 @@ export class Schedule extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      name?: string
-      expression?: string
-      prompt?: string
+      name: string
+      expression: string
+      prompt: string
       sessionId?: string
       oneShot?: boolean
     },
@@ -1559,12 +1559,12 @@ export class Eventschedule extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      name?: string
-      eventType?: string
+      name: string
+      eventType: string
       match?: {
         [key: string]: string | number | boolean
       }
-      prompt?: string
+      prompt: string
       sessionId?: string
       oneShot?: boolean
       cooldownMs?: number
@@ -1879,7 +1879,7 @@ export class Session extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      kind?:
+      kind:
         | "root"
         | "orchestrator"
         | "assistant"
@@ -2228,9 +2228,9 @@ export class Session extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      modelID?: string
-      providerID?: string
-      messageID?: string
+      modelID: string
+      providerID: string
+      messageID: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2368,8 +2368,8 @@ export class Session extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      providerID?: string
-      modelID?: string
+      providerID: string
+      modelID: string
       auto?: boolean
       focus?: string
     },
@@ -2460,7 +2460,7 @@ export class Session extends HeyApiClient {
       extra?: {
         [key: string]: unknown
       }
-      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2678,8 +2678,8 @@ export class Session extends HeyApiClient {
       messageID?: string
       agent?: string
       model?: string
-      arguments?: string
-      command?: string
+      arguments: string
+      command: string
       variant?: string
       parts?: Array<{
         id?: string
@@ -2731,12 +2731,12 @@ export class Session extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      agent?: string
+      agent: string
       model?: {
         providerID: string
         modelID: string
       }
-      command?: string
+      command: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2883,8 +2883,8 @@ export class Permission extends HeyApiClient {
     parameters: {
       requestID: string
       directory?: string
-      reply?: "once" | "always" | "reject"
-      autoReply?: boolean
+      reply: "once" | "always" | "reject"
+      autoReply: boolean
       message?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -2964,7 +2964,7 @@ export class Question extends HeyApiClient {
     parameters: {
       requestID: string
       directory?: string
-      answers?: Array<QuestionAnswer>
+      answers: Array<QuestionAnswer>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3072,7 +3072,7 @@ export class Discover extends HeyApiClient {
   public models<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      api?: string
+      api: string
       apiKey?: string
       providerID?: string
     },
@@ -3118,7 +3118,7 @@ export class Auth extends HeyApiClient {
     parameters: {
       providerID: string
       directory?: string
-      method?: number
+      method: number
       inputs?: {
         [key: string]: string
       }
@@ -3161,7 +3161,7 @@ export class Auth extends HeyApiClient {
     parameters: {
       providerID: string
       directory?: string
-      method?: number
+      method: number
       inputs?: {
         [key: string]: string
       }
@@ -3206,7 +3206,7 @@ export class Oauth extends HeyApiClient {
     parameters: {
       providerID: string
       directory?: string
-      method?: number
+      method: number
       inputs?: {
         [key: string]: string
       }
@@ -3251,7 +3251,7 @@ export class Oauth extends HeyApiClient {
     parameters: {
       providerID: string
       directory?: string
-      method?: number
+      method: number
       code?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -3429,9 +3429,9 @@ export class App extends HeyApiClient {
    */
   public log<ThrowOnError extends boolean = false>(
     parameters?: {
-      service?: string
-      level?: "debug" | "info" | "error" | "warn"
-      message?: string
+      service: string
+      level: "debug" | "info" | "error" | "warn"
+      message: string
       extra?: {
         [key: string]: unknown
       }
@@ -3549,8 +3549,8 @@ export class Skill extends HeyApiClient {
   public install<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      kind?: "path" | "url" | "git"
-      value?: string
+      kind: "path" | "url" | "git"
+      value: string
       policy?: PermissionAction
     },
     options?: Options<never, ThrowOnError>,
@@ -3637,7 +3637,7 @@ export class Skill extends HeyApiClient {
   public remove<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      source?: string
+      source: string
       kind?: "path" | "url" | "git"
     },
     options?: Options<never, ThrowOnError>,
@@ -3674,8 +3674,8 @@ export class Skill extends HeyApiClient {
   public policy<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      name?: string
-      action?: PermissionAction
+      name: string
+      action: PermissionAction
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3713,7 +3713,7 @@ export class Message extends HeyApiClient {
   public stream<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      surface?:
+      surface:
         | "panel"
         | "gateway"
         | "slack"
@@ -3730,7 +3730,7 @@ export class Message extends HeyApiClient {
         | "wecom"
         | "dingtalk"
         | "qq"
-      text?: string
+      text: string
       taskID?: string
       sessionID?: string
       executor?: "opencorvus" | "codex" | "claude-code"
@@ -3882,7 +3882,7 @@ export class Memory extends HeyApiClient {
   public search<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      query?: string
+      query: string
       sessionID?: string
       taskID?: string
       limit?: number
@@ -3979,7 +3979,7 @@ export class Panel extends HeyApiClient {
   public message<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      surface?:
+      surface:
         | "panel"
         | "gateway"
         | "slack"
@@ -3996,7 +3996,7 @@ export class Panel extends HeyApiClient {
         | "wecom"
         | "dingtalk"
         | "qq"
-      text?: string
+      text: string
       taskID?: string
       sessionID?: string
       executor?: "opencorvus" | "codex" | "claude-code"
@@ -4145,9 +4145,9 @@ export class Cli extends HeyApiClient {
   public open<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      cliID?: string
-      terminalProfileID?: string
-      cwd?: string
+      cliID: string
+      terminalProfileID: string
+      cwd: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4187,7 +4187,7 @@ export class Selection extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      taskID?: string | null
+      taskID: string | null
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4433,7 +4433,7 @@ export class Control2 extends HeyApiClient {
   public message<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      text?: string
+      text: string
       taskID?: string
       sessionID?: string
       executor?: "opencorvus" | "codex" | "claude-code"
@@ -5138,9 +5138,9 @@ export class Channel2 extends HeyApiClient {
     parameters: {
       path_platform: string
       directory?: string
-      channel?: string
-      thread?: string
-      text?: string
+      channel: string
+      thread: string
+      text: string
       task_id?: string
       user_id?: string
       request_id?: string
@@ -5397,7 +5397,7 @@ export class Mission extends HeyApiClient {
     parameters: {
       missionID: string
       directory?: string
-      title?: string
+      title: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5494,7 +5494,7 @@ export class Mission extends HeyApiClient {
     parameters?: {
       directory?: string
       missionID?: string
-      text?: string
+      text: string
       title?: string
       model?: string
       promptProfile?: string
@@ -5706,7 +5706,7 @@ export class BrowserPreview extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      targetID?: string
+      targetID: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5743,8 +5743,8 @@ export class BrowserPreview extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      targetID?: string
-      viewportIDs?: Array<"desktop" | "tablet" | "mobile">
+      targetID: string
+      viewportIDs: Array<"desktop" | "tablet" | "mobile">
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5782,19 +5782,15 @@ export class BrowserPreview extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      targetID?: string
-      viewportIDs?: Array<"desktop" | "tablet" | "mobile">
-      inlineBindings?: Array<{
+      targetID: string
+      viewportIDs: Array<"desktop" | "tablet" | "mobile">
+      inlineBindings: Array<{
         region_id: string
         viewport_id: "desktop" | "tablet" | "mobile"
         state_id?: string
         region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
         source: {
-          reference_artifact_id:
-            | "reference.png"
-            | "reference-mobile.png"
-            | "web-clone-source/reference.png"
-            | "web-clone-source/reference-mobile.png"
+          reference_artifact_id: "reference.png" | "web-clone-source/reference.png"
           bbox: {
             x: number
             y: number
@@ -5878,8 +5874,8 @@ export class BrowserPreview extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      targetID?: string
-      viewportID?: "desktop" | "tablet" | "mobile"
+      targetID: string
+      viewportID: "desktop" | "tablet" | "mobile"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5917,9 +5913,9 @@ export class BrowserPreview extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      targetID?: string
-      viewportID?: "desktop" | "tablet" | "mobile"
-      inputs?: Array<
+      targetID: string
+      viewportID: "desktop" | "tablet" | "mobile"
+      inputs: Array<
         | {
             kind: "click"
             x: number
@@ -6253,7 +6249,7 @@ export class Session3 extends HeyApiClient {
       taskID: string
       sessionID: string
       directory?: string
-      message?: string
+      message: string
       attachments?: Array<{
         mime: string
         url: string
@@ -6335,7 +6331,7 @@ export class Task extends HeyApiClient {
       executor?: "opencorvus" | "codex" | "claude-code"
       model?: string
       title?: string
-      request?: string
+      request: string
       attachments?: Array<{
         mime: string
         data: string
@@ -7269,8 +7265,8 @@ export class Task extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      text?: string
-      source?: string
+      text: string
+      source: string
       target?: TaskMessageTarget
       user_id?: string
       promptProfile?: string
@@ -7322,7 +7318,7 @@ export class Task extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      message?: string
+      message: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7385,7 +7381,7 @@ export class Task extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      anchor?:
+      anchor:
         | {
             kind: "cursorTime"
             cursorTime: number
@@ -7397,7 +7393,7 @@ export class Task extends HeyApiClient {
             messageID: string
             partID?: string
           }
-      resetWorktree?: boolean
+      resetWorktree: boolean
       reason?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -7579,7 +7575,7 @@ export class Task extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      budget?: {
+      budget: {
         maxExecutorGroups?: number
       } | null
     },
@@ -7616,7 +7612,7 @@ export class Task extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      title?: string
+      title: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7879,7 +7875,7 @@ export class Interaction extends HeyApiClient {
       interactionID: string
       directory?: string
       reply?: "once" | "always" | "reject"
-      autoReply?: boolean
+      autoReply: boolean
       message?: string
       answers?: Array<QuestionAnswer>
     },
@@ -7919,7 +7915,7 @@ export class Interaction extends HeyApiClient {
     parameters: {
       interactionID: string
       directory?: string
-      autoReply?: boolean
+      autoReply: boolean
       message?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -7986,8 +7982,8 @@ export class Goal extends HeyApiClient {
     parameters: {
       goalID: string
       directory?: string
-      description?: string
-      acceptance_specs?: Array<{
+      description: string
+      acceptance_specs: Array<{
         /**
          * Stable spec ID, e.g. 'acc-login-3s'.
          */
@@ -8359,8 +8355,8 @@ export class File extends HeyApiClient {
   public write<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      path?: string
-      content?: string
+      path: string
+      content: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -8396,8 +8392,8 @@ export class File extends HeyApiClient {
   public upload<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      targetDir?: string
-      files?: Array<{
+      targetDir: string
+      files: Array<{
         name: string
         contentBase64: string
         mimeType?: string
@@ -8457,7 +8453,6 @@ export class Attachment2 extends HeyApiClient {
     parameters: {
       projectID: string
       name: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -8468,7 +8463,6 @@ export class Attachment2 extends HeyApiClient {
           args: [
             { in: "path", key: "projectID" },
             { in: "path", key: "name" },
-            { in: "query", key: "directory" },
           ],
         },
       ],
@@ -8551,7 +8545,7 @@ export class Auth2 extends HeyApiClient {
     parameters: {
       name: string
       directory?: string
-      code?: string
+      code: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -8640,8 +8634,8 @@ export class Mcp extends HeyApiClient {
   public add<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      name?: string
-      config?: McpLocalConfig | McpRemoteConfig
+      name: string
+      config: McpLocalConfig | McpRemoteConfig
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -8759,7 +8753,7 @@ export class Pty extends HeyApiClient {
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      command?: string
+      command: string
       args?: Array<string>
       cwd?: string
       title?: string
@@ -9256,7 +9250,7 @@ export class Mysql extends HeyApiClient {
    */
   public import<ThrowOnError extends boolean = false>(
     parameters?: {
-      snapshot?: {
+      snapshot: {
         format: "opencorvus.mysql-transfer.v1"
         schemaFingerprint: string
         tables: Array<{
@@ -9294,7 +9288,7 @@ export class Db extends HeyApiClient {
    */
   public reset<ThrowOnError extends boolean = false>(
     parameters?: {
-      projectDir?: string
+      projectDir: string
     },
     options?: Options<never, ThrowOnError>,
   ) {

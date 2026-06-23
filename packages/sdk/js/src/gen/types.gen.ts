@@ -9869,11 +9869,7 @@ export type BrowserPreviewCompareTaskTargetRegionsData = {
       state_id?: string
       region_scope: "page-section" | "card" | "content" | "title" | "chart" | "table" | "control" | "navigation"
       source: {
-        reference_artifact_id:
-          | "reference.png"
-          | "reference-mobile.png"
-          | "web-clone-source/reference.png"
-          | "web-clone-source/reference-mobile.png"
+        reference_artifact_id: "reference.png" | "web-clone-source/reference.png"
         bbox: {
           x: number
           y: number
@@ -9953,6 +9949,12 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
         width: number
         height: number
       }
+      normalized_source_bbox?: {
+        x: number
+        y: number
+        width: number
+        height: number
+      }
       implementation_bbox?: {
         x: number
         y: number
@@ -10016,6 +10018,7 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
       }
       artifacts?: {
         source_crop: string
+        normalized_source_crop?: string
         implementation_crop: string
         side_by_side: string
         diff?: string
@@ -10700,6 +10703,7 @@ export type TaskListResponses = {
         title: string
         request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
+        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
         priority: "critical" | "high" | "normal" | "low"
         queue?: {
           order: number
@@ -10875,6 +10879,7 @@ export type TaskGlobalListResponses = {
         title: string
         request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
+        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
         priority: "critical" | "high" | "normal" | "low"
         queue?: {
           order: number
@@ -11108,6 +11113,7 @@ export type TaskQueueStartNowResponses = {
       title: string
       request: string
       status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
       priority: "critical" | "high" | "normal" | "low"
       queue?: {
         order: number
@@ -11266,6 +11272,7 @@ export type TaskGetResponses = {
     title: string
     request: string
     status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
     priority: "critical" | "high" | "normal" | "low"
     queue?: {
       order: number
@@ -11549,6 +11556,7 @@ export type TaskProgressResponses = {
       title: string
       request: string
       status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
       priority: "critical" | "high" | "normal" | "low"
       queue?: {
         order: number
@@ -11842,6 +11850,7 @@ export type TaskConversationResponses = {
         title: string
         request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
+        terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
         priority: "critical" | "high" | "normal" | "low"
         queue?: {
           order: number
@@ -12696,6 +12705,7 @@ export type TaskBoardResponses = {
       title: string
       request: string
       status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      terminalReason?: "completed" | "failed" | "cancelled" | "interrupted"
       priority: "critical" | "high" | "normal" | "low"
       queue?: {
         order: number
@@ -15275,12 +15285,7 @@ export type AttachmentGetData = {
     projectID: string
     name: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/attachment/{projectID}/{name}"
 }
 

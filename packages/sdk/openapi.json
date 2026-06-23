@@ -16651,6 +16651,34 @@
                             ],
                             "additionalProperties": false
                           },
+                          "normalized_source_bbox": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y",
+                              "width",
+                              "height"
+                            ],
+                            "additionalProperties": false
+                          },
                           "implementation_bbox": {
                             "type": "object",
                             "properties": {
@@ -16917,6 +16945,9 @@
                               "source_crop": {
                                 "type": "string"
                               },
+                              "normalized_source_crop": {
+                                "type": "string"
+                              },
                               "implementation_crop": {
                                 "type": "string"
                               },
@@ -17056,9 +17087,7 @@
                               "type": "string",
                               "enum": [
                                 "reference.png",
-                                "reference-mobile.png",
-                                "web-clone-source/reference.png",
-                                "web-clone-source/reference-mobile.png"
+                                "web-clone-source/reference.png"
                               ]
                             },
                             "bbox": {
@@ -35145,15 +35174,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "schema": {
               "type": "string"
