@@ -5746,7 +5746,7 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL webpage/UI investigation publisher. Source-page-scoped brief producer: pass exactly one source page URL per fresh call, let the host prepare rendered evidence for that page, persist the brief, and call frontend_research separately for additional pages. Do not reuse frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after the same page scope's frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, risks, and the Page Skeleton Blueprint that frontend_design consumes as page information architecture. It persists a frontend_research_brief/webpage_contract artifact built from small registration tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+        "OPTIONAL webpage/UI investigation publisher. Source-page-scoped brief producer: pass exactly one source page URL per fresh call, let the host prepare rendered evidence for that page, persist the brief, and call frontend_research separately for additional pages. Do not reuse frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after the same page scope's frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, risks, and the Page Skeleton Blueprint that frontend_design consumes as page information architecture. It persists a frontend_research_brief/webpage_contract artifact built from small update_* result tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: FrontendResearchInputSchema,
       execute: async ({ reason, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)
@@ -7212,8 +7212,8 @@ export function createOrchestratorTools(input: {
     propose_task: tool({
       description:
         "Create one polished inheriting follow-up task candidate from terminal parent-task handoff evidence. " +
-        "This is the orchestrator's ONLY new-engine-task creation path: it follows `experimental.confirm_proposed_tasks`, " +
-        "creating directly by default and asking the user first only when that policy is enabled. Do not use this for normal workflow progress, do not use it " +
+        "This is the orchestrator's ONLY new-engine-task creation path: it follows `experimental.auto_confirm_proposed_tasks`, " +
+        "creating directly by default and asking the user first only when auto-confirm is disabled. Do not use this for normal workflow progress, do not use it " +
         "instead of build/integrity on the current task, and do not call generic `task` or control-plane `panel`. " +
         "Create at most one follow-up task for the parent task, and only from terminal parent-task handoff evidence after the current task has ended. " +
         "Use propose_task only when terminal execution evidence, artifact state, integrity history, or final visual QA evidence names separate inheriting work that cannot be completed safely inside the ended parent task. " +
@@ -7282,9 +7282,9 @@ export function createOrchestratorTools(input: {
           })
         }
         const cfg = await EffectiveConfig.effective({ taskID, sessionID: input.agentSessionID })
-        const requireConfirmation = cfg.experimental?.confirm_proposed_tasks === true
-        log.info("propose_task requested", { taskID, title, priority, kind, requireConfirmation })
-        if (requireConfirmation) {
+        const autoConfirmProposedTasks = cfg.experimental?.auto_confirm_proposed_tasks === true
+        log.info("propose_task requested", { taskID, title, priority, kind, autoConfirmProposedTasks })
+        if (!autoConfirmProposedTasks) {
           const { output, answers } = await Question.askAndFormat({
             sessionID: input.agentSessionID,
             questions: [
@@ -7350,9 +7350,9 @@ export function createOrchestratorTools(input: {
           reason: "propose_task_confirmed",
         })
         return SubAgentProtocol.yieldResult({
-          headline: requireConfirmation
-            ? "Follow-up task created after user confirmation."
-            : "Follow-up task created without user confirmation.",
+          headline: autoConfirmProposedTasks
+            ? "Follow-up task created automatically."
+            : "Follow-up task created after user confirmation.",
           fields: [
             ["new_task_id", newTaskID],
             ["title", title],

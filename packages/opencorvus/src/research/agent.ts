@@ -306,7 +306,7 @@ function buildUserPrompt(
   if (input.focus?.trim()) sections.push(`# Focus\n\n${input.focus.trim()}`)
   sections.push(
     "# Output Boundary\n\n" +
-      "Build the research brief through small registration tools, then call `submit_research_brief({ final: true })` exactly once. The tool result is an evidence artifact, not a process pointer. " +
+      "Build the research brief through small `update_*` result tools, then call `submit_research_brief({ final: true })` exactly once. If finalization reports missing fragments, call the listed `update_*` tools and submit again; do not retry a giant result payload. The tool result is an evidence artifact, not a process pointer. " +
       "Never write `NEXT: call ...`, never recommend `publish_acceptance`, and never tell the orchestrator which tool must run next.",
   )
   return sections.join("\n\n")

@@ -27,6 +27,56 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { validResearchBrief } from "../research/fixtures"
 
+async function updatePromptTestFrontendResult(
+  kit: ReturnType<typeof createFrontendTemplateOutputTools>,
+  notes: readonly string[],
+) {
+  const tools = kit.tools as any
+  await tools.update_frontend_basics.execute({
+    design_system: "custom financial dashboard",
+    tech_stack: ["React", "mock API"],
+    final_acceptance_mode: "visual_baseline_allowed",
+  })
+  await tools.update_frontend_text.execute({ section: "frontend_template", content: "frontend replica scope" })
+  await tools.update_frontend_text.execute({
+    section: "fillable_modules",
+    content: "frontend implementation source handoff",
+  })
+  await tools.update_frontend_text.execute({ section: "component_inventory", content: "component inventory" })
+  await tools.update_frontend_component_reuse.execute({
+    family_id: "comp-chart-panel",
+    name: "Chart panel",
+    observed_surface: "Primary chart panel",
+    source_refs: ["webpage-evidence/reference.png"],
+    implementation_strategy: "extracted_baseline_defer",
+    reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
+    mature_library_candidates: [],
+    props_states: "static baseline until replacement keeps parity",
+    replacement_boundary: "main chart DOM subtree",
+    parity_guard: "desktop reference screenshot remains within threshold",
+    project_specific_reason: "not applicable",
+  })
+  await tools.update_frontend_text.execute({ section: "material_inventory", content: "material inventory" })
+  await tools.update_frontend_material.execute({
+    title: "Reference materials",
+    detail: "Use reference pixels and source artifacts needed by the frontend replica.",
+    source_refs: ["webpage-evidence/reference.png"],
+  })
+  await tools.update_frontend_text.execute({
+    section: "visual_consistency_contract",
+    content: "visual consistency contract",
+  })
+  await tools.update_frontend_text.execute({ section: "ui_data_contract", content: "UI data contract" })
+  for (const note of notes) {
+    await tools.update_frontend_iteration_note.execute({ value: note })
+  }
+  await tools.update_frontend_text.execute({
+    section: "completeness_review",
+    content: "frontend template complete enough for handoff",
+  })
+  await tools.update_frontend_reference.execute({ value: "webpage-evidence/reference.png" })
+}
+
 describe("frontend-design prompt assembly", () => {
   test("core prompt pins visual HTML skeleton restoration workflow", async () => {
     const prompt = await fs.readFile(new URL("../../src/prompt/core/frontend-design-core.txt", import.meta.url), "utf8")
@@ -220,7 +270,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "frontend_design's first workflow deliverable is a source-editable static HTML/CSS visual skeleton",
     )
-    expect(prompt).toContain("Report visual-only work as `submit_frontend_template.frontend_project.role=visual_baseline_input`")
+    expect(prompt).toContain('Report visual-only work through `update_frontend_project({ role: "visual_baseline_input", ... })`')
     expect(prompt).toContain("For production/component-system tasks, set `final_acceptance_mode=maintainable_replacement_required`")
     expect(prompt).toContain("submit `implementation_phase_outcomes`")
     expect(prompt).toContain("package.json or source imports prove it")
@@ -801,48 +851,8 @@ describe("frontend-design prompt assembly", () => {
 
   test("terminal frontend template submit tool accepts bounded review notes when auto iteration is off", async () => {
     const kit = createFrontendTemplateOutputTools()
-    const submit = kit.tools.submit_frontend_template as any
-
-    await submit.execute(
-      {
-        design_system: "custom financial dashboard",
-        tech_stack: ["React", "mock API"],
-        final_acceptance_mode: "visual_baseline_allowed",
-        frontend_template: "frontend replica scope",
-        fillable_modules: "frontend implementation source handoff",
-        component_inventory: "component inventory",
-        component_reuse_plan: [
-          {
-            family_id: "comp-chart-panel",
-            name: "Chart panel",
-            observed_surface: "Primary chart panel",
-            source_refs: ["webpage-evidence/reference.png"],
-            implementation_strategy: "extracted_baseline_defer",
-            reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
-            mature_library_candidates: [],
-            props_states: "static baseline until replacement keeps parity",
-            replacement_boundary: "main chart DOM subtree",
-            parity_guard: "desktop reference screenshot remains within threshold",
-            project_specific_reason: "not applicable",
-          },
-        ],
-        material_inventory: "material inventory",
-        material_inventory_items: [
-          {
-            title: "Reference materials",
-            detail: "Use reference pixels and source artifacts needed by the frontend replica.",
-            source_refs: ["webpage-evidence/reference.png"],
-          },
-        ],
-        visual_consistency_contract: "visual consistency contract",
-        ui_data_contract: "UI data contract",
-        template_iteration_notes: ["bounded inventory and implementation review complete"],
-        completeness_review: "frontend template complete enough for handoff",
-        reference_artifacts: ["webpage-evidence/reference.png", "webpage-evidence/prd-evidence-summary.md"],
-        open_questions: [],
-      },
-      {},
-    )
+    await updatePromptTestFrontendResult(kit, ["bounded inventory and implementation review complete"])
+    await (kit.tools.submit_frontend_template as any).execute({ final: true }, {})
 
     const collector = kit.getCollector()
     expect(collector.final?.visual_consistency_contract).toBe("visual consistency contract")
@@ -853,61 +863,42 @@ describe("frontend-design prompt assembly", () => {
     const kit = createFrontendTemplateOutputTools({ autoIteration: true })
     const submit = kit.tools.submit_frontend_template as any
 
-    const payload = {
-      design_system: "custom financial dashboard",
-      tech_stack: ["React", "mock API"],
-      final_acceptance_mode: "visual_baseline_allowed",
-      frontend_template: "frontend replica scope",
-      fillable_modules: "frontend implementation source handoff",
-      component_inventory: "component inventory",
-      component_reuse_plan: [
-        {
-          family_id: "comp-chart-panel",
-          name: "Chart panel",
-          observed_surface: "Primary chart panel",
-          source_refs: ["webpage-evidence/reference.png"],
-          implementation_strategy: "extracted_baseline_defer",
-          reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
-          mature_library_candidates: [],
-          props_states: "static baseline until replacement keeps parity",
-          replacement_boundary: "main chart DOM subtree",
-          parity_guard: "desktop reference screenshot remains within threshold",
-          project_specific_reason: "not applicable",
-        },
-      ],
-      material_inventory: "material inventory",
-      material_inventory_items: [
-        {
-          title: "Reference materials",
-          detail: "Use reference pixels and source artifacts needed by the frontend replica.",
-          source_refs: ["webpage-evidence/reference.png"],
-        },
-      ],
-      visual_consistency_contract: "visual consistency contract",
-      ui_data_contract: "UI data contract",
-      template_iteration_notes: ["pass 1 inventory complete"],
-      completeness_review: "frontend template complete enough for handoff",
-      reference_artifacts: ["webpage-evidence/reference.png"],
-      open_questions: [],
-    }
+    await updatePromptTestFrontendResult(kit, ["pass 1 inventory complete"])
 
-    await expect(submit.execute(payload, {})).rejects.toThrow("requires at least two")
+    const missing = await submit.execute({ final: true }, {})
 
-    await submit.execute(
-      {
-        ...payload,
-        template_iteration_notes: ["pass 1 inventory complete", "pass 2 implementation handoff complete"],
-      },
+    expect(missing).toContain("MISSING_FRONTEND_TEMPLATE_RESULT")
+    expect(missing).toContain("update_frontend_iteration_note")
+    expect(kit.getCollector().final).toBeUndefined()
+
+    await (kit.tools.update_frontend_iteration_note as any).execute(
+      { value: "pass 2 implementation handoff complete" },
       {},
     )
+    await submit.execute({ final: true }, {})
 
     expect(kit.getCollector().final?.template_iteration_notes).toHaveLength(2)
   })
 
-  test("agent exposes direct frontend template submit instead of register tools", () => {
+  test("agent exposes incremental frontend result update tools plus small submit", () => {
     const tools = FrontendDesignTestHooks.createFrontendSubmitTools(createFrontendTemplateOutputTools())
 
-    expect(Object.keys(tools)).toEqual(["submit_frontend_template"])
+    expect(Object.keys(tools)).toEqual([
+      "update_frontend_basics",
+      "update_frontend_text",
+      "update_frontend_item",
+      "update_frontend_material",
+      "update_frontend_project",
+      "update_frontend_component_reuse",
+      "update_frontend_baseline",
+      "update_frontend_phase",
+      "update_frontend_visual_evidence",
+      "update_frontend_iteration_note",
+      "update_frontend_reference",
+      "update_frontend_question",
+      "inspect_frontend_result_status",
+      "submit_frontend_template",
+    ])
     expect(Object.keys(tools).some((name) => name.startsWith("register_"))).toBe(false)
   })
 
@@ -969,7 +960,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("any existing frontend app constraints")
     expect(prompt).toContain("## source-ir/component-tree.json")
     expect(prompt).toContain("## source-ir/content-model.json")
-    expect(prompt).toContain("call `submit_frontend_template` with the full frontend-design contract")
+    expect(prompt).toContain("Populate the contract through `update_frontend_*` tools")
     expect(prompt).not.toContain("Only `submit_frontend_template` is available")
     expect(prompt).not.toContain("schema is intentionally lightweight")
     expect(prompt).not.toContain("terminal-only host-prepared turn")

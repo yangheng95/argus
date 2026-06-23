@@ -102,67 +102,102 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
           remainingSourceDebt: [],
           nextRegionComponentName: "FooterRegion",
         })
-        await input.toolKit.tools.submit_frontend_template.execute({
+        await input.toolKit.tools.update_frontend_basics.execute({
           design_system: "source-region clone",
           tech_stack: ["React", "Vite"],
           final_acceptance_mode: "maintainable_replacement_required",
-          frontend_template: "Use the frontend-design-skeleton source project as the implementation target.",
-          fillable_modules: "HeroSection owns the replaced HeroRegion vertical slice.",
-          component_inventory: "HeroSection semantic component.",
-          component_reuse_plan: [
-            {
-              family_id: "hero-section",
-              name: "HeroSection",
-              observed_surface: "HeroRegion",
-              source_refs: ["src/data/sourceDomReplacementPlan.ts"],
-              implementation_strategy: "project_specific_component",
-              reuse_source: "project-owned semantic component",
-              mature_library_candidates: [],
-              props_states: "hero data fixture",
-              replacement_boundary: "src/components/source-dom/HeroRegion.tsx",
-              parity_guard: "task-scoped preview screenshot inspection plus source audit",
-              project_specific_reason: "Simple page-specific layout; no mature library domain.",
-            },
-          ],
-          baseline_replacement_plan: [
-            {
-              boundary_id: "HeroRegion",
-              source_region: "src/components/source-dom/HeroRegion.tsx",
-              action: "replace_generated_baseline",
-              component_family_id: "hero-section",
-              replacement_strategy: "project_specific_component",
-              reuse_source: "HeroSection",
-              mature_library_candidates: [],
-              deletion_rule: "Remove source-dom HeroRegion after parity evidence.",
-              source_refs: ["src/data/sourceDomReplacementPlan.ts"],
-              parity_guard: "task-scoped preview screenshot inspection plus source audit",
-              project_specific_reason: "Simple page-specific layout.",
-            },
-          ],
-          material_inventory: "reference.png, sourceDomReplacementPlan.ts, heroData.ts",
-          material_inventory_items: [
-            {
-              title: "Hero source materials",
-              detail: "Use reference pixels, replacement-plan rows, and hero data for visual restoration.",
-              source_refs: ["reference.png", "sourceDomReplacementPlan.ts", "heroData.ts"],
-            },
-          ],
-          visual_consistency_contract: "Maintain source screenshot parity for the replaced hero region.",
-          ui_data_contract: "Local hero data fixture.",
-          template_iteration_notes: ["Checked source-region process evidence."],
-          completeness_review: "HeroRegion replacement evidence is recorded; downstream benchmark consumes artifacts.",
-          reference_artifacts: ["src/data/sourceDomReplacementPlan.ts"],
-          open_questions: [],
-          frontend_project: {
-            status: "created",
-            role: "implementation_target",
-            project_root: ProjectRuntimePaths.frontendDesignPaths("", "tsk_analyze_process").skeletonProjectRelative,
-            source_package: ProjectRuntimePaths.frontendDesignPaths("", "tsk_analyze_process").sourcePackageRelative,
-            entrypoints: ["src/main.tsx", "src/App.tsx"],
-            generation_tool: "create_frontend_skeleton_project",
-            notes: ["HeroRegion replacement completed."],
-          },
         })
+        await input.toolKit.tools.update_frontend_text.execute({
+          section: "frontend_template",
+          content: "Use the frontend-design-skeleton source project as the implementation target.",
+        })
+        await input.toolKit.tools.update_frontend_text.execute({
+          section: "fillable_modules",
+          content: "HeroSection owns the replaced HeroRegion vertical slice.",
+        })
+        await input.toolKit.tools.update_frontend_text.execute({
+          section: "component_inventory",
+          content: "HeroSection semantic component.",
+        })
+        await input.toolKit.tools.update_frontend_component_reuse.execute({
+          family_id: "hero-section",
+          name: "HeroSection",
+          observed_surface: "HeroRegion",
+          source_refs: ["src/data/sourceDomReplacementPlan.ts"],
+          implementation_strategy: "project_specific_component",
+          reuse_source: "project-owned semantic component",
+          mature_library_candidates: [],
+          props_states: "hero data fixture",
+          replacement_boundary: "src/components/source-dom/HeroRegion.tsx",
+          parity_guard: "task-scoped preview screenshot inspection plus source audit",
+          project_specific_reason: "Simple page-specific layout; no mature library domain.",
+        })
+        await input.toolKit.tools.update_frontend_baseline.execute({
+          boundary_id: "HeroRegion",
+          source_region: "src/components/source-dom/HeroRegion.tsx",
+          action: "replace_generated_baseline",
+          component_family_id: "hero-section",
+          replacement_strategy: "project_specific_component",
+          reuse_source: "HeroSection",
+          mature_library_candidates: [],
+          deletion_rule: "Remove source-dom HeroRegion after parity evidence.",
+          source_refs: ["src/data/sourceDomReplacementPlan.ts"],
+          parity_guard: "task-scoped preview screenshot inspection plus source audit",
+          project_specific_reason: "Simple page-specific layout.",
+        })
+        await input.toolKit.tools.update_frontend_text.execute({
+          section: "material_inventory",
+          content: "reference.png, sourceDomReplacementPlan.ts, heroData.ts",
+        })
+        await input.toolKit.tools.update_frontend_material.execute({
+          title: "Hero source materials",
+          detail: "Use reference pixels, replacement-plan rows, and hero data for visual restoration.",
+          source_refs: ["reference.png", "sourceDomReplacementPlan.ts", "heroData.ts"],
+        })
+        await input.toolKit.tools.update_frontend_text.execute({
+          section: "visual_consistency_contract",
+          content: "Maintain source screenshot parity for the replaced hero region.",
+        })
+        await input.toolKit.tools.update_frontend_text.execute({
+          section: "ui_data_contract",
+          content: "Local hero data fixture.",
+        })
+        for (const phase of [
+          "evidence_lock",
+          "implementation_scaffold",
+          "data_component_transcription",
+          "runtime_visual_verification",
+          "source_quality_cleanup",
+        ] as const) {
+          await input.toolKit.tools.update_frontend_phase.execute({
+            id: `phase-${phase}`,
+            phase,
+            title: phase,
+            deliverable: `Recorded ${phase} outcome for the source-region clone.`,
+            source_refs: ["src/data/sourceDomReplacementPlan.ts"],
+            acceptance: `${phase} evidence is present in the handoff.`,
+          })
+        }
+        await input.toolKit.tools.update_frontend_iteration_note.execute({
+          value: "Checked source-region process evidence.",
+        })
+        await input.toolKit.tools.update_frontend_text.execute({
+          section: "completeness_review",
+          content: "HeroRegion replacement evidence is recorded; downstream benchmark consumes artifacts.",
+        })
+        await input.toolKit.tools.update_frontend_reference.execute({
+          value: "src/data/sourceDomReplacementPlan.ts",
+        })
+        await input.toolKit.tools.update_frontend_project.execute({
+          status: "created",
+          role: "implementation_target",
+          project_root: ProjectRuntimePaths.frontendDesignPaths("", "tsk_analyze_process").skeletonProjectRelative,
+          source_package: ProjectRuntimePaths.frontendDesignPaths("", "tsk_analyze_process").sourcePackageRelative,
+          entrypoints: ["src/main.tsx", "src/App.tsx"],
+          generation_tool: "create_frontend_skeleton_project",
+          notes: ["HeroRegion replacement completed."],
+        })
+        await input.toolKit.tools.submit_frontend_template.execute({ final: true })
 
         return {
           collector: input.toolKit.getCollector(),

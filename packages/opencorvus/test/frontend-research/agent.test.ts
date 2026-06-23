@@ -25,7 +25,7 @@ describe("frontend-research agent", () => {
     expect(prompt).toContain("Use an empty array only when no screenshot/rendered visual capture exists")
     expect(prompt).toContain("never create placeholder evidence")
     expect(prompt).toContain("Evidence index `bundle_ref` values are optional")
-    expect(prompt).toContain("Build the brief with small registration tools")
+    expect(prompt).toContain("Build the brief with small `update_*` tools")
     expect(prompt).toContain("downstream implementation must inspect and reference that image while writing code")
     expect(prompt).toContain("do not let frontend_design or build infer visual layout from prose alone")
     expect(prompt).toContain("source IR/style-profile/style-tokens/reference screenshot evidence")

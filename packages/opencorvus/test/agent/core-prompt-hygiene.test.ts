@@ -729,9 +729,9 @@ describe("core prompt hygiene", () => {
     )
     expect(normalized).toContain("do not synthesize a parallel token catalog")
     expect(normalized).toContain("Treat `webpage_contract` as an investigation partition contract")
-    expect(normalized).toContain("Build the brief with small registration tools")
+    expect(normalized).toContain("Build the brief with small `update_*` tools")
     expect(normalized).toContain(
-      "Fields named `fact_ids`, `based_on_fact_ids`, or `related_fact_ids` may cite only ids previously registered through `register_research_fact`",
+      "Fields named `fact_ids`, `based_on_fact_ids`, or `related_fact_ids` may cite only ids previously submitted through `update_research_fact`",
     )
     expect(normalized).toContain("do not cite evidence ids, risk ids, packet ids, webpage contract ids")
     expect(normalized).toContain("Do not submit raw markdown or JSON documents as string fields")
@@ -1120,8 +1120,8 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(text).toContain("propose_task")
     expect(normalized).toContain("You are the only agent-side owner of engine task lifecycle decisions")
-    expect(normalized).toContain("It creates according to `experimental.confirm_proposed_tasks`")
-    expect(normalized).toContain("default false creates directly")
+    expect(normalized).toContain("It creates according to `experimental.auto_confirm_proposed_tasks`")
+    expect(normalized).toContain("default true creates directly")
     expect(normalized).toContain("inheriting follow-up task creation")
     expect(normalized).toContain("execution evidence, artifact state, integrity history, or the obvious product path")
     expect(normalized).toContain("If visual QA returns a `follow_up_task`")
@@ -1192,8 +1192,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain(
       "when a source-backed Page Skeleton Blueprint is missing, call `frontend_research` before `frontend_design`",
     )
-    expect(normalized).toContain("do not let frontend_design invent or reorder the page skeleton")
     expect(normalized).toContain("do not call `frontend_design` first merely to materialize raw webpage evidence")
+    expect(normalized).toContain("do not let frontend_design invent or reorder the page skeleton")
     expect(normalized).not.toContain("raw webpage evidence/source package materialization may require frontend_design first")
     expect(normalized).not.toContain("`frontend_design` and any needed `frontend_research` MUST be first")
     expect(normalized).not.toContain("`frontend_design` and `frontend_research` in parallel")

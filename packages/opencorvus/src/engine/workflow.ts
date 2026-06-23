@@ -187,7 +187,7 @@ const PIPELINE: MiniWorkflow = {
       id: "frontend_research",
       tool: "frontend_research",
       label: "Frontend Research",
-      hint: "网页/URL 参考任务的调查分工阶段。source URL 存在时由 host 先准备 rendered webpage evidence；frontend_research 基于证据、源 URL、可见区域、组件/数据/交互/样式疑点和 fidelity risk，发布 source-backed frontend_research_brief/webpage_contract。frontend_design 通过 Page Skeleton Blueprint 消费它作为页面信息架构，requirements、architect、build 消费各自 compact projection 作为 investigation work packets。它用小 registration tools 分块登记 brief，不提交巨型 terminal payload；不写 final PRD、不产出 frontend implementation template、不调用 build、不选择下一步路线。",
+      hint: "网页/URL 参考任务的调查分工阶段。source URL 存在时由 host 先准备 rendered webpage evidence；frontend_research 基于证据、源 URL、可见区域、组件/数据/交互/样式疑点和 fidelity risk，发布 source-backed frontend_research_brief/webpage_contract。frontend_design 通过 Page Skeleton Blueprint 消费它作为页面信息架构，requirements、architect、build 消费各自 compact projection 作为 investigation work packets。它用小 update_* result tools 分块登记 brief，不提交巨型 terminal payload；不写 final PRD、不产出 frontend implementation template、不调用 build、不选择下一步路线。",
       scope: "task",
       skippable: true,
       after: [],
