@@ -8,6 +8,7 @@ import { Vcs } from "../../project/vcs"
 import { Worktree } from "../../worktree"
 import { Ownership } from "../../engine/ownership"
 import { WorktreeGC } from "../../worktree/gc"
+import { deleteCurrentProject, ProjectDeleteResult } from "../../project/delete"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -85,6 +86,29 @@ export const ProjectRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(Instance.project)
+      },
+    )
+    .delete(
+      "/current",
+      describeRoute({
+        summary: "Delete current project",
+        description:
+          "Delete the current project's OpenCorvus state, task history, and project-local runtime directory. Source files in the workspace are not deleted.",
+        operationId: "project.current.delete",
+        responses: {
+          200: {
+            description: "Project deleted",
+            content: {
+              "application/json": {
+                schema: resolver(ProjectDeleteResult),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      async (c) => {
+        return c.json(await deleteCurrentProject())
       },
     )
     .post(

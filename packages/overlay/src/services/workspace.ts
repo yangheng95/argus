@@ -25,6 +25,7 @@ import { checkConnection } from "./connection"
 import { reloadProjectScope } from "./config"
 import { startTaskListSSE, stopSSE, stopTaskListSSE } from "./sse"
 import { activeProjectDirectory } from "./project-directory"
+import { directoryScopedPath } from "./task-path"
 
 // ── Types ──
 
@@ -45,6 +46,14 @@ export interface ProjectDiscovery {
   root: string
   defaultDirectory: string
   projects: DiscoveredProject[]
+}
+
+export interface DeleteProjectResult {
+  ok: true
+  projectID: string
+  directory: string
+  deletedTaskCount: number
+  deletedActive: boolean
 }
 
 // IDE means Integrated Development Environment; these IDs are the public
@@ -329,6 +338,52 @@ export function closeProject(): void {
   enterEmptyWorkspace({ restoreDirectory: false })
   clearProjectScopeData()
   saveSettings()
+}
+
+function directoryIdentity(value: string): string {
+  return String(value || "")
+    .trim()
+    .replace(/[\\/]+$/, "")
+    .toLowerCase()
+}
+
+function sameDirectory(a: string, b: string): boolean {
+  const left = directoryIdentity(a)
+  const right = directoryIdentity(b)
+  return !!left && left === right
+}
+
+function parseDeleteProjectResult(value: any, deletedActive: boolean): DeleteProjectResult {
+  if (!value || value.ok !== true) throw new Error("deleteProject: server did not confirm project deletion")
+  if (typeof value.projectID !== "string" || !value.projectID) {
+    throw new Error("deleteProject: server response is missing projectID")
+  }
+  if (typeof value.directory !== "string" || !value.directory) {
+    throw new Error("deleteProject: server response is missing directory")
+  }
+  if (!Number.isInteger(value.deletedTaskCount) || value.deletedTaskCount < 0) {
+    throw new Error("deleteProject: server response has invalid deletedTaskCount")
+  }
+  return {
+    ok: true,
+    projectID: value.projectID,
+    directory: value.directory,
+    deletedTaskCount: value.deletedTaskCount,
+    deletedActive,
+  }
+}
+
+export async function deleteProject(directory: string): Promise<DeleteProjectResult> {
+  const target = String(directory || "").trim()
+  if (!target) throw new Error("deleteProject: directory is required")
+  const deletedActive = sameDirectory(activeDirectory(), target)
+  const result = await apiJson(directoryScopedPath("project/current", target, "deleteProject"), {
+    method: "DELETE",
+  })
+  const parsed = parseDeleteProjectResult(result, deletedActive)
+  removeRecentDirectory(target)
+  if (deletedActive) closeProject()
+  return parsed
 }
 
 // ── enterEmptyWorkspace ──

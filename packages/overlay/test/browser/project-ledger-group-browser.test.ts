@@ -95,11 +95,7 @@ function boardForTask(item: any): any {
   }
 }
 
-async function saveElementScreenshot(
-  page: OverlayPage,
-  selector: string,
-  filename: string,
-) {
+async function saveElementScreenshot(page: OverlayPage, selector: string, filename: string) {
   const element = await page.$(selector)
   assert.ok(element, `${selector} should exist before screenshot`)
   const target = resolve(".scratch", filename)
@@ -116,6 +112,7 @@ async function verifyProjectGroup(
     activity: "tasks" | "mission" | "assistant"
     groupSelector: string
     expectedCount: string
+    expectedDelete: boolean
     screenshot: string
   },
 ) {
@@ -128,8 +125,11 @@ async function verifyProjectGroup(
   const openState = await page.$eval(input.groupSelector, (node) => {
     const group = node as HTMLElement
     const heading = group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')
+    const deleteButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-delete"]')
     const body = group.querySelector<HTMLElement>(".project-group-body")
     const headingControls = heading?.getAttribute("aria-controls") ?? ""
+    const headingRect = heading?.getBoundingClientRect()
+    const deleteRect = deleteButton?.getBoundingClientRect()
     return {
       tag: group.tagName,
       className: group.className,
@@ -139,13 +139,27 @@ async function verifyProjectGroup(
       headingVariant: heading?.dataset.variant ?? "",
       headingSize: heading?.dataset.size ?? "",
       headingTone: heading?.dataset.tone ?? "",
+      deleteExists: !!deleteButton,
+      deleteInsideToggle: !!heading?.querySelector('[data-ui="project-group-delete"]'),
+      deleteTag: deleteButton?.tagName ?? "",
+      deleteClass: deleteButton?.className ?? "",
+      deleteVariant: deleteButton?.dataset.variant ?? "",
+      deleteSize: deleteButton?.dataset.size ?? "",
+      deleteTone: deleteButton?.dataset.tone ?? "",
+      deleteChrome: deleteButton?.dataset.chrome ?? "",
+      deleteLabel: deleteButton?.getAttribute("aria-label") ?? "",
+      deletePressed: deleteButton?.getAttribute("aria-pressed") ?? "",
+      deleteVisible: !!deleteButton && deleteButton.getClientRects().length > 0,
+      deleteWidth: deleteRect?.width ?? 0,
+      deleteAfterToggle: !!headingRect && !!deleteRect && deleteRect.left >= headingRect.right - 0.5,
       headingExpanded: heading?.getAttribute("aria-expanded") ?? "",
       headingControls,
       headingLabel: heading?.getAttribute("aria-label") ?? "",
       headingTabIndex: heading?.tabIndex ?? null,
       count: group.querySelector<HTMLElement>(".project-group-count")?.textContent?.trim() ?? "",
       bodyID: body?.id ?? "",
-      bodyMatchesControls: !!headingControls && body?.id === headingControls && document.getElementById(headingControls) === body,
+      bodyMatchesControls:
+        !!headingControls && body?.id === headingControls && document.getElementById(headingControls) === body,
       bodyVisible: !!body && body.getClientRects().length > 0,
     }
   })
@@ -158,6 +172,21 @@ async function verifyProjectGroup(
   assert.equal(openState.headingVariant, "ghost")
   assert.equal(openState.headingSize, "mini")
   assert.equal(openState.headingTone, "neutral")
+  assert.equal(openState.deleteExists, input.expectedDelete)
+  assert.equal(openState.deleteInsideToggle, false)
+  if (input.expectedDelete) {
+    assert.equal(openState.deleteTag, "BUTTON")
+    assert.equal(openState.deleteClass, "oc-button")
+    assert.equal(openState.deleteVariant, "ghost")
+    assert.equal(openState.deleteSize, "icon")
+    assert.equal(openState.deleteTone, "danger")
+    assert.equal(openState.deleteChrome, "icon-action")
+    assert.match(openState.deleteLabel, /Delete this project/)
+    assert.equal(openState.deletePressed, "false")
+    assert.equal(openState.deleteVisible, true)
+    assert.ok(openState.deleteWidth >= 20)
+    assert.equal(openState.deleteAfterToggle, true)
+  }
   assert.equal(openState.headingExpanded, "true")
   assert.ok(openState.headingControls.length > 0)
   assert.ok(openState.headingLabel.length > 0)
@@ -178,9 +207,9 @@ async function verifyProjectGroup(
     const group = node as HTMLElement
     return {
       expanded:
-        group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')?.getAttribute("aria-expanded") ??
-        "",
-      controls: group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')?.getAttribute("aria-controls") ?? "",
+        group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')?.getAttribute("aria-expanded") ?? "",
+      controls:
+        group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')?.getAttribute("aria-controls") ?? "",
       bodyCount: group.querySelectorAll(".project-group-body").length,
     }
   })
@@ -196,211 +225,230 @@ async function verifyProjectGroup(
   await saveElementScreenshot(page, input.groupSelector, input.screenshot)
 }
 
-test("project ledger grouping is shared across Task, Mission, and Coding Assistant ledgers", { timeout: 90_000 }, async () => {
-  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
-  assert.equal(typeof globalThis.Bun, "undefined")
+test(
+  "project ledger grouping is shared across Task, Mission, and Coding Assistant ledgers",
+  { timeout: 90_000 },
+  async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
 
-  const server = await startBrowserFixture(async (req) => {
-    const url = new URL(req.url)
-    const path = route(url)
-    if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
-    if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
 
-    const staticResponse = await overlayStaticResponse(path)
-    if (staticResponse) return staticResponse
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
 
-    if (path === "/global/health") return json({ version: "project-ledger-group-test" })
-    if (path === "/global/projects/discover") {
-      return json({ root: "D:/ledger", defaultDirectory: PROJECT_DIR, projects: [] })
-    }
-    if (path === "/global/tasks" || path === "/tasks") return json({ tasks })
-    if (path === "/mission") return json(missions)
-    if (path === "/coding/sessions") return json({ sessions, nextCursor: null })
-    if (path === "/log") return json({})
-    if (path === "/log/tail") return json({ lines: [] })
-    if (path === "/executor") return json([])
-    if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return json({ profiles: [] })
-    if (path === "/path") return json({ directory: PROJECT_DIR, exists: true, git: true })
-    if (path === "/project/current/worktrees") return json({ worktrees: [] })
-    if (path === "/vcs") return json({ branch: "coding-assistant", dirty: false })
-    if (path === "/provider") return json({ all: [], connected: [], default: {} })
-    if (path === "/provider/auth") return json({})
-    if (path === "/config/providers") return json({ providers: [], default: {} })
-    if (path === "/config") {
-      return json({
-        server: {},
-        provider: {},
-        channel: {},
-        mcp: {},
-        model: "",
-        directory: PROJECT_DIR,
-      })
-    }
-    if (path === "/config/prompt" || path === "/config/prompt-profile") {
-      return json({
-        active: "general",
-        project_active: "general",
-        session_active: null,
-        default: "general",
-        targets: [],
-        profiles: [
-          {
-            id: "general",
-            label: "General",
-            description: "Default prompt profile",
-            built_in: true,
-            editable: false,
-            agents: {},
-          },
-        ],
-      })
-    }
-    if (path === "/channel") return json([])
-    if (path === "/channel/runtime") return json({ status: "disabled", channels: [] })
-    if (path === "/gateway/stats") return json({ active: 0, queued: tasks.length, completed: 0, failed: 0 })
-    if (path === "/skill/installed" || path === "/skill") return json([])
-    if (path === "/skill/directories") {
-      return json({
-        global_config: "D:/ledger/config",
-        managed_skills: "D:/ledger/config/skills-market",
-        remote_cache: "D:/ledger/cache",
-      })
-    }
-    if (path === "/skill/market") return json([])
-    if (path === "/mcp") return json({})
-    if (path === "/agent") return json([])
-    if (path === "/file") return json([])
-    if (path === "/panel/knowledge/memory") return json([])
-    if (path === "/panel/knowledge/preference") return json([])
-    if (/^\/task\/[^/]+\/operator-model-context$/.test(path)) {
-      const taskID = decodeURIComponent(path.slice("/task/".length, -"/operator-model-context".length))
-      const item = tasksByID.get(taskID) || tasks[0]
-      return json({
-        taskID,
-        sessionID: item.task.sessionID,
-        agent: "orchestrator",
-        model: { providerID: "openai", modelID: "gpt-4o-mini" },
-      })
-    }
-    if (/^\/task\/[^/]+\/browser-preview$/.test(path)) {
-      const taskID = decodeURIComponent(path.slice("/task/".length, -"/browser-preview".length))
-      return json({
-        taskID,
-        kind: "missing",
-        status: "missing",
-        projectRoot: PROJECT_DIR,
-        viewports: [],
-        diagnostics: [],
-        candidates: [],
-        source: "none",
-      })
-    }
-    const taskBoardMatch = /^\/task\/([^/]+)\/board$/.exec(path)
-    if (taskBoardMatch) {
-      const item = tasksByID.get(decodeURIComponent(taskBoardMatch[1]))
-      return item ? json(boardForTask(item)) : json({ error: "task not found" }, 404)
-    }
-    if (/^\/task\/[^/]+\/conversation$/.test(path)) {
-      const taskID = decodeURIComponent(path.split("/")[2] || "")
-      const item = tasksByID.get(taskID) || tasks[0]
-      return json({
-        board: boardForTask(item),
-        transcript: [],
-        timeline: [],
-        events: [],
-        view: { sessions: [] },
-        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-        lastSequence: 0,
-      })
-    }
-    const codingSessionMatch = /^\/coding\/session\/([^/]+)$/.exec(path)
-    if (codingSessionMatch) {
-      const session = sessionsByID.get(decodeURIComponent(codingSessionMatch[1]))
-      return session ? json({ session }) : json({ error: "session not found" }, 404)
-    }
-    if (/^\/session\/[^/]+\/conversation$/.test(path)) {
-      return json({
-        transcript: [],
-        timeline: [],
-        events: [],
-        view: { sessions: [] },
-        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
-        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-        messageWatermark: 0,
-        lastSequence: 0,
-      })
-    }
-    if (/^\/session\/[^/]+\/events$/.test(path)) {
-      return new Response(new ReadableStream(), {
-        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
-      })
-    }
-    if (path === "/task/events" || /^\/task\/[^/]+\/events$/.test(path)) {
-      return new Response(new ReadableStream(), {
-        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
-      })
-    }
+      if (path === "/global/health") return json({ version: "project-ledger-group-test" })
+      if (path === "/global/projects/discover") {
+        return json({ root: "D:/ledger", defaultDirectory: PROJECT_DIR, projects: [] })
+      }
+      if (path === "/global/tasks" || path === "/tasks") return json({ tasks })
+      if (path === "/mission") return json(missions)
+      if (path === "/coding/sessions") return json({ sessions, nextCursor: null })
+      if (path === "/log") return json({})
+      if (path === "/log/tail") return json({ lines: [] })
+      if (path === "/executor") return json([])
+      if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return json({ profiles: [] })
+      if (path === "/path") return json({ directory: PROJECT_DIR, exists: true, git: true })
+      if (path === "/project/current/worktrees") return json({ worktrees: [] })
+      if (path === "/vcs") return json({ branch: "coding-assistant", dirty: false })
+      if (path === "/provider") return json({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return json({})
+      if (path === "/config/providers") return json({ providers: [], default: {} })
+      if (path === "/config") {
+        return json({
+          server: {},
+          provider: {},
+          channel: {},
+          mcp: {},
+          model: "",
+          directory: PROJECT_DIR,
+        })
+      }
+      if (path === "/config/prompt" || path === "/config/prompt-profile") {
+        return json({
+          active: "general",
+          project_active: "general",
+          session_active: null,
+          default: "general",
+          targets: [],
+          profiles: [
+            {
+              id: "general",
+              label: "General",
+              description: "Default prompt profile",
+              built_in: true,
+              editable: false,
+              agents: {},
+            },
+          ],
+        })
+      }
+      if (path === "/channel") return json([])
+      if (path === "/channel/runtime") return json({ status: "disabled", channels: [] })
+      if (path === "/gateway/stats") return json({ active: 0, queued: tasks.length, completed: 0, failed: 0 })
+      if (path === "/skill/installed" || path === "/skill") return json([])
+      if (path === "/skill/mounts") return json({})
+      if (path === "/skill/directories") {
+        return json({
+          global_config: "D:/ledger/config",
+          managed_skills: "D:/ledger/config/skills-market",
+          remote_cache: "D:/ledger/cache",
+        })
+      }
+      if (path === "/skill/market") return json([])
+      if (path === "/mcp") return json({})
+      if (path === "/agent") return json([])
+      if (path === "/file") return json([])
+      if (path === "/panel/knowledge/memory") return json([])
+      if (path === "/panel/knowledge/preference") return json([])
+      if (/^\/task\/[^/]+\/operator-model-context$/.test(path)) {
+        const taskID = decodeURIComponent(path.slice("/task/".length, -"/operator-model-context".length))
+        const item = tasksByID.get(taskID) || tasks[0]
+        return json({
+          taskID,
+          sessionID: item.task.sessionID,
+          agent: "orchestrator",
+          model: { providerID: "openai", modelID: "gpt-4o-mini" },
+        })
+      }
+      if (/^\/task\/[^/]+\/browser-preview$/.test(path)) {
+        const taskID = decodeURIComponent(path.slice("/task/".length, -"/browser-preview".length))
+        return json({
+          taskID,
+          kind: "missing",
+          status: "missing",
+          projectRoot: PROJECT_DIR,
+          viewports: [],
+          diagnostics: [],
+          candidates: [],
+          source: "none",
+        })
+      }
+      const taskBoardMatch = /^\/task\/([^/]+)\/board$/.exec(path)
+      if (taskBoardMatch) {
+        const item = tasksByID.get(decodeURIComponent(taskBoardMatch[1]))
+        return item ? json(boardForTask(item)) : json({ error: "task not found" }, 404)
+      }
+      if (/^\/task\/[^/]+\/conversation$/.test(path)) {
+        const taskID = decodeURIComponent(path.split("/")[2] || "")
+        const item = tasksByID.get(taskID) || tasks[0]
+        return json({
+          board: boardForTask(item),
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { sessions: [] },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          lastSequence: 0,
+        })
+      }
+      const codingSessionMatch = /^\/coding\/session\/([^/]+)$/.exec(path)
+      if (codingSessionMatch) {
+        const session = sessionsByID.get(decodeURIComponent(codingSessionMatch[1]))
+        return session ? json({ session }) : json({ error: "session not found" }, 404)
+      }
+      if (/^\/session\/[^/]+\/conversation$/.test(path)) {
+        return json({
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { sessions: [] },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+          messageWatermark: 0,
+          lastSequence: 0,
+        })
+      }
+      if (/^\/session\/[^/]+\/events$/.test(path)) {
+        return new Response(new ReadableStream(), {
+          headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+        })
+      }
+      if (path === "/task/events" || /^\/task\/[^/]+\/events$/.test(path)) {
+        return new Response(new ReadableStream(), {
+          headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+        })
+      }
 
-    return json({ error: `unhandled ${path}` }, 404)
-  })
-
-  const browser = await launchBrowser(["--disable-dev-shm-usage"])
-  const page = await browser.newPage()
-  const consoleErrors: string[] = []
-  const failedRequests: string[] = []
-  const badResponses: string[] = []
-
-  page.on("console", (msg) => {
-    if (msg.type() === "error" && !msg.text().startsWith("Failed to load resource:")) consoleErrors.push(msg.text())
-  })
-  page.on("pageerror", (error) => consoleErrors.push(error.message))
-  page.on("requestfailed", (request) => {
-    if (/\/task\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
-    if (/\/session\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
-    failedRequests.push(request.url())
-  })
-  page.on("response", (response) => {
-    if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
-  })
-
-  try {
-    await page.setViewport({ width: 1180, height: 760 })
-    await page.evaluateOnNewDocument((origin) => {
-      ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_server_url", origin)
-      localStorage.setItem("oc_auto_server", "true")
-      localStorage.setItem("oc_directory", "D:/ledger/workspace")
-      localStorage.setItem("oc_workspace_directory", "D:/ledger/workspace")
-      localStorage.setItem("oc_directory_mode", "custom")
-      localStorage.setItem("oc_theme", "light")
-    }, server.origin)
-
-    await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
-
-    await verifyProjectGroup(page, {
-      activity: "tasks",
-      groupSelector: "#leftPanelTasks .project-group",
-      expectedCount: "2",
-      screenshot: "project-ledger-group-tasks.png",
-    })
-    await verifyProjectGroup(page, {
-      activity: "mission",
-      groupSelector: '[data-ui="mission-project-group"]',
-      expectedCount: "2",
-      screenshot: "project-ledger-group-mission.png",
-    })
-    await verifyProjectGroup(page, {
-      activity: "assistant",
-      groupSelector: '[data-ui="coding-assistant-project-group"]',
-      expectedCount: "2",
-      screenshot: "project-ledger-group-coding-assistant.png",
+      return json({ error: `unhandled ${path}` }, 404)
     })
 
-    assert.deepEqual({ consoleErrors, failedRequests, badResponses }, { consoleErrors: [], failedRequests: [], badResponses: [] })
-  } finally {
-    await browser.close().catch(() => undefined)
-    await server.close()
-  }
-})
+    const browser = await launchBrowser(["--disable-dev-shm-usage"])
+    const page = await browser.newPage()
+    const consoleErrors: string[] = []
+    const failedRequests: string[] = []
+    const badResponses: string[] = []
+
+    page.on("console", (msg) => {
+      if (msg.type() === "error" && !msg.text().startsWith("Failed to load resource:")) consoleErrors.push(msg.text())
+    })
+    page.on("pageerror", (error) => consoleErrors.push(error.message))
+    page.on("requestfailed", (request) => {
+      if (/\/task\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
+      if (/\/session\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
+      failedRequests.push(request.url())
+    })
+    page.on("response", (response) => {
+      if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
+    })
+
+    try {
+      await page.setViewport({ width: 1180, height: 760 })
+      await page.evaluateOnNewDocument((origin) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_server_url", origin)
+        localStorage.setItem("oc_auto_server", "true")
+        localStorage.setItem("oc_directory", "D:/ledger/workspace")
+        localStorage.setItem("oc_workspace_directory", "D:/ledger/workspace")
+        localStorage.setItem("oc_directory_mode", "custom")
+        localStorage.setItem("oc_theme", "light")
+      }, server.origin)
+
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
+      await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
+
+      await verifyProjectGroup(page, {
+        activity: "tasks",
+        groupSelector: "#leftPanelTasks .project-group",
+        expectedCount: "2",
+        expectedDelete: true,
+        screenshot: "project-ledger-group-tasks.png",
+      })
+      await verifyProjectGroup(page, {
+        activity: "mission",
+        groupSelector: '[data-ui="mission-project-group"]',
+        expectedCount: "2",
+        expectedDelete: false,
+        screenshot: "project-ledger-group-mission.png",
+      })
+      await verifyProjectGroup(page, {
+        activity: "assistant",
+        groupSelector: '[data-ui="coding-assistant-project-group"]',
+        expectedCount: "2",
+        expectedDelete: false,
+        screenshot: "project-ledger-group-coding-assistant.png",
+      })
+      await page.setViewport({ width: 390, height: 720 })
+      await verifyProjectGroup(page, {
+        activity: "tasks",
+        groupSelector: "#leftPanelTasks .project-group",
+        expectedCount: "2",
+        expectedDelete: true,
+        screenshot: "project-ledger-group-tasks-mobile.png",
+      })
+
+      assert.deepEqual(
+        { consoleErrors, failedRequests, badResponses },
+        { consoleErrors: [], failedRequests: [], badResponses: [] },
+      )
+    } finally {
+      await browser.close().catch(() => undefined)
+      await server.close()
+    }
+  },
+)

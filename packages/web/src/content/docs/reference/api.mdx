@@ -61,6 +61,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/project` | List all projects | `project.list` |
+| DELETE | `/project/current` | Delete current project | `project.current.delete` |
 | GET | `/project/current` | Get current project | `project.current` |
 | GET | `/project/current/cleanup-candidates` | Inspect current project cleanup candidates | `project.current.cleanupCandidates` |
 | POST | `/project/current/init-git` | Initialize git in current directory | `project.current.initGit` |

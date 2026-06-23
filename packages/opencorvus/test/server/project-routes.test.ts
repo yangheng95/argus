@@ -7,12 +7,18 @@ import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Ownership } from "../../src/engine/ownership"
 import { Instance } from "../../src/project/instance"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
 import { Project } from "../../src/project/project"
+import { ProjectTable } from "../../src/project/project.sql"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { SessionTable } from "../../src/session/session.sql"
+import { ControlMessageTable } from "../../src/control/control.sql"
+import { QuickNoteTable } from "../../src/quicknote/quicknote.sql"
+import { DecisionLogTable } from "../../src/decision-log/schema"
 
 Log.init({ print: false })
 
@@ -60,6 +66,158 @@ describe("project routes", () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { created: boolean }
     expect(body.created).toBe(false)
+  }, 30_000)
+
+  test("DELETE /project/current deletes OpenCorvus project state without deleting source files", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const now = Date.now()
+    const taskA = `tsk_project_delete_a_${now}`
+    const taskB = `tsk_project_delete_b_${now}`
+    const sessionA = `ses_project_delete_a_${now}`
+    const sourceSentinel = path.join(tmp.path, "source-sentinel.txt")
+    const runtimeSentinel = path.join(ProjectRuntimePaths.projectRuntimeRoot(tmp.path), "delete-sentinel.txt")
+    let projectID = ""
+
+    await Bun.write(sourceSentinel, "keep-source")
+    await fs.mkdir(path.dirname(runtimeSentinel), { recursive: true })
+    await Bun.write(runtimeSentinel, "delete-runtime")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        projectID = Instance.project.id
+        Database.transaction((db) => {
+          db.insert(SessionTable)
+            .values({
+              id: sessionA,
+              project_id: projectID,
+              slug: "delete-project-root",
+              directory: tmp.path,
+              title: "delete project root session",
+              version: "test",
+              kind: "root",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values([
+              {
+                id: taskA,
+                project_id: projectID,
+                session_id: sessionA,
+                source: "test",
+                title: "project delete task A",
+                request: "delete project task A",
+                priority: "normal",
+                kind: "workflow",
+                queue_order: 0,
+                system_artifacts: [],
+                design_specs: [],
+                criteria_results: [],
+                time_created: now,
+                time_updated: now,
+                time_started: now,
+                time_completed: now,
+              },
+              {
+                id: taskB,
+                project_id: projectID,
+                source: "test",
+                title: "project delete task B",
+                request: "delete project task B",
+                priority: "normal",
+                kind: "workflow",
+                queue_order: 1,
+                system_artifacts: [],
+                design_specs: [],
+                criteria_results: [],
+                time_created: now + 1,
+                time_updated: now + 1,
+                time_started: now + 1,
+                time_completed: now + 1,
+              },
+            ])
+            .run()
+          db.insert(DecisionLogTable)
+            .values({
+              id: `dec_project_delete_${now}`,
+              task_id: taskA,
+              phase: "execute",
+              key: "project-delete",
+              value: "remove",
+              reason: "project delete route cleanup regression",
+              time_created: now,
+            })
+            .run()
+          db.insert(ControlMessageTable)
+            .values({
+              id: `ctl_project_delete_${now}`,
+              project_id: projectID,
+              scope: "task",
+              scope_id: taskA,
+              task_id: taskA,
+              session_id: sessionA,
+              surface: "panel",
+              role: "user",
+              source: "test",
+              text: "delete project control message",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(QuickNoteTable)
+            .values({
+              id: `qnt_project_delete_${now}`,
+              project_id: projectID,
+              content: "delete project quick note",
+              summary: "delete project quick note",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+      },
+    })
+
+    const response = await app.request("/project/current", {
+      method: "DELETE",
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      ok: true,
+      projectID,
+      directory: tmp.path,
+      deletedTaskCount: 2,
+    })
+    expect(await Filesystem.exists(sourceSentinel)).toBe(true)
+    expect(await Bun.file(sourceSentinel).text()).toBe("keep-source")
+    expect(await Filesystem.exists(ProjectRuntimePaths.projectConfigRoot(tmp.path))).toBe(false)
+    expect(
+      Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, projectID)).get()),
+    ).toBeUndefined()
+    expect(
+      Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.project_id, projectID)).all()),
+    ).toHaveLength(0)
+    expect(
+      Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, sessionA)).get()),
+    ).toBeUndefined()
+    expect(
+      Database.use((db) => db.select().from(DecisionLogTable).where(eq(DecisionLogTable.task_id, taskA)).all()),
+    ).toHaveLength(0)
+    expect(
+      Database.use((db) =>
+        db.select().from(ControlMessageTable).where(eq(ControlMessageTable.project_id, projectID)).all(),
+      ),
+    ).toHaveLength(0)
+    expect(
+      Database.use((db) => db.select().from(QuickNoteTable).where(eq(QuickNoteTable.project_id, projectID)).all()),
+    ).toHaveLength(0)
   }, 30_000)
 
   test("GET /project/current/worktrees marks live goal bindings and expired worktrees", async () => {
@@ -195,9 +353,9 @@ describe("project routes", () => {
     const now = Date.now()
     const expiredDir = path.join(tmp.path, "..", `experimental-route-delete-${now}`)
 
-    await $`git worktree add --no-checkout -b ${`opencorvus/experimental-delete-${now}`} ${expiredDir}`.cwd(
-      tmp.path,
-    ).quiet()
+    await $`git worktree add --no-checkout -b ${`opencorvus/experimental-delete-${now}`} ${expiredDir}`
+      .cwd(tmp.path)
+      .quiet()
     await $`git reset --hard`.cwd(expiredDir).quiet()
     await Instance.provide({
       directory: tmp.path,
@@ -228,27 +386,31 @@ describe("project routes", () => {
   test.each([
     ["/project/current/worktrees", { ok: true }],
     ["/experimental/worktree", true],
-  ] as const)("DELETE %s rejects an unregistered sibling directory without deleting it", async (route) => {
-    await using tmp = await tmpdir({ git: true })
-    const app = Server.App()
-    const victimDir = path.join(tmp.path, "..", `project-route-delete-victim-${Date.now()}`)
-    const sentinel = path.join(victimDir, "sentinel.txt")
-    await fs.mkdir(victimDir, { recursive: true })
-    await Bun.write(sentinel, "keep")
+  ] as const)(
+    "DELETE %s rejects an unregistered sibling directory without deleting it",
+    async (route) => {
+      await using tmp = await tmpdir({ git: true })
+      const app = Server.App()
+      const victimDir = path.join(tmp.path, "..", `project-route-delete-victim-${Date.now()}`)
+      const sentinel = path.join(victimDir, "sentinel.txt")
+      await fs.mkdir(victimDir, { recursive: true })
+      await Bun.write(sentinel, "keep")
 
-    const response = await app.request(route, {
-      method: "DELETE",
-      headers: {
-        "content-type": "application/json",
-        "x-opencorvus-directory": tmp.path,
-      },
-      body: JSON.stringify({ directory: victimDir }),
-    })
+      const response = await app.request(route, {
+        method: "DELETE",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({ directory: victimDir }),
+      })
 
-    expect(response.status).toBe(404)
-    expect(await Filesystem.exists(victimDir)).toBe(true)
-    expect(await Bun.file(sentinel).text()).toBe("keep")
-  }, 30_000)
+      expect(response.status).toBe(404)
+      expect(await Filesystem.exists(victimDir)).toBe(true)
+      expect(await Bun.file(sentinel).text()).toBe("keep")
+    },
+    30_000,
+  )
 
   test("GET /project/current/cleanup-candidates is read-only ownership inspection", async () => {
     await using tmp = await tmpdir({ git: true })

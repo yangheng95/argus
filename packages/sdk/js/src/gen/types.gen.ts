@@ -27,9 +27,11 @@ export type Project = {
   sandboxes: Array<string>
 }
 
-export type ProjectInitGitResult = {
-  created: boolean
-  project: Project
+export type ProjectDeleteResult = {
+  ok: boolean
+  projectID: string
+  directory: string
+  deletedTaskCount: number
 }
 
 export type BadRequestError = {
@@ -38,6 +40,11 @@ export type BadRequestError = {
     [key: string]: unknown
   }>
   success: false
+}
+
+export type ProjectInitGitResult = {
+  created: boolean
+  project: Project
 }
 
 export type ProjectWorktree = {
@@ -3593,6 +3600,68 @@ export type ProjectListResponses = {
 }
 
 export type ProjectListResponse = ProjectListResponses[keyof ProjectListResponses]
+
+export type ProjectCurrentDeleteData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current"
+}
+
+export type ProjectCurrentDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+  /**
+   * Conflict
+   */
+  409:
+    | {
+        name: "ReplyTargetEnvelopeMissingError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "TaskCancellationIncompleteError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type ProjectCurrentDeleteError = ProjectCurrentDeleteErrors[keyof ProjectCurrentDeleteErrors]
+
+export type ProjectCurrentDeleteResponses = {
+  /**
+   * Project deleted
+   */
+  200: ProjectDeleteResult
+}
+
+export type ProjectCurrentDeleteResponse = ProjectCurrentDeleteResponses[keyof ProjectCurrentDeleteResponses]
 
 export type ProjectCurrentData = {
   body?: never

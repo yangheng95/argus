@@ -168,6 +168,8 @@ import type {
   PermissionRuleset,
   ProjectCurrentCleanupCandidatesErrors,
   ProjectCurrentCleanupCandidatesResponses,
+  ProjectCurrentDeleteErrors,
+  ProjectCurrentDeleteResponses,
   ProjectCurrentInitGitErrors,
   ProjectCurrentInitGitResponses,
   ProjectCurrentResponses,
@@ -464,6 +466,29 @@ export class Worktrees extends HeyApiClient {
 }
 
 export class Current extends HeyApiClient {
+  /**
+   * Delete current project
+   *
+   * Delete the current project's OpenCorvus state, task history, and project-local runtime directory. Source files in the workspace are not deleted.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).delete<
+      ProjectCurrentDeleteResponses,
+      ProjectCurrentDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/project/current",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Initialize git in current directory
    *
