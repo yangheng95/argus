@@ -9,6 +9,7 @@
 // applyOpacity(opacity) — writes --ui-window-opacity CSS variable
 
 import { MIN_WINDOW_OPACITY, sanitizeOpacity, settingsStore } from "../store/settings"
+import { currentUIScale } from "../utils/layout-tokens"
 import { overlayLayoutFrameSize } from "../utils/overlay-layout-frame"
 import { getHostTransport } from "./host-transport"
 import { readInitialVsCodeHostTheme } from "./host-theme"
@@ -134,12 +135,13 @@ export function stepZoom(delta: number): void {
   // Read the current zoom from the CSS custom property written by applyZoom.
   // We cannot read state.zoom directly without creating a circular
   // dependency, so we use the value stored in the CSS variable instead.
-  const current = Number.parseFloat(document.documentElement.style.getPropertyValue("--ui-scale") || "1") || 1
+  const current = currentUIScale()
   // current = base * zoom; we only want to nudge zoom so we normalise first.
   const frame = overlayLayoutFrameSize()
   const scale = Math.min(frame.width / 1040, frame.height / 820)
   const base = Math.max(0.82, Math.min(1.04, scale))
-  const currentZoom = base > 0 ? current / base : 1
+  if (base <= 0) throw new Error(`Overlay zoom base resolved to invalid value: ${base}`)
+  const currentZoom = current / base
   const next = Math.round((currentZoom + delta) * 100) / 100
   setZoom(next)
 }

@@ -1461,7 +1461,19 @@ test(
       })
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-      const twoPanelState = await activeState()
+      const twoPanelState = await waitForState(
+        "workflow separator semantics should render after inspector opens",
+        (state) => {
+          const separator = state.workflowSeparator as { hidden: boolean; disabled: string; controls: string }
+          return (
+            state.centerWorkflow === "true" &&
+            state.centerInspector === "true" &&
+            separator.hidden === false &&
+            separator.disabled === "false" &&
+            separator.controls === "centerWorkbenchWorkflow centerWorkbenchInspector"
+          )
+        },
+      )
       assertMatchObject(twoPanelState, {
         centerWorkflow: "true",
         centerInspector: "true",
@@ -1502,7 +1514,13 @@ test(
       await page.mouse.down()
       await page.mouse.move(workflowEdge.x + 120, workflowEdge.y, { steps: 8 })
       await page.mouse.up()
-      const resizedTwoPanelState = await activeState()
+      const resizedTwoPanelState = await waitForState(
+        "separator pointer resize should widen the workflow panel",
+        (state) => {
+          const widths = state.openPanelWidths as number[]
+          return state.openPanels instanceof Array && widths[0]! - widths[1]! > 80
+        },
+      )
       assert.deepEqual(resizedTwoPanelState.openPanels, ["task", "inspector"])
       assert.ok(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]! > 80)
       const keyboardWidthBefore = resizedTwoPanelState.openPanelWidths[0]!
@@ -1550,35 +1568,67 @@ test(
       await page.waitForFunction(
         () => getComputedStyle(document.querySelector<HTMLElement>("#workspaceMain")!).flexDirection === "row",
       )
+      await page.waitForSelector("#centerWorkbenchSeparatorDiff:not([hidden])", { visible: true })
       const previewWidth = async () =>
         await page.evaluate(() =>
           Math.round(document.querySelector<HTMLElement>("#centerWorkbenchBrowser")!.getBoundingClientRect().width),
         )
+      const waitForPreviewWidth = async (label: string, predicate: (width: number) => boolean) => {
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          const width = await previewWidth()
+          if (predicate(width)) return width
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        const width = await previewWidth()
+        throw new Error(`${label}: ${JSON.stringify({ width })}`)
+      }
+      const waitForStablePreviewWidth = async (label: string) => {
+        let previous = await previewWidth()
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          const width = await previewWidth()
+          if (Math.abs(width - previous) <= 1) return width
+          previous = width
+        }
+        throw new Error(`${label}: ${JSON.stringify({ width: previous })}`)
+      }
       const previewLeftEdge = async () =>
         await page.evaluate(() => {
           const rect = document.querySelector<HTMLElement>("#centerWorkbenchSeparatorDiff")!.getBoundingClientRect()
           return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
         })
-      const previewWidthBeforeDrag = await previewWidth()
+      const previewWidthBeforeDrag = await waitForStablePreviewWidth("browser preview width should settle before drag")
       let previewEdge = await previewLeftEdge()
       await page.mouse.move(previewEdge.x, previewEdge.y)
       await page.mouse.down()
       await page.mouse.move(previewEdge.x - 80, previewEdge.y, { steps: 8 })
       await page.mouse.up()
-      const previewWidthAfterWiden = await previewWidth()
+      const previewWidthAfterWidenObserved = await waitForPreviewWidth(
+        "diff separator drag should widen the browser preview panel",
+        (width) => width - previewWidthBeforeDrag > 50,
+      )
+      const previewWidthAfterWiden = await waitForStablePreviewWidth(
+        "browser preview width should settle after widen drag",
+      )
       assert.ok(
         previewWidthAfterWiden - previewWidthBeforeDrag > 50,
-        JSON.stringify({ previewWidthBeforeDrag, previewWidthAfterWiden }),
+        JSON.stringify({ previewWidthBeforeDrag, previewWidthAfterWidenObserved, previewWidthAfterWiden }),
       )
       previewEdge = await previewLeftEdge()
       await page.mouse.move(previewEdge.x, previewEdge.y)
       await page.mouse.down()
       await page.mouse.move(previewEdge.x + 80, previewEdge.y, { steps: 8 })
       await page.mouse.up()
-      const previewWidthAfterNarrow = await previewWidth()
+      const previewWidthAfterNarrowObserved = await waitForPreviewWidth(
+        "diff separator drag should narrow the browser preview panel",
+        (width) => previewWidthAfterWiden - width > 50,
+      )
+      const previewWidthAfterNarrow = await waitForStablePreviewWidth(
+        "browser preview width should settle after narrow drag",
+      )
       assert.ok(
         previewWidthAfterWiden - previewWidthAfterNarrow > 50,
-        JSON.stringify({ previewWidthAfterWiden, previewWidthAfterNarrow }),
+        JSON.stringify({ previewWidthAfterWiden, previewWidthAfterNarrowObserved, previewWidthAfterNarrow }),
       )
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')

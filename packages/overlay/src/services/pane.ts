@@ -24,7 +24,7 @@
 // and which DOM handles / CSS variables back them via the PaneConfig.
 
 import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"
-import { layoutTokenPx } from "../utils/layout-tokens"
+import { currentUIScale, layoutTokenPx } from "../utils/layout-tokens"
 
 // ── Types ──
 
@@ -168,14 +168,6 @@ export function defaultRailWidth(config: PaneConfig): number {
 
 export function defaultPanelRemainingMinWidth(): number {
   return layoutTokenPx("--ui-chat-min-width")
-}
-
-/**
- * Read the --ui-scale CSS custom property (
- */
-export function currentUIScale(): number {
-  if (typeof document === "undefined") return 1
-  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1
 }
 
 function paneWidthStyleScope(): HTMLElement {

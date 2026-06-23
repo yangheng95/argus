@@ -1,7 +1,18 @@
 # Center Workbench Panel Min Size Contract
 
 Date: 2026-06-22
-Status: Verified
+Status: Superseded 2026-06-23 by `2026-06-23-overlay-panel-legal-size-contract.md`
+
+## Supersession Note
+
+This note records the historical repair that first made `1120px` an exclusive
+compact breakpoint. That intermediate breakpoint decision is no longer the
+current contract. The 2026-06-23 legal shell cleanup removed production
+`@media (width < 1120px)` and `@container overlay-shell (width < 1120px)`
+branches entirely because `body` is already constrained to the legal
+`1120x720` shell. Current runtime code must follow the 2026-06-23 contract:
+legal shell compact branches stay absent, and open center workbench panels keep
+their token-owned minimum width inside the legal shell.
 
 ## Acronyms
 
@@ -38,7 +49,7 @@ not enough.
 | Resize math | `main.tsx` resolves `--ui-workbench-panel-min-width` in `centerWorkbenchPanelMinWidth()`. | Keep; this owns drag and keyboard separator constraints. |
 | Base center body layout | `workspace.css` `.center-workbench-body` uses `overflow: hidden`. | Change base overflow to horizontal scroll and hidden vertical overflow so illegal compression is not the release valve. |
 | Base open panel layout | `workspace.css` `.center-workbench-view` uses `min-width: 0`; only compact mode sets a token-based flex basis. | Add a base open-panel minimum width using the same token. |
-| Compact workbench mode | `workspace.css` and `activity.css` used inclusive `@media (max-width: 1120px)` while native minimum width is `1120px`. | Make the compact breakpoint exclusive with `@media (width < 1120px)`, so `1120x720` remains a legal desktop layout. |
+| Compact workbench mode | `workspace.css` and `activity.css` used inclusive `@media (max-width: 1120px)` while native minimum width is `1120px`. | Historical intermediate step: make the compact breakpoint exclusive. Superseded by the 2026-06-23 legal shell cleanup, which removed these production branches. |
 | Static tests | `workspace-surface-consistency.test.ts` currently only asserts compact open-panel scrolling. | Add assertions for the base desktop min-size contract. |
 | Browser tests | `center-workbench-separator-browser.test.ts` covers two panels and resize screenshots, not three simultaneous peer panels. | Add a three-panel browser check that every open panel is at least the token width and capture a visual screenshot. |
 
@@ -66,8 +77,10 @@ large one-pixel layout flip between `1120px` and `1121px`.
 3. Keep `centerWorkbenchPanelWeights` as the only persisted width source and do
    not add panel-specific pixel state.
 4. Extend static CSS tests for the base contract.
-5. Change the compact workspace and right toolbar breakpoint to
-   `@media (width < 1120px)`.
+5. Historical intermediate step: change the compact workspace and right
+   toolbar breakpoint to exclusive width syntax. Superseded by the 2026-06-23
+   legal shell cleanup, which removes the production compact legal-shell
+   branches instead.
 6. Extend the browser separator test with a three-panel open layout assertion
    and screenshot.
 7. Extend the browser titlebar test so `1120px` remains desktop row layout and
@@ -81,8 +94,9 @@ large one-pixel layout flip between `1120px` and `1121px`.
   `--ui-workbench-panel-min-width` in desktop peer-panel layout.
 - When multiple panels need more inline space than available, the workbench
   body scrolls horizontally instead of crushing panel content.
-- `1120x720` stays in desktop layout; compact workbench/right-toolbar layout
-  applies only below the native legal minimum.
+- `1120x720` stays in desktop layout. Current superseding contract removes the
+  production compact legal-shell branches instead of applying them below the
+  native legal minimum.
 - Existing separator drag, keyboard resize, and RAF scheduling semantics remain
   unchanged.
 - No alternate panel state, duplicate width source, hidden fallback layout, or
@@ -104,9 +118,11 @@ large one-pixel layout flip between `1120px` and `1121px`.
 
 ## Self Review
 
-- Rechecked the runtime compact breakpoint call points; only
-  `workspace.css` and `activity.css` use the `1120px` workbench breakpoint, and
-  both are now exclusive `@media (width < 1120px)`.
+- Rechecked the runtime compact breakpoint call points in this historical
+  round; at that point only `workspace.css` and `activity.css` used the
+  `1120px` workbench breakpoint, and both were changed to exclusive
+  `@media (width < 1120px)`. Superseding 2026-06-23 cleanup later deleted
+  those production branches.
 - Rechecked the open panel width source; CSS, separator math, and screenshot
   browser tests all resolve the same `--ui-workbench-panel-min-width` token.
 - Rechecked the resize probe after the browser failure; the corrected assertion

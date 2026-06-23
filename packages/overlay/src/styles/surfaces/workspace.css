@@ -512,8 +512,8 @@ body[data-resizing="true"] .pane-resizer::after {
 /* ─────────────────────────────────────────────────────────────
    Workspace shell zero-overrides (extracted 2026-05-04): kill any
    inherited gap / margin / padding / border on .panel-body and
-   .workspace-main, plus the responsive --ui-breakpoint-xl
-   stack-collapse for the panel-body, sidebar, and sections.
+   .workspace-main. The old legal-shell stack-collapse branch was removed:
+   the overlay shell cannot shrink below the generated native minimum frame.
    ───────────────────────────────────────────────────────────── */
 
 .panel-body {
