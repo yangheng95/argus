@@ -643,6 +643,23 @@ test(
             openPanelWidths: Array.from(
               document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']"),
             ).map((node) => Math.round(node.getBoundingClientRect().width)),
+            workbenchPanelMinWidth: (() => {
+              const probe = document.createElement("div")
+              probe.style.position = "fixed"
+              probe.style.visibility = "hidden"
+              probe.style.width = "var(--ui-workbench-panel-min-width)"
+              document.body.append(probe)
+              const width = probe.getBoundingClientRect().width
+              probe.remove()
+              return width
+            })(),
+            centerWorkbenchBodyOverflow: (() => {
+              const body = document.querySelector<HTMLElement>(".center-workbench-body")
+              return {
+                clientWidth: body?.clientWidth ?? 0,
+                scrollWidth: body?.scrollWidth ?? 0,
+              }
+            })(),
             workflowSeparator: (() => {
               const separator = document.querySelector<HTMLElement>("#centerWorkbenchSeparatorWorkflow")
               return {
@@ -1662,9 +1679,26 @@ test(
         "inspector",
         "notifications",
       ])
+      const inspectorPanelWidths = inspectorOpenState.openPanelWidths as number[]
+      const workbenchPanelMinWidth = inspectorOpenState.workbenchPanelMinWidth as number
+      assert.equal(inspectorPanelWidths.length, 6)
       assert.equal(
-        inspectorOpenState.openPanelWidths.every((width) => width > 0),
+        inspectorPanelWidths.every((width) => width >= workbenchPanelMinWidth - 1),
         true,
+        JSON.stringify({
+          openPanels: inspectorOpenState.openPanels,
+          inspectorPanelWidths,
+          workbenchPanelMinWidth,
+          centerWorkbenchBodyOverflow: inspectorOpenState.centerWorkbenchBodyOverflow,
+        }),
+      )
+      const centerWorkbenchBodyOverflow = inspectorOpenState.centerWorkbenchBodyOverflow as {
+        clientWidth: number
+        scrollWidth: number
+      }
+      assert.ok(
+        centerWorkbenchBodyOverflow.scrollWidth > centerWorkbenchBodyOverflow.clientWidth,
+        JSON.stringify({ centerWorkbenchBodyOverflow, inspectorPanelWidths, workbenchPanelMinWidth }),
       )
       assert.equal((inspectorOpenState.workflowSeparator as { hidden: boolean }).hidden, false)
 

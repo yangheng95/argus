@@ -152,6 +152,17 @@ describe("overlay window and pane size contract", () => {
     expect(viewportSpec).toContain("generated Tauri config legal")
   })
 
+  test("mission visual loop treats sub-minimum browser viewports as legal-frame captures", () => {
+    const loop = readOverlay("test/mission-visual-loop.ts")
+
+    expect(loop).toContain("VIEWPORT_ILLEGAL_NARROW")
+    expect(loop).toContain("06-illegal-narrow-legal-frame")
+    expect(loop).toContain("illegalNarrow")
+    expect(loop).not.toContain("VIEWPORT_NARROW")
+    expect(loop).not.toContain("06-narrow-breakpoint")
+    expect(loop).not.toContain("Narrow-breakpoint capture")
+  })
+
   test("surface width clamps use the legal overlay container instead of raw viewport width", () => {
     const offenders = readStyleFiles()
       .filter(({ file }) => file !== path.join("src", "styles", "cascade", "base.css"))
