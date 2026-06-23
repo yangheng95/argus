@@ -466,6 +466,190 @@ test(
         `expected vertical legal-shell backdrop close area, got ${JSON.stringify(dialogMetrics)}`,
       )
 
+      await page.evaluate(() => {
+        function getterOwner(property: "clientWidth" | "clientHeight") {
+          let owner: object | null = HTMLElement.prototype
+          while (owner) {
+            const descriptor = Object.getOwnPropertyDescriptor(owner, property)
+            if (descriptor?.get) return { owner, descriptor }
+            owner = Object.getPrototypeOf(owner)
+          }
+          throw new Error(`${property} getter was not found`)
+        }
+
+        const originalRequestAnimationFrame = window.requestAnimationFrame
+        const requestAnimationFrameForProbe = window.requestAnimationFrame.bind(window)
+        const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect
+        const clientWidth = getterOwner("clientWidth")
+        const clientHeight = getterOwner("clientHeight")
+        const body = document.querySelector<HTMLElement>(".image-preview-dialog__body")
+        if (!body) throw new Error("image preview body missing")
+        const probe = {
+          eventDepth: 0,
+          rafDepth: 0,
+          rafCallbacks: 0,
+          eventRectReads: [] as string[],
+          eventClientWidthReads: 0,
+          eventClientHeightReads: 0,
+          rafRectReads: [] as string[],
+          rafClientWidthReads: 0,
+          rafClientHeightReads: 0,
+        }
+        const isImagePreviewBody = (node: unknown): node is HTMLElement =>
+          node instanceof HTMLElement && node.classList.contains("image-preview-dialog__body")
+        const recordBodyRead = (kind: "rect" | "width" | "height", node: HTMLElement) => {
+          if (probe.eventDepth > 0) {
+            if (kind === "rect") probe.eventRectReads.push(node.className)
+            if (kind === "width") probe.eventClientWidthReads += 1
+            if (kind === "height") probe.eventClientHeightReads += 1
+          }
+          if (probe.rafDepth > 0) {
+            if (kind === "rect") probe.rafRectReads.push(node.className)
+            if (kind === "width") probe.rafClientWidthReads += 1
+            if (kind === "height") probe.rafClientHeightReads += 1
+          }
+        }
+        const enterWheelHandlerTask = () => {
+          probe.eventDepth += 1
+        }
+        const leaveWheelHandlerTask = () => {
+          probe.eventDepth -= 1
+        }
+        const resetProbeCounts = () => {
+          probe.eventDepth = 0
+          probe.rafDepth = 0
+          probe.rafCallbacks = 0
+          probe.eventRectReads = []
+          probe.eventClientWidthReads = 0
+          probe.eventClientHeightReads = 0
+          probe.rafRectReads = []
+          probe.rafClientWidthReads = 0
+          probe.rafClientHeightReads = 0
+        }
+        body.addEventListener("wheel", enterWheelHandlerTask, { capture: true })
+        body.addEventListener("wheel", leaveWheelHandlerTask)
+
+        Element.prototype.getBoundingClientRect = function getBoundingClientRectWithImagePreviewWheelProbe() {
+          if (isImagePreviewBody(this)) recordBodyRead("rect", this)
+          return originalGetBoundingClientRect.call(this)
+        }
+        Object.defineProperty(clientWidth.owner, "clientWidth", {
+          configurable: true,
+          get(this: HTMLElement) {
+            if (isImagePreviewBody(this)) recordBodyRead("width", this)
+            return clientWidth.descriptor.get!.call(this)
+          },
+        })
+        Object.defineProperty(clientHeight.owner, "clientHeight", {
+          configurable: true,
+          get(this: HTMLElement) {
+            if (isImagePreviewBody(this)) recordBodyRead("height", this)
+            return clientHeight.descriptor.get!.call(this)
+          },
+        })
+        window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+          requestAnimationFrameForProbe((time) => {
+            probe.rafDepth += 1
+            probe.rafCallbacks += 1
+            try {
+              callback(time)
+            } finally {
+              probe.rafDepth -= 1
+            }
+          })) as typeof requestAnimationFrame
+
+        Object.defineProperty(window, "__imagePreviewWheelProbe", {
+          configurable: true,
+          value: probe,
+        })
+        Object.defineProperty(window, "__dispatchImagePreviewWheelBurst", {
+          configurable: true,
+          value: (input: { count: number; ctrlKey?: boolean; metaKey?: boolean; deltaY?: number }) => {
+            const rect = originalGetBoundingClientRect.call(body)
+            for (let index = 0; index < input.count; index += 1) {
+              const defaultAllowed = body.dispatchEvent(
+                new WheelEvent("wheel", {
+                  bubbles: true,
+                  cancelable: true,
+                  ctrlKey: input.ctrlKey ?? false,
+                  metaKey: input.metaKey ?? false,
+                  deltaY: input.deltaY ?? -120,
+                  clientX: rect.left + 120 + index,
+                  clientY: rect.top + 96,
+                }),
+              )
+              if (defaultAllowed) throw new Error("modified wheel zoom event was not cancelled")
+            }
+          },
+        })
+        Object.defineProperty(window, "__resetImagePreviewWheelProbe", {
+          configurable: true,
+          value: resetProbeCounts,
+        })
+        Object.defineProperty(window, "__restoreImagePreviewWheelProbe", {
+          configurable: true,
+          value: () => {
+            body.removeEventListener("wheel", enterWheelHandlerTask, { capture: true })
+            body.removeEventListener("wheel", leaveWheelHandlerTask)
+            Element.prototype.getBoundingClientRect = originalGetBoundingClientRect
+            Object.defineProperty(clientWidth.owner, "clientWidth", clientWidth.descriptor)
+            Object.defineProperty(clientHeight.owner, "clientHeight", clientHeight.descriptor)
+            window.requestAnimationFrame = originalRequestAnimationFrame
+          },
+        })
+      })
+      const wheelProbe = await page.evaluate(async () => {
+        const target = window as typeof window & {
+          __dispatchImagePreviewWheelBurst: (input: {
+            count: number
+            ctrlKey?: boolean
+            metaKey?: boolean
+            deltaY?: number
+          }) => void
+          __resetImagePreviewWheelProbe: () => void
+          __imagePreviewWheelProbe: {
+            eventRectReads: string[]
+            eventClientWidthReads: number
+            eventClientHeightReads: number
+            rafRectReads: string[]
+            rafClientWidthReads: number
+            rafClientHeightReads: number
+            rafCallbacks: number
+          }
+          __restoreImagePreviewWheelProbe: () => void
+        }
+        target.__dispatchImagePreviewWheelBurst({ count: 12, ctrlKey: true })
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+        const ctrlResult = {
+          ...target.__imagePreviewWheelProbe,
+          scaleText: document.querySelector<HTMLElement>(".image-preview-dialog__scale")?.textContent?.trim() || "",
+        }
+        target.__resetImagePreviewWheelProbe()
+        target.__dispatchImagePreviewWheelBurst({ count: 4, metaKey: true, deltaY: 120 })
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+        const metaResult = {
+          ...target.__imagePreviewWheelProbe,
+          scaleText: document.querySelector<HTMLElement>(".image-preview-dialog__scale")?.textContent?.trim() || "",
+        }
+        target.__restoreImagePreviewWheelProbe()
+        return { ctrlResult, metaResult }
+      })
+      for (const [label, result] of Object.entries(wheelProbe)) {
+        assert.deepEqual(result.eventRectReads, [], `${label} burst must not read body rect during wheel events`)
+        assert.equal(result.eventClientWidthReads, 0, `${label} burst must not read body clientWidth during wheel events`)
+        assert.equal(result.eventClientHeightReads, 0, `${label} burst must not read body clientHeight during wheel events`)
+        assert.equal(result.rafRectReads.length, 1, `${label} burst should read body rect once in RAF: ${JSON.stringify(result)}`)
+        assert.equal(result.rafClientWidthReads, 1, `${label} burst should read body width once in RAF: ${JSON.stringify(result)}`)
+        assert.equal(result.rafClientHeightReads, 1, `${label} burst should read body height once in RAF: ${JSON.stringify(result)}`)
+      }
+      assert.equal(wheelProbe.ctrlResult.scaleText, "400%")
+      assert.equal(wheelProbe.metaResult.scaleText, "300%")
+      const wheelDialog = await page.$("#imagePreviewDialog")
+      assert.ok(wheelDialog)
+      const wheelScreenshotPath = resolve(".scratch", "image-preview-wheel-zoom.png")
+      mkdirSync(resolve(".scratch"), { recursive: true })
+      writeFileSync(wheelScreenshotPath, await wheelDialog.screenshot({}))
+
       const previewSrc = await page.evaluate(() => {
         const image = document.querySelector<HTMLImageElement>(".image-preview-dialog__image")
         return image?.src || ""
