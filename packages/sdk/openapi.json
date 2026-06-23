@@ -40211,9 +40211,9 @@
                 "default": true,
                 "type": "boolean"
               },
-              "confirm_proposed_tasks": {
-                "description": "Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.",
-                "default": false,
+              "auto_confirm_proposed_tasks": {
+                "description": "Automatically create orchestrator-proposed follow-up tasks. Default true creates directly; false asks the operator first.",
+                "default": true,
                 "type": "boolean"
               },
               "mcp_timeout": {

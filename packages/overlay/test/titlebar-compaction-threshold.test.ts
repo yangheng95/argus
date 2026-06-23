@@ -28,11 +28,11 @@ test("Run-menu range values render beside the slider, not under the label", () =
   expect(TITLEBAR_SOURCE).toContain('class="titlebar-menubar-item-meta">{props.description}</span>')
 })
 
-test("Run-menu proposed-task confirmation toggle routes through patchConfig", () => {
-  expect(TITLEBAR_SOURCE).toContain("titlebar.confirm_proposed_tasks")
-  expect(TITLEBAR_SOURCE).toContain("handlePatchProposedTaskConfirmation")
-  expect(TITLEBAR_SOURCE).toContain("confirm_proposed_tasks: enabled")
-  expect(TITLEBAR_SOURCE).toContain('testid="titlebar-confirm-proposed-tasks"')
+test("Run-menu proposed-task auto-confirm toggle routes through patchConfig", () => {
+  expect(TITLEBAR_SOURCE).toContain("titlebar.auto_confirm_proposed_tasks")
+  expect(TITLEBAR_SOURCE).toContain("handlePatchProposedTaskAutoConfirm")
+  expect(TITLEBAR_SOURCE).toContain("auto_confirm_proposed_tasks: enabled")
+  expect(TITLEBAR_SOURCE).toContain('testid="titlebar-auto-confirm-proposed-tasks"')
 })
 
 test("GeneralPanel no longer owns the compaction threshold control", () => {
@@ -54,13 +54,16 @@ test("compaction threshold i18n key exists in both locales (titlebar-scoped)", (
   expect(ZH["settings.compaction_threshold_label"]).toBeUndefined()
 })
 
-test("proposed-task confirmation i18n keys exist in both locales", () => {
-  expect(typeof EN["titlebar.confirm_proposed_tasks"]).toBe("string")
-  expect(typeof ZH["titlebar.confirm_proposed_tasks"]).toBe("string")
-  expect(typeof EN["titlebar.confirm_proposed_tasks_hint"]).toBe("string")
-  expect(typeof ZH["titlebar.confirm_proposed_tasks_hint"]).toBe("string")
-  expect(EN["titlebar.confirm_proposed_tasks"]).not.toBe("")
-  expect(ZH["titlebar.confirm_proposed_tasks"]).not.toBe("")
+test("proposed-task auto-confirm i18n keys exist in both locales", () => {
+  expect(typeof EN["titlebar.auto_confirm_proposed_tasks"]).toBe("string")
+  expect(typeof ZH["titlebar.auto_confirm_proposed_tasks"]).toBe("string")
+  expect(typeof EN["titlebar.auto_confirm_proposed_tasks_hint"]).toBe("string")
+  expect(typeof ZH["titlebar.auto_confirm_proposed_tasks_hint"]).toBe("string")
+  expect(EN["titlebar.auto_confirm_proposed_tasks"]).not.toBe("")
+  expect(ZH["titlebar.auto_confirm_proposed_tasks"]).not.toBe("")
+  const retiredKey = "titlebar." + ["confirm", "proposed", "tasks"].join("_")
+  expect(EN[retiredKey]).toBeUndefined()
+  expect(ZH[retiredKey]).toBeUndefined()
 })
 
 test("titlebar top-level menu i18n keys exist in both locales", () => {

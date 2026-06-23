@@ -18,7 +18,7 @@
 - **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
 - **`integrity` 是最终 review / acceptance tool**：对应 Integrity reviewer team（动态 reviewer 计划、replay-aware context、severity discipline、build feedback），并吸收旧固定维度 review 与旧对抗性复核职责。`prosecute` / `prosecutor` 已删除。
 - `build -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；acceptance direct 子代理路径已删除；`general -> general` 自递归被权限拒绝。
-- `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：先向用户展示"完善上一个 request 的新任务"候选，用户确认后才创建新 task；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
+- `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：默认按 `experimental.auto_confirm_proposed_tasks=true` 自动创建"完善上一个 request 的新任务"候选，只有该配置显式为 `false` 时才先询问用户；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
 - [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的"双向都要声明"规则，`general -> explore` 在 spec 文本上并不成立。
 
 ## 节点缩写

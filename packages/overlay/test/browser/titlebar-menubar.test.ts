@@ -592,7 +592,7 @@ test(
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config/prompt") return send([])
-      if (path === "/config") return send({ experimental: { auto_question: false, confirm_proposed_tasks: true } })
+      if (path === "/config") return send({ experimental: { auto_question: false, auto_confirm_proposed_tasks: true } })
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
       if (path === "/executor") return send([])
@@ -774,7 +774,7 @@ test(
           legacyToggleCount: node.querySelectorAll(".titlebar-menubar-toggle").length,
         }
       })
-      assert.deepEqual(runCheckboxStructure.testids, ["titlebar-auto-question", "titlebar-confirm-proposed-tasks"])
+      assert.deepEqual(runCheckboxStructure.testids, ["titlebar-auto-question", "titlebar-auto-confirm-proposed-tasks"])
       assert.deepEqual([...new Set(runCheckboxStructure.roles)], ["menuitemcheckbox"])
       assert.equal(runCheckboxStructure.legacyCheckboxCount, 0)
       assert.equal(runCheckboxStructure.legacyToggleCount, 0)
@@ -786,7 +786,7 @@ test(
           className: "titlebar-menubar-item titlebar-menubar-checkbox",
         },
         {
-          testid: "titlebar-confirm-proposed-tasks",
+          testid: "titlebar-auto-confirm-proposed-tasks",
           ariaChecked: "true",
           dataChecked: true,
           className: "titlebar-menubar-item titlebar-menubar-checkbox",
@@ -794,10 +794,10 @@ test(
       ])
       for (let attempt = 0; attempt < 8; attempt += 1) {
         const activeTestid = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid || "")
-        if (activeTestid === "titlebar-confirm-proposed-tasks") break
+        if (activeTestid === "titlebar-auto-confirm-proposed-tasks") break
         await page.keyboard.press("ArrowDown")
       }
-      const checkboxFocusState = await page.$eval('[data-testid="titlebar-confirm-proposed-tasks"]', (node) => {
+      const checkboxFocusState = await page.$eval('[data-testid="titlebar-auto-confirm-proposed-tasks"]', (node) => {
         const item = node as HTMLElement
         const indicator = item.querySelector<HTMLElement>(".titlebar-menubar-checkbox-indicator")
         if (!indicator) throw new Error("missing titlebar checkbox indicator")
@@ -813,7 +813,7 @@ test(
           indicatorBorderColor: getComputedStyle(indicator).borderColor,
         }
       })
-      assert.equal(checkboxFocusState.activeTestid, "titlebar-confirm-proposed-tasks")
+      assert.equal(checkboxFocusState.activeTestid, "titlebar-auto-confirm-proposed-tasks")
       assert.equal(checkboxFocusState.role, "menuitemcheckbox")
       assert.equal(checkboxFocusState.ariaChecked, "true")
       assert.equal(checkboxFocusState.highlighted, true)

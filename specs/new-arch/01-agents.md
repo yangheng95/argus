@@ -149,13 +149,13 @@ orchestrator/loop.ts — runTaskLoop()
    `steer_subagent`、`cancel_subagent`（中止指定子 agent session；session 级恢复手段，
    取消后须显式重新 dispatch 同一 goal/stage）、`restart_from_stage`、`refine`
 6. **用户交互 / 等待 / merge 修复**：`question`、`wait`、`bash`（仅项目根 git merge-state 修复）
-7. **任务繁衍**：`propose_task`（按配置确认策略创建继承 follow-up task）
+7. **任务繁衍**：`propose_task`（按自动确认配置创建继承 follow-up task）
 
 **Planning tool role 已删除**，因此 orchestrator 也没有 `planner` tool。pipeline build 路径里 "per-goal 实现步骤" 的旧 `planGoal()` 入口随同 `engine/goal-pool.ts` 一起删掉了；现在 build agent 直接读 architect contract + decision-log 自行推进。
 
 `panel` control-plane tool **不**属于 orchestrator。Gateway 入口独占 panel capability action；orchestrator 只能通过自身的 workflow / task-control tools 推进任务。
 
-orchestrator 通过 `propose_task` 提供"完善上一个 request 的新任务"候选；该工具必须先等待用户确认，确认后才调用 `EngineService.createTask`。这不是恢复 `panel`，也不是恢复 generic `task` subagent 工具。
+orchestrator 通过 `propose_task` 提供"完善上一个 request 的新任务"候选；默认按 `experimental.auto_confirm_proposed_tasks=true` 直接调用 `EngineService.createTask`，只有该配置显式为 `false` 时才先等待用户确认。这不是恢复 `panel`，也不是恢复 generic `task` subagent 工具。
 
 ## Decision Log
 

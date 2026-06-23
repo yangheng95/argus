@@ -156,7 +156,7 @@ export namespace Config {
     result.plugin = result.plugin || []
     result.experimental = {
       auto_question: true,
-      confirm_proposed_tasks: false,
+      auto_confirm_proposed_tasks: true,
       ...(result.experimental ?? {}),
     }
 
@@ -1616,12 +1616,12 @@ export namespace Config {
             .describe(
               "Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
             ),
-          confirm_proposed_tasks: z
+          auto_confirm_proposed_tasks: z
             .boolean()
             .optional()
-            .default(false)
+            .default(true)
             .describe(
-              "Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.",
+              "Automatically create orchestrator-proposed follow-up tasks. Default true creates directly; false asks the operator first.",
             ),
           mcp_timeout: z
             .number()

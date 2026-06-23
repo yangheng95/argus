@@ -1214,9 +1214,9 @@ export type Config = {
      */
     auto_question?: boolean
     /**
-     * Require operator confirmation before the orchestrator creates a proposed follow-up task. Default false lets the orchestrator create the task directly.
+     * Automatically create orchestrator-proposed follow-up tasks. Default true creates directly; false asks the operator first.
      */
-    confirm_proposed_tasks?: boolean
+    auto_confirm_proposed_tasks?: boolean
     /**
      * Timeout in milliseconds for model context protocol (MCP) requests
      */

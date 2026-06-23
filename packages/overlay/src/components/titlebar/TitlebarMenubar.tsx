@@ -315,8 +315,8 @@ export function TitlebarMenubar() {
     await patchConfig({ compaction: { threshold: ratio } })
   }
 
-  async function handlePatchProposedTaskConfirmation(enabled: boolean) {
-    await patchConfig({ experimental: { confirm_proposed_tasks: enabled } })
+  async function handlePatchProposedTaskAutoConfirm(enabled: boolean) {
+    await patchConfig({ experimental: { auto_confirm_proposed_tasks: enabled } })
   }
 
   function setTheme(value: string) {
@@ -528,11 +528,11 @@ export function TitlebarMenubar() {
                       testid="titlebar-auto-question"
                     />
                     <MenuCheckboxItem
-                      label={t("titlebar.confirm_proposed_tasks")}
-                      description={t("titlebar.confirm_proposed_tasks_hint")}
-                      checked={(appStore.config as any)?.experimental?.confirm_proposed_tasks === true}
-                      onChange={handlePatchProposedTaskConfirmation}
-                      testid="titlebar-confirm-proposed-tasks"
+                      label={t("titlebar.auto_confirm_proposed_tasks")}
+                      description={t("titlebar.auto_confirm_proposed_tasks_hint")}
+                      checked={(appStore.config as any)?.experimental?.auto_confirm_proposed_tasks === true}
+                      onChange={handlePatchProposedTaskAutoConfirm}
+                      testid="titlebar-auto-confirm-proposed-tasks"
                     />
                     <MenuRange
                       label={t("titlebar.budget_max_executor_groups")}
