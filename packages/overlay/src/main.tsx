@@ -1530,6 +1530,7 @@ if (browserPreviewEl) {
         active={() => isCenterWorkbenchPanelOpen("browser")}
         directory={activeDirectory}
         refreshKey={() => `${boardStore.boardUpdatedAt}:${browserPreviewLinkRefresh()}`}
+        scrollElement={() => document.querySelector<HTMLElement>(".center-workbench-body")}
         taskID={() => activeTaskID() || undefined}
         onReady={() => openRightActivity("browser")}
       />
