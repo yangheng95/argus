@@ -687,7 +687,7 @@
   "memory.search_failed": "上下文搜索失败：{{error}}",
   "memory.load_failed": "上下文加载失败",
   "memory.no_results": "无匹配结果",
-  "memory.none": "暂无上下文",
+  "memory.none": "暂无上下文条目",
   "memory.none_unselected": "选择任务后查看上下文",
   "memory.scope.cwd": "当前目录",
   "memory.scope.global": "全局",

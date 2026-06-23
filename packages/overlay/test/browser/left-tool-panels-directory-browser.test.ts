@@ -323,7 +323,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
       }
     })
     assert.equal(deletedState.itemCount, 0)
-    assert.ok(deletedState.emptyText.length > 0)
+    assert.equal(deletedState.emptyText, "No context entries")
     assert.equal(deletedState.deleteStillFocused, false)
     const deleteRequest = requestLog.find(
       (item) =>
