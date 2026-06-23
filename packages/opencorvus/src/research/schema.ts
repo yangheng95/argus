@@ -272,85 +272,60 @@ function ensureRefs(ids: string[], known: Set<string>, label: string): string | 
   return undefined
 }
 
+function collectUniqueError(errors: string[], ids: string[], label: string): void {
+  const err = ensureUnique(ids, label)
+  if (err) errors.push(err)
+}
+
+function collectRefError(errors: string[], ids: string[], known: Set<string>, label: string): void {
+  const err = ensureRefs(ids, known, label)
+  if (err) errors.push(err)
+}
+
 export function validateResearchBriefSemantics(brief: ResearchBrief): string | undefined {
   const evidenceIDs = new Set(brief.evidence_index.map((item) => item.id))
   const factIDs = new Set(brief.facts.map((item) => item.id))
+  const errors: string[] = []
 
-  const uniqueError =
-    ensureUnique(
-      brief.evidence_index.map((item) => item.id),
-      "evidence",
-    ) ??
-    ensureUnique(
-      brief.facts.map((item) => item.id),
-      "fact",
-    ) ??
-    ensureUnique(
-      brief.inferences.map((item) => item.id),
-      "inference",
-    ) ??
-    ensureUnique(
-      brief.problem_statements.map((item) => item.id),
-      "problem_statement",
-    ) ??
-    ensureUnique(
-      brief.user_needs.map((item) => item.id),
-      "user_need",
-    ) ??
-    ensureUnique(
-      brief.constraints.map((item) => item.id),
-      "constraint",
-    ) ??
-    ensureUnique(
-      brief.document_outline.map((item) => item.id),
-      "document_outline",
-    ) ??
-    ensureWebpageContractUniqueIDs(brief.webpage_contract) ??
-    ensureUnique(
-      brief.subpage_research_tasks.map((item) => item.id),
-      "subpage_research_task",
-    ) ??
-    ensureUnique(
-      brief.open_questions.map((item) => item.id),
-      "open_question",
-    )
-  if (uniqueError) return uniqueError
+  collectUniqueError(errors, brief.evidence_index.map((item) => item.id), "evidence")
+  collectUniqueError(errors, brief.facts.map((item) => item.id), "fact")
+  collectUniqueError(errors, brief.inferences.map((item) => item.id), "inference")
+  collectUniqueError(errors, brief.problem_statements.map((item) => item.id), "problem_statement")
+  collectUniqueError(errors, brief.user_needs.map((item) => item.id), "user_need")
+  collectUniqueError(errors, brief.constraints.map((item) => item.id), "constraint")
+  collectUniqueError(errors, brief.document_outline.map((item) => item.id), "document_outline")
+  const webpageUniqueError = ensureWebpageContractUniqueIDs(brief.webpage_contract)
+  if (webpageUniqueError) errors.push(webpageUniqueError)
+  collectUniqueError(errors, brief.subpage_research_tasks.map((item) => item.id), "subpage_research_task")
+  collectUniqueError(errors, brief.open_questions.map((item) => item.id), "open_question")
 
   for (const fact of brief.facts) {
-    const err = ensureRefs(fact.evidence_ids, evidenceIDs, `fact ${fact.id}.evidence_ids`)
-    if (err) return err
+    collectRefError(errors, fact.evidence_ids, evidenceIDs, `fact ${fact.id}.evidence_ids`)
   }
   for (const inference of brief.inferences) {
-    const err = ensureRefs(inference.based_on_fact_ids, factIDs, `inference ${inference.id}.based_on_fact_ids`)
-    if (err) return err
+    collectRefError(errors, inference.based_on_fact_ids, factIDs, `inference ${inference.id}.based_on_fact_ids`)
   }
   for (const item of brief.problem_statements) {
-    const err = ensureRefs(item.fact_ids, factIDs, `problem_statement ${item.id}.fact_ids`)
-    if (err) return err
+    collectRefError(errors, item.fact_ids, factIDs, `problem_statement ${item.id}.fact_ids`)
   }
   for (const item of brief.user_needs) {
-    const err = ensureRefs(item.fact_ids, factIDs, `user_need ${item.id}.fact_ids`)
-    if (err) return err
+    collectRefError(errors, item.fact_ids, factIDs, `user_need ${item.id}.fact_ids`)
   }
   for (const item of brief.constraints) {
-    const err = ensureRefs(item.fact_ids, factIDs, `constraint ${item.id}.fact_ids`)
-    if (err) return err
+    collectRefError(errors, item.fact_ids, factIDs, `constraint ${item.id}.fact_ids`)
   }
   for (const item of brief.document_outline) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `document_outline ${item.id}.evidence_ids`)
-    if (err) return err
+    collectRefError(errors, item.evidence_ids, evidenceIDs, `document_outline ${item.id}.evidence_ids`)
   }
   const webpageContractError = ensureWebpageContractRefs(brief.webpage_contract, evidenceIDs)
-  if (webpageContractError) return webpageContractError
+  if (webpageContractError) errors.push(webpageContractError)
   for (const item of brief.subpage_research_tasks) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `subpage_research_task ${item.id}.evidence_ids`)
-    if (err) return err
+    collectRefError(errors, item.evidence_ids, evidenceIDs, `subpage_research_task ${item.id}.evidence_ids`)
   }
   for (const item of brief.open_questions) {
-    const err = ensureRefs(item.related_fact_ids, factIDs, `open_question ${item.id}.related_fact_ids`)
-    if (err) return err
+    collectRefError(errors, item.related_fact_ids, factIDs, `open_question ${item.id}.related_fact_ids`)
   }
-  return undefined
+  return errors.length > 0 ? errors.join("\n") : undefined
 }
 
 function ensureWebpageContractUniqueIDs(contract: ResearchWebpageContract | undefined): string | undefined {
@@ -392,53 +367,50 @@ function ensureWebpageContractRefs(
   evidenceIDs: Set<string>,
 ): string | undefined {
   if (!contract) return undefined
-  const referenceErr = ensureRefs(
+  const errors: string[] = []
+  collectRefError(
+    errors,
     contract.reference_image_evidence_ids,
     evidenceIDs,
     "webpage_contract.reference_image_evidence_ids",
   )
-  if (referenceErr) return referenceErr
   for (const item of contract.functional_surfaces) {
-    const err = ensureRefs(
+    collectRefError(
+      errors,
       item.evidence_ids,
       evidenceIDs,
       `webpage_contract.functional_surface ${item.id}.evidence_ids`,
     )
-    if (err) return err
   }
   for (const item of contract.visual_layout) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.visual_layout ${item.id}.evidence_ids`)
-    if (err) return err
+    collectRefError(errors, item.evidence_ids, evidenceIDs, `webpage_contract.visual_layout ${item.id}.evidence_ids`)
   }
   for (const item of contract.style_requirements) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.style_requirement ${item.id}.evidence_ids`)
-    if (err) return err
+    collectRefError(errors, item.evidence_ids, evidenceIDs, `webpage_contract.style_requirement ${item.id}.evidence_ids`)
   }
   for (const item of contract.interaction_states) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.interaction_state ${item.id}.evidence_ids`)
-    if (err) return err
+    collectRefError(errors, item.evidence_ids, evidenceIDs, `webpage_contract.interaction_state ${item.id}.evidence_ids`)
   }
   for (const item of contract.data_content_inventory) {
-    const err = ensureRefs(
+    collectRefError(
+      errors,
       item.evidence_ids,
       evidenceIDs,
       `webpage_contract.data_content_inventory ${item.id}.evidence_ids`,
     )
-    if (err) return err
   }
   for (const item of contract.fidelity_acceptance) {
-    const err = ensureRefs(
+    collectRefError(
+      errors,
       item.evidence_ids,
       evidenceIDs,
       `webpage_contract.fidelity_acceptance ${item.id}.evidence_ids`,
     )
-    if (err) return err
   }
   for (const item of contract.fidelity_risks) {
-    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.fidelity_risk ${item.id}.evidence_ids`)
-    if (err) return err
+    collectRefError(errors, item.evidence_ids, evidenceIDs, `webpage_contract.fidelity_risk ${item.id}.evidence_ids`)
   }
-  return undefined
+  return errors.length > 0 ? errors.join("\n") : undefined
 }
 
 export function validateResearchBriefIntegrity(brief: ResearchBrief): string | undefined {
