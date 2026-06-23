@@ -52,22 +52,22 @@
 }
 
 /* Activity body container: inactive activities collapse via data-active. */
-.sections-tab-body {
+.right-activity-body {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.sections-tab-body[data-active="false"] {
+.right-activity-body[data-active="false"] {
   display: none;
 }
 
-.sections-tab-body[data-side-activity] {
+.right-activity-body[data-side-activity] {
   display: flex;
   min-height: 0;
 }
 
-.sections-tab-body[data-side-activity][data-active="false"] {
+.right-activity-body[data-side-activity][data-active="false"] {
   display: none;
 }
 

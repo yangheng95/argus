@@ -98,14 +98,19 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   const windowResizeEnd = main.indexOf("const applyWindowResizeOnFrame", windowResizeStart)
   const centerPointerDownStart = main.indexOf("function startCenterWorkbenchPanelResize")
   const centerPointerDownEnd = main.indexOf("function centerWorkbenchPanelResizeBaseline", centerPointerDownStart)
+  const updateWeightsStart = main.indexOf("function updateCenterWorkbenchPanelWeights")
+  const updateWeightsEnd = main.indexOf("function updateCenterWorkbenchPanelResize", updateWeightsStart)
 
   expect(windowResizeStart).toBeGreaterThan(0)
   expect(windowResizeEnd).toBeGreaterThan(windowResizeStart)
   expect(centerPointerDownStart).toBeGreaterThan(0)
   expect(centerPointerDownEnd).toBeGreaterThan(centerPointerDownStart)
+  expect(updateWeightsStart).toBeGreaterThan(0)
+  expect(updateWeightsEnd).toBeGreaterThan(updateWeightsStart)
 
   const windowResizeFunction = main.slice(windowResizeStart, windowResizeEnd)
   const centerPointerDownFunction = main.slice(centerPointerDownStart, centerPointerDownEnd)
+  const updateWeightsFunction = main.slice(updateWeightsStart, updateWeightsEnd)
 
   expect(main).toContain('import { createAnimationFrameScheduler } from "./utils/animation-frame"')
   expect(main).toContain("const applyWindowResizeOnFrame = createAnimationFrameScheduler(applyWindowResize)")
@@ -126,6 +131,8 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   expect(windowResizeFunction).toContain("renderCenterWorkbenchPanelLayoutOnFrame.schedule()")
   expect(windowResizeFunction).not.toContain("renderCenterWorkbenchPanelLayout()")
   expect(windowResizeFunction).not.toContain("renderCenterWorkbenchPanelSeparators()")
+  expect(updateWeightsFunction).toContain("setSettingsStore(\"centerWorkbenchPanelWeights\"")
+  expect(updateWeightsFunction).toContain("renderCenterWorkbenchPanelLayoutOnFrame.schedule()")
   expect(main).toContain("pendingCenterWorkbenchPanelResizeClientX = event.clientX")
   expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.schedule()")
   expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.cancel()")
