@@ -138,9 +138,11 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   const dragApplyEnd = main.indexOf("const applyCenterWorkbenchPanelResizeOnFrame", dragApplyStart)
   const keyboardResizeStart = main.indexOf("function resizeCenterWorkbenchPanelByKeyboard")
   const keyboardResizeEnd = main.indexOf("function stopCenterWorkbenchPanelResize", keyboardResizeStart)
-  const layoutRevealStart = main.indexOf("function renderCenterWorkbenchPanelLayoutAndReveal(): void")
+  const layoutStart = main.indexOf("function renderCenterWorkbenchPanelLayout(): void")
+  const layoutEnd = main.indexOf("function renderCenterWorkbenchPanelMeasurementsAndReveal(): void", layoutStart)
+  const layoutRevealStart = layoutEnd
   const layoutRevealEnd = main.indexOf(
-    "const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler",
+    "const renderCenterWorkbenchPanelMeasurementsOnFrame = createAnimationFrameScheduler",
     layoutRevealStart,
   )
   const panelEffectStart = main.indexOf("createEffect(() => {\n      const panels = centerWorkbenchPanels()")
@@ -157,6 +159,8 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   expect(dragApplyEnd).toBeGreaterThan(dragApplyStart)
   expect(keyboardResizeStart).toBeGreaterThan(0)
   expect(keyboardResizeEnd).toBeGreaterThan(keyboardResizeStart)
+  expect(layoutStart).toBeGreaterThan(0)
+  expect(layoutEnd).toBeGreaterThan(layoutStart)
   expect(layoutRevealStart).toBeGreaterThan(0)
   expect(layoutRevealEnd).toBeGreaterThan(layoutRevealStart)
   expect(panelEffectStart).toBeGreaterThan(0)
@@ -168,23 +172,33 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   const scheduleRevealFunction = main.slice(scheduleRevealStart, scheduleRevealEnd)
   const dragApplyFunction = main.slice(dragApplyStart, dragApplyEnd)
   const keyboardResizeFunction = main.slice(keyboardResizeStart, keyboardResizeEnd)
+  const layoutFunction = main.slice(layoutStart, layoutEnd)
   const layoutRevealFunction = main.slice(layoutRevealStart, layoutRevealEnd)
   const panelOpenEffect = main.slice(panelEffectStart, settingsEffectStart)
   const settingsWeightEffect = main.slice(settingsEffectStart, nextEffectStart)
 
   expect(main).toContain("function renderCenterWorkbenchPanelLayout(): void")
+  expect(main).toContain("function renderCenterWorkbenchPanelMeasurementsAndReveal(): void")
   expect(main).toContain("function centerWorkbenchPanelWeightsSignature(): string")
   expect(main).toContain("const weights = settingsStore.centerWorkbenchPanelWeights")
   expect(main).toContain("const weight = Number(weights[panel])")
   expect(main).toContain(
-    "const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayoutAndReveal)",
+    "const renderCenterWorkbenchPanelMeasurementsOnFrame = createAnimationFrameScheduler(",
+  )
+  expect(main).toContain(
+    "const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayout)",
   )
   expect(main).toContain("renderCenterWorkbenchPanelLayoutOnFrame.cancel()")
+  expect(main).toContain("renderCenterWorkbenchPanelMeasurementsOnFrame.cancel()")
   expect(main).not.toContain("createAnimationFrameScheduler(revealPendingCenterWorkbenchPanel)")
   expect(main).not.toContain("revealCenterWorkbenchPanelOnFrame")
-  expect(layoutRevealFunction).toContain("renderCenterWorkbenchPanelLayout()")
+  expect(layoutFunction).toContain("renderCenterWorkbenchPanelWeights()")
+  expect(layoutFunction).toContain("renderCenterWorkbenchPanelMeasurementsOnFrame.schedule()")
+  expect(layoutFunction).not.toContain("renderCenterWorkbenchPanelSeparators()")
+  expect(layoutFunction).not.toContain("revealPendingCenterWorkbenchPanel()")
+  expect(layoutRevealFunction).toContain("renderCenterWorkbenchPanelSeparators()")
   expect(layoutRevealFunction).toContain("revealPendingCenterWorkbenchPanel()")
-  expect(layoutRevealFunction.indexOf("renderCenterWorkbenchPanelLayout()")).toBeLessThan(
+  expect(layoutRevealFunction.indexOf("renderCenterWorkbenchPanelSeparators()")).toBeLessThan(
     layoutRevealFunction.indexOf("revealPendingCenterWorkbenchPanel()"),
   )
   expect(resetPanelFunction).toContain('scheduleCenterWorkbenchPanelReveal("workflow")')
@@ -199,10 +213,11 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   expect(panelOpenEffect).not.toContain("renderCenterWorkbenchPanelWeights()")
   expect(panelOpenEffect).not.toContain("renderCenterWorkbenchPanelSeparators()")
   expect(settingsWeightEffect).toContain("centerWorkbenchPanelWeightsSignature()")
-  expect(settingsWeightEffect).toContain("untrack(renderCenterWorkbenchPanelLayout)")
+  expect(settingsWeightEffect).toContain("renderCenterWorkbenchPanelLayoutOnFrame.schedule()")
   expect(settingsWeightEffect).not.toContain("centerWorkbenchPanels().length")
   expect(settingsWeightEffect).not.toContain("renderCenterWorkbenchPanelWeights()")
   expect(settingsWeightEffect).not.toContain("renderCenterWorkbenchPanelSeparators()")
+  expect(settingsWeightEffect).not.toContain("untrack(renderCenterWorkbenchPanelLayout)")
   expect(dragApplyFunction).toContain("updateCenterWorkbenchPanelWeights(drag, clientX - drag.leftRect.left)")
   expect(dragApplyFunction).not.toContain("renderCenterWorkbenchPanelWeights()")
   expect(dragApplyFunction).not.toContain("renderCenterWorkbenchPanelSeparators()")
