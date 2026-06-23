@@ -207,6 +207,19 @@ async function provideTaskRootSessionInstance<T>(task: TaskRow, fn: () => Promis
   return Instance.provide({ directory: session.directory, fn })
 }
 
+async function awaitTaskLoopIdleForDelete(taskID: string, idleTimeoutMs: number): Promise<void> {
+  const { awaitTaskLoopIdle } = await import("@/orchestrator/loop")
+  try {
+    await awaitTaskLoopIdle(taskID, idleTimeoutMs)
+  } catch (cause) {
+    throw createTaskCancellationIncomplete({
+      taskID,
+      handle: "task loop idle before delete",
+      cause,
+    })
+  }
+}
+
 function requireGoalInCurrentProject(goalID: string): GoalRow {
   const row = Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get())
   if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
@@ -317,6 +330,11 @@ export interface CancelTaskOptions {
   cleanupTimeoutMs?: number
   /** Override prompt-settle inactivity (ms). Tests use this to keep zombie checks small. */
   promptSettleInactivityMs?: number
+}
+
+export interface DeleteTaskOptions extends CancelTaskOptions {
+  /** Override task-loop idle proof inactivity (ms). Tests use this to keep zombie checks small. */
+  taskLoopIdleTimeoutMs?: number
 }
 
 async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
@@ -1623,15 +1641,16 @@ export namespace EngineService {
     return true
   }
 
-  export async function deleteTask(taskID: string) {
+  export async function deleteTask(taskID: string, options?: DeleteTaskOptions) {
     const task = requireTaskInCurrentProject(taskID)
     discardQueuedTaskEvent(taskID)
     // Cancel if still active
     if (!isTaskTerminal(task)) {
-      await cancelTask(taskID)
+      await cancelTask(taskID, options)
     }
     // Wait for any in-progress pipeline stage to settle after abort
     await awaitPipelineSettled(taskID)
+    await awaitTaskLoopIdleForDelete(taskID, options?.taskLoopIdleTimeoutMs ?? CANCEL_CLEANUP_TIMEOUT_MS)
     // Delete session tree (CASCADE handles plans, goals, runs, etc.)
     if (task.session_id) {
       await Session.removeInProject({ sessionID: task.session_id, projectID: task.project_id })
@@ -1861,6 +1880,10 @@ export namespace EngineService {
           taskID,
         })
       : { sessionIDs: [], cancelledSessions: [], failures: [] }
+    TaskQueueService.cancelSessionPrompts({
+      sessionIDs: promptCancellation.sessionIDs,
+      reason: "task cancelled",
+    })
     const liveOwnerships = listLiveOrchestratorToolOwnership(taskID)
     if (liveOwnerships.length > 0) {
       const { abortLiveOrchestratorToolOwnership } = await import("@/engine/writer")
