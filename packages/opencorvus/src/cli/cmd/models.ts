@@ -1,7 +1,6 @@
 import type { Argv } from "yargs"
 import { Instance } from "../../project/instance"
 import { Provider } from "../../provider/provider"
-import { ModelsDev } from "../../provider/models"
 import { cmd } from "./cmd"
 import { UI } from "../ui"
 import { EOL } from "os"
@@ -21,19 +20,24 @@ export const ModelsCommand = cmd({
         type: "boolean",
       })
       .option("refresh", {
-        describe: "refresh the models cache from models.dev",
+        describe: "refresh the provider model cache",
         type: "boolean",
       })
   },
   handler: async (args) => {
-    if (args.refresh) {
-      await ModelsDev.refresh()
-      UI.println(UI.Style.TEXT_SUCCESS_BOLD + "Models cache refreshed" + UI.Style.TEXT_NORMAL)
-    }
-
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
+        if (args.refresh) {
+          const result = await Provider.refreshCatalog()
+          if (!result.ok) {
+            UI.error(`Models cache refresh failed: ${result.error}`)
+            return
+          }
+          const suffix = result.hexin ? ` (Hexin: ${result.hexin.count})` : ""
+          UI.println(UI.Style.TEXT_SUCCESS_BOLD + `Models cache refreshed${suffix}` + UI.Style.TEXT_NORMAL)
+        }
+
         const providers = await Provider.list()
 
         function printModels(providerID: string, verbose?: boolean) {

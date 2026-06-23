@@ -686,6 +686,27 @@ export namespace Provider {
     return Object.keys(models)
   }
 
+  export type RefreshCatalogResult =
+    | { ok: true; fetchedAt: number; hexin?: { count: number; ids: string[] } }
+    | { ok: false; error: string; fetchedAt?: number }
+
+  export async function refreshCatalog(): Promise<RefreshCatalogResult> {
+    const result = await ModelsDev.refresh()
+    if (!result.ok) return result
+
+    const cfg = await Config.get()
+    const apiKey = await resolveHexinApiKey(cfg)
+    if (!apiKey) return result
+
+    try {
+      const ids = await refreshHexin()
+      return { ...result, hexin: { count: ids.length, ids } }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, fetchedAt: result.fetchedAt, error: `hexin refresh failed: ${message}` }
+    }
+  }
+
   export async function list(opts?: { config?: Config.Info }) {
     return stateFor(opts?.config).then((state) => state.providers)
   }
