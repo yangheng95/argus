@@ -345,7 +345,11 @@ mounted_agents:
       expect(requirements).toBeDefined()
 
       expect(await SystemPrompt.skills(orchestrator!)).toBeUndefined()
-      expect(await SystemPrompt.skills(requirements!)).toContain("tool-skill")
+      const prompt = await SystemPrompt.skills(requirements!)
+      expect(prompt).toContain("### Mounted Skills")
+      expect(prompt).toContain("already mounted for this agent in the current turn")
+      expect(prompt).toContain("Before planning or tool use")
+      expect(prompt).toContain("tool-skill")
     },
   })
 })
