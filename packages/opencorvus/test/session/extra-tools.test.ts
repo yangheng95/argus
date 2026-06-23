@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
 import { asSchema, tool } from "ai"
 import z from "zod"
 // Import order matters: SessionPrompt loads session/index first which pulls
@@ -20,6 +21,7 @@ import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "../../src/engine/cancellation-scope"
 import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-error"
 import { SessionPromptState } from "../../src/session/prompt/state"
+import { SkillTool } from "../../src/tool/skill"
 
 const dummyTool = () =>
   tool({
@@ -630,6 +632,104 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
         SessionLoop.clearSessionRuntimeContract(sessionID)
       },
     })
+  })
+
+  test("exact runtime contract skill tool is rebound to the turn-scoped mount surface", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".opencorvus", "skill", "runtime-needs-webpage-extract")
+        await Bun.write(
+          path.join(skillDir, "SKILL.md"),
+          `---
+name: runtime-needs-webpage-extract
+description: Skill requiring a frontend-design tool that is not in this exact runtime contract.
+required_tools:
+  - webpage_extract
+mounted_agents:
+  - frontend-design
+---
+
+# Runtime Needs Webpage Extract
+`,
+        )
+      },
+    })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const sessionID = `ses_runtime_${Date.now()}_skill_surface`
+          const frontendDesign = await Agent.get("frontend-design")
+          expect(frontendDesign).toBeDefined()
+          const staleSkill = await SkillTool.init({ agent: frontendDesign })
+          const staleExtraSkill = tool({
+            description: staleSkill.description,
+            inputSchema: staleSkill.parameters,
+            async execute(args) {
+              return staleSkill.execute(args as never, {
+                sessionID,
+                messageID: "msg_test",
+                callID: "call_test",
+                agent: "frontend-design",
+                abort: AbortSignal.any([]),
+                messages: [],
+                metadata: () => {},
+                ask: async () => {},
+              })
+            },
+          })
+
+          SessionLoop.setSessionRuntimeContract(
+            sessionID,
+            runtimeContract(sessionID, {
+              identity: {
+                sessionID,
+                agentKind: "frontend-design",
+                contractKind: "stage-attempt",
+              },
+              tools: {
+                skill: staleExtraSkill,
+                submit_frontend_template: dummyTool(),
+              },
+            }),
+          )
+          const resolved = await SessionLoop.resolveTools({
+            agent: frontendDesign!,
+            model: {
+              providerID: "test",
+              id: "test",
+              api: { id: "test", npm: "@ai-sdk/openai" },
+              capabilities: { input: {}, reasoning: false },
+            } as any,
+            session: { id: sessionID, kind: "frontend-design", permission: [] } as any,
+            processor: {
+              message: { id: "msg_test" },
+              partFromToolCall: () => undefined,
+              ensureToolPart: async () => undefined,
+            } as any,
+            bypassAgentCheck: false,
+            messages: [],
+            config: {} as any,
+          })
+
+          expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_frontend_template"])
+          await expect(
+            (resolved.skill as any).execute(
+              { name: "runtime-needs-webpage-extract" },
+              { toolCallId: "call_runtime_skill_surface" },
+            ),
+          ).rejects.toThrow('Skill "runtime-needs-webpage-extract" not found or not allowed')
+          SessionLoop.clearSessionRuntimeContract(sessionID)
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
   })
 
   test("normalizes multimodal extra-tool results without stringifying attachments into output", () => {

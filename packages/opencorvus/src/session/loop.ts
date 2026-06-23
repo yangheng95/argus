@@ -2974,7 +2974,7 @@ export namespace SessionLoop {
         availableToolNames,
       })
       resolvedToolSkillSurfaces.set(tools, surface)
-      if (toolSources.get(SkillTool.id) === "registry" && tools[SkillTool.id]) {
+      if (tools[SkillTool.id]) {
         const skillTool = await SkillTool.init({ agent: input.agent, config: input.config, skillSurface: surface })
         const output = {
           description: skillTool.description,
