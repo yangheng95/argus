@@ -225,6 +225,7 @@ function equalScreenshotItem(a: ScreenshotBrowserItem | undefined, b: Screenshot
     a.id === b.id &&
     a.role === b.role &&
     a.src === b.src &&
+    a.thumbnailSrc === b.thumbnailSrc &&
     a.alt === b.alt &&
     a.title === b.title &&
     a.detail === b.detail &&

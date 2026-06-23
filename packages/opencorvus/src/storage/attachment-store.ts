@@ -1,6 +1,8 @@
 import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
+import sharp from "sharp"
+import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT as SHARED_SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database, eq } from "@/storage/db"
@@ -78,6 +80,10 @@ const log = Log.create({ service: "attachment-store" })
 
 export namespace AttachmentStore {
   export const ROUTE_PREFIX = "/attachment"
+  export const SCREENSHOT_BROWSER_THUMBNAIL_VARIANT = SHARED_SCREENSHOT_BROWSER_THUMBNAIL_VARIANT
+  export const SCREENSHOT_BROWSER_THUMBNAIL_MIME = "image/webp"
+  const SCREENSHOT_BROWSER_THUMBNAIL_WIDTH = 360
+  const SCREENSHOT_BROWSER_THUMBNAIL_HEIGHT = 240
 
   export type Reference = {
     sha: string
@@ -160,6 +166,71 @@ export namespace AttachmentStore {
     const abs = resolveAbsolute(projectID, name)
     if (!abs) throw new Error(`attachment ${projectID}/${name} is not resolvable`)
     return await fs.readFile(abs)
+  }
+
+  export interface DerivedAttachment {
+    name: string
+    abs: string
+    mime: string
+    size: number
+  }
+
+  function derivedThumbnailName(name: string): string {
+    if (!name || /[/\\?#]/.test(name)) {
+      throw new Error(`AttachmentStore.screenshotBrowserThumbnail: invalid attachment name ${name}`)
+    }
+    const ext = path.extname(name)
+    const stem = ext ? name.slice(0, -ext.length) : name
+    if (!stem) throw new Error(`AttachmentStore.screenshotBrowserThumbnail: invalid attachment name ${name}`)
+    return `${stem}.${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}.webp`
+  }
+
+  function derivedThumbnailDirectory(sourceAbs: string): string {
+    return path.join(path.dirname(sourceAbs), ".derived", SCREENSHOT_BROWSER_THUMBNAIL_VARIANT)
+  }
+
+  export async function screenshotBrowserThumbnail(projectID: string, name: string): Promise<DerivedAttachment> {
+    const sourceAbs = resolveAbsolute(projectID, name)
+    if (!sourceAbs) throw new Error(`attachment ${projectID}/${name} is not resolvable`)
+    const sourceStat = await fs.stat(sourceAbs)
+    if (!sourceStat.isFile()) throw new Error(`attachment ${projectID}/${name} is not a file`)
+
+    const derivedName = derivedThumbnailName(name)
+    const derivedDir = derivedThumbnailDirectory(sourceAbs)
+    const derivedAbs = path.join(derivedDir, derivedName)
+    const existing = await fs.stat(derivedAbs).catch(() => null)
+    if (existing?.isFile()) {
+      return {
+        name: derivedName,
+        abs: derivedAbs,
+        mime: SCREENSHOT_BROWSER_THUMBNAIL_MIME,
+        size: existing.size,
+      }
+    }
+
+    const bytes = await sharp(sourceAbs, { failOn: "error" })
+      .rotate()
+      .resize({
+        width: SCREENSHOT_BROWSER_THUMBNAIL_WIDTH,
+        height: SCREENSHOT_BROWSER_THUMBNAIL_HEIGHT,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 78, effort: 4 })
+      .toBuffer()
+
+    await fs.mkdir(derivedDir, { recursive: true })
+    await fs.writeFile(derivedAbs, bytes, { flag: "wx" }).catch(async (error: NodeJS.ErrnoException) => {
+      if (hasNodeErrorCode(error, "EEXIST")) return
+      throw error
+    })
+    const info = await fs.stat(derivedAbs)
+    return {
+      name: derivedName,
+      abs: derivedAbs,
+      mime: SCREENSHOT_BROWSER_THUMBNAIL_MIME,
+      size: info.size,
+    }
   }
 
   /** Convert a canonical `/attachment/<projectID>/<sha>.<ext>` reference into an AI-SDK data URL. */

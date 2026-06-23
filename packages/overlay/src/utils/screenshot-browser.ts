@@ -1,3 +1,4 @@
+import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 import { normalizeAgentRole, type AgentRole } from "./message"
 import type { CardNode } from "../store/card-tree"
 
@@ -7,6 +8,7 @@ export interface ScreenshotBrowserItem {
   id: string
   role: AgentRole
   src: string
+  thumbnailSrc: string
   alt: string
   title: string
   detail: string
@@ -15,6 +17,8 @@ export interface ScreenshotBrowserItem {
   partID: string
   source: "file" | "tool-browser-evidence" | "tool-attachment"
 }
+
+export { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT }
 
 export interface ScreenshotBrowserGroup {
   role: AgentRole
@@ -70,6 +74,23 @@ function messageRole(message: any): AgentRole {
 
 export function isStoredAttachmentUrl(url: string): boolean {
   return /^\/attachment\/[^/\\?#]+\/[^/\\?#]+$/i.test(url)
+}
+
+export function screenshotBrowserThumbnailUrl(url: string): string {
+  if (!isStoredAttachmentUrl(url)) {
+    throw new Error(`Screenshot thumbnail source must be a stored attachment URL: ${url}`)
+  }
+  return `${url}?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`
+}
+
+export function isScreenshotBrowserThumbnailUrl(url: string): boolean {
+  const [attachmentUrl, query = ""] = url.split("?", 2)
+  const params = new URLSearchParams(query)
+  return (
+    isStoredAttachmentUrl(attachmentUrl) &&
+    params.get("variant") === SCREENSHOT_BROWSER_THUMBNAIL_VARIANT &&
+    Array.from(params.keys()).length === 1
+  )
 }
 
 function isStoredImageReference(input: { url?: unknown; mime?: unknown; mediaType?: unknown }): boolean {
@@ -130,6 +151,7 @@ function browserEvidenceItem(input: {
     id: `tool-browser:${messageID}:${partID}`,
     role: input.role,
     src,
+    thumbnailSrc: screenshotBrowserThumbnailUrl(src),
     alt: title,
     title,
     detail: [firstString(browser?.url), viewportText].filter(Boolean).join(" · "),
@@ -157,6 +179,7 @@ function fileItem(input: {
     id: `file:${messageID}:${partID}`,
     role: input.role,
     src,
+    thumbnailSrc: screenshotBrowserThumbnailUrl(src),
     alt: title,
     title,
     detail: firstString(input.part?.mime, input.part?.mediaType),
@@ -190,6 +213,7 @@ function toolAttachmentItems(input: {
         id: `tool-attachment:${messageID}:${partID}:${attachmentIndex}`,
         role: input.role,
         src,
+        thumbnailSrc: screenshotBrowserThumbnailUrl(src),
         alt: title,
         title,
         detail: firstString(attachment?.mime, attachment?.mediaType, input.part?.tool),

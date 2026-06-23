@@ -12,6 +12,10 @@
 
 export const PROTOCOL_VERSION = 2 as const
 
+// ── Attachment resource variants ──
+
+export const SCREENSHOT_BROWSER_THUMBNAIL_VARIANT = "screenshot-browser-thumbnail" as const
+
 // ── Server route directory policy ──
 
 /**
@@ -28,7 +32,7 @@ export const PROJECT_DIRECTORY_BYPASS_PATHS = [
   "/mission",
 ] as const
 
-export const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/", "/log/"] as const
+export const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/", "/log/", "/attachment/"] as const
 export const REQUEST_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
 export type RequestMethod = (typeof REQUEST_METHODS)[number]
 

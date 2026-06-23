@@ -1,4 +1,5 @@
 import { expect, test, describe, beforeEach, afterEach, mock } from "bun:test"
+import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 import {
   HOST_CAPABILITIES,
   __setHostTransportForTest,
@@ -78,6 +79,43 @@ describe("blob URL cache", () => {
     expect(peekResourceObjectUrl("/attachment/proj/cache-b.png")).toBeUndefined()
     const materialised = await fetchResourceAsObjectUrl("/attachment/proj/cache-b.png")
     expect(peekResourceObjectUrl("/attachment/proj/cache-b.png")).toBe(materialised)
+  })
+
+  test("server-relative resource URLs preserve query parameters through host transport", async () => {
+    const { fetchResourceAsObjectUrl, peekResourceObjectUrl } = await import("../src/services/api")
+    const requests: TransportRequest[] = []
+    const transport = {
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+        requests.push(req)
+        return {
+          status: 200,
+          ok: true,
+          headers: { "content-type": "image/webp" },
+          body: new Uint8Array([1, 2, 3]) as T,
+        }
+      },
+      openStream() {
+        throw new Error("openStream not used")
+      },
+      async native() {
+        throw new Error("native not used")
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    } satisfies HostTransport
+    __setHostTransportForTest(transport)
+
+    const raw = `/attachment/proj/shot.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`
+    const materialised = await fetchResourceAsObjectUrl(raw)
+
+    expect(materialised).toBe("blob:fake-1")
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.path).toBe("attachment/proj/shot.png")
+    expect(requests[0]?.query).toEqual({ variant: SCREENSHOT_BROWSER_THUMBNAIL_VARIANT })
+    expect(peekResourceObjectUrl(raw)).toBe(materialised)
   })
 
   test("concurrent callers for the same URL share a single in-flight fetch", async () => {

@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { closeImagePreview, imagePreviewState, openImagePreview } from "../services/image-preview"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import {
   calculateImagePreviewFitScale,
   calculateImagePreviewOpenScale,
@@ -37,6 +38,7 @@ type CopyFeedback = {
 
 type PreviewableImageAttributes = JSX.ImgHTMLAttributes<HTMLImageElement> &
   Partial<Record<`data-${string}`, string | undefined>>
+type PreviewImageLoader = () => string | Promise<string>
 type ImagePreviewBodyGeometry = {
   left: number
   top: number
@@ -57,12 +59,30 @@ export function PreviewableImage(props: {
   imageClass?: string
   imageDataUI?: string
   imageAttributes?: PreviewableImageAttributes
+  previewLoader?: PreviewImageLoader
 }) {
   const alt = () => props.alt || ""
   const trigger = createMemo(() => imagePreviewTriggerContract({ src: props.src, alt: alt() }))
   const triggerClass = () => imagePreviewTriggerClass(props.triggerClass)
   const imageClass = () => ["md-img", props.imageClass].filter(Boolean).join(" ")
   const imageAttributes = () => props.imageAttributes ?? {}
+  const delegatedPreview = () => !props.previewLoader
+  const loadPreviewSource = async () => (props.previewLoader ? await props.previewLoader() : props.src)
+
+  async function handlePreviewOpen(event: MouseEvent): Promise<void> {
+    event.preventDefault()
+    event.stopPropagation()
+    try {
+      openImagePreview(await loadPreviewSource(), alt())
+    } catch (error) {
+      notifyError({
+        title: t("image_preview.title"),
+        message: t("image_preview.copy_status.source_unavailable"),
+        details: formatErrorDetails(error),
+        centerHistory: true,
+      })
+    }
+  }
 
   return (
     <Button
@@ -72,16 +92,12 @@ export function PreviewableImage(props: {
       tone={trigger().tone}
       class={triggerClass()}
       data-ui={trigger().dataUi}
-      data-image-preview-trigger={trigger().triggerFlag}
-      data-image-preview-src={trigger().src}
-      data-image-preview-alt={trigger().alt}
+      data-image-preview-trigger={delegatedPreview() ? trigger().triggerFlag : undefined}
+      data-image-preview-src={delegatedPreview() ? trigger().src : undefined}
+      data-image-preview-alt={delegatedPreview() ? trigger().alt : undefined}
       title={trigger().label}
       aria-label={trigger().label}
-      onClick={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        openImagePreview(props.src, alt())
-      }}
+      onClick={(event) => void handlePreviewOpen(event)}
     >
       <img
         {...imageAttributes()}

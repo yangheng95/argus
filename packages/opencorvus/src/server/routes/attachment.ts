@@ -48,6 +48,15 @@ function attachmentHeaders(name: string, size: number) {
   return headers
 }
 
+function thumbnailHeaders(size: number) {
+  return {
+    "content-type": AttachmentStore.SCREENSHOT_BROWSER_THUMBNAIL_MIME,
+    "content-length": String(size),
+    "cache-control": "public, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff",
+  }
+}
+
 /**
  * GET /attachment/:projectID/:name
  * Serves a content-addressed attachment previously written by AttachmentStore.
@@ -72,6 +81,20 @@ export const AttachmentRoutes = lazy(() =>
       const name = c.req.param("name")
       if (!projectID || !name || name.includes("/") || name.includes("\\")) {
         return c.text("Not found", 404)
+      }
+      const variant = c.req.query("variant") ?? ""
+      if (variant) {
+        if (variant !== AttachmentStore.SCREENSHOT_BROWSER_THUMBNAIL_VARIANT) return c.text("Not found", 404)
+        const sourceAbs = AttachmentStore.resolveAbsolute(projectID, name)
+        if (!sourceAbs) return c.text("Not found", 404)
+        const sourceInfo = await stat(sourceAbs).catch(() => undefined)
+        if (!sourceInfo || !sourceInfo.isFile()) return c.text("Not found", 404)
+        const thumbnail = await AttachmentStore.screenshotBrowserThumbnail(projectID, name)
+        const body = await readFile(thumbnail.abs)
+        return new Response(body as unknown as BodyInit, {
+          status: 200,
+          headers: thumbnailHeaders(thumbnail.size),
+        })
       }
       const abs = AttachmentStore.resolveAbsolute(projectID, name)
       if (!abs) return c.text("Not found", 404)

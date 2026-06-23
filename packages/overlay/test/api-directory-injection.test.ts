@@ -4,7 +4,7 @@ import path from "node:path"
 import { ProjectDirectoryRequiredError, apiJson, apiRequest, apiUrl, configure } from "../src/services/api"
 import { HOST_CAPABILITIES, __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
-import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol"
+import { routeRequiresProjectDirectory, SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 
 /**
  * 2026-04-30 W2-V31 — overlay api.ts must decide per-path whether to
@@ -100,6 +100,9 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("global/db/mysql/import", () => expectDoesNotInject("global/db/mysql/import"))
     test("global/tasks", () => expectDoesNotInject("global/tasks"))
     test("mission ledger", () => expectDoesNotInject("mission"))
+    test("stored attachment resource", () => expectDoesNotInject("attachment/project/shot.png"))
+    test("stored attachment variant resource", () =>
+      expectDoesNotInject(`attachment/project/shot.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`))
     test("task conversation hydrate", () => expectDoesNotInject("task/abc/conversation"))
     test("task conversation history", () => expectDoesNotInject("task/abc/conversation/history"))
     test("task conversation events", () => expectDoesNotInject("task/abc/conversation/events"))
