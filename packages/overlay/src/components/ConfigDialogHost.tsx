@@ -117,9 +117,34 @@ interface ResizableOptions {
 
 function useResizable(opts: ResizableOptions) {
   let cleanupSession: (() => void) | undefined
+  let pendingMove: { dx: number; dy: number; event: PointerEvent } | undefined
+  let moveFrame = 0
+
+  const cancelPendingMove = () => {
+    if (moveFrame) {
+      cancelAnimationFrame(moveFrame)
+      moveFrame = 0
+    }
+  }
+
+  const flushPendingMove = () => {
+    cancelPendingMove()
+    const pending = pendingMove
+    pendingMove = undefined
+    if (pending) opts.onMove(pending.dx, pending.dy, pending.event)
+  }
+
+  const schedulePendingMove = () => {
+    if (moveFrame) return
+    moveFrame = requestAnimationFrame(() => {
+      moveFrame = 0
+      flushPendingMove()
+    })
+  }
 
   const clearSession = () => {
     if (!cleanupSession) return
+    flushPendingMove()
     cleanupSession()
     cleanupSession = undefined
     opts.onEnd?.()
@@ -131,13 +156,20 @@ function useResizable(opts: ResizableOptions) {
     const startX = event.clientX
     const startY = event.clientY
     const onMove = (moveEvent: PointerEvent) => {
-      opts.onMove(moveEvent.clientX - startX, moveEvent.clientY - startY, moveEvent)
+      pendingMove = {
+        dx: moveEvent.clientX - startX,
+        dy: moveEvent.clientY - startY,
+        event: moveEvent,
+      }
+      schedulePendingMove()
     }
     const onEnd = () => clearSession()
     window.addEventListener("pointermove", onMove)
     window.addEventListener("pointerup", onEnd)
     window.addEventListener("pointercancel", onEnd)
     cleanupSession = () => {
+      cancelPendingMove()
+      pendingMove = undefined
       window.removeEventListener("pointermove", onMove)
       window.removeEventListener("pointerup", onEnd)
       window.removeEventListener("pointercancel", onEnd)
@@ -170,7 +202,7 @@ export function ConfigDialogHost() {
     if (typeof rendered === "number" && Number.isFinite(rendered) && rendered > 0) {
       return clampConfigSidebarWidth(rendered, resizeBounds())
     }
-    return clampConfigSidebarWidth(220 * currentUIScale(), resizeBounds())
+    return resizeBounds().min
   }
 
   const aboutRows = createMemo(() => {
