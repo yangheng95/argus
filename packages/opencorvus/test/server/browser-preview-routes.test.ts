@@ -13,10 +13,10 @@ import {
   BROWSER_PREVIEW_EVIDENCE_KIND,
   latestBrowserPreviewEvidenceIDs,
   persistBrowserPreviewEvidence,
-  persistBrowserPreviewTarget,
 } from "../../src/browser-preview/persist"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
+import { persistTestBrowserPreviewTarget as persistBrowserPreviewTarget } from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 

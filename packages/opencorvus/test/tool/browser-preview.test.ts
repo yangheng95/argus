@@ -22,9 +22,12 @@ import {
   findLatestBrowserPreviewTarget,
   findReadableBrowserPreviewEvidenceByID,
   persistBrowserPreviewEvidence,
-  persistBrowserPreviewTarget,
   resolveRuntimeRelativePath,
 } from "../../src/browser-preview/persist"
+import {
+  persistTestBrowserPreviewTarget as persistBrowserPreviewTarget,
+  TEST_BROWSER_PREVIEW_VIEWPORTS,
+} from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -39,6 +42,15 @@ const baseCtx = {
   ask: async () => {},
 }
 const BROWSER_PREVIEW_TOOL_TEST_TIMEOUT_MILLISECONDS = 30_000
+const BINDING_TOOL_TEST_VIEWPORTS = [
+  { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 360, height: 220 },
+] satisfies typeof TEST_BROWSER_PREVIEW_VIEWPORTS
+
+function browserPreviewToolInput<T extends { viewports?: typeof TEST_BROWSER_PREVIEW_VIEWPORTS }>(
+  input: T,
+): T & { viewports: typeof TEST_BROWSER_PREVIEW_VIEWPORTS } {
+  return { ...input, viewports: input.viewports ?? TEST_BROWSER_PREVIEW_VIEWPORTS }
+}
 
 afterEach(async () => {
   await resetDatabase()
@@ -158,11 +170,11 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: "npm run dev",
                   timeout: 20,
                   leaseTimeout: 200,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -217,11 +229,11 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: "npm run dev",
                   timeout: 1_500,
                   leaseTimeout: 2_000,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -265,12 +277,12 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: "npm run dev",
                   url: preview.url,
                   timeout: 2_500,
                   leaseTimeout: 3_000,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -321,12 +333,12 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: "npm run dev",
                   url: preview.url,
                   timeout: 20,
                   leaseTimeout: 200,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -382,11 +394,11 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: "npm run dev",
                   timeout: 7_000,
                   leaseTimeout: 8_000,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -436,11 +448,11 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: "npm run dev",
                   timeout: 1_000,
                   leaseTimeout: 4_000,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -490,12 +502,12 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: "npm run dev",
                   url: "http://127.0.0.1:9/",
                   timeout: 500,
                   leaseTimeout: 1_500,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -544,11 +556,11 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: `npx vite --host 127.0.0.1 --port ${url.port}`,
                   timeout: 20,
                   leaseTimeout: 200,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -604,11 +616,11 @@ describe("tool.browser_preview", () => {
             try {
               const tool = await BrowserPreviewTool.init()
               const result = await tool.execute(
-                {
+                browserPreviewToolInput({
                   command: `npx vite --host 127.0.0.1 --port ${commandUrl.port}`,
                   timeout: 20,
                   leaseTimeout: 200,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               )
               const payload = JSON.parse(result.output)
@@ -669,12 +681,12 @@ describe("tool.browser_preview", () => {
             const tool = await BrowserPreviewTool.init()
             await expect(
               tool.execute(
-                {
+                browserPreviewToolInput({
                   command: "npm run dev",
                   url: "file:///tmp/index.html",
                   timeout: 20,
                   leaseTimeout: 200,
-                },
+                }),
                 { ...baseCtx, extra: { taskID } },
               ),
             ).rejects.toThrow("Invalid browser preview URL")
@@ -698,11 +710,11 @@ describe("tool.browser_preview", () => {
           const tool = await BrowserPreviewTool.init()
           await expect(
             tool.execute(
-              {
+              browserPreviewToolInput({
                 command: "npm run dev",
                 timeout: 20,
                 leaseTimeout: 200,
-              },
+              }),
               baseCtx,
             ),
           ).rejects.toThrow("requires a task context")
@@ -896,7 +908,7 @@ describe("tool.browser_preview", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
         })
         await Instance.provide({
           directory: tmp.path,
@@ -1020,7 +1032,7 @@ describe("tool.browser_preview", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
         })
         await Instance.provide({
           directory: linkedWorktree,
