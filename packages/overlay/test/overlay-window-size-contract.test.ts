@@ -140,6 +140,18 @@ describe("overlay window and pane size contract", () => {
     expect(spec).not.toContain("Status: Verified")
   })
 
+  test("historical legal-size specs do not advertise removed size sources as active", () => {
+    const compactSpec = readRepo("specs/new-arch/2026-06-23-overlay-compact-legal-frame-query.md")
+    const viewportSpec = readRepo("specs/new-arch/2026-06-22-overlay-viewport-size-contract.md")
+
+    expect(compactSpec).toContain("Status: Superseded 2026-06-23")
+    expect(compactSpec).toContain("unreachable")
+    expect(compactSpec).toContain("Current runtime code must follow")
+    expect(compactSpec).not.toContain("Status: Verified")
+    expect(viewportSpec).not.toContain("--ui-breakpoint-xl")
+    expect(viewportSpec).toContain("generated Tauri config legal")
+  })
+
   test("surface width clamps use the legal overlay container instead of raw viewport width", () => {
     const offenders = readStyleFiles()
       .filter(({ file }) => file !== path.join("src", "styles", "cascade", "base.css"))
@@ -197,8 +209,14 @@ describe("overlay window and pane size contract", () => {
     expect(main).toContain('layoutTokenPx("--ui-workbench-panel-min-width")')
     expect(main).not.toContain("CENTER_WORKBENCH_MIN_PANEL_WIDTH")
     expect(main).not.toContain("80 * scale")
+    expect(main).toContain("const next = stepZoom(delta)")
+    expect(main).toContain('setSettingsStore("zoom", next)')
+    expect(main).not.toContain("settingsStore.zoom || 1")
+    expect(main).not.toContain("sanitizeZoom((settingsStore.zoom || 1)")
     expect(theme).toContain('import { currentUIScale } from "../utils/layout-tokens"')
     expect(theme).toContain("const current = currentUIScale()")
+    expect(theme).toContain("export function stepZoom(delta: number): number")
+    expect(theme).toContain("return setZoom(next)")
     expect(theme).not.toContain('getPropertyValue("--ui-scale") || "1"')
     expect(chatComposer).toContain('import { currentUIScale } from "../utils/layout-tokens"')
     expect(chatComposer).not.toContain("function currentUIScale(): number")

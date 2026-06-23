@@ -1170,3 +1170,160 @@ token source.
 - Rechecked browser test failure: the production separator direction was
   correct; the side activity test sampled widths before frame-split layout had
   settled, so the test harness now waits for stable panel geometry.
+
+## Follow-up 2026-06-23: Center Workbench Pointerdown Frame Owner
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User feedback 2026-06-23 | Illegal aspect ratios and too-small panels are not acceptable; resize work must not make toolbar panels feel stuck. |
+| Aquinas read-only audit | `startCenterWorkbenchPanelResize()` still reads center panel rects synchronously during pointerdown before writing the resizing dataset. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Toolbar-open and resize work must keep DOM writes, layout reads, and layout-affecting follow-up work in explicit frame phases. |
+| This contract | Center workbench panel minimum width remains token-owned by `--ui-workbench-panel-min-width`; no alternate emergency minimum is allowed. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Separator pointerdown | `startCenterWorkbenchPanelResize()` calls `centerWorkbenchPanelResizeMetrics()`, which reads panel rects. | Start a drag session without geometry reads; defer baseline metrics to the existing resize RAF. |
+| Pointermove | `updateCenterWorkbenchPanelResize()` already records `pendingCenterWorkbenchPanelResizeClientX` and schedules `applyCenterWorkbenchPanelResizeOnFrame`. | Keep this as the single pointer geometry owner. |
+| Resize baseline | Existing drag math needs the initial pair widths, total weight, and legal range. | Capture that baseline on the first scheduled resize frame and reuse it for the drag. |
+| Keyboard resize | `resizeCenterWorkbenchPanelByKeyboard()` is a discrete action and still reads metrics before applying one change. | Keep unchanged. |
+| Tests | Static frame scheduler tests and center workbench browser test already cover RAF resize paths. | Extend them to reject pointerdown geometry reads before RAF. |
+
+### Root Cause
+
+Pane drag startup had already been moved out of pointerdown, but the center
+workbench separator kept the older pattern. The first pointerdown read every
+open center panel rect to build resize metrics, then immediately wrote
+`body[data-center-workbench-panel-resizing]`. On multi-panel layouts this keeps
+a high-frequency input event on the same read/write path that the resize
+frame-split work was meant to avoid.
+
+### Fix Plan
+
+1. Change center workbench drag state to store the left panel id plus a nullable
+   baseline.
+2. Make pointerdown only validate the right neighbor, create the drag session,
+   and set resize affordance state.
+3. Resolve and cache the baseline metrics inside
+   `applyPendingCenterWorkbenchPanelResize()`, which already runs from the
+   shared RAF scheduler.
+4. Keep pointermove coalescing, final pointerup flush, and keyboard resize
+   behavior unchanged.
+5. Extend static and browser tests, then run focused tests, typecheck, visual
+   QA, self-review, commit, and push.
+
+### Acceptance
+
+- Center workbench separator pointerdown performs no center panel geometry
+  reads before RAF.
+- Pointermove bursts still coalesce through
+  `applyCenterWorkbenchPanelResizeOnFrame`.
+- Legal resize ranges still come from `--ui-workbench-panel-min-width`.
+- No fallback width, debounce gate, alternate size source, or native resize
+  feedback loop is introduced.
+
+### Implementation
+
+- Center workbench drag state now stores the left panel id plus a nullable
+  baseline.
+- `startCenterWorkbenchPanelResize()` validates only the right neighbor and
+  starts the resize affordance without calling
+  `centerWorkbenchPanelResizeMetrics()`.
+- `applyPendingCenterWorkbenchPanelResize()` resolves and caches the baseline
+  inside the existing RAF scheduler before writing panel weights.
+- The browser separator probe now samples immediately after `pointerdown` and
+  rejects any non-RAF center workbench rect read.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/resize-observer-frame-scheduler.test.ts packages/overlay/test/center-workbench-size.test.ts --timeout 30000`.
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/resize-observer-frame-scheduler.test.ts packages/overlay/test/center-workbench-size.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+- Visual QA reviewed:
+  `.scratch/center-workbench-three-panel-min-width-1120.png`,
+  `.scratch/center-workbench-separator-illegal-narrow-legal-frame.png`, and
+  `.scratch/center-workbench-separator-restored-desktop-resize.png`.
+
+### Self Review
+
+- Rechecked `startCenterWorkbenchPanelResize()`: pointerdown no longer calls
+  the metrics function or reads center panel rects.
+- Rechecked `applyPendingCenterWorkbenchPanelResize()`: legal ranges are still
+  resolved through `centerWorkbenchPanelResizeMetrics()` and
+  `--ui-workbench-panel-min-width`, but from the scheduled frame.
+- Rechecked browser evidence: legal minimum, illegal narrow, and restored
+  desktop screenshots keep panel widths coherent and the right toolbar vertical.
+
+## Follow-up 2026-06-23: Zoom Bridge Single Owner
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Einstein read-only audit | `window.stepZoom` still used `settingsStore.zoom || 1` and duplicated the zoom-step calculation outside `services/theme.ts`. |
+| Generated overlay size contract follow-up | UI scale readers used by resize/panel math must fail fast instead of inventing a default scale. |
+| `services/theme.ts` | `stepZoom()` already derives the current zoom from `currentUIScale()` and `overlayLayoutFrameSize()`. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Global bridge | `installGlobalBridges()` exposes `window.stepZoom` for tests/probes. | Keep the bridge, but make it delegate to the theme service's single zoom-step owner. |
+| Theme service | `stepZoom()` applies the zoom but did not return the applied sanitized value. | Return the applied zoom so callers that persist settings do not recompute it. |
+| Settings store | Existing settings hydration still owns persisted zoom sanitization. | Do not change hydration semantics in this frame-split fix. |
+| Static tests | `overlay-window-size-contract.test.ts` already guards scale fallback removal. | Extend it to reject `settingsStore.zoom || 1` in the bridge and require `theme.stepZoom()` ownership. |
+
+### Root Cause
+
+The generated legal-frame cleanup moved UI scale reads into
+`utils/layout-tokens.ts`, but the legacy global bridge still computed a zoom
+step from persisted settings with `settingsStore.zoom || 1`. That reintroduced
+both a silent default and a duplicate zoom path that bypassed the legal-frame
+calculation in `services/theme.ts`.
+
+### Fix Plan
+
+1. Make `setZoom()` and `stepZoom()` return the sanitized zoom value they
+   applied.
+2. Change `window.stepZoom` to call `stepZoom(delta)` and persist that returned
+   value.
+3. Remove the bridge's local `sanitizeZoom((settingsStore.zoom || 1) + delta)`
+   and duplicate `applyZoom(next)` call.
+4. Extend static coverage and rerun focused tests/typecheck.
+
+### Acceptance
+
+- `window.stepZoom` has no `settingsStore.zoom || 1` fallback.
+- Zoom stepping has one owner in `services/theme.ts` and still uses
+  `currentUIScale()` plus the legal overlay layout frame.
+- The bridge may persist the returned value but does not recompute or reapply
+  zoom itself.
+
+### Implementation
+
+- `setZoom()` and `stepZoom()` now return the sanitized zoom value they apply.
+- `window.stepZoom` delegates to `stepZoom(delta)`, persists the returned
+  value, and no longer calls `sanitizeZoom()` or `applyZoom()` directly.
+- Historical legal-size docs were corrected so the active contract no longer
+  points at removed `--ui-breakpoint-xl` or superseded overlay-shell compact
+  branches.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/resize-observer-frame-scheduler.test.ts packages/overlay/test/center-workbench-size.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+
+### Self Review
+
+- Rechecked `main.tsx`: the bridge contains `const next = stepZoom(delta)` and
+  no `settingsStore.zoom || 1` branch.
+- Rechecked `theme.ts`: `stepZoom()` still reads `currentUIScale()` and
+  `overlayLayoutFrameSize()` before applying the returned zoom value.
+- Rechecked historical specs: the compact legal-frame query note is superseded,
+  and the viewport-size note no longer cites `--ui-breakpoint-xl` as an active
+  source.

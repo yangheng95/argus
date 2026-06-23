@@ -120,6 +120,20 @@ function assertCenterWorkbenchResizeReadsAreDeferred(events: CenterWorkbenchResi
   )
 }
 
+function assertCenterWorkbenchPointerdownHasNoPreFrameGeometryReads(
+  events: CenterWorkbenchResizeEvent[],
+  label: string,
+) {
+  const preFrameRectReads = events.filter(
+    (event) => event.type === "center-workbench-rect-read" && !event.inRaf,
+  )
+  assert.deepEqual(
+    preFrameRectReads,
+    [],
+    `${label}: pointerdown must not synchronously read center workbench geometry: ${JSON.stringify(events)}`,
+  )
+}
+
 async function installCenterWorkbenchResizeInstrumentation(page: OverlayPage) {
   await page.evaluate(() => {
     const win = window as any
@@ -202,6 +216,13 @@ async function collectCenterWorkbenchResizeEvents(page: OverlayPage) {
     }
     const win = window as any
     win.__centerWorkbenchResizePhase = "idle"
+    return Array.from(win.__centerWorkbenchResizeEvents ?? [])
+  })
+}
+
+async function collectCenterWorkbenchResizeEventsNow(page: OverlayPage) {
+  return await page.evaluate<CenterWorkbenchResizeEvent[]>(() => {
+    const win = window as any
     return Array.from(win.__centerWorkbenchResizeEvents ?? [])
   })
 }
@@ -444,9 +465,14 @@ test(
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
       })
       await page.mouse.move(separatorPoint.x, separatorPoint.y)
+      await beginCenterWorkbenchResizeInstrumentation(page)
       await page.mouse.down()
+      const pointerdownEvents = await collectCenterWorkbenchResizeEventsNow(page)
+      assertCenterWorkbenchPointerdownHasNoPreFrameGeometryReads(pointerdownEvents, "separator pointerdown")
       await page.mouse.move(separatorPoint.x + 120, separatorPoint.y, { steps: 8 })
       await page.mouse.up()
+      const pointerDragEvents = await collectCenterWorkbenchResizeEvents(page)
+      assertCenterWorkbenchResizeReadsAreDeferred(pointerDragEvents, "separator pointer drag")
       await page.waitForFunction(
         (previous) =>
           document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!.getBoundingClientRect().width >

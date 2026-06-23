@@ -124,14 +124,16 @@ const ZOOM_STEP = 0.1
 // Set zoom to an absolute value, sanitise, then call applyZoom.
 // effects, which remain.
 
-export function setZoom(value: number): void {
-  applyZoom(sanitizeZoom(value))
+export function setZoom(value: number): number {
+  const next = sanitizeZoom(value)
+  applyZoom(next)
+  return next
 }
 
 // ── stepZoom ──
 // Increment or decrement the current CSS-derived zoom by delta.
 
-export function stepZoom(delta: number): void {
+export function stepZoom(delta: number): number {
   // Read the current zoom from the CSS custom property written by applyZoom.
   // We cannot read state.zoom directly without creating a circular
   // dependency, so we use the value stored in the CSS variable instead.
@@ -143,7 +145,7 @@ export function stepZoom(delta: number): void {
   if (base <= 0) throw new Error(`Overlay zoom base resolved to invalid value: ${base}`)
   const currentZoom = current / base
   const next = Math.round((currentZoom + delta) * 100) / 100
-  setZoom(next)
+  return setZoom(next)
 }
 
 // ── handleZoomHotkey ──
