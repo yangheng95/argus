@@ -1930,16 +1930,20 @@ async function loadTaskTranscript(taskID: string, input: { perSessionLimit?: num
   if (!rootSessionID) return { transcript: [], truncated: false }
   const perSessionLimit =
     typeof input.perSessionLimit === "number" ? Math.max(1, Math.floor(input.perSessionLimit)) : undefined
+  if (perSessionLimit) {
+    const messages = await Message.latestAcrossSessions({ sessionIDs, limit: perSessionLimit + 1 })
+    const truncated = messages.length > perSessionLimit
+    const transcript = truncated ? messages.slice(messages.length - perSessionLimit) : messages
+    annotateTaskTranscriptMessages(transcript, rootSessionID)
+    return {
+      transcript: __displayableConversationTranscriptForTest(transcript),
+      truncated,
+    }
+  }
   let truncated = false
   const all = await Promise.all(
     sessionIDs.map(async (id) => {
-      if (!perSessionLimit) return Session.messages({ sessionID: id })
-      const messages = await Session.messages({ sessionID: id, limit: perSessionLimit + 1 })
-      if (messages.length > perSessionLimit) {
-        truncated = true
-        return messages.slice(messages.length - perSessionLimit)
-      }
-      return messages
+      return Session.messages({ sessionID: id })
     }),
   )
   const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
