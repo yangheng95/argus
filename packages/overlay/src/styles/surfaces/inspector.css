@@ -144,8 +144,8 @@
 }
 
 .browser-preview-candidate-content {
-  min-width: min(calc(420px * var(--ui-scale)), calc(100vw - 32px));
-  max-width: min(calc(560px * var(--ui-scale)), calc(100vw - 32px));
+  min-width: min(calc(420px * var(--ui-scale)), calc(100cqw - 32px));
+  max-width: min(calc(560px * var(--ui-scale)), calc(100cqw - 32px));
 }
 
 .browser-preview-candidate-option {
@@ -439,7 +439,7 @@
   border-color: color-mix(in srgb, var(--bad) 42%, var(--border));
 }
 
-@media (max-width: 720px) {
+@container browser-preview (max-width: 720px) {
   /* breakpoint: compact preview panel */
   .browser-preview-controls {
     align-items: stretch;

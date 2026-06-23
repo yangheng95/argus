@@ -64,7 +64,7 @@
   z-index: 1000;
   overflow: hidden;
   min-width: calc(120px * var(--ui-scale));
-  max-width: min(calc(360px * var(--ui-scale)), calc(100vw - 16px));
+  max-width: min(calc(360px * var(--ui-scale)), calc(100cqw - 16px));
   border: var(--oc-border-width) solid var(--border);
   border-radius: var(--oc-radius-soft);
   background: var(--menu-panel-bg);

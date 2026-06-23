@@ -10,7 +10,7 @@
   right: calc(14px * var(--ui-scale));
   bottom: calc(14px * var(--ui-scale));
   z-index: var(--ui-z-toast);
-  width: min(calc(360px * var(--ui-scale)), calc(100vw - 28px * var(--ui-scale)));
+  width: min(calc(360px * var(--ui-scale)), calc(100cqw - 28px * var(--ui-scale)));
   pointer-events: none;
 }
 

@@ -1732,7 +1732,7 @@ button.s-row:focus-visible {
   min-height: calc(160px * var(--ui-scale));
 }
 
-@media (max-width: 900px) {
+@container overlay-shell (width < 900px) {
   .prompt-profile-layout,
   .prompt-profile-form {
     grid-template-columns: 1fr;
@@ -2129,7 +2129,7 @@ button.s-row:focus-visible {
 .provider-catalog-row {
   align-items: start;
 }
-@media (max-width: 900px) {
+@container overlay-shell (width < 900px) {
   /* breakpoint: --ui-breakpoint-lg */
   .provider-command,
   .provider-settings-row {

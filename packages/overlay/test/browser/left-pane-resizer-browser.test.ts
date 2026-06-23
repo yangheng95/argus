@@ -570,22 +570,22 @@ test(
 
       await resetPaneDragProbe(page)
       await page.setViewport({ width: 900, height: 760 })
-      const compact = await waitForLeftPaneState(
+      const illegalNarrow = await waitForLeftPaneState(
         page,
-        "component compact layout to hide and untab left pane separator",
-        (state) => state.display === "none" && state.tabIndex === -1 && state.now === null,
+        "illegal narrow viewport keeps the legal desktop left pane separator",
+        (state) => state.display === "block" && state.disabled === "false" && state.tabIndex === 0 && state.now !== null,
       )
       await waitForAnimationFrames(page, 3)
-      const compactResize = await paneDragProbeSummary(page)
-      assertPaneViewportResizeGeometryIsDeferred(compactResize, "compact viewport resize")
-      assert.equal(compact.display, "none")
-      assert.equal(compact.disabled, "true")
-      assert.equal(compact.tabIndex, -1)
-      assert.equal(compact.min, null)
-      assert.equal(compact.max, null)
-      assert.equal(compact.now, null)
+      const illegalNarrowResize = await paneDragProbeSummary(page)
+      assertPaneViewportResizeGeometryIsDeferred(illegalNarrowResize, "illegal narrow viewport resize")
+      assert.equal(illegalNarrow.display, "block")
+      assert.equal(illegalNarrow.disabled, "false")
+      assert.equal(illegalNarrow.tabIndex, 0)
+      assert.ok(illegalNarrow.minValue! < illegalNarrow.maxValue!)
+      assert.ok(illegalNarrow.nowValue! >= illegalNarrow.minValue!)
+      assert.ok(illegalNarrow.nowValue! <= illegalNarrow.maxValue!)
       await writeFile(
-        resolve(".scratch", "left-pane-resizer-component-compact-resize.png"),
+        resolve(".scratch", "left-pane-resizer-illegal-narrow-legal-frame.png"),
         await page.screenshot({ fullPage: true }),
       )
 

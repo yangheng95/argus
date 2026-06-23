@@ -1,11 +1,24 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 const OVERLAY_ROOT = path.resolve(import.meta.dir, "..")
 
 function readOverlay(rel: string): string {
   return readFileSync(path.join(OVERLAY_ROOT, rel), "utf8")
+}
+
+function readStyleFiles(dir = path.join(OVERLAY_ROOT, "src/styles")): Array<{ file: string; source: string }> {
+  const files: Array<{ file: string; source: string }> = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...readStyleFiles(fullPath))
+    } else if (entry.isFile() && entry.name.endsWith(".css")) {
+      files.push({ file: path.relative(OVERLAY_ROOT, fullPath), source: readFileSync(fullPath, "utf8") })
+    }
+  }
+  return files
 }
 
 describe("overlay window and pane size contract", () => {
@@ -58,10 +71,37 @@ describe("overlay window and pane size contract", () => {
     expect(base).toContain(
       "height: min(100vh, calc(100vw * var(--ui-overlay-min-height-units) / var(--ui-overlay-min-width-units)))",
     )
-    expect(workspace).toContain("@media (width < 1120px)")
-    expect(activity).toContain("@media (width < 1120px)")
+    expect(base).toContain("container: overlay-shell / inline-size")
+    expect(workspace).toContain("@container overlay-shell (width < 1120px)")
+    expect(activity).toContain("@container overlay-shell (width < 1120px)")
+    expect(workspace).not.toContain("@media (width < 1120px)")
+    expect(activity).not.toContain("@media (width < 1120px)")
     expect(workspace).not.toContain("@media (max-width: 1120px)")
     expect(activity).not.toContain("@media (max-width: 1120px)")
+  })
+
+  test("width responsive CSS uses layout containers instead of raw viewport media queries", () => {
+    const offenders = readStyleFiles().flatMap(({ file, source }) =>
+      Array.from(source.matchAll(/@media\s*\([^)]*\b(?:max-width|min-width|width\s*[<>=])[^)]*\)/g)).map((match) => ({
+        file,
+        query: match[0],
+      })),
+    )
+
+    expect(offenders).toEqual([])
+  })
+
+  test("surface width clamps use the legal overlay container instead of raw viewport width", () => {
+    const offenders = readStyleFiles()
+      .filter(({ file }) => file !== path.join("src", "styles", "cascade", "base.css"))
+      .flatMap(({ file, source }) =>
+        Array.from(source.matchAll(/\b\d+(?:\.\d+)?vw\b/g)).map((match) => ({
+          file,
+          unit: match[0],
+        })),
+      )
+
+    expect(offenders).toEqual([])
   })
 
   test("pane and center workbench minimums are token-owned", () => {
@@ -88,7 +128,8 @@ describe("overlay window and pane size contract", () => {
     expect(layoutFrame).toContain("width: window.innerWidth")
     expect(layoutFrame).toContain("height: window.innerHeight")
     expect(layoutFrame).not.toContain("visualViewport")
-    expect(workspace).toContain("max(var(--ui-workbench-panel-min-width), calc(50vw))")
-    expect(workspace).not.toContain("max(calc(280px * var(--ui-scale)), calc(50vw))")
+    expect(workspace).toContain("max(var(--ui-workbench-panel-min-width), calc(50cqw))")
+    expect(workspace).not.toContain("max(calc(280px * var(--ui-scale)), calc(50cqw))")
+    expect(workspace).not.toContain("calc(50vw)")
   })
 })

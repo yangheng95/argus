@@ -518,17 +518,20 @@ test(
       )
       await beginCenterWorkbenchResizeInstrumentation(page)
       await page.setViewport({ width: 500, height: 720 })
-      await page.waitForFunction(() => document.querySelector<HTMLElement>("#centerWorkbenchSeparatorWorkflow")?.hidden)
-      const narrowResizeEvents = await collectCenterWorkbenchResizeEvents(page)
-      assertCenterWorkbenchResizeReadsAreDeferred(narrowResizeEvents, "narrow viewport resize")
+      await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
+      const illegalNarrowResizeEvents = await collectCenterWorkbenchResizeEvents(page)
+      assertCenterWorkbenchResizeReadsAreDeferred(illegalNarrowResizeEvents, "illegal narrow viewport resize")
       await writeFile(
-        resolve(".scratch", "center-workbench-separator-narrow-resize.png"),
+        resolve(".scratch", "center-workbench-separator-illegal-narrow-legal-frame.png"),
         await page.screenshot({ fullPage: true }),
       )
-      const compact = await separatorState(page)
-      assert.equal(compact.hidden, true)
-      assert.equal(compact.disabled, "true")
-      assert.equal(compact.tabIndex, -1)
+      const illegalNarrow = await separatorState(page)
+      assert.equal(illegalNarrow.hidden, false)
+      assert.equal(illegalNarrow.disabled, "false")
+      assert.equal(illegalNarrow.tabIndex, 0)
+      assert.ok(illegalNarrow.minValue! < illegalNarrow.maxValue!)
+      assert.ok(illegalNarrow.nowValue! >= illegalNarrow.minValue!)
+      assert.ok(illegalNarrow.nowValue! <= illegalNarrow.maxValue!)
 
       await beginCenterWorkbenchResizeInstrumentation(page)
       await page.setViewport({ width: 1280, height: 760 })

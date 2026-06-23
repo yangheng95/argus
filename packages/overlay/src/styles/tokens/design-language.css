@@ -172,7 +172,7 @@
   --oc-brand-claude-code: #d97757;
   --oc-brand-gemini: #8e75b2;
 
-  --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
+  --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22cqw, calc(360px * var(--ui-scale)));
   --ui-rail-min-width: calc(210px * var(--ui-scale));
   --ui-sidebar-width: var(--ui-rail-width);
   --ui-chat-priority-width: calc(640px * var(--ui-scale));

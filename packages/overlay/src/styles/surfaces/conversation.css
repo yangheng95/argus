@@ -219,7 +219,7 @@
   align-self: center;
 }
 
-@media (max-width: 900px) {
+@container chat-workbench (width < 900px) {
   /* breakpoint: --ui-breakpoint-lg */
   .conversation-virtual-item > .card,
   .conversation-virtual-item > .interaction-card,
@@ -952,7 +952,7 @@
 .project-worktree-panel {
   position: fixed;
   z-index: var(--ui-z-titlebar);
-  max-width: min(calc(460px * var(--ui-scale)), calc(100vw - 16px));
+  max-width: min(calc(460px * var(--ui-scale)), calc(100cqw - 16px));
 }
 
 .project-worktree-panel-shell {
@@ -1799,7 +1799,7 @@
    user / system message bubbles stretch full width.
    ───────────────────────────────────────────────────────────── */
 
-@media (max-width: 760px) {
+@container chat-workbench (width < 760px) {
   /* breakpoint: --ui-breakpoint-md */
   .conversation-body {
     flex-direction: column;

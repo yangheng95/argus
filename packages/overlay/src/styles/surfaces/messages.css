@@ -157,7 +157,7 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 520px) {
+@container overlay-shell (width < 520px) {
   /* breakpoint: --ui-breakpoint-sm */
   .msg-browser-evidence {
     grid-template-columns: 1fr;
@@ -530,8 +530,8 @@
 }
 
 .dialog .image-preview-dialog__form {
-  width: min(calc(1040px * var(--ui-scale)), calc(100vw - calc(72px * var(--ui-scale))));
-  max-width: calc(100vw - calc(32px * var(--ui-scale)));
+  width: min(calc(1040px * var(--ui-scale)), calc(100cqw - calc(72px * var(--ui-scale))));
+  max-width: calc(100cqw - calc(32px * var(--ui-scale)));
   height: min(calc(760px * var(--ui-scale)), calc(78vh));
   max-height: calc(100vh - calc(72px * var(--ui-scale)));
   min-height: min(calc(420px * var(--ui-scale)), calc(100vh - calc(96px * var(--ui-scale))));
@@ -604,7 +604,7 @@
 }
 
 .image-preview-dialog__copy-status {
-  max-width: min(calc(240px * var(--ui-scale)), 52vw);
+  max-width: min(calc(240px * var(--ui-scale)), 52cqw);
   min-height: calc(26px * var(--ui-scale));
   display: inline-flex;
   align-items: center;
@@ -837,7 +837,7 @@
   display: none;
 }
 
-@media (max-width: 520px) {
+@container overlay-shell (width < 520px) {
   /* breakpoint: --ui-breakpoint-sm */
   .msg-reasoning {
     gap: calc(4px * var(--ui-scale));
