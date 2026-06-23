@@ -337,8 +337,70 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     const clickCount = await page.evaluate(() => (window as any).__agentRailClickCount || 0)
     assert.equal(clickCount, 1, "plain click must still reach the locate button")
 
-    const startX = Math.round(geometry.right - 24)
-    const y = Math.round(geometry.top + geometry.height / 2)
+    const dragStart = await page.$$eval(
+      '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]',
+      (buttons) => {
+        const lanes = document.querySelector<HTMLElement>(".conversation-agent-rail__lanes")
+        if (!lanes) return null
+        const railRect = lanes.getBoundingClientRect()
+        const visible = buttons
+          .map((button) => {
+            const rect = button.getBoundingClientRect()
+            return {
+              button,
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+              bottom: rect.bottom,
+            }
+          })
+          .filter((rect) => {
+            if (rect.left < railRect.left || rect.right > Math.min(railRect.right - 8, window.innerWidth - 8)) return false
+            if (rect.top < 0 || rect.bottom > window.innerHeight) return false
+            const hit = document.elementFromPoint(rect.x, rect.y)
+            return hit instanceof Element && hit.closest('.oc-button[data-ui="conversation-agent-rail-locate"]') === rect.button
+          })
+        const target = visible.at(-1)
+        return target ? { x: target.x, y: target.y } : null
+      },
+    )
+    assert.ok(dragStart, "drag must start on a visible rail locate button")
+    const startX = Math.round(dragStart.x)
+    const y = Math.round(dragStart.y)
+    await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => {
+      el.scrollLeft = 0
+      delete el.dataset.dragging
+    })
+    await page.mouse.move(startX, y)
+    await page.mouse.down()
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    await page.mouse.move(startX - 64, Math.round(geometry.top - 32))
+    const escapeDragDuringMove = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => ({
+      scrollLeft: el.scrollLeft,
+      dragging: el.dataset.dragging || "",
+    }))
+    await page.mouse.up()
+    const escapeDragAfter = await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => ({
+      scrollLeft: el.scrollLeft,
+      dragging: el.dataset.dragging || "",
+    }))
+    assert.equal(
+      escapeDragDuringMove.dragging,
+      "true",
+      `first move outside rail must still set data-dragging: ${JSON.stringify(escapeDragDuringMove)}`,
+    )
+    assert.ok(
+      escapeDragDuringMove.scrollLeft > 20,
+      `first move outside rail must still scroll: ${JSON.stringify(escapeDragDuringMove)}`,
+    )
+    assert.equal(escapeDragAfter.dragging, "", "escape drag must clear data-dragging after pointerup")
+
+    await page.$eval(".conversation-agent-rail__lanes", (el: HTMLElement) => {
+      el.scrollLeft = 0
+      delete el.dataset.dragging
+    })
     await page.mouse.move(startX, y)
     await page.mouse.down()
     await page.mouse.move(startX - 18, y)

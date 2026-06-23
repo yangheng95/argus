@@ -124,6 +124,8 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
 function attachRailDragScroll(el: HTMLElement): () => void {
   const DRAG_THRESHOLD_PX = 4
   let pointerId: number | null = null
+  let capturedPointerId: number | null = null
+  let capturedPointerTarget: Element | null = null
   let startX = 0
   let startScrollLeft = 0
   let dragging = false
@@ -131,11 +133,17 @@ function attachRailDragScroll(el: HTMLElement): () => void {
 
   function onPointerDown(event: PointerEvent) {
     if (event.pointerType === "mouse" && event.button !== 0) return
+    if (pointerId !== null) return
+    if (!(event.target instanceof Element)) return
+    const captureTarget = event.target
     pointerId = event.pointerId
     startX = event.clientX
     startScrollLeft = el.scrollLeft
     dragging = false
     suppressClick = false
+    captureTarget.setPointerCapture(pointerId)
+    capturedPointerId = pointerId
+    capturedPointerTarget = captureTarget
   }
 
   function onPointerMove(event: PointerEvent) {
@@ -145,12 +153,6 @@ function attachRailDragScroll(el: HTMLElement): () => void {
       if (Math.abs(dx) < DRAG_THRESHOLD_PX) return
       dragging = true
       suppressClick = true
-      try {
-        el.setPointerCapture(pointerId)
-      } catch {
-        // setPointerCapture can throw if the pointer was already
-        // released; the drag still works via the document listeners.
-      }
       el.dataset.dragging = "true"
     }
     el.scrollLeft = startScrollLeft - dx
@@ -159,12 +161,12 @@ function attachRailDragScroll(el: HTMLElement): () => void {
 
   function onPointerEnd(event: PointerEvent) {
     if (pointerId === null || event.pointerId !== pointerId) return
+    if (capturedPointerId === pointerId && capturedPointerTarget?.hasPointerCapture(pointerId)) {
+      capturedPointerTarget.releasePointerCapture(pointerId)
+    }
+    capturedPointerId = null
+    capturedPointerTarget = null
     if (dragging) {
-      try {
-        el.releasePointerCapture(pointerId)
-      } catch {
-        /* same reason as setPointerCapture */
-      }
       delete el.dataset.dragging
     }
     dragging = false
@@ -192,6 +194,12 @@ function attachRailDragScroll(el: HTMLElement): () => void {
     el.removeEventListener("pointerup", onPointerEnd)
     el.removeEventListener("pointercancel", onPointerEnd)
     el.removeEventListener("click", onClickCapture, true)
+    if (capturedPointerId !== null && capturedPointerTarget?.hasPointerCapture(capturedPointerId)) {
+      capturedPointerTarget.releasePointerCapture(capturedPointerId)
+    }
+    capturedPointerId = null
+    capturedPointerTarget = null
+    delete el.dataset.dragging
   }
 }
 
