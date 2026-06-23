@@ -753,7 +753,9 @@ function scheduleTasksCompat(delay = 0): void {
   if (tasksKickTimer) clearTimeout(tasksKickTimer)
   tasksKickTimer = setTimeout(() => {
     tasksKickTimer = null
-    void loadTasks()
+    void loadTasks().catch((err) => {
+      console.error("[task-list-sse] task refresh failed", err)
+    })
   }, delay)
 }
 
