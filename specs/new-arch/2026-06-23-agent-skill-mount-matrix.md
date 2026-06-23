@@ -260,6 +260,24 @@ Backend:
 - Orchestrator and Mission do not receive skill policy or skill tool through mounts.
 - `Skill.Info.agents` remains a compatibility constraint, not a mount source.
 
+### 2026-06-23 runtime contract audit
+
+Codex review feedback after the first mount implementation found a second `skill` tool entry path:
+
+| Callsite | Status |
+| --- | --- |
+| `ToolRegistry.tools()` registry `SkillTool` | Must be rebound with the turn-scoped `SkillMount.resolve()` surface. |
+| `frontend-research` runtime contract `skill` extra tool | Must be rebound with the same surface; the exact runtime contract must not keep a stale `SkillTool.init()` closure. |
+| `frontend-design` runtime contract `skill` extra tool | Must be rebound with the same surface; required-tool filtering must use the exact per-turn tool list. |
+| `visual-qa` runtime contract `skill` extra tool | Must be rebound with the same surface; mounted-but-disabled skills stay unavailable. |
+| MCP or plugin tool named `skill` | Must not shadow OpenCorvus skill policy; `skill` is a reserved canonical tool id. |
+
+`SessionLoop.resolveTools()` is the single binding point after registry, MCP, and runtime-contract
+tools are merged and switches have been applied. If `skill` exists in the final tool map, it is
+replaced by the canonical `SkillTool` initialized with the resolved surface for that exact turn.
+This means a model may still attempt `skill({"name":"..."})`, but an unmounted or disabled skill
+fails at execution and cannot return full skill content.
+
 Overlay:
 
 - Agent Skills panel renders pool + agent matrix from `/skill/mounts`.
