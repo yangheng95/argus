@@ -40,7 +40,7 @@ export async function reloadTerminalProfileSelection(input: {
       throw new Error(input.defaultProfileMissingMessage)
     }
     const current = selectedTerminalProfileID()
-    const selected = response.profiles.some((profile) => profile.id === current) ? current : response.defaultProfileID
+    const selected = response.profiles.some((profile) => profile.id === current) ? current : ""
     setTerminalProfiles(response.profiles)
     setDefaultTerminalProfileID(response.defaultProfileID)
     setSelectedTerminalProfileID(selected)

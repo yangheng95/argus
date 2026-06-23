@@ -56,10 +56,31 @@ describe("system terminal generated profile drift", () => {
     ).toBe(true)
   })
 
-  test("does not rewrite a generated profile that still resolves on this host", () => {
+  test("detects generated drift when the generated profile is not supported on the current host platform", () => {
+    const terminal = generatedBashProfile("C:\\Windows\\System32\\bash.exe")
+
+    expect(TerminalProfile.shouldRegenerateGeneratedProfilesForTest(terminal, (command) => command, "win32")).toBe(true)
+  })
+
+  test("does not rewrite a generated profile that still resolves on a supported host platform", () => {
     const terminal = generatedBashProfile("/bin/bash")
 
-    expect(TerminalProfile.shouldRegenerateGeneratedProfilesForTest(terminal, (command) => command)).toBe(false)
+    expect(TerminalProfile.shouldRegenerateGeneratedProfilesForTest(terminal, (command) => command, "linux")).toBe(false)
+  })
+
+  test("does not include Bash in generated Windows terminal profiles", () => {
+    const terminal = TerminalProfile.createSystemTerminalProfilesForTest({
+      platform: "win32",
+      env: {
+        ComSpec: "C:\\Windows\\System32\\cmd.exe",
+      },
+      resolveCommand(command) {
+        return command
+      },
+    })
+
+    expect(terminal?.default_profile_id).toBe("powershell")
+    expect(Object.keys(terminal?.profiles ?? {})).toEqual(["powershell", "pwsh", "cmd"])
   })
 
   test("rewrites stale generated profiles in the project .opencorvus config", async () => {

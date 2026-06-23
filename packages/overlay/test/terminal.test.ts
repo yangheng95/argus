@@ -6,7 +6,9 @@ import { HOST_CAPABILITIES, __setHostTransportForTest, type HostTransport } from
 import { listTerminalProfiles, openSystemTerminal } from "../src/services/terminal"
 import {
   clearTerminalProfileSelection,
+  currentTerminalProfileID,
   reloadTerminalProfileSelection,
+  selectTerminalProfileID,
   selectedTerminalProfileID,
   terminalProfiles,
 } from "../src/services/terminal-selection"
@@ -106,7 +108,108 @@ describe("terminal client", () => {
     await Promise.all([first, second])
 
     expect(terminalProfiles()).toEqual([{ id: "powershell", label: "PowerShell", icon: "powershell" }])
-    expect(selectedTerminalProfileID()).toBe("powershell")
+    expect(selectedTerminalProfileID()).toBe("")
+    expect(currentTerminalProfileID()).toBe("powershell")
+  })
+
+  test("server default terminal profile remains implicit across default changes", async () => {
+    let requestCount = 0
+    const responses = [
+      {
+        defaultProfileID: "bash",
+        profiles: [
+          { id: "bash", label: "Bash", icon: "bash" },
+          { id: "powershell", label: "PowerShell", icon: "powershell" },
+        ],
+      },
+      {
+        defaultProfileID: "powershell",
+        profiles: [
+          { id: "powershell", label: "PowerShell", icon: "powershell" },
+          { id: "cmd", label: "Command Prompt", icon: "command-prompt" },
+        ],
+      },
+    ]
+    const transport: HostTransport = {
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      async request(req) {
+        expect(req.path).toBe("terminal/profiles")
+        requestCount += 1
+        const body = responses.shift()
+        if (!body) throw new Error("unexpected terminal profile request")
+        return { status: 200, ok: true, headers: {}, body }
+      },
+      openStream() {
+        throw new Error("openStream not used in terminal default selection test")
+      },
+      async native() {
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    }
+    __setHostTransportForTest(transport)
+
+    await reloadTerminalProfileSelection({
+      directory: "C:/repo/app",
+      defaultProfileMissingMessage: "missing default terminal",
+    })
+
+    expect(requestCount).toBe(1)
+    expect(selectedTerminalProfileID()).toBe("")
+    expect(currentTerminalProfileID()).toBe("bash")
+
+    await reloadTerminalProfileSelection({
+      directory: "C:/repo/app",
+      defaultProfileMissingMessage: "missing default terminal",
+    })
+
+    expect(requestCount).toBe(2)
+    expect(selectedTerminalProfileID()).toBe("")
+    expect(currentTerminalProfileID()).toBe("powershell")
+  })
+
+  test("explicit terminal profile selection survives reload while still valid", async () => {
+    const response = {
+      defaultProfileID: "powershell",
+      profiles: [
+        { id: "powershell", label: "PowerShell", icon: "powershell" },
+        { id: "cmd", label: "Command Prompt", icon: "command-prompt" },
+      ],
+    }
+    const transport: HostTransport = {
+      kind: "tauri",
+      capabilities: HOST_CAPABILITIES.tauri,
+      async request(req) {
+        expect(req.path).toBe("terminal/profiles")
+        return { status: 200, ok: true, headers: {}, body: response }
+      },
+      openStream() {
+        throw new Error("openStream not used in terminal explicit selection test")
+      },
+      async native() {
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe() {} }
+      },
+    }
+    __setHostTransportForTest(transport)
+
+    await reloadTerminalProfileSelection({
+      directory: "C:/repo/app",
+      defaultProfileMissingMessage: "missing default terminal",
+    })
+    selectTerminalProfileID("cmd")
+    await reloadTerminalProfileSelection({
+      directory: "C:/repo/app",
+      defaultProfileMissingMessage: "missing default terminal",
+    })
+
+    expect(selectedTerminalProfileID()).toBe("cmd")
+    expect(currentTerminalProfileID()).toBe("cmd")
   })
 
   test("workspace launchers reload profile data only when the directory key changes", () => {
