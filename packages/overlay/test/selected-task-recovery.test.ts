@@ -666,9 +666,7 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
   expect(requests).toEqual(["task/tsk_db_tail_stream/conversation"])
   expect(card).toBeDefined()
   expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_db_tail"])
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(
-    "assistant:session:ses_db_tail:message:msg_db_tail",
-  )
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("assistant:session:ses_db_tail:message:msg_db_tail")
   expect(
     card?.parts.some(
       (part: any) =>

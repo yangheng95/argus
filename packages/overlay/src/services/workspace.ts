@@ -343,7 +343,9 @@ export function closeProject(): void {
   configureApi({ directory: "" })
   enterEmptyWorkspace({ restoreDirectory: false })
   clearProjectScopeData()
-  saveSettings()
+  void saveSettings().catch((error) => {
+    AppLog.error("ui", "Failed to persist closed project settings", { error: String(error) })
+  })
 }
 
 function directoryIdentity(value: string): string {

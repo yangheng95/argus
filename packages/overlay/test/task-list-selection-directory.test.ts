@@ -18,6 +18,6 @@ test("TaskList row selection carries the clicked task directory into selectTask"
   expect(taskList).not.toContain("props.onSelectTask(id())")
 
   expect(main).toContain("function selectTaskFromTaskList(taskID: string, directory?: string): void")
-  expect(main).toContain("void selectTask(taskID, { directory })")
+  expect(main).toContain('runMainAsync("task.select-from-list", () => selectTask(taskID, { directory }))')
   expect(main).not.toContain("void selectTask(taskID)\n")
 })

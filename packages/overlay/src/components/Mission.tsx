@@ -261,7 +261,9 @@ function MissionContent(props: MissionProps) {
         onDeleteMission={(mission) => void handleMissionDelete(mission)}
         onRenameMission={(mission, title) => void handleMissionRename(mission, title)}
         actionBusy={actionBusy()}
-        onRetry={() => void missionRecordsCtl.refetch()}
+        onRetry={() => {
+          void Promise.resolve(missionRecordsCtl.refetch()).catch((error) => reportActionError("retry", error))
+        }}
         hasMore={missionRecords()?.hasMore}
         loadingMore={missionsLoadingMore()}
         onLoadMore={() => void handleMissionLoadMore()}
