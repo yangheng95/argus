@@ -311,13 +311,6 @@ function skillSourceRoot(item: SkillItem): string {
   return roots.find((root) => location.includes(`/${root}/`) || location.includes(`${root}/`)) || ""
 }
 
-function agentColumnLabel(name: string): string {
-  const parts = name.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  if (parts.length <= 1) return name.slice(0, 4)
-  const compact = parts.map((part) => part[0]).join("")
-  return (compact || name).slice(0, 4)
-}
-
 // ── Extension Settings Panels ──
 
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
@@ -435,16 +428,18 @@ function ExtensionSettingsPanel(props: {
     const matrix = mounts()
     if (!matrix) return []
     const rows = new Map(matrix.matrix.map((row) => [row.agent, row.mounted]))
-    return matrix.agents.map((agent) => ({
-      ...agent,
-      mounted: rows.get(agent.name) ?? [],
-    })) as AgentSkillRow[]
+    return matrix.agents
+      .filter((agent) => agent.skill_tool_available)
+      .map((agent) => ({
+        ...agent,
+        mounted: rows.get(agent.name) ?? [],
+      })) as AgentSkillRow[]
   })
   const matrixGridTemplate = createMemo(() => {
     const agentColumns = agentRows()
-      .map(() => "minmax(calc(28px * var(--ui-scale)), calc(28px * var(--ui-scale)))")
+      .map((agent) => `minmax(${Math.max(14, agent.name.length + 4)}ch, max-content)`)
       .join(" ")
-    return `minmax(calc(120px * var(--ui-scale)), 1fr) ${agentColumns}`.trim()
+    return `minmax(calc(180px * var(--ui-scale)), calc(260px * var(--ui-scale))) ${agentColumns}`.trim()
   })
   const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp as Record<string, McpItem>) }))
   const market = createMemo((): MarketItem[] => [...(appStore.skillMarket as MarketItem[])])
@@ -972,10 +967,7 @@ function ExtensionSettingsPanel(props: {
                           void handleAgentDrop(agent.name, event)
                         }}
                       >
-                        <span>{agentColumnLabel(agent.name)}</span>
-                        <Show when={!agent.skill_tool_available}>
-                          <span class="agent-skill-grid-cell__reason">{t("skill.mount.no_skill_tool")}</span>
-                        </Show>
+                        <span>{agent.name}</span>
                       </div>
                     )}
                   </For>

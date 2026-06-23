@@ -81,80 +81,138 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       policy: "deny",
     },
   ]
+  const visibleAgents = [
+    {
+      name: "coding-assistant",
+      description: "Coding assistant",
+      mode: "primary",
+      hidden: false,
+      native: true,
+      skill_tool_available: true,
+    },
+    {
+      name: "requirements",
+      description: "Requirements agent",
+      mode: "primary",
+      hidden: false,
+      native: true,
+      skill_tool_available: true,
+    },
+    {
+      name: "architect",
+      description: "Architecture agent",
+      mode: "subagent",
+      hidden: false,
+      native: true,
+      skill_tool_available: true,
+    },
+    {
+      name: "build",
+      description: "Build agent",
+      mode: "subagent",
+      hidden: false,
+      native: true,
+      skill_tool_available: true,
+    },
+    {
+      name: "frontend-research",
+      description: "Frontend research agent",
+      mode: "subagent",
+      hidden: false,
+      native: true,
+      skill_tool_available: true,
+    },
+    {
+      name: "visual-qa",
+      description: "Visual quality agent",
+      mode: "subagent",
+      hidden: false,
+      native: true,
+      skill_tool_available: true,
+    },
+    {
+      name: "content",
+      description: "Content agent",
+      mode: "subagent",
+      hidden: false,
+      native: true,
+      skill_tool_available: true,
+    },
+    {
+      name: "summarizer",
+      description: "Summarizer agent",
+      mode: "subagent",
+      hidden: false,
+      native: true,
+      skill_tool_available: true,
+    },
+  ] as const
+  const unavailableAgents = [
+    {
+      name: "mission",
+      description: "Mission orchestrator",
+      mode: "primary",
+      hidden: true,
+      native: true,
+      skill_tool_available: false,
+    },
+    {
+      name: "orchestrator",
+      description: "Orchestrator",
+      mode: "primary",
+      hidden: true,
+      native: true,
+      skill_tool_available: false,
+    },
+  ] as const
+  const baseMatrixRows = [
+    { agent: "coding-assistant", mounted: [] },
+    {
+      agent: "requirements",
+      mounted: [
+        {
+          name: "opencorvus-plan",
+          description: "Project planning workflow loaded from .opencorvus.",
+          location: "D:/overlay/workspace/app/.opencorvus/skills/opencorvus-plan/SKILL.md",
+          enabled: true,
+        },
+      ],
+    },
+    {
+      agent: "architect",
+      mounted: [
+        {
+          name: "opencorvus-plan",
+          description: "Project planning workflow loaded from .opencorvus.",
+          location: "D:/overlay/workspace/app/.opencorvus/skills/opencorvus-plan/SKILL.md",
+          enabled: true,
+        },
+      ],
+    },
+    {
+      agent: "build",
+      mounted: [
+        {
+          name: "codex-review",
+          description: "Codex review skill mounted but disabled by server evidence.",
+          location: "D:/overlay/workspace/app/.codex/skills/codex-review/SKILL.md",
+          enabled: false,
+          reason: "permission_denied",
+        },
+      ],
+    },
+    { agent: "frontend-research", mounted: [] },
+    { agent: "visual-qa", mounted: [] },
+    { agent: "content", mounted: [] },
+    { agent: "summarizer", mounted: [] },
+    { agent: "mission", mounted: [] },
+    { agent: "orchestrator", mounted: [] },
+  ]
   const mountMatrix = {
     scope: "project",
     skills,
-    agents: [
-      {
-        name: "requirements",
-        description: "Requirements agent",
-        mode: "primary",
-        hidden: false,
-        native: true,
-        skill_tool_available: true,
-      },
-      {
-        name: "architect",
-        description: "Architecture agent",
-        mode: "subagent",
-        hidden: false,
-        native: true,
-        skill_tool_available: true,
-      },
-      {
-        name: "build",
-        description: "Build agent",
-        mode: "subagent",
-        hidden: false,
-        native: true,
-        skill_tool_available: true,
-      },
-      {
-        name: "mission",
-        description: "Mission orchestrator",
-        mode: "primary",
-        hidden: true,
-        native: true,
-        skill_tool_available: false,
-      },
-    ],
-    matrix: [
-      {
-        agent: "requirements",
-        mounted: [
-          {
-            name: "opencorvus-plan",
-            description: "Project planning workflow loaded from .opencorvus.",
-            location: "D:/overlay/workspace/app/.opencorvus/skills/opencorvus-plan/SKILL.md",
-            enabled: true,
-          },
-        ],
-      },
-      {
-        agent: "architect",
-        mounted: [
-          {
-            name: "opencorvus-plan",
-            description: "Project planning workflow loaded from .opencorvus.",
-            location: "D:/overlay/workspace/app/.opencorvus/skills/opencorvus-plan/SKILL.md",
-            enabled: true,
-          },
-        ],
-      },
-      {
-        agent: "build",
-        mounted: [
-          {
-            name: "codex-review",
-            description: "Codex review skill mounted but disabled by server evidence.",
-            location: "D:/overlay/workspace/app/.codex/skills/codex-review/SKILL.md",
-            enabled: false,
-            reason: "permission_denied",
-          },
-        ],
-      },
-      { agent: "mission", mounted: [] },
-    ],
+    agents: [...visibleAgents, ...unavailableAgents],
+    matrix: baseMatrixRows,
     project_mounts: {
       agents: {
         requirements: ["opencorvus-plan"],
@@ -229,6 +287,32 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     if (path === "/mcp") return send({})
     if (path === "/skill/installed" || path === "/skill") return send(skills)
     if (path === "/skill/mounts") return send(mountMatrix)
+    if (path === "/skill/mount" && req.method === "POST") {
+      const updatedSkills = mountMatrix.skills
+        .map((skill) =>
+          skill.name === "claude-debug"
+            ? { ...skill, mounted_agents: ["requirements"], unmounted: false, warning: undefined }
+            : skill,
+        )
+        .reverse()
+      const updatedRows = mountMatrix.matrix.map((row) =>
+        row.agent === "requirements"
+          ? {
+              ...row,
+              mounted: [
+                ...row.mounted,
+                {
+                  name: "claude-debug",
+                  description: "Claude compatibility skill kept in the pool until mounted.",
+                  location: "D:/overlay/workspace/app/.claude/skills/claude-debug/SKILL.md",
+                  enabled: true,
+                },
+              ],
+            }
+          : row,
+      )
+      return send({ ...mountMatrix, skills: updatedSkills, matrix: updatedRows, unmounted_count: 1 })
+    }
     if (path === "/skill/market") return send([])
     if (path === "/skill/directories") {
       return send({
@@ -301,7 +385,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
           text.includes("claude-debug") &&
           text.includes("agents-legacy") &&
           text.includes("permission_denied") &&
-          text.includes("Unavailable")
+          text.includes("frontend-research")
         )
       })
     } catch (error) {
@@ -335,37 +419,77 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
           text: (item.textContent || "").trim(),
         }
       })
+      const gridRect = grid?.getBoundingClientRect()
+      const headers = Array.from(node.querySelectorAll(".agent-skill-grid-agent")).map((item) =>
+        (item.textContent || "").trim(),
+      )
+      const rowNames = Array.from(node.querySelectorAll(".agent-skill-grid-skill__name")).map((item) =>
+        (item.textContent || "").trim(),
+      )
+      const corner = node.querySelector(".agent-skill-grid-corner") as HTMLElement | null
+      const rowHeader = node.querySelector(".agent-skill-grid-skill") as HTMLElement | null
+      const topHeader = node.querySelector(".agent-skill-grid-agent") as HTMLElement | null
       return {
         matrix: { left: matrix.left, right: matrix.right, width: matrix.width },
-        overflowX: node.scrollWidth - node.clientWidth,
-        gridWidth: grid?.getBoundingClientRect().width ?? 0,
+        overflowX: (grid?.scrollWidth ?? 0) - (grid?.clientWidth ?? 0),
+        gridWidth: gridRect?.width ?? 0,
+        gridScrollWidth: grid?.scrollWidth ?? 0,
+        gridClientWidth: grid?.clientWidth ?? 0,
         sourceListVisible: !!sourceList && sourceList.getBoundingClientRect().height > 0,
         dropZoneVisible: !!dropZone && dropZone.getBoundingClientRect().height > 0,
+        headers,
+        rowNames,
         skillRows: node.querySelectorAll(".agent-skill-grid-skill").length,
         agentHeaders: node.querySelectorAll(".agent-skill-grid-agent").length,
         mountedCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="mounted"]').length,
         conflictCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="conflict"]').length,
         unavailableCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="unavailable"]').length,
+        cornerBackground: corner ? getComputedStyle(corner).backgroundColor : "",
+        rowHeaderBackground: rowHeader ? getComputedStyle(rowHeader).backgroundColor : "",
+        topHeaderBackground: topHeader ? getComputedStyle(topHeader).backgroundColor : "",
+        cornerPosition: corner ? getComputedStyle(corner).position : "",
+        rowHeaderPosition: rowHeader ? getComputedStyle(rowHeader).position : "",
+        topHeaderPosition: topHeader ? getComputedStyle(topHeader).position : "",
         measured,
       }
     })
 
     assert.equal(screenshot.endsWith("skill-mount-matrix-panel.png"), true)
     assert.ok(layout.gridWidth > 180, "matrix grid should have visible width")
-    assert.ok(layout.overflowX <= 1, "matrix should not create horizontal overflow")
+    assert.ok(layout.gridScrollWidth > layout.gridClientWidth, "full agent names should use horizontal matrix scroll")
     assert.equal(layout.sourceListVisible, false, "compact skill matrix must not show the source management list")
     assert.equal(layout.dropZoneVisible, false, "compact skill matrix must not show the global drop zone")
     assert.equal(layout.skillRows, 4, "each skill should render once as a matrix row")
-    assert.equal(layout.agentHeaders, 4, "each agent should render as a matrix column header")
+    assert.equal(layout.agentHeaders, visibleAgents.length, "only skill-mountable agents should render as columns")
+    assert.deepEqual(layout.rowNames, ["opencorvus-plan", "claude-debug", "agents-legacy", "codex-review"])
+    assert.ok(layout.headers.includes("frontend-research"), "agent header should use the full agent name")
+    assert.equal(layout.headers.includes("mission"), false, "agents without skill tool should not render as X columns")
+    assert.equal(layout.headers.includes("orchestrator"), false, "orchestrator should not render as an unsettable column")
     assert.equal(layout.mountedCells, 2, "enabled mounts should render as cell state")
     assert.equal(layout.conflictCells, 1, "disabled mounted skills should render as conflict cells")
-    assert.ok(layout.unavailableCells >= 4, "unavailable agent cells should render disabled state")
-    assert.ok(layout.measured.length >= 20, "grid rows and cells should render")
+    assert.equal(layout.unavailableCells, 0, "unavailable agent columns should be removed")
+    assert.equal(layout.cornerPosition, "sticky")
+    assert.equal(layout.rowHeaderPosition, "sticky")
+    assert.equal(layout.topHeaderPosition, "sticky")
+    assert.notEqual(layout.cornerBackground, "rgba(0, 0, 0, 0)")
+    assert.notEqual(layout.rowHeaderBackground, "rgba(0, 0, 0, 0)")
+    assert.notEqual(layout.topHeaderBackground, "rgba(0, 0, 0, 0)")
+    assert.ok(layout.measured.length >= 40, "grid rows and cells should render")
     for (const item of layout.measured) {
       assert.ok(item.width > 12 && item.height > 10, `${item.text} should have visible dimensions`)
       assert.ok(item.left >= layout.matrix.left - 1, `${item.text} should not overflow left`)
-      assert.ok(item.right <= layout.matrix.right + 1, `${item.text} should not overflow right`)
     }
+
+    await page.click('#leftPanelSkills [aria-label="Mount skill: claude-debug -> requirements"]')
+    await page.waitForFunction(() => {
+      const names = Array.from(document.querySelectorAll("#leftPanelSkills .agent-skill-grid-skill__name")).map(
+        (item) => (item.textContent || "").trim(),
+      )
+      const mounted = document.querySelector(
+        '#leftPanelSkills [aria-label="Unmount: claude-debug -> requirements"]',
+      )
+      return mounted && names.join("|") === "opencorvus-plan|claude-debug|agents-legacy|codex-review"
+    })
 
     await page.click('#leftPanelSkills[data-active="true"] [data-ui="tool-panel-action"][aria-label="Add Skill"]')
     await page.waitForSelector("#leftPanelSkills .config-inline-form")
@@ -395,6 +519,79 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         compactForm.browse.top < compactForm.input.bottom &&
         compactForm.browse.bottom > compactForm.input.top,
       "browse icon must stay inline with input",
+    )
+
+    await page.click('[data-menu-trigger="settings"]')
+    await page.waitForSelector('[data-testid="titlebar-menu-settings"]')
+    await page.click('[data-testid="titlebar-settings-skill"]')
+    await page.waitForSelector('#configDialog [data-config-panel="skill"] .agent-skill-matrix-grid')
+    const settingsScreenshot = await saveElementScreenshot(
+      page,
+      '#configDialog [data-config-panel="skill"] .agent-skill-matrix',
+      "skill-mount-matrix-settings-panel.png",
+    )
+    const settingsLayout = await page.$eval(
+      '#configDialog [data-config-panel="skill"] .agent-skill-matrix',
+      (node: HTMLElement) => {
+        const grid = node.querySelector(".agent-skill-matrix-grid") as HTMLElement
+        const corner = node.querySelector(".agent-skill-grid-corner") as HTMLElement
+        const rowHeader = node.querySelector(".agent-skill-grid-skill") as HTMLElement
+        const topHeader = node.querySelector(".agent-skill-grid-agent") as HTMLElement
+        const headers = Array.from(node.querySelectorAll(".agent-skill-grid-agent")).map((item) =>
+          (item.textContent || "").trim(),
+        )
+        const rowNames = Array.from(node.querySelectorAll(".agent-skill-grid-skill__name")).map((item) =>
+          (item.textContent || "").trim(),
+        )
+        const firstCell = node.querySelector(".agent-skill-grid-cell") as HTMLElement
+        const gridStyle = getComputedStyle(grid)
+        const gridRect = grid.getBoundingClientRect()
+        return {
+          display: gridStyle.display,
+          columns: gridStyle.gridTemplateColumns,
+          height: gridRect.height,
+          scrollWidth: grid.scrollWidth,
+          clientWidth: grid.clientWidth,
+          headers,
+          rowNames,
+          unavailableCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="unavailable"]').length,
+          cornerBackground: getComputedStyle(corner).backgroundColor,
+          rowHeaderBackground: getComputedStyle(rowHeader).backgroundColor,
+          topHeaderBackground: getComputedStyle(topHeader).backgroundColor,
+          cornerPosition: getComputedStyle(corner).position,
+          rowHeaderPosition: getComputedStyle(rowHeader).position,
+          topHeaderPosition: getComputedStyle(topHeader).position,
+          firstCellWidth: firstCell.getBoundingClientRect().width,
+          topHeaderWidth: topHeader.getBoundingClientRect().width,
+          text: node.textContent || "",
+        }
+      },
+    )
+    assert.equal(settingsScreenshot.endsWith("skill-mount-matrix-settings-panel.png"), true)
+    assert.equal(settingsLayout.display, "grid")
+    assert.ok(settingsLayout.height >= 140, "settings matrix must be visibly rendered above the skill registry")
+    assert.ok(settingsLayout.columns.includes("px"), "settings matrix should receive explicit grid columns")
+    assert.ok(settingsLayout.scrollWidth > settingsLayout.clientWidth, "settings matrix should scroll instead of crushing headers")
+    assert.ok(settingsLayout.headers.includes("frontend-research"), "settings matrix should show full agent names")
+    assert.equal(settingsLayout.headers.includes("mission"), false)
+    assert.equal(settingsLayout.headers.includes("orchestrator"), false)
+    assert.equal(settingsLayout.text.includes("Unavailable"), false)
+    assert.equal(settingsLayout.unavailableCells, 0)
+    assert.deepEqual(settingsLayout.rowNames, ["opencorvus-plan", "claude-debug", "agents-legacy", "codex-review"])
+    assert.equal(settingsLayout.cornerPosition, "sticky")
+    assert.equal(settingsLayout.rowHeaderPosition, "sticky")
+    assert.equal(settingsLayout.topHeaderPosition, "sticky")
+    assert.notEqual(settingsLayout.cornerBackground, "rgba(0, 0, 0, 0)")
+    assert.notEqual(settingsLayout.rowHeaderBackground, "rgba(0, 0, 0, 0)")
+    assert.notEqual(settingsLayout.topHeaderBackground, "rgba(0, 0, 0, 0)")
+    assert.ok(settingsLayout.firstCellWidth >= 70, "settings matrix cells must not collapse into icon strips")
+    assert.ok(
+      settingsLayout.topHeaderWidth >= 110,
+      `agent headers must reserve full-name width: ${JSON.stringify({
+        width: settingsLayout.topHeaderWidth,
+        columns: settingsLayout.columns,
+        headers: settingsLayout.headers,
+      })}`,
     )
   } finally {
     await browser.close()
