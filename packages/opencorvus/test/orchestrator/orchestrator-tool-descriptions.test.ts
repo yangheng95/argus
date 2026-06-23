@@ -143,6 +143,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.frontend_research.description).toContain("call frontend_research separately for additional pages")
     expect(tools.frontend_research.description).toContain("host prepares rendered webpage evidence")
     expect(tools.frontend_research.description).toContain("partitions that evidence into source-backed work packets")
+    expect(tools.frontend_research.description).toContain("Page Skeleton Blueprint")
+    expect(tools.frontend_research.description).toContain("frontend_design consumes as page information architecture")
     expect(tools.frontend_research.description).toContain("small registration tools")
     expect(tools.frontend_research.description).not.toContain("dispatch once for the relevant webpage investigation scope")
     expect(tools.frontend_research.description).not.toContain("does not acquire webpage evidence itself")

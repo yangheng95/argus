@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import path from "node:path"
+import {
+  appendNonExecutorSourceBoundary,
+  NON_EXECUTOR_SOURCE_BOUNDARY_PROMPT,
+  shouldAppendNonExecutorSourceBoundary,
+} from "../../src/prompt/non-executor-source-boundary"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const coreDir = path.join(repoRoot, "packages/opencorvus/src/prompt/core")
@@ -134,6 +139,28 @@ describe("core prompt hygiene", () => {
     }
   })
 
+  test("generic non-executor prompt boundary limits broad source reads and irrelevant skills", async () => {
+    expect(shouldAppendNonExecutorSourceBoundary("frontend-design")).toBe(true)
+    expect(shouldAppendNonExecutorSourceBoundary("requirements")).toBe(true)
+    expect(shouldAppendNonExecutorSourceBoundary("orchestrator")).toBe(true)
+    expect(shouldAppendNonExecutorSourceBoundary("build")).toBe(false)
+    expect(shouldAppendNonExecutorSourceBoundary("integrity")).toBe(false)
+    expect(shouldAppendNonExecutorSourceBoundary("visual-qa")).toBe(false)
+
+    expect(appendNonExecutorSourceBoundary({ agentID: "frontend-design", prompt: "CORE" })).toContain(
+      "## Non-Executor Source Boundary",
+    )
+    expect(appendNonExecutorSourceBoundary({ agentID: "build", prompt: "CORE" })).toBe("CORE")
+    expect(NON_EXECUTOR_SOURCE_BOUNDARY_PROMPT).toContain("do not read or write broad project source areas")
+    expect(NON_EXECUTOR_SOURCE_BOUNDARY_PROMPT).toContain("do not load task-irrelevant skills")
+    expect(NON_EXECUTOR_SOURCE_BOUNDARY_PROMPT).toContain("Build, Integrity, and Visual QA")
+
+    const runner = await readSource("agent/runner.ts")
+    const orchestrator = await readSource("orchestrator/agent.ts")
+    expect(runner).toContain("appendNonExecutorSourceBoundary")
+    expect(orchestrator).toContain("appendNonExecutorSourceBoundary")
+  })
+
   test("fact-check core anti-recursion: no <fact-check> tag literal; fact_check_items only in NOT/forbid context", async () => {
     // Anti-recursion enforcement per specs/fact-check-agent-2026-05-25.md
     // §7.1 / codex impl review §6.  The fact-check agent must never be
@@ -209,7 +236,8 @@ describe("core prompt hygiene", () => {
     expect(build).not.toContain("mirror/")
     expect(build).not.toContain("baseline_replacement_plan")
     expect(orchestratorTools).toContain("renderFrontendResearchBuildPromptSection")
-    expect(orchestratorTools).not.toContain("renderFrontendResearchBriefPromptSection")
+    expect(orchestratorTools).toContain("const frontendResearch = renderFrontendResearchBuildPromptSection")
+    expect(orchestratorTools).toContain("frontend_research: renderFrontendResearchBriefPromptSection")
 
     expect(overlays).toContain("## Webpage Clone Source-Baseline Overlay")
     expect(overlays).toContain("web-clone-source/")
@@ -299,6 +327,8 @@ describe("core prompt hygiene", () => {
     expect(workflow).toContain("integrity 做 session-bound final gate")
     expect(workflow).toContain("acceptance_specs / traceability / source-reference coverage / cross-goal contracts")
     expect(workflow).toContain("最终 gate")
+    expect(workflow).toContain("materialization/source handoff")
+    expect(workflow).not.toContain("独占网页证据工具")
   })
 
   test("architecture review findings are actionable feedback, not dispatch gates", async () => {
@@ -683,9 +713,16 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Interaction/State Questions")
     expect(normalized).toContain("Style/Layout Questions")
     expect(normalized).toContain("Visual HTML Skeleton Coverage")
-    expect(normalized).toContain("publish visual skeleton coverage packets only")
+    expect(normalized).toContain("publish a Page Skeleton Blueprint under Visual HTML Skeleton Coverage")
+    expect(normalized).toContain("visible regions in source order")
+    expect(normalized).toContain("region count")
+    expect(normalized).toContain("major content sections")
+    expect(normalized).toContain("component-kind hypotheses")
+    expect(normalized).toContain("data/content anchors")
+    expect(normalized).toContain("source evidence ids")
+    expect(normalized).toContain("frontend_design page information-architecture input")
     expect(normalized).toContain(
-      "Do not create the HTML skeleton, source skeleton, implementation template, acceptance app, or token catalog yourself",
+      "do not create the HTML skeleton, source skeleton, implementation template, acceptance app, or token catalog yourself",
     )
     expect(normalized).toContain(
       "Treat `source-ir/style-profile.json` as a pointer to deterministic region-scoped style evidence",
@@ -745,11 +782,11 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("`webpage-evidence/source-ir/source-quality-audit.json` as semantic IR quality evidence")
     expect(design).toContain("skeleton-first visual handoff")
     expect(design).toContain("`web-clone-source/implementation-blueprint.md`")
-    expect(design).toContain("`reference.png`, and `reference-mobile.png` as visual truth")
+    expect(design).toContain("`reference.png` as desktop visual truth")
     expect(design).toContain("mock/static data contract")
     expect(design).toContain("full-stack replica")
     expect(design).toContain("seed/reset")
-    expect(design).toContain("desktop/tablet/mobile viewport matrix")
+    expect(design).not.toContain("desktop/tablet/mobile viewport matrix")
     expect(design).toContain("source-quality review against static HTML/base64/CSS replay")
     expect(design).toContain(
       "frontend_design/host materializes raw webpage evidence and the `web-clone-source/` package under `.opencorvus/r/t/<task-key>/fd/`",
@@ -1150,6 +1187,12 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("not repeatable repair tools")
     expect(normalized).toContain("do not rerun frontend_research for that same page")
     expect(normalized).toContain("additional source page URLs that still need their own prepared evidence")
+    expect(normalized).toContain("Page Skeleton Blueprint")
+    expect(normalized).toContain("raw webpage evidence/source package materialization may require frontend_design first")
+    expect(normalized).toContain(
+      "once prepared visual/source evidence exists, call frontend_research when the Page Skeleton Blueprint is missing",
+    )
+    expect(normalized).toContain("do not let frontend_design invent or reorder the page skeleton")
     expect(normalized).not.toContain("`frontend_design` and any needed `frontend_research` MUST be first")
     expect(normalized).not.toContain("`frontend_design` and `frontend_research` in parallel")
     expect(normalized).not.toContain("frontend_research brief exists for the relevant scope, do not rerun that agent")
@@ -1168,14 +1211,21 @@ describe("core prompt hygiene", () => {
     const orchestratorTools = await readSource("orchestrator/tools.ts")
 
     expect(frontendDesign).toContain("single-shot task-scope handoff agent")
+    expect(frontendDesign).toContain("source-handoff materialization")
     expect(frontendDesign).toContain("without independent webpage extraction, alternate reference interpretation")
     expect(frontendDesign).toContain("or repeated repair/retry/implementation iteration through frontend_design")
+    expect(frontendDesign).not.toContain("only stage agent that may acquire webpage evidence")
     expect(frontendResearch).toContain("source-page-scoped investigation publisher")
     expect(frontendResearch).toContain("additional source page URLs require separate frontend_research sessions")
     expect(frontendResearch).toContain("not a repeated crawler, repair, retry, or implementation iteration agent")
+    expect(frontendResearch).toContain("Page Skeleton Blueprint")
+    expect(frontendDesign).toContain("Frontend Research Page Skeleton Blueprint")
+    expect(frontendDesign).toContain("page information-architecture input")
+    expect(frontendDesign).toContain("must record those conflicts instead of inventing, reordering, or demoting major sections")
     expect(orchestratorTools).toContain("Single-shot task-scope handoff producer")
     expect(orchestratorTools).toContain("Do not use frontend_design as a repeated repair")
     expect(orchestratorTools).toContain("Source-page-scoped brief producer")
+    expect(orchestratorTools).toContain("Page Skeleton Blueprint that frontend_design consumes as page information architecture")
     expect(orchestratorTools).toContain("call frontend_research separately for additional pages")
     expect(orchestratorTools).not.toContain("dispatch once for the relevant webpage investigation scope")
   })

@@ -94,6 +94,7 @@ const WebpageEvidenceBackedItemBase = z.object({
 export const ResearchWebpageFunctionalSurfaceSchema = WebpageEvidenceBackedItemBase.extend({
   title: z.string().min(1),
   user_visible_behavior: z.string().min(1),
+  component_kind_hypothesis: z.string().min(1),
   required_interactions: z.array(z.string().min(1)).default([]),
 })
 export type ResearchWebpageFunctionalSurface = z.infer<typeof ResearchWebpageFunctionalSurfaceSchema>

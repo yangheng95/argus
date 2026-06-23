@@ -126,7 +126,6 @@ function renderHostPreparedEvidenceIndex(): string {
     ["web-clone-source/source-skeleton/source-skeleton-audit.json", "source skeleton coverage audit"],
     ["web-clone-source/visual-surface-candidates.json", "visual surface inventory"],
     ["web-clone-source/reference.png", "visual reference for overlay comparison"],
-    ["web-clone-source/reference-mobile.png", "mobile viewport visual reference for responsive comparison"],
     ["frontend-design-skeleton/README.md", "source project usage and verification notes"],
     ["frontend-design-skeleton/src/App.tsx", "source project root entrypoint"],
     ["frontend-design-skeleton/src/components/SourceClonePage.tsx", "high-fidelity source baseline page"],
@@ -308,7 +307,7 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
 
   lines.push("")
   lines.push(
-    "Extraction rule: frontend_design should start from sourceDomIterationState.ts, then consume sourceDomReplacementPlan.ts, inspect existing target-project components/libraries before coding, and extract each source-dom region into target-project semantic source only when parity can be preserved. The skeleton remains evidence; it is not the final working project.",
+    "Extraction rule: frontend_design should establish the visible page skeleton from the Frontend Research Page Skeleton Blueprint when present plus reference pixels/source evidence, then use sourceDomIterationState.ts and sourceDomReplacementPlan.ts only as per-region selection and repair metadata. They are not the page information architecture, not the section order, and not permission to demote missing major content sections into navigation/footer labels. The visual HTML skeleton remains the current source-editable deliverable; later workflow stages transcribe it into the final working project only after visual parity can be preserved.",
   )
   return lines.join("\n")
 }
@@ -604,7 +603,7 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
     `Visual iteration viewport matrix: ${visualIterationMatrix}`,
     "For webpage clones, perform and describe source-region traceable visual restoration: every HTML boundary, content group, style rule, asset, representative state, and deferred transcription note must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source content/data extraction, HTML/CSS restoration, rendered screenshot inspection for that region, and visual iteration viewport evidence. If a region is deferred, frontend_design must label it as unfinished visual/source debt.",
     "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
-    "Webpage/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `webpage-evidence/`, `references/`, `reference.png`, or `reference-mobile.png` into the visual skeleton as app-owned deliverables; extract only the observed source structure, content, styles, and assets needed by the HTML/CSS skeleton.",
+    "Webpage/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `webpage-evidence/`, `references/`, or `reference.png` into the visual skeleton as app-owned deliverables; extract only the observed source structure, content, styles, and assets needed by the HTML/CSS skeleton.",
     "Do not output a standalone component checklist or advice-only report. Use the full `submit_frontend_template` schema to identify the source baseline, visual-region restoration plan, skeleton-to-project quality contract, visual/data contracts, completeness review, and open questions needed for later maintainable project transcription.",
     "Principle for frontend_design source work: restore visual parity first; document existing repository components/design-system primitives and mature maintained libraries only as later transcription constraints for hard UI domains. Use the embedded source-project-handoff summary and the referenced sourceDomIterationState.ts/sourceDomReplacementPlan.ts as static progress metadata and the known-problem map.",
     "",

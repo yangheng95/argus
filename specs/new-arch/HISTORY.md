@@ -32,6 +32,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-23-screenshot-cache-server-time-restamp.md](2026-06-23-screenshot-cache-server-time-restamp.md) | Screenshot Cache Server Time Restamp |
 | [2026-06-23-task-stop-agent-settle-validation.md](2026-06-23-task-stop-agent-settle-validation.md) | Task Stop Agent Settle Validation |
 | [2026-06-23-shutdown-scheduler-enterprise-debug.md](2026-06-23-shutdown-scheduler-enterprise-debug.md) | Shutdown Scheduler Enterprise Debug |
+| [2026-06-23-frontend-research-page-skeleton-blueprint.md](2026-06-23-frontend-research-page-skeleton-blueprint.md) | Frontend Research Page Skeleton Blueprint |
 
 ## 2026-06-22
 

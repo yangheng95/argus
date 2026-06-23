@@ -88,6 +88,7 @@ async function registerWebpageContract(kit: ReturnType<typeof createResearchOutp
     id: "surface_economic_trends",
     title: "Economic trends",
     user_visible_behavior: "Shows an inflation map, GDP growth list, and economic metric cards.",
+    component_kind_hypothesis: "map, table/list, and metric card group",
     required_interactions: ["Tab navigation remains selectable when evidence shows it."],
     evidence_ids: ["ev_1"],
   })

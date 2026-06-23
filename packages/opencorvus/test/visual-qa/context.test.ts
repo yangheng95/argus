@@ -63,6 +63,7 @@ describe("visual-qa context rendering", () => {
     expect(context).toContain("frontend_research:art_frontend_page:ev_ref")
     expect(context).toContain("functional_surfaces")
     expect(context).toContain("Primary search")
+    expect(context).toContain("component_kind=search input controlling a data table")
     expect(context).toContain("visual_layout")
     expect(context).toContain("Hero")
     expect(context).toContain("fidelity_acceptance")
@@ -227,6 +228,7 @@ function validResearchBrief(sourceURL = "https://example.com/page"): ResearchBri
           id: "fn_search",
           title: "Primary search",
           user_visible_behavior: "Typing filters visible rows.",
+          component_kind_hypothesis: "search input controlling a data table",
           required_interactions: ["type query", "clear query"],
           evidence_ids: ["ev_ref"],
         },

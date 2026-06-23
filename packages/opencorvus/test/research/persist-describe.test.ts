@@ -13,6 +13,7 @@ import {
   renderFrontendResearchArchitectPromptSection,
   renderFrontendResearchBriefPromptSection,
   renderFrontendResearchBuildPromptSection,
+  renderFrontendResearchDesignPromptSection,
   renderResearchBriefPromptSection,
 } from "../../src/research/prompt-section"
 import { validateResearchBriefTaskBoundary } from "../../src/research/schema"
@@ -88,6 +89,7 @@ function validWebpageContract(sourceURL = "https://example.com/page") {
         id: "surface_main",
         title: "Main surface",
         user_visible_behavior: "Shows the primary page content and navigation.",
+        component_kind_hypothesis: "navigation plus primary content section",
         required_interactions: ["Primary navigation remains clickable."],
         evidence_ids: ["ev_1"],
       },
@@ -271,9 +273,28 @@ describe("research brief persistence and describe projection", () => {
           expect(architectPrompt).not.toContain('"webpage_contract"')
           expect(architectPrompt).not.toContain("Example documentation excerpt.")
 
+          const designPrompt = renderFrontendResearchDesignPromptSection({ taskID, request })
+          expect(designPrompt).toContain("Frontend Research Page Skeleton Blueprint")
+          expect(designPrompt).toContain(`"artifact_id": "${artifactID}"`)
+          expect(designPrompt).toContain(`"source_url": "${validWebpageContract().source_url}"`)
+          expect(designPrompt).toContain('"page_skeleton_blueprint"')
+          expect(designPrompt).toContain('"region_count"')
+          expect(designPrompt).toContain('"visible_flow"')
+          expect(designPrompt).toContain('"major_surfaces"')
+          expect(designPrompt).toContain('"data_content_anchors"')
+          expect(designPrompt).toContain('"interaction_states"')
+          expect(designPrompt).toContain('"component_kind_hypotheses"')
+          expect(designPrompt).toContain('"hypothesis": "navigation plus primary content section"')
+          expect(designPrompt).toContain('"style_layout_anchors"')
+          expect(designPrompt).toContain('"fidelity_risks"')
+          expect(designPrompt).toContain(evidenceRef)
+          expect(designPrompt).not.toContain('"webpage_contract"')
+          expect(designPrompt).not.toContain("Example documentation excerpt.")
+
           const buildPrompt = renderFrontendResearchBuildPromptSection({ taskID, request })
           expect(buildPrompt).toContain("Compact advisory coverage index from frontend_research")
           expect(buildPrompt).toContain(`artifact_id: ${artifactID}`)
+          expect(buildPrompt).toContain("component_kind=navigation plus primary content section")
           expect(buildPrompt).toContain("bundle_paths")
           expect(buildPrompt).toContain(`reference_image_evidence_refs: ${evidenceRef}`)
           expect(buildPrompt).toContain("Functional surfaces")
@@ -360,6 +381,15 @@ describe("research brief persistence and describe projection", () => {
           expect(architectPrompt).toContain(`"artifact_id": "${secondArtifactID}"`)
           expect(architectPrompt).toContain(firstEvidenceRef)
           expect(architectPrompt).toContain(secondEvidenceRef)
+
+          const designPrompt = renderFrontendResearchDesignPromptSection({ taskID, request })
+          expect(designPrompt).toContain(`"artifact_id": "${firstArtifactID}"`)
+          expect(designPrompt).toContain(`"artifact_id": "${secondArtifactID}"`)
+          expect(designPrompt).toContain("https://example.com/first")
+          expect(designPrompt).toContain("https://example.com/second")
+          expect(designPrompt).toContain(firstEvidenceRef)
+          expect(designPrompt).toContain(secondEvidenceRef)
+          expect(designPrompt.indexOf(secondArtifactID)).toBeLessThan(designPrompt.indexOf(firstArtifactID))
 
           const buildPrompt = renderFrontendResearchBuildPromptSection({ taskID, request })
           expect(buildPrompt).toContain(`artifact_id: ${firstArtifactID}`)
