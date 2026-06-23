@@ -35,6 +35,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 | [2026-06-23-shutdown-scheduler-enterprise-debug.md](2026-06-23-shutdown-scheduler-enterprise-debug.md) | Shutdown Scheduler Enterprise Debug |
 | [2026-06-23-frontend-research-page-skeleton-blueprint.md](2026-06-23-frontend-research-page-skeleton-blueprint.md) | Frontend Research Page Skeleton Blueprint |
 | [2026-06-23-auto-confirm-proposed-tasks.md](2026-06-23-auto-confirm-proposed-tasks.md) | Auto-Confirm Proposed Tasks |
+| [2026-06-23-terminal-profile-host-drift.md](2026-06-23-terminal-profile-host-drift.md) | Terminal Profile Host Drift Repair |
 
 ## 2026-06-22
 

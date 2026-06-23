@@ -87,6 +87,15 @@ export namespace TerminalProfile {
     return resolved
   }
 
+  function resolveCommandIfAvailable(command: string): string | undefined {
+    try {
+      return resolveCommand(command)
+    } catch (error) {
+      if (error instanceof ConfigError) return undefined
+      throw error
+    }
+  }
+
   function configuredProfileIcon(profile: Config.TerminalProfile): Icon {
     return profile.icon ?? "terminal"
   }
@@ -148,9 +157,18 @@ export namespace TerminalProfile {
     return process.env.SHELL
   }
 
+  const GENERATED_TERMINAL_ENV = {
+    TERM: "xterm-256color",
+    COLORTERM: "truecolor",
+  } as const
+
+  type PlatformScope = NodeJS.Platform | "non-win32" | "all"
+
   interface SystemProfileDefinition {
     id: string
     label: string
+    scope: PlatformScope
+    commandNames: readonly string[]
     commands: string[]
     args: string[]
     icon: Icon
@@ -166,63 +184,114 @@ export namespace TerminalProfile {
     return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => !!value))]
   }
 
-  function systemProfileDefinitions(options: SystemProfileOptions): SystemProfileDefinition[] {
-    if (options.platform === "win32") {
-      return [
-        {
-          id: "powershell",
-          label: "Windows PowerShell",
-          commands: ["powershell.exe", "powershell"],
-          args: ["-NoLogo"],
-          icon: "powershell",
-        },
-        {
-          id: "pwsh",
-          label: "PowerShell",
-          commands: ["pwsh.exe", "pwsh"],
-          args: ["-NoLogo"],
-          icon: "powershell",
-        },
-        {
-          id: "cmd",
-          label: "Command Prompt",
-          commands: uniqueStrings([options.env.ComSpec, "cmd.exe", "cmd"]),
-          args: [],
-          icon: "command-prompt",
-        },
-        {
-          id: "bash",
-          label: "Bash",
-          commands: ["bash.exe", "bash"],
-          args: [],
-          icon: "bash",
-        },
-      ]
-    }
+  const GENERATED_SYSTEM_PROFILE_DEFINITIONS: readonly SystemProfileDefinition[] = [
+    {
+      id: "powershell",
+      label: "Windows PowerShell",
+      scope: "win32",
+      commandNames: ["powershell.exe", "powershell"],
+      commands: ["powershell.exe", "powershell"],
+      args: ["-NoLogo"],
+      icon: "powershell",
+    },
+    {
+      id: "pwsh",
+      label: "PowerShell",
+      scope: "win32",
+      commandNames: ["pwsh.exe", "pwsh"],
+      commands: ["pwsh.exe", "pwsh"],
+      args: ["-NoLogo"],
+      icon: "powershell",
+    },
+    {
+      id: "cmd",
+      label: "Command Prompt",
+      scope: "win32",
+      commandNames: ["cmd.exe", "cmd"],
+      commands: ["cmd.exe", "cmd"],
+      args: [],
+      icon: "command-prompt",
+    },
+    {
+      id: "bash",
+      label: "Bash",
+      scope: "all",
+      commandNames: ["bash.exe", "bash"],
+      commands: ["bash"],
+      args: [],
+      icon: "bash",
+    },
+    {
+      id: "zsh",
+      label: "Zsh",
+      scope: "non-win32",
+      commandNames: ["zsh"],
+      commands: ["zsh"],
+      args: [],
+      icon: "terminal",
+    },
+    {
+      id: "fish",
+      label: "Fish",
+      scope: "non-win32",
+      commandNames: ["fish"],
+      commands: ["fish"],
+      args: [],
+      icon: "terminal",
+    },
+  ]
 
-    return [
-      {
-        id: "bash",
-        label: "Bash",
-        commands: uniqueStrings([options.env.SHELL?.endsWith("/bash") ? options.env.SHELL : undefined, "bash"]),
-        args: [],
-        icon: "bash",
-      },
-      {
-        id: "zsh",
-        label: "Zsh",
-        commands: uniqueStrings([options.env.SHELL?.endsWith("/zsh") ? options.env.SHELL : undefined, "zsh"]),
-        args: [],
-        icon: "terminal",
-      },
-      {
-        id: "fish",
-        label: "Fish",
-        commands: uniqueStrings([options.env.SHELL?.endsWith("/fish") ? options.env.SHELL : undefined, "fish"]),
-        args: [],
-        icon: "terminal",
-      },
-    ]
+  function definitionAppliesToPlatform(scope: PlatformScope, platform: NodeJS.Platform): boolean {
+    if (scope === "all") return true
+    if (scope === "non-win32") return platform !== "win32"
+    return scope === platform
+  }
+
+  function systemProfileDefinitions(options: SystemProfileOptions): SystemProfileDefinition[] {
+    return GENERATED_SYSTEM_PROFILE_DEFINITIONS.filter((definition) =>
+      definitionAppliesToPlatform(definition.scope, options.platform),
+    ).map((definition) => {
+      if (definition.id === "cmd") {
+        return {
+          ...definition,
+          commands: uniqueStrings([options.env.ComSpec, ...definition.commands]),
+        }
+      }
+      if (definition.id === "bash" && options.platform === "win32") {
+        return {
+          ...definition,
+          commands: ["bash.exe", "bash"],
+        }
+      }
+      if (definition.id === "bash") {
+        return {
+          ...definition,
+          commands: uniqueStrings([
+            options.env.SHELL?.endsWith("/bash") ? options.env.SHELL : undefined,
+            ...definition.commands,
+          ]),
+        }
+      }
+      if (definition.id === "zsh") {
+        return {
+          ...definition,
+          commands: uniqueStrings([
+            options.env.SHELL?.endsWith("/zsh") ? options.env.SHELL : undefined,
+            ...definition.commands,
+          ]),
+        }
+      }
+      if (definition.id === "fish") {
+        return {
+          ...definition,
+          commands: uniqueStrings([
+            options.env.SHELL?.endsWith("/fish") ? options.env.SHELL : undefined,
+            ...definition.commands,
+          ]),
+        }
+      }
+      return { ...definition }
+    })
   }
 
   function createSystemTerminalProfileConfig(options: SystemProfileOptions): Config.Terminal | undefined {
@@ -234,10 +303,7 @@ export namespace TerminalProfile {
         label: definition.label,
         command,
         args: definition.args,
-        env: {
-          TERM: "xterm-256color",
-          COLORTERM: "truecolor",
-        },
+        env: { ...GENERATED_TERMINAL_ENV },
         icon: definition.icon,
       }
     }
@@ -257,15 +323,111 @@ export namespace TerminalProfile {
     return createSystemTerminalProfileConfig({
       platform: process.platform,
       env: process.env,
-      resolveCommand(command) {
-        try {
-          return resolveCommand(command)
-        } catch (error) {
-          if (error instanceof ConfigError) return undefined
-          throw error
-        }
-      },
+      resolveCommand: resolveCommandIfAvailable,
     })
+  }
+
+  function generatedDefinitionForID(id: string): SystemProfileDefinition | undefined {
+    return GENERATED_SYSTEM_PROFILE_DEFINITIONS.find((definition) => definition.id === id)
+  }
+
+  function commandName(command: string): string {
+    const normalized = command.replace(/\\/g, "/")
+    return (normalized.split("/").pop() ?? normalized).toLowerCase()
+  }
+
+  function generatedCommandNameMatches(definition: SystemProfileDefinition, command: string): boolean {
+    const configuredName = commandName(command)
+    return definition.commandNames.some((candidate) => candidate.toLowerCase() === configuredName)
+  }
+
+  function profileArgsMatchGenerated(profile: Config.TerminalProfile, definition: SystemProfileDefinition): boolean {
+    return (
+      profile.args.length === definition.args.length &&
+      profile.args.every((arg, index) => arg === definition.args[index])
+    )
+  }
+
+  function profileEnvMatchesGenerated(profile: Config.TerminalProfile): boolean {
+    const keys = Object.keys(profile.env)
+    return (
+      keys.length === Object.keys(GENERATED_TERMINAL_ENV).length &&
+      profile.env.TERM === GENERATED_TERMINAL_ENV.TERM &&
+      profile.env.COLORTERM === GENERATED_TERMINAL_ENV.COLORTERM
+    )
+  }
+
+  function isGeneratedSystemProfile(id: string, profile: Config.TerminalProfile): boolean {
+    const definition = generatedDefinitionForID(id)
+    if (!definition) return false
+    return (
+      profile.label === definition.label &&
+      profile.icon === definition.icon &&
+      profileArgsMatchGenerated(profile, definition) &&
+      profileEnvMatchesGenerated(profile) &&
+      generatedCommandNameMatches(definition, profile.command)
+    )
+  }
+
+  export function shouldRegenerateGeneratedProfilesForTest(
+    terminal: Config.Terminal,
+    resolveCommandForHost: (command: string) => string | undefined,
+  ): boolean {
+    const profiles = terminal.profiles ?? {}
+    const entries = Object.entries(profiles)
+    if (entries.length === 0) return false
+    const generatedEntries = entries.filter(([id, profile]) => isGeneratedSystemProfile(id, profile))
+    if (generatedEntries.length === 0) return false
+    if (!terminal.default_profile_id || !profiles[terminal.default_profile_id]) {
+      return generatedEntries.length === entries.length
+    }
+    return generatedEntries.some(([, profile]) => !resolveCommandForHost(profile.command))
+  }
+
+  function shouldRegenerateGeneratedProfiles(terminal: Config.Terminal): boolean {
+    return shouldRegenerateGeneratedProfilesForTest(terminal, resolveCommandIfAvailable)
+  }
+
+  function removableGeneratedProfilePatch(
+    terminal: Config.Terminal | undefined,
+    options: { removeLegacyDefault: boolean },
+  ): Record<string, null> {
+    const profiles = terminal?.profiles ?? {}
+    const patch: Record<string, null> = {}
+    for (const [id, profile] of Object.entries(profiles)) {
+      if ((options.removeLegacyDefault && id === "default") || isGeneratedSystemProfile(id, profile)) {
+        patch[id] = null
+      }
+    }
+    return patch
+  }
+
+  function customProfilePatch(
+    terminal: Config.Terminal | undefined,
+    options: { removeLegacyDefault: boolean },
+  ): Record<string, Config.TerminalProfile> {
+    const profiles = terminal?.profiles ?? {}
+    const patch: Record<string, Config.TerminalProfile> = {}
+    for (const [id, profile] of Object.entries(profiles)) {
+      if ((options.removeLegacyDefault && id === "default") || isGeneratedSystemProfile(id, profile)) {
+        continue
+      }
+      patch[id] = profile
+    }
+    return patch
+  }
+
+  function generatedProfilePatch(
+    terminal: Config.Terminal,
+    customProfiles: Record<string, Config.TerminalProfile>,
+  ): Record<string, Config.TerminalProfile> {
+    const profiles = terminal.profiles ?? {}
+    const patch: Record<string, Config.TerminalProfile> = {}
+    for (const [id, profile] of Object.entries(profiles)) {
+      if (customProfiles[id]) continue
+      patch[id] = profile
+    }
+    return patch
   }
 
   function isPreviousGeneratedSingleProfile(terminal: Config.Terminal): boolean {
@@ -281,18 +443,21 @@ export namespace TerminalProfile {
       profile.label === label &&
       profile.command === command &&
       profile.args.length === 0 &&
-      profile.env.TERM === "xterm-256color" &&
-      profile.env.COLORTERM === "truecolor" &&
+      profile.env.TERM === GENERATED_TERMINAL_ENV.TERM &&
+      profile.env.COLORTERM === GENERATED_TERMINAL_ENV.COLORTERM &&
       profile.icon === (process.platform === "win32" ? "command-prompt" : "terminal")
     )
   }
 
   export async function ensureProjectDefaultProfile(): Promise<void> {
     const config = await Config.get()
+    const existingTerminal = config.terminal
+    const previousGeneratedSingleProfile = existingTerminal ? isPreviousGeneratedSingleProfile(existingTerminal) : false
     const shouldWrite =
-      !config.terminal?.profiles ||
-      Object.keys(config.terminal.profiles).length === 0 ||
-      isPreviousGeneratedSingleProfile(config.terminal)
+      !existingTerminal?.profiles ||
+      Object.keys(existingTerminal.profiles).length === 0 ||
+      previousGeneratedSingleProfile ||
+      shouldRegenerateGeneratedProfiles(existingTerminal)
     if (!shouldWrite) return
 
     const terminal = setupDefaultProfile()
@@ -302,13 +467,22 @@ export namespace TerminalProfile {
       })
     }
 
-    const removePreviousDefault = config.terminal?.profiles?.default ? { default: null } : {}
+    const patchOptions = { removeLegacyDefault: previousGeneratedSingleProfile }
+    const removePreviousProfiles = removableGeneratedProfilePatch(existingTerminal, patchOptions)
+    const customProfiles = customProfilePatch(existingTerminal, patchOptions)
+    const generatedProfiles = generatedProfilePatch(terminal, customProfiles)
+    const defaultProfileID =
+      existingTerminal?.default_profile_id && customProfiles[existingTerminal.default_profile_id]
+        ? existingTerminal.default_profile_id
+        : terminal.default_profile_id
     await Config.update({
       terminal: {
         ...terminal,
+        default_profile_id: defaultProfileID,
         profiles: {
-          ...removePreviousDefault,
-          ...terminal.profiles,
+          ...removePreviousProfiles,
+          ...customProfiles,
+          ...generatedProfiles,
         },
       },
     } as Config.Info)
