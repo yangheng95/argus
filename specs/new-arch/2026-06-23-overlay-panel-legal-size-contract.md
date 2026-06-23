@@ -663,3 +663,76 @@ the same surface that is recomputing virtual rows.
   introduced; inactive behavior still comes from the existing `items()` memo.
 - Rechecked visual output: grouped screenshots, thumbnail images, and the
   narrow minimum panel layout still render without card or thumbnail overflow.
+
+## Follow-up 2026-06-23: Center Workbench Separator Geometry Snapshot
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User report | Toolbar panel opening is slow, especially screenshots and preview panels. |
+| Euclid read-only audit | Center workbench opening reads adjacent panel rects per separator and repeats reads for middle panels in the same measurement frame. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Layout writes and measurement/reveal remain split across animation frames. |
+| Current browser probe | `center-workbench-separator-browser.test.ts` already verifies resize reads are in RAF and not in style-write frames. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Separator render | `renderCenterWorkbenchPanelSeparators()` calls `centerWorkbenchPanelResizeMetrics()` for every separator. | Read one open-panel geometry snapshot before the separator loop. |
+| Metrics helper | `centerWorkbenchPanelResizeMetrics()` reads left and right `getBoundingClientRect()` itself. | Accept a snapshot argument and consume pre-read rects. |
+| Drag/keyboard resize | Pointer start and keyboard resize also call `centerWorkbenchPanelResizeMetrics()`. | Keep them on the same helper; the default snapshot reads current open panels once for that call. |
+| Reveal ordering | `renderCenterWorkbenchPanelMeasurementsAndReveal()` runs separators then reveal. | Keep frame split and existing reveal ordering unchanged in this round. |
+| Tests | Static frame-scheduler and browser center-workbench tests cover the function boundary. | Add static guard for snapshot ownership and keep browser visual coverage. |
+
+### Root Cause
+
+The measurement frame already separated style writes from geometry reads, but
+the geometry read phase still re-entered DOM layout once per adjacent pair.
+With multiple center panels open, a middle panel participates in two separators
+and is measured twice in the same frame.
+
+### Fix Plan
+
+1. Add a center workbench geometry snapshot containing the current view map and
+   one rect per open panel.
+2. Pass the snapshot into separator metrics so each open panel is measured once
+   per measurement frame.
+3. Keep drag and keyboard callers on the same metrics helper without adding a
+   second resize source.
+4. Extend static guards and rerun center-workbench browser visual coverage.
+
+### Acceptance
+
+- Separator rendering reads open panel geometry from one snapshot per frame.
+- Middle panels are not re-measured once per adjacent separator.
+- Frame split remains intact: layout writes schedule measurement on the next
+  RAF, and no fallback range or duplicate separator owner is introduced.
+
+### Implementation
+
+- Added `readCenterWorkbenchPanelGeometrySnapshot()` so a measurement frame
+  reads each open center panel rect once.
+- `centerWorkbenchPanelResizeMetrics()` now consumes that snapshot and no
+  longer reads left/right rects independently per separator.
+- `renderCenterWorkbenchPanelSeparators()` creates one snapshot before its
+  separator loop and passes it into each metrics call.
+- Drag start and keyboard resizing remain on the same metrics helper, keeping
+  one range and resize owner.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/resize-observer-frame-scheduler.test.ts packages/overlay/test/center-workbench-size.test.ts packages/overlay/test/screenshot-browser-panel.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+- Visual QA reviewed:
+  `.scratch/center-workbench-three-panel-min-width-1120.png`.
+
+### Self Review
+
+- Rechecked measurement ownership: the separator render frame now has one
+  explicit geometry snapshot, not a hidden per-separator DOM read loop.
+- Rechecked drag and keyboard paths: they still call
+  `centerWorkbenchPanelResizeMetrics()` and consume the same legal range helper.
+- Rechecked frame split: layout writes still schedule measurements on the next
+  animation frame, and reveal ordering remains unchanged.
