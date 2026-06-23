@@ -373,15 +373,16 @@ function startPaneResize(
 ): void {
   if (event.button != null && event.button !== 0) return
   const state = callbacks.getState()
-  if (!paneHandleEnabled(state, config)) return
+  if (state.sidebarCollapsed) return
+  const handle = paneHandleElement(config)
+  if (!handle) return
   paneDrag = {
     config,
     callbacks,
     pendingClientX: null,
     resizeOnFrame: createAnimationFrameScheduler(flushPendingPaneResize),
   }
-  const handle = paneHandleElement(config)
-  if (handle) (handle as HTMLElement).dataset.active = "true"
+  handle.dataset.active = "true"
   document.body.dataset.resizing = "true"
 
   // Capture listeners with callbacks in closure
@@ -398,7 +399,7 @@ function startPaneResize(
   window.addEventListener("pointerup", onUp)
   window.addEventListener("pointercancel", onUp)
 
-  resizePane(event.clientX, callbacks, config)
+  onPaneResizeMove(event)
   event.preventDefault()
 }
 

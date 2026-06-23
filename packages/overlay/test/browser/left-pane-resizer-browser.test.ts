@@ -229,7 +229,13 @@ async function installPaneDragProbe(page: OverlayPage) {
 
     const rectOriginal = Element.prototype.getBoundingClientRect
     Element.prototype.getBoundingClientRect = function () {
-      if (this instanceof HTMLElement && (this.id === "panelBody" || this.id === "leftPaneResizer")) {
+      if (
+        this instanceof HTMLElement &&
+        (this.id === "panelBody" ||
+          this.id === "leftPaneResizer" ||
+          this.id === "solidLeftActivityToolbar" ||
+          this.id === "solidRightActivityToolbar")
+      ) {
         probe.record("pane-geometry-read", probe.rectReadsByFrame, { id: this.id })
       }
       return rectOriginal.call(this)
@@ -485,12 +491,13 @@ test(
         `left pane max left chat below its token minimum: ${JSON.stringify(atMax)}`,
       )
 
-      const afterMoveBurst = await page.$eval("#leftPaneResizer", (node) => {
+      const afterPointerDown = await page.$eval("#leftPaneResizer", (node) => {
         const probe = (window as any).__paneDragProbe
         const separator = node as HTMLElement
         const rect = separator.getBoundingClientRect()
         const startX = rect.left + rect.width / 2
         const clientY = rect.top + rect.height / 2
+        probe.reset()
         separator.dispatchEvent(
           new PointerEvent("pointerdown", {
             bubbles: true,
@@ -501,6 +508,18 @@ test(
             pointerType: "mouse",
           }),
         )
+        return probe.summary() as PaneDragProbeSummary
+      })
+      assert.equal(afterPointerDown.rectReadsBeforeFrame, 0)
+      assert.equal(afterPointerDown.styleWritesBeforeFrame, 0)
+      assert.equal(afterPointerDown.ariaWritesBeforeFrame, 0)
+
+      const afterMoveBurst = await page.$eval("#leftPaneResizer", (node) => {
+        const probe = (window as any).__paneDragProbe
+        const separator = node as HTMLElement
+        const rect = separator.getBoundingClientRect()
+        const startX = rect.left + rect.width / 2
+        const clientY = rect.top + rect.height / 2
         probe.reset()
         for (let index = 0; index < 30; index += 1) {
           window.dispatchEvent(

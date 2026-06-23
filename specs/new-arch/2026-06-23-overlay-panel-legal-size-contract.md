@@ -206,6 +206,74 @@ though ARIA claimed the pane was legal.
   `--ui-workbench-panel-min-width`, and overlay aspect-ratio handling remains
   unchanged.
 
+## Follow-up 2026-06-23: Pane Pointerdown Frame Owner
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Sartre read-only audit | Pointerdown still calls `resizePane()` synchronously, and the browser probe resets immediately after pointerdown, masking drag-start work. |
+| `2026-06-22-window-resize-center-layout-frame.md` | Resize work must avoid read/write chains in the same event or RAF phase. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Toolbar and resize work must stay frame-split; no new synchronous geometry owner. |
+| This spec | Pane legal max must still reserve left/right activity toolbar chrome and the chat minimum. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| `startPaneResize()` | Calls `paneHandleEnabled()`, then `resizePane(event.clientX, callbacks, config)` in the pointerdown event. | Avoid pointerdown geometry reads and schedule the initial pointer position through the existing pane RAF scheduler. |
+| `onPaneResizeMove()` | Already records `pendingClientX` and uses `paneDrag.resizeOnFrame.schedule()`. | Reuse this as the single drag geometry owner for pointerdown and pointermove. |
+| `paneResizeBounds()` | Owns panel body, handle, and fixed toolbar measurements. | Keep unchanged, but run from the scheduled resize frame. |
+| Browser probe | Counts only `panelBody` and `leftPaneResizer`, then resets after pointerdown. | Count both activity toolbars and assert pointerdown produces no pre-RAF geometry read or sidebar-width style write. |
+
+### Fix Plan
+
+1. Change pointerdown startup to check only state collapse and handle existence.
+2. Route the initial pointer position through `onPaneResizeMove(event)` instead
+   of calling `resizePane()` directly.
+3. Extend the left-pane browser probe so pointerdown work is measured instead
+   of reset away, and fixed toolbar rect reads are included.
+4. Keep pointerup flush semantics unchanged so the final persisted width still
+   lands before persistence.
+
+### Acceptance
+
+- Pointerdown does not read pane geometry or write `--ui-sidebar-width` before
+  the first RAF.
+- Pointermove bursts remain coalesced into one scheduled pane resize frame.
+- Pane legal bounds still reserve left and right activity toolbar chrome.
+- No duplicate pane writer, fallback width, alternate resize gate, or new
+  listener path is introduced.
+
+### Implementation
+
+- `startPaneResize()` now checks only collapsed state and handle existence
+  before starting a drag.
+- The initial pointer position is queued through `onPaneResizeMove(event)`, so
+  the first bounds calculation runs in the existing pane resize RAF scheduler.
+- The browser probe now counts `panelBody`, `leftPaneResizer`,
+  `solidLeftActivityToolbar`, and `solidRightActivityToolbar`, and asserts the
+  pointerdown event itself has no pre-RAF geometry reads, sidebar-width writes,
+  or ARIA writes.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `bun test packages/overlay/test/pane-config.test.ts packages/overlay/test/overlay-window-size-contract.test.ts --timeout 30000` | 15 pass |
+| `bun run --cwd packages/overlay typecheck` | Pass |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts` | 1 pass |
+| Visual QA | Reviewed `.scratch/left-pane-resizer-accessibility.png`, `.scratch/left-pane-resizer-desktop-resize.png`, `.scratch/left-pane-resizer-illegal-narrow-legal-frame.png`, and `.scratch/left-pane-resizer-restored-desktop-resize.png`. |
+
+### Self Review
+
+- Pointermove and pointerdown now share the existing pane resize scheduler;
+  there is still one drag geometry owner.
+- Pointerup flush remains synchronous so persistence still records the final
+  rendered width before the drag is cleared.
+- Pane legal bound math, toolbar chrome reserve, keyboard resize, and scheduled
+  ARIA semantics are unchanged.
+
 ## Follow-up 2026-06-23: Center Workbench Range Source
 
 ### Recall
