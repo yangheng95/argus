@@ -5,8 +5,6 @@ export const OVERLAY_SIZE_CONTRACT_MARKER = "<!-- OPENCORVUS_OVERLAY_SIZE_CONTRA
 export interface OverlaySizeContract {
   minWidth: number
   minHeight: number
-  maxAspectWidth: number
-  maxAspectHeight: number
 }
 
 function positiveInteger(name: string, value: unknown): number {
@@ -34,8 +32,6 @@ export function overlaySizeContractFromTauriConfig(config: unknown): OverlaySize
   return {
     minWidth,
     minHeight,
-    maxAspectWidth: width,
-    maxAspectHeight: minHeight,
   }
 }
 
@@ -46,24 +42,14 @@ export function readOverlaySizeContract(configPath: string): OverlaySizeContract
 export function renderOverlaySizeContractStyle(contract: OverlaySizeContract): string {
   const minWidth = positiveInteger("minWidth", contract.minWidth)
   const minHeight = positiveInteger("minHeight", contract.minHeight)
-  const maxAspectWidth = positiveInteger("maxAspectWidth", contract.maxAspectWidth)
-  const maxAspectHeight = positiveInteger("maxAspectHeight", contract.maxAspectHeight)
-  if (maxAspectWidth / maxAspectHeight < minWidth / minHeight) {
-    throw new Error("Overlay size contract maximum aspect ratio must be greater than or equal to the minimum aspect ratio.")
-  }
   return [
     '<style id="opencorvus-overlay-size-contract">',
     ":root {",
     `  --ui-overlay-min-width-units: ${minWidth};`,
     `  --ui-overlay-min-height-units: ${minHeight};`,
-    `  --ui-overlay-max-aspect-width-units: ${maxAspectWidth};`,
-    `  --ui-overlay-max-aspect-height-units: ${maxAspectHeight};`,
     "  --ui-overlay-min-width: calc(var(--ui-overlay-min-width-units) * 1px);",
     "  --ui-overlay-min-height: calc(var(--ui-overlay-min-height-units) * 1px);",
-    "  --ui-overlay-max-aspect-width: calc(var(--ui-overlay-max-aspect-width-units) * 1px);",
-    "  --ui-overlay-max-aspect-height: calc(var(--ui-overlay-max-aspect-height-units) * 1px);",
     "  --ui-overlay-min-aspect-ratio: calc(var(--ui-overlay-min-width-units) / var(--ui-overlay-min-height-units));",
-    "  --ui-overlay-max-aspect-ratio: calc(var(--ui-overlay-max-aspect-width-units) / var(--ui-overlay-max-aspect-height-units));",
     "}",
     "</style>",
   ].join("\n")

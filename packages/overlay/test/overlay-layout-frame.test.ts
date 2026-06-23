@@ -5,7 +5,6 @@ import { constrainOverlayLayoutFrame } from "../src/utils/overlay-layout-frame"
 describe("overlay legal layout frame", () => {
   const constraints = {
     minimum: { width: 1120, height: 720 },
-    maximumAspect: { width: 1280, height: 720 },
   }
 
   test("keeps the native minimum floor", () => {
@@ -19,9 +18,9 @@ describe("overlay legal layout frame", () => {
     })
   })
 
-  test("clamps illegal wide viewports to the maximum aspect ratio", () => {
+  test("preserves wide fullscreen viewports", () => {
     expect(constrainOverlayLayoutFrame({ width: 1600, height: 720 }, constraints)).toEqual({
-      width: 1280,
+      width: 1600,
       height: 720,
     })
   })

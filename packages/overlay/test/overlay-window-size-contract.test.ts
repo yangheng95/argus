@@ -38,13 +38,11 @@ describe("overlay window and pane size contract", () => {
     const contract = overlaySizeContractFromTauriConfig(config)
 
     expect(mainWindow).toBeDefined()
-    expect(contract).toEqual({ minWidth: 1120, minHeight: 720, maxAspectWidth: 1280, maxAspectHeight: 720 })
+    expect(contract).toEqual({ minWidth: 1120, minHeight: 720 })
     expect(mainWindow.width).toBeGreaterThanOrEqual(contract.minWidth)
     expect(mainWindow.height).toBeGreaterThanOrEqual(contract.minHeight)
     expect(mainWindow.minWidth).toBe(contract.minWidth)
     expect(mainWindow.minHeight).toBe(contract.minHeight)
-    expect(mainWindow.width).toBe(contract.maxAspectWidth)
-    expect(mainWindow.minHeight).toBe(contract.maxAspectHeight)
   })
 
   test("Rust startup and Windows live sizing use native pre-commit constraints", () => {
@@ -54,15 +52,16 @@ describe("overlay window and pane size contract", () => {
       /fn overlay_main_size_constraints\(\s*config: &tauri::utils::config::Config,\s*\) -> OverlayWindowConstraints/,
     )
     expect(main).toContain("overlay_main_size_constraints(app.config())")
-    expect(main).toContain("fn overlay_max_aspect_ratio(constraints: OverlayWindowConstraints) -> f64")
     expect(main).toContain("window.set_min_size(Some(tauri::LogicalSize::new(")
     expect(main).toContain("fn constrain_overlay_window_size(")
     expect(main).toContain("fn startup_overlay_window_size(")
-    expect(main).toContain("fn install_overlay_resize_aspect_constraint")
-    expect(main).toMatch(/#\[cfg\(windows\)\]\s+fn constrain_overlay_resize_rect_to_aspect_range/)
-    expect(main).toMatch(/#\[cfg\(windows\)\]\s+fn install_overlay_resize_aspect_constraint/)
+    expect(main).toContain("fn install_overlay_resize_minimum_aspect_constraint")
+    expect(main).toMatch(/#\[cfg\(windows\)\]\s+fn constrain_overlay_resize_rect_to_minimum_aspect/)
+    expect(main).toMatch(/#\[cfg\(windows\)\]\s+fn install_overlay_resize_minimum_aspect_constraint/)
     expect(main).toContain("WM_SIZING")
     expect(main).toContain("SetWindowSubclass")
+    expect(main).not.toContain("fn overlay_max_aspect_ratio")
+    expect(main).not.toContain("max_aspect_size")
     expect(main).not.toContain("tauri::WindowEvent::Resized")
     expect(main).not.toContain("RunEvent::WindowEvent")
     expect(main).not.toContain("fn overlay_window_needs_resize(")
@@ -86,18 +85,12 @@ describe("overlay window and pane size contract", () => {
     expect(vite).toContain("renderOverlaySizeContractStyle")
     expect(generatedStyle).toContain(`--ui-overlay-min-width-units: ${contract.minWidth};`)
     expect(generatedStyle).toContain(`--ui-overlay-min-height-units: ${contract.minHeight};`)
-    expect(generatedStyle).toContain(`--ui-overlay-max-aspect-width-units: ${contract.maxAspectWidth};`)
-    expect(generatedStyle).toContain(`--ui-overlay-max-aspect-height-units: ${contract.maxAspectHeight};`)
     expect(generatedStyle).toContain("--ui-overlay-min-width: calc(var(--ui-overlay-min-width-units) * 1px)")
     expect(generatedStyle).toContain("--ui-overlay-min-height: calc(var(--ui-overlay-min-height-units) * 1px)")
-    expect(generatedStyle).toContain("--ui-overlay-max-aspect-width: calc(var(--ui-overlay-max-aspect-width-units) * 1px)")
-    expect(generatedStyle).toContain("--ui-overlay-max-aspect-height: calc(var(--ui-overlay-max-aspect-height-units) * 1px)")
     expect(generatedStyle).toContain(
       "--ui-overlay-min-aspect-ratio: calc(var(--ui-overlay-min-width-units) / var(--ui-overlay-min-height-units))",
     )
-    expect(generatedStyle).toContain(
-      "--ui-overlay-max-aspect-ratio: calc(var(--ui-overlay-max-aspect-width-units) / var(--ui-overlay-max-aspect-height-units))",
-    )
+    expect(generatedStyle).not.toContain("--ui-overlay-max-aspect")
     expect(tokens).not.toContain("--ui-breakpoint-xl")
     expect(tokens).not.toContain("--ui-overlay-min-width-units")
     expect(tokens).not.toContain("--ui-overlay-min-height-units")
@@ -111,7 +104,7 @@ describe("overlay window and pane size contract", () => {
     expect(base).toContain("--ui-overlay-viewport-width: max(100vw, var(--ui-overlay-min-width))")
     expect(base).toContain("--ui-overlay-shell-width: max(")
     expect(base).toContain("var(--ui-overlay-viewport-width)")
-    expect(base).toContain("calc(var(--ui-overlay-shell-height) * var(--ui-overlay-max-aspect-ratio))")
+    expect(base).not.toContain("--ui-overlay-max-aspect")
     expect(base).toContain("--ui-overlay-shell-height: max(")
     expect(base).toContain("var(--ui-overlay-min-height)")
     expect(base).toContain("width: var(--ui-overlay-shell-width)")
@@ -165,6 +158,7 @@ describe("overlay window and pane size contract", () => {
   test("historical legal-size specs do not advertise removed size sources as active", () => {
     const compactSpec = readRepo("specs/new-arch/2026-06-23-overlay-compact-legal-frame-query.md")
     const viewportSpec = readRepo("specs/new-arch/2026-06-22-overlay-viewport-size-contract.md")
+    const panelSpec = readRepo("specs/new-arch/2026-06-23-overlay-panel-legal-size-contract.md")
 
     expect(compactSpec).toContain("Status: Superseded 2026-06-23")
     expect(compactSpec).toContain("unreachable")
@@ -172,6 +166,9 @@ describe("overlay window and pane size contract", () => {
     expect(compactSpec).not.toContain("Status: Verified")
     expect(viewportSpec).not.toContain("--ui-breakpoint-xl")
     expect(viewportSpec).toContain("generated Tauri config legal")
+    expect(panelSpec).toContain("Status: Superseded 2026-06-23 by `Fullscreen Width Legality`.")
+    expect(panelSpec).toContain("Normal fullscreen/maximized width is a legal overlay state.")
+    expect(panelSpec).toContain("No max-aspect token, `max_aspect_size`, or `overlay_max_aspect_ratio`")
   })
 
   test("mission visual loop treats sub-minimum browser viewports as legal-frame captures", () => {
@@ -263,9 +260,8 @@ describe("overlay window and pane size contract", () => {
     expect(layoutFrame).toContain("export interface OverlayLayoutFrameConstraints")
     expect(layoutFrame).toContain('width: layoutTokenPx("--ui-overlay-min-width")')
     expect(layoutFrame).toContain('height: layoutTokenPx("--ui-overlay-min-height")')
-    expect(layoutFrame).toContain('width: layoutTokenPx("--ui-overlay-max-aspect-width")')
-    expect(layoutFrame).toContain('height: layoutTokenPx("--ui-overlay-max-aspect-height")')
-    expect(layoutFrame).toContain("Overlay maximum aspect ratio must be greater than or equal to the minimum aspect ratio.")
+    expect(layoutFrame).not.toContain("--ui-overlay-max-aspect")
+    expect(layoutFrame).not.toContain("Overlay maximum aspect ratio")
     expect(layoutFrame).toContain("width: window.innerWidth")
     expect(layoutFrame).toContain("height: window.innerHeight")
     expect(layoutFrame).not.toContain("visualViewport")
