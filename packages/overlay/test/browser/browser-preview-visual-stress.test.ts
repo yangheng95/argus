@@ -348,22 +348,27 @@ async function waitForImageMatchesReference(
 
 function assertNoPreviewLayoutBreakage(layout: {
   bodyOverflowX: number
+  legalShellOverflowX: number
+  shell: Box | null
   panel: Box | null
   command: Box | null
   stage: Box | null
   badBoxes: string[]
+  badShellBoxes: string[]
   overlaps: string[]
   candidateEllipsis: boolean
   evidenceStatusPresent: boolean
   evidenceEllipsis: boolean
 }) {
+  assert.ok(layout.shell, `legal overlay shell should be visible\n${JSON.stringify(layout, null, 2)}`)
   assert.ok(layout.panel, `preview panel should be visible\n${JSON.stringify(layout, null, 2)}`)
   assert.ok(layout.command, `preview command surface should be visible\n${JSON.stringify(layout, null, 2)}`)
   assert.ok(layout.stage, `preview stage should be visible\n${JSON.stringify(layout, null, 2)}`)
   assert.ok(
-    layout.bodyOverflowX <= 1,
-    `page should not have body horizontal overflow\n${JSON.stringify(layout, null, 2)}`,
+    layout.legalShellOverflowX <= 1,
+    `page should not overflow the legal overlay shell\n${JSON.stringify(layout, null, 2)}`,
   )
+  assert.deepEqual(layout.badShellBoxes, [], `preview elements escaped the legal shell\n${JSON.stringify(layout, null, 2)}`)
   assert.deepEqual(layout.badBoxes, [], `preview elements escaped their panel\n${JSON.stringify(layout, null, 2)}`)
   assert.deepEqual(layout.overlaps, [], `preview controls overlap incoherently\n${JSON.stringify(layout, null, 2)}`)
   assert.equal(
@@ -408,6 +413,7 @@ async function previewLayout(page: Awaited<ReturnType<Awaited<ReturnType<typeof 
     const intersects = (a: Box, b: Box) =>
       a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1
     const panel = box("panel", document.querySelector(".browser-preview-panel"))
+    const shell = box("shell", document.body)
     const command = box("command", document.querySelector(".browser-preview-command-surface"))
     const stage = box("stage", document.querySelector(".browser-preview-stage"))
     const watched = [
@@ -421,6 +427,12 @@ async function previewLayout(page: Awaited<ReturnType<Awaited<ReturnType<typeof 
           .filter((item) => item.left < panel.left - 2 || item.right > panel.right + 2 || item.top < panel.top - 2)
           .map((item) => item.label)
       : watched.map((item) => item.label)
+    const shellWatched = [panel, command, stage, ...watched].filter((item): item is Box => Boolean(item))
+    const badShellBoxes = shell
+      ? shellWatched
+          .filter((item) => item.left < shell.left - 2 || item.right > shell.right + 2 || item.top < shell.top - 2)
+          .map((item) => item.label)
+      : shellWatched.map((item) => item.label)
     const overlaps: string[] = []
     for (let i = 0; i < watched.length; i += 1) {
       for (let j = i + 1; j < watched.length; j += 1) {
@@ -431,10 +443,13 @@ async function previewLayout(page: Awaited<ReturnType<Awaited<ReturnType<typeof 
     const evidenceText = document.querySelector<HTMLElement>(".browser-preview-evidence-status span:last-child")
     return {
       bodyOverflowX: document.documentElement.scrollWidth - window.innerWidth,
+      legalShellOverflowX: shell ? document.documentElement.scrollWidth - shell.width : document.documentElement.scrollWidth,
+      shell,
       panel,
       command,
       stage,
       badBoxes,
+      badShellBoxes,
       overlaps,
       candidateEllipsis:
         !!candidateText &&
@@ -481,6 +496,7 @@ test(
     let taskEventConnectionCount = 0
     let expectedTargetLoadFailureConsoleCount = 0
     let expectedTargetSelectionFailureConsoleCount = 0
+    let liveSnapshotMode: "valid" | "corrupt-next" = "valid"
     const validTargetIDs = new Set([primaryTargetID, alternateTargetID])
     const png = {
       primary: await pngBytes("primary live frame", ["#0f766e", "#1d4ed8"]),
@@ -488,6 +504,7 @@ test(
       input: await pngBytes("live input routed", ["#166534", "#15803d"]),
       evidence: await pngBytes("persisted evidence", ["#312e81", "#0f172a"]),
     }
+    const corruptLivePng = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 1, 2, 3])
     const viewports = [
       { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1440, height: 900 },
       { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
@@ -797,6 +814,10 @@ test(
           if (!validTargetIDs.has(targetID)) {
             return json({ message: `Unknown browser preview target ${targetID}` }, { status: 404 })
           }
+          if (liveSnapshotMode === "corrupt-next") {
+            liveSnapshotMode = "valid"
+            return new Response(corruptLivePng, { headers: { "content-type": "image/png" } })
+          }
           return new Response(targetID === alternateTargetID ? png.alternate : png.primary, {
             headers: { "content-type": "image/png" },
           })
@@ -1090,10 +1111,62 @@ test(
       )
       await writeAndAssertScreenshot(page, "06-alternate-live")
 
+      liveSnapshotMode = "corrupt-next"
+      await clickBrowserPreviewViewport(page, "tablet")
+      await waitForLiveSnapshotViewport(liveSnapshotBodies, {
+        targetID: alternateTargetID,
+        viewportID: "tablet",
+        label: "alternate tablet corrupt live snapshot",
+      })
+      await waitForActivityState(
+        page,
+        () => {
+          const error = document.querySelector<HTMLElement>('[data-ui="browser-preview-live-error"]')
+          return (
+            !!error &&
+            !document.querySelector('[data-ui="browser-preview-live-screenshot"]') &&
+            (error.textContent || "").includes("Browser preview live screenshot failed to decode.")
+          )
+        },
+        "corrupt live image decode failure",
+        () => ({ errors, requestLog, liveSnapshotBodies }),
+      )
+      assertNoPreviewLayoutBreakage(await previewLayout(page))
+      await writeAndAssertScreenshot(page, "07-live-decode-failure", { minNonWhiteDensity: 0.018 })
+
+      await clickBrowserPreviewViewport(page, "mobile")
+      await waitForLiveSnapshotViewport(liveSnapshotBodies, {
+        targetID: alternateTargetID,
+        viewportID: "mobile",
+        label: "alternate mobile live snapshot recovery",
+      })
+      await waitForActivityState(
+        page,
+        () => {
+          const img = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+          return (
+            !document.querySelector('[data-ui="browser-preview-live-error"]') &&
+            !!img &&
+            img.complete &&
+            img.naturalWidth > 0 &&
+            img.naturalHeight > 0
+          )
+        },
+        "live screenshot recovery after decode failure",
+        () => ({ errors, requestLog, liveSnapshotBodies }),
+      )
+      await assertImageMatchesReference(
+        page,
+        '[data-ui="browser-preview-live-screenshot"]',
+        png.alternate,
+        "alternate live frame after decode recovery",
+      )
+      await writeAndAssertScreenshot(page, "08-live-decode-recovery")
+
       await page.setViewport({ width: 390, height: 760 })
       await new Promise((resolve) => setTimeout(resolve, 250))
       assertNoPreviewLayoutBreakage(await previewLayout(page))
-      await writeAndAssertScreenshot(page, "07-narrow-layout")
+      await writeAndAssertScreenshot(page, "09-narrow-layout")
 
       await page.setViewport({ width: 1440, height: 900 })
       await new Promise((resolve) => setTimeout(resolve, 250))
@@ -1119,7 +1192,7 @@ test(
         ),
         true,
       )
-      await writeAndAssertScreenshot(page, "08-target-failed")
+      await writeAndAssertScreenshot(page, "10-target-failed")
 
       assert.deepEqual(selectedTargets, [{ targetID: staleTargetID }, { targetID: alternateTargetID }])
       assert.ok(
