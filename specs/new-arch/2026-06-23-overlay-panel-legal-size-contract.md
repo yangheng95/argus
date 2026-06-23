@@ -736,3 +736,98 @@ and is measured twice in the same frame.
   `centerWorkbenchPanelResizeMetrics()` and consume the same legal range helper.
 - Rechecked frame split: layout writes still schedule measurements on the next
   animation frame, and reveal ordering remains unchanged.
+
+## Follow-up 2026-06-23: Center Workbench Reveal Frame Split
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User feedback 2026-06-23 | Illegal aspect ratios and too-small panels are not acceptable; opening toolbar panels must not create resize jank. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | DOM state writes, layout measurements, and layout-affecting follow-up work must stay in explicit frame phases. |
+| This spec, previous follow-up | Separator geometry now reads from one snapshot per measurement frame. |
+| Current live 7878 probe | The running 7878 tab appears stale and still shows the old illegal 900x900 bottom-toolbar layout without shell width/height CSS variables; do not refresh/restart it without explicit user approval. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| `revealPendingCenterWorkbenchPanel()` | Owns the only center workbench `scrollIntoView()` call in `main.tsx`. | Keep it as the single reveal owner. |
+| `renderCenterWorkbenchPanelMeasurementsAndReveal()` | Calls `renderCenterWorkbenchPanelSeparators()` and then `revealPendingCenterWorkbenchPanel()` in the same RAF. | Remove the scroll side effect from the measurement RAF. |
+| `renderCenterWorkbenchPanelMeasurementsOnFrame` | Schedules the separator measurement phase after layout writes. | Keep this scheduler as the measurement owner. |
+| `scheduleCenterWorkbenchPanelReveal()` | Sets `pendingCenterWorkbenchRevealPanel` and schedules layout. | Keep the public scheduling entry unchanged. |
+| Cleanup disposer | Cancels layout and measurement schedulers. | Add reveal scheduler cancellation in the same cleanup block. |
+| Browser instrumentation | `screenshot-browser-panel-browser.test.ts` records `scrollIntoView` and RAF context but not frame ordering against rect reads. | Extend instrumentation so reveal scroll is proven to be in a later frame than measurement reads. |
+
+### Root Cause
+
+The previous round made separator measurement cheaper by snapshotting geometry,
+but the measurement RAF still performs `scrollIntoView()` immediately after DOM
+rect reads. `scrollIntoView()` is layout-affecting follow-up work, not a pure
+measurement. Keeping it in the same callback can force extra layout work during
+toolbar panel open and window resize.
+
+### Fix Plan
+
+1. Add a dedicated `revealPendingCenterWorkbenchPanelOnFrame` scheduler that
+   runs `revealPendingCenterWorkbenchPanel`.
+2. Make the measurement callback only render separator semantics and schedule
+   the reveal scheduler.
+3. Cancel the reveal scheduler during cleanup and keep pending reveal reset in
+   the same block.
+4. Update static tests to require the dedicated reveal scheduler and reject
+   direct reveal calls from the measurement function.
+5. Extend browser open instrumentation to assert reveal scroll happens in a RAF
+   after the center workbench rect-read frame.
+
+### Acceptance
+
+- Center workbench separator measurement remains the only work in the
+  measurement RAF.
+- Center workbench reveal scroll is still the single reveal owner, but runs in
+  its own scheduled frame.
+- No fallback/gate/second size source is introduced.
+- Latest-build browser tests still show legal right-toolbar layout and usable
+  screenshot panel under illegal viewport fixtures.
+
+### Implementation
+
+- Added `revealPendingCenterWorkbenchPanelOnFrame` as the dedicated reveal
+  scheduler in `main.tsx`.
+- Changed `renderCenterWorkbenchPanelMeasurementsAndReveal()` so the
+  measurement RAF renders separator semantics, then schedules reveal work
+  instead of calling `scrollIntoView()` directly.
+- Added cleanup cancellation for the reveal scheduler.
+- Updated static frame-scheduler tests to require the dedicated reveal
+  scheduler and reject a direct reveal call inside the measurement function.
+- Extended screenshot browser instrumentation to record center workbench rect
+  reads and reveal scroll frame IDs, then assert reveal runs in a later RAF than
+  the measurement read.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/resize-observer-frame-scheduler.test.ts --timeout 30000`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/screenshot-browser-panel-browser.test.ts`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `bun test packages/overlay/test/acceptance-panel-mount.test.ts packages/overlay/test/browser-preview-panel.test.ts --timeout 30000`.
+- Visual QA reviewed:
+  `.scratch/screenshot-browser-panel-browser.png`,
+  `.scratch/screenshot-browser-panel-browser-reopen.png`,
+  `.scratch/live-7878-current-state.png`, and
+  `.scratch/live-7878-illegal-900x900.png`.
+
+### Self Review
+
+- Rechecked the center workbench reveal path: there is still only one
+  `scrollIntoView()` owner for center panels, but it is no longer executed in
+  the same RAF as separator geometry reads.
+- Rechecked scheduler cleanup: layout, measurement, reveal, and pending reveal
+  state are all disposed from the same owner block.
+- Rechecked legal-size behavior in latest-build screenshots: right toolbar stays
+  vertical, screenshot thumbnails remain inside the legal panel, and illegal
+  narrow viewport fixtures clip the legal shell instead of shrinking panels
+  below token minimums.
+- Rechecked live 7878 only as stale runtime evidence: it still lacks the latest
+  shell CSS variables and shows the old bottom-toolbar behavior at 900x900, so
+  it was not used as latest-code acceptance evidence and was not refreshed.

@@ -765,16 +765,18 @@ function renderCenterWorkbenchPanelLayout(): void {
 
 function renderCenterWorkbenchPanelMeasurementsAndReveal(): void {
   renderCenterWorkbenchPanelSeparators()
-  revealPendingCenterWorkbenchPanel()
+  revealPendingCenterWorkbenchPanelOnFrame.schedule()
 }
 
 const renderCenterWorkbenchPanelMeasurementsOnFrame = createAnimationFrameScheduler(
   renderCenterWorkbenchPanelMeasurementsAndReveal,
 )
+const revealPendingCenterWorkbenchPanelOnFrame = createAnimationFrameScheduler(revealPendingCenterWorkbenchPanel)
 const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayout)
 disposers.push(() => {
   renderCenterWorkbenchPanelLayoutOnFrame.cancel()
   renderCenterWorkbenchPanelMeasurementsOnFrame.cancel()
+  revealPendingCenterWorkbenchPanelOnFrame.cancel()
   pendingCenterWorkbenchRevealPanel = null
 })
 

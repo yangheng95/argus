@@ -293,13 +293,16 @@ test(
         const original = Element.prototype.scrollIntoView
         const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window)
         const originalCancelAnimationFrame = window.cancelAnimationFrame.bind(window)
+        const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect
         const clientWidthOwner =
           Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth")?.get
             ? HTMLElement.prototype
             : Element.prototype
         const clientWidthDescriptor = Object.getOwnPropertyDescriptor(clientWidthOwner, "clientWidth")
         if (!clientWidthDescriptor?.get) throw new Error("clientWidth getter was not found")
+        let activeFrameID = 0
         let frameDepth = 0
+        let nextFrameID = 1
         let sequence = 0
         ;(window as any).__screenshotBrowserLayoutEvents = []
         ;(window as any).__screenshotBrowserOpenPerf = {
@@ -354,10 +357,12 @@ test(
           Object.defineProperty(clientWidthOwner, "clientWidth", clientWidthDescriptor)
           window.requestAnimationFrame = originalRequestAnimationFrame
           window.cancelAnimationFrame = originalCancelAnimationFrame
+          Element.prototype.getBoundingClientRect = originalGetBoundingClientRect
           Element.prototype.scrollIntoView = original
         }
         const recordLayoutEvent = (event: Record<string, unknown>) => {
           ;(window as any).__screenshotBrowserLayoutEvents.push({
+            frameID: activeFrameID,
             inRaf: frameDepth > 0,
             sequence: ++sequence,
             ...event,
@@ -372,13 +377,28 @@ test(
             return clientWidthDescriptor.get!.call(this)
           },
         })
+        Element.prototype.getBoundingClientRect = function getBoundingClientRectInstrumented() {
+          const rect = originalGetBoundingClientRect.call(this)
+          if (
+            this instanceof HTMLElement &&
+            (this.id === "centerWorkbenchWorkflow" ||
+              this.id === "centerWorkbenchScreenshots" ||
+              this.dataset.centerWorkbenchSeparator !== undefined)
+          ) {
+            recordLayoutEvent({ id: this.id, type: "center-workbench-rect-read" })
+          }
+          return rect
+        }
         window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
           return originalRequestAnimationFrame((time) => {
+            const previousFrameID = activeFrameID
+            activeFrameID = nextFrameID++
             frameDepth += 1
             try {
               callback(time)
             } finally {
               frameDepth -= 1
+              activeFrameID = previousFrameID
             }
           })
         }) as typeof requestAnimationFrame
@@ -416,14 +436,33 @@ test(
       const layoutEvents = await page.evaluate(() => (window as any).__screenshotBrowserLayoutEvents)
       const synchronousEvents = layoutEvents.filter(
         (event: any) =>
-          (event.type === "screenshot-list-client-width" || event.type === "screenshots-scroll-into-view") &&
+          (event.type === "screenshot-list-client-width" ||
+            event.type === "screenshots-scroll-into-view" ||
+            event.type === "center-workbench-rect-read") &&
           !event.inRaf,
       )
       assert.deepEqual(synchronousEvents, [], `screenshot open did layout work outside RAF: ${JSON.stringify(layoutEvents)}`)
       const revealState = layoutEvents.filter((event: any) => event.type === "screenshots-scroll-into-view").at(-1)
       assert.ok(revealState, `screenshot open did not reveal the panel on RAF: ${JSON.stringify(layoutEvents)}`)
       assert.equal(typeof revealState.sequence, "number")
-      const { sequence: _sequence, ...revealStateStable } = revealState
+      assert.equal(typeof revealState.frameID, "number")
+      const centerWorkbenchRectReads = layoutEvents.filter((event: any) => event.type === "center-workbench-rect-read")
+      assert.ok(
+        centerWorkbenchRectReads.length > 0,
+        `screenshot open did not measure center workbench geometry: ${JSON.stringify(layoutEvents)}`,
+      )
+      const lastMeasurementBeforeReveal = centerWorkbenchRectReads
+        .filter((event: any) => event.sequence < revealState.sequence)
+        .at(-1)
+      assert.ok(
+        lastMeasurementBeforeReveal,
+        `screenshot reveal happened before geometry measurement was observed: ${JSON.stringify(layoutEvents)}`,
+      )
+      assert.ok(
+        revealState.frameID > lastMeasurementBeforeReveal.frameID,
+        `screenshot reveal shared the measurement RAF: ${JSON.stringify(layoutEvents)}`,
+      )
+      const { frameID: _frameID, sequence: _sequence, ...revealStateStable } = revealState
       assert.deepEqual(revealStateStable, {
         active: "true",
         grow: "1",

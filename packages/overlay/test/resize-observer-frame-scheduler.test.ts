@@ -198,10 +198,12 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   expect(main).toContain(
     "const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayout)",
   )
+  expect(main).toContain(
+    "const revealPendingCenterWorkbenchPanelOnFrame = createAnimationFrameScheduler(revealPendingCenterWorkbenchPanel)",
+  )
   expect(main).toContain("renderCenterWorkbenchPanelLayoutOnFrame.cancel()")
   expect(main).toContain("renderCenterWorkbenchPanelMeasurementsOnFrame.cancel()")
-  expect(main).not.toContain("createAnimationFrameScheduler(revealPendingCenterWorkbenchPanel)")
-  expect(main).not.toContain("revealCenterWorkbenchPanelOnFrame")
+  expect(main).toContain("revealPendingCenterWorkbenchPanelOnFrame.cancel()")
   expect(layoutFunction).toContain("renderCenterWorkbenchPanelWeights()")
   expect(layoutFunction).toContain("renderCenterWorkbenchPanelMeasurementsOnFrame.schedule()")
   expect(layoutFunction).not.toContain("renderCenterWorkbenchPanelSeparators()")
@@ -210,9 +212,10 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   expect(separatorRenderFunction).toContain("centerWorkbenchPanelResizeMetrics(panel, panels, geometry)")
   expect(separatorRenderFunction).not.toContain("centerWorkbenchPanelResizeMetrics(panel, panels)")
   expect(layoutRevealFunction).toContain("renderCenterWorkbenchPanelSeparators()")
-  expect(layoutRevealFunction).toContain("revealPendingCenterWorkbenchPanel()")
+  expect(layoutRevealFunction).toContain("revealPendingCenterWorkbenchPanelOnFrame.schedule()")
+  expect(layoutRevealFunction).not.toContain("revealPendingCenterWorkbenchPanel()")
   expect(layoutRevealFunction.indexOf("renderCenterWorkbenchPanelSeparators()")).toBeLessThan(
-    layoutRevealFunction.indexOf("revealPendingCenterWorkbenchPanel()"),
+    layoutRevealFunction.indexOf("revealPendingCenterWorkbenchPanelOnFrame.schedule()"),
   )
   expect(resetPanelFunction).toContain('scheduleCenterWorkbenchPanelReveal("workflow")')
   expect(resetPanelFunction).not.toContain("queueMicrotask")
