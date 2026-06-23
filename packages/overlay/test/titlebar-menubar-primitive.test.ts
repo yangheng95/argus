@@ -113,7 +113,9 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).toContain("<Menubar.CheckboxItem")
     expect(SOURCE).toContain('class="titlebar-menubar-item titlebar-menubar-checkbox"')
     expect(SOURCE).toContain("checked={props.checked}")
-    expect(SOURCE).toContain("onChange={(checked) => void props.onChange(checked)}")
+    expect(SOURCE).toContain(
+      "onChange={(checked) => runTitlebarMenuAction(props.label, () => props.onChange(checked))}",
+    )
     expect(SOURCE).toContain('testid="titlebar-auto-question"')
     expect(SOURCE).toContain('testid="titlebar-auto-confirm-proposed-tasks"')
     expect(SOURCE).not.toContain('class="titlebar-menubar-toggle"')
