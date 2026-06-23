@@ -102,10 +102,52 @@ export function Dialog(rawProps: DialogProps) {
   let dialogRef: HTMLElement | undefined
   let formRef: HTMLDivElement | undefined
   let removeDragListeners: (() => void) | undefined
+  let dialogDragFrame = 0
+  let pendingDialogDrag:
+    | {
+        clientX: number
+        clientY: number
+        form: HTMLElement
+        origin: { x: number; y: number }
+        startX: number
+        startY: number
+      }
+    | undefined
   const [dialogOffset, setDialogOffset] = createSignal({ x: 0, y: 0 })
   const [dragging, setDragging] = createSignal(false)
 
+  function cancelPendingDialogDrag() {
+    if (!dialogDragFrame) return
+    cancelAnimationFrame(dialogDragFrame)
+    dialogDragFrame = 0
+  }
+
+  function applyPendingDialogDrag() {
+    dialogDragFrame = 0
+    const pending = pendingDialogDrag
+    pendingDialogDrag = undefined
+    if (!pending) return
+    setDialogOffset(
+      clampDialogOffset(
+        pending.form,
+        pending.origin.x + pending.clientX - pending.startX,
+        pending.origin.y + pending.clientY - pending.startY,
+      ),
+    )
+  }
+
+  function flushPendingDialogDrag() {
+    cancelPendingDialogDrag()
+    applyPendingDialogDrag()
+  }
+
+  function schedulePendingDialogDrag() {
+    if (dialogDragFrame) return
+    dialogDragFrame = requestAnimationFrame(applyPendingDialogDrag)
+  }
+
   function stopDragging() {
+    flushPendingDialogDrag()
     setDragging(false)
     removeDragListeners?.()
     removeDragListeners = undefined
@@ -123,9 +165,15 @@ export function Dialog(rawProps: DialogProps) {
 
     const moveDialog = (moveEvent: PointerEvent) => {
       moveEvent.preventDefault()
-      setDialogOffset(
-        clampDialogOffset(form, origin.x + moveEvent.clientX - startX, origin.y + moveEvent.clientY - startY),
-      )
+      pendingDialogDrag = {
+        clientX: moveEvent.clientX,
+        clientY: moveEvent.clientY,
+        form,
+        origin,
+        startX,
+        startY,
+      }
+      schedulePendingDialogDrag()
     }
 
     const finishDialogDrag = () => stopDragging()
@@ -135,6 +183,8 @@ export function Dialog(rawProps: DialogProps) {
     window.addEventListener("pointerup", finishDialogDrag, { once: true })
     window.addEventListener("pointercancel", finishDialogDrag, { once: true })
     removeDragListeners = () => {
+      cancelPendingDialogDrag()
+      pendingDialogDrag = undefined
       window.removeEventListener("pointermove", moveDialog)
       window.removeEventListener("pointerup", finishDialogDrag)
       window.removeEventListener("pointercancel", finishDialogDrag)

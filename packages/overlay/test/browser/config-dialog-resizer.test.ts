@@ -310,12 +310,148 @@ test(
         `pointerup should flush the final pending width before cleanup: ${JSON.stringify(dragBurst)}`,
       )
       assert.equal(dragBurst.handleActive, "")
+      const dialogDrag = await page.evaluate(async () => {
+        const header = document.querySelector<HTMLElement>("#configDialog .dialog-header")
+        const form = document.querySelector<HTMLElement>("#configDialog .dialog-form")
+        if (!header || !form) throw new Error("Config dialog drag fixture is missing")
+        type RectRead = { frameDepth: number; inputDepth: number; target: string }
+        const record = {
+          frameDepth: 0,
+          inputDepth: 0,
+          reads: [] as RectRead[],
+        }
+        const originalRect = Element.prototype.getBoundingClientRect
+        const originalRaf = window.requestAnimationFrame.bind(window)
+        const captureRead = (target: Element) => {
+          if (target !== form && target !== document.body) return
+          record.reads.push({
+            frameDepth: record.frameDepth,
+            inputDepth: record.inputDepth,
+            target: target === form ? "form" : "body",
+          })
+        }
+        try {
+          Element.prototype.getBoundingClientRect = function () {
+            captureRead(this)
+            return originalRect.call(this)
+          }
+          window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+            originalRaf((time) => {
+              record.frameDepth += 1
+              try {
+                callback(time)
+              } finally {
+                record.frameDepth -= 1
+              }
+            })) as typeof window.requestAnimationFrame
+          const pointer = originalRect.call(header)
+          const startX = pointer.left + pointer.width / 2
+          const startY = pointer.top + pointer.height / 2
+          header.dispatchEvent(
+            new PointerEvent("pointerdown", {
+              bubbles: true,
+              button: 0,
+              cancelable: true,
+              clientX: startX,
+              clientY: startY,
+              isPrimary: true,
+              pointerId: 17,
+              pointerType: "mouse",
+            }),
+          )
+          record.reads = []
+          record.inputDepth += 1
+          try {
+            for (let index = 0; index < 30; index += 1) {
+              window.dispatchEvent(
+                new PointerEvent("pointermove", {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: startX + 90 + index,
+                  clientY: startY + 24,
+                  pointerId: 17,
+                  pointerType: "mouse",
+                }),
+              )
+            }
+            await Promise.resolve()
+          } finally {
+            await Promise.resolve()
+            record.inputDepth -= 1
+          }
+          const afterMoves = record.reads.slice()
+          await new Promise<void>((resolve) => originalRaf(() => originalRaf(() => resolve())))
+          await Promise.resolve()
+          const afterFrame = record.reads.slice()
+          record.reads = []
+          record.inputDepth += 1
+          try {
+            window.dispatchEvent(
+              new PointerEvent("pointermove", {
+                bubbles: true,
+                cancelable: true,
+                clientX: startX + 140,
+                clientY: startY + 48,
+                pointerId: 17,
+                pointerType: "mouse",
+              }),
+            )
+            window.dispatchEvent(
+              new PointerEvent("pointerup", {
+                bubbles: true,
+                cancelable: true,
+                clientX: startX + 140,
+                clientY: startY + 48,
+                pointerId: 17,
+                pointerType: "mouse",
+              }),
+            )
+            await Promise.resolve()
+          } finally {
+            await Promise.resolve()
+            record.inputDepth -= 1
+          }
+          const afterPointerUpFlush = record.reads.slice()
+          return {
+            afterFrame,
+            afterMoves,
+            afterPointerUpFlush,
+            dragging: form.dataset.dialogDragging || "",
+            x: form.style.getPropertyValue("--dialog-drag-x"),
+            y: form.style.getPropertyValue("--dialog-drag-y"),
+          }
+        } finally {
+          Element.prototype.getBoundingClientRect = originalRect
+          window.requestAnimationFrame = originalRaf
+        }
+      })
+      assert.deepEqual(
+        dialogDrag.afterMoves,
+        [],
+        `dialog pointermove burst should not read layout synchronously: ${JSON.stringify(dialogDrag)}`,
+      )
+      const frameFormReads = dialogDrag.afterFrame.filter((entry) => entry.target === "form")
+      const frameBodyReads = dialogDrag.afterFrame.filter((entry) => entry.target === "body")
+      assert.equal(frameFormReads.length, 1, `dialog drag should read form rect once in RAF: ${JSON.stringify(dialogDrag)}`)
+      assert.equal(frameBodyReads.length, 1, `dialog drag should read body rect once in RAF: ${JSON.stringify(dialogDrag)}`)
+      assert.ok(
+        dialogDrag.afterFrame.every((entry) => entry.frameDepth > 0 && entry.inputDepth === 0),
+        `dialog drag layout reads must run inside RAF outside pointermove: ${JSON.stringify(dialogDrag)}`,
+      )
+      assert.ok(
+        dialogDrag.afterPointerUpFlush.some((entry) => entry.inputDepth > 0),
+        `dialog pointerup should flush the final pending clamp: ${JSON.stringify(dialogDrag)}`,
+      )
+      assert.equal(dialogDrag.dragging, "")
+      assert.ok(dialogDrag.x !== "0px" || dialogDrag.y !== "0px", `dialog drag should apply a visible offset: ${JSON.stringify(dialogDrag)}`)
       const notifications = await page.evaluate(() =>
         Array.from(document.querySelectorAll<HTMLElement>('.app-notification[role="alert"]')).map((node) =>
           node.textContent?.replace(/\s+/g, " ").trim(),
         ),
       )
       assert.deepEqual(notifications, [])
+      await page.setViewport({ width: 1120, height: 720 })
+      await page.waitForFunction(() => document.body.getBoundingClientRect().width >= 1120)
       mkdirSync(resolve(".scratch"), { recursive: true })
       writeFileSync(resolve(".scratch/config-dialog-resizer.png"), await page.screenshot({ fullPage: false }))
     } finally {
