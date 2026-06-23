@@ -149,7 +149,7 @@ export async function syncLocalServerUrl(options: SyncLocalServerUrlOptions = {}
   }
   // Update the settings store + persist + push to API client
   applySettings({ ...settingsStore, serverUrl: next })
-  saveSettings()
+  await saveSettings()
   configureApi({ serverUrl: next })
   return info
 }
@@ -178,7 +178,7 @@ export async function restartLocalServer(): Promise<LocalServerInfo | null> {
   setAppStore("serverPid", typeof info.pid === "number" ? info.pid : undefined)
   const next = normalizeUrl(info.url, settingsStore.serverUrl)
   applySettings({ ...settingsStore, serverUrl: next })
-  saveSettings()
+  await saveSettings()
   configureApi({ serverUrl: next })
   return info
 }

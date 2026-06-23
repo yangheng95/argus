@@ -105,7 +105,11 @@ export function TaskDirContent() {
   function syncPanelData(): void {
     syncRecentDirs()
     setPathDraft(dir())
-    void syncDiscoveredProjects()
+    void syncDiscoveredProjects().catch((err) => {
+      const message = err instanceof Error ? err.message : String(err)
+      setDiscoveryError(message)
+      AppLog.warn("ui", "Failed to discover local OpenCorvus projects", { error: message })
+    })
   }
 
   function syncRecentPanelGeometry(): void {
@@ -556,6 +560,8 @@ export function InitGitButton() {
     setBusy(true)
     try {
       await initGitCurrent()
+    } catch (error) {
+      AppLog.error("ui", "Failed to initialize git repository", { error: String(error) })
     } finally {
       setBusy(false)
     }

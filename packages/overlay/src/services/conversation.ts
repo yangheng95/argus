@@ -485,7 +485,10 @@ export function scheduleLatestConversationTailMerge(taskID: string): void {
     scheduledTailMergeRunning = false
     if (scheduledTailMergeTaskID) scheduleLatestConversationTailMerge(scheduledTailMergeTaskID)
   }
-  void run()
+  void run().catch((error) => {
+    scheduledTailMergeRunning = false
+    console.error("[conversation] scheduled tail merge owner failed", error)
+  })
 }
 
 export function canLoadOlderConversationHistory(source: BoardSource | null = boardStore.selectedSource): boolean {

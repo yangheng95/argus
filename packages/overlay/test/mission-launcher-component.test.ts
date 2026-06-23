@@ -252,7 +252,7 @@ test("Mission activity does not implicitly reopen the newest Mission session whi
   expect(MAIN_TSX).toContain("setMissionLauncherActive(false)")
   expect(MAIN_TSX).toContain("function openMissionLauncher()")
   expect(MAIN_TSX).toContain("setMissionLauncherActive(true)")
-  expect(MAIN_TSX).toContain('void selectTask("")')
+  expect(MAIN_TSX).toContain('runMainAsync("mission.open-launcher-deselect", () => selectTask(""))')
 })
 
 test("New Task launcher clears stale conversation state and owns Tasks focus", () => {
@@ -266,7 +266,7 @@ test("New Task launcher clears stale conversation state and owns Tasks focus", (
   expect(block).toContain('resetCenterWorkbenchToFocusedPanel("tasks")')
   expect(block).toContain('setSelectedLeftActivity("tasks")')
   expect(block).toContain('setSelectedLeftPanelActivity("tasks")')
-  expect(block).toContain('void selectTask("")')
+  expect(block).toContain('runMainAsync("task.open-launcher-deselect", () => selectTask(""))')
   expect(MAIN_TSX).toContain('document.getElementById("btnCreateTask")?.addEventListener("click"')
   expect(MAIN_TSX).toContain("openTaskLauncher()")
 })
@@ -279,7 +279,7 @@ test("Mission task projection selection explicitly rebinds the left toolbar and 
   expect(block).toContain('resetCenterWorkbenchToFocusedPanel("tasks")')
   expect(block).toContain('setSelectedLeftActivity("tasks")')
   expect(block).toContain('setSelectedLeftPanelActivity("tasks")')
-  expect(block).toContain("void selectTask(taskID, { directory })")
+  expect(block).toContain('runMainAsync("task.select-mission-task", () => selectTask(taskID, { directory }))')
   expect(MISSION_TSX).toContain("props.onSelectTask(task.id, task.directory)")
   expect(MISSION_LIST_TSX).toContain("props.onSelectTask(props.task)")
   expect(SERVICES_TASK).toContain("export interface SelectTaskOptions")

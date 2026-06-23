@@ -363,7 +363,14 @@ function TaskRow(props: {
     setEditing(false)
     setDraftTitle("")
     if (!next || next === rawTitle().trim()) return
-    void props.onRenameTask?.(id(), next)
+    void Promise.resolve(props.onRenameTask?.(id(), next)).catch((error) => {
+      notifyError({
+        id: `task:rename:${id()}`,
+        title: t("common.error"),
+        message: error instanceof Error ? error.message : String(error),
+        details: formatErrorDetails(error),
+      })
+    })
   }
 
   return (

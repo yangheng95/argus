@@ -281,8 +281,14 @@ function retryBoard(sync: boolean): void {
   setBoardRetryCount(boardStore.boardRetryCount + 1)
   _boardRetryTimer = setTimeout(() => {
     _boardRetryTimer = null
-    void loadBoard({ sync: boardStore.boardSyncPending })
+    observeScheduledBoardLoad("retry", loadBoard({ sync: boardStore.boardSyncPending }))
   }, delay)
+}
+
+function observeScheduledBoardLoad(owner: string, promise: Promise<void>): void {
+  void promise.catch((error) => {
+    console.error(`[board] scheduled ${owner} refresh failed`, error)
+  })
 }
 
 export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
@@ -364,7 +370,7 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
         setBoardQueued(false)
         if (!failed && !_boardRetryTimer) {
           queueMicrotask(() => {
-            void loadBoard({ sync: boardStore.boardSyncPending })
+            observeScheduledBoardLoad("queued", loadBoard({ sync: boardStore.boardSyncPending }))
           })
         }
       }
@@ -639,7 +645,7 @@ export function scheduleBoard(delay = 0): void {
   boardLoadTimer = setTimeout(() => {
     boardLoadTimer = null
     boardLoadDeadline = 0
-    void loadBoard({ sync: true })
+    observeScheduledBoardLoad("debounced", loadBoard({ sync: true }))
   }, effectiveDelay)
 }
 

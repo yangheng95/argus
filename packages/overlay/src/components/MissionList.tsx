@@ -4,6 +4,7 @@ import { detailStamp, relativeTime } from "../utils/time"
 import { t } from "../utils/i18n"
 import { taskLifecycleStatusLabel } from "../utils/status-labels"
 import { buildMissionDebugBlob, writeDebugClipboard } from "../utils/debug-info"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { ArmedConfirmButton } from "./ui/ArmedConfirmButton"
@@ -30,6 +31,10 @@ export interface MissionListProps {
   loadingMore?: boolean
   onLoadMore?: () => void
   actionBusy?: string
+}
+
+function missionRowErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 type MissionGroup = {
@@ -253,7 +258,14 @@ function MissionRow(props: {
     setEditing(false)
     setDraftTitle("")
     if (!next || next === title().trim()) return
-    void props.onRenameMission(props.mission, next)
+    void Promise.resolve(props.onRenameMission(props.mission, next)).catch((error) => {
+      notifyError({
+        id: `mission-row:rename:${props.mission.missionID}`,
+        title: t("common.error"),
+        message: missionRowErrorMessage(error),
+        details: formatErrorDetails(error),
+      })
+    })
   }
 
   async function copyMissionDebugInfo(): Promise<void> {
