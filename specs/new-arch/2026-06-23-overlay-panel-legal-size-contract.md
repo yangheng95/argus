@@ -921,3 +921,78 @@ small-panel behavior easier to reintroduce.
   legal overlay shell instead of compacting the right toolbar or center panels.
 - Rechecked scope: this round did not change component-local container queries,
   only unreachable overlay-shell compact branches.
+
+## Follow-up 2026-06-23: Native Aspect Platform Boundary
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Pascal read-only audit | Historical viewport spec said native resize cannot leave the overlay below the aspect contract, but the current pre-commit native hook is Windows-only. |
+| `2026-06-22-native-resize-no-set-size-loop.md` | Do not restore `WindowEvent::Resized -> window.set_size(...)`; that feedback loop caused resize jank. |
+| `2026-06-22-overlay-layout-aspect-frame.md` | Windows `WM_SIZING` constrains the mutable resize rectangle before OS commit. |
+| Local Tauri/tao source | `WindowSizeConstraints` exposes min/max size only; no cross-platform aspect-ratio constraint exists in the public Tauri runtime surface. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Windows native resize | `main.rs` installs `install_overlay_resize_aspect_constraint()` under `#[cfg(windows)]`, using `WM_SIZING` and `SetWindowSubclass`. | Keep as the only native pre-commit aspect owner currently implemented. |
+| Non-Windows native resize | Tauri/tao exposes resize events and min/max constraints, not a verified aspect-ratio pre-commit API. | Do not add a post-resize correction loop or unverified platform dependency. |
+| Browser shell | CSS/TS legal frame clamps illegal browser/dev viewports. | Keep as the cross-platform WebView-side safety net. |
+| Historical specs | `2026-06-22-overlay-viewport-size-contract.md` still implied platform-neutral native aspect enforcement. | Correct the wording to Windows native + cross-platform browser shell. |
+| Static test | `overlay-window-size-contract.test.ts` checked for the Windows hook but did not state the platform boundary. | Require `#[cfg(windows)]` for the native aspect hook and reject `RunEvent::WindowEvent` feedback. |
+
+### Root Cause
+
+The system has two different guarantees that were conflated in older prose:
+Windows native resize is constrained before the OS commits a rectangle, while
+browser/dev illegal viewports are clamped by the legal shell. Tauri's public
+runtime constraints do not currently provide a cross-platform aspect-ratio
+constraint, so adding non-Windows `WindowEvent::Resized -> set_size()` logic
+would reintroduce the exact live resize feedback loop the project retired.
+
+### Fix Plan
+
+1. Correct historical spec wording so it no longer claims platform-neutral
+   native aspect-ratio enforcement.
+2. Add static coverage that the native aspect hook remains explicitly
+   Windows-gated and that the event-loop resize feedback path is absent.
+3. Keep this as a contract correction unless a verified macOS/Linux pre-commit
+   native aspect API is added and tested on those platforms.
+
+### Acceptance
+
+- Specs distinguish Windows native pre-commit aspect enforcement from the
+  cross-platform browser legal shell.
+- Static tests reject reintroducing `RunEvent::WindowEvent` / `WindowEvent::Resized`
+  resize correction paths.
+- No unverified macOS/Linux native dependency or fallback resize loop is added.
+
+### Implementation
+
+- Corrected `2026-06-22-overlay-viewport-size-contract.md` so native aspect
+  enforcement is described as Windows pre-commit `WM_SIZING`, with non-Windows
+  covered by the browser legal shell unless a verified native pre-commit API is
+  added later.
+- Corrected `2026-06-22-overlay-layout-aspect-frame.md` so its source ownership
+  language no longer implies a deleted standalone aspect token or
+  platform-neutral native aspect hook.
+- Updated `overlay-window-size-contract.test.ts` to require `#[cfg(windows)]`
+  on the native aspect hook and to reject `RunEvent::WindowEvent` feedback.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts --timeout 30000`.
+- PASS after correcting the command filter: `cargo test --manifest-path packages/overlay/src-tauri/Cargo.toml overlay_ -- --nocapture`.
+
+### Self Review
+
+- Rechecked local Tauri/tao sources: `WindowSizeConstraints` exposes min/max
+  dimensions, not a cross-platform aspect-ratio constraint.
+- Rechecked the Windows path: `WM_SIZING` still constrains before OS commit, and
+  the static test now proves that path remains Windows-gated.
+- Rechecked the forbidden path: no `RunEvent::WindowEvent` or
+  `tauri::WindowEvent::Resized` correction path was introduced.
+- Rechecked scope: no macOS/Linux dependency, unverified native hook, fallback
+  path, or live `set_size()` resize loop was added.

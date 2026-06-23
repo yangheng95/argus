@@ -35,7 +35,7 @@ toolbar/panel operations feel stuck.
 | --- | --- | --- |
 | Native window creation | `packages/overlay/src-tauri/tauri.conf.json` sets `width`, `height`, `minWidth`, and `minHeight`. | Raise native min dimensions to the desktop layout contract and keep the config as the creation-time source. |
 | Native startup sizing | `packages/overlay/src-tauri/src/main.rs` independently clamps startup size to `760..1600` and `480..920`. | Read the configured `main` window minimum from `tauri.conf.json` through `app.config()` and use a pure size-contract helper. |
-| Native resize | `main.rs` currently only handles `RunEvent::Exit`. | Enforce the same minimum aspect ratio after resize without restarting or reloading the running overlay. |
+| Native resize | `main.rs` currently only handles `RunEvent::Exit`; Windows has a `WM_SIZING` pre-commit hook in the later aspect-frame follow-up. | Enforce native aspect before commit only where the OS/Tauri stack exposes a supported hook; do not add a post-resize `set_size()` feedback loop on other platforms. |
 | Browser shell sizing | `base.css` owns the body shell. | Add overlay minimum viewport dimensions so browser/dev fixtures cannot compress the workbench below the desktop contract. |
 | Layout tokens | `design-language.css` owns structural layout tokens. | Add overlay viewport and center workbench panel minimum tokens here. |
 | Pane layout | `services/pane.ts` uses hardcoded `120 * scale` and `300 * scale` floors while tokens already define `--ui-rail-min-width` and `--ui-chat-min-width`. | Resolve layout tokens from CSS and remove the smaller hardcoded floors. |
@@ -61,7 +61,8 @@ brand slot to icon width while leaving the wordmark visible.
    `1120x720`.
 2. Add a pure Rust size helper that applies configured min dimensions plus a
    minimum aspect ratio derived from them.
-3. Change startup sizing and resize events to use that helper.
+3. Change startup sizing and Windows live sizing to use that helper without
+   reintroducing resize-event feedback.
 4. Add CSS overlay viewport tokens and apply them to the shell.
 5. Add a layout-token resolver for JS/TS code that needs pixel values from CSS
    tokens.
@@ -77,8 +78,9 @@ brand slot to icon width while leaving the wordmark visible.
 - The native overlay minimum window dimensions are `1120x720`.
 - Startup sizing cannot choose a width/height below the configured native
   minimum.
-- Resize cannot leave the native overlay below the minimum aspect ratio
-  implied by `1120x720`.
+- Windows native resize cannot leave the overlay below the minimum aspect ratio
+  implied by `1120x720`; other platforms rely on the browser legal shell unless
+  a verified native pre-commit aspect API is added.
 - Browser/dev shell layout has matching minimum viewport tokens.
 - Pane layout no longer contains the `120 * scale` rail floor or `300 * scale`
   chat floor.
