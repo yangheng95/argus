@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { ProjectTable } from "../../src/project/project.sql"
+import { SessionTable } from "../../src/session/session.sql"
+import { SessionPromptState } from "../../src/session/prompt/state"
+import { SessionStatus } from "../../src/session/status"
 import { Database } from "../../src/storage/db"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { resetDatabase } from "../fixture/db"
@@ -116,6 +119,56 @@ function seedRunningTaskRun() {
   return { taskID, runID, projectID }
 }
 
+function seedRunningTaskSession() {
+  const now = Date.now()
+  const taskID = `task_cancel_prompt_${now}_${Math.random().toString(36).slice(2)}`
+  const sessionID = `ses_cancel_prompt_${now}_${Math.random().toString(36).slice(2)}`
+  const projectID = `project_cancel_prompt_${now}_${Math.random().toString(36).slice(2)}`
+  Database.transaction((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "cancel prompt settle test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(SessionTable)
+      .values({
+        id: sessionID,
+        project_id: projectID,
+        parent_id: null,
+        slug: "cancel-prompt-settle",
+        directory: process.cwd(),
+        title: "Cancel prompt settle",
+        version: "1",
+        kind: "root",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        session_id: sessionID,
+        source: "test",
+        title: "cancel prompt settle regression",
+        request: "prove terminal status is not cancellation proof",
+        priority: "normal",
+        executor: "opencorvus",
+        time_started: now,
+        time_completed: null,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+  return { taskID, sessionID }
+}
+
 describe("cancelTask under unresponsive executor.abort", () => {
   test("fails fast without marking task cancelled + records abort_timeout in decision_log", async () => {
     ExecutorRegistry.reset()
@@ -156,5 +209,31 @@ describe("cancelTask under unresponsive executor.abort", () => {
     expect(timeoutEntry).toBeTruthy()
     expect(timeoutEntry?.phase).toBe("cancel")
     expect(timeoutEntry?.value).toContain("executor.abort")
+  }, 5_000)
+
+  test("does not mark task cancelled while the cancelled prompt state is still live", async () => {
+    const { taskID, sessionID } = seedRunningTaskSession()
+    const abort = SessionPromptState.start(sessionID, process.cwd())
+    expect(abort).toBeDefined()
+    SessionStatus.set(sessionID, { type: "streaming" }, { publish: false })
+
+    const { EngineService } = await import("../../src/task-api")
+    try {
+      await expect(
+        EngineService.cancelTask(taskID, {
+          cleanupTimeoutMs: 100,
+          promptSettleInactivityMs: 20,
+        }),
+      ).rejects.toBeInstanceOf(TaskCancellationIncompleteError)
+
+      const taskRow = Database.use((db) =>
+        db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+      )
+      expect(taskRow?.time_completed).toBeNull()
+      expect(taskRow?.error).toBeNull()
+      expect(SessionPromptState.isActive(sessionID, process.cwd())).toBe(true)
+    } finally {
+      SessionPromptState.finish(sessionID, abort, process.cwd())
+    }
   }, 5_000)
 })

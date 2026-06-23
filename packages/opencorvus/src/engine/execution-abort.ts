@@ -3,7 +3,11 @@ import type { ExecutorNameInfo } from "@/executor/contract"
 import { Session } from "@/session"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/await-with-timeout"
-import { cancelSessionPromptInScope } from "./cancellation-scope"
+import {
+  assertSessionPromptSubtreeFinished,
+  cancelSessionPromptInScope,
+  requestSessionPromptSubtreeCancellation,
+} from "./cancellation-scope"
 import { createTaskCancellationIncomplete } from "./cancellation-error"
 import { isLiveGoalRunStatus } from "./catalog"
 import { updateGoalRun } from "./persist"
@@ -28,10 +32,12 @@ export async function abortChildExecutionForSession(input: {
 }): Promise<AbortChildExecutionResult> {
   const result = emptyResult()
   const session = await Session.get(input.sessionID)
-  result.promptCancelled = cancelSessionPromptInScope({
-    session,
+  const promptCancellation = await requestSessionPromptSubtreeCancellation({
+    sessionID: input.sessionID,
+    projectID: session.projectID,
     taskID: input.taskID,
   })
+  result.promptCancelled = promptCancellation.cancelledSessions.length > 0
   result.activityGateAborted = true
 
   const goalRun = listGoalRunsForTask(input.taskID).find(
@@ -48,6 +54,12 @@ export async function abortChildExecutionForSession(input: {
       }),
     )
     result.cancelled = true
+    await assertSessionPromptSubtreeFinished({
+      sessions: promptCancellation.cancelledSessions,
+      failures: promptCancellation.failures,
+      taskID: input.taskID,
+      inactivityTimeoutMs: input.abortTimeoutMs,
+    })
     return result
   }
 
@@ -71,6 +83,12 @@ export async function abortChildExecutionForSession(input: {
     }
   }
 
+  await assertSessionPromptSubtreeFinished({
+    sessions: promptCancellation.cancelledSessions,
+    failures: promptCancellation.failures,
+    taskID: input.taskID,
+    inactivityTimeoutMs: input.abortTimeoutMs,
+  })
   result.cancelled = true
   return result
 }

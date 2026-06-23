@@ -25,11 +25,21 @@ export namespace SessionPromptState {
         resolve(input: Message.WithParts): void
         reject(reason?: any): void
       }[]
+      finished: Promise<void>
+      finish(): void
     }
   >
 
   function createPromptState(): PromptState {
     return {}
+  }
+
+  function createFinishSignal() {
+    let finish!: () => void
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    return { finished, finish }
   }
 
   const instanceState = lazyInstanceState(createPromptState)
@@ -53,11 +63,22 @@ export namespace SessionPromptState {
     const s = state(directory)
     if (s[sessionID]) return
     const controller = new AbortController()
+    const finished = createFinishSignal()
     s[sessionID] = {
       abort: controller,
       callbacks: [],
+      finished: finished.finished,
+      finish: finished.finish,
     }
     return controller.signal
+  }
+
+  export function isActive(sessionID: string, directory?: string): boolean {
+    return Boolean(state(directory)[sessionID])
+  }
+
+  export function waitForFinish(sessionID: string, directory?: string): Promise<void> {
+    return state(directory)[sessionID]?.finished ?? Promise.resolve()
   }
 
   export function resume(sessionID: string, directory?: string) {
@@ -104,6 +125,7 @@ export namespace SessionPromptState {
       cb.reject(error)
     }
     match.callbacks = []
+    match.finish()
     delete s[sessionID]
   }
 

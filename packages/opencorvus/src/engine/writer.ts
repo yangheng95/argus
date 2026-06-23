@@ -57,7 +57,11 @@ import { isGoalRunOrphaned } from "./orphan"
 import { taskIDForSession } from "@/orchestrator/task-event"
 import { Project } from "@/project/project"
 import { Instance } from "@/project/instance"
-import { cancelSessionPromptInScope, terminateSessionPromptInScope } from "./cancellation-scope"
+import {
+  assertSessionPromptSubtreeFinished,
+  requestSessionPromptSubtreeCancellation,
+  terminateSessionPromptInScope,
+} from "./cancellation-scope"
 
 const log = Log.create({ service: "engine-writer" })
 
@@ -697,12 +701,13 @@ export async function abortLiveOrchestratorToolOwnership(input: {
   for (const ownership of ownerships) {
     const childSessionID = ownership.payload.child_session_id
     const childSession = await Session.get(childSessionID)
-    cancelSessionPromptInScope({
-      session: childSession,
+    const promptCancellation = await requestSessionPromptSubtreeCancellation({
+      sessionID: childSession.id,
+      projectID: childSession.projectID,
       taskID: input.taskID,
       handle: "abortLiveOrchestratorToolOwnership",
     })
-    sessions += 1
+    sessions += promptCancellation.sessionIDs.length
 
     if (ownership.payload.goal_run_id) {
       const aborted = await abortGoalRunExecution({
@@ -712,6 +717,13 @@ export async function abortLiveOrchestratorToolOwnership(input: {
       })
       if (aborted.goalRunAborted) goalRuns += 1
     }
+
+    await assertSessionPromptSubtreeFinished({
+      sessions: promptCancellation.cancelledSessions,
+      failures: promptCancellation.failures,
+      taskID: input.taskID,
+      handle: "abortLiveOrchestratorToolOwnership",
+    })
 
     toolParts += await abortOwnedToolPart({
       ownership: ownership.payload,

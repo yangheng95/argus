@@ -92,7 +92,11 @@ import {
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
 import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
-import { cancelSessionPromptByID, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import {
+  assertSessionPromptSubtreeFinished,
+  cancelSessionPromptByID,
+  requestSessionPromptSubtreeCancellation,
+} from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
 import { listLiveOrchestratorToolOwnership } from "@/engine/tool-ownership"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
@@ -312,6 +316,8 @@ export interface CancelTaskOptions {
   abortTimeoutMs?: number
   /** Override the cleanup deadline (ms). Tests use this to force timeout in <1s. */
   cleanupTimeoutMs?: number
+  /** Override prompt-settle inactivity (ms). Tests use this to keep zombie checks small. */
+  promptSettleInactivityMs?: number
 }
 
 async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
@@ -1848,13 +1854,13 @@ export namespace EngineService {
     // Abort Orchestrator and any in-progress pipeline stage
     Orchestrator.abort(taskID)
     abortTaskPipeline(taskID)
-    const sessionIDs = task.session_id
-      ? await Session.treeInProject({ sessionID: task.session_id, projectID: task.project_id })
-      : []
-    for (const sessionID of sessionIDs.reverse()) {
-      const session = await Session.get(sessionID)
-      cancelSessionPromptInScope({ session, taskID })
-    }
+    const promptCancellation = task.session_id
+      ? await requestSessionPromptSubtreeCancellation({
+          sessionID: task.session_id,
+          projectID: task.project_id,
+          taskID,
+        })
+      : { sessionIDs: [], cancelledSessions: [], failures: [] }
     const liveOwnerships = listLiveOrchestratorToolOwnership(taskID)
     if (liveOwnerships.length > 0) {
       const { abortLiveOrchestratorToolOwnership } = await import("@/engine/writer")
@@ -1941,6 +1947,12 @@ export namespace EngineService {
         "Run aborted",
       )
     }
+    await assertSessionPromptSubtreeFinished({
+      sessions: promptCancellation.cancelledSessions,
+      failures: promptCancellation.failures,
+      taskID,
+      inactivityTimeoutMs: options?.promptSettleInactivityMs,
+    })
     await updateTask(
       task,
       {

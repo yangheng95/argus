@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import {
   createOrchestratorToolOwnershipPayload,
@@ -9,6 +9,9 @@ import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
+import { SessionPrompt } from "../../src/session/prompt"
+import { SessionPromptState } from "../../src/session/prompt/state"
+import { SessionStatus } from "../../src/session/status"
 import { Database, eq } from "../../src/storage/db"
 import { EngineService } from "../../src/task-api"
 import { Log } from "../../src/util/log"
@@ -18,6 +21,7 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 afterEach(async () => {
+  mock.restore()
   await Instance.disposeAll()
   await resetDatabase()
 })
@@ -29,6 +33,9 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
     const taskID = Identifier.ascending("task")
     let messageID = ""
     let partID = ""
+    let childID = ""
+    let descendantID = ""
+    let descendantAbort: AbortSignal | undefined
 
     await Instance.provide({
       directory: tmp.path,
@@ -41,9 +48,18 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
         })
         const child = await Session.create({
           kind: "frontend-research",
-          parentID: orchestrator.id,
           title: "cancel child",
         })
+        childID = child.id
+        const descendant = await Session.create({
+          kind: "frontend-research",
+          parentID: child.id,
+          title: "cancel descendant",
+        })
+        descendantID = descendant.id
+        descendantAbort = SessionPromptState.start(descendant.id, tmp.path)
+        expect(descendantAbort).toBeDefined()
+        SessionStatus.set(descendant.id, { type: "streaming" }, { publish: false })
         messageID = Identifier.ascending("message")
         partID = Identifier.ascending("part")
 
@@ -103,7 +119,7 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
           orchestratorMessageID: messageID,
           toolCallID: "call_cancel_live_ownership",
           toolPartID: partID,
-          childSessionID: child.id,
+          childSessionID: childID,
           toolName: "build",
           scope: "task",
           now,
@@ -120,8 +136,20 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
     expect(Instance.current()).toBeUndefined()
     expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(1)
 
+    const cancelled: string[] = []
+    spyOn(SessionPrompt, "cancel").mockImplementation((sessionID, directory) => {
+      const result = SessionPromptState.cancel(sessionID, directory)
+      if (result) cancelled.push(sessionID)
+      if (sessionID === descendantID && descendantAbort) {
+        queueMicrotask(() => SessionPromptState.finish(sessionID, descendantAbort!, directory))
+      }
+      return result
+    })
+
     await EngineService.cancelTask(taskID)
 
+    expect(cancelled).toContain(descendantID)
+    expect(SessionPromptState.isActive(descendantID, tmp.path)).toBe(false)
     expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
     const part = (await Message.parts(messageID)).find((item) => item.id === partID)
     expect(part?.type).toBe("tool")

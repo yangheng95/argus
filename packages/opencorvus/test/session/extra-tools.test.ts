@@ -17,8 +17,9 @@ import { AttachmentStore } from "../../src/storage/attachment-store"
 import { tmpdir } from "../fixture/fixture"
 import { Agent } from "../../src/agent/agent"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
-import { cancelSessionPromptInScope } from "../../src/engine/cancellation-scope"
+import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "../../src/engine/cancellation-scope"
 import { TaskCancellationIncompleteError } from "../../src/engine/cancellation-error"
+import { SessionPromptState } from "../../src/session/prompt/state"
 
 const dummyTool = () =>
   tool({
@@ -163,6 +164,29 @@ describe("SessionLoop session runtime contract", () => {
           expect(SessionStatus.get(sessionID)).toEqual({ type: "streaming" })
         } finally {
           SessionStatus.set(sessionID, { type: "idle" }, { publish: false })
+        }
+      },
+    })
+  })
+
+  test("cancellation settle proof rejects terminal status while prompt state remains live", async () => {
+    const sessionID = `ses_runtime_${Date.now()}_settle`
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const abort = SessionPromptState.start(sessionID, tmp.path)
+        expect(abort).toBeDefined()
+        try {
+          SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" }, { publish: false })
+          await expect(
+            awaitSessionPromptFinishedInScope({
+              session: { id: sessionID, directory: tmp.path },
+              inactivityTimeoutMs: 20,
+            }),
+          ).rejects.toThrow(TaskCancellationIncompleteError)
+        } finally {
+          SessionPromptState.finish(sessionID, abort, tmp.path)
         }
       },
     })

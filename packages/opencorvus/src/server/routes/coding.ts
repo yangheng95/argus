@@ -8,7 +8,7 @@ import { HTTPException } from "hono/http-exception"
 import { Instance } from "@/project/instance"
 import { EngineService } from "@/task-api"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
-import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import {
   RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
   isRightSidebarCodingAssistantSession,
@@ -272,6 +272,7 @@ export function CodingRoutes() {
           reason: "coding assistant stopped",
           source: "session.prompt_async",
         })
+        await awaitSessionPromptFinishedInScope({ session, handle: "coding.session.abort" })
         return c.json(true)
       },
     )
