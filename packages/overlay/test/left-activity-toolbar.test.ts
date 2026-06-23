@@ -87,14 +87,14 @@ test("left activity toolbar owns task, mission, assistant, memory, skill, and MC
   expect(main).toContain("appStore.skillMounts.unmounted_count")
   expect(main).toContain('data-tone="warn"')
   expect(main).toContain('id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp"')
-  expect(main).toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />')
-  expect(main).toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />')
-  expect(main).not.toContain(
+  expect(main).toContain(
     '<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />',
   )
-  expect(main).not.toContain(
+  expect(main).toContain(
     '<McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />',
   )
+  expect(main).not.toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />')
+  expect(main).not.toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />')
   expect(main).toContain('active={selectedLeftPanelActivity() === "memory"}')
   expect(main).toContain("directory={activeDirectory}")
   expect(icons).toContain("ListTodo")

@@ -278,6 +278,19 @@ replaced by the canonical `SkillTool` initialized with the resolved surface for 
 This means a model may still attempt `skill({"name":"..."})`, but an unmounted or disabled skill
 fails at execution and cannot return full skill content.
 
+### 2026-06-24 overlay refresh audit
+
+The matrix refresh button must not depend on whichever panel last configured the global API
+directory. Toolbar panels and the settings dialog pass the active project directory directly into
+`SkillMarketPanel`, and `currentDirectory()` applies that directory before every project-scoped
+request.
+
+`/skill/mounts` is the single overlay projection for the matrix and skill pool. `loadExtensions()`
+and the skill panel reload path must not concurrently call `/skill/installed` and `/skill/mounts`,
+because both write `appStore.skills` and the later response can make a successful matrix refresh
+look unchanged. `/skill/installed` remains only the installed-pool route for delete/partial-failure
+reconciliation.
+
 Overlay:
 
 - Agent Skills panel renders pool + agent matrix from `/skill/mounts`.

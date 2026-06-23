@@ -23,6 +23,21 @@ function fakeTransport(requests: TransportRequest[]): HostTransport {
       if (req.path === "skill/installed") {
         return { status: 200, ok: true, headers: {}, body: [{ name: "task-skill", builtin: false }] }
       }
+      if (req.path === "skill/mounts") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            scope: "project",
+            skills: [{ name: "task-skill", builtin: false, mounted_agents: ["build"], unmounted: false }],
+            agents: [],
+            matrix: [],
+            project_mounts: { agents: { build: ["task-skill"] } },
+            unmounted_count: 0,
+          },
+        }
+      }
       if (req.path === "mcp") return { status: 200, ok: true, headers: {}, body: { docs: { status: "connected" } } }
       if (req.path === "path") return { status: 200, ok: true, headers: {}, body: { directory: "D:/repo/from-task" } }
       if (req.path === "vcs") return { status: 200, ok: true, headers: {}, body: { branch: "main", dirty: false } }
@@ -103,6 +118,7 @@ describe("task directory project-scope reload", () => {
       configLoadErrors: {},
       channels: [],
       skills: [],
+      skillMounts: null,
       mcp: {},
       memoryFiles: [],
       promptEntries: [],
@@ -117,21 +133,24 @@ describe("task directory project-scope reload", () => {
     await reloadProjectScope({ restoreWorkspace: false })
 
     const scoped = requests.filter((req) =>
-      ["config", "channel", "skill/installed", "mcp", "path", "vcs", "executor"].includes(req.path),
+      ["config", "channel", "skill/mounts", "mcp", "path", "vcs", "executor"].includes(req.path),
     )
     expect(scoped.length).toBeGreaterThan(0)
     expect(scoped.every((req) => req.query?.directory === "D:/repo/from-task")).toBe(true)
-    expect(appStore.skills).toEqual([{ name: "task-skill", builtin: false }])
+    expect(appStore.skills).toEqual([
+      { name: "task-skill", builtin: false, mounted_agents: ["build"], unmounted: false },
+    ])
+    expect(appStore.skillMounts?.project_mounts).toEqual({ agents: { build: ["task-skill"] } })
     expect(appStore.mcp.docs).toEqual({ status: "connected" })
   })
 
   test("reloadProjectScope rejects extension reload failures instead of preserving stale projections silently", async () => {
     const requests: TransportRequest[] = []
-    __setHostTransportForTest(fakeTransportFailing(requests, "skill/installed", "skill inventory unavailable"))
+    __setHostTransportForTest(fakeTransportFailing(requests, "skill/mounts", "skill mount matrix unavailable"))
     selectTaskDirectory()
     setAppStore("skills", [{ name: "stale-skill", builtin: false }])
 
-    await expect(reloadProjectScope({ restoreWorkspace: false })).rejects.toThrow("skill inventory unavailable")
+    await expect(reloadProjectScope({ restoreWorkspace: false })).rejects.toThrow("skill mount matrix unavailable")
 
     expect(appStore.skills).toEqual([{ name: "stale-skill", builtin: false }])
   })

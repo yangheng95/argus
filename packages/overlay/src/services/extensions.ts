@@ -109,8 +109,8 @@ function errorMessage(error: unknown): string {
  * react to store updates via Solid reactivity.
  */
 export async function loadExtensions(): Promise<{ skills: SkillDescriptor[]; mcp: Record<string, any> }> {
-  const [skills, mcp] = await Promise.all([loadInstalledSkills(), loadMcpStatus(), loadSkillMountMatrix()])
-  return { skills, mcp }
+  const [matrix, mcp] = await Promise.all([loadSkillMountMatrix(), loadMcpStatus()])
+  return { skills: matrix.skills, mcp }
 }
 
 export async function loadInstalledSkills(): Promise<SkillDescriptor[]> {

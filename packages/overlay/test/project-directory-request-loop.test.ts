@@ -64,23 +64,34 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain("if (props.active !== true) return")
     expect(source).toContain("const directory = currentDirectory()")
     expect(source).toContain('setPanelNotice(t("workspace.no_directory"), "warn")')
-    expect(source).toContain("refreshInstalledSkills().catch")
+    expect(source).toContain("refreshSkillMounts().catch")
     expect(source).toContain("const skills = createMemo((): SkillItem[] => [...(appStore.skills")
     expect(source).not.toContain("panelSkills")
     expect(source).not.toContain("setPanelSkills")
     expect(source).toContain('if (props.mode === "skill")')
+    expect(source).toContain('if (props.mode === "skill-market")')
     expect(source).toContain('mode="skill"')
     expect(source).toContain("active={props.active ?? true}")
-    expect(main).toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />')
-    expect(main).toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />')
-    expect(main).not.toContain(
+    expect(main).toContain(
       '<SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />',
     )
-    expect(main).not.toContain(
+    expect(main).toContain(
       '<McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />',
     )
+    expect(main).not.toContain('<SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />')
+    expect(main).not.toContain('<McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />')
     expect(main).toContain('active={selectedLeftPanelActivity() === "memory"}')
     expect(main).toContain("directory={activeDirectory}")
+  })
+
+  test("settings skill and MCP panels receive the active project directory explicitly", () => {
+    const source = read("src/components/ConfigDialogHost.tsx")
+    expect(source).toContain('import { activeProjectDirectory } from "../services/project-directory"')
+    expect(source).toContain("<SkillsPanel directory={activeProjectDirectory} />")
+    expect(source).toContain('<SkillMarketPanel active={true} directory={activeProjectDirectory} />')
+    expect(source).toContain("<McpPanel directory={activeProjectDirectory} />")
+    expect(source).not.toContain("return <SkillsPanel />")
+    expect(source).not.toContain("return <McpPanel />")
   })
 
   test("memory panel sends the active directory on every memory request", () => {
@@ -99,8 +110,8 @@ describe("overlay project directory request loop", () => {
     const source = read("src/services/extensions.ts")
     expect(source).toContain("export async function loadInstalledSkills()")
     expect(source).toContain("export async function loadMcpStatus()")
-    expect(source).toContain("const [skills, mcp] = await Promise.all([loadInstalledSkills(), loadMcpStatus()])")
-    expect(source).toContain("return { skills, mcp }")
+    expect(source).toContain("const [matrix, mcp] = await Promise.all([loadSkillMountMatrix(), loadMcpStatus()])")
+    expect(source).toContain("return { skills: matrix.skills, mcp }")
     expect(source).toContain("return skills")
     expect(source).toContain("return mcp")
     expect(source).toContain('apiJson("skill/installed")')
@@ -115,7 +126,7 @@ describe("overlay project directory request loop", () => {
     const source = read("src/components/settings/SkillMarketPanel.tsx")
     expect(source).toContain("const skills = createMemo((): SkillItem[] => [...(appStore.skills")
     expect(source).toContain("const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp")
-    expect(source).toContain("return (await loadInstalledSkills()) as SkillItem[]")
+    expect(source).toContain("return await loadSkillMountMatrix()")
     expect(source).toContain("return (await loadMcpStatus()) as Record<string, McpItem>")
     expect(source).toContain('deleteAllSkills,')
     expect(source).toContain("await deleteAllSkills()")

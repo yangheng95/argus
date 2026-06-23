@@ -1508,12 +1508,18 @@ if (leftActivityToolbarEl) {
 
 const leftSkillsPanelEl = document.getElementById("solidLeftSkillsPanel")
 if (leftSkillsPanelEl) {
-  render(() => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} compact />, leftSkillsPanelEl)
+  render(
+    () => <SkillsPanel active={selectedLeftPanelActivity() === "skill"} directory={activeDirectory} compact />,
+    leftSkillsPanelEl,
+  )
 }
 
 const leftMcpPanelEl = document.getElementById("solidLeftMcpPanel")
 if (leftMcpPanelEl) {
-  render(() => <McpPanel active={selectedLeftPanelActivity() === "mcp"} compact />, leftMcpPanelEl)
+  render(
+    () => <McpPanel active={selectedLeftPanelActivity() === "mcp"} directory={activeDirectory} compact />,
+    leftMcpPanelEl,
+  )
 }
 
 const leftMemoryPanelEl = document.getElementById("solidLeftMemoryPanel")
