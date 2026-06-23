@@ -80,12 +80,33 @@ them in the same repair:
   `sourceDomIterationState.ts`/`sourceDomReplacementPlan.ts`; those files are
   only per-region selection and repair metadata.
 
+## Follow-up: Design-First Evidence Escape
+
+Task `tsk_ef31c37850015M9wXdvRwPU1u5` reproduced a remaining ordering bug:
+the orchestrator session quoted the prompt sentence that raw webpage
+evidence/source package materialization may require `frontend_design` first,
+then dispatched `frontend_design` at `2026-06-23 06:17:11Z`. The task had an
+`explore` child and a `frontend-design` child, but no `frontend-research`
+session, and the decision log wrote `frontend_design/webpage_evidence` at
+`2026-06-23 06:18:07Z`.
+
+That means the page-skeleton ownership repair is incomplete while the
+design-first evidence exception remains. For live webpage clones with no
+non-stale Page Skeleton Blueprint, the frontend-research tool path must be the
+first rendered-evidence consumer because the host prepares evidence from
+`source_urls` before the frontend-research session. Frontend-design may still
+materialize the visual template and source package, but it must not be invoked
+merely to discover page information architecture or raw webpage evidence before
+frontend-research publishes the blueprint.
+
 ## Acceptance
 
 - A non-stale frontend-research brief with webpage contract becomes visible to
   frontend-design as Page Skeleton Blueprint input.
 - Frontend-design is still allowed to create/edit `visual-html-skeleton`, but
   only as materialization of the blueprint plus source/reference evidence.
+- Live webpage clone orchestration does not use `frontend_design` first merely
+  to prepare raw webpage evidence when the Page Skeleton Blueprint is missing.
 - No new broad source-reading or code-writing authority is granted to
   frontend-research.
 - Component kind is explicit in the `webpage_contract` schema and remains
