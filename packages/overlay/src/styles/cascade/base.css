@@ -83,15 +83,19 @@
 }
 
 body {
-  --ui-overlay-shell-width: max(100vw, var(--ui-overlay-min-width));
+  --ui-overlay-viewport-width: max(100vw, var(--ui-overlay-min-width));
   --ui-overlay-shell-height: max(
     var(--ui-overlay-min-height),
     min(
       100vh,
-      calc(
-        var(--ui-overlay-shell-width) * var(--ui-overlay-min-height-units) /
-          var(--ui-overlay-min-width-units)
-      )
+      calc(var(--ui-overlay-viewport-width) / var(--ui-overlay-min-aspect-ratio))
+    )
+  );
+  --ui-overlay-shell-width: max(
+    var(--ui-overlay-min-width),
+    min(
+      var(--ui-overlay-viewport-width),
+      calc(var(--ui-overlay-shell-height) * var(--ui-overlay-max-aspect-ratio))
     )
   );
 
@@ -106,7 +110,8 @@ body {
   user-select: none;
   -webkit-user-select: none;
   container: overlay-shell / inline-size;
-  width: 100vw;
+  width: var(--ui-overlay-shell-width);
+  margin: 0 auto;
   min-width: var(--ui-overlay-min-width);
   min-height: var(--ui-overlay-min-height);
   height: var(--ui-overlay-shell-height);

@@ -263,13 +263,26 @@ async function threeCenterWorkbenchPanelLayout(page: OverlayPage) {
     heightProbe.style.position = "fixed"
     heightProbe.style.visibility = "hidden"
     heightProbe.style.height = "var(--ui-overlay-min-height)"
-    document.body.append(widthProbe, heightProbe)
+    const maxAspectWidthProbe = document.createElement("div")
+    maxAspectWidthProbe.style.position = "fixed"
+    maxAspectWidthProbe.style.visibility = "hidden"
+    maxAspectWidthProbe.style.width = "var(--ui-overlay-max-aspect-width)"
+    const maxAspectHeightProbe = document.createElement("div")
+    maxAspectHeightProbe.style.position = "fixed"
+    maxAspectHeightProbe.style.visibility = "hidden"
+    maxAspectHeightProbe.style.height = "var(--ui-overlay-max-aspect-height)"
+    document.body.append(widthProbe, heightProbe, maxAspectWidthProbe, maxAspectHeightProbe)
     const minimumWidth = widthProbe.getBoundingClientRect().width
     const minimumHeight = heightProbe.getBoundingClientRect().height
+    const maxAspectWidth = maxAspectWidthProbe.getBoundingClientRect().width
+    const maxAspectHeight = maxAspectHeightProbe.getBoundingClientRect().height
     widthProbe.remove()
     heightProbe.remove()
+    maxAspectWidthProbe.remove()
+    maxAspectHeightProbe.remove()
     const shell = document.body.getBoundingClientRect()
     const aspectRatio = minimumWidth / minimumHeight
+    const maxAspectRatio = maxAspectWidth / maxAspectHeight
     return {
       minWidth,
       bodyClientWidth: body.clientWidth,
@@ -279,6 +292,7 @@ async function threeCenterWorkbenchPanelLayout(page: OverlayPage) {
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       aspectRatio,
+      maxAspectRatio,
       panels,
     }
   })
@@ -450,6 +464,20 @@ test(
       )
       await writeFile(
         resolve(".scratch", "center-workbench-illegal-tall-aspect-frame.png"),
+        await page.screenshot({ fullPage: true }),
+      )
+      await page.setViewport({ width: 1600, height: 720 })
+      await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
+      const illegalWideLayout = await threeCenterWorkbenchPanelLayout(page)
+      assertThreeCenterWorkbenchPanelMinWidths(illegalWideLayout, "1600x720 illegal-wide three-panel layout")
+      assert.equal(illegalWideLayout.viewportWidth, 1600)
+      assert.ok(illegalWideLayout.maxAspectRatio > illegalWideLayout.aspectRatio)
+      assert.ok(
+        Math.abs(illegalWideLayout.shellWidth - illegalWideLayout.shellHeight * illegalWideLayout.maxAspectRatio) <= 1,
+        `expected illegal wide shell width to be aspect-clamped: ${JSON.stringify(illegalWideLayout)}`,
+      )
+      await writeFile(
+        resolve(".scratch", "center-workbench-illegal-wide-aspect-frame.png"),
         await page.screenshot({ fullPage: true }),
       )
       await page.setViewport({ width: 1280, height: 760 })
