@@ -183,7 +183,9 @@ export function teardownApp(): void {
  * Thin wrapper so callers don't need to import from multiple modules.
  */
 export function persistAndSyncSettings(): void {
-  saveSettings()
+  void saveSettings().catch((error) => {
+    console.error("[init] persist settings failed", error)
+  })
   syncApiConfig()
 }
 

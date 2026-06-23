@@ -45,6 +45,7 @@ import {
 } from "../services/config"
 import { loadProviderInfo } from "../services/init"
 import { activeDirectory } from "../services/workspace"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { localeTag, t } from "../utils/i18n"
 import { Button } from "./ui/Button"
 import { Tab, TabList, TabPanel, Tabs } from "./ui/Tabs"
@@ -123,6 +124,26 @@ function connectedProviderIDs(): Set<string> {
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message
   return String(error || "")
+}
+
+function runExecutorSelectorAction(label: string, action: () => void | Promise<void>): void {
+  try {
+    void Promise.resolve(action()).catch((error) => {
+      notifyError({
+        id: `executor-selector:${label}`,
+        title: t("executor.group"),
+        message: errorMessage(error),
+        details: formatErrorDetails(error),
+      })
+    })
+  } catch (error) {
+    notifyError({
+      id: `executor-selector:${label}`,
+      title: t("executor.group"),
+      message: errorMessage(error),
+      details: formatErrorDetails(error),
+    })
+  }
 }
 
 function buildProviderGroups(
@@ -457,12 +478,12 @@ export function ExecutorSelector() {
 
   function openMirror() {
     external.close()
-    void ensureProviderInfoLoaded()
+    runExecutorSelectorAction("provider-info", ensureProviderInfoLoaded)
     mirror.openIt()
   }
   function openExternal() {
     mirror.close()
-    void ensureProviderInfoLoaded()
+    runExecutorSelectorAction("provider-info", ensureProviderInfoLoaded)
     setFocusedExternalID(defaultFocusedExternalID())
     external.openIt()
   }
@@ -534,30 +555,32 @@ export function ExecutorSelector() {
   const mirrorWriteDisabled = createMemo(() => hasSelectedTask() && !currentTaskOperatorContext()?.sessionID)
 
   function retryTaskOperatorContext() {
-    void refetchTaskOperatorContext()
+    runExecutorSelectorAction("task-operator-context", () =>
+      Promise.resolve(refetchTaskOperatorContext()).then(() => undefined),
+    )
   }
 
   async function pickExternalModel(executorID: string, model: string) {
     if (executorID !== activeID()) {
       setSettingsStore("executor", sanitizeExecutor(executorID))
-      saveSettings()
+      await saveSettings()
     }
     setFocusedExternalID(executorID)
     await setExecutorModel({ executorID, model, directory: activeDirectory().trim() })
     external.close()
   }
 
-  function disableExternal() {
+  async function disableExternal() {
     if (activeID() !== INTERNAL_EXECUTOR_ID) {
       setSettingsStore("executor", sanitizeExecutor(INTERNAL_EXECUTOR_ID))
-      saveSettings()
+      await saveSettings()
     }
     external.close()
   }
 
   function changeExternalTab(value: string) {
     if (value === EXTERNAL_DISABLED_TAB_ID) {
-      disableExternal()
+      runExecutorSelectorAction("disable-external", disableExternal)
       return
     }
     setFocusedExternalID(value)
@@ -626,7 +649,7 @@ export function ExecutorSelector() {
                           group={group}
                           currentModel={openCorvusModel()}
                           disabled={mirrorWriteDisabled()}
-                          onPick={(modelID) => void pickMirrorModel(modelID)}
+                          onPick={pickMirrorModel}
                         />
                       )}
                     </For>
@@ -709,7 +732,7 @@ export function ExecutorSelector() {
                             <ProviderModelGroup
                               group={group}
                               currentModel={focusedCurrentModel()}
-                              onPick={(modelID) => void pickExternalModel(tab.id, modelID)}
+                              onPick={(modelID) => pickExternalModel(tab.id, modelID)}
                             />
                           )}
                         </For>
@@ -793,7 +816,7 @@ interface ProviderModelGroupProps {
   group: ProviderGroup
   currentModel: string
   disabled?: boolean
-  onPick: (modelID: string) => void
+  onPick: (modelID: string) => void | Promise<void>
 }
 
 function ProviderModelGroup(props: ProviderModelGroupProps) {
@@ -828,7 +851,7 @@ function ProviderModelGroup(props: ProviderModelGroupProps) {
         shouldFocusWrap
         onChange={(keys) => {
           const modelID = [...keys][0]
-          if (modelID) props.onPick(modelID)
+          if (modelID) runExecutorSelectorAction(`pick-model:${props.group.providerID}`, () => props.onPick(modelID))
         }}
         renderItem={(node) => {
           const option = node.rawValue as ExecutorModelOption

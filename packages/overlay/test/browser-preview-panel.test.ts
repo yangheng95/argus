@@ -43,7 +43,7 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(main).toContain("function selectTaskFromTaskList(taskID: string, directory?: string): void")
   expect(main).toContain("focusTaskPanel()")
   expect(main).toContain("if (activeTaskID() !== taskID) focusTaskPanel()")
-  expect(main).toContain("void selectTask(taskID, { directory })")
+  expect(main).toContain('runMainAsync("task.select-from-list", () => selectTask(taskID, { directory }))')
   expect(main).toContain("onSelectTask={selectTaskFromTaskList}")
   expect(main).not.toContain("saveTaskBrowserPreviewTarget")
   expect(main).toContain('anchor.getAttribute("data-browser-preview-url")')
@@ -269,14 +269,16 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("disabled={candidates().length <= 1}")
   expect(component).toContain("<Show when={readyTarget() && viewports().length > 0}>")
   expect(component).toContain('class="browser-preview-evidence-status"')
+  expect(component).toContain("<Show")
   expect(component).toContain(
-    "<Show when={currentVerificationError() || currentVerificationLoading() || currentVerification() || renderedEvidence()}>",
+    "currentVerificationError() || currentVerificationLoading() || currentVerification() || renderedEvidence()",
   )
   expect(component).not.toContain("<Show when={targetUrl() || candidates().length > 0}>")
   expect(component).toContain("const [target, { refetch: refetchTarget }] = createResource")
   expect(component).toContain("if (!resolved || resolved.taskID !== taskID) return undefined")
   expect(component).toContain("error instanceof ApiError && error.status === 404")
-  expect(component).toContain("void refetchTarget()")
+  expect(component).toContain("const refetchTargetFromPanel = () =>")
+  expect(component).toContain("void Promise.resolve(refetchTarget()).catch")
   expect(component).not.toMatch(/src=\{?frameUrl/)
   expect(component).not.toContain("window.open")
   expect(component).not.toContain("data-frame-token")

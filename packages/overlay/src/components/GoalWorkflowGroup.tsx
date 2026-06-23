@@ -13,6 +13,7 @@ import { goalStatusToTaskStatus, statusIconName } from "../utils/status-mapping"
 import { relativePathFrom } from "../utils/path"
 import { activeDirectory, openDirectory } from "../services/workspace"
 import { getHostTransport } from "../services/host-transport"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { StaticTextPart } from "./TextPart"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -35,6 +36,30 @@ interface GoalStep {
   completedAt?: number
   /** Summary detail: e.g., "5 steps" for plan, "12 files changed" for execute, "3/4 checks passed" for eval */
   summary?: string
+}
+
+function goalWorkflowActionErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function runGoalWorkflowAction(owner: string, action: () => void | Promise<void>): void {
+  try {
+    void Promise.resolve(action()).catch((error) => {
+      notifyError({
+        id: `goal-workflow:${owner}`,
+        title: t("common.error"),
+        message: goalWorkflowActionErrorMessage(error),
+        details: formatErrorDetails(error),
+      })
+    })
+  } catch (error) {
+    notifyError({
+      id: `goal-workflow:${owner}`,
+      title: t("common.error"),
+      message: goalWorkflowActionErrorMessage(error),
+      details: formatErrorDetails(error),
+    })
+  }
 }
 
 interface AcceptanceScorerLike {
@@ -206,7 +231,11 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
                 data-ui="goal-worktree-open"
                 title={props.goal.workspaceDir}
                 aria-label={`${t("cwd.open")}: ${props.goal.workspaceDir ?? ""}`}
-                onClick={() => void openDirectory(props.goal.workspaceDir!)}
+                onClick={() =>
+                  runGoalWorkflowAction(`open-worktree:${props.goal.goalID}`, () =>
+                    openDirectory(props.goal.workspaceDir!),
+                  )
+                }
                 data-card-dblclick-ignore="true"
               >
                 {worktreeContent()}

@@ -624,7 +624,9 @@ export function routeSSEEvent(event: any): boolean {
         const { pruneCardsAfterCursor } = await import("../store/card-tree")
         pruneCardsAfterCursor(cursorTime)
         if (resetWorktree) scheduleBoard(0)
-      })()
+      })().catch((error) => {
+        console.error("[sse] rewind card pruning failed", error)
+      })
       advanceHandledSelectedTaskSequence(event)
     } else if (evtTaskID === activeTaskID() && cursorTime === 0) {
       scheduleRewindClearRecovery("task rewind cleared", evtTaskID)

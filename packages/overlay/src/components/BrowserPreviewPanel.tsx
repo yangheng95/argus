@@ -233,6 +233,15 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     return image
   })
 
+  const refetchTargetFromPanel = () => {
+    const taskID = props.taskID()
+    if (!taskID) return
+    void Promise.resolve(refetchTarget()).catch((error) => {
+      if (props.taskID() !== taskID) return
+      setTargetLoadError({ taskID, message: browserPreviewErrorMessage(error) })
+    })
+  }
+
   createEffect(() => {
     const taskID = props.taskID()
     if (!taskID || !props.directory()) {
@@ -293,7 +302,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const error = currentVerificationError()
     if (error instanceof ApiError && error.status === 404) {
       setVerificationRequest(undefined)
-      void refetchTarget()
+      refetchTargetFromPanel()
     }
   })
 
@@ -312,7 +321,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         if (pendingSelectedTargetID() !== candidate.id) return
         setPendingSelectedTargetID("")
         setTargetSelectionError(browserPreviewErrorMessage(error))
-        void refetchTarget()
+        refetchTargetFromPanel()
       })
   }
 
@@ -470,7 +479,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         setLiveError(error instanceof Error ? error.message : String(error))
         clearLiveImageUrl()
         if (error instanceof ApiError && error.status === 404) {
-          void refetchTarget()
+          refetchTargetFromPanel()
         }
       }
     } finally {

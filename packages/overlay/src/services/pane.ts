@@ -181,6 +181,12 @@ function setPaneWidthProperty(name: string, value: number): void {
   paneWidthStyleScope().style.setProperty(name, `${value}px`)
 }
 
+function observePanePersistence(owner: string, promise: Promise<void>): void {
+  void promise.catch((error) => {
+    console.error(`[pane] ${owner} persistence failed`, error)
+  })
+}
+
 function readPaneWidthProperty(name: string): number {
   return Number.parseFloat(getComputedStyle(paneWidthStyleScope()).getPropertyValue(name))
 }
@@ -286,7 +292,7 @@ export function applyPaneWidths(sidebarWidth: number | null, callbacks: PaneCall
     sidebarWidth: sidebarWidth ?? state.sidebarWidth,
   }
   renderPaneLayout(next, config)
-  void callbacks.onWidthsChanged(next.sidebarWidth)
+  observePanePersistence("applyPaneWidths", Promise.resolve(callbacks.onWidthsChanged(next.sidebarWidth)))
 }
 
 // ── Drag logic ──
@@ -363,7 +369,11 @@ function startPaneResize(event: PointerEvent, callbacks: PaneCallbacks, config: 
     window.removeEventListener("pointermove", onMove)
     window.removeEventListener("pointerup", onUp)
     window.removeEventListener("pointercancel", onUp)
-    await stopPaneResize()
+    try {
+      await stopPaneResize()
+    } catch (error) {
+      console.error("[pane] pointer resize stop failed", error)
+    }
   }
   window.addEventListener("pointermove", onMove)
   window.addEventListener("pointerup", onUp)
@@ -400,7 +410,7 @@ function resizePaneByKeyboard(event: KeyboardEvent, callbacks: PaneCallbacks, co
     },
     config,
   )
-  void persistRenderedPaneWidths(callbacks, config)
+  observePanePersistence("keyboard resize", persistRenderedPaneWidths(callbacks, config))
 }
 
 // ── Public API ──

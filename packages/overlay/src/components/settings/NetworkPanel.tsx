@@ -151,6 +151,8 @@ export default function NetworkPanel() {
       }
       setSaved(true)
       setTimeout(() => setSaved(false), 1800)
+    } catch (err) {
+      setError(`${t("network.proxy.save_failed")} ${describeFailure(err)}`)
     } finally {
       setSaving(false)
     }
