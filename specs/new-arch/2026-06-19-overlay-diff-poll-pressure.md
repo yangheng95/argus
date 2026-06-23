@@ -18,15 +18,15 @@ Port 7878 feels slow while the overlay sidecar is otherwise responsive. Local in
 
 Two hot paths showed up while the selected task is active: repeated overlay data fetching and high-volume scheduler logging.
 
-| Evidence | Result |
-| --- | --- |
-| `GET /ui/` | 17 ms |
-| `GET /provider?directory=...` | 168-226 ms, 3.7 MB |
-| `GET /task/tsk_edb303f00001koOay5ND4C22Wo/conversation?directory=...` | 1.44 MB, 399-1207 ms |
-| Recent 20k log lines | 4 `/goal-run/:id/acceptance` routes each requested about 790 times |
-| Recent 20k log lines | `engine.liveness` logged 4933 successful scheduler runs at INFO level |
-| 8-second live log sample | 102 `engine.liveness` entries, about 12.75 successful scheduler-run log rows per second |
-| Browser preview evidence capture | one `/browser-preview/capture` request took 14.4 s |
+| Evidence                                                              | Result                                                                                  |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `GET /ui/`                                                            | 17 ms                                                                                   |
+| `GET /provider?directory=...`                                         | 168-226 ms, 3.7 MB                                                                      |
+| `GET /task/tsk_edb303f00001koOay5ND4C22Wo/conversation?directory=...` | 1.44 MB, 399-1207 ms                                                                    |
+| Recent 20k log lines                                                  | 4 `/goal-run/:id/acceptance` routes each requested about 790 times                      |
+| Recent 20k log lines                                                  | `engine.liveness` logged 4933 successful scheduler runs at INFO level                   |
+| 8-second live log sample                                              | 102 `engine.liveness` entries, about 12.75 successful scheduler-run log rows per second |
+| Browser preview evidence capture                                      | one `/browser-preview/capture` request took 14.4 s                                      |
 
 The acceptance diff burst is self-inflicted by the overlay. `ChangesPanel` builds its resource key from `cardTreeStore.visibleVersion`. That version changes for ordinary visible conversation updates, even when the file-change groups did not change. Each key change calls `resolveCurrentChangeGroups()`, which asks each goal-run acceptance route for full diffs when local stubs only have zero stats. Goal-runs with no full acceptance diff return no useful body, so the same endpoints are fetched repeatedly.
 
@@ -34,14 +34,14 @@ The scheduler log burst is separate. `EngineService.init()` registers `engine.li
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `ChangesPanel` request key | `packages/overlay/src/components/ChangesPanel.tsx` includes `cardTreeStore.visibleVersion` in the key. | Remove the broad visible-tree dependency. Keep task id, board snapshot, agent file-change key, and source group key. |
-| Agent file groups | `collectAgentFileChangeGroupsFromNodes(...)` derives file groups from `cardTreeStore.order` and `cardTreeStore.cards`. | Keep the explicit `agentKey` in the request key; this is the narrow data dependency. |
-| Diff loading | `packages/overlay/src/services/diff.ts::resolveCurrentChangeGroups()` calls `/goal-run/:id/acceptance` only to upgrade zero-stat stubs. | Keep the service contract unchanged in this pass. Do not cache missing goal-run acceptance forever because a live goal-run can later produce an acceptance row under the same id. |
-| Inline diff | `FileChangesView.tsx::InlineDiffPanel` resolves a single row only when expanded. | Keep this lazy path unchanged. |
-| Backend routes | `/goal-run/:id/acceptance` and `/run/:id/acceptance` are the single source for acceptance diffs. | Do not add route compatibility, alternate caches, or fallback bodies. |
-| Scheduler liveness | Existing `operator-wake-status-facts-not-scheduler-2026-06-17.md` preserves narrow `engine.liveness`. | Keep the 500 ms liveness behavior unchanged. Lower only successful scheduler tick logging from INFO to DEBUG; keep failed runs at ERROR. |
+| Surface                    | Evidence                                                                                                                                | Decision                                                                                                                                                                          |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ChangesPanel` request key | `packages/overlay/src/components/ChangesPanel.tsx` includes `cardTreeStore.visibleVersion` in the key.                                  | Remove the broad visible-tree dependency. Keep task id, board snapshot, agent file-change key, and source group key.                                                              |
+| Agent file groups          | `collectAgentFileChangeGroupsFromNodes(...)` derives file groups from `cardTreeStore.order` and `cardTreeStore.cards`.                  | Keep the explicit `agentKey` in the request key; this is the narrow data dependency.                                                                                              |
+| Diff loading               | `packages/overlay/src/services/diff.ts::resolveCurrentChangeGroups()` calls `/goal-run/:id/acceptance` only to upgrade zero-stat stubs. | Keep the service contract unchanged in this pass. Do not cache missing goal-run acceptance forever because a live goal-run can later produce an acceptance row under the same id. |
+| Inline diff                | `FileChangesView.tsx::InlineDiffPanel` resolves a single row only when expanded.                                                        | Keep this lazy path unchanged.                                                                                                                                                    |
+| Backend routes             | `/goal-run/:id/acceptance` and `/run/:id/acceptance` are the single source for acceptance diffs.                                        | Do not add route compatibility, alternate caches, or fallback bodies.                                                                                                             |
+| Scheduler liveness         | Existing `operator-wake-status-facts-not-scheduler-2026-06-17.md` preserves narrow `engine.liveness`.                                   | Keep the 500 ms liveness behavior unchanged. Lower only successful scheduler tick logging from INFO to DEBUG; keep failed runs at ERROR.                                          |
 
 ## Implementation
 

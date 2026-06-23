@@ -26,11 +26,11 @@ exception makes the guard look broader than it actually is.
 
 ## Call Points
 
-| Surface | Evidence | Required action |
-| --- | --- | --- |
+| Surface                               | Evidence                                                                 | Required action                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `flat-redesign-icon-coverage.test.ts` | `EXCLUDED` still keeps `TracePanel.tsx` out of the character-icon sweep. | Remove the exclusion so the existing forbidden glyph guard covers TracePanel. |
-| `TracePanel.tsx` | Current controls already use the Icon primitive. | No production code change; keep the component covered by the guard. |
-| `EvaluationCriteriaPanel.tsx` | The file does not exist. | Do not preserve dead exclusions for nonexistent components. |
+| `TracePanel.tsx`                      | Current controls already use the Icon primitive.                         | No production code change; keep the component covered by the guard.           |
+| `EvaluationCriteriaPanel.tsx`         | The file does not exist.                                                 | Do not preserve dead exclusions for nonexistent components.                   |
 
 ## Acceptance
 

@@ -52,7 +52,7 @@ const promptProfileCatalog = {
 
 const syntaxMarkdown = [
   "```ts",
-  "import { readFileSync } from \"node:fs\"",
+  'import { readFileSync } from "node:fs"',
   "const answer = 42",
   "const enabled = false",
   "// syntax contrast sample",
@@ -66,7 +66,7 @@ const syntaxMarkdown = [
   "```",
   "",
   "```xml",
-  "<article data-state=\"open\">Hello</article>",
+  '<article data-state="open">Hello</article>',
   "```",
   "",
   "```yaml",
@@ -83,12 +83,12 @@ const syntaxMarkdown = [
   "```",
   "",
   "```bash",
-  "echo \"$HOME\" && export NAME=value",
+  'echo "$HOME" && export NAME=value',
   "```",
   "",
   "```rust",
   "pub enum Mode { Fast }",
-  "let value: Option<String> = Some(String::from(\"x\"));",
+  'let value: Option<String> = Some(String::from("x"));',
   "```",
   "",
   "```diff",
@@ -366,29 +366,33 @@ test("rendered Markdown syntax highlighting stays readable across overlay themes
         ]
         const stage = document.querySelector<HTMLElement>(".markdown-syntax-stage")
         if (!stage) throw new Error("Missing Markdown syntax stage")
-        const samples = sampleGroups.flatMap((group) =>
-          Array.from(stage.querySelectorAll<HTMLElement>(group.selector), (node) => {
-            const style = getComputedStyle(node)
-            const rect = node.getBoundingClientRect()
-            const color = parseColor(style.color)
-            const surface = effectiveSurface(node)
-            return {
-              intent: group.intent,
-              className: node.className,
-              text: node.textContent?.trim() ?? "",
-              display: style.display,
-              visibility: style.visibility,
-              rectWidth: rect.width,
-              rectHeight: rect.height,
-              color: style.color,
-              background: style.backgroundColor,
-              surfaceAlpha: surface.a,
-              contrast: contrastRatio(color, surface),
-            }
-          }),
-        ).filter((sample) => sample.text)
+        const samples = sampleGroups
+          .flatMap((group) =>
+            Array.from(stage.querySelectorAll<HTMLElement>(group.selector), (node) => {
+              const style = getComputedStyle(node)
+              const rect = node.getBoundingClientRect()
+              const color = parseColor(style.color)
+              const surface = effectiveSurface(node)
+              return {
+                intent: group.intent,
+                className: node.className,
+                text: node.textContent?.trim() ?? "",
+                display: style.display,
+                visibility: style.visibility,
+                rectWidth: rect.width,
+                rectHeight: rect.height,
+                color: style.color,
+                background: style.backgroundColor,
+                surfaceAlpha: surface.a,
+                contrast: contrastRatio(color, surface),
+              }
+            }),
+          )
+          .filter((sample) => sample.text)
         const seenIntents = new Set(samples.map((sample) => sample.intent))
-        const missingIntents = sampleGroups.filter((group) => !seenIntents.has(group.intent)).map((group) => group.intent)
+        const missingIntents = sampleGroups
+          .filter((group) => !seenIntents.has(group.intent))
+          .map((group) => group.intent)
         return { theme: themeName, samples, missingIntents }
       }, theme)
 

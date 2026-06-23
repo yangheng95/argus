@@ -18,19 +18,19 @@ menubar and popover primitives already used by the overlay.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-17-titlebar-menu-order-tools-removal.md` | Top-level titlebar menus are exactly Workspace, Provider, Run, View, Settings, Help; `Tools` is retired. |
-| `2026-06-18-retire-titlebar-nav-residue.md` | Dead static titlebar selector families must stay retired while Kobalte-owned titlebar surfaces remain live. |
+| Source                                                | Existing decision                                                                                           |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `2026-06-17-titlebar-menu-order-tools-removal.md`     | Top-level titlebar menus are exactly Workspace, Provider, Run, View, Settings, Help; `Tools` is retired.    |
+| `2026-06-18-retire-titlebar-nav-residue.md`           | Dead static titlebar selector families must stay retired while Kobalte-owned titlebar surfaces remain live. |
 | `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Popover interactions should use mature primitives; `ExecutorSelector` already uses `@kobalte/core/popover`. |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "brand-guide|brand\\.guide|solidTitlebarBrandGuide|guide_usage_4" packages/overlay/src packages/overlay/test specs/new-arch` | Brand guide is limited to static HTML, i18n strings, `titlebar.css`, titlebar browser geometry checks, and architecture/surface guards. |
-| `rg -n "@kobalte/core/popover|Popover\\.Root|Popover\\.Trigger|Popover\\.Content|anchorRef" packages/overlay/src/components packages/overlay/test` | `ExecutorSelector.tsx` is the existing Kobalte Popover pattern. |
-| `rg -n "tools|Tools|工具" packages/overlay/src/i18n packages/overlay/src/index.html packages/overlay/src/components/titlebar` | `brand.guide_usage_4` is the stale user-facing titlebar copy that still mentions the removed Tools menu. |
+| Sweep                         | Result         |
+| ----------------------------- | -------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `rg -n "brand-guide           | brand\\.guide  | solidTitlebarBrandGuide                                                                                   | guide_usage_4" packages/overlay/src packages/overlay/test specs/new-arch`                                | Brand guide is limited to static HTML, i18n strings, `titlebar.css`, titlebar browser geometry checks, and architecture/surface guards. |
+| `rg -n "@kobalte/core/popover | Popover\\.Root | Popover\\.Trigger                                                                                         | Popover\\.Content                                                                                        | anchorRef" packages/overlay/src/components packages/overlay/test`                                                                       | `ExecutorSelector.tsx` is the existing Kobalte Popover pattern. |
+| `rg -n "tools                 | Tools          | 工具" packages/overlay/src/i18n packages/overlay/src/index.html packages/overlay/src/components/titlebar` | `brand.guide_usage_4` is the stale user-facing titlebar copy that still mentions the removed Tools menu. |
 
 ## Fix
 

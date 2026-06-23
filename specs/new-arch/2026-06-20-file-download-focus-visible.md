@@ -15,19 +15,19 @@ state as pointer users.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `packages/overlay/src/components/FilePart.tsx` | Non-previewable file parts render a `DownloadLink` anchor with `download={name}`. |
-| `packages/overlay/src/styles/surfaces/messages.css` | `.msg-file-download` owns the visible pill chrome for file attachment downloads. |
-| `2026-06-08-message-image-preview.md` | Image file parts route through the shared preview component; non-image file parts remain download chips. |
-| `2026-06-20-markdown-link-focus-visible.md` | Rendered links need explicit tokenized focus-visible chrome at their shared surface owner. |
+| Source                                              | Existing decision                                                                                        |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/FilePart.tsx`      | Non-previewable file parts render a `DownloadLink` anchor with `download={name}`.                        |
+| `packages/overlay/src/styles/surfaces/messages.css` | `.msg-file-download` owns the visible pill chrome for file attachment downloads.                         |
+| `2026-06-08-message-image-preview.md`               | Image file parts route through the shared preview component; non-image file parts remain download chips. |
+| `2026-06-20-markdown-link-focus-visible.md`         | Rendered links need explicit tokenized focus-visible chrome at their shared surface owner.               |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "msg-file-download|FilePart|download=|focus-visible" packages/overlay/src/components packages/overlay/src/styles/surfaces/messages.css packages/overlay/test specs/new-arch` | `FilePart.tsx` has one `DownloadLink` owner; `messages.css` has base and hover styles but no focus-visible. | Add focus-visible to `messages.css`, not per caller. |
-| `rg -n 'type: "file"|msg-file' packages/overlay/src packages/overlay/test` | Browser coverage for file-like message parts exists in screenshot panel tests, but no visual focus test for `.msg-file-download`. | Extend the existing real message fixture that already exercises links. |
+| Sweep                     | Result                                                | Decision                                                                                                                          |
+| ------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `rg -n "msg-file-download | FilePart                                              | download=                                                                                                                         | focus-visible" packages/overlay/src/components packages/overlay/src/styles/surfaces/messages.css packages/overlay/test specs/new-arch` | `FilePart.tsx` has one `DownloadLink` owner; `messages.css` has base and hover styles but no focus-visible. | Add focus-visible to `messages.css`, not per caller. |
+| `rg -n 'type: "file"      | msg-file' packages/overlay/src packages/overlay/test` | Browser coverage for file-like message parts exists in screenshot panel tests, but no visual focus test for `.msg-file-download`. | Extend the existing real message fixture that already exercises links.                                                                 |
 
 ## Fix
 

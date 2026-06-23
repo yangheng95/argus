@@ -7,11 +7,11 @@ Date: 2026-06-20
 Independent GUI review found that destructive inline ledger actions expose their
 armed confirmation state only through visual styling:
 
-| Surface | Existing source | Problem |
-| --- | --- | --- |
-| Task row delete/cancel | `packages/overlay/src/components/TaskList.tsx` | Direct `useArmedConfirm`; `data-confirm` changes icon/color, but the accessible name and button state stay static. |
-| Mission abort/delete | `packages/overlay/src/components/MissionList.tsx` | Same direct hook and visual-only armed state. |
-| Coding Assistant stop/delete | `packages/overlay/src/components/CodingAssistantSessionList.tsx` | Same direct hook and visual-only armed state. |
+| Surface                      | Existing source                                                  | Problem                                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Task row delete/cancel       | `packages/overlay/src/components/TaskList.tsx`                   | Direct `useArmedConfirm`; `data-confirm` changes icon/color, but the accessible name and button state stay static. |
+| Mission abort/delete         | `packages/overlay/src/components/MissionList.tsx`                | Same direct hook and visual-only armed state.                                                                      |
+| Coding Assistant stop/delete | `packages/overlay/src/components/CodingAssistantSessionList.tsx` | Same direct hook and visual-only armed state.                                                                      |
 
 The low-level `Button` primitive is already reused, so the root issue is not a
 raw button. The missing owner is a reusable destructive-confirm action primitive
@@ -21,15 +21,15 @@ that couples the shared armed timer with accessible state.
 
 `rg -n "useArmedConfirm|data-confirm|aria-pressed|ArmedConfirm" packages/overlay/src packages/overlay/test`
 
-| Call site | Decision |
-| --- | --- |
-| `packages/overlay/src/solid/armed-confirm.ts` | Keep as the low-level timer primitive. |
-| `packages/overlay/src/components/TaskList.tsx` | Replace direct `useArmedConfirm` usage with shared `ArmedConfirmButton`. |
-| `packages/overlay/src/components/MissionList.tsx` | Replace direct `useArmedConfirm` usage with shared `ArmedConfirmButton`; preserve existing uncommitted mission download additions. |
-| `packages/overlay/src/components/CodingAssistantSessionList.tsx` | Replace direct `useArmedConfirm` usage with shared `ArmedConfirmButton`. |
-| `packages/overlay/src/styles/surfaces/sidebar.css` | Keep existing `data-confirm` visual styling; the shared primitive continues to emit `data-confirm`. |
-| Browser tests using `[data-confirm="true"]` | Extend relevant flows to assert `aria-pressed`, `aria-describedby`, live/status text, and visual screenshots. |
-| Static adoption tests | Update so ledger components cannot import `useArmedConfirm` directly. |
+| Call site                                                        | Decision                                                                                                                           |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/solid/armed-confirm.ts`                    | Keep as the low-level timer primitive.                                                                                             |
+| `packages/overlay/src/components/TaskList.tsx`                   | Replace direct `useArmedConfirm` usage with shared `ArmedConfirmButton`.                                                           |
+| `packages/overlay/src/components/MissionList.tsx`                | Replace direct `useArmedConfirm` usage with shared `ArmedConfirmButton`; preserve existing uncommitted mission download additions. |
+| `packages/overlay/src/components/CodingAssistantSessionList.tsx` | Replace direct `useArmedConfirm` usage with shared `ArmedConfirmButton`.                                                           |
+| `packages/overlay/src/styles/surfaces/sidebar.css`               | Keep existing `data-confirm` visual styling; the shared primitive continues to emit `data-confirm`.                                |
+| Browser tests using `[data-confirm="true"]`                      | Extend relevant flows to assert `aria-pressed`, `aria-describedby`, live/status text, and visual screenshots.                      |
+| Static adoption tests                                            | Update so ledger components cannot import `useArmedConfirm` directly.                                                              |
 
 ## Design
 

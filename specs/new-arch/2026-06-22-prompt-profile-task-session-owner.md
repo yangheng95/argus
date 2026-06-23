@@ -17,23 +17,23 @@ selected task's root session is still unresolved.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no double source, recall plans before edits, test every change, visually verify UI work, commit and push each round. |
-| `2026-06-22-task-switch-directory-source.md` | During task switch, task-owned UI must use the selected task's ownership data and must not reuse previous project scope. |
-| `2026-06-22-task-switch-stable-request-keys.md` | `config/prompt-profile` still fires repeatedly because the composer requests project-level profiles before `rootTaskSessionID()` resolves. |
-| `board.ts::rootTaskSessionID()` | When a task is selected and the root session is unresolved, callers must treat the empty string as "do not write /config"; never silently fall back to project config. |
-| `2026-06-18-prompt-profile-extension-import-consensus.md` | Prompt Profiles are the single expert-squad source; the selector must not create new routing, workflow, tools, gates, or prompt systems. |
+| Source                                                    | Constraint carried forward                                                                                                                                             |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                               | No fallback, no gate, no double source, recall plans before edits, test every change, visually verify UI work, commit and push each round.                             |
+| `2026-06-22-task-switch-directory-source.md`              | During task switch, task-owned UI must use the selected task's ownership data and must not reuse previous project scope.                                               |
+| `2026-06-22-task-switch-stable-request-keys.md`           | `config/prompt-profile` still fires repeatedly because the composer requests project-level profiles before `rootTaskSessionID()` resolves.                             |
+| `board.ts::rootTaskSessionID()`                           | When a task is selected and the root session is unresolved, callers must treat the empty string as "do not write /config"; never silently fall back to project config. |
+| `2026-06-18-prompt-profile-extension-import-consensus.md` | Prompt Profiles are the single expert-squad source; the selector must not create new routing, workflow, tools, gates, or prompt systems.                               |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `main.tsx::refreshPromptProfiles()` | Uses `rootTaskSessionID() || activeSessionID() || undefined`, so selected-task pending root falls through to project catalog. | Pass an explicitly resolved session id into the loader; do not compute fallback at fetch time. |
-| `main.tsx` prompt-profile effect | Reads broad task/session/config sources directly and calls the loader on every invalidation. | Introduce a stable request key memo so unchanged semantic target/config does not refetch. |
-| `loadPromptProfileCatalog(sessionID?)` | Backend route intentionally distinguishes project catalog from session-effective catalog by optional `sessionID`. | Keep route contract unchanged; the fix is client request ownership. |
-| `rootTaskSessionID()` | Already resolves board task session first, then selected task row session; returns `""` while unresolved. | Reuse this single source and treat `""` under selected task as "no request yet". |
-| `ChatComposer` selector | Disables the selector when `promptProfiles.length === 0`. | Clear profiles while selected task root is unresolved so stale project options are not shown as task options. |
+| Surface                                | Evidence                                                                                                          | Decision                                                                                                      |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------- | --- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `main.tsx::refreshPromptProfiles()`    | Uses `rootTaskSessionID()                                                                                         |                                                                                                               | activeSessionID() |     | undefined`, so selected-task pending root falls through to project catalog. | Pass an explicitly resolved session id into the loader; do not compute fallback at fetch time. |
+| `main.tsx` prompt-profile effect       | Reads broad task/session/config sources directly and calls the loader on every invalidation.                      | Introduce a stable request key memo so unchanged semantic target/config does not refetch.                     |
+| `loadPromptProfileCatalog(sessionID?)` | Backend route intentionally distinguishes project catalog from session-effective catalog by optional `sessionID`. | Keep route contract unchanged; the fix is client request ownership.                                           |
+| `rootTaskSessionID()`                  | Already resolves board task session first, then selected task row session; returns `""` while unresolved.         | Reuse this single source and treat `""` under selected task as "no request yet".                              |
+| `ChatComposer` selector                | Disables the selector when `promptProfiles.length === 0`.                                                         | Clear profiles while selected task root is unresolved so stale project options are not shown as task options. |
 
 ## Root Cause
 
@@ -70,26 +70,26 @@ stale-board route for the same class of bug.
 
 ## Implementation
 
-| Change | Reason |
-| --- | --- |
-| Added `services/prompt-profile-scope.ts` as the single catalog scope/key owner. | Keeps directory, selected task, selected session, and catalog revision in one source. |
-| Changed `loadPromptProfileCatalog()` to require explicit project/session scope with directory. | Prevents implicit global directory injection and project fallback. |
-| Added in-flight coalescing for identical catalog loads. | Removes parallel duplicate fetches without retaining stale catalog results. |
-| Moved composer prompt-profile loading to stable semantic request keys. | Prevents broad config/task invalidations from refetching unchanged scope. |
-| Updated `PromptCatalog` to use the same scope owner. | Removes a second interpretation of session/project scope in settings. |
-| Treat selected task scope as pending while `boardStore.taskSwitching` is true. | Defers loading until task ownership has settled instead of requesting during switch hydration. |
-| Updated `rootTaskSessionID()` to read board session only when `board.task.id` matches the selected task. | Blocks stale board snapshots from supplying the current task session. |
+| Change                                                                                                   | Reason                                                                                         |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Added `services/prompt-profile-scope.ts` as the single catalog scope/key owner.                          | Keeps directory, selected task, selected session, and catalog revision in one source.          |
+| Changed `loadPromptProfileCatalog()` to require explicit project/session scope with directory.           | Prevents implicit global directory injection and project fallback.                             |
+| Added in-flight coalescing for identical catalog loads.                                                  | Removes parallel duplicate fetches without retaining stale catalog results.                    |
+| Moved composer prompt-profile loading to stable semantic request keys.                                   | Prevents broad config/task invalidations from refetching unchanged scope.                      |
+| Updated `PromptCatalog` to use the same scope owner.                                                     | Removes a second interpretation of session/project scope in settings.                          |
+| Treat selected task scope as pending while `boardStore.taskSwitching` is true.                           | Defers loading until task ownership has settled instead of requesting during switch hydration. |
+| Updated `rootTaskSessionID()` to read board session only when `board.task.id` matches the selected task. | Blocks stale board snapshots from supplying the current task session.                          |
 
 ## Verification
 
-| Check | Result |
-| --- | --- |
-| `bun test packages/overlay/test/prompt-profile-task-session-owner.test.ts --timeout 30000` | Passed: 9 tests, 32 assertions. |
-| `bun test packages/overlay/test/prompt-profile-config.test.ts packages/overlay/test/general-panel-db-reset.test.ts packages/overlay/test/prompt-catalog-save.test.ts --timeout 30000` | Passed: 15 tests, 90 assertions. |
-| `bun run --cwd packages/overlay typecheck` | Passed. |
-| `bun run --cwd packages/overlay build:vite` | Passed; only existing Vite warnings for JSX import source, mixed dynamic/static imports, and large chunk. |
-| `node packages/overlay/.scratch/task-select-directory-window.mjs` | Passed: `staleRequestCount=0`, `/config/prompt-profile=1`, total request count dropped from 31 to 30 for the measured switch. |
-| Visual screenshot | Passed: task list, workflow surface, composer, and prompt-profile selector are visible and not blank or visibly overlapped. |
+| Check                                                                                                                                                                                 | Result                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `bun test packages/overlay/test/prompt-profile-task-session-owner.test.ts --timeout 30000`                                                                                            | Passed: 9 tests, 32 assertions.                                                                                               |
+| `bun test packages/overlay/test/prompt-profile-config.test.ts packages/overlay/test/general-panel-db-reset.test.ts packages/overlay/test/prompt-catalog-save.test.ts --timeout 30000` | Passed: 15 tests, 90 assertions.                                                                                              |
+| `bun run --cwd packages/overlay typecheck`                                                                                                                                            | Passed.                                                                                                                       |
+| `bun run --cwd packages/overlay build:vite`                                                                                                                                           | Passed; only existing Vite warnings for JSX import source, mixed dynamic/static imports, and large chunk.                     |
+| `node packages/overlay/.scratch/task-select-directory-window.mjs`                                                                                                                     | Passed: `staleRequestCount=0`, `/config/prompt-profile=1`, total request count dropped from 31 to 30 for the measured switch. |
+| Visual screenshot                                                                                                                                                                     | Passed: task list, workflow surface, composer, and prompt-profile selector are visible and not blank or visibly overlapped.   |
 
 ## Self Review
 

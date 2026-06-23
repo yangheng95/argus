@@ -15,6 +15,7 @@ import { z } from "zod"
 import { BrowserRuntime } from "@/browser/runtime"
 import { runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
 import { requireRuntimePackage } from "@/runtime/package-require"
+import { inspectVisualHtmlSkeletonStructureCoverage } from "./visual-skeleton-coverage"
 import {
   ColorSchema,
   ComponentSchema,
@@ -451,8 +452,7 @@ function requiredImplementationPhaseMissingActions(draft: FrontendTemplateDraft)
   if (draft.final_acceptance_mode !== "maintainable_replacement_required") return []
   const covered = new Set((draft.implementation_phase_outcomes ?? []).map((item) => item.phase))
   return REQUIRED_IMPLEMENTATION_PHASES.filter((phase) => !covered.has(phase)).map(
-    (phase) =>
-      `update_frontend_phase({ phase: "${phase}", id, title, deliverable, source_refs, acceptance })`,
+    (phase) => `update_frontend_phase({ phase: "${phase}", id, title, deliverable, source_refs, acceptance })`,
   )
 }
 
@@ -476,7 +476,9 @@ function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector,
     )
   }
   if (!hasItems(draft.component_reuse_plan)) {
-    actions.push("update_frontend_component_reuse({ family_id, name, observed_surface, implementation_strategy, reuse_source, props_states, replacement_boundary, parity_guard, ... })")
+    actions.push(
+      "update_frontend_component_reuse({ family_id, name, observed_surface, implementation_strategy, reuse_source, props_states, replacement_boundary, parity_guard, ... })",
+    )
   }
   if (!hasItems(draft.material_inventory_items)) {
     actions.push("update_frontend_material({ title, detail, source_refs })")
@@ -494,12 +496,17 @@ function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector,
   if (!hasText(draft.completeness_review)) {
     actions.push('update_frontend_text({ section: "completeness_review", content })')
   }
-  if (!hasItems(draft.template_iteration_notes) || (autoIteration && (draft.template_iteration_notes?.length ?? 0) < 2)) {
+  if (
+    !hasItems(draft.template_iteration_notes) ||
+    (autoIteration && (draft.template_iteration_notes?.length ?? 0) < 2)
+  ) {
     actions.push("update_frontend_iteration_note({ value })")
   }
   actions.push(...requiredImplementationPhaseMissingActions(draft))
   if (draft.frontend_project?.role === "visual_baseline_input" && !hasItems(draft.visual_validation_evidence)) {
-    actions.push("update_frontend_visual_evidence({ id, rendered_entrypoint, screenshot_artifact, source_reference_artifact, renderer, viewport, hashes, review_status, review_summary })")
+    actions.push(
+      "update_frontend_visual_evidence({ id, rendered_entrypoint, screenshot_artifact, source_reference_artifact, renderer, viewport, hashes, review_status, review_summary })",
+    )
   }
   return actions
 }
@@ -673,6 +680,18 @@ async function assertFrontendTemplateFinal(
           "repair the visual-html-skeleton until structured screenshot review has no blocking debt, or report frontend_project.role=blocked/source_baseline_input with the named unfinished visual debt.",
       )
     }
+    const structureCoverage = await inspectVisualHtmlSkeletonStructureCoverage({
+      artifactRoot: options.artifactRoot,
+      visualProjectRoot: final.frontend_project.project_root,
+      sourcePackage: final.frontend_project.source_package || "web-clone-source",
+    })
+    if (structureCoverage.checked && !structureCoverage.passed) {
+      throw new Error(
+        "frontend_project.role=visual_baseline_input failed source structure coverage for visual-html-skeleton; " +
+          "the skeleton must render source sections as content blocks in source order, not only as navigation labels. " +
+          structureCoverage.diagnostics.join("; "),
+      )
+    }
   }
   if (final.final_acceptance_mode === "maintainable_replacement_required") {
     assertMaintainablePhaseOutcomes(final)
@@ -701,7 +720,9 @@ function assertImplementationTargetEntrypoints(final: FrontendTemplateFinal, wor
     throw new Error("frontend_project.role=implementation_target requires a non-empty project_root.")
   }
   if (project.entrypoints.length === 0) {
-    throw new Error("frontend_project.role=implementation_target requires at least one project-root-relative entrypoint.")
+    throw new Error(
+      "frontend_project.role=implementation_target requires at least one project-root-relative entrypoint.",
+    )
   }
   const projectRoot = resolveWorkspaceReportPath(workspaceRoot, project.project_root)
   if (!projectRoot || !isDirectory(projectRoot)) {
@@ -1480,8 +1501,7 @@ export function createFrontendTemplateOutputTools(
     }),
 
     update_frontend_component_reuse: tool({
-      description:
-        "Update one structured component-family reuse plan item. Items are keyed by family_id.",
+      description: "Update one structured component-family reuse plan item. Items are keyed by family_id.",
       inputSchema: ToolComponentReusePlanItemSchema,
       execute: async (rawInput) => {
         if (collector.final) return "Error: frontend template already submitted; collector is closed."
@@ -1494,8 +1514,7 @@ export function createFrontendTemplateOutputTools(
     }),
 
     update_frontend_baseline: tool({
-      description:
-        "Update one source-region baseline replacement/evolution plan item. Items are keyed by boundary_id.",
+      description: "Update one source-region baseline replacement/evolution plan item. Items are keyed by boundary_id.",
       inputSchema: ToolBaselineReplacementPlanItemSchema,
       execute: async (rawInput) => {
         if (collector.final) return "Error: frontend template already submitted; collector is closed."
@@ -1549,7 +1568,8 @@ export function createFrontendTemplateOutputTools(
     }),
 
     update_frontend_reference: tool({
-      description: "Update one canonical reference artifact path/id used as evidence. Repeated identical references are ignored.",
+      description:
+        "Update one canonical reference artifact path/id used as evidence. Repeated identical references are ignored.",
       inputSchema: FrontendTemplateStringItemToolInputSchema,
       execute: async (rawInput) => {
         if (collector.final) return "Error: frontend template already submitted; collector is closed."
@@ -1600,7 +1620,12 @@ export function createFrontendTemplateOutputTools(
   return {
     tools,
     getCollector(): FrontendTemplateOutputCollector {
-      return { specs: [...collector.specs], draft: { ...collector.draft }, final: collector.final, semantic_error: collector.semantic_error }
+      return {
+        specs: [...collector.specs],
+        draft: { ...collector.draft },
+        final: collector.final,
+        semantic_error: collector.semantic_error,
+      }
     },
     buildReport() {
       return buildFrontendTemplateReport({

@@ -19,27 +19,27 @@ removing pane semantics geometry reads after pane width style writes.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate layout source, no blind patching, test every change, visually verify GUI work, and commit/push every round. |
-| `2026-06-03-resize-observer-frame-coalescing-plan.md` | Resize-driven layout work must not run synchronously in high-frequency browser delivery paths. |
-| `2026-06-17-left-pane-resizer-accessibility.md` | Pane handle semantics belong in `services/pane.ts`; do not add a second ARIA writer in `main.tsx`. |
-| `2026-06-22-overlay-resize-frame-coalescing.md` | Window resize work is coalesced through the shared RAF scheduler. |
-| `2026-06-22-window-resize-center-layout-frame.md` | Center workbench geometry reads were moved out of the resize style-write callback; pane service internals were explicitly left for a later audit. |
-| `2026-06-22-left-pane-drag-frame-coalescing.md` | Pointer drag work is already coalesced; `resizePane()` still uses pane service math and renderer as the single source. |
+| Source                                                | Constraint carried forward                                                                                                                        |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                           | No fallback, no duplicate layout source, no blind patching, test every change, visually verify GUI work, and commit/push every round.             |
+| `2026-06-03-resize-observer-frame-coalescing-plan.md` | Resize-driven layout work must not run synchronously in high-frequency browser delivery paths.                                                    |
+| `2026-06-17-left-pane-resizer-accessibility.md`       | Pane handle semantics belong in `services/pane.ts`; do not add a second ARIA writer in `main.tsx`.                                                |
+| `2026-06-22-overlay-resize-frame-coalescing.md`       | Window resize work is coalesced through the shared RAF scheduler.                                                                                 |
+| `2026-06-22-window-resize-center-layout-frame.md`     | Center workbench geometry reads were moved out of the resize style-write callback; pane service internals were explicitly left for a later audit. |
+| `2026-06-22-left-pane-drag-frame-coalescing.md`       | Pointer drag work is already coalesced; `resizePane()` still uses pane service math and renderer as the single source.                            |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Window resize event | `main.tsx` has the only `window.addEventListener("resize", applyWindowResizeOnFrame.schedule)` and `visualViewport.resize` path. | Keep the existing event path and scheduler. |
-| Window resize callback | `applyWindowResize()` calls `applyZoom()`, `renderPaneLayout(paneCallbacks.getState(), PANEL_PANE_CONFIG)`, then schedules center workbench layout. | Keep one pane service renderer, but schedule pane layout after the zoom write frame. |
-| Pane renderer | `renderPaneLayout()` reads pane width inputs, writes `--ui-sidebar-width` and `--ui-sections-width`, then calls `renderPaneHandleSemantics()`. | Keep `renderPaneLayout()` as the single public renderer, but defer handle semantics to the pane service's own shared RAF so no geometry read follows pane CSS writes in the same frame. |
-| Pane semantics | `renderPaneHandleSemantics()` calls `paneResizeBounds()`, which reads `#panelBody.getBoundingClientRect()` and handle widths. | Keep one semantics implementation, but run it after pane width writes have had a frame boundary. |
-| Pointer drag | `resizePane()` reads bounds before writing CSS; pointermove is already RAF-coalesced and pointerup flushes the last pending point. | Keep drag math; deferred semantics means drag no longer reads handle bounds after writing CSS in the same callback. |
-| Keyboard resize | `resizePaneByKeyboard()` reads bounds before writing CSS and persists widths. | Keep immediate keyboard width application; ARIA values update on the next pane semantics RAF. |
-| Programmatic widths | `applyPaneWidths()` calls `renderPaneLayout()` and persists through the existing callback. | Preserve this API; semantics update remains owned by `renderPaneLayout()`. |
-| Tests | `pane-config.test.ts` and `left-pane-resizer-browser.test.ts` already guard pane ownership and pointermove coalescing. `center-workbench-separator-browser.test.ts` only checks center workbench rect reads. | Extend pane tests and browser instrumentation to prove pane rect reads do not share resize style-write frames. |
+| Surface                | Evidence                                                                                                                                                                                                     | Decision                                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Window resize event    | `main.tsx` has the only `window.addEventListener("resize", applyWindowResizeOnFrame.schedule)` and `visualViewport.resize` path.                                                                             | Keep the existing event path and scheduler.                                                                                                                                             |
+| Window resize callback | `applyWindowResize()` calls `applyZoom()`, `renderPaneLayout(paneCallbacks.getState(), PANEL_PANE_CONFIG)`, then schedules center workbench layout.                                                          | Keep one pane service renderer, but schedule pane layout after the zoom write frame.                                                                                                    |
+| Pane renderer          | `renderPaneLayout()` reads pane width inputs, writes `--ui-sidebar-width` and `--ui-sections-width`, then calls `renderPaneHandleSemantics()`.                                                               | Keep `renderPaneLayout()` as the single public renderer, but defer handle semantics to the pane service's own shared RAF so no geometry read follows pane CSS writes in the same frame. |
+| Pane semantics         | `renderPaneHandleSemantics()` calls `paneResizeBounds()`, which reads `#panelBody.getBoundingClientRect()` and handle widths.                                                                                | Keep one semantics implementation, but run it after pane width writes have had a frame boundary.                                                                                        |
+| Pointer drag           | `resizePane()` reads bounds before writing CSS; pointermove is already RAF-coalesced and pointerup flushes the last pending point.                                                                           | Keep drag math; deferred semantics means drag no longer reads handle bounds after writing CSS in the same callback.                                                                     |
+| Keyboard resize        | `resizePaneByKeyboard()` reads bounds before writing CSS and persists widths.                                                                                                                                | Keep immediate keyboard width application; ARIA values update on the next pane semantics RAF.                                                                                           |
+| Programmatic widths    | `applyPaneWidths()` calls `renderPaneLayout()` and persists through the existing callback.                                                                                                                   | Preserve this API; semantics update remains owned by `renderPaneLayout()`.                                                                                                              |
+| Tests                  | `pane-config.test.ts` and `left-pane-resizer-browser.test.ts` already guard pane ownership and pointermove coalescing. `center-workbench-separator-browser.test.ts` only checks center workbench rect reads. | Extend pane tests and browser instrumentation to prove pane rect reads do not share resize style-write frames.                                                                          |
 
 ## Root Cause
 

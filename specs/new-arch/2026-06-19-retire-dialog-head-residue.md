@@ -11,21 +11,21 @@ regression where a feature-local dialog bypasses the primitive.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Dialog migration preserves `.dialog-form` and `.dialog-header` as the public CSS contract. |
-| `2026-06-19-retire-session-dialog-diff-residue.md` | Session dialogs now delegate title and form chrome to the Dialog primitive. |
-| `Dialog.tsx` inspection | The primitive emits `.dialog-header`, `.dialog-title`, and `.dialog-header-actions`; it never emits `.dialog-head`. |
-| `dialog-primitive.test.ts` | Tests already assert the primitive's `.dialog-header` class. |
+| Source                                                | Relevant constraint                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Dialog migration preserves `.dialog-form` and `.dialog-header` as the public CSS contract.                          |
+| `2026-06-19-retire-session-dialog-diff-residue.md`    | Session dialogs now delegate title and form chrome to the Dialog primitive.                                         |
+| `Dialog.tsx` inspection                               | The primitive emits `.dialog-header`, `.dialog-title`, and `.dialog-header-actions`; it never emits `.dialog-head`. |
+| `dialog-primitive.test.ts`                            | Tests already assert the primitive's `.dialog-header` class.                                                        |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg --pcre2 '(?<![A-Za-z0-9_-])dialog-head(?![A-Za-z0-9_-])' packages/overlay/src packages/overlay/test packages/overlay/script specs specs/new-arch` | Three live hits: two in `dialog.css`, one compatibility query in `snap-settings.ts`. | Remove all current-source `.dialog-head` references. |
-| `rg --pcre2 '(?<![A-Za-z0-9_-])dialog-header(?![A-Za-z0-9_-])' packages/overlay/src packages/overlay/test packages/overlay/script specs specs/new-arch` | Production primitive and browser tests use `.dialog-header`. | Keep `.dialog-header` as the only header selector. |
-| `packages/overlay/src/styles/surfaces/dialog.css` | `.dialog-head` duplicates the same flex layout that `.dialog-header` owns. | Delete the old rule and remove it from the direct-child form selector. |
-| `packages/overlay/script/snap-settings.ts` | Helper queries `.dialog-header,.dialog-head`, accepting both old and new DOM. | Query only `.dialog-header` so snapshot diagnostics fail on retired markup. |
+| Sweep                                                                                                                                                   | Result                                                                               | Decision                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `rg --pcre2 '(?<![A-Za-z0-9_-])dialog-head(?![A-Za-z0-9_-])' packages/overlay/src packages/overlay/test packages/overlay/script specs specs/new-arch`   | Three live hits: two in `dialog.css`, one compatibility query in `snap-settings.ts`. | Remove all current-source `.dialog-head` references.                        |
+| `rg --pcre2 '(?<![A-Za-z0-9_-])dialog-header(?![A-Za-z0-9_-])' packages/overlay/src packages/overlay/test packages/overlay/script specs specs/new-arch` | Production primitive and browser tests use `.dialog-header`.                         | Keep `.dialog-header` as the only header selector.                          |
+| `packages/overlay/src/styles/surfaces/dialog.css`                                                                                                       | `.dialog-head` duplicates the same flex layout that `.dialog-header` owns.           | Delete the old rule and remove it from the direct-child form selector.      |
+| `packages/overlay/script/snap-settings.ts`                                                                                                              | Helper queries `.dialog-header,.dialog-head`, accepting both old and new DOM.        | Query only `.dialog-header` so snapshot diagnostics fail on retired markup. |
 
 ## Fix Plan
 

@@ -14,20 +14,20 @@ of inside it.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-settings-primitives-single-source-completion.md` | Settings rows should converge on `SettingsRow` and `.s-row`; domain classes may remain only for layout details. |
-| `2026-06-18-prompt-profile-list-current-aria.md` | Prompt profile list rows are command buttons and should keep `aria-current`, not `aria-selected` or `aria-pressed`. |
-| `packages/overlay/src/components/settings/primitives.tsx` | `SettingsRow` currently owns `.s-row` chrome, but only renders a `div`, which leaves selectable rows without a primitive root. |
-| `packages/overlay/src/components/settings/PromptCatalog.tsx` | The Prompt Profiles list is the only production owner of `.prompt-profile-list-item`. |
+| Source                                                       | Relevant constraint                                                                                                            |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `2026-06-18-settings-primitives-single-source-completion.md` | Settings rows should converge on `SettingsRow` and `.s-row`; domain classes may remain only for layout details.                |
+| `2026-06-18-prompt-profile-list-current-aria.md`             | Prompt profile list rows are command buttons and should keep `aria-current`, not `aria-selected` or `aria-pressed`.            |
+| `packages/overlay/src/components/settings/primitives.tsx`    | `SettingsRow` currently owns `.s-row` chrome, but only renders a `div`, which leaves selectable rows without a primitive root. |
+| `packages/overlay/src/components/settings/PromptCatalog.tsx` | The Prompt Profiles list is the only production owner of `.prompt-profile-list-item`.                                          |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -F "prompt-profile-list-item" packages/overlay/src packages/overlay/test specs/new-arch` | Production owner: `PromptCatalog`; CSS owns hover/active/focus; tests assert the old class. | Retire `.prompt-profile-list-item`; use `SettingsRow as="button"` with `prompt-profile-list-row` as domain class. |
-| `rg -n -F "prompt-profile-list" packages/overlay/src packages/overlay/test specs/new-arch` | List container and copy/meta classes remain layout-specific. | Keep `prompt-profile-list`, `prompt-profile-list-copy`, and `prompt-profile-list-meta`; move row chrome to `.s-row`. |
-| `rg -n -F "aria-current" packages/overlay/src/components/settings/PromptCatalog.tsx packages/overlay/test specs/new-arch` | Existing browser test verifies current profile semantics. | Preserve `aria-current="true"` and continue rejecting `aria-selected` / `aria-pressed`. |
+| Sweep                                                                                                                     | Result                                                                                      | Decision                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `rg -n -F "prompt-profile-list-item" packages/overlay/src packages/overlay/test specs/new-arch`                           | Production owner: `PromptCatalog`; CSS owns hover/active/focus; tests assert the old class. | Retire `.prompt-profile-list-item`; use `SettingsRow as="button"` with `prompt-profile-list-row` as domain class.    |
+| `rg -n -F "prompt-profile-list" packages/overlay/src packages/overlay/test specs/new-arch`                                | List container and copy/meta classes remain layout-specific.                                | Keep `prompt-profile-list`, `prompt-profile-list-copy`, and `prompt-profile-list-meta`; move row chrome to `.s-row`. |
+| `rg -n -F "aria-current" packages/overlay/src/components/settings/PromptCatalog.tsx packages/overlay/test specs/new-arch` | Existing browser test verifies current profile semantics.                                   | Preserve `aria-current="true"` and continue rejecting `aria-selected` / `aria-pressed`.                              |
 
 ## Fix Plan
 

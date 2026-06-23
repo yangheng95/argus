@@ -536,8 +536,14 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     })
     assert.ok(fileChangesContrastState.filters.length > 0)
     assert.equal(await page.evaluate(() => document.querySelectorAll(".change-subline").length), 0)
-    assert.equal(fileChangesContrastState.rows.some((row) => row.selected), true)
-    assert.equal(fileChangesContrastState.rows.some((row) => row.hovered), true)
+    assert.equal(
+      fileChangesContrastState.rows.some((row) => row.selected),
+      true,
+    )
+    assert.equal(
+      fileChangesContrastState.rows.some((row) => row.hovered),
+      true,
+    )
     assert.equal(
       fileChangesContrastState.rows.some((row) => !row.selected && !row.hovered && !row.highlighted),
       true,
@@ -640,7 +646,10 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       initialFilterControlState.options.map((item) => item.status),
       ["all", "modified", "added", "deleted"],
     )
-    assert.equal(initialFilterControlState.options.every((item) => item.className.includes("oc-tab")), true)
+    assert.equal(
+      initialFilterControlState.options.every((item) => item.className.includes("oc-tab")),
+      true,
+    )
     assert.equal(initialFilterControlState.options.find((item) => item.status === "all")?.dataPressed, true)
 
     await page.focus('[data-ui="file-changes-search-input"]')
@@ -697,7 +706,8 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
     await page.click('[data-ui="file-changes-status-filter-option"][data-status="added"]')
     await page.waitForFunction(
       () =>
-        document.querySelector<HTMLElement>('[data-ui="file-changes-status-filter-option"][data-status="added"]')
+        document
+          .querySelector<HTMLElement>('[data-ui="file-changes-status-filter-option"][data-status="added"]')
           ?.hasAttribute("data-pressed") === true,
     )
     const addedFilterState = await page.evaluate(() => {
@@ -706,14 +716,18 @@ test("right toolbar Diff returns to the diff subview after the user switches to 
       )
       return {
         activeAdded:
-          document.querySelector<HTMLElement>('[data-ui="file-changes-status-filter-option"][data-status="added"]')
+          document
+            .querySelector<HTMLElement>('[data-ui="file-changes-status-filter-option"][data-status="added"]')
             ?.hasAttribute("data-pressed") ?? false,
         rowStatuses,
       }
     })
     assert.equal(addedFilterState.activeAdded, true)
     assert.ok(addedFilterState.rowStatuses.length > 0)
-    assert.equal(addedFilterState.rowStatuses.every((status) => status === "added"), true)
+    assert.equal(
+      addedFilterState.rowStatuses.every((status) => status === "added"),
+      true,
+    )
 
     await page.$eval('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]', (node) =>
       (node as HTMLButtonElement).click(),

@@ -152,13 +152,11 @@ test("coding assistant row actions reject missing directories before transport",
   await expect(selectCodingAssistantSession({ sessionID: "ses_assistant", directory: "" })).rejects.toThrow(
     "session directory is required",
   )
-  await expect(
-    renameCodingAssistantSession({ sessionID: "ses_assistant", directory: "" }, "Renamed"),
-  ).rejects.toThrow("directory")
-  await expect(stopCodingAssistantSession({ sessionID: "ses_assistant", directory: "" })).rejects.toThrow("directory")
-  await expect(deleteCodingAssistantSession({ sessionID: "ses_assistant", directory: "" })).rejects.toThrow(
+  await expect(renameCodingAssistantSession({ sessionID: "ses_assistant", directory: "" }, "Renamed")).rejects.toThrow(
     "directory",
   )
+  await expect(stopCodingAssistantSession({ sessionID: "ses_assistant", directory: "" })).rejects.toThrow("directory")
+  await expect(deleteCodingAssistantSession({ sessionID: "ses_assistant", directory: "" })).rejects.toThrow("directory")
   expect(requests).toEqual([])
 })
 

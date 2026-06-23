@@ -18,21 +18,21 @@ fix can land in one ledger and miss the other two.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-01-mission-panel-mission-list.md` | Mission rows moved to neutral ledger naming and away from task-row CSS, but project grouping was not extracted. |
-| `2026-06-11-coding-assistant-session-history.md` | Coding Assistant sessions should reuse mature ledger grammar rather than invent a separate task-like surface. |
-| `sidebar.css` | `.project-group*` is already the visual single source for grouped project ledgers. |
-| McClintock explorer report, 2026-06-18 | Identified three live JSX implementations and recommended a `ProjectLedgerGroup` primitive. |
+| Source                                           | Relevant constraint                                                                                             |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `2026-06-01-mission-panel-mission-list.md`       | Mission rows moved to neutral ledger naming and away from task-row CSS, but project grouping was not extracted. |
+| `2026-06-11-coding-assistant-session-history.md` | Coding Assistant sessions should reuse mature ledger grammar rather than invent a separate task-like surface.   |
+| `sidebar.css`                                    | `.project-group*` is already the visual single source for grouped project ledgers.                              |
+| McClintock explorer report, 2026-06-18           | Identified three live JSX implementations and recommended a `ProjectLedgerGroup` primitive.                     |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "project-group-heading|project-group-icon|project-group-count|project-group-chevron|project-group-body" packages/overlay/src/components packages/overlay/test` | Live component JSX exists in `TaskList.tsx`, `MissionList.tsx`, and `CodingAssistantSessionList.tsx`; tests pin those local strings. | Move the JSX to one component and update tests to assert all ledgers use it. |
-| `rg -n "collapsedDirectories|projectDirectoryKey" packages/overlay/src/components` | The same collapsed-directory map/toggle pattern appears in the three ledger components. | Export a small collapse-state helper from the primitive owner. |
-| `rg -n "mission-project-group|coding-assistant-project-group|data-ui=\"mission-project-group\"|data-ui=\"coding-assistant-project-group\"" packages/overlay/src packages/overlay/test` | Mission and Coding Assistant need stable `data-ui` and class extensions for browser tests and domain styling. | Keep extension props on `ProjectLedgerGroup`. |
-| `rg -n "mission-project-group \\.project-group" packages/overlay/src/styles packages/overlay/test` | `mission.css` contains local density overrides. | Keep CSS untouched in this narrow pass; the double source being fixed is markup/state ownership, not row density. |
+| Sweep                                                                                              | Result                                                | Decision                                                                                                          |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `rg -n "project-group-heading                                                                      | project-group-icon                                    | project-group-count                                                                                               | project-group-chevron                                                                   | project-group-body" packages/overlay/src/components packages/overlay/test`                                    | Live component JSX exists in `TaskList.tsx`, `MissionList.tsx`, and `CodingAssistantSessionList.tsx`; tests pin those local strings. | Move the JSX to one component and update tests to assert all ledgers use it. |
+| `rg -n "collapsedDirectories                                                                       | projectDirectoryKey" packages/overlay/src/components` | The same collapsed-directory map/toggle pattern appears in the three ledger components.                           | Export a small collapse-state helper from the primitive owner.                          |
+| `rg -n "mission-project-group                                                                      | coding-assistant-project-group                        | data-ui=\"mission-project-group\"                                                                                 | data-ui=\"coding-assistant-project-group\"" packages/overlay/src packages/overlay/test` | Mission and Coding Assistant need stable `data-ui` and class extensions for browser tests and domain styling. | Keep extension props on `ProjectLedgerGroup`.                                                                                        |
+| `rg -n "mission-project-group \\.project-group" packages/overlay/src/styles packages/overlay/test` | `mission.css` contains local density overrides.       | Keep CSS untouched in this narrow pass; the double source being fixed is markup/state ownership, not row density. |
 
 ## Fix Plan
 

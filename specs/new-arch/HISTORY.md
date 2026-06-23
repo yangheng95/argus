@@ -14,358 +14,360 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 ## 2026-06-23
 
-| File | Title |
-| --- | --- |
-| [2026-06-23-conversation-agent-rail-pointer-capture.md](2026-06-23-conversation-agent-rail-pointer-capture.md) | Conversation Agent Rail Pointer Capture |
-| [2026-06-23-packaged-ripgrep-runtime-source.md](2026-06-23-packaged-ripgrep-runtime-source.md) | Packaged Ripgrep Runtime Source |
-| [2026-06-23-overlay-compact-legal-frame-query.md](2026-06-23-overlay-compact-legal-frame-query.md) | Overlay Compact Legal Frame Query |
-| [2026-06-23-conversation-hydrate-global-message-budget.md](2026-06-23-conversation-hydrate-global-message-budget.md) | Conversation Hydrate Global Message Budget |
-| [2026-06-23-screenshot-top-level-incremental-index.md](2026-06-23-screenshot-top-level-incremental-index.md) | Screenshot Top Level Incremental Index |
-| [2026-06-23-task-list-row-directory-selection.md](2026-06-23-task-list-row-directory-selection.md) | Task List Row Directory Selection |
-| [2026-06-23-center-workbench-frame-phase-split.md](2026-06-23-center-workbench-frame-phase-split.md) | Center Workbench Frame Phase Split |
-| [2026-06-23-overlay-row-main-button-primitive.md](2026-06-23-overlay-row-main-button-primitive.md) | Overlay Row Main Button Primitive |
-| [2026-06-23-browser-preview-live-snapshot-scope-owner.md](2026-06-23-browser-preview-live-snapshot-scope-owner.md) | Browser Preview Live Snapshot Scope Owner |
-| [2026-06-23-browser-preview-live-input-rect-cache.md](2026-06-23-browser-preview-live-input-rect-cache.md) | Browser Preview Live Input Rect Cache |
-| [2026-06-23-retire-right-pane-layout-state.md](2026-06-23-retire-right-pane-layout-state.md) | Retire Right Pane Layout State |
-| [2026-06-23-screenshot-thumbnail-load-queue-cancellation.md](2026-06-23-screenshot-thumbnail-load-queue-cancellation.md) | Screenshot Thumbnail Load Queue Cancellation |
-| [2026-06-23-overlay-panel-legal-size-contract.md](2026-06-23-overlay-panel-legal-size-contract.md) | Overlay Panel Legal Size Contract |
-| [2026-06-23-overlay-ui-asset-fingerprint.md](2026-06-23-overlay-ui-asset-fingerprint.md) | Overlay UI Asset Fingerprint |
-| [2026-06-23-screenshot-cache-server-time-restamp.md](2026-06-23-screenshot-cache-server-time-restamp.md) | Screenshot Cache Server Time Restamp |
-| [2026-06-23-task-stop-agent-settle-validation.md](2026-06-23-task-stop-agent-settle-validation.md) | Task Stop Agent Settle Validation |
-| [2026-06-23-shutdown-scheduler-enterprise-debug.md](2026-06-23-shutdown-scheduler-enterprise-debug.md) | Shutdown Scheduler Enterprise Debug |
-| [2026-06-23-frontend-research-page-skeleton-blueprint.md](2026-06-23-frontend-research-page-skeleton-blueprint.md) | Frontend Research Page Skeleton Blueprint |
-| [2026-06-23-auto-confirm-proposed-tasks.md](2026-06-23-auto-confirm-proposed-tasks.md) | Auto-Confirm Proposed Tasks |
-| [2026-06-23-terminal-profile-host-drift.md](2026-06-23-terminal-profile-host-drift.md) | Terminal Profile Host Drift Repair |
+| File                                                                                                                       | Title                                             |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| [2026-06-23-conversation-agent-rail-pointer-capture.md](2026-06-23-conversation-agent-rail-pointer-capture.md)             | Conversation Agent Rail Pointer Capture           |
+| [2026-06-23-packaged-ripgrep-runtime-source.md](2026-06-23-packaged-ripgrep-runtime-source.md)                             | Packaged Ripgrep Runtime Source                   |
+| [2026-06-23-overlay-compact-legal-frame-query.md](2026-06-23-overlay-compact-legal-frame-query.md)                         | Overlay Compact Legal Frame Query                 |
+| [2026-06-23-conversation-hydrate-global-message-budget.md](2026-06-23-conversation-hydrate-global-message-budget.md)       | Conversation Hydrate Global Message Budget        |
+| [2026-06-23-screenshot-top-level-incremental-index.md](2026-06-23-screenshot-top-level-incremental-index.md)               | Screenshot Top Level Incremental Index            |
+| [2026-06-23-task-list-row-directory-selection.md](2026-06-23-task-list-row-directory-selection.md)                         | Task List Row Directory Selection                 |
+| [2026-06-23-center-workbench-frame-phase-split.md](2026-06-23-center-workbench-frame-phase-split.md)                       | Center Workbench Frame Phase Split                |
+| [2026-06-23-overlay-row-main-button-primitive.md](2026-06-23-overlay-row-main-button-primitive.md)                         | Overlay Row Main Button Primitive                 |
+| [2026-06-23-browser-preview-live-snapshot-scope-owner.md](2026-06-23-browser-preview-live-snapshot-scope-owner.md)         | Browser Preview Live Snapshot Scope Owner         |
+| [2026-06-23-browser-preview-live-input-rect-cache.md](2026-06-23-browser-preview-live-input-rect-cache.md)                 | Browser Preview Live Input Rect Cache             |
+| [2026-06-23-retire-right-pane-layout-state.md](2026-06-23-retire-right-pane-layout-state.md)                               | Retire Right Pane Layout State                    |
+| [2026-06-23-screenshot-thumbnail-load-queue-cancellation.md](2026-06-23-screenshot-thumbnail-load-queue-cancellation.md)   | Screenshot Thumbnail Load Queue Cancellation      |
+| [2026-06-23-overlay-panel-legal-size-contract.md](2026-06-23-overlay-panel-legal-size-contract.md)                         | Overlay Panel Legal Size Contract                 |
+| [2026-06-23-overlay-ui-asset-fingerprint.md](2026-06-23-overlay-ui-asset-fingerprint.md)                                   | Overlay UI Asset Fingerprint                      |
+| [2026-06-23-screenshot-cache-server-time-restamp.md](2026-06-23-screenshot-cache-server-time-restamp.md)                   | Screenshot Cache Server Time Restamp              |
+| [2026-06-23-task-stop-agent-settle-validation.md](2026-06-23-task-stop-agent-settle-validation.md)                         | Task Stop Agent Settle Validation                 |
+| [2026-06-23-shutdown-scheduler-enterprise-debug.md](2026-06-23-shutdown-scheduler-enterprise-debug.md)                     | Shutdown Scheduler Enterprise Debug               |
+| [2026-06-23-visual-skeleton-region-comparison-root-repair.md](2026-06-23-visual-skeleton-region-comparison-root-repair.md) | Visual Skeleton And Region Comparison Root Repair |
+| [2026-06-23-frontend-research-page-skeleton-blueprint.md](2026-06-23-frontend-research-page-skeleton-blueprint.md)         | Frontend Research Page Skeleton Blueprint         |
+| [2026-06-23-auto-confirm-proposed-tasks.md](2026-06-23-auto-confirm-proposed-tasks.md)                                     | Auto-Confirm Proposed Tasks                       |
+| [2026-06-23-terminal-profile-host-drift.md](2026-06-23-terminal-profile-host-drift.md)                                     | Terminal Profile Host Drift Repair                |
 
 ## 2026-06-22
 
-| File | Title |
-| --- | --- |
-| [2026-06-22-testing-expert-squad-profile.md](2026-06-22-testing-expert-squad-profile.md) | Testing Expert Squad Profile |
-| [2026-06-22-read-context-output-budget.md](2026-06-22-read-context-output-budget.md) | Read Context Output Budget |
-| [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md) | Browser Preview Evidence Previewable Image |
-| [2026-06-22-browser-preview-evidence-live-snapshot-boundary.md](2026-06-22-browser-preview-evidence-live-snapshot-boundary.md) | Browser Preview Evidence Live Snapshot Boundary |
-| [2026-06-22-browser-preview-live-input-batch-owner.md](2026-06-22-browser-preview-live-input-batch-owner.md) | Browser Preview Live Input Batch Owner |
-| [2026-06-22-browser-preview-selected-target-probe.md](2026-06-22-browser-preview-selected-target-probe.md) | Browser Preview Selected Target Probe |
+| File                                                                                                                                     | Title                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [2026-06-22-testing-expert-squad-profile.md](2026-06-22-testing-expert-squad-profile.md)                                                 | Testing Expert Squad Profile                         |
+| [2026-06-22-read-context-output-budget.md](2026-06-22-read-context-output-budget.md)                                                     | Read Context Output Budget                           |
+| [2026-06-22-browser-preview-evidence-previewable-image.md](2026-06-22-browser-preview-evidence-previewable-image.md)                     | Browser Preview Evidence Previewable Image           |
+| [2026-06-22-browser-preview-evidence-live-snapshot-boundary.md](2026-06-22-browser-preview-evidence-live-snapshot-boundary.md)           | Browser Preview Evidence Live Snapshot Boundary      |
+| [2026-06-22-browser-preview-live-input-batch-owner.md](2026-06-22-browser-preview-live-input-batch-owner.md)                             | Browser Preview Live Input Batch Owner               |
+| [2026-06-22-browser-preview-selected-target-probe.md](2026-06-22-browser-preview-selected-target-probe.md)                               | Browser Preview Selected Target Probe                |
 | [2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md](2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md) | Center Workbench Deferred Reveal Single Layout Owner |
-| [2026-06-22-center-workbench-open-layout-frame.md](2026-06-22-center-workbench-open-layout-frame.md) | Center Workbench Open Layout Frame |
-| [2026-06-22-config-sidebar-width-single-source.md](2026-06-22-config-sidebar-width-single-source.md) | Config Sidebar Width Single Source |
-| [2026-06-22-retire-default-network-proxy.md](2026-06-22-retire-default-network-proxy.md) | Retire Default Network Proxy |
-| [2026-06-22-overlay-resize-frame-coalescing.md](2026-06-22-overlay-resize-frame-coalescing.md) | Overlay Resize Frame Coalescing |
-| [2026-06-22-overlay-ui-serving-source.md](2026-06-22-overlay-ui-serving-source.md) | Overlay UI Serving Source |
-| [2026-06-22-packaged-overlay-ui-asset-parity.md](2026-06-22-packaged-overlay-ui-asset-parity.md) | Packaged Overlay UI Asset Parity |
-| [2026-06-22-orchestrator-live-build-park-prompt.md](2026-06-22-orchestrator-live-build-park-prompt.md) | Orchestrator Live Build Park Prompt Repair |
-| [2026-06-22-overlay-proxy-delete-button.md](2026-06-22-overlay-proxy-delete-button.md) | Overlay Proxy Delete Button |
-| [2026-06-22-mission-ledger-connection-boundary.md](2026-06-22-mission-ledger-connection-boundary.md) | Mission Ledger Connection Boundary |
-| [2026-06-22-left-pane-drag-frame-coalescing.md](2026-06-22-left-pane-drag-frame-coalescing.md) | Left Pane Drag Frame Coalescing |
-| [2026-06-22-screenshot-browser-defer-initial-measure.md](2026-06-22-screenshot-browser-defer-initial-measure.md) | Screenshot Browser Defer Initial Measure |
-| [2026-06-22-screenshot-browser-card-tree-cache.md](2026-06-22-screenshot-browser-card-tree-cache.md) | Screenshot Browser Card Tree Cache |
-| [2026-06-22-screenshot-browser-top-level-index.md](2026-06-22-screenshot-browser-top-level-index.md) | Screenshot Browser Top Level Index |
-| [2026-06-22-screenshot-browser-thumbnail-decode-budget.md](2026-06-22-screenshot-browser-thumbnail-decode-budget.md) | Screenshot Browser Thumbnail Decode Budget |
-| [2026-06-22-taskbar-badge-count-cfg.md](2026-06-22-taskbar-badge-count-cfg.md) | Taskbar Badge Count CFG |
-| [2026-06-22-window-resize-center-layout-frame.md](2026-06-22-window-resize-center-layout-frame.md) | Window Resize Center Layout Frame |
-| [2026-06-22-retire-md-active-block-residue.md](2026-06-22-retire-md-active-block-residue.md) | Retire Markdown Active Block Residue |
-| [2026-06-22-retire-dialog-subtitle-residue.md](2026-06-22-retire-dialog-subtitle-residue.md) | Retire Dialog Subtitle Residue |
-| [2026-06-22-retire-row-resize-css.md](2026-06-22-retire-row-resize-css.md) | Retire Row Resize CSS |
-| [2026-06-22-retire-solid-changes-panel-empty-state.md](2026-06-22-retire-solid-changes-panel-empty-state.md) | Retire Solid Changes Panel Empty State |
-| [2026-06-22-screenshot-browser-bounded-card-collector.md](2026-06-22-screenshot-browser-bounded-card-collector.md) | Screenshot Browser Bounded Card Collector |
-| [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md) | Screenshot Browser Open Jank |
-| [2026-06-22-section-phase-solid-owner.md](2026-06-22-section-phase-solid-owner.md) | Section Phase Solid Owner |
-| [2026-06-22-task-switch-directory-source.md](2026-06-22-task-switch-directory-source.md) | Task Switch Directory Source |
-| [2026-06-22-task-switch-stable-request-keys.md](2026-06-22-task-switch-stable-request-keys.md) | Task Switch Stable Request Keys |
-| [2026-06-22-prompt-profile-task-session-owner.md](2026-06-22-prompt-profile-task-session-owner.md) | Prompt Profile Task Session Owner |
-| [2026-06-22-screenshot-browser-virtual-row-measurement.md](2026-06-22-screenshot-browser-virtual-row-measurement.md) | Screenshot Browser Virtual Row Measurement |
-| [2026-06-22-center-workbench-panel-min-size-contract.md](2026-06-22-center-workbench-panel-min-size-contract.md) | Center Workbench Panel Min Size Contract |
-| [2026-06-22-overlay-layout-aspect-frame.md](2026-06-22-overlay-layout-aspect-frame.md) | Overlay Layout Aspect Frame |
-| [2026-06-22-native-resize-no-set-size-loop.md](2026-06-22-native-resize-no-set-size-loop.md) | Native Resize No Set Size Loop |
-| [2026-06-22-overlay-viewport-size-contract.md](2026-06-22-overlay-viewport-size-contract.md) | Overlay Viewport Size Contract |
-| [2026-06-22-pane-semantics-layout-frame.md](2026-06-22-pane-semantics-layout-frame.md) | Pane Semantics Layout Frame |
-| [2026-06-22-file-changes-hidden-projection-boundary.md](2026-06-22-file-changes-hidden-projection-boundary.md) | File Changes Hidden Projection Boundary |
-| [2026-06-22-usage-strip-card-tree-aggregate.md](2026-06-22-usage-strip-card-tree-aggregate.md) | Usage Strip Card Tree Aggregate |
+| [2026-06-22-center-workbench-open-layout-frame.md](2026-06-22-center-workbench-open-layout-frame.md)                                     | Center Workbench Open Layout Frame                   |
+| [2026-06-22-config-sidebar-width-single-source.md](2026-06-22-config-sidebar-width-single-source.md)                                     | Config Sidebar Width Single Source                   |
+| [2026-06-22-retire-default-network-proxy.md](2026-06-22-retire-default-network-proxy.md)                                                 | Retire Default Network Proxy                         |
+| [2026-06-22-overlay-resize-frame-coalescing.md](2026-06-22-overlay-resize-frame-coalescing.md)                                           | Overlay Resize Frame Coalescing                      |
+| [2026-06-22-overlay-ui-serving-source.md](2026-06-22-overlay-ui-serving-source.md)                                                       | Overlay UI Serving Source                            |
+| [2026-06-22-packaged-overlay-ui-asset-parity.md](2026-06-22-packaged-overlay-ui-asset-parity.md)                                         | Packaged Overlay UI Asset Parity                     |
+| [2026-06-22-orchestrator-live-build-park-prompt.md](2026-06-22-orchestrator-live-build-park-prompt.md)                                   | Orchestrator Live Build Park Prompt Repair           |
+| [2026-06-22-overlay-proxy-delete-button.md](2026-06-22-overlay-proxy-delete-button.md)                                                   | Overlay Proxy Delete Button                          |
+| [2026-06-22-mission-ledger-connection-boundary.md](2026-06-22-mission-ledger-connection-boundary.md)                                     | Mission Ledger Connection Boundary                   |
+| [2026-06-22-left-pane-drag-frame-coalescing.md](2026-06-22-left-pane-drag-frame-coalescing.md)                                           | Left Pane Drag Frame Coalescing                      |
+| [2026-06-22-screenshot-browser-defer-initial-measure.md](2026-06-22-screenshot-browser-defer-initial-measure.md)                         | Screenshot Browser Defer Initial Measure             |
+| [2026-06-22-screenshot-browser-card-tree-cache.md](2026-06-22-screenshot-browser-card-tree-cache.md)                                     | Screenshot Browser Card Tree Cache                   |
+| [2026-06-22-screenshot-browser-top-level-index.md](2026-06-22-screenshot-browser-top-level-index.md)                                     | Screenshot Browser Top Level Index                   |
+| [2026-06-22-screenshot-browser-thumbnail-decode-budget.md](2026-06-22-screenshot-browser-thumbnail-decode-budget.md)                     | Screenshot Browser Thumbnail Decode Budget           |
+| [2026-06-22-taskbar-badge-count-cfg.md](2026-06-22-taskbar-badge-count-cfg.md)                                                           | Taskbar Badge Count CFG                              |
+| [2026-06-22-window-resize-center-layout-frame.md](2026-06-22-window-resize-center-layout-frame.md)                                       | Window Resize Center Layout Frame                    |
+| [2026-06-22-retire-md-active-block-residue.md](2026-06-22-retire-md-active-block-residue.md)                                             | Retire Markdown Active Block Residue                 |
+| [2026-06-22-retire-dialog-subtitle-residue.md](2026-06-22-retire-dialog-subtitle-residue.md)                                             | Retire Dialog Subtitle Residue                       |
+| [2026-06-22-retire-row-resize-css.md](2026-06-22-retire-row-resize-css.md)                                                               | Retire Row Resize CSS                                |
+| [2026-06-22-retire-solid-changes-panel-empty-state.md](2026-06-22-retire-solid-changes-panel-empty-state.md)                             | Retire Solid Changes Panel Empty State               |
+| [2026-06-22-screenshot-browser-bounded-card-collector.md](2026-06-22-screenshot-browser-bounded-card-collector.md)                       | Screenshot Browser Bounded Card Collector            |
+| [2026-06-22-screenshot-browser-open-jank.md](2026-06-22-screenshot-browser-open-jank.md)                                                 | Screenshot Browser Open Jank                         |
+| [2026-06-22-section-phase-solid-owner.md](2026-06-22-section-phase-solid-owner.md)                                                       | Section Phase Solid Owner                            |
+| [2026-06-22-task-switch-directory-source.md](2026-06-22-task-switch-directory-source.md)                                                 | Task Switch Directory Source                         |
+| [2026-06-22-task-switch-stable-request-keys.md](2026-06-22-task-switch-stable-request-keys.md)                                           | Task Switch Stable Request Keys                      |
+| [2026-06-22-prompt-profile-task-session-owner.md](2026-06-22-prompt-profile-task-session-owner.md)                                       | Prompt Profile Task Session Owner                    |
+| [2026-06-22-screenshot-browser-virtual-row-measurement.md](2026-06-22-screenshot-browser-virtual-row-measurement.md)                     | Screenshot Browser Virtual Row Measurement           |
+| [2026-06-22-browser-preview-viewport-source.md](2026-06-22-browser-preview-viewport-source.md)                                           | Browser Preview Viewport Source                      |
+| [2026-06-22-center-workbench-panel-min-size-contract.md](2026-06-22-center-workbench-panel-min-size-contract.md)                         | Center Workbench Panel Min Size Contract             |
+| [2026-06-22-overlay-layout-aspect-frame.md](2026-06-22-overlay-layout-aspect-frame.md)                                                   | Overlay Layout Aspect Frame                          |
+| [2026-06-22-native-resize-no-set-size-loop.md](2026-06-22-native-resize-no-set-size-loop.md)                                             | Native Resize No Set Size Loop                       |
+| [2026-06-22-overlay-viewport-size-contract.md](2026-06-22-overlay-viewport-size-contract.md)                                             | Overlay Viewport Size Contract                       |
+| [2026-06-22-pane-semantics-layout-frame.md](2026-06-22-pane-semantics-layout-frame.md)                                                   | Pane Semantics Layout Frame                          |
+| [2026-06-22-file-changes-hidden-projection-boundary.md](2026-06-22-file-changes-hidden-projection-boundary.md)                           | File Changes Hidden Projection Boundary              |
+| [2026-06-22-usage-strip-card-tree-aggregate.md](2026-06-22-usage-strip-card-tree-aggregate.md)                                           | Usage Strip Card Tree Aggregate                      |
 
 ## 2026-06-21
 
-| File | Title |
-| --- | --- |
-| [2026-06-21-frontend-research-context-digest.md](2026-06-21-frontend-research-context-digest.md) | Frontend Research Context Digest |
-| [2026-06-21-overlay-payload-stamp-rerun-discipline.md](2026-06-21-overlay-payload-stamp-rerun-discipline.md) | Overlay Payload Stamp Rerun Discipline |
-| [2026-06-21-operator-message-live-goal-abort-audit.md](2026-06-21-operator-message-live-goal-abort-audit.md) | Operator Message Live Goal Abort Audit |
-| [2026-06-21-orchestrator-tool-only-trace-summary.md](2026-06-21-orchestrator-tool-only-trace-summary.md) | Orchestrator Tool-Only Trace Summary Repair |
+| File                                                                                                                   | Title                                       |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| [2026-06-21-frontend-research-context-digest.md](2026-06-21-frontend-research-context-digest.md)                       | Frontend Research Context Digest            |
+| [2026-06-21-overlay-payload-stamp-rerun-discipline.md](2026-06-21-overlay-payload-stamp-rerun-discipline.md)           | Overlay Payload Stamp Rerun Discipline      |
+| [2026-06-21-operator-message-live-goal-abort-audit.md](2026-06-21-operator-message-live-goal-abort-audit.md)           | Operator Message Live Goal Abort Audit      |
+| [2026-06-21-orchestrator-tool-only-trace-summary.md](2026-06-21-orchestrator-tool-only-trace-summary.md)               | Orchestrator Tool-Only Trace Summary Repair |
 | [2026-06-21-world-economy-stuck-adversarial-goal-review.md](2026-06-21-world-economy-stuck-adversarial-goal-review.md) | World Economy Stuck Adversarial Goal Review |
 
 ## 2026-06-20
 
-| File                                                                                                       | Title                          |
-| ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| [2026-06-20-armed-confirm-button-a11y-single-source.md](2026-06-20-armed-confirm-button-a11y-single-source.md) | Armed Confirm Button A11y Single Source |
-| [2026-06-20-agent-rail-drag-scroll-regression.md](2026-06-20-agent-rail-drag-scroll-regression.md) | Agent Rail Drag Scroll Regression |
-| [2026-06-20-expert-squad-select-keyboard-highlight-coverage.md](2026-06-20-expert-squad-select-keyboard-highlight-coverage.md) | Expert Squad Select Keyboard Highlight Coverage |
-| [2026-06-20-frontend-design-wake-state-projection-fix.md](2026-06-20-frontend-design-wake-state-projection-fix.md) | Frontend Design Wake State Projection Fix |
-| [2026-06-20-goal-continue-stale-run-blocker-pressure.md](2026-06-20-goal-continue-stale-run-blocker-pressure.md) | Goal Continue Stale Run Blocker Pressure |
-| [2026-06-20-instance-late-bootstrap-question-popup.md](2026-06-20-instance-late-bootstrap-question-popup.md) | Instance Late Bootstrap Question Popup Repair |
-| [2026-06-20-kobalte-trigger-open-state-single-source.md](2026-06-20-kobalte-trigger-open-state-single-source.md) | Kobalte Trigger Open State Single Source |
-| [2026-06-20-message-card-chronological-turns.md](2026-06-20-message-card-chronological-turns.md) | Message Card Chronological Turns Repair |
-| [2026-06-20-mission-action-busy-single-source.md](2026-06-20-mission-action-busy-single-source.md) | Mission Action Busy Single Source |
-| [2026-06-20-reference-comparison-evidence-chain-root-repair.md](2026-06-20-reference-comparison-evidence-chain-root-repair.md) | Reference Comparison Evidence Chain Root Repair |
-| [2026-06-20-runtime-isolation-first-repair.md](2026-06-20-runtime-isolation-first-repair.md) | Runtime Isolation First Repair |
-| [2026-06-20-runtime-isolation-second-repair.md](2026-06-20-runtime-isolation-second-repair.md) | Runtime Isolation Second Repair |
-| [2026-06-20-settings-status-label-single-source.md](2026-06-20-settings-status-label-single-source.md) | Settings Status Label Single Source |
-| [2026-06-20-status-label-single-source.md](2026-06-20-status-label-single-source.md) | Status Label Single Source |
-| [2026-06-20-task-actions-cancel-button-owner.md](2026-06-20-task-actions-cancel-button-owner.md) | Task Actions Cancel Button Owner |
-| [2026-06-20-visual-qa-scroll-slice-comparison.md](2026-06-20-visual-qa-scroll-slice-comparison.md) | Visual QA Scroll Slice Comparison |
-| [2026-06-20-world-economy-architect-algorithm-fix.md](2026-06-20-world-economy-architect-algorithm-fix.md) | World Economy Architect Algorithm Fix |
-| [2026-06-20-conversation-rendering-i18n-source.md](2026-06-20-conversation-rendering-i18n-source.md) | Conversation Rendering i18n Source |
-| [2026-06-20-memory-panel-owner-browser-coverage.md](2026-06-20-memory-panel-owner-browser-coverage.md) | Memory Panel Owner And Browser Coverage |
-| [2026-06-20-file-explorer-row-button-size-source.md](2026-06-20-file-explorer-row-button-size-source.md) | File Explorer Row Button Size Source |
-| [2026-06-20-trace-event-head-button-primitive.md](2026-06-20-trace-event-head-button-primitive.md) | Trace Event Head Button Primitive |
-| [2026-06-20-architect-integrity-badge-primitive.md](2026-06-20-architect-integrity-badge-primitive.md) | Architect Integrity Badge Primitive |
-| [2026-06-20-app-dialog-recommended-badge-primitive.md](2026-06-20-app-dialog-recommended-badge-primitive.md) | AppDialog Recommended Badge Primitive |
-| [2026-06-20-task-dirbar-recent-popover-trigger-single-source.md](2026-06-20-task-dirbar-recent-popover-trigger-single-source.md) | TaskDirBar Recent Popover Trigger Single Source |
-| [2026-06-20-browser-preview-candidate-trigger-focus.md](2026-06-20-browser-preview-candidate-trigger-focus.md) | Browser Preview Candidate Trigger Focus |
-| [2026-06-20-titlebar-brand-guide-open-state-contrast.md](2026-06-20-titlebar-brand-guide-open-state-contrast.md) | Titlebar Brand Guide Open State And Contrast Coverage |
-| [2026-06-20-file-explorer-search-input-single-source.md](2026-06-20-file-explorer-search-input-single-source.md) | File Explorer Search Input Single Source |
-| [2026-06-20-file-changes-search-field-single-source.md](2026-06-20-file-changes-search-field-single-source.md) | File Changes Search Field Single Source |
-| [2026-06-20-workspace-onboarding-path-input-single-source.md](2026-06-20-workspace-onboarding-path-input-single-source.md) | Workspace Onboarding Path Input Single Source |
-| [2026-06-20-task-dirbar-recent-path-input-single-source.md](2026-06-20-task-dirbar-recent-path-input-single-source.md) | TaskDirBar Recent Path Input Single Source |
-| [2026-06-20-conversation-render-error-i18n.md](2026-06-20-conversation-render-error-i18n.md)               | Conversation Render Error i18n |
-| [2026-06-20-provider-search-field-single-source.md](2026-06-20-provider-search-field-single-source.md)     | Provider Search Field Single Source |
-| [2026-06-20-log-viewer-refresh-entry-single-source.md](2026-06-20-log-viewer-refresh-entry-single-source.md) | Log Viewer Refresh Entry Single Source |
-| [2026-06-20-settings-textarea-primitive.md](2026-06-20-settings-textarea-primitive.md)                     | Settings Textarea Primitive    |
-| [2026-06-20-image-preview-trigger-i18n-button.md](2026-06-20-image-preview-trigger-i18n-button.md)         | Image Preview Trigger i18n Button |
-| [2026-06-20-image-preview-trigger-contract-single-source.md](2026-06-20-image-preview-trigger-contract-single-source.md) | Image Preview Trigger Contract Single Source |
-| [2026-06-20-mission-rename-input-single-source.md](2026-06-20-mission-rename-input-single-source.md)       | Mission Rename Input Single Source |
-| [2026-06-20-titlebar-run-checkbox-menubar-primitive.md](2026-06-20-titlebar-run-checkbox-menubar-primitive.md) | Titlebar Run Checkbox Menubar Primitive |
-| [2026-06-20-task-dirbar-breadcrumb-focus-visible.md](2026-06-20-task-dirbar-breadcrumb-focus-visible.md)   | TaskDirBar Breadcrumb Focus Visible |
-| [2026-06-20-executor-chip-focus-visible.md](2026-06-20-executor-chip-focus-visible.md)                     | Executor Chip Focus Visible |
-| [2026-06-20-side-activity-toolbar-aria-semantics.md](2026-06-20-side-activity-toolbar-aria-semantics.md)   | Side Activity Toolbar ARIA Semantics |
-| [2026-06-20-tool-diff-open-file-button.md](2026-06-20-tool-diff-open-file-button.md)                       | Tool Diff Open File Button |
-| [2026-06-20-window-control-danger-foreground.md](2026-06-20-window-control-danger-foreground.md)           | Window Control Danger Foreground |
-| [2026-06-20-markdown-link-focus-visible.md](2026-06-20-markdown-link-focus-visible.md)                     | Markdown Link Focus Visible |
-| [2026-06-20-file-download-focus-visible.md](2026-06-20-file-download-focus-visible.md)                     | File Download Focus Visible |
-| [2026-06-20-about-link-focus-visible.md](2026-06-20-about-link-focus-visible.md)                           | About Link Focus Visible |
-| [2026-06-20-file-explorer-row-focus-visible.md](2026-06-20-file-explorer-row-focus-visible.md)             | File Explorer Row Focus Visible |
-| [2026-06-20-app-dialog-task-decision-keyboard.md](2026-06-20-app-dialog-task-decision-keyboard.md)         | App Dialog Task Decision Keyboard |
-| [2026-06-20-expert-squad-zh-select-readability-coverage.md](2026-06-20-expert-squad-zh-select-readability-coverage.md) | Expert Squad Chinese Select Readability Coverage |
-| [2026-06-20-interaction-card-form-accessibility.md](2026-06-20-interaction-card-form-accessibility.md)     | Interaction Card Form Accessibility |
+| File                                                                                                                             | Title                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [2026-06-20-armed-confirm-button-a11y-single-source.md](2026-06-20-armed-confirm-button-a11y-single-source.md)                   | Armed Confirm Button A11y Single Source               |
+| [2026-06-20-agent-rail-drag-scroll-regression.md](2026-06-20-agent-rail-drag-scroll-regression.md)                               | Agent Rail Drag Scroll Regression                     |
+| [2026-06-20-expert-squad-select-keyboard-highlight-coverage.md](2026-06-20-expert-squad-select-keyboard-highlight-coverage.md)   | Expert Squad Select Keyboard Highlight Coverage       |
+| [2026-06-20-frontend-design-wake-state-projection-fix.md](2026-06-20-frontend-design-wake-state-projection-fix.md)               | Frontend Design Wake State Projection Fix             |
+| [2026-06-20-goal-continue-stale-run-blocker-pressure.md](2026-06-20-goal-continue-stale-run-blocker-pressure.md)                 | Goal Continue Stale Run Blocker Pressure              |
+| [2026-06-20-instance-late-bootstrap-question-popup.md](2026-06-20-instance-late-bootstrap-question-popup.md)                     | Instance Late Bootstrap Question Popup Repair         |
+| [2026-06-20-kobalte-trigger-open-state-single-source.md](2026-06-20-kobalte-trigger-open-state-single-source.md)                 | Kobalte Trigger Open State Single Source              |
+| [2026-06-20-message-card-chronological-turns.md](2026-06-20-message-card-chronological-turns.md)                                 | Message Card Chronological Turns Repair               |
+| [2026-06-20-mission-action-busy-single-source.md](2026-06-20-mission-action-busy-single-source.md)                               | Mission Action Busy Single Source                     |
+| [2026-06-20-reference-comparison-evidence-chain-root-repair.md](2026-06-20-reference-comparison-evidence-chain-root-repair.md)   | Reference Comparison Evidence Chain Root Repair       |
+| [2026-06-20-runtime-isolation-first-repair.md](2026-06-20-runtime-isolation-first-repair.md)                                     | Runtime Isolation First Repair                        |
+| [2026-06-20-runtime-isolation-second-repair.md](2026-06-20-runtime-isolation-second-repair.md)                                   | Runtime Isolation Second Repair                       |
+| [2026-06-20-settings-status-label-single-source.md](2026-06-20-settings-status-label-single-source.md)                           | Settings Status Label Single Source                   |
+| [2026-06-20-status-label-single-source.md](2026-06-20-status-label-single-source.md)                                             | Status Label Single Source                            |
+| [2026-06-20-task-actions-cancel-button-owner.md](2026-06-20-task-actions-cancel-button-owner.md)                                 | Task Actions Cancel Button Owner                      |
+| [2026-06-20-visual-qa-scroll-slice-comparison.md](2026-06-20-visual-qa-scroll-slice-comparison.md)                               | Visual QA Scroll Slice Comparison                     |
+| [2026-06-20-world-economy-architect-algorithm-fix.md](2026-06-20-world-economy-architect-algorithm-fix.md)                       | World Economy Architect Algorithm Fix                 |
+| [2026-06-20-conversation-rendering-i18n-source.md](2026-06-20-conversation-rendering-i18n-source.md)                             | Conversation Rendering i18n Source                    |
+| [2026-06-20-memory-panel-owner-browser-coverage.md](2026-06-20-memory-panel-owner-browser-coverage.md)                           | Memory Panel Owner And Browser Coverage               |
+| [2026-06-20-file-explorer-row-button-size-source.md](2026-06-20-file-explorer-row-button-size-source.md)                         | File Explorer Row Button Size Source                  |
+| [2026-06-20-trace-event-head-button-primitive.md](2026-06-20-trace-event-head-button-primitive.md)                               | Trace Event Head Button Primitive                     |
+| [2026-06-20-architect-integrity-badge-primitive.md](2026-06-20-architect-integrity-badge-primitive.md)                           | Architect Integrity Badge Primitive                   |
+| [2026-06-20-app-dialog-recommended-badge-primitive.md](2026-06-20-app-dialog-recommended-badge-primitive.md)                     | AppDialog Recommended Badge Primitive                 |
+| [2026-06-20-task-dirbar-recent-popover-trigger-single-source.md](2026-06-20-task-dirbar-recent-popover-trigger-single-source.md) | TaskDirBar Recent Popover Trigger Single Source       |
+| [2026-06-20-browser-preview-candidate-trigger-focus.md](2026-06-20-browser-preview-candidate-trigger-focus.md)                   | Browser Preview Candidate Trigger Focus               |
+| [2026-06-20-titlebar-brand-guide-open-state-contrast.md](2026-06-20-titlebar-brand-guide-open-state-contrast.md)                 | Titlebar Brand Guide Open State And Contrast Coverage |
+| [2026-06-20-file-explorer-search-input-single-source.md](2026-06-20-file-explorer-search-input-single-source.md)                 | File Explorer Search Input Single Source              |
+| [2026-06-20-file-changes-search-field-single-source.md](2026-06-20-file-changes-search-field-single-source.md)                   | File Changes Search Field Single Source               |
+| [2026-06-20-workspace-onboarding-path-input-single-source.md](2026-06-20-workspace-onboarding-path-input-single-source.md)       | Workspace Onboarding Path Input Single Source         |
+| [2026-06-20-task-dirbar-recent-path-input-single-source.md](2026-06-20-task-dirbar-recent-path-input-single-source.md)           | TaskDirBar Recent Path Input Single Source            |
+| [2026-06-20-conversation-render-error-i18n.md](2026-06-20-conversation-render-error-i18n.md)                                     | Conversation Render Error i18n                        |
+| [2026-06-20-provider-search-field-single-source.md](2026-06-20-provider-search-field-single-source.md)                           | Provider Search Field Single Source                   |
+| [2026-06-20-log-viewer-refresh-entry-single-source.md](2026-06-20-log-viewer-refresh-entry-single-source.md)                     | Log Viewer Refresh Entry Single Source                |
+| [2026-06-20-settings-textarea-primitive.md](2026-06-20-settings-textarea-primitive.md)                                           | Settings Textarea Primitive                           |
+| [2026-06-20-image-preview-trigger-i18n-button.md](2026-06-20-image-preview-trigger-i18n-button.md)                               | Image Preview Trigger i18n Button                     |
+| [2026-06-20-image-preview-trigger-contract-single-source.md](2026-06-20-image-preview-trigger-contract-single-source.md)         | Image Preview Trigger Contract Single Source          |
+| [2026-06-20-mission-rename-input-single-source.md](2026-06-20-mission-rename-input-single-source.md)                             | Mission Rename Input Single Source                    |
+| [2026-06-20-titlebar-run-checkbox-menubar-primitive.md](2026-06-20-titlebar-run-checkbox-menubar-primitive.md)                   | Titlebar Run Checkbox Menubar Primitive               |
+| [2026-06-20-task-dirbar-breadcrumb-focus-visible.md](2026-06-20-task-dirbar-breadcrumb-focus-visible.md)                         | TaskDirBar Breadcrumb Focus Visible                   |
+| [2026-06-20-executor-chip-focus-visible.md](2026-06-20-executor-chip-focus-visible.md)                                           | Executor Chip Focus Visible                           |
+| [2026-06-20-side-activity-toolbar-aria-semantics.md](2026-06-20-side-activity-toolbar-aria-semantics.md)                         | Side Activity Toolbar ARIA Semantics                  |
+| [2026-06-20-tool-diff-open-file-button.md](2026-06-20-tool-diff-open-file-button.md)                                             | Tool Diff Open File Button                            |
+| [2026-06-20-window-control-danger-foreground.md](2026-06-20-window-control-danger-foreground.md)                                 | Window Control Danger Foreground                      |
+| [2026-06-20-markdown-link-focus-visible.md](2026-06-20-markdown-link-focus-visible.md)                                           | Markdown Link Focus Visible                           |
+| [2026-06-20-file-download-focus-visible.md](2026-06-20-file-download-focus-visible.md)                                           | File Download Focus Visible                           |
+| [2026-06-20-about-link-focus-visible.md](2026-06-20-about-link-focus-visible.md)                                                 | About Link Focus Visible                              |
+| [2026-06-20-file-explorer-row-focus-visible.md](2026-06-20-file-explorer-row-focus-visible.md)                                   | File Explorer Row Focus Visible                       |
+| [2026-06-20-app-dialog-task-decision-keyboard.md](2026-06-20-app-dialog-task-decision-keyboard.md)                               | App Dialog Task Decision Keyboard                     |
+| [2026-06-20-expert-squad-zh-select-readability-coverage.md](2026-06-20-expert-squad-zh-select-readability-coverage.md)           | Expert Squad Chinese Select Readability Coverage      |
+| [2026-06-20-interaction-card-form-accessibility.md](2026-06-20-interaction-card-form-accessibility.md)                           | Interaction Card Form Accessibility                   |
 
 ## 2026-06-19
 
-| File                                                                                                           | Title                      |
-| -------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| File                                                                                                                                       | Title                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
 | [2026-06-19-browser-preview-region-comparison-failure-repair-plan.md](2026-06-19-browser-preview-region-comparison-failure-repair-plan.md) | Browser Preview Region Comparison Failure Repair Plan |
 | [2026-06-19-browser-preview-repair-pressure-benchmark-timeout-fix.md](2026-06-19-browser-preview-repair-pressure-benchmark-timeout-fix.md) | Browser Preview Repair Pressure Benchmark Timeout Fix |
-| [2026-06-19-expert-squad-option-visibility-guard.md](2026-06-19-expert-squad-option-visibility-guard.md) | Expert Squad Option Visibility Guard |
-| [2026-06-19-file-changes-light-contrast-runtime-guard.md](2026-06-19-file-changes-light-contrast-runtime-guard.md) | File Changes Light Contrast Runtime Guard |
-| [2026-06-19-g1-g2-orchestrator-runtime-single-source-repair.md](2026-06-19-g1-g2-orchestrator-runtime-single-source-repair.md) | G1/G2 Orchestrator Runtime Single-Source Repair |
-| [2026-06-19-goal-fifo-refill-scheduling-impact.md](2026-06-19-goal-fifo-refill-scheduling-impact.md) | Goal FIFO Refill Scheduling Impact Audit |
-| [2026-06-19-markdown-code-copy-button-primitive.md](2026-06-19-markdown-code-copy-button-primitive.md) | Markdown Code Copy Button Primitive |
-| [2026-06-19-markdown-syntax-theme-contrast.md](2026-06-19-markdown-syntax-theme-contrast.md) | Markdown Syntax Theme Contrast |
-| [2026-06-19-memory-search-field-primitive.md](2026-06-19-memory-search-field-primitive.md) | Memory Search Field Primitive |
-| [2026-06-19-mission-action-error-dismiss-button-primitive.md](2026-06-19-mission-action-error-dismiss-button-primitive.md) | Mission Action Error Dismiss Button Primitive |
-| [2026-06-19-reasoning-toggle-button-primitive.md](2026-06-19-reasoning-toggle-button-primitive.md) | Reasoning Toggle Button Primitive |
-| [2026-06-19-reference-comparison-contract-preservation.md](2026-06-19-reference-comparison-contract-preservation.md) | Reference Comparison Contract Preservation |
-| [2026-06-19-task-mission-agent-cancellation-scope.md](2026-06-19-task-mission-agent-cancellation-scope.md) | Task, Mission, And Agent Cancellation Scope |
-| [2026-06-19-trace-event-disclosure-controls.md](2026-06-19-trace-event-disclosure-controls.md) | Trace Event Disclosure Controls |
-| [2026-06-19-workflow-generating-status-live.md](2026-06-19-workflow-generating-status-live.md) | Workflow Generating Status Live Regions |
-| [2026-06-19-workspace-onboarding-directory-row-button-primitive.md](2026-06-19-workspace-onboarding-directory-row-button-primitive.md) | Workspace Onboarding Directory Row Button Primitive |
-| [2026-06-19-ledger-row-main-button-primitive.md](2026-06-19-ledger-row-main-button-primitive.md)               | Ledger Row Main Button Primitive |
-| [2026-06-19-solid-button-foreground-contrast.md](2026-06-19-solid-button-foreground-contrast.md)               | Solid Button Foreground Contrast |
-| [2026-06-19-ledger-loading-status-live.md](2026-06-19-ledger-loading-status-live.md)                           | Ledger Loading Status Live |
-| [2026-06-19-retire-change-subline-residue.md](2026-06-19-retire-change-subline-residue.md)                     | Retire Change Subline Residue |
-| [2026-06-19-interaction-card-textarea-primitive.md](2026-06-19-interaction-card-textarea-primitive.md)         | Interaction Card Textarea Primitive |
-| [2026-06-19-workspace-split-menu-focus-ring.md](2026-06-19-workspace-split-menu-focus-ring.md)                 | Workspace Split Menu Focus Ring |
-| [2026-06-19-notification-dismissed-readable-state.md](2026-06-19-notification-dismissed-readable-state.md)     | Notification Dismissed Readable State |
-| [2026-06-19-loading-spinner-motion-token-source.md](2026-06-19-loading-spinner-motion-token-source.md)         | Loading Spinner Motion Token Source |
-| [2026-06-19-browser-preview-loading-status-live.md](2026-06-19-browser-preview-loading-status-live.md)         | Browser Preview Loading Status Live |
-| [2026-06-19-trace-panel-i18n-source.md](2026-06-19-trace-panel-i18n-source.md)                                 | Trace Panel i18n Source |
-| [2026-06-19-task-dirbar-recent-popover-semantics.md](2026-06-19-task-dirbar-recent-popover-semantics.md)       | TaskDirBar Recent Popover Semantics |
-| [2026-06-19-agent-models-loading-spinner-motion.md](2026-06-19-agent-models-loading-spinner-motion.md)         | Agent Models Loading Spinner Motion |
-| [2026-06-19-agent-models-i18n-source.md](2026-06-19-agent-models-i18n-source.md)                               | Agent Models i18n Source |
-| [2026-06-19-browser-evidence-title-font-weight-token.md](2026-06-19-browser-evidence-title-font-weight-token.md) | Browser Evidence Title Font Weight Token |
-| [2026-06-19-section-summary-focus-visible.md](2026-06-19-section-summary-focus-visible.md)                     | Section Summary Focus Visible |
-| [2026-06-19-connection-badge-button-diagnostics.md](2026-06-19-connection-badge-button-diagnostics.md)         | Connection Badge Button Diagnostics |
-| [2026-06-19-chat-bubble-disclosure-button-scope.md](2026-06-19-chat-bubble-disclosure-button-scope.md)         | Chat Bubble Disclosure Button Scope |
-| [2026-06-19-markdown-code-copy-i18n-source.md](2026-06-19-markdown-code-copy-i18n-source.md)                   | Markdown Code Copy i18n Source |
-| [2026-06-19-image-preview-dialog-i18n-source.md](2026-06-19-image-preview-dialog-i18n-source.md)               | Image Preview Dialog i18n Source |
-| [2026-06-19-about-issues-link-target.md](2026-06-19-about-issues-link-target.md)                               | About Issues Link Target |
-| [2026-06-19-vscode-media-ui-dist-vite-single-source.md](2026-06-19-vscode-media-ui-dist-vite-single-source.md) | VS Code Media UI Dist-Vite Single Source |
-| [2026-06-19-session-dialog-body-single-source.md](2026-06-19-session-dialog-body-single-source.md)             | Session Dialog Body Single Source |
-| [2026-06-19-ledger-scrollbar-visible-source.md](2026-06-19-ledger-scrollbar-visible-source.md)                 | Ledger Scrollbar Visible Source |
-| [2026-06-19-retire-mission-conversation-scrollbar-residue.md](2026-06-19-retire-mission-conversation-scrollbar-residue.md) | Retire Mission Conversation Scrollbar Residue |
-| [2026-06-19-retire-topbar-dead-control.md](2026-06-19-retire-topbar-dead-control.md)                         | Retire TopBar Dead Control |
-| [2026-06-19-final-visual-qa-scoped-build-context.md](2026-06-19-final-visual-qa-scoped-build-context.md)       | Final Visual QA And Scoped Build Context |
-| [2026-06-19-ledger-row-action-rail-keyboard-single-source.md](2026-06-19-ledger-row-action-rail-keyboard-single-source.md) | Ledger Row Action Rail Keyboard Single Source |
-| [2026-06-19-retire-overlay-orphan-css-residue.md](2026-06-19-retire-overlay-orphan-css-residue.md)             | Retire Overlay Orphan CSS Residue |
-| [2026-06-19-kobalte-tabpanel-state-single-source.md](2026-06-19-kobalte-tabpanel-state-single-source.md)       | Kobalte TabPanel State Single Source |
-| [2026-06-19-prompt-profile-select-runtime-contrast.md](2026-06-19-prompt-profile-select-runtime-contrast.md)   | Prompt Profile Select Runtime Contrast |
-| [2026-06-19-kobalte-selected-state-single-source.md](2026-06-19-kobalte-selected-state-single-source.md)       | Kobalte Selected State Single Source |
-| [2026-06-19-dropdown-menu-highlighted-contrast-source.md](2026-06-19-dropdown-menu-highlighted-contrast-source.md) | Dropdown Menu Highlighted Contrast Source |
-| [2026-06-19-deep-performance-investigation.md](2026-06-19-deep-performance-investigation.md)                   | Deep Performance Investigation |
-| [2026-06-19-system-performance-high-confidence-pass.md](2026-06-19-system-performance-high-confidence-pass.md) | System Performance High Confidence Pass |
-| [2026-06-19-overlay-diff-poll-pressure.md](2026-06-19-overlay-diff-poll-pressure.md)                           | Overlay Diff Poll Pressure |
-| [2026-06-19-retire-about-author-link-residue.md](2026-06-19-retire-about-author-link-residue.md)               | Retire About Author Link Residue |
-| [2026-06-19-retire-message-path-link-residue.md](2026-06-19-retire-message-path-link-residue.md)               | Retire Message Path Link Residue |
-| [2026-06-19-retire-board-intro-residue.md](2026-06-19-retire-board-intro-residue.md)                           | Retire BoardIntro Residue |
-| [2026-06-19-retire-llm-provider-summary-residue.md](2026-06-19-retire-llm-provider-summary-residue.md)         | Retire LLM Provider Summary Residue |
-| [2026-06-19-retire-detail-card-residue.md](2026-06-19-retire-detail-card-residue.md)                           | Retire Detail Card Residue |
-| [2026-06-19-retire-settings-continuation-residue.md](2026-06-19-retire-settings-continuation-residue.md)       | Retire Settings Continuation Residue |
-| [2026-06-19-retire-dialog-section-actions-residue.md](2026-06-19-retire-dialog-section-actions-residue.md)     | Retire Dialog Section Actions Residue |
-| [2026-06-19-retire-pref-item-residue.md](2026-06-19-retire-pref-item-residue.md)                               | Retire Pref Item Residue |
-| [2026-06-19-provider-refresh-spinner-owner.md](2026-06-19-provider-refresh-spinner-owner.md)                   | Provider Refresh Spinner Owner |
-| [2026-06-19-retire-field-input-action-residue.md](2026-06-19-retire-field-input-action-residue.md)             | Retire Field Input Action Residue |
-| [2026-06-19-retire-section-icon-button-residue.md](2026-06-19-retire-section-icon-button-residue.md)           | Retire Section Icon Button Residue |
-| [2026-06-19-provider-head-actions-responsive-source.md](2026-06-19-provider-head-actions-responsive-source.md) | Provider Head Actions Responsive Source |
-| [2026-06-19-retire-section-action-residue.md](2026-06-19-retire-section-action-residue.md)                     | Retire Section Action Residue |
-| [2026-06-19-retire-sidebar-orphan-selectors.md](2026-06-19-retire-sidebar-orphan-selectors.md)                 | Retire Sidebar Orphan Selectors |
-| [2026-06-19-retire-section-body-residue.md](2026-06-19-retire-section-body-residue.md)                         | Retire Section Body Residue |
-| [2026-06-19-retire-session-dialog-diff-residue.md](2026-06-19-retire-session-dialog-diff-residue.md)           | Retire Session Dialog Diff Residue |
-| [2026-06-19-card-header-chrome-single-source.md](2026-06-19-card-header-chrome-single-source.md)               | Card Header Chrome Single Source |
-| [2026-06-19-retire-dialog-head-residue.md](2026-06-19-retire-dialog-head-residue.md)                           | Retire Dialog Head Residue |
-| [2026-06-19-image-preview-trigger-accessible-name.md](2026-06-19-image-preview-trigger-accessible-name.md)     | Image Preview Trigger Accessible Name |
-| [2026-06-19-file-changes-row-keyboard-single-activation.md](2026-06-19-file-changes-row-keyboard-single-activation.md) | File Changes Row Keyboard Single Activation |
-| [2026-06-19-retire-provider-page-title-residue.md](2026-06-19-retire-provider-page-title-residue.md)           | Retire Provider Page Title Residue |
-| [2026-06-19-chat-composer-resize-keyboard-separator.md](2026-06-19-chat-composer-resize-keyboard-separator.md) | Chat Composer Resize Keyboard Separator |
-| [2026-06-19-retire-log-path-residue.md](2026-06-19-retire-log-path-residue.md)                                 | Retire Log Path Residue |
-| [2026-06-19-executor-model-listbox-primitive.md](2026-06-19-executor-model-listbox-primitive.md)               | Executor Model Listbox Primitive |
-| [2026-06-19-vsix-skip-build-media-ui-contrast-guard.md](2026-06-19-vsix-skip-build-media-ui-contrast-guard.md) | VSIX Skip Build Media UI Contrast Guard |
-| [2026-06-19-retire-toolbar-search-residue.md](2026-06-19-retire-toolbar-search-residue.md)                     | Retire Toolbar Search Residue |
-| [2026-06-19-task-row-children-toggle-button-primitive.md](2026-06-19-task-row-children-toggle-button-primitive.md) | Task Row Children Toggle Button Primitive |
-| [2026-06-19-retire-coding-assistant-activity-residue.md](2026-06-19-retire-coding-assistant-activity-residue.md) | Retire Coding Assistant Activity Residue |
-| [2026-06-19-task-progress-button-primitive.md](2026-06-19-task-progress-button-primitive.md)                 | Task Progress Button Primitive |
-| [2026-06-19-retire-card-status-badge-residue.md](2026-06-19-retire-card-status-badge-residue.md)             | Retire Card Status Badge Residue |
-| [2026-06-19-titlebar-menubar-trigger-button-primitive.md](2026-06-19-titlebar-menubar-trigger-button-primitive.md) | Titlebar Menubar Trigger Button Primitive |
-| [2026-06-19-titlebar-menubar-form-focus.md](2026-06-19-titlebar-menubar-form-focus.md) | Titlebar Menubar Form Focus |
-| [2026-06-19-project-ledger-group-toggle-button-primitive.md](2026-06-19-project-ledger-group-toggle-button-primitive.md) | Project Ledger Group Toggle Button Primitive |
-| [2026-06-19-project-ledger-group-disclosure-controls.md](2026-06-19-project-ledger-group-disclosure-controls.md) | Project Ledger Group Disclosure Controls |
-| [2026-06-19-retire-file-editor-nav-residue.md](2026-06-19-retire-file-editor-nav-residue.md)                       | Retire File Editor Nav Residue |
-| [2026-06-19-mission-task-projection-button-primitive.md](2026-06-19-mission-task-projection-button-primitive.md)     | Mission Task Projection Button Primitive |
-| [2026-06-19-retire-changes-group-foldable-residue.md](2026-06-19-retire-changes-group-foldable-residue.md)           | Retire Changes Group Foldable Residue |
-| [2026-06-19-retire-engine-model-panel-residue.md](2026-06-19-retire-engine-model-panel-residue.md)                   | Retire Engine Model Panel Residue |
-| [2026-06-19-cwd-recent-trigger-button-primitive.md](2026-06-19-cwd-recent-trigger-button-primitive.md)               | CWD Recent Trigger Button Primitive |
-| [2026-06-19-browser-preview-live-frame-application-role.md](2026-06-19-browser-preview-live-frame-application-role.md) | Browser Preview Live Frame Application Role |
-| [2026-06-19-goal-workflow-button-primitive.md](2026-06-19-goal-workflow-button-primitive.md)                         | Goal Workflow Button Primitive |
-| [2026-06-19-task-row-action-keyboard-rail.md](2026-06-19-task-row-action-keyboard-rail.md)                           | Task Row Action Keyboard Rail |
-| [2026-06-19-card-todo-summary-progressbar-a11y.md](2026-06-19-card-todo-summary-progressbar-a11y.md)                 | Card Todo Summary Progressbar Accessibility |
-| [2026-06-19-card-header-metadata-tooltip-a11y.md](2026-06-19-card-header-metadata-tooltip-a11y.md)                   | Card Header Metadata Tooltip Accessibility |
-| [2026-06-19-tree-writer-contiguous-segment-regroup.md](2026-06-19-tree-writer-contiguous-segment-regroup.md)         | Tree Writer Contiguous Segment Regroup |
-| [2026-06-19-dev-error-overlay-token-source.md](2026-06-19-dev-error-overlay-token-source.md)                         | Dev Error Overlay Token Source |
-| [2026-06-19-app-dialog-select-value-single-source.md](2026-06-19-app-dialog-select-value-single-source.md)           | App Dialog Select Value Single Source |
+| [2026-06-19-expert-squad-option-visibility-guard.md](2026-06-19-expert-squad-option-visibility-guard.md)                                   | Expert Squad Option Visibility Guard                  |
+| [2026-06-19-file-changes-light-contrast-runtime-guard.md](2026-06-19-file-changes-light-contrast-runtime-guard.md)                         | File Changes Light Contrast Runtime Guard             |
+| [2026-06-19-g1-g2-orchestrator-runtime-single-source-repair.md](2026-06-19-g1-g2-orchestrator-runtime-single-source-repair.md)             | G1/G2 Orchestrator Runtime Single-Source Repair       |
+| [2026-06-19-goal-fifo-refill-scheduling-impact.md](2026-06-19-goal-fifo-refill-scheduling-impact.md)                                       | Goal FIFO Refill Scheduling Impact Audit              |
+| [2026-06-19-markdown-code-copy-button-primitive.md](2026-06-19-markdown-code-copy-button-primitive.md)                                     | Markdown Code Copy Button Primitive                   |
+| [2026-06-19-markdown-syntax-theme-contrast.md](2026-06-19-markdown-syntax-theme-contrast.md)                                               | Markdown Syntax Theme Contrast                        |
+| [2026-06-19-memory-search-field-primitive.md](2026-06-19-memory-search-field-primitive.md)                                                 | Memory Search Field Primitive                         |
+| [2026-06-19-mission-action-error-dismiss-button-primitive.md](2026-06-19-mission-action-error-dismiss-button-primitive.md)                 | Mission Action Error Dismiss Button Primitive         |
+| [2026-06-19-reasoning-toggle-button-primitive.md](2026-06-19-reasoning-toggle-button-primitive.md)                                         | Reasoning Toggle Button Primitive                     |
+| [2026-06-19-reference-comparison-contract-preservation.md](2026-06-19-reference-comparison-contract-preservation.md)                       | Reference Comparison Contract Preservation            |
+| [2026-06-19-task-mission-agent-cancellation-scope.md](2026-06-19-task-mission-agent-cancellation-scope.md)                                 | Task, Mission, And Agent Cancellation Scope           |
+| [2026-06-19-trace-event-disclosure-controls.md](2026-06-19-trace-event-disclosure-controls.md)                                             | Trace Event Disclosure Controls                       |
+| [2026-06-19-workflow-generating-status-live.md](2026-06-19-workflow-generating-status-live.md)                                             | Workflow Generating Status Live Regions               |
+| [2026-06-19-workspace-onboarding-directory-row-button-primitive.md](2026-06-19-workspace-onboarding-directory-row-button-primitive.md)     | Workspace Onboarding Directory Row Button Primitive   |
+| [2026-06-19-ledger-row-main-button-primitive.md](2026-06-19-ledger-row-main-button-primitive.md)                                           | Ledger Row Main Button Primitive                      |
+| [2026-06-19-solid-button-foreground-contrast.md](2026-06-19-solid-button-foreground-contrast.md)                                           | Solid Button Foreground Contrast                      |
+| [2026-06-19-ledger-loading-status-live.md](2026-06-19-ledger-loading-status-live.md)                                                       | Ledger Loading Status Live                            |
+| [2026-06-19-retire-change-subline-residue.md](2026-06-19-retire-change-subline-residue.md)                                                 | Retire Change Subline Residue                         |
+| [2026-06-19-interaction-card-textarea-primitive.md](2026-06-19-interaction-card-textarea-primitive.md)                                     | Interaction Card Textarea Primitive                   |
+| [2026-06-19-workspace-split-menu-focus-ring.md](2026-06-19-workspace-split-menu-focus-ring.md)                                             | Workspace Split Menu Focus Ring                       |
+| [2026-06-19-notification-dismissed-readable-state.md](2026-06-19-notification-dismissed-readable-state.md)                                 | Notification Dismissed Readable State                 |
+| [2026-06-19-loading-spinner-motion-token-source.md](2026-06-19-loading-spinner-motion-token-source.md)                                     | Loading Spinner Motion Token Source                   |
+| [2026-06-19-browser-preview-loading-status-live.md](2026-06-19-browser-preview-loading-status-live.md)                                     | Browser Preview Loading Status Live                   |
+| [2026-06-19-trace-panel-i18n-source.md](2026-06-19-trace-panel-i18n-source.md)                                                             | Trace Panel i18n Source                               |
+| [2026-06-19-task-dirbar-recent-popover-semantics.md](2026-06-19-task-dirbar-recent-popover-semantics.md)                                   | TaskDirBar Recent Popover Semantics                   |
+| [2026-06-19-agent-models-loading-spinner-motion.md](2026-06-19-agent-models-loading-spinner-motion.md)                                     | Agent Models Loading Spinner Motion                   |
+| [2026-06-19-agent-models-i18n-source.md](2026-06-19-agent-models-i18n-source.md)                                                           | Agent Models i18n Source                              |
+| [2026-06-19-browser-evidence-title-font-weight-token.md](2026-06-19-browser-evidence-title-font-weight-token.md)                           | Browser Evidence Title Font Weight Token              |
+| [2026-06-19-section-summary-focus-visible.md](2026-06-19-section-summary-focus-visible.md)                                                 | Section Summary Focus Visible                         |
+| [2026-06-19-connection-badge-button-diagnostics.md](2026-06-19-connection-badge-button-diagnostics.md)                                     | Connection Badge Button Diagnostics                   |
+| [2026-06-19-chat-bubble-disclosure-button-scope.md](2026-06-19-chat-bubble-disclosure-button-scope.md)                                     | Chat Bubble Disclosure Button Scope                   |
+| [2026-06-19-markdown-code-copy-i18n-source.md](2026-06-19-markdown-code-copy-i18n-source.md)                                               | Markdown Code Copy i18n Source                        |
+| [2026-06-19-image-preview-dialog-i18n-source.md](2026-06-19-image-preview-dialog-i18n-source.md)                                           | Image Preview Dialog i18n Source                      |
+| [2026-06-19-about-issues-link-target.md](2026-06-19-about-issues-link-target.md)                                                           | About Issues Link Target                              |
+| [2026-06-19-vscode-media-ui-dist-vite-single-source.md](2026-06-19-vscode-media-ui-dist-vite-single-source.md)                             | VS Code Media UI Dist-Vite Single Source              |
+| [2026-06-19-session-dialog-body-single-source.md](2026-06-19-session-dialog-body-single-source.md)                                         | Session Dialog Body Single Source                     |
+| [2026-06-19-ledger-scrollbar-visible-source.md](2026-06-19-ledger-scrollbar-visible-source.md)                                             | Ledger Scrollbar Visible Source                       |
+| [2026-06-19-retire-mission-conversation-scrollbar-residue.md](2026-06-19-retire-mission-conversation-scrollbar-residue.md)                 | Retire Mission Conversation Scrollbar Residue         |
+| [2026-06-19-retire-topbar-dead-control.md](2026-06-19-retire-topbar-dead-control.md)                                                       | Retire TopBar Dead Control                            |
+| [2026-06-19-final-visual-qa-scoped-build-context.md](2026-06-19-final-visual-qa-scoped-build-context.md)                                   | Final Visual QA And Scoped Build Context              |
+| [2026-06-19-ledger-row-action-rail-keyboard-single-source.md](2026-06-19-ledger-row-action-rail-keyboard-single-source.md)                 | Ledger Row Action Rail Keyboard Single Source         |
+| [2026-06-19-retire-overlay-orphan-css-residue.md](2026-06-19-retire-overlay-orphan-css-residue.md)                                         | Retire Overlay Orphan CSS Residue                     |
+| [2026-06-19-kobalte-tabpanel-state-single-source.md](2026-06-19-kobalte-tabpanel-state-single-source.md)                                   | Kobalte TabPanel State Single Source                  |
+| [2026-06-19-prompt-profile-select-runtime-contrast.md](2026-06-19-prompt-profile-select-runtime-contrast.md)                               | Prompt Profile Select Runtime Contrast                |
+| [2026-06-19-kobalte-selected-state-single-source.md](2026-06-19-kobalte-selected-state-single-source.md)                                   | Kobalte Selected State Single Source                  |
+| [2026-06-19-dropdown-menu-highlighted-contrast-source.md](2026-06-19-dropdown-menu-highlighted-contrast-source.md)                         | Dropdown Menu Highlighted Contrast Source             |
+| [2026-06-19-deep-performance-investigation.md](2026-06-19-deep-performance-investigation.md)                                               | Deep Performance Investigation                        |
+| [2026-06-19-system-performance-high-confidence-pass.md](2026-06-19-system-performance-high-confidence-pass.md)                             | System Performance High Confidence Pass               |
+| [2026-06-19-overlay-diff-poll-pressure.md](2026-06-19-overlay-diff-poll-pressure.md)                                                       | Overlay Diff Poll Pressure                            |
+| [2026-06-19-retire-about-author-link-residue.md](2026-06-19-retire-about-author-link-residue.md)                                           | Retire About Author Link Residue                      |
+| [2026-06-19-retire-message-path-link-residue.md](2026-06-19-retire-message-path-link-residue.md)                                           | Retire Message Path Link Residue                      |
+| [2026-06-19-retire-board-intro-residue.md](2026-06-19-retire-board-intro-residue.md)                                                       | Retire BoardIntro Residue                             |
+| [2026-06-19-retire-llm-provider-summary-residue.md](2026-06-19-retire-llm-provider-summary-residue.md)                                     | Retire LLM Provider Summary Residue                   |
+| [2026-06-19-retire-detail-card-residue.md](2026-06-19-retire-detail-card-residue.md)                                                       | Retire Detail Card Residue                            |
+| [2026-06-19-retire-settings-continuation-residue.md](2026-06-19-retire-settings-continuation-residue.md)                                   | Retire Settings Continuation Residue                  |
+| [2026-06-19-retire-dialog-section-actions-residue.md](2026-06-19-retire-dialog-section-actions-residue.md)                                 | Retire Dialog Section Actions Residue                 |
+| [2026-06-19-retire-pref-item-residue.md](2026-06-19-retire-pref-item-residue.md)                                                           | Retire Pref Item Residue                              |
+| [2026-06-19-provider-refresh-spinner-owner.md](2026-06-19-provider-refresh-spinner-owner.md)                                               | Provider Refresh Spinner Owner                        |
+| [2026-06-19-retire-field-input-action-residue.md](2026-06-19-retire-field-input-action-residue.md)                                         | Retire Field Input Action Residue                     |
+| [2026-06-19-retire-section-icon-button-residue.md](2026-06-19-retire-section-icon-button-residue.md)                                       | Retire Section Icon Button Residue                    |
+| [2026-06-19-provider-head-actions-responsive-source.md](2026-06-19-provider-head-actions-responsive-source.md)                             | Provider Head Actions Responsive Source               |
+| [2026-06-19-retire-section-action-residue.md](2026-06-19-retire-section-action-residue.md)                                                 | Retire Section Action Residue                         |
+| [2026-06-19-retire-sidebar-orphan-selectors.md](2026-06-19-retire-sidebar-orphan-selectors.md)                                             | Retire Sidebar Orphan Selectors                       |
+| [2026-06-19-retire-section-body-residue.md](2026-06-19-retire-section-body-residue.md)                                                     | Retire Section Body Residue                           |
+| [2026-06-19-retire-session-dialog-diff-residue.md](2026-06-19-retire-session-dialog-diff-residue.md)                                       | Retire Session Dialog Diff Residue                    |
+| [2026-06-19-card-header-chrome-single-source.md](2026-06-19-card-header-chrome-single-source.md)                                           | Card Header Chrome Single Source                      |
+| [2026-06-19-retire-dialog-head-residue.md](2026-06-19-retire-dialog-head-residue.md)                                                       | Retire Dialog Head Residue                            |
+| [2026-06-19-image-preview-trigger-accessible-name.md](2026-06-19-image-preview-trigger-accessible-name.md)                                 | Image Preview Trigger Accessible Name                 |
+| [2026-06-19-file-changes-row-keyboard-single-activation.md](2026-06-19-file-changes-row-keyboard-single-activation.md)                     | File Changes Row Keyboard Single Activation           |
+| [2026-06-19-retire-provider-page-title-residue.md](2026-06-19-retire-provider-page-title-residue.md)                                       | Retire Provider Page Title Residue                    |
+| [2026-06-19-chat-composer-resize-keyboard-separator.md](2026-06-19-chat-composer-resize-keyboard-separator.md)                             | Chat Composer Resize Keyboard Separator               |
+| [2026-06-19-retire-log-path-residue.md](2026-06-19-retire-log-path-residue.md)                                                             | Retire Log Path Residue                               |
+| [2026-06-19-executor-model-listbox-primitive.md](2026-06-19-executor-model-listbox-primitive.md)                                           | Executor Model Listbox Primitive                      |
+| [2026-06-19-vsix-skip-build-media-ui-contrast-guard.md](2026-06-19-vsix-skip-build-media-ui-contrast-guard.md)                             | VSIX Skip Build Media UI Contrast Guard               |
+| [2026-06-19-retire-toolbar-search-residue.md](2026-06-19-retire-toolbar-search-residue.md)                                                 | Retire Toolbar Search Residue                         |
+| [2026-06-19-task-row-children-toggle-button-primitive.md](2026-06-19-task-row-children-toggle-button-primitive.md)                         | Task Row Children Toggle Button Primitive             |
+| [2026-06-19-retire-coding-assistant-activity-residue.md](2026-06-19-retire-coding-assistant-activity-residue.md)                           | Retire Coding Assistant Activity Residue              |
+| [2026-06-19-task-progress-button-primitive.md](2026-06-19-task-progress-button-primitive.md)                                               | Task Progress Button Primitive                        |
+| [2026-06-19-retire-card-status-badge-residue.md](2026-06-19-retire-card-status-badge-residue.md)                                           | Retire Card Status Badge Residue                      |
+| [2026-06-19-titlebar-menubar-trigger-button-primitive.md](2026-06-19-titlebar-menubar-trigger-button-primitive.md)                         | Titlebar Menubar Trigger Button Primitive             |
+| [2026-06-19-titlebar-menubar-form-focus.md](2026-06-19-titlebar-menubar-form-focus.md)                                                     | Titlebar Menubar Form Focus                           |
+| [2026-06-19-project-ledger-group-toggle-button-primitive.md](2026-06-19-project-ledger-group-toggle-button-primitive.md)                   | Project Ledger Group Toggle Button Primitive          |
+| [2026-06-19-project-ledger-group-disclosure-controls.md](2026-06-19-project-ledger-group-disclosure-controls.md)                           | Project Ledger Group Disclosure Controls              |
+| [2026-06-19-retire-file-editor-nav-residue.md](2026-06-19-retire-file-editor-nav-residue.md)                                               | Retire File Editor Nav Residue                        |
+| [2026-06-19-mission-task-projection-button-primitive.md](2026-06-19-mission-task-projection-button-primitive.md)                           | Mission Task Projection Button Primitive              |
+| [2026-06-19-retire-changes-group-foldable-residue.md](2026-06-19-retire-changes-group-foldable-residue.md)                                 | Retire Changes Group Foldable Residue                 |
+| [2026-06-19-retire-engine-model-panel-residue.md](2026-06-19-retire-engine-model-panel-residue.md)                                         | Retire Engine Model Panel Residue                     |
+| [2026-06-19-cwd-recent-trigger-button-primitive.md](2026-06-19-cwd-recent-trigger-button-primitive.md)                                     | CWD Recent Trigger Button Primitive                   |
+| [2026-06-19-browser-preview-live-frame-application-role.md](2026-06-19-browser-preview-live-frame-application-role.md)                     | Browser Preview Live Frame Application Role           |
+| [2026-06-19-goal-workflow-button-primitive.md](2026-06-19-goal-workflow-button-primitive.md)                                               | Goal Workflow Button Primitive                        |
+| [2026-06-19-task-row-action-keyboard-rail.md](2026-06-19-task-row-action-keyboard-rail.md)                                                 | Task Row Action Keyboard Rail                         |
+| [2026-06-19-card-todo-summary-progressbar-a11y.md](2026-06-19-card-todo-summary-progressbar-a11y.md)                                       | Card Todo Summary Progressbar Accessibility           |
+| [2026-06-19-card-header-metadata-tooltip-a11y.md](2026-06-19-card-header-metadata-tooltip-a11y.md)                                         | Card Header Metadata Tooltip Accessibility            |
+| [2026-06-19-tree-writer-contiguous-segment-regroup.md](2026-06-19-tree-writer-contiguous-segment-regroup.md)                               | Tree Writer Contiguous Segment Regroup                |
+| [2026-06-19-dev-error-overlay-token-source.md](2026-06-19-dev-error-overlay-token-source.md)                                               | Dev Error Overlay Token Source                        |
+| [2026-06-19-app-dialog-select-value-single-source.md](2026-06-19-app-dialog-select-value-single-source.md)                                 | App Dialog Select Value Single Source                 |
 
 ## 2026-06-18
 
-| File                                                                                                                                       | Title                                  |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| [2026-06-18-agent-reply-box-primitives.md](2026-06-18-agent-reply-box-primitives.md) | Agent Reply Box Primitive Adoption |
-| [2026-06-18-app-dialog-segmented-control.md](2026-06-18-app-dialog-segmented-control.md) | App Dialog Segmented Control Primitive |
+| File                                                                                                                                             | Title                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| [2026-06-18-agent-reply-box-primitives.md](2026-06-18-agent-reply-box-primitives.md)                                                             | Agent Reply Box Primitive Adoption                       |
+| [2026-06-18-app-dialog-segmented-control.md](2026-06-18-app-dialog-segmented-control.md)                                                         | App Dialog Segmented Control Primitive                   |
 | [2026-06-18-browser-preview-repair-tool-algorithm-pressure-benchmark.md](2026-06-18-browser-preview-repair-tool-algorithm-pressure-benchmark.md) | Browser Preview Repair Tool Algorithm Pressure Benchmark |
-| [2026-06-18-command-palette-dialog-primitive.md](2026-06-18-command-palette-dialog-primitive.md) | Command Palette Dialog Primitive |
-| [2026-06-18-executor-selector-current-model-aria.md](2026-06-18-executor-selector-current-model-aria.md) | Executor Selector Current Model ARIA |
-| [2026-06-18-file-explorer-row-button-semantics.md](2026-06-18-file-explorer-row-button-semantics.md) | File Explorer Row Button Semantics |
-| [2026-06-18-frontend-design-authenticated-browser-proxy.md](2026-06-18-frontend-design-authenticated-browser-proxy.md) | Frontend-design authenticated browser proxy |
-| [2026-06-18-hexin-budget-selector-regression.md](2026-06-18-hexin-budget-selector-regression.md) | Hexin Budget Selector Regression |
-| [2026-06-18-image-preview-copy-single-source.md](2026-06-18-image-preview-copy-single-source.md) | Image Preview Copy Single Source |
-| [2026-06-18-ledger-row-current-aria.md](2026-06-18-ledger-row-current-aria.md) | Ledger Row Current ARIA |
-| [2026-06-18-ledger-row-nested-interactions.md](2026-06-18-ledger-row-nested-interactions.md) | Ledger Row Nested Interaction Cleanup |
-| [2026-06-18-popup-contrast-matrix-entrypoint-css.md](2026-06-18-popup-contrast-matrix-entrypoint-css.md) | Popup Contrast Matrix Entrypoint CSS |
-| [2026-06-18-preview-repair-tool-adapter-single-source.md](2026-06-18-preview-repair-tool-adapter-single-source.md) | Preview Repair Tool Adapter Single Source |
-| [2026-06-18-prompt-profile-extension-import-consensus.md](2026-06-18-prompt-profile-extension-import-consensus.md) | Prompt Profile Extension Import Consensus |
-| [2026-06-18-prompt-profile-list-current-aria.md](2026-06-18-prompt-profile-list-current-aria.md) | Prompt Profile List Current ARIA |
-| [2026-06-18-retire-chat-plugin-css-residue.md](2026-06-18-retire-chat-plugin-css-residue.md) | Retire Chat Plugin CSS Residue |
-| [2026-06-18-retire-task-detail-overlay-hash-residue.md](2026-06-18-retire-task-detail-overlay-hash-residue.md) | Retire Task Detail Overlay Hash Residue |
-| [2026-06-18-retire-titlebar-tools-menu-source.md](2026-06-18-retire-titlebar-tools-menu-source.md) | Retire Titlebar Tools Menu Source |
-| [2026-06-18-runtime-inline-svg-icon-single-source.md](2026-06-18-runtime-inline-svg-icon-single-source.md) | Runtime Inline SVG Icon Single Source |
-| [2026-06-18-settings-db-reset-safe-route.md](2026-06-18-settings-db-reset-safe-route.md) | Settings DB Reset Safe Route |
-| [2026-06-18-settings-primitives-single-source-completion.md](2026-06-18-settings-primitives-single-source-completion.md) | Settings Primitives Single Source Completion |
-| [2026-06-18-tabs-tabpanel-semantic-contract.md](2026-06-18-tabs-tabpanel-semantic-contract.md) | Tabs Tabpanel Semantic Contract |
-| [2026-06-18-task-dirbar-breadcrumb-current-aria.md](2026-06-18-task-dirbar-breadcrumb-current-aria.md) | TaskDirBar Breadcrumb Current ARIA |
-| [2026-06-18-task-dirbar-current-location-aria.md](2026-06-18-task-dirbar-current-location-aria.md) | TaskDirBar Current Location ARIA |
-| [2026-06-18-task-dirbar-recent-trigger-semantics.md](2026-06-18-task-dirbar-recent-trigger-semantics.md) | TaskDirBar recent trigger semantics |
-| [2026-06-18-titlebar-view-radio-focus-single-source.md](2026-06-18-titlebar-view-radio-focus-single-source.md) | Titlebar View Radio Focus Single Source |
-| [2026-06-18-trace-panel-icon-guard-retirement.md](2026-06-18-trace-panel-icon-guard-retirement.md) | Trace Panel Icon Guard Retirement |
-| [2026-06-18-file-explorer-drag-upload.md](2026-06-18-file-explorer-drag-upload.md)                                                         | File Explorer Drag Upload |
-| [2026-06-18-titlebar-brand-guide-popover-primitive.md](2026-06-18-titlebar-brand-guide-popover-primitive.md)                               | Titlebar Brand Guide Popover Primitive |
-| [2026-06-18-settings-dialog-tabs-primitive.md](2026-06-18-settings-dialog-tabs-primitive.md)                                               | Settings Dialog Tabs Primitive |
-| [2026-06-18-settings-tabpanel-active-test-contract.md](2026-06-18-settings-tabpanel-active-test-contract.md)                               | Settings TabPanel Active Test Contract |
-| [2026-06-18-prompt-profile-list-row-primitive.md](2026-06-18-prompt-profile-list-row-primitive.md)                                         | Prompt Profile List Row Primitive |
-| [2026-06-18-chat-composer-button-primitive-owner.md](2026-06-18-chat-composer-button-primitive-owner.md)                                   | Chat Composer Button Primitive Owner |
-| [2026-06-18-select-control-shell-single-source.md](2026-06-18-select-control-shell-single-source.md)                                       | Select Control Shell Single Source |
-| [2026-06-18-config-dialog-close-button-primitive.md](2026-06-18-config-dialog-close-button-primitive.md)                                   | Config Dialog Close Button Primitive |
-| [2026-06-18-workspace-split-launcher-button-primitive.md](2026-06-18-workspace-split-launcher-button-primitive.md)                         | Workspace Split Launcher Button Primitive |
-| [2026-06-18-file-editor-button-primitive.md](2026-06-18-file-editor-button-primitive.md)                                                     | File Editor Button Primitive |
-| [2026-06-18-project-worktree-remove-button-primitive.md](2026-06-18-project-worktree-remove-button-primitive.md)                           | Project Worktree Remove Button Primitive |
-| [2026-06-18-recent-directory-actions-button-primitive.md](2026-06-18-recent-directory-actions-button-primitive.md)                         | Recent Directory Actions Button Primitive |
-| [2026-06-18-file-explorer-retry-button-primitive.md](2026-06-18-file-explorer-retry-button-primitive.md)                                   | File Explorer Retry Button Primitive |
-| [2026-06-18-mission-task-projection-row-focus.md](2026-06-18-mission-task-projection-row-focus.md)                                         | Mission Task Projection Row Focus |
-| [2026-06-18-integrity-panel-token-source.md](2026-06-18-integrity-panel-token-source.md)                                                   | Integrity Panel Token Source |
-| [2026-06-18-task-progress-pill-focus.md](2026-06-18-task-progress-pill-focus.md)                                                           | Task Progress Pill Focus |
-| [2026-06-18-trace-event-head-focus.md](2026-06-18-trace-event-head-focus.md)                                                               | Trace Event Head Focus |
-| [2026-06-18-css-token-closure.md](2026-06-18-css-token-closure.md)                                                                         | CSS Token Closure |
-| [2026-06-18-select-control-static-coverage-alignment.md](2026-06-18-select-control-static-coverage-alignment.md)                           | Select Control Static Coverage Alignment |
-| [2026-06-18-coding-cli-icon-token-source.md](2026-06-18-coding-cli-icon-token-source.md)                                                     | Coding CLI Icon Token Source |
-| [2026-06-18-conversation-agent-rail-button-primitive.md](2026-06-18-conversation-agent-rail-button-primitive.md)                             | Conversation Agent Rail Button Primitive |
-| [2026-06-18-image-preview-shadow-token-source.md](2026-06-18-image-preview-shadow-token-source.md)                                           | Image Preview Shadow Token Source |
-| [2026-06-18-card-css-duplicate-selector-debt.md](2026-06-18-card-css-duplicate-selector-debt.md)                                               | Card CSS Duplicate Selector Debt |
-| [2026-06-18-project-ledger-group-primitive.md](2026-06-18-project-ledger-group-primitive.md)                                               | Project Ledger Group Primitive |
-| [2026-06-18-file-changes-filter-primitive-owner.md](2026-06-18-file-changes-filter-primitive-owner.md) | File Changes Filter Primitive Owner |
-| [2026-06-18-card-trace-action-button-owner.md](2026-06-18-card-trace-action-button-owner.md)                                               | Card Trace Action Button Owner |
-| [2026-06-18-goal-workflow-header-native-button.md](2026-06-18-goal-workflow-header-native-button.md)                                       | Goal Workflow Header Native Button |
-| [2026-06-18-extension-head-field-label-single-source.md](2026-06-18-extension-head-field-label-single-source.md)                           | Extension Head Field Label Single Source |
-| [2026-06-18-retire-goal-item-css-residue.md](2026-06-18-retire-goal-item-css-residue.md)                                                   | Retire Goal Item CSS Residue |
-| [2026-06-18-acceptance-panel-button-owner.md](2026-06-18-acceptance-panel-button-owner.md)                                                 | Acceptance Panel Button Owner |
-| [2026-06-18-settings-surface-header-residue.md](2026-06-18-settings-surface-header-residue.md)                                             | Settings Surface Header Residue |
-| [2026-06-18-connection-banner-button-primitive.md](2026-06-18-connection-banner-button-primitive.md)                                       | Connection Banner Button Primitive |
-| [2026-06-18-notification-live-region-task-action.md](2026-06-18-notification-live-region-task-action.md)                                   | Notification Live Region Task Action |
-| [2026-06-18-card-header-nested-interactions.md](2026-06-18-card-header-nested-interactions.md)                                             | Card Header Nested Interaction Cleanup |
-| [2026-06-18-memory-row-nested-interactions.md](2026-06-18-memory-row-nested-interactions.md)                                               | Memory Row Nested Interaction Cleanup |
-| [2026-06-18-light-popup-active-state-contrast.md](2026-06-18-light-popup-active-state-contrast.md)                                         | Light Popup Active State Contrast |
-| [2026-06-18-left-pane-resizer-browser-max-contract.md](2026-06-18-left-pane-resizer-browser-max-contract.md)                               | Left Pane Resizer Browser Max Contract |
-| [2026-06-18-command-palette-activedescendant.md](2026-06-18-command-palette-activedescendant.md)                                           | Command Palette Active Descendant      |
-| [2026-06-18-command-palette-config-sections-single-source.md](2026-06-18-command-palette-config-sections-single-source.md)                 | Command Palette Config Sections Single Source |
-| [2026-06-18-command-palette-combobox-primitive.md](2026-06-18-command-palette-combobox-primitive.md)                                       | Command Palette Combobox Primitive |
-| [2026-06-18-dialog-header-drag-kobalte-regression.md](2026-06-18-dialog-header-drag-kobalte-regression.md)                                 | Dialog Header Drag Kobalte Regression |
-| [2026-06-18-executor-chip-density-guard.md](2026-06-18-executor-chip-density-guard.md)                                                     | Executor Chip Density Guard |
-| [2026-06-18-expert-squad-unselected-option-contrast-guard.md](2026-06-18-expert-squad-unselected-option-contrast-guard.md)                   | Expert Squad Unselected Option Contrast Guard |
-| [2026-06-18-popup-disabled-effective-contrast.md](2026-06-18-popup-disabled-effective-contrast.md)                                         | Popup Disabled Effective Contrast |
-| [2026-06-18-popup-contrast-light-palette.md](2026-06-18-popup-contrast-light-palette.md)                                                   | Popup Contrast Light Palette |
-| [2026-06-18-prompt-profile-trigger-select-primitive.md](2026-06-18-prompt-profile-trigger-select-primitive.md)                             | Prompt Profile Trigger Select Primitive |
-| [2026-06-18-prompt-profile-textarea-accessible-names.md](2026-06-18-prompt-profile-textarea-accessible-names.md)                           | Prompt Profile Textarea Accessible Names |
-| [2026-06-18-retire-prompt-editor-css-residue.md](2026-06-18-retire-prompt-editor-css-residue.md)                                           | Retire Prompt Editor CSS Residue |
-| [2026-06-18-retire-settings-config-shell-residue.md](2026-06-18-retire-settings-config-shell-residue.md)                                     | Retire Settings Config Shell Residue |
-| [2026-06-18-retire-settings-extension-memory-residue.md](2026-06-18-retire-settings-extension-memory-residue.md)                             | Retire Settings Extension Memory Residue |
-| [2026-06-18-retire-conversation-goal-strip-residue.md](2026-06-18-retire-conversation-goal-strip-residue.md)                                   | Retire Conversation Goal Strip Residue |
-| [2026-06-18-retire-ndjson-log-css-residue.md](2026-06-18-retire-ndjson-log-css-residue.md)                                                 | Retire NDJSON Log CSS Residue |
-| [2026-06-18-retire-titlebar-status-residue.md](2026-06-18-retire-titlebar-status-residue.md)                                                 | Retire Titlebar Status Residue |
-| [2026-06-18-retire-titlebar-nav-residue.md](2026-06-18-retire-titlebar-nav-residue.md)                                                       | Retire Titlebar Nav Residue |
-| [2026-06-18-right-activity-toolbar-responsive-rail.md](2026-06-18-right-activity-toolbar-responsive-rail.md)                                 | Right Activity Toolbar Responsive Rail |
-| [2026-06-18-retire-workspace-panel-residue.md](2026-06-18-retire-workspace-panel-residue.md)                                                 | Retire Workspace Panel Residue |
-| [2026-06-18-retire-criteria-dom-css-residue.md](2026-06-18-retire-criteria-dom-css-residue.md)                                             | Retire Criteria DOM CSS Residue |
-| [2026-06-18-retire-eval-shell-residue.md](2026-06-18-retire-eval-shell-residue.md)                                                         | Retire Eval Shell Residue |
-| [2026-06-18-retire-composer-selector-residue.md](2026-06-18-retire-composer-selector-residue.md)                                           | Retire Composer Selector Residue |
-| [2026-06-18-retire-gwg-integrity-selector-residue.md](2026-06-18-retire-gwg-integrity-selector-residue.md)                                 | Retire GWG Integrity Selector Residue |
-| [2026-06-18-select-popup-readability-impact-review.md](2026-06-18-select-popup-readability-impact-review.md)                               | Select Popup Readability Impact Review |
-| [2026-06-18-settings-segmented-aria-label-forwarding.md](2026-06-18-settings-segmented-aria-label-forwarding.md)                           | Settings Segmented Aria Label Forwarding |
+| [2026-06-18-command-palette-dialog-primitive.md](2026-06-18-command-palette-dialog-primitive.md)                                                 | Command Palette Dialog Primitive                         |
+| [2026-06-18-executor-selector-current-model-aria.md](2026-06-18-executor-selector-current-model-aria.md)                                         | Executor Selector Current Model ARIA                     |
+| [2026-06-18-file-explorer-row-button-semantics.md](2026-06-18-file-explorer-row-button-semantics.md)                                             | File Explorer Row Button Semantics                       |
+| [2026-06-18-frontend-design-authenticated-browser-proxy.md](2026-06-18-frontend-design-authenticated-browser-proxy.md)                           | Frontend-design authenticated browser proxy              |
+| [2026-06-18-hexin-budget-selector-regression.md](2026-06-18-hexin-budget-selector-regression.md)                                                 | Hexin Budget Selector Regression                         |
+| [2026-06-18-image-preview-copy-single-source.md](2026-06-18-image-preview-copy-single-source.md)                                                 | Image Preview Copy Single Source                         |
+| [2026-06-18-ledger-row-current-aria.md](2026-06-18-ledger-row-current-aria.md)                                                                   | Ledger Row Current ARIA                                  |
+| [2026-06-18-ledger-row-nested-interactions.md](2026-06-18-ledger-row-nested-interactions.md)                                                     | Ledger Row Nested Interaction Cleanup                    |
+| [2026-06-18-popup-contrast-matrix-entrypoint-css.md](2026-06-18-popup-contrast-matrix-entrypoint-css.md)                                         | Popup Contrast Matrix Entrypoint CSS                     |
+| [2026-06-18-preview-repair-tool-adapter-single-source.md](2026-06-18-preview-repair-tool-adapter-single-source.md)                               | Preview Repair Tool Adapter Single Source                |
+| [2026-06-18-prompt-profile-extension-import-consensus.md](2026-06-18-prompt-profile-extension-import-consensus.md)                               | Prompt Profile Extension Import Consensus                |
+| [2026-06-18-prompt-profile-list-current-aria.md](2026-06-18-prompt-profile-list-current-aria.md)                                                 | Prompt Profile List Current ARIA                         |
+| [2026-06-18-retire-chat-plugin-css-residue.md](2026-06-18-retire-chat-plugin-css-residue.md)                                                     | Retire Chat Plugin CSS Residue                           |
+| [2026-06-18-retire-task-detail-overlay-hash-residue.md](2026-06-18-retire-task-detail-overlay-hash-residue.md)                                   | Retire Task Detail Overlay Hash Residue                  |
+| [2026-06-18-retire-titlebar-tools-menu-source.md](2026-06-18-retire-titlebar-tools-menu-source.md)                                               | Retire Titlebar Tools Menu Source                        |
+| [2026-06-18-runtime-inline-svg-icon-single-source.md](2026-06-18-runtime-inline-svg-icon-single-source.md)                                       | Runtime Inline SVG Icon Single Source                    |
+| [2026-06-18-settings-db-reset-safe-route.md](2026-06-18-settings-db-reset-safe-route.md)                                                         | Settings DB Reset Safe Route                             |
+| [2026-06-18-settings-primitives-single-source-completion.md](2026-06-18-settings-primitives-single-source-completion.md)                         | Settings Primitives Single Source Completion             |
+| [2026-06-18-tabs-tabpanel-semantic-contract.md](2026-06-18-tabs-tabpanel-semantic-contract.md)                                                   | Tabs Tabpanel Semantic Contract                          |
+| [2026-06-18-task-dirbar-breadcrumb-current-aria.md](2026-06-18-task-dirbar-breadcrumb-current-aria.md)                                           | TaskDirBar Breadcrumb Current ARIA                       |
+| [2026-06-18-task-dirbar-current-location-aria.md](2026-06-18-task-dirbar-current-location-aria.md)                                               | TaskDirBar Current Location ARIA                         |
+| [2026-06-18-task-dirbar-recent-trigger-semantics.md](2026-06-18-task-dirbar-recent-trigger-semantics.md)                                         | TaskDirBar recent trigger semantics                      |
+| [2026-06-18-titlebar-view-radio-focus-single-source.md](2026-06-18-titlebar-view-radio-focus-single-source.md)                                   | Titlebar View Radio Focus Single Source                  |
+| [2026-06-18-trace-panel-icon-guard-retirement.md](2026-06-18-trace-panel-icon-guard-retirement.md)                                               | Trace Panel Icon Guard Retirement                        |
+| [2026-06-18-file-explorer-drag-upload.md](2026-06-18-file-explorer-drag-upload.md)                                                               | File Explorer Drag Upload                                |
+| [2026-06-18-titlebar-brand-guide-popover-primitive.md](2026-06-18-titlebar-brand-guide-popover-primitive.md)                                     | Titlebar Brand Guide Popover Primitive                   |
+| [2026-06-18-settings-dialog-tabs-primitive.md](2026-06-18-settings-dialog-tabs-primitive.md)                                                     | Settings Dialog Tabs Primitive                           |
+| [2026-06-18-settings-tabpanel-active-test-contract.md](2026-06-18-settings-tabpanel-active-test-contract.md)                                     | Settings TabPanel Active Test Contract                   |
+| [2026-06-18-prompt-profile-list-row-primitive.md](2026-06-18-prompt-profile-list-row-primitive.md)                                               | Prompt Profile List Row Primitive                        |
+| [2026-06-18-chat-composer-button-primitive-owner.md](2026-06-18-chat-composer-button-primitive-owner.md)                                         | Chat Composer Button Primitive Owner                     |
+| [2026-06-18-select-control-shell-single-source.md](2026-06-18-select-control-shell-single-source.md)                                             | Select Control Shell Single Source                       |
+| [2026-06-18-config-dialog-close-button-primitive.md](2026-06-18-config-dialog-close-button-primitive.md)                                         | Config Dialog Close Button Primitive                     |
+| [2026-06-18-workspace-split-launcher-button-primitive.md](2026-06-18-workspace-split-launcher-button-primitive.md)                               | Workspace Split Launcher Button Primitive                |
+| [2026-06-18-file-editor-button-primitive.md](2026-06-18-file-editor-button-primitive.md)                                                         | File Editor Button Primitive                             |
+| [2026-06-18-project-worktree-remove-button-primitive.md](2026-06-18-project-worktree-remove-button-primitive.md)                                 | Project Worktree Remove Button Primitive                 |
+| [2026-06-18-recent-directory-actions-button-primitive.md](2026-06-18-recent-directory-actions-button-primitive.md)                               | Recent Directory Actions Button Primitive                |
+| [2026-06-18-file-explorer-retry-button-primitive.md](2026-06-18-file-explorer-retry-button-primitive.md)                                         | File Explorer Retry Button Primitive                     |
+| [2026-06-18-mission-task-projection-row-focus.md](2026-06-18-mission-task-projection-row-focus.md)                                               | Mission Task Projection Row Focus                        |
+| [2026-06-18-integrity-panel-token-source.md](2026-06-18-integrity-panel-token-source.md)                                                         | Integrity Panel Token Source                             |
+| [2026-06-18-task-progress-pill-focus.md](2026-06-18-task-progress-pill-focus.md)                                                                 | Task Progress Pill Focus                                 |
+| [2026-06-18-trace-event-head-focus.md](2026-06-18-trace-event-head-focus.md)                                                                     | Trace Event Head Focus                                   |
+| [2026-06-18-css-token-closure.md](2026-06-18-css-token-closure.md)                                                                               | CSS Token Closure                                        |
+| [2026-06-18-select-control-static-coverage-alignment.md](2026-06-18-select-control-static-coverage-alignment.md)                                 | Select Control Static Coverage Alignment                 |
+| [2026-06-18-coding-cli-icon-token-source.md](2026-06-18-coding-cli-icon-token-source.md)                                                         | Coding CLI Icon Token Source                             |
+| [2026-06-18-conversation-agent-rail-button-primitive.md](2026-06-18-conversation-agent-rail-button-primitive.md)                                 | Conversation Agent Rail Button Primitive                 |
+| [2026-06-18-image-preview-shadow-token-source.md](2026-06-18-image-preview-shadow-token-source.md)                                               | Image Preview Shadow Token Source                        |
+| [2026-06-18-card-css-duplicate-selector-debt.md](2026-06-18-card-css-duplicate-selector-debt.md)                                                 | Card CSS Duplicate Selector Debt                         |
+| [2026-06-18-project-ledger-group-primitive.md](2026-06-18-project-ledger-group-primitive.md)                                                     | Project Ledger Group Primitive                           |
+| [2026-06-18-file-changes-filter-primitive-owner.md](2026-06-18-file-changes-filter-primitive-owner.md)                                           | File Changes Filter Primitive Owner                      |
+| [2026-06-18-card-trace-action-button-owner.md](2026-06-18-card-trace-action-button-owner.md)                                                     | Card Trace Action Button Owner                           |
+| [2026-06-18-goal-workflow-header-native-button.md](2026-06-18-goal-workflow-header-native-button.md)                                             | Goal Workflow Header Native Button                       |
+| [2026-06-18-extension-head-field-label-single-source.md](2026-06-18-extension-head-field-label-single-source.md)                                 | Extension Head Field Label Single Source                 |
+| [2026-06-18-retire-goal-item-css-residue.md](2026-06-18-retire-goal-item-css-residue.md)                                                         | Retire Goal Item CSS Residue                             |
+| [2026-06-18-acceptance-panel-button-owner.md](2026-06-18-acceptance-panel-button-owner.md)                                                       | Acceptance Panel Button Owner                            |
+| [2026-06-18-settings-surface-header-residue.md](2026-06-18-settings-surface-header-residue.md)                                                   | Settings Surface Header Residue                          |
+| [2026-06-18-connection-banner-button-primitive.md](2026-06-18-connection-banner-button-primitive.md)                                             | Connection Banner Button Primitive                       |
+| [2026-06-18-notification-live-region-task-action.md](2026-06-18-notification-live-region-task-action.md)                                         | Notification Live Region Task Action                     |
+| [2026-06-18-card-header-nested-interactions.md](2026-06-18-card-header-nested-interactions.md)                                                   | Card Header Nested Interaction Cleanup                   |
+| [2026-06-18-memory-row-nested-interactions.md](2026-06-18-memory-row-nested-interactions.md)                                                     | Memory Row Nested Interaction Cleanup                    |
+| [2026-06-18-light-popup-active-state-contrast.md](2026-06-18-light-popup-active-state-contrast.md)                                               | Light Popup Active State Contrast                        |
+| [2026-06-18-left-pane-resizer-browser-max-contract.md](2026-06-18-left-pane-resizer-browser-max-contract.md)                                     | Left Pane Resizer Browser Max Contract                   |
+| [2026-06-18-command-palette-activedescendant.md](2026-06-18-command-palette-activedescendant.md)                                                 | Command Palette Active Descendant                        |
+| [2026-06-18-command-palette-config-sections-single-source.md](2026-06-18-command-palette-config-sections-single-source.md)                       | Command Palette Config Sections Single Source            |
+| [2026-06-18-command-palette-combobox-primitive.md](2026-06-18-command-palette-combobox-primitive.md)                                             | Command Palette Combobox Primitive                       |
+| [2026-06-18-dialog-header-drag-kobalte-regression.md](2026-06-18-dialog-header-drag-kobalte-regression.md)                                       | Dialog Header Drag Kobalte Regression                    |
+| [2026-06-18-executor-chip-density-guard.md](2026-06-18-executor-chip-density-guard.md)                                                           | Executor Chip Density Guard                              |
+| [2026-06-18-expert-squad-unselected-option-contrast-guard.md](2026-06-18-expert-squad-unselected-option-contrast-guard.md)                       | Expert Squad Unselected Option Contrast Guard            |
+| [2026-06-18-popup-disabled-effective-contrast.md](2026-06-18-popup-disabled-effective-contrast.md)                                               | Popup Disabled Effective Contrast                        |
+| [2026-06-18-popup-contrast-light-palette.md](2026-06-18-popup-contrast-light-palette.md)                                                         | Popup Contrast Light Palette                             |
+| [2026-06-18-prompt-profile-trigger-select-primitive.md](2026-06-18-prompt-profile-trigger-select-primitive.md)                                   | Prompt Profile Trigger Select Primitive                  |
+| [2026-06-18-prompt-profile-textarea-accessible-names.md](2026-06-18-prompt-profile-textarea-accessible-names.md)                                 | Prompt Profile Textarea Accessible Names                 |
+| [2026-06-18-retire-prompt-editor-css-residue.md](2026-06-18-retire-prompt-editor-css-residue.md)                                                 | Retire Prompt Editor CSS Residue                         |
+| [2026-06-18-retire-settings-config-shell-residue.md](2026-06-18-retire-settings-config-shell-residue.md)                                         | Retire Settings Config Shell Residue                     |
+| [2026-06-18-retire-settings-extension-memory-residue.md](2026-06-18-retire-settings-extension-memory-residue.md)                                 | Retire Settings Extension Memory Residue                 |
+| [2026-06-18-retire-conversation-goal-strip-residue.md](2026-06-18-retire-conversation-goal-strip-residue.md)                                     | Retire Conversation Goal Strip Residue                   |
+| [2026-06-18-retire-ndjson-log-css-residue.md](2026-06-18-retire-ndjson-log-css-residue.md)                                                       | Retire NDJSON Log CSS Residue                            |
+| [2026-06-18-retire-titlebar-status-residue.md](2026-06-18-retire-titlebar-status-residue.md)                                                     | Retire Titlebar Status Residue                           |
+| [2026-06-18-retire-titlebar-nav-residue.md](2026-06-18-retire-titlebar-nav-residue.md)                                                           | Retire Titlebar Nav Residue                              |
+| [2026-06-18-right-activity-toolbar-responsive-rail.md](2026-06-18-right-activity-toolbar-responsive-rail.md)                                     | Right Activity Toolbar Responsive Rail                   |
+| [2026-06-18-retire-workspace-panel-residue.md](2026-06-18-retire-workspace-panel-residue.md)                                                     | Retire Workspace Panel Residue                           |
+| [2026-06-18-retire-criteria-dom-css-residue.md](2026-06-18-retire-criteria-dom-css-residue.md)                                                   | Retire Criteria DOM CSS Residue                          |
+| [2026-06-18-retire-eval-shell-residue.md](2026-06-18-retire-eval-shell-residue.md)                                                               | Retire Eval Shell Residue                                |
+| [2026-06-18-retire-composer-selector-residue.md](2026-06-18-retire-composer-selector-residue.md)                                                 | Retire Composer Selector Residue                         |
+| [2026-06-18-retire-gwg-integrity-selector-residue.md](2026-06-18-retire-gwg-integrity-selector-residue.md)                                       | Retire GWG Integrity Selector Residue                    |
+| [2026-06-18-select-popup-readability-impact-review.md](2026-06-18-select-popup-readability-impact-review.md)                                     | Select Popup Readability Impact Review                   |
+| [2026-06-18-settings-segmented-aria-label-forwarding.md](2026-06-18-settings-segmented-aria-label-forwarding.md)                                 | Settings Segmented Aria Label Forwarding                 |
 
 ## 2026-06-17
 
 | File                                                                                                                         | Title                                                  |
 | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| [2026-06-17-agent-card-css-retirement.md](2026-06-17-agent-card-css-retirement.md) | Agent Card CSS Retirement |
-| [2026-06-17-app-dialog-select-trigger-single-source.md](2026-06-17-app-dialog-select-trigger-single-source.md) | App Dialog Select Trigger Single Source |
-| [2026-06-17-browser-preview-evidence-test-open-path.md](2026-06-17-browser-preview-evidence-test-open-path.md) | Browser Preview Evidence Test Open Path |
-| [2026-06-17-browser-preview-glyph-render-robustness.md](2026-06-17-browser-preview-glyph-render-robustness.md) | Browser Preview Glyph Render Robustness |
-| [2026-06-17-browser-preview-select-style-single-source.md](2026-06-17-browser-preview-select-style-single-source.md) | Browser Preview Select Style Single Source |
-| [2026-06-17-card-header-action-rhythm.md](2026-06-17-card-header-action-rhythm.md) | Card Header Action Rhythm |
-| [2026-06-17-executor-popover-dead-css-retirement.md](2026-06-17-executor-popover-dead-css-retirement.md) | Executor Popover Dead CSS Retirement |
-| [2026-06-17-expert-squad-select-readability-impact.md](2026-06-17-expert-squad-select-readability-impact.md) | Expert Squad Select Readability Impact Review |
-| [2026-06-17-log-viewer-select-style-single-source.md](2026-06-17-log-viewer-select-style-single-source.md) | Log Viewer Select Style Single Source |
-| [2026-06-17-network-proxy-webfetch-runtime-fix.md](2026-06-17-network-proxy-webfetch-runtime-fix.md) | Network proxy webfetch runtime fix |
-| [2026-06-17-overlay-proxy-test-button.md](2026-06-17-overlay-proxy-test-button.md) | Overlay proxy test button |
-| [2026-06-17-pane-resizer-right-css-retirement.md](2026-06-17-pane-resizer-right-css-retirement.md) | Right Pane Resizer CSS Retirement |
-| [2026-06-17-panel-header-collapse-css-retirement.md](2026-06-17-panel-header-collapse-css-retirement.md) | Panel Header Collapse CSS Retirement |
-| [2026-06-17-right-toolbar-workflow-active-single-source.md](2026-06-17-right-toolbar-workflow-active-single-source.md) | Right Toolbar Workflow Active Single Source |
-| [2026-06-17-settings-config-fail-fast.md](2026-06-17-settings-config-fail-fast.md) | Settings and Config Fail Fast Writes |
-| [2026-06-17-settings-info-stale-projection.md](2026-06-17-settings-info-stale-projection.md) | Settings Info Stale Projection Removal |
-| [2026-06-17-titlebar-menu-order-tools-removal.md](2026-06-17-titlebar-menu-order-tools-removal.md) | Titlebar Menu Order And Tools Removal |
+| [2026-06-17-agent-card-css-retirement.md](2026-06-17-agent-card-css-retirement.md)                                           | Agent Card CSS Retirement                              |
+| [2026-06-17-app-dialog-select-trigger-single-source.md](2026-06-17-app-dialog-select-trigger-single-source.md)               | App Dialog Select Trigger Single Source                |
+| [2026-06-17-browser-preview-evidence-test-open-path.md](2026-06-17-browser-preview-evidence-test-open-path.md)               | Browser Preview Evidence Test Open Path                |
+| [2026-06-17-browser-preview-glyph-render-robustness.md](2026-06-17-browser-preview-glyph-render-robustness.md)               | Browser Preview Glyph Render Robustness                |
+| [2026-06-17-browser-preview-select-style-single-source.md](2026-06-17-browser-preview-select-style-single-source.md)         | Browser Preview Select Style Single Source             |
+| [2026-06-17-card-header-action-rhythm.md](2026-06-17-card-header-action-rhythm.md)                                           | Card Header Action Rhythm                              |
+| [2026-06-17-executor-popover-dead-css-retirement.md](2026-06-17-executor-popover-dead-css-retirement.md)                     | Executor Popover Dead CSS Retirement                   |
+| [2026-06-17-expert-squad-select-readability-impact.md](2026-06-17-expert-squad-select-readability-impact.md)                 | Expert Squad Select Readability Impact Review          |
+| [2026-06-17-log-viewer-select-style-single-source.md](2026-06-17-log-viewer-select-style-single-source.md)                   | Log Viewer Select Style Single Source                  |
+| [2026-06-17-network-proxy-webfetch-runtime-fix.md](2026-06-17-network-proxy-webfetch-runtime-fix.md)                         | Network proxy webfetch runtime fix                     |
+| [2026-06-17-overlay-proxy-test-button.md](2026-06-17-overlay-proxy-test-button.md)                                           | Overlay proxy test button                              |
+| [2026-06-17-pane-resizer-right-css-retirement.md](2026-06-17-pane-resizer-right-css-retirement.md)                           | Right Pane Resizer CSS Retirement                      |
+| [2026-06-17-panel-header-collapse-css-retirement.md](2026-06-17-panel-header-collapse-css-retirement.md)                     | Panel Header Collapse CSS Retirement                   |
+| [2026-06-17-right-toolbar-workflow-active-single-source.md](2026-06-17-right-toolbar-workflow-active-single-source.md)       | Right Toolbar Workflow Active Single Source            |
+| [2026-06-17-settings-config-fail-fast.md](2026-06-17-settings-config-fail-fast.md)                                           | Settings and Config Fail Fast Writes                   |
+| [2026-06-17-settings-info-stale-projection.md](2026-06-17-settings-info-stale-projection.md)                                 | Settings Info Stale Projection Removal                 |
+| [2026-06-17-titlebar-menu-order-tools-removal.md](2026-06-17-titlebar-menu-order-tools-removal.md)                           | Titlebar Menu Order And Tools Removal                  |
 | [2026-06-17-browser-preview-evidence-operation-kind-strict.md](2026-06-17-browser-preview-evidence-operation-kind-strict.md) | Browser Preview Evidence Operation Kind Strictness     |
 | [2026-06-17-browser-preview-evidence-stage-priority.md](2026-06-17-browser-preview-evidence-stage-priority.md)               | Browser Preview Evidence Stage Priority                |
 | [2026-06-17-browser-preview-latest-readable-evidence.md](2026-06-17-browser-preview-latest-readable-evidence.md)             | Browser Preview Latest Readable Evidence               |

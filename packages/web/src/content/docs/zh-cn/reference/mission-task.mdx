@@ -87,15 +87,15 @@ Task 有自己的 ID、状态、进度、对话、执行证据和最终代码归
 
 最常用的 Task 接口：
 
-| 目的     | SDK                                      | HTTP                                 |
-| -------- | ---------------------------------------- | ------------------------------------ |
-| 发布任务 | `client.task.create()`                   | `POST /task`                         |
-| 查状态   | `client.task.status({ taskID })`         | `GET /task/{taskID}/status`          |
+| 目的     | SDK                                             | HTTP                                 |
+| -------- | ----------------------------------------------- | ------------------------------------ |
+| 发布任务 | `client.task.create()`                          | `POST /task`                         |
+| 查状态   | `client.task.status({ taskID })`                | `GET /task/{taskID}/status`          |
 | 追加说明 | `client.task.message({ taskID, source, text })` | `POST /task/{taskID}/message`        |
-| 下载代码 | `client.task.projectArchive({ taskID })` | `GET /task/{taskID}/project-archive` |
-| 取消任务 | `client.task.cancel({ taskID })`         | `POST /task/{taskID}/cancel`         |
-| 重试任务 | `client.task.retry({ taskID })`          | `POST /task/{taskID}/retry`          |
-| 重新规划 | `client.task.replan({ taskID })`         | `POST /task/{taskID}/replan`         |
+| 下载代码 | `client.task.projectArchive({ taskID })`        | `GET /task/{taskID}/project-archive` |
+| 取消任务 | `client.task.cancel({ taskID })`                | `POST /task/{taskID}/cancel`         |
+| 重试任务 | `client.task.retry({ taskID })`                 | `POST /task/{taskID}/retry`          |
+| 重新规划 | `client.task.replan({ taskID })`                | `POST /task/{taskID}/replan`         |
 
 ## 创建 Task
 

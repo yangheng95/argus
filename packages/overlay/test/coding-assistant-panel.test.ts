@@ -69,8 +69,10 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(main).toContain("activateCodingAssistantSessionList")
   expect(main).toContain("bumpWorkspaceEpoch()")
   expect(main).toContain("await loadCodingAssistantSessions({ signal: controller.signal })")
-  expect(main).toContain("selectCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || \"\") })")
-  expect(main).toContain("directory: String(session.directory || \"\")")
+  expect(main).toContain(
+    'selectCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") })',
+  )
+  expect(main).toContain('directory: String(session.directory || "")')
   expect(main).toContain("function openCodingAssistantLauncher()")
   expect(main).toContain("setAssistantLauncherActive(true)")
   expect(main).toContain('document.getElementById("btnCreateCodingAssistantSession")?.addEventListener("click"')
@@ -81,10 +83,8 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(service).toContain("export async function loadCodingAssistantSessions")
   expect(service).toContain("codingAssistantSessionsPath({ limit: 30, append })")
   expect(service).toContain("apiJson(`coding/session?${params.toString()}`, {")
-  expect(service).toContain(
-    "return selectCodingAssistantSession({",
-  )
-  expect(service).toContain("directory: String(response.session.directory || \"\")")
+  expect(service).toContain("return selectCodingAssistantSession({")
+  expect(service).toContain('directory: String(response.session.directory || "")')
   expect(service).toContain("assertNotAborted(options.signal)")
   expect(service).toContain('setBoardStore("selectedSource", source)')
   expect(service).toContain("startSSE(source, 0, { directory })")

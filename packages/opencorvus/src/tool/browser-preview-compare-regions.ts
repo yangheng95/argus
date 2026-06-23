@@ -1,4 +1,3 @@
-import path from "node:path"
 import z from "zod"
 import { findBrowserPreviewTargetByID, resolveRuntimeRelativePath } from "@/browser-preview/persist"
 import {
@@ -29,9 +28,39 @@ export const BrowserPreviewCompareRegionsToolParameters = z
   .strict()
 export type BrowserPreviewCompareRegionsToolParameters = z.infer<typeof BrowserPreviewCompareRegionsToolParameters>
 
+export function browserPreviewRegionComparisonAttachmentImages(input: {
+  projectRoot: string
+  result: BrowserPreviewRegionComparisonResult
+  limit?: number
+}): Array<{ path: string; mime: "image/png"; filename: string }> {
+  const images: Array<{ path: string; mime: "image/png"; filename: string }> = []
+  const regions = [...input.result.regions].sort((left, right) => {
+    if (left.status === right.status) return 0
+    return left.status === "failed" ? -1 : 1
+  })
+  const limit = input.limit ?? 8
+  for (const region of regions) {
+    if (!region.artifacts?.side_by_side) continue
+    images.push({
+      path: resolveRuntimeRelativePath(input.projectRoot, region.artifacts.side_by_side),
+      mime: "image/png",
+      filename: `${region.viewport_id}-${region.status}-${region.region_id}-side-by-side.png`,
+    })
+    if (region.artifacts.diff) {
+      images.push({
+        path: resolveRuntimeRelativePath(input.projectRoot, region.artifacts.diff),
+        mime: "image/png",
+        filename: `${region.viewport_id}-${region.status}-${region.region_id}-diff.png`,
+      })
+    }
+    if (images.length >= limit) return images.slice(0, limit)
+  }
+  return images
+}
+
 export const BrowserPreviewCompareRegionsTool = Tool.define(BrowserPreviewCompareRegionsToolID, {
   description:
-    "Preferred frontend visual repair-loop tool when source/reference evidence and a persisted browser_preview_target both exist. Capture local implementation regions, crop matching source reference regions, persist comparison evidence, and return source/local side-by-side PNG attachments directly in the build agent message. Use before standalone screenshot review for reference-parity regions with bindings.",
+    "Preferred frontend visual repair-loop tool when source/reference evidence and a persisted browser_preview_target both exist. Capture local implementation regions, crop matching source reference regions, persist comparison evidence, and return source/local side-by-side PNG attachments directly in the build agent message, including failed/mismatched regions first and diff PNGs when generated. Use before standalone screenshot review for reference-parity regions with bindings.",
   parameters: BrowserPreviewCompareRegionsToolParameters,
   async execute(params: BrowserPreviewCompareRegionsToolParameters, ctx: Tool.Context) {
     const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""
@@ -53,14 +82,7 @@ export const BrowserPreviewCompareRegionsTool = Tool.define(BrowserPreviewCompar
       includeFullpageOverview: params.includeFullpageOverview,
       signal: ctx.abort,
     })
-    const visibleImages = result.regions
-      .filter((region) => region.status === "completed" && region.artifacts?.side_by_side)
-      .slice(0, 6)
-      .map((region) => ({
-        path: resolveRuntimeRelativePath(projectRoot, region.artifacts!.side_by_side),
-        mime: "image/png",
-        filename: `${region.viewport_id}-${path.basename(region.artifacts!.side_by_side)}`,
-      }))
+    const visibleImages = browserPreviewRegionComparisonAttachmentImages({ projectRoot, result })
     const multimodal = await buildMultimodalToolResult({
       projectID: Instance.project.id,
       text: JSON.stringify(result, null, 2),

@@ -157,7 +157,6 @@
   overflow-wrap: anywhere;
 }
 
-
 .msg-tool-input {
   margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
@@ -830,7 +829,6 @@
 .msg-reasoning[data-expanded="false"] .reasoning-text {
   display: none;
 }
-
 
 .msg-patch {
   display: flex;

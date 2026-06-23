@@ -11,17 +11,17 @@ unreadable on a white/light popup surface.
 
 Call-site inventory:
 
-| Search | Result |
-| --- | --- |
-| `rg -n "prompt profile|promptProfile|prompt-profile|Expert Squad|专家团" specs packages/overlay/src packages/overlay/test -S` | The chat composer selector is implemented in `packages/overlay/src/components/ChatComposer.tsx`; the profile catalog and setting panel use the prompt profile API. |
-| `rg -n "<select|<option|Select\\.Root|oc-select|field-input" packages/overlay/src packages/overlay/test -S` | `ChatComposer.tsx` is the only overlay source file with a handwritten prompt-profile `<select>` and `<option>`; mature Kobalte Select usage already exists in `AgentModelsPanel`, `LogViewer`, `AppDialogHost`, `SkillMarketPanel`, and `BrowserPreviewPanel`. |
+| Search                 | Result        |
+| ---------------------- | ------------- | -------------- | ------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "prompt profile | promptProfile | prompt-profile | Expert Squad | 专家团" specs packages/overlay/src packages/overlay/test -S` | The chat composer selector is implemented in `packages/overlay/src/components/ChatComposer.tsx`; the profile catalog and setting panel use the prompt profile API.                                                                                             |
+| `rg -n "<select        | <option       | Select\\.Root  | oc-select    | field-input" packages/overlay/src packages/overlay/test -S`  | `ChatComposer.tsx` is the only overlay source file with a handwritten prompt-profile `<select>` and `<option>`; mature Kobalte Select usage already exists in `AgentModelsPanel`, `LogViewer`, `AppDialogHost`, `SkillMarketPanel`, and `BrowserPreviewPanel`. |
 
 Root cause:
 
 - `.prompt-profile-select` is the real native select.
 - The visible control chrome is a separate `.prompt-profile-select-chrome`.
 - The native select is made invisible with `opacity: 0` and `color:
-  transparent`.
+transparent`.
 - Native popup option rendering inherits the transparent foreground in some
   light/background combinations, so unselected options become invisible.
 

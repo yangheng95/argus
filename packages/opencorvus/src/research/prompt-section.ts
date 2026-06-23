@@ -50,7 +50,10 @@ function scopedDeepResearchEvidenceRefs(artifactID: string, evidenceIDs: string[
 export function findNonStaleResearchBriefs(input: { taskID?: string; request: string }): ResearchPromptBrief[] {
   if (!input.taskID) return []
   return listResearchBriefArtifacts(input.taskID)
-    .filter((artifact) => !researchBriefStaleForRequest({ taskID: input.taskID!, request: input.request, brief: artifact.payload }))
+    .filter(
+      (artifact) =>
+        !researchBriefStaleForRequest({ taskID: input.taskID!, request: input.request, brief: artifact.payload }),
+    )
     .slice(0, DEEP_RESEARCH_BRIEF_CAP)
     .map((artifact) => ({ artifactID: artifact.id, brief: artifact.payload }))
 }
@@ -61,7 +64,10 @@ export function findNonStaleFrontendResearchBriefs(input: {
 }): FrontendResearchPromptBrief[] {
   if (!input.taskID) return []
   return listFrontendResearchBriefArtifacts(input.taskID)
-    .filter((artifact) => !researchBriefStaleForRequest({ taskID: input.taskID!, request: input.request, brief: artifact.payload }))
+    .filter(
+      (artifact) =>
+        !researchBriefStaleForRequest({ taskID: input.taskID!, request: input.request, brief: artifact.payload }),
+    )
     .slice(0, FRONTEND_RESEARCH_BRIEF_CAP)
     .map((artifact) => ({ artifactID: artifact.id, brief: artifact.payload }))
 }
@@ -144,7 +150,8 @@ function renderResearchBriefSection(input: {
     source === "deep_research"
       ? scopedDeepResearchEvidenceRef(artifactID, evidenceID)
       : scopedFrontendResearchEvidenceRef(artifactID, evidenceID)
-  const evidenceRefs = (artifactID: string, evidenceIDs: string[]) => evidenceIDs.map((id) => evidenceRef(artifactID, id))
+  const evidenceRefs = (artifactID: string, evidenceIDs: string[]) =>
+    evidenceIDs.map((id) => evidenceRef(artifactID, id))
   const data = {
     briefs: briefs.map(({ artifactID, brief }) => ({
       artifact_id: artifactID,
@@ -188,17 +195,17 @@ function renderResearchBriefSection(input: {
       webpage_contract: brief.webpage_contract
         ? {
             source_url: limitText(brief.webpage_contract.source_url, RESEARCH_PROMPT_LIMITS.itemChars),
-            reference_image_evidence_refs: evidenceRefs(artifactID, brief.webpage_contract.reference_image_evidence_ids),
+            reference_image_evidence_refs: evidenceRefs(
+              artifactID,
+              brief.webpage_contract.reference_image_evidence_ids,
+            ),
             functional_surfaces: brief.webpage_contract.functional_surfaces
               .slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems)
               .map((item) => ({
                 id: item.id,
                 title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
                 user_visible_behavior: limitText(item.user_visible_behavior, RESEARCH_PROMPT_LIMITS.itemChars),
-                component_kind_hypothesis: limitText(
-                  item.component_kind_hypothesis,
-                  RESEARCH_PROMPT_LIMITS.itemChars,
-                ),
+                component_kind_hypothesis: limitText(item.component_kind_hypothesis, RESEARCH_PROMPT_LIMITS.itemChars),
                 required_interactions: item.required_interactions.map((interaction) =>
                   limitText(interaction, RESEARCH_PROMPT_LIMITS.itemChars),
                 ),
@@ -270,7 +277,9 @@ function renderResearchBriefSection(input: {
   lines.push(input.heading)
   lines.push("")
   lines.push(input.preamble)
-  lines.push("Only source-qualified evidence ref values present in this JSON block may be copied into downstream evidence_refs.")
+  lines.push(
+    "Only source-qualified evidence ref values present in this JSON block may be copied into downstream evidence_refs.",
+  )
   lines.push("```json")
   lines.push(JSON.stringify(data, null, 2))
   lines.push("```")
@@ -377,8 +386,12 @@ function renderFrontendResearchRequirementsSection(input: { briefs?: FrontendRes
   lines.push(
     "Frontend research input is advisory evidence data for requirement extraction. It is not final REQ-N, not acceptance specs, not the frontend_design implementation template, and not a route instruction.",
   )
-  lines.push("Only source-qualified evidence ref values present in this JSON block may be copied into downstream evidence_refs.")
-  lines.push("Use bundle_paths for drilldown; this compact block intentionally omits long excerpts and full webpage contract bodies.")
+  lines.push(
+    "Only source-qualified evidence ref values present in this JSON block may be copied into downstream evidence_refs.",
+  )
+  lines.push(
+    "Use bundle_paths for drilldown; this compact block intentionally omits long excerpts and full webpage contract bodies.",
+  )
   lines.push("```json")
   lines.push(JSON.stringify(data, null, 2))
   lines.push("```")
@@ -513,18 +526,16 @@ function renderFrontendResearchDesignSection(input: { briefs?: FrontendResearchP
             spacing_and_alignment: limitText(item.spacing_and_alignment, FRONTEND_RESEARCH_DETAIL_CHARS),
             evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
           })),
-          major_surfaces: contract.functional_surfaces
-            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
-            .map((item) => ({
-              id: item.id,
-              title: limitText(item.title, FRONTEND_RESEARCH_LABEL_CHARS),
-              component_kind_hypothesis: limitText(item.component_kind_hypothesis, FRONTEND_RESEARCH_LABEL_CHARS),
-              behavior: limitText(item.user_visible_behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
-              interactions: item.required_interactions
-                .slice(0, 4)
-                .map((interaction) => limitText(interaction, FRONTEND_RESEARCH_LABEL_CHARS)),
-              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
-            })),
+          major_surfaces: contract.functional_surfaces.slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP).map((item) => ({
+            id: item.id,
+            title: limitText(item.title, FRONTEND_RESEARCH_LABEL_CHARS),
+            component_kind_hypothesis: limitText(item.component_kind_hypothesis, FRONTEND_RESEARCH_LABEL_CHARS),
+            behavior: limitText(item.user_visible_behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
+            interactions: item.required_interactions
+              .slice(0, 4)
+              .map((interaction) => limitText(interaction, FRONTEND_RESEARCH_LABEL_CHARS)),
+            evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+          })),
           data_content_anchors: contract.data_content_inventory
             .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
             .map((item) => ({
@@ -533,15 +544,13 @@ function renderFrontendResearchDesignSection(input: { briefs?: FrontendResearchP
               content_contract: limitText(item.content_contract, FRONTEND_RESEARCH_DETAIL_CHARS),
               evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
             })),
-          interaction_states: contract.interaction_states
-            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
-            .map((item) => ({
-              id: item.id,
-              component: limitText(item.component, FRONTEND_RESEARCH_LABEL_CHARS),
-              state: limitText(item.state, FRONTEND_RESEARCH_LABEL_CHARS),
-              behavior: limitText(item.behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
-              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
-            })),
+          interaction_states: contract.interaction_states.slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP).map((item) => ({
+            id: item.id,
+            component: limitText(item.component, FRONTEND_RESEARCH_LABEL_CHARS),
+            state: limitText(item.state, FRONTEND_RESEARCH_LABEL_CHARS),
+            behavior: limitText(item.behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
+            evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+          })),
           component_kind_hypotheses: contract.functional_surfaces
             .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
             .map((item) => ({
@@ -551,22 +560,18 @@ function renderFrontendResearchDesignSection(input: { briefs?: FrontendResearchP
               behavior: limitText(item.user_visible_behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
               evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
             })),
-          style_layout_anchors: contract.style_requirements
-            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
-            .map((item) => ({
-              id: item.id,
-              token_or_selector: limitText(item.token_or_selector, FRONTEND_RESEARCH_LABEL_CHARS),
-              requirement: limitText(item.requirement, FRONTEND_RESEARCH_DETAIL_CHARS),
-              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
-            })),
-          fidelity_acceptance: contract.fidelity_acceptance
-            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
-            .map((item) => ({
-              id: item.id,
-              target: limitText(item.target, FRONTEND_RESEARCH_LABEL_CHARS),
-              criterion: limitText(item.criterion, FRONTEND_RESEARCH_DETAIL_CHARS),
-              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
-            })),
+          style_layout_anchors: contract.style_requirements.slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP).map((item) => ({
+            id: item.id,
+            token_or_selector: limitText(item.token_or_selector, FRONTEND_RESEARCH_LABEL_CHARS),
+            requirement: limitText(item.requirement, FRONTEND_RESEARCH_DETAIL_CHARS),
+            evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+          })),
+          fidelity_acceptance: contract.fidelity_acceptance.slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP).map((item) => ({
+            id: item.id,
+            target: limitText(item.target, FRONTEND_RESEARCH_LABEL_CHARS),
+            criterion: limitText(item.criterion, FRONTEND_RESEARCH_DETAIL_CHARS),
+            evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+          })),
           fidelity_risks: contract.fidelity_risks.slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP).map((item) => ({
             id: item.id,
             risk: limitText(item.risk, FRONTEND_RESEARCH_LABEL_CHARS),
@@ -615,7 +620,9 @@ function renderFrontendResearchBuildBriefSection(input: FrontendResearchPromptBr
     `- coverage_counts: evidence=${brief.evidence_index.length}; functional_surfaces=${contract.functional_surfaces.length}; visual_layout=${contract.visual_layout.length}; style_requirements=${contract.style_requirements.length}; interaction_states=${contract.interaction_states.length}; data_content_inventory=${contract.data_content_inventory.length}; fidelity_acceptance=${contract.fidelity_acceptance.length}; fidelity_risks=${contract.fidelity_risks.length}; blocking_open_questions=${brief.open_questions.filter((item) => item.blocking).length}`,
     `- reference_image_evidence_refs: ${scopedFrontendResearchEvidenceRefs(artifactID, contract.reference_image_evidence_ids).join(", ") || "(none)"}`,
   ]
-  const blockingQuestions = brief.open_questions.filter((item) => item.blocking).slice(0, FRONTEND_RESEARCH_BUILD_OPEN_QUESTION_CAP)
+  const blockingQuestions = brief.open_questions
+    .filter((item) => item.blocking)
+    .slice(0, FRONTEND_RESEARCH_BUILD_OPEN_QUESTION_CAP)
   if (blockingQuestions.length > 0) {
     lines.push("", "Blocking open questions:")
     for (const item of blockingQuestions) {

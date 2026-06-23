@@ -8,19 +8,19 @@ not identify the raw JSON payload region it controls.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `2026-06-18-trace-event-head-focus.md` | Trace event heads are disclosure rows with visible keyboard focus, not generic action buttons. |
+| Source                                   | Constraint                                                                                                                      |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-trace-event-head-focus.md`   | Trace event heads are disclosure rows with visible keyboard focus, not generic action buttons.                                  |
 | `ProjectLedgerGroup` disclosure controls | When controlled content is conditionally mounted, expose `aria-controls` only while expanded and give the body a matching `id`. |
-| `TracePanel.tsx` | The raw JSON payload is the source-of-truth detail body for each trace event. |
+| `TracePanel.tsx`                         | The raw JSON payload is the source-of-truth detail body for each trace event.                                                   |
 
 ## Evidence
 
-| File | Finding | Decision |
-| --- | --- | --- |
-| `TracePanel.tsx` | `.trace-event-head` has `aria-expanded={open()}` only. `.trace-event-body` has no id. | Add a stable body id per row and connect it with `aria-controls` while expanded. |
-| `trace-event-head-focus-browser.test.ts` | Browser fixture verifies focus and keyboard toggle, but not control relationship. | Extend the fixture to assert `aria-controls` points to the mounted body. |
-| `primitives-panel-section.test.ts` | Static guard already owns TracePanel row focus contract. | Add static assertions for the controls/body id contract. |
+| File                                     | Finding                                                                               | Decision                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `TracePanel.tsx`                         | `.trace-event-head` has `aria-expanded={open()}` only. `.trace-event-body` has no id. | Add a stable body id per row and connect it with `aria-controls` while expanded. |
+| `trace-event-head-focus-browser.test.ts` | Browser fixture verifies focus and keyboard toggle, but not control relationship.     | Extend the fixture to assert `aria-controls` points to the mounted body.         |
+| `primitives-panel-section.test.ts`       | Static guard already owns TracePanel row focus contract.                              | Add static assertions for the controls/body id contract.                         |
 
 ## Implementation
 

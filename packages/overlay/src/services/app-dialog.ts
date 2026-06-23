@@ -71,7 +71,9 @@ function validatedChoiceValue(options: AppDialogOptions): string {
     throw new Error(`showAppDialog ${options.kind || "select"} requires selectValue`)
   }
   if (!selectOptions.some((option) => option.value === selectValue)) {
-    throw new Error(`showAppDialog ${options.kind || "select"} selectValue ${JSON.stringify(selectValue)} is not in selectOptions`)
+    throw new Error(
+      `showAppDialog ${options.kind || "select"} selectValue ${JSON.stringify(selectValue)} is not in selectOptions`,
+    )
   }
   return selectValue
 }

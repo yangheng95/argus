@@ -21,21 +21,21 @@ same DOM contract.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
+| Source                                         | Relevant constraint                                                                                                                           |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `2026-06-18-memory-row-nested-interactions.md` | `.knowledge-item-main` is the row disclosure button and Delete is a sibling action; the left Memory panel must be verified in a real browser. |
-| `2026-06-19-memory-search-field-primitive.md` | MemoryPanel already moved search chrome to a shared primitive; private Memory chrome should not reappear through side-panel overrides. |
-| `overlay-architecture-guards.test.ts` | The guard states the knowledge / memory panel is owned by `surfaces/settings.css`. |
-| `main.tsx` | MemoryPanel has two production mounts: Settings without `compact`, and the left activity panel with `compact`. |
+| `2026-06-19-memory-search-field-primitive.md`  | MemoryPanel already moved search chrome to a shared primitive; private Memory chrome should not reappear through side-panel overrides.        |
+| `overlay-architecture-guards.test.ts`          | The guard states the knowledge / memory panel is owned by `surfaces/settings.css`.                                                            |
+| `main.tsx`                                     | MemoryPanel has two production mounts: Settings without `compact`, and the left activity panel with `compact`.                                |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "MemoryPanel" packages/overlay/src` | Production mounts are `ConfigDialogHost.tsx` and `main.tsx`; the left mount passes `compact`. | Treat compact density as a MemoryPanel variant, not as an activity-owned override of Memory internals. |
-| `rg -n "knowledge-item-main|memory-inline-detail|memory-detail-content" packages/overlay/src/styles/surfaces` | `settings.css` owns base selectors; `activity.css` repeats left-panel overrides for the same selectors. | Move compact Memory row/detail rules into `settings.css` under `.memory-panel[data-compact="true"]`. |
-| `left-tool-panels-directory-browser.test.ts` | Real overlay browser test opens left Memory, expands detail, tabs to Delete, and saves a screenshot. It does not click Delete or verify row removal. | Extend the same mounted test to send DELETE, remove the fixture row, and verify the empty state. |
-| `left-activity-toolbar.test.ts` | Static test expects activity.css to contain the compact Memory toolbar selector. | Update it to assert activity owns only side panel shell/layout while settings owns Memory compact internals. |
+| Sweep                                        | Result                                                                                                                                               | Decision                                                                                                     |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `rg -n "MemoryPanel" packages/overlay/src`   | Production mounts are `ConfigDialogHost.tsx` and `main.tsx`; the left mount passes `compact`.                                                        | Treat compact density as a MemoryPanel variant, not as an activity-owned override of Memory internals.       |
+| `rg -n "knowledge-item-main                  | memory-inline-detail                                                                                                                                 | memory-detail-content" packages/overlay/src/styles/surfaces`                                                 | `settings.css` owns base selectors; `activity.css` repeats left-panel overrides for the same selectors. | Move compact Memory row/detail rules into `settings.css` under `.memory-panel[data-compact="true"]`. |
+| `left-tool-panels-directory-browser.test.ts` | Real overlay browser test opens left Memory, expands detail, tabs to Delete, and saves a screenshot. It does not click Delete or verify row removal. | Extend the same mounted test to send DELETE, remove the fixture row, and verify the empty state.             |
+| `left-activity-toolbar.test.ts`              | Static test expects activity.css to contain the compact Memory toolbar selector.                                                                     | Update it to assert activity owns only side panel shell/layout while settings owns Memory compact internals. |
 
 ## Fix Plan
 
@@ -54,7 +54,7 @@ same DOM contract.
 
 - `activity.css` contains no `.sidebar-tool-panel .knowledge-*`,
   `.sidebar-tool-panel .memory-inline-detail`, `.sidebar-tool-panel
-  .memory-detail-*`, or `.sidebar-tool-panel .memory-panel[data-compact]`
+.memory-detail-*`, or `.sidebar-tool-panel .memory-panel[data-compact]`
   Memory internals.
 - `settings.css` owns both base MemoryPanel selectors and compact
   `.memory-panel[data-compact="true"]` selectors.
@@ -66,11 +66,11 @@ same DOM contract.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| This spec | The mounted left Memory browser test already verifies the post-delete empty state. |
-| `MemoryPanel.tsx` | Empty copy uses `memory.none` when a current task ID exists and `memory.none_unselected` only when no task is selected. |
-| Visual QA | `.scratch/memory-panel-delete-empty-state.png` showed "No task context" after deleting the only row while the task remained selected. |
+| Source            | Constraint carried forward                                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| This spec         | The mounted left Memory browser test already verifies the post-delete empty state.                                                    |
+| `MemoryPanel.tsx` | Empty copy uses `memory.none` when a current task ID exists and `memory.none_unselected` only when no task is selected.               |
+| Visual QA         | `.scratch/memory-panel-delete-empty-state.png` showed "No task context" after deleting the only row while the task remained selected. |
 
 ### Fix Plan
 
@@ -96,12 +96,12 @@ same DOM contract.
 
 ### Verification
 
-| Check | Result |
-| --- | --- |
-| `bun run --cwd packages/overlay check:i18n` | Pass |
-| `bun run --cwd packages/overlay typecheck` | Pass |
-| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts` | 1 pass |
-| Visual QA | Reviewed `.scratch/memory-panel-delete-empty-state.png`; empty state reads "No context entries" without layout overlap. |
+| Check                                                                                                                    | Result                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `bun run --cwd packages/overlay check:i18n`                                                                              | Pass                                                                                                                    |
+| `bun run --cwd packages/overlay typecheck`                                                                               | Pass                                                                                                                    |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts` | 1 pass                                                                                                                  |
+| Visual QA                                                                                                                | Reviewed `.scratch/memory-panel-delete-empty-state.png`; empty state reads "No context entries" without layout overlap. |
 
 ### Self Review
 

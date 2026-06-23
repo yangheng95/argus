@@ -15,17 +15,17 @@ clipped by the workspace container and could not be hit-tested.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-05-vscode-style-activity-toolbars.md` | Left and right side navigation must use the shared `SideActivityToolbar` primitive, not alternate toolbar sources. |
+| Source                                                   | Existing decision                                                                                                    |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-05-vscode-style-activity-toolbars.md`           | Left and right side navigation must use the shared `SideActivityToolbar` primitive, not alternate toolbar sources.   |
 | `2026-06-17-center-workbench-separator-accessibility.md` | Responsive workbench geometry belongs to the real workbench and toolbar DOM, not pseudo or hidden fallback controls. |
-| `2026-06-17-left-pane-resizer-accessibility.md` | Responsive pane geometry must expose the actual reachable layout state. |
+| `2026-06-17-left-pane-resizer-accessibility.md`          | Responsive pane geometry must expose the actual reachable layout state.                                              |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "solidRightActivityToolbar|side-activity-toolbar|@media \\(max-width: 1120px\\)" packages/overlay/src/styles packages/overlay/src/index.html packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` | The right toolbar has one live mount and one shared primitive; the responsive breakpoint changes `#workspaceMain` to column but did not change the right toolbar to row. |
+| Sweep                                       | Result                                                                                                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `rg -n "solidRightActivityToolbar           | side-activity-toolbar                                                                                                                                   | @media \\(max-width: 1120px\\)" packages/overlay/src/styles packages/overlay/src/index.html packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` | The right toolbar has one live mount and one shared primitive; the responsive breakpoint changes `#workspaceMain` to column but did not change the right toolbar to row. |
 | Browser geometry at `960x820` and `390x760` | The toolbar flex item height was around one rail button while all seven right buttons remained vertical; later buttons extended below `#workspaceMain`. |
 
 ## Fix

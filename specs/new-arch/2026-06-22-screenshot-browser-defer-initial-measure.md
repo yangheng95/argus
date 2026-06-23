@@ -29,26 +29,26 @@ virtualized screenshot browser source, grouping, and lazy thumbnail loading.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, test every change, and visually verify UI work. |
-| `2026-06-22-screenshot-browser-open-jank.md` | Screenshot Browser uses `virtua/solid`, lazy thumbnail loading, and shared `PreviewableImage`. |
-| `2026-06-22-screenshot-browser-bounded-card-collector.md` | Card tree remains the single screenshot source; data derivation is bounded. |
-| `2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md` | Layout-affecting panel-open work should run through the shared RAF scheduler. |
-| Independent GUI audit 2026-06-22 | Center workbench reveal and layout were still split across two RAF callbacks. |
-| Independent serving audit 2026-06-22 | Running `7878` is an immutable old packaged sidecar; do not add workspace-dist fallback to packaged runtime. |
+| Source                                                               | Constraint carried forward                                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                                          | No fallback, no duplicate source, test every change, and visually verify UI work.                            |
+| `2026-06-22-screenshot-browser-open-jank.md`                         | Screenshot Browser uses `virtua/solid`, lazy thumbnail loading, and shared `PreviewableImage`.               |
+| `2026-06-22-screenshot-browser-bounded-card-collector.md`            | Card tree remains the single screenshot source; data derivation is bounded.                                  |
+| `2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md` | Layout-affecting panel-open work should run through the shared RAF scheduler.                                |
+| Independent GUI audit 2026-06-22                                     | Center workbench reveal and layout were still split across two RAF callbacks.                                |
+| Independent serving audit 2026-06-22                                 | Running `7878` is an immutable old packaged sidecar; do not add workspace-dist fallback to packaged runtime. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Screenshot panel mount | `ScreenshotBrowserPanel.tsx` creates `measureOnFrame`, then calls `measure()` before installing `ResizeObserver`. | Remove the direct call and rely on the scheduled RAF measure. |
-| Resize observer | The same component already uses `new ResizeObserver(measureOnFrame.schedule)`. | Keep this as the single measurement timing path. |
-| Column count | `columnCount()` returns one column until `listWidth()` is measured. | Keep this transient initial state; RAF updates it before visual settling. |
-| Browser test | `screenshot-browser-panel-browser.test.ts` already instruments screenshot toolbar open before RAF. | Extend instrumentation to prove `.screenshot-browser-groups.clientWidth` is not read before RAF. |
-| Static test | `resize-observer-frame-scheduler.test.ts` guards observer callback scheduling. | Add a guard against direct initial `measure()` before observer setup. |
+| Surface                 | Evidence                                                                                                                 | Decision                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Screenshot panel mount  | `ScreenshotBrowserPanel.tsx` creates `measureOnFrame`, then calls `measure()` before installing `ResizeObserver`.        | Remove the direct call and rely on the scheduled RAF measure.                                               |
+| Resize observer         | The same component already uses `new ResizeObserver(measureOnFrame.schedule)`.                                           | Keep this as the single measurement timing path.                                                            |
+| Column count            | `columnCount()` returns one column until `listWidth()` is measured.                                                      | Keep this transient initial state; RAF updates it before visual settling.                                   |
+| Browser test            | `screenshot-browser-panel-browser.test.ts` already instruments screenshot toolbar open before RAF.                       | Extend instrumentation to prove `.screenshot-browser-groups.clientWidth` is not read before RAF.            |
+| Static test             | `resize-observer-frame-scheduler.test.ts` guards observer callback scheduling.                                           | Add a guard against direct initial `measure()` before observer setup.                                       |
 | Center workbench reveal | `scheduleCenterWorkbenchPanelReveal()` used an independent RAF scheduler from `renderCenterWorkbenchPanelLayoutOnFrame`. | Use the existing center workbench layout frame as the single owner; run layout before reveal in that frame. |
-| Running 7878 | Embedded sidecar serves old asset names from compiled `opencorvus.exe`. | Record as runtime artifact parity issue; reject runtime fallback to workspace `dist-vite`. |
+| Running 7878            | Embedded sidecar serves old asset names from compiled `opencorvus.exe`.                                                  | Record as runtime artifact parity issue; reject runtime fallback to workspace `dist-vite`.                  |
 
 ## Root Cause
 

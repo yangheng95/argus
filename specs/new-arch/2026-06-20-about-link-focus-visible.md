@@ -14,18 +14,18 @@ than for pointer users.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-19-retire-about-author-link-residue.md` | `.about-link` is the only live About link style; `.about-author-link` must stay retired. |
-| `packages/overlay/src/components/ConfigDialogHost.tsx` | About links are real anchors with distinct GitHub and Issues destinations. |
-| `packages/overlay/src/styles/surfaces/settings.css` | Settings surface owns `.about-link` base and hover chrome. |
+| Source                                                                    | Existing decision                                                                                     |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `2026-06-19-retire-about-author-link-residue.md`                          | `.about-link` is the only live About link style; `.about-author-link` must stay retired.              |
+| `packages/overlay/src/components/ConfigDialogHost.tsx`                    | About links are real anchors with distinct GitHub and Issues destinations.                            |
+| `packages/overlay/src/styles/surfaces/settings.css`                       | Settings surface owns `.about-link` base and hover chrome.                                            |
 | `packages/overlay/test/browser/runtime-icon-single-source-visual.test.ts` | Real About panel browser coverage already opens the panel, checks live links, hover, and screenshots. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "about-link|About|runtime-icon-single-source-visual|ConfigDialogHost|focus-visible" packages/overlay/src/components/ConfigDialogHost.tsx packages/overlay/src/styles/surfaces/settings.css packages/overlay/test specs/new-arch` | One production caller creates `.about-link`; one CSS owner defines base/hover; browser test covers hover but no keyboard focus. | Add focus-visible at the Settings surface owner and extend the existing browser test. |
+| Sweep                                            | Result                                                                        | Decision                                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `rg -n "about-link                               | About                                                                         | runtime-icon-single-source-visual                                          | ConfigDialogHost | focus-visible" packages/overlay/src/components/ConfigDialogHost.tsx packages/overlay/src/styles/surfaces/settings.css packages/overlay/test specs/new-arch` | One production caller creates `.about-link`; one CSS owner defines base/hover; browser test covers hover but no keyboard focus. | Add focus-visible at the Settings surface owner and extend the existing browser test. |
 | `2026-06-19-retire-about-author-link-residue.md` | The About link single-source work intentionally kept `.about-link` unchanged. | Preserve `.about-author-link` absence and add focus to `.about-link` only. |
 
 ## Fix

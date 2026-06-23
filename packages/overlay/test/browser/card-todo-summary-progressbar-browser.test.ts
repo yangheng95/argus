@@ -121,7 +121,10 @@ test("card TODO summary progressbar exposes accessible value without visual drif
       },
     )
     assert.ok(state.progressWidth >= 60, `progress bar should retain minimum visible width: ${JSON.stringify(state)}`)
-    assert.ok(state.summaryWidth > state.progressWidth, `summary row should include text after the bar: ${JSON.stringify(state)}`)
+    assert.ok(
+      state.summaryWidth > state.progressWidth,
+      `summary row should include text after the bar: ${JSON.stringify(state)}`,
+    )
     assert.ok(state.progressHeight >= 4, `progress bar should remain visible: ${JSON.stringify(state)}`)
     assert.notEqual(state.progressBackground, "rgba(0, 0, 0, 0)")
 

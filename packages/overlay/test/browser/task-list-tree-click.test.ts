@@ -260,9 +260,7 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     await page.waitForSelector('.task-row-main[data-task-id="task-child"]', { visible: true })
     assert.equal(await page.$eval(toggleSelector, (node: HTMLElement) => node.getAttribute("aria-expanded")), "true")
     await page.keyboard.press("Space")
-    await page.waitForFunction(
-      () => !document.querySelector('.task-row-main[data-task-id="task-child"]'),
-    )
+    await page.waitForFunction(() => !document.querySelector('.task-row-main[data-task-id="task-child"]'))
     assert.equal(await page.$eval(toggleSelector, (node: HTMLElement) => node.getAttribute("aria-expanded")), "false")
 
     await page.click('.task-row-main[data-task-id="task-parent"]')
@@ -285,7 +283,10 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     assert.equal(hiddenActions.open, null)
     assert.ok(hiddenActions.actionCount > 0)
     assert.deepEqual(hiddenActions.tabIndexes, Array(hiddenActions.actionCount).fill("-1"))
-    assert.equal(hiddenActions.opacities.every((value) => value === "0"), true)
+    assert.equal(
+      hiddenActions.opacities.every((value) => value === "0"),
+      true,
+    )
     assert.equal(hiddenActions.activeInActions, false)
 
     await page.keyboard.press("Tab")
@@ -351,8 +352,14 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     assert.equal(keyboardAction.open, "true")
     assert.equal(keyboardAction.activeDataUi, "task-row-start-now")
     assert.equal(keyboardAction.activeInSiblingActions, true)
-    assert.equal(keyboardAction.tabIndexes.every((value) => value === null), true)
-    assert.equal(keyboardAction.opacities.every((value) => Number.parseFloat(value) > 0.95), true)
+    assert.equal(
+      keyboardAction.tabIndexes.every((value) => value === null),
+      true,
+    )
+    assert.equal(
+      keyboardAction.opacities.every((value) => Number.parseFloat(value) > 0.95),
+      true,
+    )
     assert.ok(taskListPanel)
     writeFileSync(scratchPath("task-row-actions-keyboard-open.png"), await taskListPanel.screenshot({}))
 
@@ -404,7 +411,7 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     const cancelHitTarget = await page.$eval(siblingCancelSelector, (button) => {
       const rect = (button as HTMLElement).getBoundingClientRect()
       const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-      return target instanceof Element ? target.closest<HTMLElement>("[data-ui]")?.dataset.ui ?? "" : ""
+      return target instanceof Element ? (target.closest<HTMLElement>("[data-ui]")?.dataset.ui ?? "") : ""
     })
     assert.equal(cancelHitTarget, "task-row-cancel")
     await page.click(siblingCancelSelector)

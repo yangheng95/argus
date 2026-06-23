@@ -227,7 +227,9 @@ const StageContinuationArtifactIDField = z
   )
 
 function stageInputDigest(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value ?? null)).digest("hex")
+  return createHash("sha256")
+    .update(JSON.stringify(value ?? null))
+    .digest("hex")
 }
 
 const EvidenceSnapshotEntrySchema = z
@@ -325,7 +327,10 @@ function goalsContinuationScope(
     }))
 }
 
-function taskArrayField(task: { attachments?: unknown; design_specs?: unknown; system_artifacts?: unknown }, key: "attachments" | "design_specs" | "system_artifacts") {
+function taskArrayField(
+  task: { attachments?: unknown; design_specs?: unknown; system_artifacts?: unknown },
+  key: "attachments" | "design_specs" | "system_artifacts",
+) {
   const value = task[key]
   return Array.isArray(value) ? value : []
 }
@@ -344,7 +349,9 @@ function architectWorkloadPromptScope(workloadBriefs: unknown) {
     .filter((brief) => typeof brief.decomposition_concern === "string" && brief.decomposition_concern.trim())
     .map((brief) => {
       const inventory =
-        brief.execution_inventory && typeof brief.execution_inventory === "object" && !Array.isArray(brief.execution_inventory)
+        brief.execution_inventory &&
+        typeof brief.execution_inventory === "object" &&
+        !Array.isArray(brief.execution_inventory)
           ? (brief.execution_inventory as Record<string, unknown>)
           : {}
       return {
@@ -459,9 +466,7 @@ function continuationFromArtifact(input: {
   let row = findStageContinuationRequest({ taskID: input.taskID, artifactID: input.artifactID })
   if (!row) throw new Error(`stage continuation request not found: ${input.artifactID}`)
   if (row.payload.stage !== input.stage) {
-    throw new Error(
-      `stage continuation ${input.artifactID} targets stage ${row.payload.stage}, not ${input.stage}`,
-    )
+    throw new Error(`stage continuation ${input.artifactID} targets stage ${row.payload.stage}, not ${input.stage}`)
   }
   if (row.payload.finalizer_name !== input.finalizerName) {
     throw new Error(
@@ -531,8 +536,7 @@ function stageContinuationUnavailableResult(input: {
       pointer: `read_context scope=decisions; do not reuse ${input.artifactID} with ${toolName}`,
     })
   }
-  row =
-    failNonCurrentOwnerStageContinuationClaim({ taskID: input.taskID, artifactID: input.artifactID }) ?? row
+  row = failNonCurrentOwnerStageContinuationClaim({ taskID: input.taskID, artifactID: input.artifactID }) ?? row
   const state = row.payload.consumed_at
     ? "consumed"
     : row.payload.claim_failed_at
@@ -591,18 +595,15 @@ function stageContinuationUnavailableResult(input: {
   return undefined
 }
 
-function continuationFromArtifactOrResult(input: Parameters<typeof continuationFromArtifact>[0]):
-  | { continuation: AgentSessionContinuation }
-  | { result: ReturnType<typeof SubAgentProtocol.yieldResult> } {
+function continuationFromArtifactOrResult(
+  input: Parameters<typeof continuationFromArtifact>[0],
+): { continuation: AgentSessionContinuation } | { result: ReturnType<typeof SubAgentProtocol.yieldResult> } {
   const result = stageContinuationUnavailableResult(input)
   if (result) return { result }
   return { continuation: continuationFromArtifact(input) }
 }
 
-function terminalFinalizerMiss(input: {
-  err: unknown
-  finalizerName: string
-}): { failureMessage: string } | undefined {
+function terminalFinalizerMiss(input: { err: unknown; finalizerName: string }): { failureMessage: string } | undefined {
   if (!(input.err instanceof AgentRunError)) return undefined
   const cause = input.err.cause
   if (!Message.TerminalToolMissingError.isInstance(cause as Error | undefined)) return undefined
@@ -636,7 +637,8 @@ function continuationReason(input: {
   const normalized = input.normalizedStageInput
   if (normalized && typeof normalized === "object" && !Array.isArray(normalized)) {
     const reason = (normalized as { reason?: unknown }).reason
-    if (typeof reason === "string" && reason.trim()) return `Continue after missing ${input.finalizerName}: ${reason.trim()}`
+    if (typeof reason === "string" && reason.trim())
+      return `Continue after missing ${input.finalizerName}: ${reason.trim()}`
   }
   return `Continue ${input.stage} after missing ${input.finalizerName}.`
 }
@@ -774,9 +776,7 @@ function createReadContextOutput() {
     const block = normalizeReadContextBlock(rawLines)
     if (!block) return true
     const bounded =
-      typeof options.sectionCap === "number"
-        ? readContextTrimText(block, options.pointer, options.sectionCap)
-        : block
+      typeof options.sectionCap === "number" ? readContextTrimText(block, options.pointer, options.sectionCap) : block
     if (!bounded) return true
 
     const separatorChars = sections.length > 0 ? 1 : 0
@@ -1317,7 +1317,8 @@ const FrontendDesignInputSchema = z
   .extend({ continuation_artifact_id: StageContinuationArtifactIDField })
   .strict()
   .superRefine((input, ctx) => {
-    const hasContinuation = typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const hasContinuation =
+      typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
     const liveUrls = (Array.isArray(input.urls) ? input.urls : []).filter(
       (url) => typeof url === "string" && url.length > 0 && !isFigmaUrl(url),
     )
@@ -1352,7 +1353,9 @@ const FrontendResearchReasonField = z
     "Why frontend_research should publish source-backed webpage investigation packets now. Name the page scope and the downstream requirement/architect/build coverage need. This is not the frontend implementation template; use frontend_design for that. Do not use a new focus on an already-briefed source URL as a reason for a fresh frontend_research call.",
   )
 const FrontendResearchSourceUrlsField = z
-  .array(z.string().min(1).refine(isHttpWebpageUrl, "frontend_research source_urls entries must be HTTP(S) webpage URLs"))
+  .array(
+    z.string().min(1).refine(isHttpWebpageUrl, "frontend_research source_urls entries must be HTTP(S) webpage URLs"),
+  )
   .min(1)
   .max(1)
   .describe(
@@ -1361,7 +1364,9 @@ const FrontendResearchSourceUrlsField = z
 const FrontendResearchFocusField = z
   .string()
   .optional()
-  .describe("Optional fresh-session focus for the frontend_research agent on a not-yet-briefed source URL. Focus narrows the first brief only; it cannot turn an already-briefed source URL into a new source-page scope. Omit during continuation recovery.")
+  .describe(
+    "Optional fresh-session focus for the frontend_research agent on a not-yet-briefed source URL. Focus narrows the first brief only; it cannot turn an already-briefed source URL into a new source-page scope. Omit during continuation recovery.",
+  )
 
 const FrontendResearchInputSchema = z
   .object({})
@@ -1372,7 +1377,8 @@ const FrontendResearchInputSchema = z
   .strict()
   .superRefine((input, ctx) => {
     const hasSourceUrls = Array.isArray(input.source_urls) && input.source_urls.length > 0
-    const hasContinuation = typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
+    const hasContinuation =
+      typeof input.continuation_artifact_id === "string" && input.continuation_artifact_id.length > 0
     const hasFocus = typeof input.focus === "string" && input.focus.trim().length > 0
     if (hasSourceUrls === hasContinuation) {
       ctx.addIssue({
@@ -1586,10 +1592,10 @@ const IntegrityStageInputSchema = z
 
 type IntegrityStageInput = z.infer<typeof IntegrityStageInputSchema>
 
-function integrityContinuationFromArtifact(input: {
-  taskID: string
-  artifactID: string
-}): { continuation: AgentSessionContinuation; normalizedStageInput: IntegrityStageInput } {
+function integrityContinuationFromArtifact(input: { taskID: string; artifactID: string }): {
+  continuation: AgentSessionContinuation
+  normalizedStageInput: IntegrityStageInput
+} {
   const finalizerName = "submit_integrity_consensus"
   const continuation = continuationFromArtifact({
     taskID: input.taskID,
@@ -1608,10 +1614,10 @@ function integrityContinuationFromArtifact(input: {
   return { continuation, normalizedStageInput: parsed.data }
 }
 
-function factCheckContinuationFromArtifact(input: {
-  taskID: string
-  artifactID: string
-}): { continuation: AgentSessionContinuation; normalizedStageInput: FactCheckStageInput } {
+function factCheckContinuationFromArtifact(input: { taskID: string; artifactID: string }): {
+  continuation: AgentSessionContinuation
+  normalizedStageInput: FactCheckStageInput
+} {
   const finalizerName = "report_fact_check_result"
   const continuation = continuationFromArtifact({
     taskID: input.taskID,
@@ -1875,7 +1881,11 @@ async function composeIntegrityFeedbackMarkdownForBuild(input: {
     taskID: input.taskID,
     specSnapshotLineage: lineage,
     promptBudget: getSharedIntegrityPromptBudget(),
-    runtimeMarkdownDir: ProjectRuntimePaths.taskAbsolute(taskPrimaryProjectRoot(input.taskID), input.taskID, "integrity-feedback"),
+    runtimeMarkdownDir: ProjectRuntimePaths.taskAbsolute(
+      taskPrimaryProjectRoot(input.taskID),
+      input.taskID,
+      "integrity-feedback",
+    ),
   })?.promptMarkdown
 }
 
@@ -3438,10 +3448,12 @@ export function createOrchestratorTools(input: {
         "build agent can run against the user's text alone and integrity has enough " +
         "signal in the request and build evidence to verify. Frontend evidence tools are available candidates when the full task context " +
         "needs visual/reference material for requirements analysis.",
-      inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to analyze requirements"),
-        continuation_artifact_id: StageContinuationArtifactIDField,
-      }).strict(),
+      inputSchema: z
+        .object({
+          reason: z.string().optional().describe("Why you decided to analyze requirements"),
+          continuation_artifact_id: StageContinuationArtifactIDField,
+        })
+        .strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         let task = requireTask(taskID)
         log.info("requirements guard check", { taskID, hasSpec: !!findActiveSpecForTask(task.id) })
@@ -3470,12 +3482,12 @@ export function createOrchestratorTools(input: {
         try {
           if (continuation_artifact_id) {
             const resolvedContinuation = continuationFromArtifactOrResult({
-                taskID,
-                stage: "requirements",
-                artifactID: continuation_artifact_id,
-                finalizerName: "submit_requirements",
-                expectedNormalizedStageInput: normalizedStageInput,
-              })
+              taskID,
+              stage: "requirements",
+              artifactID: continuation_artifact_id,
+              finalizerName: "submit_requirements",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
             if ("result" in resolvedContinuation) {
               await trackStepComplete("requirements")
               return resolvedContinuation.result
@@ -3768,12 +3780,12 @@ export function createOrchestratorTools(input: {
         let continuation: AgentSessionContinuation | undefined
         if (hasContinuation) {
           const resolvedContinuation = continuationFromArtifactOrResult({
-              taskID,
-              stage: "frontend-design",
-              artifactID: continuation_artifact_id,
-              finalizerName: "submit_frontend_template",
-              expectedNormalizedStageInput: normalizedStageInput,
-            })
+            taskID,
+            stage: "frontend-design",
+            artifactID: continuation_artifact_id,
+            finalizerName: "submit_frontend_template",
+            expectedNormalizedStageInput: normalizedStageInput,
+          })
           if ("result" in resolvedContinuation) return resolvedContinuation.result
           continuation = resolvedContinuation.continuation
         }
@@ -4434,10 +4446,12 @@ export function createOrchestratorTools(input: {
         "and must explain every touched file in files_changed[]. For contract-level " +
         "point fixes prefer `modify_goal`. Frontend evidence tools are available candidates when the full task context " +
         "needs visual/reference material for architecture.",
-      inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to run architect"),
-        continuation_artifact_id: StageContinuationArtifactIDField,
-      }).strict(),
+      inputSchema: z
+        .object({
+          reason: z.string().optional().describe("Why you decided to run architect"),
+          continuation_artifact_id: StageContinuationArtifactIDField,
+        })
+        .strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
@@ -4487,12 +4501,12 @@ export function createOrchestratorTools(input: {
         try {
           if (continuation_artifact_id) {
             const resolvedContinuation = continuationFromArtifactOrResult({
-                taskID,
-                stage: "architect",
-                artifactID: continuation_artifact_id,
-                finalizerName: "submit_architect",
-                expectedNormalizedStageInput: normalizedStageInput,
-              })
+              taskID,
+              stage: "architect",
+              artifactID: continuation_artifact_id,
+              finalizerName: "submit_architect",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
             if ("result" in resolvedContinuation) {
               await trackStepComplete("architect")
               return resolvedContinuation.result
@@ -4842,10 +4856,12 @@ export function createOrchestratorTools(input: {
         "AFTER it returns: goals flagged with `decomposition_concern` are evidence for an architect " +
         "re-size — prefer `modify_goal` for single-field fixes, re-enter `architect` only for genuinely " +
         "new structure (a split). Briefs feed the next per-goal `build` automatically.",
-      inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to run workload analysis"),
-        continuation_artifact_id: StageContinuationArtifactIDField,
-      }).strict(),
+      inputSchema: z
+        .object({
+          reason: z.string().optional().describe("Why you decided to run workload analysis"),
+          continuation_artifact_id: StageContinuationArtifactIDField,
+        })
+        .strict(),
       execute: async ({ reason, continuation_artifact_id }) => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
@@ -4881,12 +4897,12 @@ export function createOrchestratorTools(input: {
           let continuation: AgentSessionContinuation | undefined
           if (continuation_artifact_id) {
             const resolvedContinuation = continuationFromArtifactOrResult({
-                taskID,
-                stage: "goal-workload-analyst",
-                artifactID: continuation_artifact_id,
-                finalizerName: "submit_workload_analysis",
-                expectedNormalizedStageInput: normalizedStageInput,
-              })
+              taskID,
+              stage: "goal-workload-analyst",
+              artifactID: continuation_artifact_id,
+              finalizerName: "submit_workload_analysis",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
             if ("result" in resolvedContinuation) {
               await trackStepComplete("workload_analysis")
               return resolvedContinuation.result
@@ -5106,12 +5122,12 @@ export function createOrchestratorTools(input: {
           let continuation: AgentSessionContinuation | undefined
           if (continuation_artifact_id) {
             const resolvedContinuation = continuationFromArtifactOrResult({
-                taskID,
-                stage: "visual-qa",
-                artifactID: continuation_artifact_id,
-                finalizerName: "submit_visual_qa_report",
-                expectedNormalizedStageInput: normalizedStageInput,
-              })
+              taskID,
+              stage: "visual-qa",
+              artifactID: continuation_artifact_id,
+              finalizerName: "submit_visual_qa_report",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
             if ("result" in resolvedContinuation) {
               await close(false)
               return resolvedContinuation.result
@@ -5342,119 +5358,133 @@ export function createOrchestratorTools(input: {
         const { Session } = await import("@/session")
         let factCheckStepFailed = true
         try {
-        const unavailableContinuation = args.continuation_artifact_id
-          ? stageContinuationUnavailableResult({
+          const unavailableContinuation = args.continuation_artifact_id
+            ? stageContinuationUnavailableResult({
+                taskID: task.id,
+                stage: "fact-check",
+                artifactID: args.continuation_artifact_id,
+                finalizerName: "report_fact_check_result",
+              })
+            : undefined
+          if (unavailableContinuation) {
+            factCheckStepFailed = false
+            return unavailableContinuation
+          }
+          const continuationInput = args.continuation_artifact_id
+            ? factCheckContinuationFromArtifact({ taskID: task.id, artifactID: args.continuation_artifact_id })
+            : undefined
+          const continuation = continuationInput?.continuation
+
+          // Step 1: snapshot — also acts as the terminal-state precondition.
+          let resolvedArgs: FactCheckStageInput
+          if (continuationInput) {
+            resolvedArgs = continuationInput.normalizedStageInput
+          } else {
+            const targetScope = resolveFactCheckTargetScope({
               taskID: task.id,
-              stage: "fact-check",
-              artifactID: args.continuation_artifact_id,
-              finalizerName: "report_fact_check_result",
+              targetSessionID: args.target_session_id!,
+              assertedTargetAgent: args.target_agent,
             })
-          : undefined
-        if (unavailableContinuation) {
-          factCheckStepFailed = false
-          return unavailableContinuation
-        }
-        const continuationInput = args.continuation_artifact_id
-          ? factCheckContinuationFromArtifact({ taskID: task.id, artifactID: args.continuation_artifact_id })
-          : undefined
-        const continuation = continuationInput?.continuation
-
-        // Step 1: snapshot — also acts as the terminal-state precondition.
-        let resolvedArgs: FactCheckStageInput
-        if (continuationInput) {
-          resolvedArgs = continuationInput.normalizedStageInput
-        } else {
-          const targetScope = resolveFactCheckTargetScope({
-            taskID: task.id,
-            targetSessionID: args.target_session_id!,
-            assertedTargetAgent: args.target_agent,
-          })
-          if ("error" in targetScope) {
-            return `fact_check rejected: ${targetScope.error}`
+            if ("error" in targetScope) {
+              return `fact_check rejected: ${targetScope.error}`
+            }
+            const snap = await Session.snapshotLatestAssistant(args.target_session_id!)
+            if (!snap.finished) {
+              return (
+                `fact_check rejected: target session is not in a terminal state ` +
+                `(reason=${snap.reason ?? "unknown"}). Retry after the worker finishes streaming.`
+              )
+            }
+            if (!snap.messageID || !snap.contentHash) {
+              return (
+                "fact_check rejected: target session has no terminal assistant message. " +
+                "Confirm you passed the correct target_session_id."
+              )
+            }
+            resolvedArgs = FactCheckStageInputSchema.parse({
+              target_session_id: args.target_session_id,
+              target_agent: targetScope.targetAgent,
+              fact_check_items: args.fact_check_items,
+              reason: args.reason,
+              target_message_id: snap.messageID,
+              target_message_content_hash: snap.contentHash,
+            })
           }
-          const snap = await Session.snapshotLatestAssistant(args.target_session_id!)
-          if (!snap.finished) {
-            return (
-              `fact_check rejected: target session is not in a terminal state ` +
-              `(reason=${snap.reason ?? "unknown"}). Retry after the worker finishes streaming.`
-            )
-          }
-          if (!snap.messageID || !snap.contentHash) {
-            return (
-              "fact_check rejected: target session has no terminal assistant message. " +
-              "Confirm you passed the correct target_session_id."
-            )
-          }
-          resolvedArgs = FactCheckStageInputSchema.parse({
-            target_session_id: args.target_session_id,
-            target_agent: targetScope.targetAgent,
-            fact_check_items: args.fact_check_items,
-            reason: args.reason,
-            target_message_id: snap.messageID,
-            target_message_content_hash: snap.contentHash,
-          })
-        }
 
-        // Step 2: idempotency cache.
-        const cached = findFactCheckAttempt({
-          invokedByOrchestratorSessionID: input.agentSessionID,
-          targetSessionID: resolvedArgs.target_session_id,
-          targetMessageID: resolvedArgs.target_message_id,
-          targetMessageContentHash: resolvedArgs.target_message_content_hash,
-        })
-        if (cached) {
-          factCheckStepFailed = false
-          return (
-            `fact_check (cached, no LLM work) — verdict=\`${cached.payload.report.overall_verdict}\`\n\n` +
-            renderFactCheckReport(cached.payload.report)
-          )
-        }
-
-        // Step 3: run agent.
-        const timeStarted = Date.now()
-        let runnerSessionID = continuation?.sessionID
-        try {
-          const result = await FactCheckAgent.run({
+          // Step 2: idempotency cache.
+          const cached = findFactCheckAttempt({
+            invokedByOrchestratorSessionID: input.agentSessionID,
             targetSessionID: resolvedArgs.target_session_id,
-            targetAgent: resolvedArgs.target_agent,
             targetMessageID: resolvedArgs.target_message_id,
             targetMessageContentHash: resolvedArgs.target_message_content_hash,
-            factCheckItems: resolvedArgs.fact_check_items,
-            reason: resolvedArgs.reason,
-            orchestratorSessionID: input.agentSessionID,
-            taskID: task.id,
-            signal: input.signal,
-            continuation,
-            onSessionCreated: (sessionID) => {
-              runnerSessionID = sessionID
-            },
           })
-          // Step 3a: scope consistency check (codex impl review §3).  The
-          // LLM populates report.scope itself; we must assert it matches
-          // the snapshot the host took so a wrong scope cannot poison the
-          // idempotency cache or read_context downstream.  Mismatch is
-          // a contract violation, not a soft warning — return tool error
-          // and persist outcome=tool_error so the orchestrator knows to
-          // retry (rule 7: no silent fallback).
-          const scope = result.report.scope
-          const scopeMismatch =
-            scope.target_session_id !== resolvedArgs.target_session_id ||
-            scope.target_agent !== resolvedArgs.target_agent ||
-            scope.target_message_id !== resolvedArgs.target_message_id ||
-            scope.target_message_content_hash !== resolvedArgs.target_message_content_hash
-          if (scopeMismatch) {
-            const synthetic = synthesizeToolErrorReport({
-              snap: {
-                messageID: resolvedArgs.target_message_id,
-                contentHash: resolvedArgs.target_message_content_hash,
+          if (cached) {
+            factCheckStepFailed = false
+            return (
+              `fact_check (cached, no LLM work) — verdict=\`${cached.payload.report.overall_verdict}\`\n\n` +
+              renderFactCheckReport(cached.payload.report)
+            )
+          }
+
+          // Step 3: run agent.
+          const timeStarted = Date.now()
+          let runnerSessionID = continuation?.sessionID
+          try {
+            const result = await FactCheckAgent.run({
+              targetSessionID: resolvedArgs.target_session_id,
+              targetAgent: resolvedArgs.target_agent,
+              targetMessageID: resolvedArgs.target_message_id,
+              targetMessageContentHash: resolvedArgs.target_message_content_hash,
+              factCheckItems: resolvedArgs.fact_check_items,
+              reason: resolvedArgs.reason,
+              orchestratorSessionID: input.agentSessionID,
+              taskID: task.id,
+              signal: input.signal,
+              continuation,
+              onSessionCreated: (sessionID) => {
+                runnerSessionID = sessionID
               },
-              args: resolvedArgs,
-              reason:
-                `fact-check returned a report.scope inconsistent with the host snapshot ` +
-                `(expected target_session=${resolvedArgs.target_session_id} agent=${resolvedArgs.target_agent} ` +
-                `message_id=${resolvedArgs.target_message_id}; got session=${scope.target_session_id} ` +
-                `agent=${scope.target_agent} message_id=${scope.target_message_id})`,
             })
+            // Step 3a: scope consistency check (codex impl review §3).  The
+            // LLM populates report.scope itself; we must assert it matches
+            // the snapshot the host took so a wrong scope cannot poison the
+            // idempotency cache or read_context downstream.  Mismatch is
+            // a contract violation, not a soft warning — return tool error
+            // and persist outcome=tool_error so the orchestrator knows to
+            // retry (rule 7: no silent fallback).
+            const scope = result.report.scope
+            const scopeMismatch =
+              scope.target_session_id !== resolvedArgs.target_session_id ||
+              scope.target_agent !== resolvedArgs.target_agent ||
+              scope.target_message_id !== resolvedArgs.target_message_id ||
+              scope.target_message_content_hash !== resolvedArgs.target_message_content_hash
+            if (scopeMismatch) {
+              const synthetic = synthesizeToolErrorReport({
+                snap: {
+                  messageID: resolvedArgs.target_message_id,
+                  contentHash: resolvedArgs.target_message_content_hash,
+                },
+                args: resolvedArgs,
+                reason:
+                  `fact-check returned a report.scope inconsistent with the host snapshot ` +
+                  `(expected target_session=${resolvedArgs.target_session_id} agent=${resolvedArgs.target_agent} ` +
+                  `message_id=${resolvedArgs.target_message_id}; got session=${scope.target_session_id} ` +
+                  `agent=${scope.target_agent} message_id=${scope.target_message_id})`,
+              })
+              recordFactCheckAttempt({
+                taskID: task.id,
+                factCheckSessionID: result.sessionID,
+                targetSessionID: resolvedArgs.target_session_id,
+                targetAgent: resolvedArgs.target_agent,
+                targetMessageID: resolvedArgs.target_message_id,
+                targetMessageContentHash: resolvedArgs.target_message_content_hash,
+                invokedByOrchestratorSessionID: input.agentSessionID,
+                report: synthetic,
+                timeStarted,
+                outcome: "tool_error",
+              })
+              return `fact_check tool_error: ${synthetic.unresolved[0].claim}`
+            }
             recordFactCheckAttempt({
               taskID: task.id,
               factCheckSessionID: result.sessionID,
@@ -5463,93 +5493,79 @@ export function createOrchestratorTools(input: {
               targetMessageID: resolvedArgs.target_message_id,
               targetMessageContentHash: resolvedArgs.target_message_content_hash,
               invokedByOrchestratorSessionID: input.agentSessionID,
+              report: result.report,
+              timeStarted,
+              outcome: result.outcome,
+            })
+            // Surface a one-line summary in decision_log so integrity replay
+            // and read_context can mention "fact-check verdict was X" without
+            // having to parse the full artifact (spec §6.1.2 step 7).
+            const { createDecisionLog } = await import("@/decision-log")
+            createDecisionLog(task.id).append({
+              phase: "fact_check",
+              key: `fact_check:${resolvedArgs.target_session_id}:${resolvedArgs.target_message_id}`,
+              value:
+                `verdict=${result.report.overall_verdict} ` +
+                `verified=${result.report.verified.length} ` +
+                `corrected=${result.report.corrected.length} ` +
+                `unresolved=${result.report.unresolved.length}`,
+              reason: `fact-check on ${resolvedArgs.target_agent} (${resolvedArgs.reason.slice(0, 200)})`,
+            })
+            factCheckStepFailed = result.outcome !== "completed"
+            return (
+              `fact_check completed — verdict=\`${result.report.overall_verdict}\`\n\n` +
+              renderFactCheckReport(result.report)
+            )
+          } catch (err) {
+            // codex impl review §1: persist tool_error / aborted artifacts
+            // too. Without this the `outcome` enum would be half-dead and
+            // the orchestrator couldn't see that fact-check tried and
+            // failed (vs never ran).
+            //
+            // codex impl review round 4 §findings-1: do NOT swallow persist
+            // errors here. The happy/scope-mismatch paths let
+            // recordFactCheckAttempt throw; the error-outcome path must
+            // behave identically. A persist failure with a swallowed log
+            // would return a "fact_check tool_error: …" string claiming
+            // the artifact exists when it does not, poisoning read_context
+            // / integrity replay (rule 7: no silent fallback).
+            const outcome: "aborted" | "tool_error" = input.signal?.aborted ? "aborted" : "tool_error"
+            const errMessage = err instanceof Error ? err.message : String(err)
+            const synthetic = synthesizeToolErrorReport({
+              snap: {
+                messageID: resolvedArgs.target_message_id,
+                contentHash: resolvedArgs.target_message_content_hash,
+              },
+              args: resolvedArgs,
+              reason: `fact-check ${outcome}: ${errMessage}`,
+            })
+            recordFactCheckAttempt({
+              taskID: task.id,
+              factCheckSessionID: runnerSessionID ?? `(no-session:${outcome})`,
+              targetSessionID: resolvedArgs.target_session_id,
+              targetAgent: resolvedArgs.target_agent,
+              targetMessageID: resolvedArgs.target_message_id,
+              targetMessageContentHash: resolvedArgs.target_message_content_hash,
+              invokedByOrchestratorSessionID: input.agentSessionID,
               report: synthetic,
               timeStarted,
-              outcome: "tool_error",
+              outcome,
             })
-            return `fact_check tool_error: ${synthetic.unresolved[0].claim}`
+            if (outcome === "tool_error") {
+              const continuationResult = continuationResultForTerminalFinalizerMiss({
+                err,
+                taskID: task.id,
+                stage: "fact-check",
+                sessionID: runnerSessionID,
+                parentSessionID: input.agentSessionID,
+                finalizerName: "report_fact_check_result",
+                normalizedStageInput: resolvedArgs,
+                pointerReason: resolvedArgs.reason,
+              })
+              if (continuationResult) return continuationResult
+            }
+            return `fact_check ${outcome}: ${errMessage}`
           }
-          recordFactCheckAttempt({
-            taskID: task.id,
-            factCheckSessionID: result.sessionID,
-            targetSessionID: resolvedArgs.target_session_id,
-            targetAgent: resolvedArgs.target_agent,
-            targetMessageID: resolvedArgs.target_message_id,
-            targetMessageContentHash: resolvedArgs.target_message_content_hash,
-            invokedByOrchestratorSessionID: input.agentSessionID,
-            report: result.report,
-            timeStarted,
-            outcome: result.outcome,
-          })
-          // Surface a one-line summary in decision_log so integrity replay
-          // and read_context can mention "fact-check verdict was X" without
-          // having to parse the full artifact (spec §6.1.2 step 7).
-          const { createDecisionLog } = await import("@/decision-log")
-          createDecisionLog(task.id).append({
-            phase: "fact_check",
-            key: `fact_check:${resolvedArgs.target_session_id}:${resolvedArgs.target_message_id}`,
-            value:
-              `verdict=${result.report.overall_verdict} ` +
-              `verified=${result.report.verified.length} ` +
-              `corrected=${result.report.corrected.length} ` +
-              `unresolved=${result.report.unresolved.length}`,
-            reason: `fact-check on ${resolvedArgs.target_agent} (${resolvedArgs.reason.slice(0, 200)})`,
-          })
-          factCheckStepFailed = result.outcome !== "completed"
-          return (
-            `fact_check completed — verdict=\`${result.report.overall_verdict}\`\n\n` +
-            renderFactCheckReport(result.report)
-          )
-        } catch (err) {
-          // codex impl review §1: persist tool_error / aborted artifacts
-          // too. Without this the `outcome` enum would be half-dead and
-          // the orchestrator couldn't see that fact-check tried and
-          // failed (vs never ran).
-          //
-          // codex impl review round 4 §findings-1: do NOT swallow persist
-          // errors here. The happy/scope-mismatch paths let
-          // recordFactCheckAttempt throw; the error-outcome path must
-          // behave identically. A persist failure with a swallowed log
-          // would return a "fact_check tool_error: …" string claiming
-          // the artifact exists when it does not, poisoning read_context
-          // / integrity replay (rule 7: no silent fallback).
-          const outcome: "aborted" | "tool_error" = input.signal?.aborted ? "aborted" : "tool_error"
-          const errMessage = err instanceof Error ? err.message : String(err)
-          const synthetic = synthesizeToolErrorReport({
-            snap: {
-              messageID: resolvedArgs.target_message_id,
-              contentHash: resolvedArgs.target_message_content_hash,
-            },
-            args: resolvedArgs,
-            reason: `fact-check ${outcome}: ${errMessage}`,
-          })
-          recordFactCheckAttempt({
-            taskID: task.id,
-            factCheckSessionID: runnerSessionID ?? `(no-session:${outcome})`,
-            targetSessionID: resolvedArgs.target_session_id,
-            targetAgent: resolvedArgs.target_agent,
-            targetMessageID: resolvedArgs.target_message_id,
-            targetMessageContentHash: resolvedArgs.target_message_content_hash,
-            invokedByOrchestratorSessionID: input.agentSessionID,
-            report: synthetic,
-            timeStarted,
-            outcome,
-          })
-          if (outcome === "tool_error") {
-            const continuationResult = continuationResultForTerminalFinalizerMiss({
-              err,
-              taskID: task.id,
-              stage: "fact-check",
-              sessionID: runnerSessionID,
-              parentSessionID: input.agentSessionID,
-              finalizerName: "report_fact_check_result",
-              normalizedStageInput: resolvedArgs,
-              pointerReason: resolvedArgs.reason,
-            })
-            if (continuationResult) return continuationResult
-          }
-          return `fact_check ${outcome}: ${errMessage}`
-        }
         } finally {
           await trackStepComplete("fact_check", undefined, factCheckStepFailed)
         }
@@ -5591,12 +5607,14 @@ export function createOrchestratorTools(input: {
         "change), OR a previous analyze_intent on this task is still valid, OR the " +
         "work is a clear single-edit fix where downstream agents have nothing to " +
         "misread.",
-      inputSchema: z.object({
-        reason: z
-          .string()
-          .optional()
-          .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
-      }).strict(),
+      inputSchema: z
+        .object({
+          reason: z
+            .string()
+            .optional()
+            .describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
+        })
+        .strict(),
       execute: async () => {
         const task = requireTask(taskID)
         await trackStepStart("analyze_intent")
@@ -5757,7 +5775,9 @@ export function createOrchestratorTools(input: {
         const storedContinuationSourceUrl = frontendResearchSourceUrlFromStageInput(
           continuationRow?.payload.normalized_stage_input,
         )
-        const storedContinuationFocus = frontendResearchFocusFromStageInput(continuationRow?.payload.normalized_stage_input)
+        const storedContinuationFocus = frontendResearchFocusFromStageInput(
+          continuationRow?.payload.normalized_stage_input,
+        )
         const sourceUrl = continuation_artifact_id ? storedContinuationSourceUrl : source_urls?.find(isHttpWebpageUrl)
         const normalizedStageInput = {
           task: taskContinuationScope(task),
@@ -5769,12 +5789,12 @@ export function createOrchestratorTools(input: {
         try {
           if (continuation_artifact_id) {
             const resolvedContinuation = continuationFromArtifactOrResult({
-                taskID,
-                stage: "frontend-research",
-                artifactID: continuation_artifact_id,
-                finalizerName: "submit_research_brief",
-                expectedNormalizedStageInput: normalizedStageInput,
-              })
+              taskID,
+              stage: "frontend-research",
+              artifactID: continuation_artifact_id,
+              finalizerName: "submit_research_brief",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
             if ("result" in resolvedContinuation) {
               await trackStepComplete("frontend_research")
               return resolvedContinuation.result
@@ -5887,12 +5907,12 @@ export function createOrchestratorTools(input: {
           let continuation: AgentSessionContinuation | undefined
           if (continuation_artifact_id) {
             const resolvedContinuation = continuationFromArtifactOrResult({
-                taskID,
-                stage: "deep-research",
-                artifactID: continuation_artifact_id,
-                finalizerName: "submit_research_brief",
-                expectedNormalizedStageInput: normalizedStageInput,
-              })
+              taskID,
+              stage: "deep-research",
+              artifactID: continuation_artifact_id,
+              finalizerName: "submit_research_brief",
+              expectedNormalizedStageInput: normalizedStageInput,
+            })
             if ("result" in resolvedContinuation) return resolvedContinuation.result
             continuation = resolvedContinuation.continuation
           }
@@ -6568,7 +6588,9 @@ export function createOrchestratorTools(input: {
           for (const [index, artifact] of researchBriefs.entries()) {
             await appendResearchBriefContext(
               output,
-              researchBriefs.length === 1 ? "Deep Research Brief" : `Deep Research Brief ${index + 1}/${researchBriefs.length}`,
+              researchBriefs.length === 1
+                ? "Deep Research Brief"
+                : `Deep Research Brief ${index + 1}/${researchBriefs.length}`,
               artifact,
               task.request,
             )
@@ -7271,7 +7293,8 @@ export function createOrchestratorTools(input: {
         if (existingChildren.length > 0) {
           return SubAgentProtocol.yieldResult({
             headline: "Follow-up task was not created because this parent already has an inheriting child task.",
-            summary: "Each parent task can create only one inheriting follow-up task. Continue through the existing child task instead of creating a second lineage branch.",
+            summary:
+              "Each parent task can create only one inheriting follow-up task. Continue through the existing child task instead of creating a second lineage branch.",
             fields: [
               ["parent_task_id", taskID],
               ["existing_child_task_ids", existingChildren.join(", ")],
@@ -7982,15 +8005,13 @@ export function createOrchestratorTools(input: {
           // session_id so retry has exactly one session identity source.
           let goalRunID: string | undefined
           let buildStartedSettled = false
-          let resolveBuildStarted: (
-            value: {
-              sessionID: string
-              goalRunID?: string
-              worktreeDir?: string
-              worktreeBranch?: string
-              worktreeBaseRef?: string
-            },
-          ) => void = () => {}
+          let resolveBuildStarted: (value: {
+            sessionID: string
+            goalRunID?: string
+            worktreeDir?: string
+            worktreeBranch?: string
+            worktreeBaseRef?: string
+          }) => void = () => {}
           let rejectBuildStarted: (error: unknown) => void = () => {}
           const buildStarted = new Promise<{
             sessionID: string
@@ -8180,443 +8201,443 @@ export function createOrchestratorTools(input: {
           // was opened, with status derived from the BuildAgent outcome
           // or, on throw, from the underlying error class.
           const runBuildToTerminal = async (): Promise<string> => {
-          let buildOutcome:
-            | { kind: "ok"; result: Awaited<ReturnType<typeof BuildAgent.run>> }
-            | { kind: "throw"; error: unknown }
-          let goalWorkspaceCleanup: string | undefined
-          try {
-            const ok = await BuildAgent.run({
-              target,
-              task,
-              context,
-              parentSessionID: input.agentSessionID,
-              existingSessionID: existingBuildSessionID,
-              signal: input.signal,
-              managedWorktree,
-              onSessionCreated: openGoalRunForBuildSession,
-            })
-            buildOutcome = { kind: "ok", result: ok }
-            if (attachedGoalID && !goalRunID) {
-              throw new Error(`build: BuildAgent.run completed for goal ${attachedGoalID} without opening a goal_run`)
-            }
-          } catch (runErr) {
-            // P2: typed BuildAgentContractError converts to a schema-valid
-            // failed BuildResult and routes through the normal failed path
-            // (NOT rethrow). Preserves the retry-budget contract: the
-            // orchestrator's tool result reads as a normal failed build,
-            // decision_log gets the contract-violation diagnostics, and
-            // generic infra errors keep their existing rethrow shape.
-            const { BuildAgentContractError } = await import("@/build/types")
-            if (runErr instanceof BuildAgentContractError) {
-              // Collect host-side worktree facts on the failure path so the
-              // orchestrator LLM sees what the build session actually
-              // produced (file changes, HEAD) before deciding next step
-              // (build retry / modify_goal / fail_task).
-              // Without these facts the build tool result's "Worktree facts"
-              // block renders all-undefined, leaving the LLM blind to whether
-              // the missing-terminal failure happened with substantial work
-              // already on disk vs an empty worktree. Spec
-              // build-missing-terminal-review-downgrade-2026-05-07.md §5.2.
-              let collectedDiffs: import("@/snapshot/types").FileDiff[] | undefined
-              let collectedHead: string | undefined
-              let collectedActualChangedFiles:
-                | NonNullable<Awaited<ReturnType<typeof BuildAgent.run>>["actualChangedFiles"]>
-                | undefined
-              if (managedWorktree?.directory) {
-                try {
-                  const headResult = await runGit(["rev-parse", "HEAD"], {
-                    cwd: managedWorktree.directory,
-                    timeoutProfile: "fast",
-                  })
-                  if (headResult.exitCode === 0) {
-                    const head = headResult.text().trim()
-                    if (head) collectedHead = head.slice(0, 12)
-                  }
-                } catch (gitErr) {
-                  log.warn("build catch: rev-parse HEAD failed (non-fatal)", {
-                    taskID,
-                    goalID: attachedGoalID,
-                    error: gitErr instanceof Error ? gitErr.message : String(gitErr),
-                  })
-                }
-                if (managedWorktree.baseRef) {
+            let buildOutcome:
+              | { kind: "ok"; result: Awaited<ReturnType<typeof BuildAgent.run>> }
+              | { kind: "throw"; error: unknown }
+            let goalWorkspaceCleanup: string | undefined
+            try {
+              const ok = await BuildAgent.run({
+                target,
+                task,
+                context,
+                parentSessionID: input.agentSessionID,
+                existingSessionID: existingBuildSessionID,
+                signal: input.signal,
+                managedWorktree,
+                onSessionCreated: openGoalRunForBuildSession,
+              })
+              buildOutcome = { kind: "ok", result: ok }
+              if (attachedGoalID && !goalRunID) {
+                throw new Error(`build: BuildAgent.run completed for goal ${attachedGoalID} without opening a goal_run`)
+              }
+            } catch (runErr) {
+              // P2: typed BuildAgentContractError converts to a schema-valid
+              // failed BuildResult and routes through the normal failed path
+              // (NOT rethrow). Preserves the retry-budget contract: the
+              // orchestrator's tool result reads as a normal failed build,
+              // decision_log gets the contract-violation diagnostics, and
+              // generic infra errors keep their existing rethrow shape.
+              const { BuildAgentContractError } = await import("@/build/types")
+              if (runErr instanceof BuildAgentContractError) {
+                // Collect host-side worktree facts on the failure path so the
+                // orchestrator LLM sees what the build session actually
+                // produced (file changes, HEAD) before deciding next step
+                // (build retry / modify_goal / fail_task).
+                // Without these facts the build tool result's "Worktree facts"
+                // block renders all-undefined, leaving the LLM blind to whether
+                // the missing-terminal failure happened with substantial work
+                // already on disk vs an empty worktree. Spec
+                // build-missing-terminal-review-downgrade-2026-05-07.md §5.2.
+                let collectedDiffs: import("@/snapshot/types").FileDiff[] | undefined
+                let collectedHead: string | undefined
+                let collectedActualChangedFiles:
+                  | NonNullable<Awaited<ReturnType<typeof BuildAgent.run>>["actualChangedFiles"]>
+                  | undefined
+                if (managedWorktree?.directory) {
                   try {
-                    const fetched = await collectGoalContributionDiffs(
-                      managedWorktree.directory,
-                      managedWorktree.baseRef,
-                    )
-                    collectedDiffs = fetched
-                    collectedActualChangedFiles = fetched.map((d) => ({
-                      path: d.file,
-                      status: (d.status ?? "modified") as "added" | "modified" | "deleted",
-                      additions: d.additions,
-                      deletions: d.deletions,
-                    }))
-                  } catch (diffErr) {
-                    log.warn("build catch: collectGoalContributionDiffs failed (non-fatal)", {
+                    const headResult = await runGit(["rev-parse", "HEAD"], {
+                      cwd: managedWorktree.directory,
+                      timeoutProfile: "fast",
+                    })
+                    if (headResult.exitCode === 0) {
+                      const head = headResult.text().trim()
+                      if (head) collectedHead = head.slice(0, 12)
+                    }
+                  } catch (gitErr) {
+                    log.warn("build catch: rev-parse HEAD failed (non-fatal)", {
                       taskID,
                       goalID: attachedGoalID,
-                      error: diffErr instanceof Error ? diffErr.message : String(diffErr),
+                      error: gitErr instanceof Error ? gitErr.message : String(gitErr),
                     })
                   }
-                }
-              }
-              const synthFailed: Awaited<ReturnType<typeof BuildAgent.run>>["result"] = {
-                status: "failed",
-                summary: `Build agent contract violation (${runErr.code}): ${runErr.message.slice(0, 200)}`,
-                tests: [],
-                files_changed: [],
-                error: runErr.message,
-                // Host-synthesised BuildResult on contract violation: the LLM
-                // never reached its terminal tool, so it has no chance to
-                // populate fact_check_items. Empty array is the honest
-                // construction-site default (specs/fact-check-agent-...md
-                // §6.1.3 — same rationale as external executor factory).
-                fact_check_items: [],
-              }
-              buildOutcome = {
-                kind: "ok",
-                result: {
-                  result: synthFailed,
-                  sessionID: runErr.diagnostics.sessionID ?? "",
-                  worktreeDir: managedWorktree?.directory,
-                  worktreeBranch: managedWorktree?.branch,
-                  worktreeBaseRef: managedWorktree?.baseRef,
-                  diffs: collectedDiffs,
-                  // BuildAgentContractError fires before the agent reached the
-                  // post-merge fact collection, so we surface whatever the
-                  // tool last reported (or "not_invoked" when nothing).
-                  mergeBackStatus: "not_invoked",
-                  lastMergeBackOutcome: runErr.diagnostics.lastMergeBackOutcome ?? undefined,
-                  publishedCommitRef: undefined,
-                  worktreeHead: collectedHead,
-                  actualChangedFiles: collectedActualChangedFiles,
-                } as Awaited<ReturnType<typeof BuildAgent.run>>,
-              }
-              // Drop a phase=retry decision_log entry so the next attempt's
-              // prompt receives the structured contract diagnostic instead
-              // of just "tool failed". Single source: decision_log; the
-              // orchestrator already reads phase=retry filtered by goalID.
-              //
-              // value carries the LLM-facing recovery hint (rendered into
-              // the next build prompt's "Prior Attempt Failed" section by
-              // the retryFeedback composer). Use BuildAgentContractError's
-              // message directly (single source per rule 8 — the hint text
-              // is owned by build/agent.ts:convertMissingTerminalToolError).
-              // reason carries the audit metadata.
-              // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
-              if (attachedGoalID) {
-                const { createDecisionLog } = await import("@/decision-log")
-                createDecisionLog(taskID).append({
-                  phase: "retry",
-                  goalID: attachedGoalID,
-                  key: "build_agent_contract_violation",
-                  value: runErr.message,
-                  reason: `build_agent_contract_violation: code=${runErr.code}; sessionID=${runErr.diagnostics.sessionID ?? "?"}`,
-                })
-              }
-            } else {
-              buildOutcome = { kind: "throw", error: runErr }
-            }
-          }
-
-          if (buildOutcome.kind === "ok") {
-            const { worktreeDir, worktreeBranch, worktreeBaseRef } = buildOutcome.result
-            const currentGoalRun = goalRunID ? findGoalRun(goalRunID) : undefined
-            if (
-              attachedGoalID &&
-              worktreeDir &&
-              worktreeBranch &&
-              (!currentGoalRun || isLiveGoalRunStatus(currentGoalRun.status))
-            ) {
-              updateGoalWorkspace({
-                goalID: attachedGoalID,
-                workspaceDir: worktreeDir,
-                workspaceBranch: worktreeBranch,
-                workspaceBaseRef: worktreeBaseRef,
-              })
-            }
-            if (attachedGoalID && worktreeDir && (!currentGoalRun || isLiveGoalRunStatus(currentGoalRun.status))) {
-              const contractAuditCriteria = await runGoalContractAuditCriteria({
-                taskID,
-                goal: findGoal(attachedGoalID),
-                goalRunID,
-                workDir: worktreeDir,
-                task,
-              })
-              if (contractAuditCriteria.length > 0) {
-                await EngineService.upsertTaskCriteria(taskID, contractAuditCriteria)
-                const failedEssential = contractAuditCriteria.filter((criteria) => {
-                  if (!contractAuditBlocksBuild(criteria.status)) return false
-                  const goalRow = findGoal(attachedGoalID)
-                  const specs = (
-                    Array.isArray(goalRow?.acceptance_specs) ? goalRow.acceptance_specs : []
-                  ) as AcceptanceSpec[]
-                  return specs.some((spec) =>
-                    spec.scorers.some(
-                      (scorer) =>
-                        scorer.type === "contract_audit" &&
-                        contractAuditRequired(spec, scorer) &&
-                        `acceptance:${spec.id}:${scorer.name}` === criteria.name,
-                    ),
-                  )
-                })
-                if (failedEssential.length > 0 && buildOutcome.result.result.status === "passed") {
-                  buildOutcome.result.result = {
-                    ...buildOutcome.result.result,
-                    status: "failed",
-                    error: `contract_audit failed:\n${failedEssential.map((criteria) => criteria.evidence).join("\n")}`,
-                    summary: `${buildOutcome.result.result.summary}\n\nContract audit failed before goal finalization.`,
+                  if (managedWorktree.baseRef) {
+                    try {
+                      const fetched = await collectGoalContributionDiffs(
+                        managedWorktree.directory,
+                        managedWorktree.baseRef,
+                      )
+                      collectedDiffs = fetched
+                      collectedActualChangedFiles = fetched.map((d) => ({
+                        path: d.file,
+                        status: (d.status ?? "modified") as "added" | "modified" | "deleted",
+                        additions: d.additions,
+                        deletions: d.deletions,
+                      }))
+                    } catch (diffErr) {
+                      log.warn("build catch: collectGoalContributionDiffs failed (non-fatal)", {
+                        taskID,
+                        goalID: attachedGoalID,
+                        error: diffErr instanceof Error ? diffErr.message : String(diffErr),
+                      })
+                    }
                   }
                 }
-              }
-            }
-          }
-
-          // Finalize the goal_run opened above. updateGoalRun writes a new
-          // append-only artifact with the terminal status + time_completed,
-          // and finalizeBuildAttempt also lays down the per-goal acceptance
-          // artifact when the build passed with concrete diffs (overlay's
-          // right-side Files panel reads it via findAcceptanceByGoalRun).
-          // For the throw branch we synthesise a failed finalisation from
-          // the underlying error message — diffs/commit/summary are absent
-          // by definition, but the goal_run row reaches a clean terminal
-          // state instead of orphaning at attempt-running.
-          let goalRunInvalidatedLine = ""
-          let goalRunInvalidated = false
-          let goalRunFinalizationFailedLine = ""
-          if (attachedGoalID && goalRunID) {
-            try {
-              const { finalizeBuildAttempt } = await import("@/engine/persist")
-              const currentGoalRun = findGoalRun(goalRunID)
-              if (currentGoalRun && !isLiveGoalRunStatus(currentGoalRun.status)) {
-                goalRunInvalidated = true
-                goalRunInvalidatedLine =
-                  `\n- build_result_ignored: goal_run ${goalRunID} is already ${currentGoalRun.status}; ` +
-                  `the attempt was invalidated before this build report returned.`
-                log.warn("build: ignoring stale build result for invalidated goal_run", {
-                  taskID,
-                  goalID: attachedGoalID,
-                  goalRunID,
-                  status: currentGoalRun.status,
-                })
-              } else if (buildOutcome.kind === "ok") {
-                const { result, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = buildOutcome.result
-                finalizeBuildAttempt({
-                  goalRunID,
-                  taskID,
-                  goalID: attachedGoalID,
-                  runID: coordinatorRunID,
-                  status: result.status === "passed" ? "completed" : "failed",
-                  commitRef: result.commit_ref,
-                  workspaceDir: worktreeDir,
-                  // Phase B (2026-05-05): the build outcome carries branch +
-                  // baseRef alongside the directory. Persist them on the
-                  // attempt artifact so the next dispatch / cleanup / board
-                  // view reads the full triple from one source.
-                  workspaceBranch: worktreeBranch,
-                  workspaceBaseRef: worktreeBaseRef ?? undefined,
-                  error: result.status === "failed" ? result.error : undefined,
-                  diffs,
-                  fileChanges: result.files_changed,
-                  summary: result.summary,
-                })
-                if (result.status === "passed") {
-                  goalWorkspaceCleanup = await cleanupCompletedGoalWorkspace(attachedGoalID, goalRunID)
+                const synthFailed: Awaited<ReturnType<typeof BuildAgent.run>>["result"] = {
+                  status: "failed",
+                  summary: `Build agent contract violation (${runErr.code}): ${runErr.message.slice(0, 200)}`,
+                  tests: [],
+                  files_changed: [],
+                  error: runErr.message,
+                  // Host-synthesised BuildResult on contract violation: the LLM
+                  // never reached its terminal tool, so it has no chance to
+                  // populate fact_check_items. Empty array is the honest
+                  // construction-site default (specs/fact-check-agent-...md
+                  // §6.1.3 — same rationale as external executor factory).
+                  fact_check_items: [],
+                }
+                buildOutcome = {
+                  kind: "ok",
+                  result: {
+                    result: synthFailed,
+                    sessionID: runErr.diagnostics.sessionID ?? "",
+                    worktreeDir: managedWorktree?.directory,
+                    worktreeBranch: managedWorktree?.branch,
+                    worktreeBaseRef: managedWorktree?.baseRef,
+                    diffs: collectedDiffs,
+                    // BuildAgentContractError fires before the agent reached the
+                    // post-merge fact collection, so we surface whatever the
+                    // tool last reported (or "not_invoked" when nothing).
+                    mergeBackStatus: "not_invoked",
+                    lastMergeBackOutcome: runErr.diagnostics.lastMergeBackOutcome ?? undefined,
+                    publishedCommitRef: undefined,
+                    worktreeHead: collectedHead,
+                    actualChangedFiles: collectedActualChangedFiles,
+                  } as Awaited<ReturnType<typeof BuildAgent.run>>,
+                }
+                // Drop a phase=retry decision_log entry so the next attempt's
+                // prompt receives the structured contract diagnostic instead
+                // of just "tool failed". Single source: decision_log; the
+                // orchestrator already reads phase=retry filtered by goalID.
+                //
+                // value carries the LLM-facing recovery hint (rendered into
+                // the next build prompt's "Prior Attempt Failed" section by
+                // the retryFeedback composer). Use BuildAgentContractError's
+                // message directly (single source per rule 8 — the hint text
+                // is owned by build/agent.ts:convertMissingTerminalToolError).
+                // reason carries the audit metadata.
+                // Spec build-missing-terminal-signal-restore-2026-05-07.md §5.1.
+                if (attachedGoalID) {
+                  const { createDecisionLog } = await import("@/decision-log")
+                  createDecisionLog(taskID).append({
+                    phase: "retry",
+                    goalID: attachedGoalID,
+                    key: "build_agent_contract_violation",
+                    value: runErr.message,
+                    reason: `build_agent_contract_violation: code=${runErr.code}; sessionID=${runErr.diagnostics.sessionID ?? "?"}`,
+                  })
                 }
               } else {
-                const errMsg =
-                  buildOutcome.error instanceof Error
-                    ? `${buildOutcome.error.name}: ${buildOutcome.error.message}`
-                    : String(buildOutcome.error)
-                finalizeBuildAttempt({
-                  goalRunID,
-                  taskID,
+                buildOutcome = { kind: "throw", error: runErr }
+              }
+            }
+
+            if (buildOutcome.kind === "ok") {
+              const { worktreeDir, worktreeBranch, worktreeBaseRef } = buildOutcome.result
+              const currentGoalRun = goalRunID ? findGoalRun(goalRunID) : undefined
+              if (
+                attachedGoalID &&
+                worktreeDir &&
+                worktreeBranch &&
+                (!currentGoalRun || isLiveGoalRunStatus(currentGoalRun.status))
+              ) {
+                updateGoalWorkspace({
                   goalID: attachedGoalID,
-                  runID: coordinatorRunID,
-                  status: "failed",
-                  workspaceDir: managedWorktree?.directory,
-                  workspaceBranch: managedWorktree?.branch,
-                  workspaceBaseRef: managedWorktree?.baseRef ?? undefined,
-                  error: errMsg,
-                  summary: `BuildAgent.run threw before producing a verdict: ${errMsg.slice(0, 240)}`,
+                  workspaceDir: worktreeDir,
+                  workspaceBranch: worktreeBranch,
+                  workspaceBaseRef: worktreeBaseRef,
                 })
               }
-            } catch (persistErr) {
-              const persistMessage = persistErr instanceof Error ? persistErr.message : String(persistErr)
-              log.error("build: finalizeBuildAttempt failed", {
-                taskID,
-                goalID: attachedGoalID,
-                goalRunID,
-                error: persistMessage,
-              })
-              const currentGoalRun = findGoalRun(goalRunID)
-              if (currentGoalRun && isLiveGoalRunStatus(currentGoalRun.status)) {
-                const error = `build finalization failed: ${persistMessage}`
-                updateGoalRun(goalRunID, {
-                  status: "failed",
-                  error,
-                  time_completed: Date.now(),
+              if (attachedGoalID && worktreeDir && (!currentGoalRun || isLiveGoalRunStatus(currentGoalRun.status))) {
+                const contractAuditCriteria = await runGoalContractAuditCriteria({
+                  taskID,
+                  goal: findGoal(attachedGoalID),
+                  goalRunID,
+                  workDir: worktreeDir,
+                  task,
                 })
-                goalRunFinalizationFailedLine =
-                  `\n- build_finalization_failed: goal_run ${goalRunID} was marked failed because terminal persistence failed: ` +
-                  `${persistMessage}`
-                if (buildOutcome.kind === "ok") {
-                  buildOutcome.result.result = {
-                    ...buildOutcome.result.result,
-                    status: "failed",
-                    error,
-                    summary: `${buildOutcome.result.result.summary}\n\nGoal run finalization failed after the build report returned.`,
+                if (contractAuditCriteria.length > 0) {
+                  await EngineService.upsertTaskCriteria(taskID, contractAuditCriteria)
+                  const failedEssential = contractAuditCriteria.filter((criteria) => {
+                    if (!contractAuditBlocksBuild(criteria.status)) return false
+                    const goalRow = findGoal(attachedGoalID)
+                    const specs = (
+                      Array.isArray(goalRow?.acceptance_specs) ? goalRow.acceptance_specs : []
+                    ) as AcceptanceSpec[]
+                    return specs.some((spec) =>
+                      spec.scorers.some(
+                        (scorer) =>
+                          scorer.type === "contract_audit" &&
+                          contractAuditRequired(spec, scorer) &&
+                          `acceptance:${spec.id}:${scorer.name}` === criteria.name,
+                      ),
+                    )
+                  })
+                  if (failedEssential.length > 0 && buildOutcome.result.result.status === "passed") {
+                    buildOutcome.result.result = {
+                      ...buildOutcome.result.result,
+                      status: "failed",
+                      error: `contract_audit failed:\n${failedEssential.map((criteria) => criteria.evidence).join("\n")}`,
+                      summary: `${buildOutcome.result.result.summary}\n\nContract audit failed before goal finalization.`,
+                    }
                   }
                 }
               }
             }
-          }
 
-          // If BuildAgent.run threw, surface the original error to the caller
-          // AFTER the goal_run is finalised. The throw shape is preserved so
-          // the orchestrator's existing tool-error / wake-loop logic isn't
-          // disturbed — only the persistent state was previously orphaned.
-          if (buildOutcome.kind === "throw") {
-            closeBuildOwnership(
-              "failed",
-              buildOutcome.error instanceof Error ? buildOutcome.error.message : String(buildOutcome.error),
-            )
-            throw buildOutcome.error
-          }
-          const { result, sessionID, worktreeDir } = buildOutcome.result
-          // diffs is captured by the surrounding scope's destructure for the
-          // ok-branch report rendering below; pull it back out for clarity.
-          const diffs = buildOutcome.result.diffs
-          // Host-truth merge / diff facts (B20). Surfaced inline in the
-          // tool result so the orchestrator LLM can cross-check the LLM's
-          // self-reported `files_changed[]` and `commit_ref` against what
-          // actually happened. Spec architecture-rework-loosening-plan-2026-05-06.md.
-          // Defaults preserve sane rendering for older test fixtures whose
-          // mocked BuildAgent.RunOutput predates these fields.
-          const mergeBackStatus = buildOutcome.result.mergeBackStatus ?? "not_invoked"
-          const lastMergeBackOutcome = buildOutcome.result.lastMergeBackOutcome
-          const publishedCommitRef = buildOutcome.result.publishedCommitRef
-          const worktreeHead = buildOutcome.result.worktreeHead
-          const actualChangedFiles = buildOutcome.result.actualChangedFiles ?? []
-          // Architecture review is no longer triggered automatically per
-          // build. Per-goal automatic review fired N times for N goals,
-          // each looking at one goal's worktree in isolation, and crowded
-          // the orchestrator's prompt with redundant entries. Build reports
-          // are recorded as decision-log evidence; standalone integrity is
-          // reserved for task-end or suspicion-triggered system-integrity
-          // review, not routine wave-level review.
-          if (attachedGoalID && !goalRunInvalidated) {
-            const buildReportForReview = {
-              status: result.status,
-              summary: result.summary,
-              files_changed: result.files_changed,
-              tests: result.tests,
-              error: result.status === "failed" ? result.error : undefined,
-              commit_ref: result.commit_ref,
-              repair_report: result.repair_report,
+            // Finalize the goal_run opened above. updateGoalRun writes a new
+            // append-only artifact with the terminal status + time_completed,
+            // and finalizeBuildAttempt also lays down the per-goal acceptance
+            // artifact when the build passed with concrete diffs (overlay's
+            // right-side Files panel reads it via findAcceptanceByGoalRun).
+            // For the throw branch we synthesise a failed finalisation from
+            // the underlying error message — diffs/commit/summary are absent
+            // by definition, but the goal_run row reaches a clean terminal
+            // state instead of orphaning at attempt-running.
+            let goalRunInvalidatedLine = ""
+            let goalRunInvalidated = false
+            let goalRunFinalizationFailedLine = ""
+            if (attachedGoalID && goalRunID) {
+              try {
+                const { finalizeBuildAttempt } = await import("@/engine/persist")
+                const currentGoalRun = findGoalRun(goalRunID)
+                if (currentGoalRun && !isLiveGoalRunStatus(currentGoalRun.status)) {
+                  goalRunInvalidated = true
+                  goalRunInvalidatedLine =
+                    `\n- build_result_ignored: goal_run ${goalRunID} is already ${currentGoalRun.status}; ` +
+                    `the attempt was invalidated before this build report returned.`
+                  log.warn("build: ignoring stale build result for invalidated goal_run", {
+                    taskID,
+                    goalID: attachedGoalID,
+                    goalRunID,
+                    status: currentGoalRun.status,
+                  })
+                } else if (buildOutcome.kind === "ok") {
+                  const { result, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = buildOutcome.result
+                  finalizeBuildAttempt({
+                    goalRunID,
+                    taskID,
+                    goalID: attachedGoalID,
+                    runID: coordinatorRunID,
+                    status: result.status === "passed" ? "completed" : "failed",
+                    commitRef: result.commit_ref,
+                    workspaceDir: worktreeDir,
+                    // Phase B (2026-05-05): the build outcome carries branch +
+                    // baseRef alongside the directory. Persist them on the
+                    // attempt artifact so the next dispatch / cleanup / board
+                    // view reads the full triple from one source.
+                    workspaceBranch: worktreeBranch,
+                    workspaceBaseRef: worktreeBaseRef ?? undefined,
+                    error: result.status === "failed" ? result.error : undefined,
+                    diffs,
+                    fileChanges: result.files_changed,
+                    summary: result.summary,
+                  })
+                  if (result.status === "passed") {
+                    goalWorkspaceCleanup = await cleanupCompletedGoalWorkspace(attachedGoalID, goalRunID)
+                  }
+                } else {
+                  const errMsg =
+                    buildOutcome.error instanceof Error
+                      ? `${buildOutcome.error.name}: ${buildOutcome.error.message}`
+                      : String(buildOutcome.error)
+                  finalizeBuildAttempt({
+                    goalRunID,
+                    taskID,
+                    goalID: attachedGoalID,
+                    runID: coordinatorRunID,
+                    status: "failed",
+                    workspaceDir: managedWorktree?.directory,
+                    workspaceBranch: managedWorktree?.branch,
+                    workspaceBaseRef: managedWorktree?.baseRef ?? undefined,
+                    error: errMsg,
+                    summary: `BuildAgent.run threw before producing a verdict: ${errMsg.slice(0, 240)}`,
+                  })
+                }
+              } catch (persistErr) {
+                const persistMessage = persistErr instanceof Error ? persistErr.message : String(persistErr)
+                log.error("build: finalizeBuildAttempt failed", {
+                  taskID,
+                  goalID: attachedGoalID,
+                  goalRunID,
+                  error: persistMessage,
+                })
+                const currentGoalRun = findGoalRun(goalRunID)
+                if (currentGoalRun && isLiveGoalRunStatus(currentGoalRun.status)) {
+                  const error = `build finalization failed: ${persistMessage}`
+                  updateGoalRun(goalRunID, {
+                    status: "failed",
+                    error,
+                    time_completed: Date.now(),
+                  })
+                  goalRunFinalizationFailedLine =
+                    `\n- build_finalization_failed: goal_run ${goalRunID} was marked failed because terminal persistence failed: ` +
+                    `${persistMessage}`
+                  if (buildOutcome.kind === "ok") {
+                    buildOutcome.result.result = {
+                      ...buildOutcome.result.result,
+                      status: "failed",
+                      error,
+                      summary: `${buildOutcome.result.result.summary}\n\nGoal run finalization failed after the build report returned.`,
+                    }
+                  }
+                }
+              }
             }
-            const decisionLog = createDecisionLog(taskID)
-            decisionLog.append({
-              phase: "build",
-              goalID: attachedGoalID,
-              key: "build_report_for_architecture_review",
-              value: JSON.stringify(buildReportForReview),
-              reason: "post_build_architecture_review_input",
-            })
-          }
 
-          if (isTaskLevelBuild) await trackStepComplete("build")
+            // If BuildAgent.run threw, surface the original error to the caller
+            // AFTER the goal_run is finalised. The throw shape is preserved so
+            // the orchestrator's existing tool-error / wake-loop logic isn't
+            // disturbed — only the persistent state was previously orphaned.
+            if (buildOutcome.kind === "throw") {
+              closeBuildOwnership(
+                "failed",
+                buildOutcome.error instanceof Error ? buildOutcome.error.message : String(buildOutcome.error),
+              )
+              throw buildOutcome.error
+            }
+            const { result, sessionID, worktreeDir } = buildOutcome.result
+            // diffs is captured by the surrounding scope's destructure for the
+            // ok-branch report rendering below; pull it back out for clarity.
+            const diffs = buildOutcome.result.diffs
+            // Host-truth merge / diff facts (B20). Surfaced inline in the
+            // tool result so the orchestrator LLM can cross-check the LLM's
+            // self-reported `files_changed[]` and `commit_ref` against what
+            // actually happened. Spec architecture-rework-loosening-plan-2026-05-06.md.
+            // Defaults preserve sane rendering for older test fixtures whose
+            // mocked BuildAgent.RunOutput predates these fields.
+            const mergeBackStatus = buildOutcome.result.mergeBackStatus ?? "not_invoked"
+            const lastMergeBackOutcome = buildOutcome.result.lastMergeBackOutcome
+            const publishedCommitRef = buildOutcome.result.publishedCommitRef
+            const worktreeHead = buildOutcome.result.worktreeHead
+            const actualChangedFiles = buildOutcome.result.actualChangedFiles ?? []
+            // Architecture review is no longer triggered automatically per
+            // build. Per-goal automatic review fired N times for N goals,
+            // each looking at one goal's worktree in isolation, and crowded
+            // the orchestrator's prompt with redundant entries. Build reports
+            // are recorded as decision-log evidence; standalone integrity is
+            // reserved for task-end or suspicion-triggered system-integrity
+            // review, not routine wave-level review.
+            if (attachedGoalID && !goalRunInvalidated) {
+              const buildReportForReview = {
+                status: result.status,
+                summary: result.summary,
+                files_changed: result.files_changed,
+                tests: result.tests,
+                error: result.status === "failed" ? result.error : undefined,
+                commit_ref: result.commit_ref,
+                repair_report: result.repair_report,
+              }
+              const decisionLog = createDecisionLog(taskID)
+              decisionLog.append({
+                phase: "build",
+                goalID: attachedGoalID,
+                key: "build_report_for_architecture_review",
+                value: JSON.stringify(buildReportForReview),
+                reason: "post_build_architecture_review_input",
+              })
+            }
 
-          // Build session terminal flows through session.status when
-          // BuildAgent.run's underlying actor closes. The structured build
-          // report below is the orchestrator-facing tool result.
+            if (isTaskLevelBuild) await trackStepComplete("build")
 
-          // Build does NOT mark workflow tasks complete. The final gate is a
-          // post-build integrity session after all blocking build evidence is
-          // terminal. Return the structured payload so the orchestrator can
-          // judge the next explicit action.
-          const testLines =
-            result.tests.length > 0
-              ? result.tests
-                  .map((t) => `  - ${t.passed ? "✓" : "✗"} ${t.name}${t.detail ? `: ${t.detail}` : ""}`)
+            // Build session terminal flows through session.status when
+            // BuildAgent.run's underlying actor closes. The structured build
+            // report below is the orchestrator-facing tool result.
+
+            // Build does NOT mark workflow tasks complete. The final gate is a
+            // post-build integrity session after all blocking build evidence is
+            // terminal. Return the structured payload so the orchestrator can
+            // judge the next explicit action.
+            const testLines =
+              result.tests.length > 0
+                ? result.tests
+                    .map((t) => `  - ${t.passed ? "✓" : "✗"} ${t.name}${t.detail ? `: ${t.detail}` : ""}`)
+                    .join("\n")
+                : "  (none reported)"
+            const fileLines =
+              result.files_changed.length > 0
+                ? result.files_changed.map((f) => `  - ${f.path}: ${f.summary} — ${f.reason}`).join("\n")
+                : "  (none reported)"
+            const repairReportLines = result.repair_report
+              ? [
+                  `  repaired_findings=${result.repair_report.repaired_findings.length}`,
+                  ...result.repair_report.repaired_findings.map(
+                    (item) =>
+                      `  - repaired ${item.finding_id} ${item.fingerprint}: files=${item.changed_files.join(", ")}; verification=${item.verification_commands
+                        .map(
+                          (command) =>
+                            `${command.passed ? "passed" : "failed"} ${command.command}${command.detail ? ` (${command.detail})` : ""}`,
+                        )
+                        .join(" | ")}`,
+                  ),
+                  `  unrepaired_findings=${result.repair_report.unrepaired_findings.length}`,
+                  ...result.repair_report.unrepaired_findings.map(
+                    (item) => `  - unrepaired ${item.finding_id} ${item.fingerprint}: ${item.reason}`,
+                  ),
+                  result.repair_report.unrelated_changes.length > 0
+                    ? `  unrelated_changes=${result.repair_report.unrelated_changes.join(", ")}`
+                    : "",
+                ]
+                  .filter(Boolean)
                   .join("\n")
               : "  (none reported)"
-          const fileLines =
-            result.files_changed.length > 0
-              ? result.files_changed.map((f) => `  - ${f.path}: ${f.summary} — ${f.reason}`).join("\n")
-              : "  (none reported)"
-          const repairReportLines = result.repair_report
-            ? [
-                `  repaired_findings=${result.repair_report.repaired_findings.length}`,
-                ...result.repair_report.repaired_findings.map(
-                  (item) =>
-                    `  - repaired ${item.finding_id} ${item.fingerprint}: files=${item.changed_files.join(", ")}; verification=${item.verification_commands
-                      .map(
-                        (command) =>
-                          `${command.passed ? "passed" : "failed"} ${command.command}${command.detail ? ` (${command.detail})` : ""}`,
-                      )
-                      .join(" | ")}`,
-                ),
-                `  unrepaired_findings=${result.repair_report.unrepaired_findings.length}`,
-                ...result.repair_report.unrepaired_findings.map(
-                  (item) => `  - unrepaired ${item.finding_id} ${item.fingerprint}: ${item.reason}`,
-                ),
-                result.repair_report.unrelated_changes.length > 0
-                  ? `  unrelated_changes=${result.repair_report.unrelated_changes.join(", ")}`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join("\n")
-            : "  (none reported)"
-          const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
-          const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
-          const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
-          const cleanupLine = goalWorkspaceCleanup ? `\n- cleanup: ${goalWorkspaceCleanup}` : ""
-          // Host-truth merge / diff fact block (B21). LLM may self-report
-          // commit_ref / files_changed[] in `result`; below is what actually
-          // happened in the worktree from the host's perspective. The
-          // orchestrator LLM cross-checks both and decides next.
-          const mergeBackLine =
-            `- merge_back_status: ${mergeBackStatus}` +
-            (lastMergeBackOutcome ? ` (last_outcome: ${lastMergeBackOutcome})` : "")
-          const publishedLine = publishedCommitRef
-            ? `- published_commit_ref: ${publishedCommitRef} (primary HEAD after merge_back)`
-            : `- published_commit_ref: (none — merge_back did not publish)`
-          const worktreeHeadLine = worktreeHead ? `- worktree_head: ${worktreeHead}` : ""
-          const actualFilesLines =
-            actualChangedFiles.length > 0
-              ? actualChangedFiles
-                  .map((f) => `  - [${f.status}] ${f.path} (+${f.additions}/-${f.deletions})`)
-                  .join("\n")
-              : "  (no changes detected against contribution base)"
-          const factBlock =
-            `\n\n### Worktree facts (host ground truth)\n` +
-            `${mergeBackLine}\n` +
-            `${publishedLine}\n` +
-            (worktreeHeadLine ? `${worktreeHeadLine}\n` : "") +
-            `- actual_changed_files (vs contribution base):\n${actualFilesLines}`
+            const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
+            const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
+            const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
+            const cleanupLine = goalWorkspaceCleanup ? `\n- cleanup: ${goalWorkspaceCleanup}` : ""
+            // Host-truth merge / diff fact block (B21). LLM may self-report
+            // commit_ref / files_changed[] in `result`; below is what actually
+            // happened in the worktree from the host's perspective. The
+            // orchestrator LLM cross-checks both and decides next.
+            const mergeBackLine =
+              `- merge_back_status: ${mergeBackStatus}` +
+              (lastMergeBackOutcome ? ` (last_outcome: ${lastMergeBackOutcome})` : "")
+            const publishedLine = publishedCommitRef
+              ? `- published_commit_ref: ${publishedCommitRef} (primary HEAD after merge_back)`
+              : `- published_commit_ref: (none — merge_back did not publish)`
+            const worktreeHeadLine = worktreeHead ? `- worktree_head: ${worktreeHead}` : ""
+            const actualFilesLines =
+              actualChangedFiles.length > 0
+                ? actualChangedFiles
+                    .map((f) => `  - [${f.status}] ${f.path} (+${f.additions}/-${f.deletions})`)
+                    .join("\n")
+                : "  (no changes detected against contribution base)"
+            const factBlock =
+              `\n\n### Worktree facts (host ground truth)\n` +
+              `${mergeBackLine}\n` +
+              `${publishedLine}\n` +
+              (worktreeHeadLine ? `${worktreeHeadLine}\n` : "") +
+              `- actual_changed_files (vs contribution base):\n${actualFilesLines}`
 
-          closeBuildOwnership(
-            result.status === "passed" ? "completed" : "failed",
-            result.status === "failed" ? result.error : undefined,
-          )
+            closeBuildOwnership(
+              result.status === "passed" ? "completed" : "failed",
+              result.status === "failed" ? result.error : undefined,
+            )
 
-          return (
-            `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
-            `### Build report\n` +
-            `- summary: ${result.summary}\n` +
-            `- files_changed:\n${fileLines}\n` +
-            `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}${goalRunFinalizationFailedLine}\n` +
-            `- repair_report:\n${repairReportLines}\n` +
-            `- tests:\n${testLines}` +
-            `${factBlock}\n\n` +
-            `### Next step\n` +
-            `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-            `When terminal goal refill facts appear, choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
-            `For frontend/browser-visible work, run \`visual_qa\` only once near task completion after all blocking build work is terminal and before final task acceptance. If visual_qa returns accepted=false with follow_up_task, call \`propose_task\` from that evidence only at terminal handoff instead of ending passively. ` +
-            `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; visual_qa and integrity are peer review agents, not replacements for each other. Before final acceptance, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
-          )
+            return (
+              `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
+              `### Build report\n` +
+              `- summary: ${result.summary}\n` +
+              `- files_changed:\n${fileLines}\n` +
+              `${commitLine}${errorLine}${worktreeLine}${cleanupLine}${goalRunInvalidatedLine}${goalRunFinalizationFailedLine}\n` +
+              `- repair_report:\n${repairReportLines}\n` +
+              `- tests:\n${testLines}` +
+              `${factBlock}\n\n` +
+              `### Next step\n` +
+              `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
+              `When terminal goal refill facts appear, choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
+              `For frontend/browser-visible work, run \`visual_qa\` only once near task completion after all blocking build work is terminal and before final task acceptance. If visual_qa returns accepted=false with follow_up_task, call \`propose_task\` from that evidence only at terminal handoff instead of ending passively. ` +
+              `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; visual_qa and integrity are peer review agents, not replacements for each other. Before final acceptance, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
+            )
           }
 
           if (attachedGoalID) {

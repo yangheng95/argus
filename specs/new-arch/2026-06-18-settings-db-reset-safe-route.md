@@ -9,13 +9,13 @@
 
 ## Call Point Sweep
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Server route | `packages/opencorvus/src/server/routes/global.ts::POST /db/reset` validates request body, resolves registered project/sandbox, blocks active sessions, then calls `Database.reset(...)`. | Keep registered-directory validation and fix the current route syntax. Do not accept arbitrary absolute paths to make stale SQLite easier to wipe. |
-| Low-level reset | `packages/opencorvus/src/storage/db.ts::Database.reset(projectDir)` removes DB files plus project runtime paths and is shared by CLI and HTTP. | Do not move HTTP authority rules into storage; keep storage only checking absolute paths. |
-| Overlay service | `packages/overlay/src/services/config.ts` owns config-related API calls. | Add `resetDatabase(projectDir)` here as the single Settings caller shape. |
-| Settings view | `packages/overlay/src/components/settings/GeneralPanel.tsx` owns General settings UI and already uses `Button`, `SurfaceHeader`, `patchConfig`, and `reloadProjectScope`. | Add a destructive Database group using the existing Button primitive, explicit `window.confirm`, and service method. |
-| Tests | `packages/opencorvus/test/server/global-db-destructive.test.ts`, `packages/overlay/test/general-panel-db-reset.test.ts`, `packages/overlay/test/browser/general-panel-fail-fast-browser.test.ts`. | Server tests must preserve BH-024; overlay tests verify service ownership, i18n, request body, confirmation, and visible notice. |
+| Surface         | Evidence                                                                                                                                                                                          | Decision                                                                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server route    | `packages/opencorvus/src/server/routes/global.ts::POST /db/reset` validates request body, resolves registered project/sandbox, blocks active sessions, then calls `Database.reset(...)`.          | Keep registered-directory validation and fix the current route syntax. Do not accept arbitrary absolute paths to make stale SQLite easier to wipe. |
+| Low-level reset | `packages/opencorvus/src/storage/db.ts::Database.reset(projectDir)` removes DB files plus project runtime paths and is shared by CLI and HTTP.                                                    | Do not move HTTP authority rules into storage; keep storage only checking absolute paths.                                                          |
+| Overlay service | `packages/overlay/src/services/config.ts` owns config-related API calls.                                                                                                                          | Add `resetDatabase(projectDir)` here as the single Settings caller shape.                                                                          |
+| Settings view   | `packages/overlay/src/components/settings/GeneralPanel.tsx` owns General settings UI and already uses `Button`, `SurfaceHeader`, `patchConfig`, and `reloadProjectScope`.                         | Add a destructive Database group using the existing Button primitive, explicit `window.confirm`, and service method.                               |
+| Tests           | `packages/opencorvus/test/server/global-db-destructive.test.ts`, `packages/overlay/test/general-panel-db-reset.test.ts`, `packages/overlay/test/browser/general-panel-fail-fast-browser.test.ts`. | Server tests must preserve BH-024; overlay tests verify service ownership, i18n, request body, confirmation, and visible notice.                   |
 
 ## Acceptance
 

@@ -20,24 +20,24 @@ selection.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no duplicate source, recall disk plans before edits, test every change, commit and push every round. |
-| `2026-06-06-overlay-live-efficiency-safe-fix.md` | `/task/:taskID/conversation?tail_limit=N` must use bounded transcript loading while preserving selected SSE behavior and response shape. |
-| `2026-06-19-system-performance-high-confidence-pass.md` | Session-specific routes can read one session directly, but task hydrate must preserve task response shape and avoid unrelated-session amplification. |
-| `2026-06-22-task-switch-stable-request-keys.md` | Task-switch request fan-out must be fixed at trigger/data-owner boundaries, not hidden behind broad frontend caches. |
-| Mill read-only audit | Task click can still hydrate `CONVERSATION_TAIL_MESSAGE_LIMIT` per session; multi-session tasks amplify payload, `hydrateConversationView()`, and `hydrateConversationAgentView()`. |
+| Source                                                  | Constraint carried forward                                                                                                                                                          |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                             | No fallback, no gate, no duplicate source, recall disk plans before edits, test every change, commit and push every round.                                                          |
+| `2026-06-06-overlay-live-efficiency-safe-fix.md`        | `/task/:taskID/conversation?tail_limit=N` must use bounded transcript loading while preserving selected SSE behavior and response shape.                                            |
+| `2026-06-19-system-performance-high-confidence-pass.md` | Session-specific routes can read one session directly, but task hydrate must preserve task response shape and avoid unrelated-session amplification.                                |
+| `2026-06-22-task-switch-stable-request-keys.md`         | Task-switch request fan-out must be fixed at trigger/data-owner boundaries, not hidden behind broad frontend caches.                                                                |
+| Mill read-only audit                                    | Task click can still hydrate `CONVERSATION_TAIL_MESSAGE_LIMIT` per session; multi-session tasks amplify payload, `hydrateConversationView()`, and `hydrateConversationAgentView()`. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Task hydrate route | `orchestrator.ts` computes `transcriptLimit = max(tailLimit, CONVERSATION_TAIL_MESSAGE_LIMIT)`. | Keep the same limit value but apply it globally across sessions. |
-| Current transcript reader | `loadTaskTranscript(taskID, { perSessionLimit })` calls `Session.messages({ sessionID, limit: perSessionLimit + 1 })` for every session. | Replace only the bounded branch with a global multi-session reader. |
-| Full transcript callers | `loadFullTaskTranscript(taskID)` calls `loadTaskTranscript(taskID)` without a limit. | Keep full callers unchanged; do not silently cap full export/history paths. |
-| Message assembly | `Message.stream()` owns MessageTable/PartTable row assembly and returns chronological messages through `Session.messages()`. | Add `Message.latestAcrossSessions()` beside that owner so route code does not duplicate part assembly policy. |
-| Frontend hydrate | `packages/overlay/src/services/conversation.ts` hydrates `transcript` and `agentView` from the route. | Keep frontend behavior unchanged; reduce server payload instead of adding frontend gates. |
-| Tests | Existing bounded hydrate test covers one session and only asserts per-session `agentView.messageIDs.length <= 80`. | Add a 45-session regression asserting total `agentView` message IDs stay within the global budget. |
+| Surface                   | Evidence                                                                                                                                 | Decision                                                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Task hydrate route        | `orchestrator.ts` computes `transcriptLimit = max(tailLimit, CONVERSATION_TAIL_MESSAGE_LIMIT)`.                                          | Keep the same limit value but apply it globally across sessions.                                              |
+| Current transcript reader | `loadTaskTranscript(taskID, { perSessionLimit })` calls `Session.messages({ sessionID, limit: perSessionLimit + 1 })` for every session. | Replace only the bounded branch with a global multi-session reader.                                           |
+| Full transcript callers   | `loadFullTaskTranscript(taskID)` calls `loadTaskTranscript(taskID)` without a limit.                                                     | Keep full callers unchanged; do not silently cap full export/history paths.                                   |
+| Message assembly          | `Message.stream()` owns MessageTable/PartTable row assembly and returns chronological messages through `Session.messages()`.             | Add `Message.latestAcrossSessions()` beside that owner so route code does not duplicate part assembly policy. |
+| Frontend hydrate          | `packages/overlay/src/services/conversation.ts` hydrates `transcript` and `agentView` from the route.                                    | Keep frontend behavior unchanged; reduce server payload instead of adding frontend gates.                     |
+| Tests                     | Existing bounded hydrate test covers one session and only asserts per-session `agentView.messageIDs.length <= 80`.                       | Add a 45-session regression asserting total `agentView` message IDs stay within the global budget.            |
 
 ## Root Cause
 

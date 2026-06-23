@@ -12,13 +12,13 @@ After a proxy is configured, the Overlay network settings must expose a direct d
 
 ## Grep Findings
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Overlay owner | `packages/overlay/src/components/settings/NetworkPanel.tsx` owns draft fields, validation, save, and test. | Add a delete handler in this component. |
-| Config write API | `packages/overlay/src/services/config.ts` exposes `patchConfig(diff)` and server-side merge patch treats `null` as delete. | Reuse `patchConfig({ network: { proxy: null } })`; no new route or service source. |
-| Static tests | `packages/overlay/test/dialog-service-single-source.test.ts` guards NetworkPanel's single-source write path. | Extend it to assert the delete button and null patch. |
-| i18n | `packages/overlay/src/i18n/en-US.json` and `zh-CN.json` own visible strings. | Add delete status/title strings in both locales. |
-| Visual acceptance | Network settings are a frontend surface. | Start a real Overlay page, open Settings > Network, screenshot the proxy controls, and verify the delete button is visible and non-overlapping. |
+| Area              | Evidence                                                                                                                   | Decision                                                                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overlay owner     | `packages/overlay/src/components/settings/NetworkPanel.tsx` owns draft fields, validation, save, and test.                 | Add a delete handler in this component.                                                                                                         |
+| Config write API  | `packages/overlay/src/services/config.ts` exposes `patchConfig(diff)` and server-side merge patch treats `null` as delete. | Reuse `patchConfig({ network: { proxy: null } })`; no new route or service source.                                                              |
+| Static tests      | `packages/overlay/test/dialog-service-single-source.test.ts` guards NetworkPanel's single-source write path.               | Extend it to assert the delete button and null patch.                                                                                           |
+| i18n              | `packages/overlay/src/i18n/en-US.json` and `zh-CN.json` own visible strings.                                               | Add delete status/title strings in both locales.                                                                                                |
+| Visual acceptance | Network settings are a frontend surface.                                                                                   | Start a real Overlay page, open Settings > Network, screenshot the proxy controls, and verify the delete button is visible and non-overlapping. |
 
 ## Acceptance
 

@@ -202,13 +202,16 @@ test("Mission and Coding Assistant ledgers expose the shared visible scrollbar s
       if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 760 })
-    await page.evaluateOnNewDocument((input: { directory: string; serverUrl: string }) => {
-      localStorage.setItem("oc_directory", input.directory)
-      localStorage.setItem("oc_saved_directory", input.directory)
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_server_url", input.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-    }, { directory: PROJECT_DIRECTORY, serverUrl: server.origin })
+    await page.evaluateOnNewDocument(
+      (input: { directory: string; serverUrl: string }) => {
+        localStorage.setItem("oc_directory", input.directory)
+        localStorage.setItem("oc_saved_directory", input.directory)
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_server_url", input.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+      },
+      { directory: PROJECT_DIRECTORY, serverUrl: server.origin },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]', {

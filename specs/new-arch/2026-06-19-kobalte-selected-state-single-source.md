@@ -16,25 +16,25 @@ split across two owners.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-19-dropdown-menu-highlighted-contrast-source.md` | Kobalte runtime state attributes must be the visual source for highlighted/selected popup options. |
-| `2026-06-18-select-control-shell-single-source.md` | SelectControl is the single Kobalte Select shell owner. |
-| `2026-06-18-settings-dialog-tabs-primitive.md` | Settings and panel tabs must use the shared Tabs primitive rather than hand-written ARIA. |
-| `2026-06-18-titlebar-view-radio-focus-single-source.md` | Titlebar theme radio items are live Kobalte menubar radio items and keyboard focus must remain visible. |
-| `packages/overlay/node_modules/@kobalte/core/src/tabs/tabs-trigger.tsx` | Tabs Trigger emits `aria-selected`, `data-selected`, and `data-highlighted`. |
-| `packages/overlay/node_modules/@kobalte/core/src/toggle-button/toggle-button-root.tsx` | ToggleGroup items emit `aria-pressed` and `data-pressed`. |
-| `packages/overlay/node_modules/@kobalte/core/src/menu/menu-item-base.tsx` | Menubar radio items emit `aria-checked`, `data-checked`, and `data-highlighted`. |
-| `packages/overlay/node_modules/@kobalte/core/src/listbox/listbox-item.tsx` | Select/Listbox items emit `aria-selected`, `data-selected`, and `data-highlighted`. |
+| Source                                                                                 | Relevant decision                                                                                       |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `2026-06-19-dropdown-menu-highlighted-contrast-source.md`                              | Kobalte runtime state attributes must be the visual source for highlighted/selected popup options.      |
+| `2026-06-18-select-control-shell-single-source.md`                                     | SelectControl is the single Kobalte Select shell owner.                                                 |
+| `2026-06-18-settings-dialog-tabs-primitive.md`                                         | Settings and panel tabs must use the shared Tabs primitive rather than hand-written ARIA.               |
+| `2026-06-18-titlebar-view-radio-focus-single-source.md`                                | Titlebar theme radio items are live Kobalte menubar radio items and keyboard focus must remain visible. |
+| `packages/overlay/node_modules/@kobalte/core/src/tabs/tabs-trigger.tsx`                | Tabs Trigger emits `aria-selected`, `data-selected`, and `data-highlighted`.                            |
+| `packages/overlay/node_modules/@kobalte/core/src/toggle-button/toggle-button-root.tsx` | ToggleGroup items emit `aria-pressed` and `data-pressed`.                                               |
+| `packages/overlay/node_modules/@kobalte/core/src/menu/menu-item-base.tsx`              | Menubar radio items emit `aria-checked`, `data-checked`, and `data-highlighted`.                        |
+| `packages/overlay/node_modules/@kobalte/core/src/listbox/listbox-item.tsx`             | Select/Listbox items emit `aria-selected`, `data-selected`, and `data-highlighted`.                     |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "<Tab\\b|active=\\{|oc-tab\\[data-active" packages/overlay/src packages/overlay/test` | Shared `Tab` call sites are `ConfigDialogHost`, `FileChangesPanel`, and `ExecutorSelector`. CSS overrides live in `tabs.css`, `activity.css`, `composer.css`, `changes.css`, and `settings.css`. | Remove `TabProps.active` and style Kobalte `[data-selected]` / `[data-highlighted]`. |
-| `rg -n "SegmentedControl|s-segmented-btn|app-dialog-decision__choice|data-active|data-pressed" packages/overlay/src packages/overlay/test` | Shared segmented consumers are settings primitives, AppDialog decisions, Browser Preview viewports, and FileChanges status filters. | Remove wrapper `data-active`; style Kobalte `[data-pressed]`. |
-| `rg -n "titlebar-theme-option|data-active|data-checked|aria-checked|Menubar\\.RadioItem" packages/overlay/src/components/titlebar packages/overlay/src/styles/surfaces/titlebar.css packages/overlay/test` | Only the theme radio item uses Kobalte Menubar radio with local `data-active`; menu trigger `data-active` is not the same semantic surface. | Retire theme option `data-active`; style `[data-checked]`. |
-| `rg -n "oc-select-option|data-selected|aria-selected|SelectControl" packages/overlay/src/components packages/overlay/src/styles/surfaces/field.css packages/overlay/test` | Shared Select options style highlighted/hover but not selected-only rows. | Add selected-only row styling and extend matrix coverage. |
+| Sweep                         | Result          | Decision                                                          |
+| ----------------------------- | --------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `rg -n "<Tab\\b               | active=\\{      | oc-tab\\[data-active" packages/overlay/src packages/overlay/test` | Shared `Tab` call sites are `ConfigDialogHost`, `FileChangesPanel`, and `ExecutorSelector`. CSS overrides live in `tabs.css`, `activity.css`, `composer.css`, `changes.css`, and `settings.css`. | Remove `TabProps.active` and style Kobalte `[data-selected]` / `[data-highlighted]`.                                                   |
+| `rg -n "SegmentedControl      | s-segmented-btn | app-dialog-decision\_\_choice                                     | data-active                                                                                                                                                                                      | data-pressed" packages/overlay/src packages/overlay/test`                                                                              | Shared segmented consumers are settings primitives, AppDialog decisions, Browser Preview viewports, and FileChanges status filters.         | Remove wrapper `data-active`; style Kobalte `[data-pressed]`. |
+| `rg -n "titlebar-theme-option | data-active     | data-checked                                                      | aria-checked                                                                                                                                                                                     | Menubar\\.RadioItem" packages/overlay/src/components/titlebar packages/overlay/src/styles/surfaces/titlebar.css packages/overlay/test` | Only the theme radio item uses Kobalte Menubar radio with local `data-active`; menu trigger `data-active` is not the same semantic surface. | Retire theme option `data-active`; style `[data-checked]`.    |
+| `rg -n "oc-select-option      | data-selected   | aria-selected                                                     | SelectControl" packages/overlay/src/components packages/overlay/src/styles/surfaces/field.css packages/overlay/test`                                                                             | Shared Select options style highlighted/hover but not selected-only rows.                                                              | Add selected-only row styling and extend matrix coverage.                                                                                   |
 
 ## Fix Plan
 

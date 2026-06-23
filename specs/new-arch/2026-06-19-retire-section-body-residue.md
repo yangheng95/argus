@@ -18,21 +18,21 @@ This is not a `.config-section-body` issue. That selector is still emitted by
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-19-retire-section-icon-button-residue.md` | The live `Section` contract is the `.oc-section__*` primitive family; phantom section header selectors must be retired instead of preserved. |
-| `2026-06-19-retire-section-action-residue.md` | `Section.tsx` renders icon, title, badge, body, and children only; stale legacy section selectors should not survive without a production owner. |
-| `Section.tsx` | Emits `.oc-section__body` for section content and contains no `.section-body` string. |
-| Independent agent report | `.section-body` has no production JSX owner, while `empty-state.css`, `conversation.css`, and tests still refer to it. |
+| Source                                             | Relevant constraint                                                                                                                              |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `2026-06-19-retire-section-icon-button-residue.md` | The live `Section` contract is the `.oc-section__*` primitive family; phantom section header selectors must be retired instead of preserved.     |
+| `2026-06-19-retire-section-action-residue.md`      | `Section.tsx` renders icon, title, badge, body, and children only; stale legacy section selectors should not survive without a production owner. |
+| `Section.tsx`                                      | Emits `.oc-section__body` for section content and contains no `.section-body` string.                                                            |
+| Independent agent report                           | `.section-body` has no production JSX owner, while `empty-state.css`, `conversation.css`, and tests still refer to it.                           |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n -F "section-body" packages specs AGENTS.md` | Production CSS hits are old `.section-body` in `empty-state.css` and `conversation.css`; live `.config-section-body` hits remain separate and owned by config dialog code. | Replace the live width-normalization selector with `.oc-section__body`; delete the direct empty-state selector because right-panel empty cards use `.empty-hint--card`. |
-| `rg -n -F "oc-section__body" packages specs` | `Section.tsx`, primitive CSS, inspector CSS, field CSS, and primitive tests already use `.oc-section__body`. | Keep only selectors with a live owner: `.oc-section__body > *` for child width and `.empty-hint--card` for right-panel empty card chrome. |
-| `Section.tsx` inspection | The component renders `<div class="oc-section__body">` and no legacy body class. | Do not add compatibility markup or dual classes. |
-| `empty-hint` production sweep | `ArchitectPanel`, `RequirementsPanel`, `FrontendResearchPanel`, and `IntegrityCard` render `.empty-hint empty-hint--card` inside panel wrappers; no production component emits `.oc-section__body > .empty-hint`. | Do not create a new dead `.oc-section__body > .empty-hint` selector. |
+| Command                                            | Result                                                                                                                                                                                                            | Decision                                                                                                                                                                |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n -F "section-body" packages specs AGENTS.md` | Production CSS hits are old `.section-body` in `empty-state.css` and `conversation.css`; live `.config-section-body` hits remain separate and owned by config dialog code.                                        | Replace the live width-normalization selector with `.oc-section__body`; delete the direct empty-state selector because right-panel empty cards use `.empty-hint--card`. |
+| `rg -n -F "oc-section__body" packages specs`       | `Section.tsx`, primitive CSS, inspector CSS, field CSS, and primitive tests already use `.oc-section__body`.                                                                                                      | Keep only selectors with a live owner: `.oc-section__body > *` for child width and `.empty-hint--card` for right-panel empty card chrome.                               |
+| `Section.tsx` inspection                           | The component renders `<div class="oc-section__body">` and no legacy body class.                                                                                                                                  | Do not add compatibility markup or dual classes.                                                                                                                        |
+| `empty-hint` production sweep                      | `ArchitectPanel`, `RequirementsPanel`, `FrontendResearchPanel`, and `IntegrityCard` render `.empty-hint empty-hint--card` inside panel wrappers; no production component emits `.oc-section__body > .empty-hint`. | Do not create a new dead `.oc-section__body > .empty-hint` selector.                                                                                                    |
 
 ## Fix Plan
 

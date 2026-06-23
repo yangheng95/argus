@@ -111,9 +111,13 @@ describe("app/session dialog single source", () => {
     expect(sessionHost).not.toContain("bodyHtml ||")
     expect(sessionHost).not.toContain("Loading...")
 
-    expect(dialogService).toContain('bodyHtml: \'<p class="empty-hint">Loading…</p>\'')
-    expect(dialogService).toContain('setDialogStore("session", "bodyHtml", \'<p class="empty-hint">No messages yet.</p>\')')
-    expect(dialogService).toContain('const bodyHtml = html ? html : \'<p class="empty-hint">No displayable messages.</p>\'')
+    expect(dialogService).toContain("bodyHtml: '<p class=\"empty-hint\">Loading…</p>'")
+    expect(dialogService).toContain(
+      'setDialogStore("session", "bodyHtml", \'<p class="empty-hint">No messages yet.</p>\')',
+    )
+    expect(dialogService).toContain(
+      "const bodyHtml = html ? html : '<p class=\"empty-hint\">No displayable messages.</p>'",
+    )
     expect(dialogService).toContain("Failed to load session:")
     expect(dialogService).not.toContain("bodyHtml ||")
     expect(dialogService).not.toContain("Loading...")
@@ -183,7 +187,7 @@ describe("app/session dialog single source", () => {
 
   test("task route and queue decisions use card choices instead of select UI", () => {
     expect(appHost).toContain('dialogStore.app.kind === "task-queue-decision"')
-    expect(appHost).toContain('import { SegmentedControl')
+    expect(appHost).toContain("import { SegmentedControl")
     expect(appHost).toContain("<SegmentedControl")
     expect(appHost).toContain('itemClass="app-dialog-decision__choice"')
     expect(appHost).toContain("onActivate={chooseTaskDecision}")
@@ -200,7 +204,7 @@ describe("app/session dialog single source", () => {
     expect(appHost).not.toContain("<button")
     expect(appHost).not.toContain("data-selected")
     expect(appHost).not.toContain("!isTaskRouteDecision()) return")
-    expect(appDialogBrowser).toContain('await page.goto(`${server.origin}/ui/index.html`')
+    expect(appDialogBrowser).toContain("await page.goto(`${server.origin}/ui/index.html`")
     expect(appDialogBrowser).toContain('await page.click("#chatSend")')
     expect(appDialogBrowser).toContain('await page.keyboard.press("Enter")')
     expect(appDialogBrowser).toContain('await page.keyboard.press("Space")')

@@ -18,22 +18,22 @@ confirm actions, and the left-sidebar Task/Mission/Assistant creation CTAs.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `packages/overlay/src/components/ui/Button.tsx` | `Button` is the shared primitive for operation buttons. |
-| `packages/overlay/src/styles/primitives/button.css` | Solid tone foreground belongs in the primitive, not per caller. |
-| `packages/overlay/src/styles/cascade/*.css` | Theme palettes already declare `--text-on-accent`; on-solid foreground must be theme-owned. |
-| `2026-06-18-chat-composer-button-primitive-owner.md` | Chat composer send/stop actions consume `Button`; local contrast fixes would fragment the primitive. |
-| `2026-06-12-task-ledger-chat-to-task-button-parity.md` | Sidebar new Task/Mission/Assistant CTAs should share Button chrome. |
+| Source                                                 | Relevant constraint                                                                                  |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/ui/Button.tsx`        | `Button` is the shared primitive for operation buttons.                                              |
+| `packages/overlay/src/styles/primitives/button.css`    | Solid tone foreground belongs in the primitive, not per caller.                                      |
+| `packages/overlay/src/styles/cascade/*.css`            | Theme palettes already declare `--text-on-accent`; on-solid foreground must be theme-owned.          |
+| `2026-06-18-chat-composer-button-primitive-owner.md`   | Chat composer send/stop actions consume `Button`; local contrast fixes would fragment the primitive. |
+| `2026-06-12-task-ledger-chat-to-task-button-parity.md` | Sidebar new Task/Mission/Assistant CTAs should share Button chrome.                                  |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -- '--oc-button-color:\s*var\(--surface\)|variant="solid"|data-variant="solid"' packages/overlay/src packages/overlay/test` | `button.css` and sidebar solid CTA rules were the active foreground owners; many TSX callers consume `variant="solid"`. | Fix the primitive and sidebar shared CTA rule, not each caller. |
-| `button-primitive.test.ts` | The test name claimed readable foreground but asserted `--surface`. | Invert the test to require on-solid foreground tokens. |
-| Theme contrast calculation | White text works on light accent but fails dark accent/danger; dark text works on dark/vscode accent/danger but fails light accent. | Keep foreground tokens theme-specific instead of hard-coding one value in `button.css`. |
-| Sidebar CTA CSS | `sidebar-new-task-button`, `mission-new`, and `coding-assistant-new` locally repeated solid foreground. | Retarget them to the same `--text-on-accent` token. |
+| Sweep                                             | Result                                                                                                                              | Decision                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `rg -n -- '--oc-button-color:\s\*var\(--surface\) | variant="solid"                                                                                                                     | data-variant="solid"' packages/overlay/src packages/overlay/test`                       | `button.css` and sidebar solid CTA rules were the active foreground owners; many TSX callers consume `variant="solid"`. | Fix the primitive and sidebar shared CTA rule, not each caller. |
+| `button-primitive.test.ts`                        | The test name claimed readable foreground but asserted `--surface`.                                                                 | Invert the test to require on-solid foreground tokens.                                  |
+| Theme contrast calculation                        | White text works on light accent but fails dark accent/danger; dark text works on dark/vscode accent/danger but fails light accent. | Keep foreground tokens theme-specific instead of hard-coding one value in `button.css`. |
+| Sidebar CTA CSS                                   | `sidebar-new-task-button`, `mission-new`, and `coding-assistant-new` locally repeated solid foreground.                             | Retarget them to the same `--text-on-accent` token.                                     |
 
 ## Fix
 

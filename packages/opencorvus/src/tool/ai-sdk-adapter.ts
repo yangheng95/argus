@@ -32,9 +32,7 @@ export async function createAiSdkToolFromInfo(input: ToolInfoAiSdkAdapterInput) 
     execute: async (args, options) => {
       const execution = requireAiSdkToolExecutionContext(options, input.info.id)
       const abort =
-        (options as AiSdkExecutionOptions | undefined)?.abortSignal ??
-        input.signal ??
-        new AbortController().signal
+        (options as AiSdkExecutionOptions | undefined)?.abortSignal ?? input.signal ?? new AbortController().signal
       await input.beforeExecute?.(args)
       try {
         const result = await initialized.execute(args as never, {

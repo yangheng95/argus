@@ -18,22 +18,22 @@ overlay bundle.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
+| Source                                                        | Relevant decision                                                                                           |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `2026-06-18-expert-squad-unselected-option-contrast-guard.md` | Expert Squad readability belongs to the shared Select popup source; stale `media/ui` can show old behavior. |
-| `2026-06-19-prompt-profile-select-runtime-contrast.md` | Runtime verification should use the real Kobalte Expert Squad selector, not local color overrides. |
-| `2026-06-19-vsix-skip-build-media-ui-contrast-guard.md` | VSIX packaging validates `media/ui` even when build is skipped, but the validation is marker-based. |
-| `packages/vscode-extension/esbuild.mjs` | Normal extension build copies `packages/overlay/dist-vite` into `media/ui`. |
-| `packages/vscode-extension/script/package-vsix.ts` | `--skip-build` validates existing `media/ui` before packaging. |
+| `2026-06-19-prompt-profile-select-runtime-contrast.md`        | Runtime verification should use the real Kobalte Expert Squad selector, not local color overrides.          |
+| `2026-06-19-vsix-skip-build-media-ui-contrast-guard.md`       | VSIX packaging validates `media/ui` even when build is skipped, but the validation is marker-based.         |
+| `packages/vscode-extension/esbuild.mjs`                       | Normal extension build copies `packages/overlay/dist-vite` into `media/ui`.                                 |
+| `packages/vscode-extension/script/package-vsix.ts`            | `--skip-build` validates existing `media/ui` before packaging.                                              |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "prompt-profile|Expert|SelectControl|oc-select" packages/overlay/src packages/overlay/test specs/new-arch` | Expert Squad still renders through shared `SelectControl`; shared `.oc-select-content` and `.oc-select-option` own popup foreground/background. | Do not patch component-local colors. |
-| `node --input-type=module -e "import { assertOverlayUiBundleDir } from './packages/vscode-extension/script/overlay-ui-bundle-assertions.mjs'; assertOverlayUiBundleDir('packages/vscode-extension/media/ui')"` | Current stale `media/ui` passes the retired-marker assertion. | Strengthen assertion beyond marker checks. |
-| Hash inventory of `packages/overlay/dist-vite` and `packages/vscode-extension/media/ui` | Every generated asset except the logo differs; `media/ui` still contains old scrollbar CSS while `dist-vite` contains current ledger scrollbar CSS. | Make `dist-vite` the single source and reject drift. |
-| `rg -n "assertPackageOverlayUiAssets|assertOverlayUiBundleDir|media/ui|dist-vite" packages/vscode-extension` | The package and build paths already have one validation hook. | Extend that hook instead of creating a second validation path. |
+| Sweep                                                                                                                                                                                                          | Result                                                                                                                                              | Decision                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `rg -n "prompt-profile                                                                                                                                                                                         | Expert                                                                                                                                              | SelectControl                                        | oc-select" packages/overlay/src packages/overlay/test specs/new-arch` | Expert Squad still renders through shared `SelectControl`; shared `.oc-select-content` and `.oc-select-option` own popup foreground/background. | Do not patch component-local colors.                           |
+| `node --input-type=module -e "import { assertOverlayUiBundleDir } from './packages/vscode-extension/script/overlay-ui-bundle-assertions.mjs'; assertOverlayUiBundleDir('packages/vscode-extension/media/ui')"` | Current stale `media/ui` passes the retired-marker assertion.                                                                                       | Strengthen assertion beyond marker checks.           |
+| Hash inventory of `packages/overlay/dist-vite` and `packages/vscode-extension/media/ui`                                                                                                                        | Every generated asset except the logo differs; `media/ui` still contains old scrollbar CSS while `dist-vite` contains current ledger scrollbar CSS. | Make `dist-vite` the single source and reject drift. |
+| `rg -n "assertPackageOverlayUiAssets                                                                                                                                                                           | assertOverlayUiBundleDir                                                                                                                            | media/ui                                             | dist-vite" packages/vscode-extension`                                 | The package and build paths already have one validation hook.                                                                                   | Extend that hook instead of creating a second validation path. |
 
 ## Fix Plan
 

@@ -18,11 +18,11 @@ and the rendered listbox.
 
 ## Evidence Sweep
 
-| Search | Result | Decision |
-| --- | --- | --- |
-| `rg -n "CommandPalette|cmdk-input|cmdk-list|cmdk-item|aria-activedescendant" packages/overlay/src packages/overlay/test specs/new-arch` | `CommandPalette.tsx` has the only `cmdk-*` listbox surface; no existing `aria-activedescendant` relation exists. | Fix in `CommandPalette.tsx`. |
+| Search                                                         | Result                                                                                                                                              | Decision                                                             |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `rg -n "CommandPalette                                         | cmdk-input                                                                                                                                          | cmdk-list                                                            | cmdk-item | aria-activedescendant" packages/overlay/src packages/overlay/test specs/new-arch` | `CommandPalette.tsx` has the only `cmdk-*` listbox surface; no existing `aria-activedescendant` relation exists. | Fix in `CommandPalette.tsx`. |
 | `rg -n "command-palette" packages/overlay/test specs/new-arch` | Existing browser coverage opens the real overlay palette, verifies Dialog primitive DOM, hotkey focus, Escape close, focus restore, and screenshot. | Extend that browser test with active-descendant keyboard assertions. |
-| `2026-06-18-command-palette-dialog-primitive.md` | The Dialog shell was already centralized; command list semantics were outside that scope. | Keep Dialog primitive unchanged. |
+| `2026-06-18-command-palette-dialog-primitive.md`               | The Dialog shell was already centralized; command list semantics were outside that scope.                                                           | Keep Dialog primitive unchanged.                                     |
 
 ## Fix
 

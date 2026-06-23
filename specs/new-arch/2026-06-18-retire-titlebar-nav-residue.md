@@ -17,16 +17,16 @@ sources and gives future changes a stale non-primitive contract to revive.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Titlebar menubar root/menu/trigger/content/item/group semantics are owned by Kobalte Menubar. |
-| `2026-06-18-retire-titlebar-status-residue.md` | Dead titlebar selector families should be removed while preserving live Kobalte menu selectors. |
+| Source                                                | Existing decision                                                                               |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Titlebar menubar root/menu/trigger/content/item/group semantics are owned by Kobalte Menubar.   |
+| `2026-06-18-retire-titlebar-status-residue.md`        | Dead titlebar selector families should be removed while preserving live Kobalte menu selectors. |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "titlebar-nav|titlebar-nav-group|titlebar-menubar" packages/overlay/src packages/overlay/test specs/new-arch/2026-06-01-overlay-mature-ui-primitives-refactor.md` | `.titlebar-nav` and `.titlebar-nav-group` were CSS/test-only; live titlebar navigation is `.titlebar-menubar` in `TitlebarMenubar.tsx`. |
+| Sweep                | Result             |
+| -------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "titlebar-nav | titlebar-nav-group | titlebar-menubar" packages/overlay/src packages/overlay/test specs/new-arch/2026-06-01-overlay-mature-ui-primitives-refactor.md` | `.titlebar-nav` and `.titlebar-nav-group` were CSS/test-only; live titlebar navigation is `.titlebar-menubar` in `TitlebarMenubar.tsx`. |
 
 ## Fix
 

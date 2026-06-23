@@ -15,24 +15,24 @@ card-tree update while preserving the existing token/cost aggregation semantics.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback/compatibility path, no duplicate source, test every change, and do not hide root causes with gates. |
-| `2026-06-19-deep-performance-investigation.md` | Usage aggregation was identified as a deferred always-mounted overlay pressure source. |
-| `2026-06-22-screenshot-browser-top-level-index.md` | Store-level card-tree stats are the right owner for bounded top-level projections. |
-| `tree-writer-message-tokens.test.ts` | `aggregateUsageAcrossSessions` is the source of truth for message usage semantics across sessions. |
-| `card-tree-stats.ts` | Existing subtree aggregates are maintained by the writer dirty/flush kernel. |
+| Source                                             | Constraint carried forward                                                                                      |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                        | No fallback/compatibility path, no duplicate source, test every change, and do not hide root causes with gates. |
+| `2026-06-19-deep-performance-investigation.md`     | Usage aggregation was identified as a deferred always-mounted overlay pressure source.                          |
+| `2026-06-22-screenshot-browser-top-level-index.md` | Store-level card-tree stats are the right owner for bounded top-level projections.                              |
+| `tree-writer-message-tokens.test.ts`               | `aggregateUsageAcrossSessions` is the source of truth for message usage semantics across sessions.              |
+| `card-tree-stats.ts`                               | Existing subtree aggregates are maintained by the writer dirty/flush kernel.                                    |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Usage pure kernel | `utils/format-usage.ts` exports `aggregateUsageAcrossSessions` and `formatUsageStrip`. | Keep this kernel as the single token/cost rule source. |
-| UI effect | `main.tsx` currently calls `aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards))`. | Replace with `formatUsageStrip(cardTreeStore.usageAggregate)`. |
-| Card usage writes | `tree-writer.ts` writes `card.usage`, `contextTokens`, and `contextTokensEstimated`, then marks card stats dirty. | Reuse existing dirty marks and `flushCardStats()`. |
-| Stats kernel | `card-tree-stats.ts` already computes subtree counts, latest activity, todo, and screenshot items. | Add `subtreeUsageAggregate` and a per-card own-usage index that publishes `cardTreeStore.usageAggregate`. |
+| Surface                   | Evidence                                                                                                                                | Decision                                                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Usage pure kernel         | `utils/format-usage.ts` exports `aggregateUsageAcrossSessions` and `formatUsageStrip`.                                                  | Keep this kernel as the single token/cost rule source.                                                                                        |
+| UI effect                 | `main.tsx` currently calls `aggregateUsageAcrossSessions(Object.values(cardTreeStore.cards))`.                                          | Replace with `formatUsageStrip(cardTreeStore.usageAggregate)`.                                                                                |
+| Card usage writes         | `tree-writer.ts` writes `card.usage`, `contextTokens`, and `contextTokensEstimated`, then marks card stats dirty.                       | Reuse existing dirty marks and `flushCardStats()`.                                                                                            |
+| Stats kernel              | `card-tree-stats.ts` already computes subtree counts, latest activity, todo, and screenshot items.                                      | Add `subtreeUsageAggregate` and a per-card own-usage index that publishes `cardTreeStore.usageAggregate`.                                     |
 | Reset/prune/order changes | Card deletion happens through reset, message removal, migrate, task-context removal, goal GC, interaction GC, and prune reconciliation. | Each deletion path removes the card from the usage index; prune reconciliation removes index keys no longer present in `cardTreeStore.cards`. |
-| Tests | `format-usage.test.ts`, `tree-writer-message-tokens.test.ts`, and `tree-writer-stats-cache.test.ts` cover current semantics. | Extend tests so store-level aggregate matches the pure kernel and UI no longer scans `Object.values(cardTreeStore.cards)`. |
+| Tests                     | `format-usage.test.ts`, `tree-writer-message-tokens.test.ts`, and `tree-writer-stats-cache.test.ts` cover current semantics.            | Extend tests so store-level aggregate matches the pure kernel and UI no longer scans `Object.values(cardTreeStore.cards)`.                    |
 
 ## Root Cause
 

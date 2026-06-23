@@ -134,7 +134,9 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).toContain('t("worktree.active")')
     expect(TASK_DIR_BAR).toContain('t("worktree.expired")')
     expect(TASK_DIR_BAR).toMatch(/<DropdownMenu\.Trigger\s+as=\{Button\}/)
-    expect(TASK_DIR_BAR).not.toMatch(/<DropdownMenu\.Trigger[\s\S]*data-ui="project-worktree-dropdown"[\s\S]*data-open=/)
+    expect(TASK_DIR_BAR).not.toMatch(
+      /<DropdownMenu\.Trigger[\s\S]*data-ui="project-worktree-dropdown"[\s\S]*data-open=/,
+    )
     expect(TASK_DIR_BAR).toContain('<DropdownMenu.Content class="project-worktree-panel">')
     expect(TASK_DIR_BAR).toContain("<DropdownMenu.Item")
     expect(TASK_DIR_BAR).toContain('placement="bottom-end"')
@@ -164,7 +166,9 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(STYLES).not.toContain('.oc-button[data-ui="project-worktree-dropdown"][data-open="true"]')
     const highlightedBranch = selectorRuleBody(".project-worktree-item[data-highlighted] .project-worktree-branch")
     expect(highlightedBranch).toMatch(/color:\s*var\(--text-strong\)/)
-    const highlightedState = selectorRuleBody(".project-worktree-row .project-worktree-item[data-highlighted] .project-worktree-state")
+    const highlightedState = selectorRuleBody(
+      ".project-worktree-row .project-worktree-item[data-highlighted] .project-worktree-state",
+    )
     expect(highlightedState).toMatch(/color:\s*var\(--text-strong\)/)
     const remove = soloRuleBody('.project-worktree-row .oc-button[data-ui="project-worktree-remove"]')
     expect(remove).toMatch(/--oc-button-height:\s*calc\(26px \* var\(--ui-scale\)\)/)
@@ -212,7 +216,9 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
   })
 
   test("recent directory trigger is separate from native breadcrumb path buttons", () => {
-    expect(TASK_DIR_BAR).toMatch(/<div[\s\S]*ref=\{\(element\) => \{[\s\S]*cwdShellRef = element[\s\S]*class="task-dir-shell task-cwd-dropdown"/)
+    expect(TASK_DIR_BAR).toMatch(
+      /<div[\s\S]*ref=\{\(element\) => \{[\s\S]*cwdShellRef = element[\s\S]*class="task-dir-shell task-cwd-dropdown"/,
+    )
     expect(TASK_DIR_BAR).toContain('class="task-dir-menu-actions"')
     expect(TASK_DIR_BAR).toMatch(/<Popover\.Trigger[\s\S]*as=\{Button\}[\s\S]*data-ui="cwd-recent-trigger"/)
     expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
@@ -344,10 +350,14 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
 
   test("cwd popup mirrors current location state onto focusable row buttons", () => {
     expect(TASK_DIR_BAR.match(/aria-current=\{isActive\(\) \? "location" : undefined\}/g)?.length).toBe(2)
-    expect(TASK_DIR_BAR).toContain('<div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">')
-    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="recent-dir-item"[\s\S]*aria-current=\{isActive\(\) \? "location" : undefined\}/)
-    expect(TASK_DIR_BAR).not.toContain('aria-selected={isActive()')
-    expect(TASK_DIR_BAR).not.toContain('aria-pressed={isActive()')
+    expect(TASK_DIR_BAR).toContain(
+      '<div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">',
+    )
+    expect(TASK_DIR_BAR).toMatch(
+      /<Button[\s\S]*data-ui="recent-dir-item"[\s\S]*aria-current=\{isActive\(\) \? "location" : undefined\}/,
+    )
+    expect(TASK_DIR_BAR).not.toContain("aria-selected={isActive()")
+    expect(TASK_DIR_BAR).not.toContain("aria-pressed={isActive()")
   })
 
   test("path breadcrumb markup does not nest a second task-dir shell", () => {

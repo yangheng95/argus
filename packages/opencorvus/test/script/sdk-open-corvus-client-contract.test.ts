@@ -137,7 +137,9 @@ describe("SDK OpenCorvus client contract", () => {
           {
             requestBody?: {
               required?: boolean
-              content?: { "application/json"?: { schema?: { properties?: Record<string, unknown>; required?: string[] } } }
+              content?: {
+                "application/json"?: { schema?: { properties?: Record<string, unknown>; required?: string[] } }
+              }
             }
           }
         >
@@ -150,7 +152,9 @@ describe("SDK OpenCorvus client contract", () => {
     expect(schema?.properties).toHaveProperty("model")
     expect(schema?.required).toContain("model")
     expect(types).toMatch(/export type ExecutorSetModelData = \{\s+body: \{[^]*model: string\s+\}/)
-    expect(sdk).toContain("{ in: \"body\", key: \"model\" }")
-    expect(sdk).toMatch(/public setModel<[^]*parameters: \{\s+executorID: string\s+directory\?: string\s+model: string\s+\}/)
+    expect(sdk).toContain('{ in: "body", key: "model" }')
+    expect(sdk).toMatch(
+      /public setModel<[^]*parameters: \{\s+executorID: string\s+directory\?: string\s+model: string\s+\}/,
+    )
   })
 })

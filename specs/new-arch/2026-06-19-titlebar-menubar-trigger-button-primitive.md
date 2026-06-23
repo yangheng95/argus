@@ -15,13 +15,13 @@ uses `data-ui="titlebar-menubar-trigger"` as a stable hook.
 
 ## Recall
 
-| Source | Evidence | Decision |
-| --- | --- | --- |
-| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx` | `Menubar.Trigger` owns menu semantics but manually emits `class="oc-button"` and button data attributes. | Keep `Menubar.Trigger`, render it `as={Button}`. |
-| `packages/overlay/src/components/WorkspaceSplitLauncher.tsx` | Existing Kobalte trigger pattern uses `DropdownMenu.Trigger as={Button}`. | Reuse the same primitive-composition pattern. |
-| `packages/overlay/src/styles/surfaces/titlebar.css` | `.oc-button[data-ui="titlebar-menubar-trigger"]` already owns live trigger dimensions, while `.titlebar-menubar-trigger` duplicates hover/focus chrome. | Retire `.titlebar-menubar-trigger`; keep `.oc-button[data-ui=...]`. |
-| `packages/overlay/test/titlebar-menubar-primitive.test.ts` | Guards Kobalte ownership but not shared `Button` ownership. | Add a guard requiring `as={Button}` and rejecting manual button contract assembly. |
-| `packages/overlay/test/flat-redesign-border-policy.test.ts` and `owner-surface-consistency.test.ts` | Assert hover background through the stale class selector. | Retarget to the live `.oc-button[data-ui=...]` selector. |
+| Source                                                                                              | Evidence                                                                                                                                                | Decision                                                                           |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx`                                      | `Menubar.Trigger` owns menu semantics but manually emits `class="oc-button"` and button data attributes.                                                | Keep `Menubar.Trigger`, render it `as={Button}`.                                   |
+| `packages/overlay/src/components/WorkspaceSplitLauncher.tsx`                                        | Existing Kobalte trigger pattern uses `DropdownMenu.Trigger as={Button}`.                                                                               | Reuse the same primitive-composition pattern.                                      |
+| `packages/overlay/src/styles/surfaces/titlebar.css`                                                 | `.oc-button[data-ui="titlebar-menubar-trigger"]` already owns live trigger dimensions, while `.titlebar-menubar-trigger` duplicates hover/focus chrome. | Retire `.titlebar-menubar-trigger`; keep `.oc-button[data-ui=...]`.                |
+| `packages/overlay/test/titlebar-menubar-primitive.test.ts`                                          | Guards Kobalte ownership but not shared `Button` ownership.                                                                                             | Add a guard requiring `as={Button}` and rejecting manual button contract assembly. |
+| `packages/overlay/test/flat-redesign-border-policy.test.ts` and `owner-surface-consistency.test.ts` | Assert hover background through the stale class selector.                                                                                               | Retarget to the live `.oc-button[data-ui=...]` selector.                           |
 
 ## Fix
 

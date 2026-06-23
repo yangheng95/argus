@@ -15,21 +15,21 @@ fixes in `Button` will not automatically cover trace event heads.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-card-trace-action-button-owner.md` | TracePanel header actions already route through `Button` with `data-ui` selectors. |
-| `2026-06-18-trace-event-head-focus.md` | Trace event heads are disclosure rows with visible keyboard focus. |
-| `2026-06-19-trace-event-disclosure-controls.md` | The row must preserve `aria-expanded`, expanded-only `aria-controls`, and a matching body id. |
-| `Button.tsx` / `button.css` | Shared button chrome owns focus, hover, border, radius, and disabled states through `oc-button`. |
+| Source                                          | Relevant constraint                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `2026-06-18-card-trace-action-button-owner.md`  | TracePanel header actions already route through `Button` with `data-ui` selectors.               |
+| `2026-06-18-trace-event-head-focus.md`          | Trace event heads are disclosure rows with visible keyboard focus.                               |
+| `2026-06-19-trace-event-disclosure-controls.md` | The row must preserve `aria-expanded`, expanded-only `aria-controls`, and a matching body id.    |
+| `Button.tsx` / `button.css`                     | Shared button chrome owns focus, hover, border, radius, and disabled states through `oc-button`. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'trace-event-head|TracePanel' packages/overlay/src packages/overlay/test specs/new-arch` | Live production row owner is `TracePanel.tsx`; style owner is `card.css`; browser fixture and primitive tests pin the old bare class contract. | Migrate the live row and test fixture together. |
-| `TracePanel.tsx` | Header actions already import and use `Button`; event heads are the only bare button in the component. | Reuse the existing import; no new primitive. |
-| `card.css` | `.trace-event-head` directly sets background, border, hover, and focus-visible box-shadow. | Keep row layout/log typography only; let `.oc-button` own hover/focus chrome. |
-| `trace-event-head-focus-browser.test.ts` | Fixture manually renders a bare button and asserts the old inset box-shadow focus. | Render `.oc-button.trace-event-head`, assert primitive class/data attrs, background on focus, and visible outline. |
+| Sweep                                    | Result                                                                                                 | Decision                                                                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `rg -n 'trace-event-head                 | TracePanel' packages/overlay/src packages/overlay/test specs/new-arch`                                 | Live production row owner is `TracePanel.tsx`; style owner is `card.css`; browser fixture and primitive tests pin the old bare class contract. | Migrate the live row and test fixture together. |
+| `TracePanel.tsx`                         | Header actions already import and use `Button`; event heads are the only bare button in the component. | Reuse the existing import; no new primitive.                                                                                                   |
+| `card.css`                               | `.trace-event-head` directly sets background, border, hover, and focus-visible box-shadow.             | Keep row layout/log typography only; let `.oc-button` own hover/focus chrome.                                                                  |
+| `trace-event-head-focus-browser.test.ts` | Fixture manually renders a bare button and asserts the old inset box-shadow focus.                     | Render `.oc-button.trace-event-head`, assert primitive class/data attrs, background on focus, and visible outline.                             |
 
 ## Fix Plan
 

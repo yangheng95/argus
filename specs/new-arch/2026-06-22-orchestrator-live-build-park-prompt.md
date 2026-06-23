@@ -29,14 +29,14 @@ progress and must not be used to poll internal live build completion.
 
 ## Callpoints
 
-| File | Evidence | Action |
-| --- | --- | --- |
-| `packages/opencorvus/src/prompt/core/orchestrator-core.txt` | `steer_subagent` says decide between waiting and stale recovery; `wait` does not explicitly exclude live builds | Replace with live-build park wording and explicit `wait` exclusion |
-| `packages/opencorvus/src/orchestrator/tools.ts` | duplicate live goal error says wait for terminal refill; build snapshot says keep waiting; cancel refusal says wait for settle | Replace with "park this wake / terminal refill" language |
-| `packages/opencorvus/test/orchestrator/no-decision-stop.test.ts` | covers `build -> read_context -> stop`, not `build -> wait -> stop` by name | Add explicit regression |
-| `packages/opencorvus/test/orchestrator/wait-tool.test.ts` | expects raw string while wrapper returns normalized object plus decision metadata | Assert normalized output and observation metadata |
-| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts` | no hygiene assertion for live-build `wait` exclusion | Add prompt hygiene assertions |
-| `packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts` | build async description is pinned, wait live-build exclusion is not | Pin tool descriptions |
+| File                                                                           | Evidence                                                                                                                       | Action                                                             |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `packages/opencorvus/src/prompt/core/orchestrator-core.txt`                    | `steer_subagent` says decide between waiting and stale recovery; `wait` does not explicitly exclude live builds                | Replace with live-build park wording and explicit `wait` exclusion |
+| `packages/opencorvus/src/orchestrator/tools.ts`                                | duplicate live goal error says wait for terminal refill; build snapshot says keep waiting; cancel refusal says wait for settle | Replace with "park this wake / terminal refill" language           |
+| `packages/opencorvus/test/orchestrator/no-decision-stop.test.ts`               | covers `build -> read_context -> stop`, not `build -> wait -> stop` by name                                                    | Add explicit regression                                            |
+| `packages/opencorvus/test/orchestrator/wait-tool.test.ts`                      | expects raw string while wrapper returns normalized object plus decision metadata                                              | Assert normalized output and observation metadata                  |
+| `packages/opencorvus/test/agent/core-prompt-hygiene.test.ts`                   | no hygiene assertion for live-build `wait` exclusion                                                                           | Add prompt hygiene assertions                                      |
+| `packages/opencorvus/test/orchestrator/orchestrator-tool-descriptions.test.ts` | build async description is pinned, wait live-build exclusion is not                                                            | Pin tool descriptions                                              |
 
 ## Decision
 

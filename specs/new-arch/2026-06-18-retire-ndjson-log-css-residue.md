@@ -17,17 +17,17 @@ does not exist.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
+| Source                                                | Existing decision                                                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `2026-06-01-overlay-mature-ui-primitives-refactor.md` | LogViewer moved to `utils/log.ts` parsing and a virtual list instead of a separate direct row renderer. |
-| `2026-06-17-log-viewer-select-style-single-source.md` | LogViewer uses Kobalte Select and shared `.oc-select-*` trigger/content styling. |
-| `2026-06-15-help-open-logs.md` | Logs open through the single `oc:open-logs` event and the existing LogViewer dialog. |
+| `2026-06-17-log-viewer-select-style-single-source.md` | LogViewer uses Kobalte Select and shared `.oc-select-*` trigger/content styling.                        |
+| `2026-06-15-help-open-logs.md`                        | Logs open through the single `oc:open-logs` event and the existing LogViewer dialog.                    |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "ndjson-log|ndjson-|log-divider|LogViewer" packages/overlay/src packages/overlay/test specs/new-arch` | `ndjson-log.css` was linked by `index.html`, but live LogViewer code uses `.log-viewer` / `.log-line`; `.ndjson-*` selectors had no production DOM owner. |
+| Sweep              | Result  |
+| ------------------ | ------- | ----------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "ndjson-log | ndjson- | log-divider | LogViewer" packages/overlay/src packages/overlay/test specs/new-arch` | `ndjson-log.css` was linked by `index.html`, but live LogViewer code uses `.log-viewer` / `.log-line`; `.ndjson-*` selectors had no production DOM owner. |
 
 ## Fix
 

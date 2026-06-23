@@ -19,11 +19,7 @@ const SCREENSHOT_FIRST_USER_PATH = resolve(
   "message-card-chronological-turns-browser",
   "first-user-card.png",
 )
-const SCREENSHOT_USAGE_HEADER_PATH = resolve(
-  ".scratch",
-  "message-card-chronological-turns-browser",
-  "usage-header.png",
-)
+const SCREENSHOT_USAGE_HEADER_PATH = resolve(".scratch", "message-card-chronological-turns-browser", "usage-header.png")
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -374,9 +370,12 @@ test("message cards render as chronological message turns without same-session m
       "assistant:session:ses_coding:message:msg_assistant_2",
     ]
     await page.waitForSelector(`[data-card-id="${expectedCardIDs.at(-1)}"]`, { visible: true, timeout: 15_000 })
-    await page.waitForFunction(() => document.getElementById("chatUsage")?.textContent?.trim() === "3.2k tok · $0.060", {
-      timeout: 15_000,
-    })
+    await page.waitForFunction(
+      () => document.getElementById("chatUsage")?.textContent?.trim() === "3.2k tok · $0.060",
+      {
+        timeout: 15_000,
+      },
+    )
     const usageHeaderMetrics = await page.evaluate(() => {
       const title = document.getElementById("chatViewTitle")?.getBoundingClientRect()
       const usage = document.getElementById("chatUsage")?.getBoundingClientRect()

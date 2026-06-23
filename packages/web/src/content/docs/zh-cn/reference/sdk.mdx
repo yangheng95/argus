@@ -28,16 +28,16 @@ const client = createOpenCorvusClient({
 
 `createOpenCorvusClient()` 接受生成 fetch client 的配置，并增加 OpenCorvus 专用选项：
 
-| 选项            | 用途                                                                                         |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| `baseUrl`       | OpenCorvus 服务地址；未传时使用生成时的默认地址。                                            |
+| 选项            | 用途                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| `baseUrl`       | OpenCorvus 服务地址；未传时使用生成时的默认地址。                                          |
 | `directory`     | 为项目作用域请求添加 `directory` query 参数；Windows 下会规范化 `/c/repo` 这类 MSYS 路径。 |
-| `username`      | Basic Auth 用户名，默认 `opencorvus`。                                                       |
-| `password`      | Basic Auth 密码；服务端启用 `OPENCORVUS_SERVER_PASSWORD` 时传入该值。                        |
-| `headers`       | 额外 header；显式传入的 `Authorization` 不会被 `password` 覆盖。                             |
-| `fetch`         | 自定义 Fetch 实现，用于代理、埋点、测试或进程内适配。                                        |
-| `throwOnError`  | 为 `true` 时，失败响应直接 throw；否则返回 `{ error }`。                                     |
-| `responseStyle` | 生成客户端响应模式：默认 fields 对象，也可设为 `"data"` 返回纯数据。                         |
+| `username`      | Basic Auth 用户名，默认 `opencorvus`。                                                     |
+| `password`      | Basic Auth 密码；服务端启用 `OPENCORVUS_SERVER_PASSWORD` 时传入该值。                      |
+| `headers`       | 额外 header；显式传入的 `Authorization` 不会被 `password` 覆盖。                           |
+| `fetch`         | 自定义 Fetch 实现，用于代理、埋点、测试或进程内适配。                                      |
+| `throwOnError`  | 为 `true` 时，失败响应直接 throw；否则返回 `{ error }`。                                   |
+| `responseStyle` | 生成客户端响应模式：默认 fields 对象，也可设为 `"data"` 返回纯数据。                       |
 
 ## 调用与返回值
 

@@ -387,12 +387,7 @@ export function ConfigDialogHost() {
             <TabList size="md" tone="neutral" data-ui="settings-dialog-tablist">
               <For each={MAIN_CONFIG_TABS}>
                 {(tab) => (
-                  <Tab
-                    value={tab.id}
-                    size="md"
-                    tone="neutral"
-                    data-config-tab={tab.id}
-                  >
+                  <Tab value={tab.id} size="md" tone="neutral" data-config-tab={tab.id}>
                     <Icon class="config-nav-icon" name={tab.icon} size={18} />
                     <span>{t(tab.labelKey)}</span>
                     <Show when={tab.badgeID}>
@@ -401,12 +396,7 @@ export function ConfigDialogHost() {
                   </Tab>
                 )}
               </For>
-              <Tab
-                value="about"
-                size="md"
-                tone="neutral"
-                data-config-tab="about"
-              >
+              <Tab value="about" size="md" tone="neutral" data-config-tab="about">
                 <Icon class="config-nav-icon" name={ABOUT_CONFIG_TAB.icon} size={18} />
                 <span>{t(ABOUT_CONFIG_TAB.labelKey)}</span>
               </Tab>

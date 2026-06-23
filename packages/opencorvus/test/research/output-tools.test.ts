@@ -279,9 +279,7 @@ describe("research output tools", () => {
     ])
 
     expect(replayed).toBe(replayCallsFromCollector(original.getCollector()).length)
-    expect(fresh.getCollector().webpage_contract_source?.source_url).toBe(
-      "https://example.com/markets/world-economy/",
-    )
+    expect(fresh.getCollector().webpage_contract_source?.source_url).toBe("https://example.com/markets/world-economy/")
     expect(fresh.getCollector().webpage_visual_layout[0]?.id).toBe("layout_desktop_economic_trends")
     expect(fresh.getCollector().finalized).toBe(false)
     expect(fresh.isReadyToSubmit()).toBe(true)
@@ -296,7 +294,11 @@ describe("research output tools", () => {
       },
       {
         tool: "update_research_problem",
-        input: { id: "prob_bad", statement: "A problem with stale risk ids.", fact_ids: ["risk_api_illusion", "fact_1"] },
+        input: {
+          id: "prob_bad",
+          statement: "A problem with stale risk ids.",
+          fact_ids: ["risk_api_illusion", "fact_1"],
+        },
         collectorKey: "problem_statements",
       },
       {

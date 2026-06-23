@@ -27,14 +27,14 @@ old selected task source as part of the same lifecycle.
 
 ## Call-Site Evidence
 
-| Area | Grep evidence | Decision |
-| --- | --- | --- |
-| Task owning directory | `packages/overlay/src/services/task-directory.ts::taskOwningDirectory` reads the task row or loaded board only. | Keep strict ownership resolution; do not use the active directory as a substitute. |
-| Board ownership helper | `packages/overlay/src/store/board.ts::selectedTaskOwningDirectory` uses board/task-list ownership for board reloads. | Preserve the same ownership invariant. |
-| Cross-project selection | `packages/overlay/src/services/task.ts::selectTask` sets `selectedSource` before `applyDirectory()`. | Attach the clicked task row's owning directory to the selected source so the handoff has a stable route context while project projections reload. |
-| Manual directory switch | `packages/overlay/src/services/workspace.ts::applyDirectory` clears project-scope data but leaves `selectedSource` intact. | Clear task/session selection synchronously when the user switches directories directly. |
-| Follow-up suggestion | `packages/overlay/src/main.tsx` calls `taskScopedPath(taskID, taskOwningDirectory(taskID), "/followup")`. | No change needed once invalid intermediate selection states are removed. |
-| Existing restore race record | `specs/new-arch/2026-06-13-coding-assistant-restore-selection-race.md` says `applyDirectory` owns directory reload and `selectTask` owns task switching. | Reuse those boundaries, no new store or duplicate task directory cache. |
+| Area                         | Grep evidence                                                                                                                                            | Decision                                                                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task owning directory        | `packages/overlay/src/services/task-directory.ts::taskOwningDirectory` reads the task row or loaded board only.                                          | Keep strict ownership resolution; do not use the active directory as a substitute.                                                                |
+| Board ownership helper       | `packages/overlay/src/store/board.ts::selectedTaskOwningDirectory` uses board/task-list ownership for board reloads.                                     | Preserve the same ownership invariant.                                                                                                            |
+| Cross-project selection      | `packages/overlay/src/services/task.ts::selectTask` sets `selectedSource` before `applyDirectory()`.                                                     | Attach the clicked task row's owning directory to the selected source so the handoff has a stable route context while project projections reload. |
+| Manual directory switch      | `packages/overlay/src/services/workspace.ts::applyDirectory` clears project-scope data but leaves `selectedSource` intact.                               | Clear task/session selection synchronously when the user switches directories directly.                                                           |
+| Follow-up suggestion         | `packages/overlay/src/main.tsx` calls `taskScopedPath(taskID, taskOwningDirectory(taskID), "/followup")`.                                                | No change needed once invalid intermediate selection states are removed.                                                                          |
+| Existing restore race record | `specs/new-arch/2026-06-13-coding-assistant-restore-selection-race.md` says `applyDirectory` owns directory reload and `selectTask` owns task switching. | Reuse those boundaries, no new store or duplicate task directory cache.                                                                           |
 
 ## Implementation
 
@@ -46,7 +46,7 @@ old selected task source as part of the same lifecycle.
 4. `taskOwningDirectory()` and the board reload helper resolve ownership from board, task list, or selected task source
    and fail on any disagreement between those sources.
 5. `selectTask()` computes the target task directory before the switch and calls `applyDirectory(..., {
-   preserveSelection: true })` for its own cross-project transition, because it is about to hydrate the selected task
+preserveSelection: true })` for its own cross-project transition, because it is about to hydrate the selected task
    itself.
 
 ## Acceptance

@@ -161,7 +161,10 @@ function renderedControlWidthSum(ids: readonly string[]): number {
 /**
  * Compute the default rail width from the shared layout token contract.
  */
-export function defaultRailWidth(config: PaneConfig, layoutTokens: LayoutTokenResolver = createLayoutTokenResolver()): number {
+export function defaultRailWidth(
+  config: PaneConfig,
+  layoutTokens: LayoutTokenResolver = createLayoutTokenResolver(),
+): number {
   void config
   return layoutTokens.tokenPx("--ui-rail-width")
 }
@@ -276,11 +279,7 @@ export function renderPaneLayout(state: PaneState, config: PaneConfig): void {
  * Imperatively set the sidebar width, re-render layout, and call onWidthsChanged.
  * Equivalent to calling state.sidebarWidth = x; renderPaneLayout().
  */
-export function applyPaneWidths(
-  sidebarWidth: number | null,
-  callbacks: PaneCallbacks,
-  config: PaneConfig,
-): void {
+export function applyPaneWidths(sidebarWidth: number | null, callbacks: PaneCallbacks, config: PaneConfig): void {
   const state = callbacks.getState()
   const next: PaneState = {
     ...state,
@@ -321,10 +320,7 @@ function onPaneResizeMove(event: PointerEvent): void {
   paneDrag.resizeOnFrame.schedule()
 }
 
-async function persistRenderedPaneWidths(
-  callbacks: PaneCallbacks,
-  config: PaneConfig,
-): Promise<void> {
+async function persistRenderedPaneWidths(callbacks: PaneCallbacks, config: PaneConfig): Promise<void> {
   const sidebarPx = readPaneWidthProperty(config.sidebarVar)
   const sidebarWidth = Number.isFinite(sidebarPx) ? Math.round(sidebarPx) : null
 
@@ -344,11 +340,7 @@ async function stopPaneResize(): Promise<void> {
   await persistRenderedPaneWidths(callbacks, config)
 }
 
-function startPaneResize(
-  event: PointerEvent,
-  callbacks: PaneCallbacks,
-  config: PaneConfig,
-): void {
+function startPaneResize(event: PointerEvent, callbacks: PaneCallbacks, config: PaneConfig): void {
   if (event.button != null && event.button !== 0) return
   const state = callbacks.getState()
   if (state.sidebarCollapsed) return
@@ -381,11 +373,7 @@ function startPaneResize(
   event.preventDefault()
 }
 
-function resizePaneByKeyboard(
-  event: KeyboardEvent,
-  callbacks: PaneCallbacks,
-  config: PaneConfig,
-): void {
+function resizePaneByKeyboard(event: KeyboardEvent, callbacks: PaneCallbacks, config: PaneConfig): void {
   const state = callbacks.getState()
   if (state.sidebarCollapsed) return
   const bounds = paneResizeBounds(state, config)

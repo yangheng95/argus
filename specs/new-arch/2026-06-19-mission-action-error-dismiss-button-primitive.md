@@ -15,22 +15,22 @@ come from the overlay's shared `Button` primitive.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
+| Source                                                   | Relevant constraint                                                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `2026-06-18-conversation-agent-rail-button-primitive.md` | Icon navigation actions use `Button`; local CSS may tune geometry through `.oc-button[data-ui]`. |
-| `2026-06-18-chat-composer-button-primitive-owner.md` | Operation buttons route through shared `Button` semantics instead of raw local shells. |
-| `2026-06-18-connection-banner-button-primitive.md` | Global diagnostic actions inherit shared button density, hover, and focus-visible behavior. |
-| `packages/overlay/src/components/ui/Button.tsx` | `Button` owns the canonical `.oc-button` class and `variant`, `size`, `tone` attributes. |
-| `packages/overlay/src/styles/primitives/button.css` | `.oc-button:focus-visible` owns the shared focus ring and icon-action hover contract. |
+| `2026-06-18-chat-composer-button-primitive-owner.md`     | Operation buttons route through shared `Button` semantics instead of raw local shells.           |
+| `2026-06-18-connection-banner-button-primitive.md`       | Global diagnostic actions inherit shared button density, hover, and focus-visible behavior.      |
+| `packages/overlay/src/components/ui/Button.tsx`          | `Button` owns the canonical `.oc-button` class and `variant`, `size`, `tone` attributes.         |
+| `packages/overlay/src/styles/primitives/button.css`      | `.oc-button:focus-visible` owns the shared focus ring and icon-action hover contract.            |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -e "mission-action-error-dismiss" -e "mission-global-action-error" packages/overlay/src packages/overlay/test specs specs/new-arch` | Production ownership is limited to `Mission.tsx` and `mission.css`. | Replace this one dismiss control; no compatibility branch. |
-| `Select-String MissionList.tsx -Pattern "<button","Button"` | Mission row actions already use `Button`, but unrelated row/search raw buttons remain separate findings. | Do not expand this fix into MissionList. Keep scope to the independent agent finding. |
-| `button.css` inspection | Icon actions have `data-chrome="icon-action"` hover/focus styling and `.oc-button:focus-visible`. | Use `Button variant="ghost" size="icon" tone="neutral" data-chrome="icon-action"`. |
-| `mission-launcher-component.test.ts` inspection | The file is already dirty in the main worktree from unrelated Mission archive work. | Add a focused static test file instead of editing that dirty test. |
+| Sweep                                                                                                                                      | Result                                                                                                   | Decision                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `rg -n -e "mission-action-error-dismiss" -e "mission-global-action-error" packages/overlay/src packages/overlay/test specs specs/new-arch` | Production ownership is limited to `Mission.tsx` and `mission.css`.                                      | Replace this one dismiss control; no compatibility branch.                            |
+| `Select-String MissionList.tsx -Pattern "<button","Button"`                                                                                | Mission row actions already use `Button`, but unrelated row/search raw buttons remain separate findings. | Do not expand this fix into MissionList. Keep scope to the independent agent finding. |
+| `button.css` inspection                                                                                                                    | Icon actions have `data-chrome="icon-action"` hover/focus styling and `.oc-button:focus-visible`.        | Use `Button variant="ghost" size="icon" tone="neutral" data-chrome="icon-action"`.    |
+| `mission-launcher-component.test.ts` inspection                                                                                            | The file is already dirty in the main worktree from unrelated Mission archive work.                      | Add a focused static test file instead of editing that dirty test.                    |
 
 ## Fix Plan
 

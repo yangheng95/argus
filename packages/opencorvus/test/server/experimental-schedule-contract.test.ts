@@ -73,19 +73,14 @@ describe("experimental schedule generated contract", () => {
   })
 
   test("generated SDK schedule methods do not accept or send projectId", () => {
-    const sdkSource = fs.readFileSync(
-      path.join(repoRoot, "packages", "sdk", "js", "src", "gen", "sdk.gen.ts"),
-      "utf8",
-    )
+    const sdkSource = fs.readFileSync(path.join(repoRoot, "packages", "sdk", "js", "src", "gen", "sdk.gen.ts"), "utf8")
     const typeSource = fs.readFileSync(
       path.join(repoRoot, "packages", "sdk", "js", "src", "gen", "types.gen.ts"),
       "utf8",
     )
 
     for (const [_method, routePath] of scheduleOperations) {
-      const sdkBlocks = sdkSource
-        .split("\n  public ")
-        .filter((block) => block.includes(`url: "${routePath}"`))
+      const sdkBlocks = sdkSource.split("\n  public ").filter((block) => block.includes(`url: "${routePath}"`))
       expect(sdkBlocks.length).toBeGreaterThan(0)
       for (const block of sdkBlocks) {
         expect(block).not.toContain("projectId")

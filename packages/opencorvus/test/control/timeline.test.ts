@@ -101,10 +101,7 @@ describe("control timeline", () => {
         const timeline = ControlTimeline.list({ taskID })
         expect(timeline.map((item) => item.info.role)).toEqual(["user", "assistant"])
         expect(timeline.map((item) => item.parts[0]?.type)).toEqual(["text", "text"])
-        expect(timeline.map((item) => item.parts[0]?.text)).toEqual([
-          "继续这个任务，先检查日志。",
-          "已记录任务消息。",
-        ])
+        expect(timeline.map((item) => item.parts[0]?.text)).toEqual(["继续这个任务，先检查日志。", "已记录任务消息。"])
         expect(timeline.every((item) => item.info.taskID === taskID)).toBe(true)
         expect(timeline.every((item) => item.info.sessionID === root.id)).toBe(true)
       },

@@ -640,7 +640,9 @@
 
 .workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded] .workspace-terminal-select-caret,
 .workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded] .workspace-editor-select-caret,
-.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded] .workspace-coding-cli-select-caret {
+.workspace-command-dock
+  .oc-button[data-chrome="workspace-split-menu"][data-expanded]
+  .workspace-coding-cli-select-caret {
   color: var(--text-strong);
   transform: rotate(180deg);
 }
@@ -1517,7 +1519,8 @@
   min-width: calc(30px * var(--ui-scale));
 }
 
-.recent-dir-edit-form .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][data-ui="recent-dir-edit-submit"]:disabled {
+.recent-dir-edit-form
+  .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][data-ui="recent-dir-edit-submit"]:disabled {
   --oc-button-color: var(--text-muted);
 
   opacity: var(--ui-opacity-full);

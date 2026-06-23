@@ -18,22 +18,22 @@ write dialog offset during the input event task.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Arendt read-only audit | Shared `Dialog.tsx` reads form/body rects and writes offset on every window `pointermove`. |
-| `2026-06-23-overlay-panel-legal-size-contract.md` | Dialog clamp must remain based on the legal overlay shell, not raw viewport dimensions. |
-| `2026-06-22-left-pane-drag-frame-coalescing.md` | Pointer drag streams should retain the latest pointer value, coalesce on RAF, and flush on pointerup. |
-| `dialog-primitive.test.ts` | Shared Dialog primitive is the only Kobalte dialog owner used by settings, image preview, log viewer, and other modal surfaces. |
+| Source                                            | Constraint carried forward                                                                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Arendt read-only audit                            | Shared `Dialog.tsx` reads form/body rects and writes offset on every window `pointermove`.                                      |
+| `2026-06-23-overlay-panel-legal-size-contract.md` | Dialog clamp must remain based on the legal overlay shell, not raw viewport dimensions.                                         |
+| `2026-06-22-left-pane-drag-frame-coalescing.md`   | Pointer drag streams should retain the latest pointer value, coalesce on RAF, and flush on pointerup.                           |
+| `dialog-primitive.test.ts`                        | Shared Dialog primitive is the only Kobalte dialog owner used by settings, image preview, log viewer, and other modal surfaces. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Clamp owner | `Dialog.tsx#clampDialogOffset()` reads `.dialog-form` and `document.body` rects. | Keep the clamp owner but call it from the frame owner. |
-| Pointermove listener | `moveDialog()` currently calls `clampDialogOffset()` and `setDialogOffset()` directly. | Store the latest client position and schedule one RAF. |
-| Pointerup cleanup | `finishDialogDrag()` calls `stopDragging()`. | Flush the pending point before removing listeners so the final drag position is not lost. |
-| Static test | `dialog-primitive.test.ts` pins the existing `window.addEventListener("pointermove", moveDialog)` string. | Update it to reject direct pointermove clamp/write and require RAF scheduling. |
-| Browser coverage | `config-dialog-resizer.test.ts` already opens a real Settings dialog. | Extend it to drag the shared dialog header with layout-read instrumentation. |
+| Surface              | Evidence                                                                                                  | Decision                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Clamp owner          | `Dialog.tsx#clampDialogOffset()` reads `.dialog-form` and `document.body` rects.                          | Keep the clamp owner but call it from the frame owner.                                    |
+| Pointermove listener | `moveDialog()` currently calls `clampDialogOffset()` and `setDialogOffset()` directly.                    | Store the latest client position and schedule one RAF.                                    |
+| Pointerup cleanup    | `finishDialogDrag()` calls `stopDragging()`.                                                              | Flush the pending point before removing listeners so the final drag position is not lost. |
+| Static test          | `dialog-primitive.test.ts` pins the existing `window.addEventListener("pointermove", moveDialog)` string. | Update it to reject direct pointermove clamp/write and require RAF scheduling.            |
+| Browser coverage     | `config-dialog-resizer.test.ts` already opens a real Settings dialog.                                     | Extend it to drag the shared dialog header with layout-read instrumentation.              |
 
 ## Root Cause
 

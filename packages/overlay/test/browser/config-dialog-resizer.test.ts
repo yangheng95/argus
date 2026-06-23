@@ -197,7 +197,11 @@ test(
           captureSet("style", sidebar.getAttribute("style") || "")
         })
         try {
-          CSSStyleDeclaration.prototype.setProperty = function (property: string, value: string | null, priority?: string) {
+          CSSStyleDeclaration.prototype.setProperty = function (
+            property: string,
+            value: string | null,
+            priority?: string,
+          ) {
             if (this === sidebar.style && (property === "width" || property === "min-width")) {
               captureSet(property, value)
             }
@@ -294,13 +298,29 @@ test(
           Element.prototype.setAttribute = originalSetAttribute
         }
       })
-      assert.deepEqual(dragBurst.afterMoves, [], `pointermove burst should not write width synchronously: ${JSON.stringify(dragBurst)}`)
+      assert.deepEqual(
+        dragBurst.afterMoves,
+        [],
+        `pointermove burst should not write width synchronously: ${JSON.stringify(dragBurst)}`,
+      )
       const frameWidthSets = dragBurst.afterFrame.filter((entry) => entry.property === "width")
       const frameMinWidthSets = dragBurst.afterFrame.filter((entry) => entry.property === "min-width")
       const frameStyleSets = dragBurst.afterFrame.filter((entry) => entry.property === "style")
-      assert.equal(frameWidthSets.length, 1, `pointermove burst should write one width in RAF: ${JSON.stringify(dragBurst)}`)
-      assert.equal(frameMinWidthSets.length, 1, `pointermove burst should write one min-width in RAF: ${JSON.stringify(dragBurst)}`)
-      assert.equal(frameStyleSets.length, 1, `pointermove burst should produce one sidebar style mutation: ${JSON.stringify(dragBurst)}`)
+      assert.equal(
+        frameWidthSets.length,
+        1,
+        `pointermove burst should write one width in RAF: ${JSON.stringify(dragBurst)}`,
+      )
+      assert.equal(
+        frameMinWidthSets.length,
+        1,
+        `pointermove burst should write one min-width in RAF: ${JSON.stringify(dragBurst)}`,
+      )
+      assert.equal(
+        frameStyleSets.length,
+        1,
+        `pointermove burst should produce one sidebar style mutation: ${JSON.stringify(dragBurst)}`,
+      )
       assert.ok(
         dragBurst.afterFrame.every((entry) => entry.inputDepth === 0),
         `pointermove burst writes must run outside the input event: ${JSON.stringify(dragBurst)}`,
@@ -432,8 +452,16 @@ test(
       )
       const frameFormReads = dialogDrag.afterFrame.filter((entry) => entry.target === "form")
       const frameBodyReads = dialogDrag.afterFrame.filter((entry) => entry.target === "body")
-      assert.equal(frameFormReads.length, 1, `dialog drag should read form rect once in RAF: ${JSON.stringify(dialogDrag)}`)
-      assert.equal(frameBodyReads.length, 1, `dialog drag should read body rect once in RAF: ${JSON.stringify(dialogDrag)}`)
+      assert.equal(
+        frameFormReads.length,
+        1,
+        `dialog drag should read form rect once in RAF: ${JSON.stringify(dialogDrag)}`,
+      )
+      assert.equal(
+        frameBodyReads.length,
+        1,
+        `dialog drag should read body rect once in RAF: ${JSON.stringify(dialogDrag)}`,
+      )
       assert.ok(
         dialogDrag.afterFrame.every((entry) => entry.frameDepth > 0 && entry.inputDepth === 0),
         `dialog drag layout reads must run inside RAF outside pointermove: ${JSON.stringify(dialogDrag)}`,
@@ -443,7 +471,10 @@ test(
         `dialog pointerup should flush the final pending clamp: ${JSON.stringify(dialogDrag)}`,
       )
       assert.equal(dialogDrag.dragging, "")
-      assert.ok(dialogDrag.x !== "0px" || dialogDrag.y !== "0px", `dialog drag should apply a visible offset: ${JSON.stringify(dialogDrag)}`)
+      assert.ok(
+        dialogDrag.x !== "0px" || dialogDrag.y !== "0px",
+        `dialog drag should apply a visible offset: ${JSON.stringify(dialogDrag)}`,
+      )
       const notifications = await page.evaluate(() =>
         Array.from(document.querySelectorAll<HTMLElement>('.app-notification[role="alert"]')).map((node) =>
           node.textContent?.replace(/\s+/g, " ").trim(),

@@ -21,21 +21,21 @@ the primitive owners.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-app-dialog-segmented-control.md` | `SegmentedControl` is the generic Kobalte ToggleGroup wrapper for non-tab mutually-exclusive choices. |
+| Source                                          | Relevant constraint                                                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-app-dialog-segmented-control.md`    | `SegmentedControl` is the generic Kobalte ToggleGroup wrapper for non-tab mutually-exclusive choices.                             |
 | `2026-06-18-tabs-tabpanel-semantic-contract.md` | Browser Preview viewport choices moved from tabs to `SegmentedControl`; non-tab choices must not pretend to be tabs semantically. |
-| `2026-06-18-retire-workspace-panel-residue.md` | Current file changes diff close already routes icon actions through `Button` plus `.oc-button[data-ui="..."]`. |
-| `2026-06-18-card-trace-action-button-owner.md` | Operation controls should use `Button` and stable `data-ui` selectors, not private raw button classes. |
+| `2026-06-18-retire-workspace-panel-residue.md`  | Current file changes diff close already routes icon actions through `Button` plus `.oc-button[data-ui="..."]`.                    |
+| `2026-06-18-card-trace-action-button-owner.md`  | Operation controls should use `Button` and stable `data-ui` selectors, not private raw button classes.                            |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "changes-filter-clear|changes-status-chip|changes-status-strip" packages/overlay/src packages/overlay/test specs/new-arch` | Live hits are `FileChangesView.tsx`, `changes.css`, and `agent-file-changes.test.ts`. Historical specs mention file changes but do not own these controls. | Replace live toolbar controls and update the single source guard. |
-| `rg -n "SegmentedControl|oc-tabs|oc-tab|@kobalte/core/toggle-group" packages/overlay/src packages/overlay/test` | `SegmentedControl` wraps Kobalte ToggleGroup and currently reuses `.oc-tabs` / `.oc-tab` visual primitives in Browser Preview and app dialogs. | Use `SegmentedControl<ChangeStatusFilter>` with `.oc-tabs` / `.oc-tab`; do not add another chip primitive. |
-| `rg -n "<Button|data-chrome=\"icon-action\"|file-changes-diff-close" packages/overlay/src packages/overlay/test` | File changes diff close already uses `Button` and `.oc-button[data-ui="file-changes-diff-close"]`. | Clear-filter action should follow the same Button primitive pattern. |
-| `FileChangesPanel.tsx` | Header view tabs and diff close are already primitive-backed. | Do not modify panel tabs or diff close in this fix. |
+| Sweep                        | Result                                                        | Decision                                                                         |
+| ---------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `rg -n "changes-filter-clear | changes-status-chip                                           | changes-status-strip" packages/overlay/src packages/overlay/test specs/new-arch` | Live hits are `FileChangesView.tsx`, `changes.css`, and `agent-file-changes.test.ts`. Historical specs mention file changes but do not own these controls. | Replace live toolbar controls and update the single source guard.                                                                              |
+| `rg -n "SegmentedControl     | oc-tabs                                                       | oc-tab                                                                           | @kobalte/core/toggle-group" packages/overlay/src packages/overlay/test`                                                                                    | `SegmentedControl` wraps Kobalte ToggleGroup and currently reuses `.oc-tabs` / `.oc-tab` visual primitives in Browser Preview and app dialogs. | Use `SegmentedControl<ChangeStatusFilter>` with `.oc-tabs` / `.oc-tab`; do not add another chip primitive. |
+| `rg -n "<Button              | data-chrome=\"icon-action\"                                   | file-changes-diff-close" packages/overlay/src packages/overlay/test`             | File changes diff close already uses `Button` and `.oc-button[data-ui="file-changes-diff-close"]`.                                                         | Clear-filter action should follow the same Button primitive pattern.                                                                           |
+| `FileChangesPanel.tsx`       | Header view tabs and diff close are already primitive-backed. | Do not modify panel tabs or diff close in this fix.                              |
 
 ## Fix Plan
 

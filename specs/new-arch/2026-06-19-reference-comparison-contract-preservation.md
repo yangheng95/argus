@@ -41,18 +41,18 @@ rg -n "createVisualQaOutputTools\\(" packages/opencorvus/src packages/opencorvus
 
 Relevant surfaces:
 
-| Surface | Finding | Decision |
-| --- | --- | --- |
-| `src/tool/browser-preview.ts` | Resolves the latest task target after every startup, even when the current startup persisted no target. | Return a current-startup missing target instead of a stale task target when no startup target was persisted. |
-| `test/tool/browser-preview.test.ts` | Covers missing command-derived target, but not stale target leakage. | Add a regression where an old saved target exists and the new startup persists nothing. |
-| `src/architect/output-tools.ts` | Missing final visual evidence acceptance for reference-driven tasks is only a concern. | Make this a blocker because it is a contract integrity failure. |
-| `test/orchestrator/architect-fidelity-gate.test.ts` | Locks the weaker concern behavior. | Update tests so reference-driven graphs cannot finalize without essential visual evidence ownership. |
-| `src/prompt/core/visual-qa-core.txt` and `src/visual-qa/agent.ts` | Prompt text now asks for bind/compare but remains model-governed. | Keep as supporting instruction; do not treat prompt text alone as the fix. |
+| Surface                                                           | Finding                                                                                                 | Decision                                                                                                     |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `src/tool/browser-preview.ts`                                     | Resolves the latest task target after every startup, even when the current startup persisted no target. | Return a current-startup missing target instead of a stale task target when no startup target was persisted. |
+| `test/tool/browser-preview.test.ts`                               | Covers missing command-derived target, but not stale target leakage.                                    | Add a regression where an old saved target exists and the new startup persists nothing.                      |
+| `src/architect/output-tools.ts`                                   | Missing final visual evidence acceptance for reference-driven tasks is only a concern.                  | Make this a blocker because it is a contract integrity failure.                                              |
+| `test/orchestrator/architect-fidelity-gate.test.ts`               | Locks the weaker concern behavior.                                                                      | Update tests so reference-driven graphs cannot finalize without essential visual evidence ownership.         |
+| `src/prompt/core/visual-qa-core.txt` and `src/visual-qa/agent.ts` | Prompt text now asks for bind/compare but remains model-governed.                                       | Keep as supporting instruction; do not treat prompt text alone as the fix.                                   |
 
 ## Acceptance
 
 - A `browser_preview` startup that persists no target reports `targetStatus:
-  "missing"` even if the task has an older saved target.
+"missing"` even if the task has an older saved target.
 - Reference-driven architect output without essential final visual evidence is a
   blocker returned by `architectValidationIssues`.
 - Reference coverage regions not owned by a final visual evidence acceptance are

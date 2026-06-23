@@ -87,8 +87,7 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
         {
           id: "part-architect",
           type: "text",
-          text:
-            "The architecture review found that collapsed chat-bubble previews must stay inside the disclosure button so a single click on visible preview text expands the bubble.",
+          text: "The architecture review found that collapsed chat-bubble previews must stay inside the disclosure button so a single click on visible preview text expands the bubble.",
         },
       ],
       info: {
@@ -148,7 +147,8 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
       return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
     if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
@@ -170,7 +170,14 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
@@ -188,10 +195,20 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     if (path === `/task/${taskID}/operator-model-context`)
       return send({ taskID, sessionID: "session-root", agent: "orchestrator", model: null })
     if (path === `/task/${taskID}/browser-preview`)
-      return send({ taskID, kind: "missing", status: "missing", viewports: [], diagnostics: [], candidates: [], source: "none" })
-    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+      return send({
+        taskID,
+        kind: "missing",
+        status: "missing",
+        viewports: [],
+        diagnostics: [],
+        candidates: [],
+        source: "none",
+      })
+    if (path === `/task/${taskID}/conversation/events`)
+      return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send(transcript)
-    if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace" })
+    if (path === `/task/${taskID}/trace`)
+      return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace" })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
@@ -209,15 +226,18 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 860 })
-    await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string }) => {
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", seed.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
-      localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
-      localStorage.setItem("oc_workspace_task", seed.taskID)
-    }, { serverUrl: server.origin, taskID })
+    await page.evaluateOnNewDocument(
+      (seed: { serverUrl: string; taskID: string }) => {
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", seed.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_workspace_task", seed.taskID)
+      },
+      { serverUrl: server.origin, taskID },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { visible: true, timeout: 15_000 })
@@ -271,7 +291,11 @@ test("ChatBubble collapsed preview is inside the Button disclosure target", asyn
     assert.ok(siblingActionButtonCount >= 1, `expected sibling action buttons, got ${siblingActionButtonCount}`)
 
     await page.focus('.chat-bubble-row[data-kind="agent"] .chat-bubble__head-main')
-    const screenshot = await saveElementScreenshot(page, '.chat-bubble-row[data-kind="agent"]', "chat-bubble-disclosure-preview-click.png")
+    const screenshot = await saveElementScreenshot(
+      page,
+      '.chat-bubble-row[data-kind="agent"]',
+      "chat-bubble-disclosure-preview-click.png",
+    )
     assert.ok(screenshot.endsWith("chat-bubble-disclosure-preview-click.png"))
 
     await page.click('.chat-bubble-row[data-kind="agent"] .card__collapsed-preview')

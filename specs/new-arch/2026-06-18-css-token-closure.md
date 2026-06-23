@@ -18,21 +18,21 @@ token would keep the guard unusable.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `flat-redesign-radius-coverage.test.ts` | Runtime border radius call sites must use canonical `--oc-radius-*` tokens. |
-| `design-language.css` | Defines `--mono`, `--ui-font-*`, `--ui-font-weight-*`, `--oc-border-width`, and `--oc-radius-{none,soft,large,pill}`. |
-| `css-token-closure.test.ts` | Surface CSS may reference defined design tokens or explicitly listed runtime style vars. |
-| `2026-06-18-integrity-panel-token-source.md` | Undefined local token aliases must be replaced with canonical overlay tokens, not hidden behind new aliases. |
+| Source                                       | Relevant constraint                                                                                                   |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `flat-redesign-radius-coverage.test.ts`      | Runtime border radius call sites must use canonical `--oc-radius-*` tokens.                                           |
+| `design-language.css`                        | Defines `--mono`, `--ui-font-*`, `--ui-font-weight-*`, `--oc-border-width`, and `--oc-radius-{none,soft,large,pill}`. |
+| `css-token-closure.test.ts`                  | Surface CSS may reference defined design tokens or explicitly listed runtime style vars.                              |
+| `2026-06-18-integrity-panel-token-source.md` | Undefined local token aliases must be replaced with canonical overlay tokens, not hidden behind new aliases.          |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `bun test packages/overlay/test/css-token-closure.test.ts` | Fails on undefined real tokens and missing runtime style vars. | Replace real undefined tokens; register only vars written by component runtime. |
+| Sweep                                                                  | Result                                                                                                     | Decision                                                                                  |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `bun test packages/overlay/test/css-token-closure.test.ts`             | Fails on undefined real tokens and missing runtime style vars.                                             | Replace real undefined tokens; register only vars written by component runtime.           |
 | `bun test packages/overlay/test/flat-redesign-radius-coverage.test.ts` | Also exposes three literal / calc radius call sites in `activity.css`, `messages.css`, and `settings.css`. | Move those call sites to the canonical radius set while the same token cleanup is active. |
-| `rg -n -- '--oc-radius-sm|--font-mono|--ui-font-mono|--ui-font-size-xs|--ui-font-size-sm|--ui-font-weight|--oc-border-width-strong|--text-subtle' packages/overlay/src/styles` | Offenders are in `activity.css`, `workspace-onboarding.css`, `changes.css`, `inspector.css`, `notifications.css`, `mission.css`, `settings.css`, and `sidebar.css`. | Map them to existing canonical tokens. |
-| `rg -n -- 'dialog-drag-x|image-preview-rendered-width|titlebar-menu-anchor-left|center-workbench-panel-grow' packages/overlay/src` | These vars are written by `Dialog.tsx`, `ImagePreview.tsx`, `TitlebarMenubar.tsx`, and `main.tsx`. | Add them to `RUNTIME_STYLE_VARS`; do not create fake design tokens. |
+| `rg -n -- '--oc-radius-sm                                              | --font-mono                                                                                                | --ui-font-mono                                                                            | --ui-font-size-xs                                  | --ui-font-size-sm                                                                                  | --ui-font-weight                                                    | --oc-border-width-strong | --text-subtle' packages/overlay/src/styles` | Offenders are in `activity.css`, `workspace-onboarding.css`, `changes.css`, `inspector.css`, `notifications.css`, `mission.css`, `settings.css`, and `sidebar.css`. | Map them to existing canonical tokens. |
+| `rg -n -- 'dialog-drag-x                                               | image-preview-rendered-width                                                                               | titlebar-menu-anchor-left                                                                 | center-workbench-panel-grow' packages/overlay/src` | These vars are written by `Dialog.tsx`, `ImagePreview.tsx`, `TitlebarMenubar.tsx`, and `main.tsx`. | Add them to `RUNTIME_STYLE_VARS`; do not create fake design tokens. |
 
 ## Fix Plan
 

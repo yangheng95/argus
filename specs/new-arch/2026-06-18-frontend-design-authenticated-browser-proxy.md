@@ -19,14 +19,14 @@ when the operator configures an authenticated proxy in Overlay.
 
 ## Grep Findings
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Proxy config | `packages/opencorvus/src/config/config.ts` owns `network.proxy.url`, `username`, `password`, `llmProvider`, and `webResearch`. | Keep the existing config object; treat frontend-design live webpage acquisition as `webResearch` traffic. |
-| Auth URL helper | `packages/opencorvus/src/util/network-proxy.ts` owns `authenticatedProxyUrl()`. | Reuse it to derive one authenticated proxy URL from config. |
-| Browser runtime | `packages/opencorvus/src/browser/runtime/index.ts` converts proxy env vars into Chromium `--proxy-server` args. | Add a shared parser that strips credentials for launch args and exposes credentials for Playwright context proxy. |
-| Frontend-design extraction | `packages/opencorvus/src/frontend-design/tools/webpage-extract.ts` calls `extractPage()` for desktop and mobile. | Resolve `network.proxy.webResearch` once in the tool and pass it to both captures. |
-| URL screenshot | `packages/opencorvus/src/frontend-design/url-screenshot-tool.ts` calls `captureReferenceManifest()`. | Use the same `webResearch` proxy for screenshot acquisition. |
-| Browser sidecars | `browser/webpage/extract.ts` and `frontend-design/capture-gate.ts` create Playwright contexts without proxy options. | Pass `proxy` into `browser.newContext()`; do not put credentials in Chrome launch args. |
+| Area                       | Evidence                                                                                                                       | Decision                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Proxy config               | `packages/opencorvus/src/config/config.ts` owns `network.proxy.url`, `username`, `password`, `llmProvider`, and `webResearch`. | Keep the existing config object; treat frontend-design live webpage acquisition as `webResearch` traffic.         |
+| Auth URL helper            | `packages/opencorvus/src/util/network-proxy.ts` owns `authenticatedProxyUrl()`.                                                | Reuse it to derive one authenticated proxy URL from config.                                                       |
+| Browser runtime            | `packages/opencorvus/src/browser/runtime/index.ts` converts proxy env vars into Chromium `--proxy-server` args.                | Add a shared parser that strips credentials for launch args and exposes credentials for Playwright context proxy. |
+| Frontend-design extraction | `packages/opencorvus/src/frontend-design/tools/webpage-extract.ts` calls `extractPage()` for desktop and mobile.               | Resolve `network.proxy.webResearch` once in the tool and pass it to both captures.                                |
+| URL screenshot             | `packages/opencorvus/src/frontend-design/url-screenshot-tool.ts` calls `captureReferenceManifest()`.                           | Use the same `webResearch` proxy for screenshot acquisition.                                                      |
+| Browser sidecars           | `browser/webpage/extract.ts` and `frontend-design/capture-gate.ts` create Playwright contexts without proxy options.           | Pass `proxy` into `browser.newContext()`; do not put credentials in Chrome launch args.                           |
 
 ## Root Cause
 

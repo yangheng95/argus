@@ -20,17 +20,17 @@ beside the live TaskProgressBar and current task directory shell.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `mission-panel-parity-2026-05-29.md` | `#chatGoalsStrip` is a dead stub; goal progress is `TaskProgressBar` inside `Conversation`. |
-| `2026-05-13-conversation-agent-workflow-rail.md` | `chatScroll` remains the only message scroll container; auxiliary rails mount outside the message stream. |
-| `2026-06-04-agent-rail-card-scroll-materialization.md` | `TaskProgressBar` uses the same card-scroll request path as the agent rail. |
+| Source                                                 | Existing decision                                                                                         |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `mission-panel-parity-2026-05-29.md`                   | `#chatGoalsStrip` is a dead stub; goal progress is `TaskProgressBar` inside `Conversation`.               |
+| `2026-05-13-conversation-agent-workflow-rail.md`       | `chatScroll` remains the only message scroll container; auxiliary rails mount outside the message stream. |
+| `2026-06-04-agent-rail-card-scroll-materialization.md` | `TaskProgressBar` uses the same card-scroll request path as the agent rail.                               |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "chatGoalsStrip|chat-goals-strip|goal-chip|task-bar-main|task-cwd-actions|task-flag|chat-follow-label|TaskProgressBar|task-progress__pill" packages/overlay/src packages/overlay/test specs/new-arch` | Retired selectors were static HTML/CSS/test-only. `Conversation.tsx` renders `TaskProgressBar`, and `card.css` owns `.task-progress__pill`. |
+| Sweep                  | Result           |
+| ---------------------- | ---------------- | --------- | ------------- | ---------------- | --------- | ----------------- | --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "chatGoalsStrip | chat-goals-strip | goal-chip | task-bar-main | task-cwd-actions | task-flag | chat-follow-label | TaskProgressBar | task-progress\_\_pill" packages/overlay/src packages/overlay/test specs/new-arch` | Retired selectors were static HTML/CSS/test-only. `Conversation.tsx` renders `TaskProgressBar`, and `card.css` owns `.task-progress__pill`. |
 
 ## Fix
 

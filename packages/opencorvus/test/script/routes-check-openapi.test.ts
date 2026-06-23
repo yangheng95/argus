@@ -110,7 +110,9 @@ describe("api routes check OpenAPI drift", () => {
 
     expect(routeCheck).toContain('import { generateOpenApiSpec } from "../../src/cli/cmd/generate"')
     expect(routeCheck).toContain("const generated = await generateOpenApiSpec()")
-    expect(routeCheck).toContain("return collectInventoryViolations({ runtime, generated, tracked, sdk: generatedSdk })")
+    expect(routeCheck).toContain(
+      "return collectInventoryViolations({ runtime, generated, tracked, sdk: generatedSdk })",
+    )
     expect(routeCheck).toContain("...compareOpenApiSpecs(input.generated, input.tracked)")
     expect(routeCheck).not.toContain("const generated = await Server.openapi()")
 

@@ -274,7 +274,10 @@ test("file explorer current file and directory expansion are exposed on the row 
     assert.equal(virtualGeometry.virtualized, "true")
     assert.equal(virtualGeometry.depth, "0")
     assert.ok(virtualGeometry.rootScale > 1.2, JSON.stringify(virtualGeometry))
-    assert.ok(Math.abs(virtualGeometry.rowHeight - 26 * virtualGeometry.rootScale) < 0.5, JSON.stringify(virtualGeometry))
+    assert.ok(
+      Math.abs(virtualGeometry.rowHeight - 26 * virtualGeometry.rootScale) < 0.5,
+      JSON.stringify(virtualGeometry),
+    )
     assert.equal(virtualGeometry.rowFontWeight, virtualGeometry.bodyWeightToken)
     assert.ok(
       Math.abs(virtualGeometry.directIconWidth - 16 * virtualGeometry.rootScale) < 0.5,
@@ -340,7 +343,9 @@ test("file explorer current file and directory expansion are exposed on the row 
     await page.keyboard.press("Enter")
     await page.waitForSelector('.file-explorer-row[title="src/main.tsx"]', { visible: true })
     await page.waitForFunction(
-      () => document.querySelector<HTMLButtonElement>('.file-explorer-row[title="src"]')?.getAttribute("aria-expanded") === "true",
+      () =>
+        document.querySelector<HTMLButtonElement>('.file-explorer-row[title="src"]')?.getAttribute("aria-expanded") ===
+        "true",
     )
 
     let readmeFocusedByKeyboard = false
@@ -377,7 +382,10 @@ test("file explorer current file and directory expansion are exposed on the row 
     )
     const readmeKeyboardState = await page.evaluate(() => ({
       active: document.querySelector<HTMLElement>('.file-explorer-row[title="README.md"]')?.dataset.active ?? "",
-      current: document.querySelector<HTMLButtonElement>('.file-explorer-row[title="README.md"]')?.getAttribute("aria-current") ?? null,
+      current:
+        document
+          .querySelector<HTMLButtonElement>('.file-explorer-row[title="README.md"]')
+          ?.getAttribute("aria-current") ?? null,
       filePanelOpen: document.querySelector<HTMLElement>("#centerWorkbenchFile")?.dataset.open ?? "",
     }))
     assert.deepEqual(readmeKeyboardState, {
@@ -445,7 +453,9 @@ test("file explorer current file and directory expansion are exposed on the row 
     )
     const editorButtonState = await page.evaluate(() => {
       const save = document.querySelector<HTMLButtonElement>('.file-editor-pane .oc-button[data-ui="file-editor-save"]')
-      const close = document.querySelector<HTMLButtonElement>('.file-editor-pane .oc-button[data-ui="file-editor-close"]')
+      const close = document.querySelector<HTMLButtonElement>(
+        '.file-editor-pane .oc-button[data-ui="file-editor-close"]',
+      )
       const pane = document.querySelector<HTMLElement>(".file-editor-pane")
       const code = document.querySelector<HTMLElement>(".file-editor-code")
       const editor = document.querySelector<HTMLElement>(".file-editor-pane .cm-editor")

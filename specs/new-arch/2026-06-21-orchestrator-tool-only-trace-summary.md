@@ -50,14 +50,14 @@ rg -n "OrchestratorNoDecisionStop|classifyOrchestratorDecisionStop|no-decision r
 
 Relevant surfaces:
 
-| Surface | Evidence | Repair decision |
-| --- | --- | --- |
-| `agent/report.ts::paragraphSummary` | Correctly throws on empty report summaries. | Keep; the caller must pass a real report. |
-| `orchestrator/agent.ts::recordOrchestratorTraceReportForSession` | Writes whatever report it is given. | Keep; validation belongs at report construction. |
-| `orchestrator/agent.ts::processTask` success trace branch | Builds summary only from final text, and treats `""` as real text. | Replace with an explicit wake-report builder that summarizes either final text or actual wake tool decisions. |
-| `orchestrator/agent.ts::classifyOrchestratorDecisionStop` | Already accepts a wake with decision-effect tool calls. | Keep; do not change no-decision semantics. |
-| `orchestrator/agent.ts::recordOrchestratorSessionErrorEnvelope` | Only no-decision envelopes self-wake. | Keep; do not add any self-wake for report construction failures. |
-| `test/orchestrator/no-decision-stop-process.test.ts` | Has process-level mock coverage for no-decision and queue re-entry. | Add a tool-only decision wake regression here. |
+| Surface                                                          | Evidence                                                            | Repair decision                                                                                               |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `agent/report.ts::paragraphSummary`                              | Correctly throws on empty report summaries.                         | Keep; the caller must pass a real report.                                                                     |
+| `orchestrator/agent.ts::recordOrchestratorTraceReportForSession` | Writes whatever report it is given.                                 | Keep; validation belongs at report construction.                                                              |
+| `orchestrator/agent.ts::processTask` success trace branch        | Builds summary only from final text, and treats `""` as real text.  | Replace with an explicit wake-report builder that summarizes either final text or actual wake tool decisions. |
+| `orchestrator/agent.ts::classifyOrchestratorDecisionStop`        | Already accepts a wake with decision-effect tool calls.             | Keep; do not change no-decision semantics.                                                                    |
+| `orchestrator/agent.ts::recordOrchestratorSessionErrorEnvelope`  | Only no-decision envelopes self-wake.                               | Keep; do not add any self-wake for report construction failures.                                              |
+| `test/orchestrator/no-decision-stop-process.test.ts`             | Has process-level mock coverage for no-decision and queue re-entry. | Add a tool-only decision wake regression here.                                                                |
 
 ## Acceptance
 

@@ -6,8 +6,7 @@ describe("orchestrator no-decision stop classifier", () => {
     const reason = classifyOrchestratorDecisionStop({
       taskTerminal: false,
       finish: "stop",
-      finalText:
-        'oesmodify_goal:60<|tool_call_argument_begin|>{"goalID":"gol_1"}<|tool_calls_section_end|>',
+      finalText: 'oesmodify_goal:60<|tool_call_argument_begin|>{"goalID":"gol_1"}<|tool_calls_section_end|>',
       providerVisiblePartCount: 1,
       wakeTools: [
         { name: "add_goal", decisionEffect: "decision" },

@@ -10,12 +10,12 @@
 
 ## Evidence
 
-| Source | Finding | Decision |
-| --- | --- | --- |
-| Independent owner review | Expert Squad is `ChatComposer.tsx` using `SelectControl<PromptProfileOption>`; color owner is shared `field.css`, not local prompt-profile CSS. | Keep production CSS unchanged unless the shared selector fails. |
-| Independent impact review | SelectControl consumers are already covered by `select-popup-contrast-matrix`; non-Select popup gaps are separate. | Harden the real Expert Squad browser test first. |
-| Independent test review | Current test catches white text on white background, but not `display`, `visibility`, `opacity`, zero-size rendering, or `-webkit-text-fill-color`. | Add visibility and text-fill assertions to the existing runtime test. |
-| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/prompt-profile-selector-browser.test.ts` | Current runtime screenshot remains readable after the new assertions. | No component-local visual patch is justified. |
+| Source                                                                                                                | Finding                                                                                                                                             | Decision                                                              |
+| --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Independent owner review                                                                                              | Expert Squad is `ChatComposer.tsx` using `SelectControl<PromptProfileOption>`; color owner is shared `field.css`, not local prompt-profile CSS.     | Keep production CSS unchanged unless the shared selector fails.       |
+| Independent impact review                                                                                             | SelectControl consumers are already covered by `select-popup-contrast-matrix`; non-Select popup gaps are separate.                                  | Harden the real Expert Squad browser test first.                      |
+| Independent test review                                                                                               | Current test catches white text on white background, but not `display`, `visibility`, `opacity`, zero-size rendering, or `-webkit-text-fill-color`. | Add visibility and text-fill assertions to the existing runtime test. |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/prompt-profile-selector-browser.test.ts` | Current runtime screenshot remains readable after the new assertions.                                                                               | No component-local visual patch is justified.                         |
 
 ## Fix
 

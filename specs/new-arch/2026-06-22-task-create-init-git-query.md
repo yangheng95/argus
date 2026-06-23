@@ -15,13 +15,13 @@ This supersedes the earlier API-mode default from `2026-06-11-api-mode-greenfiel
 
 ## Call-Site Audit
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Project-scoped middleware | `packages/opencorvus/src/server/server.ts` selects `directory` before `Instance.provide`. | Parse `init-git` and bootstrap Git before `Instance.provide` only for `POST /task`, so the active instance sees the Git-backed project identity. |
-| Task route | `packages/opencorvus/src/server/routes/orchestrator.ts` owns `POST /task` and calls `EngineService.createTask`. | Do not move directory bootstrapping into the route body; middleware already owns project directory binding. |
-| Task precondition | `packages/opencorvus/src/task-api/index.ts::prepareProject` throws `WorktreeNotGitError` when `Instance.directory` is not Git. | Keep this strict guard as the final invariant. The new query parameter prepares the directory before that guard when requested. |
-| Git initialization source | `packages/opencorvus/src/project/project.ts::Project.initGit` owns Git initialization. | Reuse `Project.initGit`; do not duplicate `git init` subprocess handling. |
-| Read routes | Project-scoped `GET` routes also pass through `Instance.provide`. | Do not let `init-git` affect read routes. Querying must not start Git initialization. |
+| Surface                   | Evidence                                                                                                                       | Decision                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Project-scoped middleware | `packages/opencorvus/src/server/server.ts` selects `directory` before `Instance.provide`.                                      | Parse `init-git` and bootstrap Git before `Instance.provide` only for `POST /task`, so the active instance sees the Git-backed project identity. |
+| Task route                | `packages/opencorvus/src/server/routes/orchestrator.ts` owns `POST /task` and calls `EngineService.createTask`.                | Do not move directory bootstrapping into the route body; middleware already owns project directory binding.                                      |
+| Task precondition         | `packages/opencorvus/src/task-api/index.ts::prepareProject` throws `WorktreeNotGitError` when `Instance.directory` is not Git. | Keep this strict guard as the final invariant. The new query parameter prepares the directory before that guard when requested.                  |
+| Git initialization source | `packages/opencorvus/src/project/project.ts::Project.initGit` owns Git initialization.                                         | Reuse `Project.initGit`; do not duplicate `git init` subprocess handling.                                                                        |
+| Read routes               | Project-scoped `GET` routes also pass through `Instance.provide`.                                                              | Do not let `init-git` affect read routes. Querying must not start Git initialization.                                                            |
 
 ## Acceptance
 

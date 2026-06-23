@@ -28,16 +28,16 @@ const client = createOpenCorvusClient({
 
 `createOpenCorvusClient()` accepts the generated fetch-client config plus OpenCorvus additions:
 
-| Option          | Purpose                                                                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------ |
-| `baseUrl`       | OpenCorvus server URL. Defaults to the generated server default.                                             |
+| Option          | Purpose                                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `baseUrl`       | OpenCorvus server URL. Defaults to the generated server default.                                                   |
 | `directory`     | Adds the `directory` query parameter to project-scoped requests. Windows MSYS paths like `/c/repo` are normalized. |
-| `username`      | Basic Auth username. Defaults to `opencorvus`.                                                               |
-| `password`      | Basic Auth password. Use `OPENCORVUS_SERVER_PASSWORD` when the server is protected.                          |
-| `headers`       | Extra headers. An explicit `Authorization` header is preserved and not replaced by `password`.               |
-| `fetch`         | Custom Fetch implementation for proxying, tracing, tests, or in-process adapters.                            |
-| `throwOnError`  | When `true`, failed responses throw instead of returning `{ error }`.                                        |
-| `responseStyle` | Generated client response mode: default fields object, or `"data"` for data-only responses.                  |
+| `username`      | Basic Auth username. Defaults to `opencorvus`.                                                                     |
+| `password`      | Basic Auth password. Use `OPENCORVUS_SERVER_PASSWORD` when the server is protected.                                |
+| `headers`       | Extra headers. An explicit `Authorization` header is preserved and not replaced by `password`.                     |
+| `fetch`         | Custom Fetch implementation for proxying, tracing, tests, or in-process adapters.                                  |
+| `throwOnError`  | When `true`, failed responses throw instead of returning `{ error }`.                                              |
+| `responseStyle` | Generated client response mode: default fields object, or `"data"` for data-only responses.                        |
 
 ## Calls and Return Values
 

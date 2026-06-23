@@ -25,7 +25,11 @@ import {
 } from "./refresh-diagnostics"
 import { settingsStore } from "../store/settings"
 import { createVisibilityInterval, type VisibilityInterval } from "../utils/visibility-interval"
-import { conversationSourceDirectory, mergeLatestConversationTail, registerConversationSourceDirectory } from "./conversation"
+import {
+  conversationSourceDirectory,
+  mergeLatestConversationTail,
+  registerConversationSourceDirectory,
+} from "./conversation"
 import { resetSelectedLiveCursor, selectedLiveReplayQuery } from "./selected-stream-cursor"
 import { AppLog } from "../utils/log"
 

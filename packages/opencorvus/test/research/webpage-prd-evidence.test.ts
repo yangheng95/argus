@@ -50,7 +50,9 @@ describe("research webpage PRD evidence", () => {
         "missing metadata, source text, or linked-source confirmation becomes an investigation-packet risk",
       )
       expect(prompt).toContain("Return `document_outline` as the visible-flow investigation module list")
-      expect(prompt).toContain("Also register `webpage_contract` chunks as the source for the frontend_design Page Skeleton Blueprint")
+      expect(prompt).toContain(
+        "Also register `webpage_contract` chunks as the source for the frontend_design Page Skeleton Blueprint",
+      )
       expect(prompt).toContain("functional_surfaces, visual_layout, style_requirements, interaction_states")
       expect(prompt).toContain("Register bundle sections for this webpage contract")
       expect(prompt).toContain("Under Visual HTML Skeleton Coverage, write the Page Skeleton Blueprint")

@@ -342,7 +342,10 @@ export async function hydrateConversation(
       1,
       Math.floor(Number(options.tailLimit ?? INITIAL_CONVERSATION_TAIL_LIMIT) || INITIAL_CONVERSATION_TAIL_LIMIT),
     )
-    const directory = registerConversationSourceDirectory(source, requireDirectory(options.directory, "hydrateConversation"))
+    const directory = registerConversationSourceDirectory(
+      source,
+      requireDirectory(options.directory, "hydrateConversation"),
+    )
     const data = await apiJson(conversationHydratePath(source, tailLimit, directory), { signal })
     assertActiveReplay(source, epoch, signal)
     const board = requireObject(data?.board, "board")
@@ -415,8 +418,7 @@ export async function mergeLatestConversationTail(
 ): Promise<void> {
   const selectedTaskID = String(taskID || "")
   if (!selectedTaskID) throw new Error("conversation tail merge requires a taskID")
-  const directory =
-    options.directory?.trim() || conversationSourceDirectory({ kind: "task", id: selectedTaskID })
+  const directory = options.directory?.trim() || conversationSourceDirectory({ kind: "task", id: selectedTaskID })
   tailMergeAbort?.abort(new DOMException("Conversation tail merge superseded", "AbortError"))
   const controller = linkedReplayController(options.signal)
   tailMergeAbort = controller
@@ -573,8 +575,7 @@ export async function loadConversationSessionHistory(
   const selectedTaskID = String(taskID || "")
   const targetSessionID = String(sessionID || "")
   if (!selectedTaskID || !targetSessionID) return false
-  const directory =
-    options.directory?.trim() || conversationSourceDirectory({ kind: "task", id: selectedTaskID })
+  const directory = options.directory?.trim() || conversationSourceDirectory({ kind: "task", id: selectedTaskID })
   historyLoading = true
   historyAbort?.abort(new DOMException("Conversation history superseded", "AbortError"))
   const controller = new AbortController()

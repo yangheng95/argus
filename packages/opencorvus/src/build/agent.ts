@@ -496,10 +496,7 @@ export namespace BuildAgent {
     userAppend?: string
   }) {
     const mcpPrompt = input.executor === "codex" ? MCPServe.codingExecutorPromptSection() : ""
-    const base = [
-      input.baseSystem ?? "",
-      externalBuildSystemContract(input.executor),
-    ]
+    const base = [input.baseSystem ?? "", externalBuildSystemContract(input.executor)]
       .map((s) => s.trim())
       .filter(Boolean)
       .join("\n\n")

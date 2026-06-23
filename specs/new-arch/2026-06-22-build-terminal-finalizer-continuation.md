@@ -21,7 +21,7 @@ worktree ownership semantics needed a build-specific decision.
 - `packages/opencorvus/src/build/agent.ts`
   - registers `report_build_result` and `merge_back`;
   - calls `runAgentSession({ kind: "build", existingSessionID, runtimeContract,
-    terminalTool })`;
+terminalTool })`;
   - converts `TerminalToolMissingError` to `BuildAgentContractError`.
 - `packages/opencorvus/src/agent/runner.ts`
   - already supports explicit same-session continuation via

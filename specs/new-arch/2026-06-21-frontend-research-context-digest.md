@@ -67,15 +67,15 @@ Split frontend research rendering by downstream role:
 
 ## Call Point Inventory
 
-| Surface | Current behavior | Required change |
-| --- | --- | --- |
-| `packages/opencorvus/src/research/prompt-section.ts` | One frontend research renderer emits broad JSON. | Add role-specific compact renderers and keep evidence IDs plus bundle paths. |
-| `packages/opencorvus/src/requirements/agent.ts` | Injects frontend research through the broad renderer. | Continue injecting frontend research, now as compact Requirements/Architect digest. |
-| `packages/opencorvus/src/architect/agent.ts` | Injects frontend research through the broad renderer. | Continue injecting frontend research, now as compact Requirements/Architect digest. |
-| `packages/opencorvus/src/orchestrator/tools.ts` | Build context uses the broad renderer for each goal/direct build. | Use the Build pointer renderer instead. |
-| `packages/opencorvus/src/build/prompt-context.ts` | Wraps whatever frontendResearch string it receives. | Reword wrapper to treat the section as compact pointers, not an inlined work-packet body. |
-| `packages/opencorvus/src/visual-qa/context.ts` | Already renders compact frontend research pointers. | Leave unchanged. |
-| Tests | Cover persistence, build prompt overlay presence, and Visual QA compactness. | Assert compact digest omits long excerpts/full JSON categories, Build receives pointer digest, and Visual QA still omits full JSON. |
+| Surface                                              | Current behavior                                                             | Required change                                                                                                                     |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/research/prompt-section.ts` | One frontend research renderer emits broad JSON.                             | Add role-specific compact renderers and keep evidence IDs plus bundle paths.                                                        |
+| `packages/opencorvus/src/requirements/agent.ts`      | Injects frontend research through the broad renderer.                        | Continue injecting frontend research, now as compact Requirements/Architect digest.                                                 |
+| `packages/opencorvus/src/architect/agent.ts`         | Injects frontend research through the broad renderer.                        | Continue injecting frontend research, now as compact Requirements/Architect digest.                                                 |
+| `packages/opencorvus/src/orchestrator/tools.ts`      | Build context uses the broad renderer for each goal/direct build.            | Use the Build pointer renderer instead.                                                                                             |
+| `packages/opencorvus/src/build/prompt-context.ts`    | Wraps whatever frontendResearch string it receives.                          | Reword wrapper to treat the section as compact pointers, not an inlined work-packet body.                                           |
+| `packages/opencorvus/src/visual-qa/context.ts`       | Already renders compact frontend research pointers.                          | Leave unchanged.                                                                                                                    |
+| Tests                                                | Cover persistence, build prompt overlay presence, and Visual QA compactness. | Assert compact digest omits long excerpts/full JSON categories, Build receives pointer digest, and Visual QA still omits full JSON. |
 
 ## Acceptance
 

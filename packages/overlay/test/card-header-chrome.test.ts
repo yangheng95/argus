@@ -59,9 +59,14 @@ test("Card header action rail has one TSX owner", () => {
   for (const delegated of [CARD_HEADER_TSX, CHAT_BUBBLE_TSX]) {
     expect(delegated).not.toContain('from "../hooks/use-card-head-actions"')
     expect(delegated).not.toContain('from "../services/clock"')
-    expect(delegated).not.toContain('formatCostUSD')
-    expect(delegated).not.toContain('formatTokenCount')
+    expect(delegated).not.toContain("formatCostUSD")
+    expect(delegated).not.toContain("formatTokenCount")
   }
+
+  expect(CARD_HEADER_CHROME_TSX).toContain('data-ui="card-rewind"')
+  expect(CARD_HEADER_CHROME_TSX).toContain('data-state="disabled"')
+  expect(CARD_HEADER_CHROME_TSX).toContain("title={headActions.labels.rewindDisabled()}")
+  expect(CARD_HEADER_CHROME_TSX).toContain("aria-label={headActions.labels.rewindDisabled()}")
 })
 
 test("Card header metadata hints use one focusable Tooltip owner", () => {
@@ -94,10 +99,12 @@ test("Card header metadata copy is localized and uses supported placeholders", (
     expect(messages["card.usage_output_tokens"]).toContain("{{value}}")
     expect(messages["card.usage_total_tokens"]).toContain("{{value}}")
     expect(messages["card.usage_cost"]).toContain("{{value}}")
+    expect(messages["card.rewind_disabled"]).toBeTruthy()
   }
   expect(CARD_HEADER_CHROME_TSX).toContain('t("card.session_model_settings")')
   expect(CARD_HEADER_CHROME_TSX).not.toContain('"Session model settings"')
   expect(CARD_HEADER_CHROME_TSX).toContain('t("card.usage_tooltip"')
+  expect(CARD_HEADER_CHROME_TSX).toContain("headActions.labels.rewindDisabled()")
 })
 
 test("CardHeader keeps disclosure and action buttons as sibling controls", () => {

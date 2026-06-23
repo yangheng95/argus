@@ -13,20 +13,20 @@ visible focus treatment in long trace lists.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-card-trace-action-button-owner.md` | TracePanel header actions already moved to the Button primitive; event heads are disclosure rows, not action buttons. |
-| `2026-06-18-trace-panel-icon-guard-retirement.md` | TracePanel icons already use the shared Icon primitive. |
-| `2026-06-03-overlay-workbench-page-prd.md` | TracePanel must keep a keyboard path and visible state. |
-| `changes.css` `.change-row:focus-visible` | Similar row-disclosure controls use an inset focus ring to avoid clipped outlines. |
+| Source                                            | Relevant constraint                                                                                                   |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-card-trace-action-button-owner.md`    | TracePanel header actions already moved to the Button primitive; event heads are disclosure rows, not action buttons. |
+| `2026-06-18-trace-panel-icon-guard-retirement.md` | TracePanel icons already use the shared Icon primitive.                                                               |
+| `2026-06-03-overlay-workbench-page-prd.md`        | TracePanel must keep a keyboard path and visible state.                                                               |
+| `changes.css` `.change-row:focus-visible`         | Similar row-disclosure controls use an inset focus ring to avoid clipped outlines.                                    |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "trace-event-head|TracePanel" packages/overlay/src packages/overlay/test specs/new-arch` | The live event disclosure owner is `TracePanel.tsx`; `card.css` owns `.trace-event-head`; tests cover Panel/Button adoption but not event row focus. | Add focused CSS and tests at the existing owner. |
-| `packages/overlay/src/styles/surfaces/card.css` | `.trace-event-head:hover` sets background only; no `:focus-visible` rule exists. | Share hover background with focus and add an inset focus ring. |
-| `packages/overlay/test/browser/rewind-visual-stress.test.ts` | Existing stress test captures TracePanel actions, not keyboard focus on event rows. | Add a focused browser fixture for trace event head keyboard behavior. |
+| Sweep                                                        | Result                                                                              | Decision                                                                                                                                             |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `rg -n "trace-event-head                                     | TracePanel" packages/overlay/src packages/overlay/test specs/new-arch`              | The live event disclosure owner is `TracePanel.tsx`; `card.css` owns `.trace-event-head`; tests cover Panel/Button adoption but not event row focus. | Add focused CSS and tests at the existing owner. |
+| `packages/overlay/src/styles/surfaces/card.css`              | `.trace-event-head:hover` sets background only; no `:focus-visible` rule exists.    | Share hover background with focus and add an inset focus ring.                                                                                       |
+| `packages/overlay/test/browser/rewind-visual-stress.test.ts` | Existing stress test captures TracePanel actions, not keyboard focus on event rows. | Add a focused browser fixture for trace event head keyboard behavior.                                                                                |
 
 ## Fix Plan
 

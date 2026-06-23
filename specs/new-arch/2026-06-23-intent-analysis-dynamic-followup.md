@@ -18,15 +18,15 @@ rg -n "analyze_intent|IntentAnalysisAgent|IntentClarification|ask_clarification|
 
 Relevant call points:
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/intent-analysis/types.ts` | Extend `IntentClarification` so the agent can describe the same interaction shape the question UI already supports. |
-| `packages/opencorvus/src/intent-analysis/output-tools.ts` | Extend `ask_clarification` schema and collector without adding fallback defaults. |
-| `packages/opencorvus/src/prompt/core/intent-analysis-core.txt` | Tell the agent to provide concrete options and custom-answer semantics when a blocker needs user input. |
-| `packages/opencorvus/src/orchestrator/tools.ts` | Keep `analyze_intent` as the orchestrator-owned entry; when blocker clarifications exist, ask the user through `Question.askAndFormat`, then return and persist a clarified request. |
-| `packages/opencorvus/src/question/index.ts` | Reuse existing `Question.Info` schema and unified interaction UI; no new question UI or route. |
-| `packages/opencorvus/src/task-context/index.ts` / `engine/describe.ts` | Downstream agents already read decision-log entries in task context. Persist clarified request there instead of overwriting `task.request`. |
-| `packages/opencorvus/test/intent-analysis/*` | Add focused contract tests for rich clarification schema and clarified request rendering. |
+| Surface                                                                | Decision                                                                                                                                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/intent-analysis/types.ts`                     | Extend `IntentClarification` so the agent can describe the same interaction shape the question UI already supports.                                                                  |
+| `packages/opencorvus/src/intent-analysis/output-tools.ts`              | Extend `ask_clarification` schema and collector without adding fallback defaults.                                                                                                    |
+| `packages/opencorvus/src/prompt/core/intent-analysis-core.txt`         | Tell the agent to provide concrete options and custom-answer semantics when a blocker needs user input.                                                                              |
+| `packages/opencorvus/src/orchestrator/tools.ts`                        | Keep `analyze_intent` as the orchestrator-owned entry; when blocker clarifications exist, ask the user through `Question.askAndFormat`, then return and persist a clarified request. |
+| `packages/opencorvus/src/question/index.ts`                            | Reuse existing `Question.Info` schema and unified interaction UI; no new question UI or route.                                                                                       |
+| `packages/opencorvus/src/task-context/index.ts` / `engine/describe.ts` | Downstream agents already read decision-log entries in task context. Persist clarified request there instead of overwriting `task.request`.                                          |
+| `packages/opencorvus/test/intent-analysis/*`                           | Add focused contract tests for rich clarification schema and clarified request rendering.                                                                                            |
 
 ## Design
 

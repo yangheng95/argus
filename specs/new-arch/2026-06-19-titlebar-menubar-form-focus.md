@@ -8,20 +8,20 @@ checkboxes in the Run menu and native range controls in the Run/View menus.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `2026-06-19-dropdown-menu-highlighted-contrast-source.md` | Titlebar menu focus/highlight states must be visible, not hover-only. |
-| `TitlebarMenubar.tsx` | Menubar semantics are already owned by Kobalte; form controls are deliberate native controls inside the menu. |
-| `owner-surface-consistency.test.ts` | Titlebar row hover/focus colors are guarded against palette drift. |
-| `titlebar-menubar.test.ts` | Browser coverage already opens Run/View menus and screenshots titlebar menu regions. |
+| Source                                                    | Constraint                                                                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `2026-06-19-dropdown-menu-highlighted-contrast-source.md` | Titlebar menu focus/highlight states must be visible, not hover-only.                                         |
+| `TitlebarMenubar.tsx`                                     | Menubar semantics are already owned by Kobalte; form controls are deliberate native controls inside the menu. |
+| `owner-surface-consistency.test.ts`                       | Titlebar row hover/focus colors are guarded against palette drift.                                            |
+| `titlebar-menubar.test.ts`                                | Browser coverage already opens Run/View menus and screenshots titlebar menu regions.                          |
 
 ## Evidence
 
-| File | Finding | Decision |
-| --- | --- | --- |
-| `titlebar.css` | `.titlebar-menubar-toggle:hover` and `.titlebar-menubar-range:hover` get `--surface-hover`, but `:focus-within` is missing. | Add `:focus-within` to the same visual rule. |
-| `TitlebarMenubar.tsx` | Run menu has checkbox controls; View menu has opacity/zoom range controls. | Do not replace native controls; improve the shared row state. |
-| `owner-surface-consistency.test.ts` | Static guard currently locks the hover-only selector. | Update it to require focus-within. |
+| File                                | Finding                                                                                                                     | Decision                                                      |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `titlebar.css`                      | `.titlebar-menubar-toggle:hover` and `.titlebar-menubar-range:hover` get `--surface-hover`, but `:focus-within` is missing. | Add `:focus-within` to the same visual rule.                  |
+| `TitlebarMenubar.tsx`               | Run menu has checkbox controls; View menu has opacity/zoom range controls.                                                  | Do not replace native controls; improve the shared row state. |
+| `owner-surface-consistency.test.ts` | Static guard currently locks the hover-only selector.                                                                       | Update it to require focus-within.                            |
 
 ## Implementation
 

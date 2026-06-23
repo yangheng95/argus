@@ -87,10 +87,12 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "spinner-motion" })
-    if (path === "/global/projects/discover") return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
+    if (path === "/global/projects/discover")
+      return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
     if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: projectRoot })
@@ -112,7 +114,14 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
@@ -139,7 +148,8 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     if (path === `/task/${taskID}/operator-model-context`)
       return send({ taskID, sessionID: "session-spinner-motion", agent: "orchestrator", model: null })
     if (path === `/task/${taskID}/browser-preview`) return previewTargetHold
-    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+    if (path === `/task/${taskID}/conversation/events`)
+      return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send([])
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
@@ -160,15 +170,18 @@ test("loading spinners animate through shared motion tokens and stop for reduced
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 860 })
-    await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", seed.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      localStorage.setItem("oc_directory", seed.projectRoot)
-      localStorage.setItem("oc_workspace_directory", seed.projectRoot)
-      localStorage.setItem("oc_workspace_task", seed.taskID)
-    }, { serverUrl: server.origin, taskID, projectRoot })
+    await page.evaluateOnNewDocument(
+      (seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", seed.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_directory", seed.projectRoot)
+        localStorage.setItem("oc_workspace_directory", seed.projectRoot)
+        localStorage.setItem("oc_workspace_task", seed.taskID)
+      },
+      { serverUrl: server.origin, taskID, projectRoot },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
@@ -288,7 +301,15 @@ test("loading spinners animate through shared motion tokens and stop for reduced
     assert.equal(reduced.notification.animationName, "none")
   } finally {
     releasePreviewTarget?.(
-      send({ taskID, kind: "missing", status: "missing", viewports: [], diagnostics: [], candidates: [], source: "none" }),
+      send({
+        taskID,
+        kind: "missing",
+        status: "missing",
+        viewports: [],
+        diagnostics: [],
+        candidates: [],
+        source: "none",
+      }),
     )
     await browser.close().catch(() => undefined)
     await server.close()

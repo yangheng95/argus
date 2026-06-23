@@ -138,9 +138,7 @@ const ArchitectPrebuiltScorerSchema = z.object({
 const ArchitectContractAuditScorerSchema = z.object({
   type: z
     .literal("contract_audit")
-    .describe(
-      "contract_audit — static audit of typed-contract field literals against registered graph contract_ids.",
-    ),
+    .describe("contract_audit — static audit of typed-contract field literals against registered graph contract_ids."),
   name: z.string().min(1),
   spec: z.object({
     kind: z.literal("contract_graph"),
@@ -184,10 +182,7 @@ const ArchitectAcceptanceSpecSchema = z.object({
 })
 
 const ArchitectGoalContractFieldsSchema = GoalContractFieldsSchema.extend({
-  acceptance_specs: z
-    .array(ArchitectAcceptanceSpecSchema)
-    .min(1)
-    .describe("Architect-visible typed acceptance specs."),
+  acceptance_specs: z.array(ArchitectAcceptanceSpecSchema).min(1).describe("Architect-visible typed acceptance specs."),
 })
 
 const ArchitectGoalContractUpdateSchema = GoalContractUpdateSchema.extend({
@@ -198,24 +193,26 @@ const ArchitectGoalContractUpdateSchema = GoalContractUpdateSchema.extend({
     .optional(),
 })
 
-const RegisterVisualEvidenceAcceptanceToolInputSchema = z.object({
-  goal_id: z.string().min(1).describe("Existing verification or integration goal that owns final visual parity."),
-  source_requirement_id: z
-    .string()
-    .min(1)
-    .describe("REQ-N claimed by the goal and represented by this final visual acceptance."),
-  title: z.string().min(8).describe("Human-readable final visual acceptance title."),
-  criteria: z
-    .string()
-    .min(40)
-    .describe("Rubric question comparing the implementation's rendered visual evidence against the references."),
-  reference_tokens: z
-    .array(z.string().trim().min(1))
-    .min(1)
-    .describe(
-      "Reference coverage ids, surface names, visual spec ids, screenshot artifact ids, or region ids that the final visual acceptance must own.",
-    ),
-}).strict()
+const RegisterVisualEvidenceAcceptanceToolInputSchema = z
+  .object({
+    goal_id: z.string().min(1).describe("Existing verification or integration goal that owns final visual parity."),
+    source_requirement_id: z
+      .string()
+      .min(1)
+      .describe("REQ-N claimed by the goal and represented by this final visual acceptance."),
+    title: z.string().min(8).describe("Human-readable final visual acceptance title."),
+    criteria: z
+      .string()
+      .min(40)
+      .describe("Rubric question comparing the implementation's rendered visual evidence against the references."),
+    reference_tokens: z
+      .array(z.string().trim().min(1))
+      .min(1)
+      .describe(
+        "Reference coverage ids, surface names, visual spec ids, screenshot artifact ids, or region ids that the final visual acceptance must own.",
+      ),
+  })
+  .strict()
 
 function parseRegisterContractInput(input: unknown): ArchitectContractRef {
   const parsed = RegisterContractToolInputSchema.parse(input)
@@ -971,8 +968,7 @@ export function createArchitectOutputTools(input: {
   const dir = input.workDir ?? Instance.directory
   const knownResearchEvidenceRefs =
     input.knownResearchEvidenceRefs !== undefined ? new Set(input.knownResearchEvidenceRefs) : undefined
-  const knownRequirementIDs =
-    input.knownRequirementIDs !== undefined ? new Set(input.knownRequirementIDs) : undefined
+  const knownRequirementIDs = input.knownRequirementIDs !== undefined ? new Set(input.knownRequirementIDs) : undefined
 
   // Single source of truth for "is the architect output complete?". Both the
   // terminal-tool-scoping predicate (`isReadyToFinalize` below) and the
@@ -1029,10 +1025,7 @@ export function createArchitectOutputTools(input: {
         })
         const next: RegisteredGoal = {
           ...prior,
-          acceptance_specs: [
-            ...prior.acceptance_specs.filter((spec) => spec.id !== visualSpec.id),
-            visualSpec,
-          ],
+          acceptance_specs: [...prior.acceptance_specs.filter((spec) => spec.id !== visualSpec.id), visualSpec],
         }
         const parsedNext = GoalContractFieldsSchema.safeParse(next)
         if (!parsedNext.success) {

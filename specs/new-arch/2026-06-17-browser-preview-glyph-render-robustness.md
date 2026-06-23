@@ -30,13 +30,13 @@ Observed local isolation:
 
 ## Call Point Sweep
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Runtime capture contract | `packages/opencorvus/src/runtime/capture-contract.ts` | Add a first-class `glyph` runtime layer instead of hiding missing glyphs under `pixel` or `dom`. |
-| Browser preview runner | `packages/opencorvus/src/browser-preview/evidence-runner.ts` | Collect visible CJK glyph diagnostics in the Node sidecar and fail `glyph` when coverage is missing. |
-| Runtime visual page helper | `packages/opencorvus/src/runtime/visual-page.ts` | Keep the shared runtime capture contract aligned with browser preview captures. |
-| Browser preview unit tests | `packages/opencorvus/test/browser-preview/evidence-runner.test.ts` | Pin layer semantics and summaries. |
-| Verification tests | `packages/opencorvus/test/browser-preview/verification.test.ts` | Update the shared passed layer fixture so old tests remain strict. |
+| Surface                    | File                                                               | Decision                                                                                             |
+| -------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Runtime capture contract   | `packages/opencorvus/src/runtime/capture-contract.ts`              | Add a first-class `glyph` runtime layer instead of hiding missing glyphs under `pixel` or `dom`.     |
+| Browser preview runner     | `packages/opencorvus/src/browser-preview/evidence-runner.ts`       | Collect visible CJK glyph diagnostics in the Node sidecar and fail `glyph` when coverage is missing. |
+| Runtime visual page helper | `packages/opencorvus/src/runtime/visual-page.ts`                   | Keep the shared runtime capture contract aligned with browser preview captures.                      |
+| Browser preview unit tests | `packages/opencorvus/test/browser-preview/evidence-runner.test.ts` | Pin layer semantics and summaries.                                                                   |
+| Verification tests         | `packages/opencorvus/test/browser-preview/verification.test.ts`    | Update the shared passed layer fixture so old tests remain strict.                                   |
 
 ## Fix Shape
 

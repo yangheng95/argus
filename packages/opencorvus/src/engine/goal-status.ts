@@ -91,7 +91,10 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
   // superseded_reason is not dependency-satisfying anymore; startNewAttempt
   // uses that field as retry intent before the next goal_run exists.
   const head = tips[0]!
-  if ((head.status === "completed" || head.status === "failed" || head.status === "aborted") && head.superseded_reason) {
+  if (
+    (head.status === "completed" || head.status === "failed" || head.status === "aborted") &&
+    head.superseded_reason
+  ) {
     return "pending"
   }
   return mapRunStatus(head.status as EngineGoalRunStatus)

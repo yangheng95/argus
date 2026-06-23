@@ -23,14 +23,20 @@ function overlayCss(): string {
     .join("\n")
 }
 
-async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+async function saveScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
   const target = join(SCRATCH_ROOT, name)
   mkdirSync(dirname(target), { recursive: true })
   await writeFile(target, await element.screenshot({}))
   return target
 }
 
-async function hoverBackground(page: { hover(selector: string): Promise<void>; $eval<T>(selector: string, fn: (node: Element) => T): Promise<T> }, selector: string) {
+async function hoverBackground(
+  page: { hover(selector: string): Promise<void>; $eval<T>(selector: string, fn: (node: Element) => T): Promise<T> },
+  selector: string,
+) {
   await page.hover(selector)
   return page.$eval(selector, (node) => getComputedStyle(node).backgroundColor)
 }

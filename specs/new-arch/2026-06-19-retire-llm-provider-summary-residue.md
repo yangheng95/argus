@@ -19,20 +19,20 @@ contract.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
+| Source                                                       | Relevant constraint                                                                                                |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | `2026-06-18-settings-primitives-single-source-completion.md` | Provider rows must render through `SettingsRow`; old provider row wrappers should be retired instead of preserved. |
-| `2026-06-18-retire-settings-config-shell-residue.md` | Retired settings shells should become absence guards once production creation points are gone. |
-| `2026-06-18-select-control-shell-single-source.md` | Settings controls should converge on shared primitives, not local hand-written shells. |
-| `provider-settings-layout.test.ts` | Current provider surface contract is `.provider-settings-row`, `.provider-row-summary`, and `SettingsPill`. |
+| `2026-06-18-retire-settings-config-shell-residue.md`         | Retired settings shells should become absence guards once production creation points are gone.                     |
+| `2026-06-18-select-control-shell-single-source.md`           | Settings controls should converge on shared primitives, not local hand-written shells.                             |
+| `provider-settings-layout.test.ts`                           | Current provider surface contract is `.provider-settings-row`, `.provider-row-summary`, and `SettingsPill`.        |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'llm-panel|llm-summary-row|llm-summary|llm-api-key-summary|llm-auth-row' packages/overlay/src packages/overlay/test specs docs --glob '*.*'` | Runtime hits are only `settings.css`; test hit is `config-panel-sizing.test.ts`. No component or HTML owner emits these classes. | Delete the CSS selectors and convert the test to an absence guard. |
-| `rg -n 'provider-settings-row|provider-row-summary|provider-panel|provider-refresh-button|provider-search-input|SettingsRow|SettingsPill' packages/overlay/src/components/settings/ProvidersPanel.tsx packages/overlay/src/styles/surfaces/settings.css packages/overlay/test --glob '*.*'` | Provider UI has active owners in `ProvidersPanel.tsx` and provider CSS. | Keep provider-specific owner classes; do not replace them with LLM-era names. |
-| `rg -n 'provider-flat-row|provider-settings-row|provider-row-summary|SettingsRow|llm-summary-row|llm-panel' specs/new-arch/2026-06-18-settings-primitives-single-source-completion.md packages/overlay/src/components/settings packages/overlay/test --glob '*.*'` | Specs/tests support primitive provider rows; no current spec requires `.llm-*`. | Treat `.llm-*` as retired residue, not compatibility. |
+| Command                       | Result                | Decision             |
+| ----------------------------- | --------------------- | -------------------- | ----------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `rg -n 'llm-panel             | llm-summary-row       | llm-summary          | llm-api-key-summary     | llm-auth-row' packages/overlay/src packages/overlay/test specs docs --glob '_._'` | Runtime hits are only `settings.css`; test hit is `config-panel-sizing.test.ts`. No component or HTML owner emits these classes.                                  | Delete the CSS selectors and convert the test to an absence guard.                                                                                              |
+| `rg -n 'provider-settings-row | provider-row-summary  | provider-panel       | provider-refresh-button | provider-search-input                                                             | SettingsRow                                                                                                                                                       | SettingsPill' packages/overlay/src/components/settings/ProvidersPanel.tsx packages/overlay/src/styles/surfaces/settings.css packages/overlay/test --glob '_._'` | Provider UI has active owners in `ProvidersPanel.tsx` and provider CSS. | Keep provider-specific owner classes; do not replace them with LLM-era names. |
+| `rg -n 'provider-flat-row     | provider-settings-row | provider-row-summary | SettingsRow             | llm-summary-row                                                                   | llm-panel' specs/new-arch/2026-06-18-settings-primitives-single-source-completion.md packages/overlay/src/components/settings packages/overlay/test --glob '_._'` | Specs/tests support primitive provider rows; no current spec requires `.llm-*`.                                                                                 | Treat `.llm-*` as retired residue, not compatibility.                   |
 
 ## Fix
 

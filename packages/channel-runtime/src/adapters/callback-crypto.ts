@@ -79,7 +79,9 @@ export function encryptCallbackEnvelope(input: EncryptInput) {
   const message = Buffer.from(input.message)
   const length = Buffer.alloc(4)
   length.writeUInt32BE(message.length)
-  const plain = pkcs7Pad(Buffer.concat([input.random ?? randomBytes(16), length, message, Buffer.from(input.receiveId)]))
+  const plain = pkcs7Pad(
+    Buffer.concat([input.random ?? randomBytes(16), length, message, Buffer.from(input.receiveId)]),
+  )
   const cipher = createCipheriv("aes-256-cbc", key, key.subarray(0, 16))
   cipher.setAutoPadding(false)
   return Buffer.concat([cipher.update(plain), cipher.final()]).toString("base64")

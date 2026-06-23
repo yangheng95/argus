@@ -24,25 +24,25 @@ it caused live resize jank.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, no blind patches, test every change, visually verify UI work, and commit/push every round. |
-| `2026-06-22-overlay-viewport-size-contract.md` | Native minimum dimensions are `1120x720`; pane and center workbench minimum widths are token-owned. |
-| `2026-06-22-native-resize-no-set-size-loop.md` | Do not restore `WindowEvent::Resized -> window.set_size(...)`; native live resize feedback caused jank. |
+| Source                                                   | Constraint carried forward                                                                                                               |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | No fallback, no duplicate source, no blind patches, test every change, visually verify UI work, and commit/push every round.             |
+| `2026-06-22-overlay-viewport-size-contract.md`           | Native minimum dimensions are `1120x720`; pane and center workbench minimum widths are token-owned.                                      |
+| `2026-06-22-native-resize-no-set-size-loop.md`           | Do not restore `WindowEvent::Resized -> window.set_size(...)`; native live resize feedback caused jank.                                  |
 | `2026-06-22-center-workbench-panel-min-size-contract.md` | `--ui-workbench-panel-min-width` remains the only center panel minimum width source; multiple open panels scroll instead of compressing. |
-| `2026-06-22-window-resize-center-layout-frame.md` | Window resize work is frame-coalesced and center workbench geometry has one RAF owner. |
+| `2026-06-22-window-resize-center-layout-frame.md`        | Window resize work is frame-coalesced and center workbench geometry has one RAF owner.                                                   |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Native creation minimum | `src-tauri/tauri.conf.json` sets `minWidth: 1120` and `minHeight: 720`. | Keep the native minimum dimensions as the OS-owned hard floor. |
-| Native startup aspect | `src-tauri/src/main.rs` derives `overlay_min_aspect_ratio()` from the configured minimum size. | Keep startup aspect correction; do not add a `WindowEvent::Resized -> set_size()` correction loop. |
-| Native Windows live sizing | `src-tauri/src/main.rs` can install a Win32 subclass during setup. | Constrain the mutable `WM_SIZING` rectangle before the OS commits the resize, so native illegal aspect ratios never enter the WebView. |
-| Browser shell size | `base.css` sets body `min-width`, `min-height`, and `height: 100vh`. | Replace raw viewport height with a legal layout-frame height derived from the same minimum size tokens. |
-| UI zoom | `services/theme.ts` computes scale from raw viewport dimensions. | Compute scale from the legal overlay layout frame so a tall/narrow illegal viewport cannot enlarge the UI. |
-| Center workbench panel minimum | `main.tsx` and `workspace.css` resolve `--ui-workbench-panel-min-width`. | Preserve this source and extend browser coverage for illegal aspect viewports. |
-| Tests | `overlay-window-size-contract.test.ts` and `center-workbench-separator-browser.test.ts` cover min dimensions and panel width. | Extend both plus a pure utility test for legal layout-frame math. |
+| Surface                        | Evidence                                                                                                                      | Decision                                                                                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Native creation minimum        | `src-tauri/tauri.conf.json` sets `minWidth: 1120` and `minHeight: 720`.                                                       | Keep the native minimum dimensions as the OS-owned hard floor.                                                                         |
+| Native startup aspect          | `src-tauri/src/main.rs` derives `overlay_min_aspect_ratio()` from the configured minimum size.                                | Keep startup aspect correction; do not add a `WindowEvent::Resized -> set_size()` correction loop.                                     |
+| Native Windows live sizing     | `src-tauri/src/main.rs` can install a Win32 subclass during setup.                                                            | Constrain the mutable `WM_SIZING` rectangle before the OS commits the resize, so native illegal aspect ratios never enter the WebView. |
+| Browser shell size             | `base.css` sets body `min-width`, `min-height`, and `height: 100vh`.                                                          | Replace raw viewport height with a legal layout-frame height derived from the same minimum size tokens.                                |
+| UI zoom                        | `services/theme.ts` computes scale from raw viewport dimensions.                                                              | Compute scale from the legal overlay layout frame so a tall/narrow illegal viewport cannot enlarge the UI.                             |
+| Center workbench panel minimum | `main.tsx` and `workspace.css` resolve `--ui-workbench-panel-min-width`.                                                      | Preserve this source and extend browser coverage for illegal aspect viewports.                                                         |
+| Tests                          | `overlay-window-size-contract.test.ts` and `center-workbench-separator-browser.test.ts` cover min dimensions and panel width. | Extend both plus a pure utility test for legal layout-frame math.                                                                      |
 
 ## Root Cause
 

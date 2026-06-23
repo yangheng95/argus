@@ -12,20 +12,20 @@ the launcher token contract.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-18-workspace-split-launcher-button-primitive.md` | Terminal, editor, and Coding CLI launchers share the `Button` primitive; local chrome must not own focus or operation styling. |
-| `2026-06-18-popup-contrast-light-palette.md` | Popup and launcher colors must be corrected at the shared token source rather than component-local overrides. |
-| `Icon.tsx` header comment | Callers use the shared Icon primitive instead of writing inline SVG; custom SVG is allowed only for product-specific glyphs. |
-| `.workspace-coding-cli-*-icon[data-coding-cli-icon]` rules | Coding CLI brand colors are already declared in CSS as the launcher-level source of truth. |
+| Source                                                     | Existing decision                                                                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `2026-06-18-workspace-split-launcher-button-primitive.md`  | Terminal, editor, and Coding CLI launchers share the `Button` primitive; local chrome must not own focus or operation styling. |
+| `2026-06-18-popup-contrast-light-palette.md`               | Popup and launcher colors must be corrected at the shared token source rather than component-local overrides.                  |
+| `Icon.tsx` header comment                                  | Callers use the shared Icon primitive instead of writing inline SVG; custom SVG is allowed only for product-specific glyphs.   |
+| `.workspace-coding-cli-*-icon[data-coding-cli-icon]` rules | Coding CLI brand colors are already declared in CSS as the launcher-level source of truth.                                     |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "coding-claude-code|coding-gemini|coding-glm" packages/overlay/src packages/overlay/test specs/new-arch` | `WorkspaceCodingCliLaunchers` maps CLI profile icons to Icon names, and `editor-brand-icons.test.ts` currently locks the hard-coded palette into place. | Update the icon test contract to preserve glyph shape while requiring token-driven color. |
-| `rg -n "oc-brand-claude-code|oc-brand-gemini|workspace-coding-cli" packages/overlay/src/styles` | CSS already maps Claude Code and Gemini to brand tokens and GLM to `--text-strong`. | Keep CSS as the single visible color source. |
-| `Icon.tsx` inspection | Claude Code uses `#D97757`, Gemini uses `#8E75B2`, and GLM uses `#2D2D2D` plus `#FFFFFF`. | Replace CLI foreground fills with `currentColor`; use an existing surface token for GLM cutout paths. |
+| Sweep                        | Result                                                                                    | Decision                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `rg -n "coding-claude-code   | coding-gemini                                                                             | coding-glm" packages/overlay/src packages/overlay/test specs/new-arch`                                | `WorkspaceCodingCliLaunchers` maps CLI profile icons to Icon names, and `editor-brand-icons.test.ts` currently locks the hard-coded palette into place. | Update the icon test contract to preserve glyph shape while requiring token-driven color. |
+| `rg -n "oc-brand-claude-code | oc-brand-gemini                                                                           | workspace-coding-cli" packages/overlay/src/styles`                                                    | CSS already maps Claude Code and Gemini to brand tokens and GLM to `--text-strong`.                                                                     | Keep CSS as the single visible color source.                                              |
+| `Icon.tsx` inspection        | Claude Code uses `#D97757`, Gemini uses `#8E75B2`, and GLM uses `#2D2D2D` plus `#FFFFFF`. | Replace CLI foreground fills with `currentColor`; use an existing surface token for GLM cutout paths. |
 
 ## Fix
 

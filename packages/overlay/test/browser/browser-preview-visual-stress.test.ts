@@ -92,9 +92,8 @@ async function waitForActivityState(
   for (;;) {
     if (await page.evaluate(predicate)) return
     const diagnosticSnapshot = diagnostics()
-    const signature = JSON.stringify(
-      {
-        page: await page.evaluate(() => ({
+    const signature = JSON.stringify({
+      page: await page.evaluate(() => ({
         text: document.body.textContent?.slice(0, 1800) || "",
         targetStatus: document.querySelector<HTMLElement>(".browser-preview-status")?.dataset.status || "",
         evidenceStatus: document.querySelector<HTMLElement>(".browser-preview-evidence-status")?.dataset.status || "",
@@ -103,9 +102,8 @@ async function waitForActivityState(
             "[data-ui='browser-preview-selection-failed'], [data-ui='browser-preview-target-load-failed'], [data-ui='browser-preview-live'], [data-ui='browser-preview-live-error'], [data-ui='browser-preview-target-failed'], [data-ui='browser-preview-evidence'], [data-ui='browser-preview-evidence-missing']",
           )?.dataset.status || "",
       })),
-        diagnostics: activityDiagnostics(diagnosticSnapshot),
-      },
-    )
+      diagnostics: activityDiagnostics(diagnosticSnapshot),
+    })
     if (signature !== previousSignature) {
       previousSignature = signature
       lastActivity = Date.now()
@@ -166,7 +164,9 @@ async function waitForText(
           text: stage?.textContent?.slice(0, 1200) || "",
         }
       })
-      assert.fail(`No page activity while waiting for ${label}\n${JSON.stringify({ state: JSON.parse(signature), preview }, null, 2)}`)
+      assert.fail(
+        `No page activity while waiting for ${label}\n${JSON.stringify({ state: JSON.parse(signature), preview }, null, 2)}`,
+      )
     }
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
@@ -313,10 +313,7 @@ async function assertImageMatchesReference(
       return Array.from(new Uint8Array(await response.arrayBuffer()))
     }),
   )
-  const [actualAverage, expectedAverage] = await Promise.all([
-    averageRgb(actualBytes),
-    averageRgb(reference),
-  ])
+  const [actualAverage, expectedAverage] = await Promise.all([averageRgb(actualBytes), averageRgb(reference)])
   const distance =
     Math.abs(actualAverage.r - expectedAverage.r) +
     Math.abs(actualAverage.g - expectedAverage.g) +
@@ -368,7 +365,11 @@ function assertNoPreviewLayoutBreakage(layout: {
     layout.legalShellOverflowX <= 1,
     `page should not overflow the legal overlay shell\n${JSON.stringify(layout, null, 2)}`,
   )
-  assert.deepEqual(layout.badShellBoxes, [], `preview elements escaped the legal shell\n${JSON.stringify(layout, null, 2)}`)
+  assert.deepEqual(
+    layout.badShellBoxes,
+    [],
+    `preview elements escaped the legal shell\n${JSON.stringify(layout, null, 2)}`,
+  )
   assert.deepEqual(layout.badBoxes, [], `preview elements escaped their panel\n${JSON.stringify(layout, null, 2)}`)
   assert.deepEqual(layout.overlaps, [], `preview controls overlap incoherently\n${JSON.stringify(layout, null, 2)}`)
   assert.equal(
@@ -443,7 +444,9 @@ async function previewLayout(page: Awaited<ReturnType<Awaited<ReturnType<typeof 
     const evidenceText = document.querySelector<HTMLElement>(".browser-preview-evidence-status span:last-child")
     return {
       bodyOverflowX: document.documentElement.scrollWidth - window.innerWidth,
-      legalShellOverflowX: shell ? document.documentElement.scrollWidth - shell.width : document.documentElement.scrollWidth,
+      legalShellOverflowX: shell
+        ? document.documentElement.scrollWidth - shell.width
+        : document.documentElement.scrollWidth,
       shell,
       panel,
       command,
@@ -755,10 +758,7 @@ test(
           return json({ events: [], traceDir: `${projectRoot}/.opencorvus/trace`, enabled: true })
         if (path === `/task/${otherTaskID}/trace`)
           return json({ events: [], traceDir: `${otherProjectRoot}/.opencorvus/trace`, enabled: true })
-        if (
-          path === "/task/events" ||
-          path === `/task/${taskID}/conversation/events`
-        ) {
+        if (path === "/task/events" || path === `/task/${taskID}/conversation/events`) {
           return eventStream()
         }
         if (path === `/task/${taskID}/events`)
@@ -934,11 +934,15 @@ test(
       )
       const taskRowSelector = `.task-row-main[data-task-id="${taskID}"]`
       await page.waitForSelector(taskRowSelector, { visible: true })
-      const taskRowHitTest = await page.$eval(taskRowSelector, (node: HTMLElement, selector) => {
-        const rect = node.getBoundingClientRect()
-        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-        return hit?.closest(String(selector)) === node
-      }, taskRowSelector)
+      const taskRowHitTest = await page.$eval(
+        taskRowSelector,
+        (node: HTMLElement, selector) => {
+          const rect = node.getBoundingClientRect()
+          const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+          return hit?.closest(String(selector)) === node
+        },
+        taskRowSelector,
+      )
       assert.equal(taskRowHitTest, true)
       await page.click(taskRowSelector)
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
@@ -1030,7 +1034,12 @@ test(
         requestLog,
       }))
       assertNoPreviewLayoutBreakage(await previewLayout(page))
-      await assertImageMatchesReference(page, '[data-ui="browser-preview-screenshot"]', png.evidence, "primary evidence")
+      await assertImageMatchesReference(
+        page,
+        '[data-ui="browser-preview-screenshot"]',
+        png.evidence,
+        "primary evidence",
+      )
       await writeAndAssertScreenshot(page, "03-ready-desktop")
 
       await page.click('[data-ui="browser-preview-candidate-trigger"]')
@@ -1203,7 +1212,11 @@ test(
         liveSnapshotBodies.some((body) => (body as any).targetID === alternateTargetID),
         "alternate target should be loaded through live snapshot after selection",
       )
-      assert.equal(captureBodies.length, 0, `visual stress must not auto-capture evidence\n${JSON.stringify(captureBodies, null, 2)}`)
+      assert.equal(
+        captureBodies.length,
+        0,
+        `visual stress must not auto-capture evidence\n${JSON.stringify(captureBodies, null, 2)}`,
+      )
       assert.ok(
         requestLog.some((entry) => entry.startsWith(`POST /task/${taskID}/browser-preview/live/snapshot`)),
         "live snapshot route should be exercised",

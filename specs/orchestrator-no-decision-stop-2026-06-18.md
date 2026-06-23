@@ -31,14 +31,14 @@ rg -n "finish|TerminalToolContract|terminalTool|processTask|SessionPrompt|modify
 
 Relevant surfaces:
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/orchestrator/loop.ts` | One wake is one orchestrator decision pass; no internal loop. | Keep. Do not add a scheduler or hidden retry loop here. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | `processTask` only treats hard errors / stream errors / INFORMATION MISSING as failures. Plain `finish=stop` text is accepted. | Add an orchestrator decision-contract check after the prompt returns. |
-| `packages/opencorvus/src/session/loop.ts` | Terminal-tool recovery only runs when a `terminalToolContract` exists. Orchestrator has none. | Do not retrofit worker terminal-tool semantics into orchestrator. Add orchestrator-specific contract validation at the host boundary. |
-| `packages/opencorvus/src/orchestrator/stateful-tool-names.ts` | `read_context` and `query_failed_goals` are read-only state snapshots. | A wake that only used these and then prose-stopped is no decision. |
-| `packages/opencorvus/src/session/repair-hint.ts` | Repairs malformed structured tool calls only when the provider emitted an actual tool call. | Text containing provider tool-call sentinel tokens is not repairable there; surface as orchestrator protocol failure. |
-| `packages/opencorvus/src/engine/persist.ts` | `recordOrchestratorStreamError` + fuse already preserve orchestrator failures. | Reuse the existing error funnel; do not create a second persistence path. |
+| Surface                                                       | Evidence                                                                                                                       | Decision                                                                                                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/orchestrator/loop.ts`                | One wake is one orchestrator decision pass; no internal loop.                                                                  | Keep. Do not add a scheduler or hidden retry loop here.                                                                               |
+| `packages/opencorvus/src/orchestrator/agent.ts`               | `processTask` only treats hard errors / stream errors / INFORMATION MISSING as failures. Plain `finish=stop` text is accepted. | Add an orchestrator decision-contract check after the prompt returns.                                                                 |
+| `packages/opencorvus/src/session/loop.ts`                     | Terminal-tool recovery only runs when a `terminalToolContract` exists. Orchestrator has none.                                  | Do not retrofit worker terminal-tool semantics into orchestrator. Add orchestrator-specific contract validation at the host boundary. |
+| `packages/opencorvus/src/orchestrator/stateful-tool-names.ts` | `read_context` and `query_failed_goals` are read-only state snapshots.                                                         | A wake that only used these and then prose-stopped is no decision.                                                                    |
+| `packages/opencorvus/src/session/repair-hint.ts`              | Repairs malformed structured tool calls only when the provider emitted an actual tool call.                                    | Text containing provider tool-call sentinel tokens is not repairable there; surface as orchestrator protocol failure.                 |
+| `packages/opencorvus/src/engine/persist.ts`                   | `recordOrchestratorStreamError` + fuse already preserve orchestrator failures.                                                 | Reuse the existing error funnel; do not create a second persistence path.                                                             |
 
 ## Fix
 

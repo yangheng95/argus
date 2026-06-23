@@ -144,7 +144,9 @@ export namespace ProviderAuth {
     .meta({ ref: "ProviderAuthPrompt" })
   export type Prompt = z.infer<typeof Prompt>
 
-  function selectPromptValue(prompt: Extract<NonNullable<AuthHook["methods"][number]["prompts"]>[number], { type: "select" }>) {
+  function selectPromptValue(
+    prompt: Extract<NonNullable<AuthHook["methods"][number]["prompts"]>[number], { type: "select" }>,
+  ) {
     const selectValue = typeof prompt.selectValue === "string" ? prompt.selectValue : ""
     if (!selectValue) {
       throw new Error(`Provider auth select prompt ${prompt.key} requires selectValue`)
@@ -171,25 +173,23 @@ export namespace ProviderAuth {
       const currentInputs = input.inputs ?? {}
       return method.prompts
         .filter((p) => !p.condition || p.condition(currentInputs))
-        .map(
-          (p): Prompt => {
-            if (p.type === "select") {
-              return {
-                type: "select",
-                key: p.key,
-                message: p.message,
-                selectValue: selectPromptValue(p),
-                options: p.options,
-              }
-            }
+        .map((p): Prompt => {
+          if (p.type === "select") {
             return {
-              type: "text",
+              type: "select",
               key: p.key,
               message: p.message,
-              placeholder: p.placeholder,
+              selectValue: selectPromptValue(p),
+              options: p.options,
             }
-          },
-        )
+          }
+          return {
+            type: "text",
+            key: p.key,
+            message: p.message,
+            placeholder: p.placeholder,
+          }
+        })
     },
   )
 

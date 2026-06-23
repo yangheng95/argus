@@ -21,20 +21,20 @@ their visual hierarchy is a dense file list, not a toolbar button group.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `2026-06-01-overlay-file-explorer-editor.md` | Explorer rows are flat, dense, and icon-led. No nested cards. |
-| `2026-06-18-file-explorer-row-button-semantics.md` | Rows are command buttons, not an incomplete ARIA tree widget. |
-| `2026-06-20-file-explorer-row-focus-visible.md` | Keep independent keyboard focus outline. |
+| Source                                               | Constraint                                                                           |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `2026-06-01-overlay-file-explorer-editor.md`         | Explorer rows are flat, dense, and icon-led. No nested cards.                        |
+| `2026-06-18-file-explorer-row-button-semantics.md`   | Rows are command buttons, not an incomplete ARIA tree widget.                        |
+| `2026-06-20-file-explorer-row-focus-visible.md`      | Keep independent keyboard focus outline.                                             |
 | `2026-06-20-file-explorer-row-button-size-source.md` | Rows must keep using `Button`; row geometry source stays in `FileExplorerPanel.tsx`. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "file-explorer-row|oc-button > svg|font-weight" packages/overlay/src packages/overlay/test` | Production owner is `inspector.css`; global Button icon and font-weight rules are the inherited source. | Override only `.file-explorer-row`, not the primitive. |
-| `git show 424d932543 -- FileExplorerPanel.tsx inspector.css` | The migration introduced `<Button>` rows and CSS variables but no row-local SVG/font overrides. | Add missing visual isolation. |
-| `file-explorer-accessibility.test.ts` | Browser fixture already opens Explorer in an isolated page and records screenshots. | Extend it to assert row icon width and body font weight. |
+| Sweep                                                        | Result                                                                                          | Decision                                                 |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `rg -n "file-explorer-row                                    | oc-button > svg                                                                                 | font-weight" packages/overlay/src packages/overlay/test` | Production owner is `inspector.css`; global Button icon and font-weight rules are the inherited source. | Override only `.file-explorer-row`, not the primitive. |
+| `git show 424d932543 -- FileExplorerPanel.tsx inspector.css` | The migration introduced `<Button>` rows and CSS variables but no row-local SVG/font overrides. | Add missing visual isolation.                            |
+| `file-explorer-accessibility.test.ts`                        | Browser fixture already opens Explorer in an isolated page and records screenshots.             | Extend it to assert row icon width and body font weight. |
 
 ## Implementation
 
@@ -58,11 +58,11 @@ their visual hierarchy is a dense file list, not a toolbar button group.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Sartre read-only audit | The `selectedFilePath()` expansion effect can call `loadDirectory()` while the center Explorer panel is inactive. |
-| `FileExplorerPanel.tsx` | Initial root load and refresh interval are already active-gated; selected-file ancestor loading is the remaining trigger gap. |
-| `2026-06-20-file-explorer-row-button-size-source.md` | Keep row geometry and Button primitive ownership unchanged. |
+| Source                                               | Constraint carried forward                                                                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Sartre read-only audit                               | The `selectedFilePath()` expansion effect can call `loadDirectory()` while the center Explorer panel is inactive.             |
+| `FileExplorerPanel.tsx`                              | Initial root load and refresh interval are already active-gated; selected-file ancestor loading is the remaining trigger gap. |
+| `2026-06-20-file-explorer-row-button-size-source.md` | Keep row geometry and Button primitive ownership unchanged.                                                                   |
 
 ### Fix Plan
 
@@ -95,12 +95,12 @@ their visual hierarchy is a dense file list, not a toolbar button group.
 
 ### Verification
 
-| Check | Result |
-| --- | --- |
-| `bun test packages/overlay/test/file-explorer-editor.test.ts --timeout 30000` | 4 pass |
-| `bun run --cwd packages/overlay typecheck` | Pass |
-| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/file-explorer-accessibility.test.ts` | 2 pass |
-| Visual QA | Reviewed `.scratch/file-explorer-dark-row-density.png`, `.scratch/file-explorer-search-field-focus.png`, `.scratch/file-explorer-row-focus-visible.png`, and `.scratch/file-explorer-retry-button-primitive.png`. |
+| Check                                                                                                             | Result                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun test packages/overlay/test/file-explorer-editor.test.ts --timeout 30000`                                     | 4 pass                                                                                                                                                                                                            |
+| `bun run --cwd packages/overlay typecheck`                                                                        | Pass                                                                                                                                                                                                              |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/file-explorer-accessibility.test.ts` | 2 pass                                                                                                                                                                                                            |
+| Visual QA                                                                                                         | Reviewed `.scratch/file-explorer-dark-row-density.png`, `.scratch/file-explorer-search-field-focus.png`, `.scratch/file-explorer-row-focus-visible.png`, and `.scratch/file-explorer-retry-button-primitive.png`. |
 
 ### Self Review
 

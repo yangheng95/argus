@@ -7,12 +7,12 @@ Document Object Model.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | Frontend fixes require real browser visual evidence and must not hide focus states. |
+| Source                                                     | Relevant constraint                                                                                   |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                | Frontend fixes require real browser visual evidence and must not hide focus states.                   |
 | `2026-06-17-browser-preview-select-style-single-source.md` | Browser Preview candidate Select keeps local layout hooks but shared `.oc-select-*` owns popup style. |
-| `2026-06-18-select-control-shell-single-source.md` | `SelectControl` is the only Kobalte Select shell; consumers keep domain classes for layout. |
-| `2026-06-18-select-control-static-coverage-alignment.md` | Consumers should not duplicate shared select shell classes or popup colors. |
+| `2026-06-18-select-control-shell-single-source.md`         | `SelectControl` is the only Kobalte Select shell; consumers keep domain classes for layout.           |
+| `2026-06-18-select-control-static-coverage-alignment.md`   | Consumers should not duplicate shared select shell classes or popup colors.                           |
 
 ## Problem
 
@@ -34,11 +34,11 @@ shell logic.
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "browser-preview-candidate-trigger|browser-preview-candidate-select|focus-visible|outline: 0" packages/overlay/src packages/overlay/test specs/new-arch -S` | The trigger focus issue is isolated to Browser Preview `inspector.css` and tests. | Add a trigger-level focus-visible rule here. |
-| `SelectControl.tsx` review | Shared Select shell prepends `.oc-select-trigger` but intentionally accepts local trigger classes. | Do not change SelectControl behavior for all consumers. |
-| Browser Preview browser tests review | `browser-preview-evidence.test.ts` opens the real Browser Preview panel with multiple candidates; its failed-selection assertion still waited for the retired `browser-preview-target-error` selector while the component and static test use `browser-preview-selection-failed`. | Extend that fixture to keyboard-focus the trigger, screenshot it, and align the failed-selection assertion to the current single error surface. |
+| Sweep                                     | Result                                                                                                                                                                                                                                                                            | Decision                                                                                                                                        |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------- |
+| `rg -n "browser-preview-candidate-trigger | browser-preview-candidate-select                                                                                                                                                                                                                                                  | focus-visible                                                                                                                                   | outline: 0" packages/overlay/src packages/overlay/test specs/new-arch -S` | The trigger focus issue is isolated to Browser Preview `inspector.css` and tests. | Add a trigger-level focus-visible rule here. |
+| `SelectControl.tsx` review                | Shared Select shell prepends `.oc-select-trigger` but intentionally accepts local trigger classes.                                                                                                                                                                                | Do not change SelectControl behavior for all consumers.                                                                                         |
+| Browser Preview browser tests review      | `browser-preview-evidence.test.ts` opens the real Browser Preview panel with multiple candidates; its failed-selection assertion still waited for the retired `browser-preview-target-error` selector while the component and static test use `browser-preview-selection-failed`. | Extend that fixture to keyboard-focus the trigger, screenshot it, and align the failed-selection assertion to the current single error surface. |
 
 ## Fix Plan
 

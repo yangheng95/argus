@@ -11,10 +11,10 @@ makes task lifecycle status and workflow step status look like the same domain.
 
 ## Sources Of Truth
 
-| Domain | Authoritative source | Allowed display statuses |
-| --- | --- | --- |
+| Domain         | Authoritative source                                                                                                                   | Allowed display statuses                               |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Task lifecycle | `packages/opencorvus/src/engine/task-status.ts`, `packages/opencorvus/src/engine/model.ts`, `packages/overlay/src/services/mission.ts` | `queued`, `active`, `completed`, `failed`, `cancelled` |
-| Workflow step | `packages/opencorvus/src/status/task-status-snapshot.ts` and workflow step projections | `pending`, `running`, `completed`, `skipped`, `failed` |
+| Workflow step  | `packages/opencorvus/src/status/task-status-snapshot.ts` and workflow step projections                                                 | `pending`, `running`, `completed`, `skipped`, `failed` |
 
 `idle` is not a task lifecycle value. It is only the explicit UI text for "no
 selected task".
@@ -23,19 +23,19 @@ selected task".
 
 `rg -n "statusLabel|taskStatusLabel|missionTaskStatusLabel|task\\.status\\.\\$|task\\.status\\.running|workflow\\.status|return map\\[status\\]|translated === key|\\|\\| status" packages/overlay/src packages/overlay/test packages/opencorvus/src`
 
-| Call site | Decision |
-| --- | --- |
-| `packages/overlay/src/components/Board.tsx` local `statusLabel` | Replace with strict task lifecycle helper for `StatusBadge`; render frontend research workflow badge with strict workflow helper. |
-| `packages/overlay/src/components/TaskList.tsx` local `statusLabel` | Replace task row badges with strict task lifecycle helper. |
-| `packages/overlay/src/components/MissionList.tsx` local `missionTaskStatusLabel` | Replace mission task projection labels with strict task lifecycle helper. Preserve unrelated mission download changes already in the worktree. |
-| `packages/overlay/src/components/Conversation.tsx` local `taskStatusLabel` | Replace empty-state task labels with strict task lifecycle helper. |
-| `packages/overlay/src/components/TaskStatusHeader.tsx` dynamic `t("task.status.${status}")` | Replace with strict task lifecycle helper. |
-| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx` raw `activeTaskLabel` | Replace menu metadata with strict task lifecycle helper and give the menu row its own titlebar label. |
-| `packages/overlay/test/browser/workflow-generating-status-browser.test.ts` fixture `task.status = "running"` | Change task fixture to lifecycle `active`; keep workflow steps as `running`; assert localized task and workflow labels. |
-| `packages/overlay/test/task-lifecycle.test.ts` old pipeline lifecycle statuses | Align isolated classifier tests with the current task lifecycle: only `queued` and `active` are interruptible. |
-| Browser/benchmark fixtures with `board.task.status = "running"` | Change only task lifecycle fixtures to `active`; keep workflow/goal/tool/run `running` values because those are separate status domains. |
-| `packages/overlay/src/i18n/*` `task.status.running` and stale task pipeline keys | Do not remove in this iteration because other historical tests/translations still reference the namespace; add `workflow.status.*` as the correct display namespace for workflow steps. |
-| `packages/overlay/src/utils/status-mapping.ts` icon aliases | Leave for a later icon-domain cleanup. It maps multiple UI domains to icons, but it is not a visible text source. |
+| Call site                                                                                                    | Decision                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/Board.tsx` local `statusLabel`                                              | Replace with strict task lifecycle helper for `StatusBadge`; render frontend research workflow badge with strict workflow helper.                                                       |
+| `packages/overlay/src/components/TaskList.tsx` local `statusLabel`                                           | Replace task row badges with strict task lifecycle helper.                                                                                                                              |
+| `packages/overlay/src/components/MissionList.tsx` local `missionTaskStatusLabel`                             | Replace mission task projection labels with strict task lifecycle helper. Preserve unrelated mission download changes already in the worktree.                                          |
+| `packages/overlay/src/components/Conversation.tsx` local `taskStatusLabel`                                   | Replace empty-state task labels with strict task lifecycle helper.                                                                                                                      |
+| `packages/overlay/src/components/TaskStatusHeader.tsx` dynamic `t("task.status.${status}")`                  | Replace with strict task lifecycle helper.                                                                                                                                              |
+| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx` raw `activeTaskLabel`                         | Replace menu metadata with strict task lifecycle helper and give the menu row its own titlebar label.                                                                                   |
+| `packages/overlay/test/browser/workflow-generating-status-browser.test.ts` fixture `task.status = "running"` | Change task fixture to lifecycle `active`; keep workflow steps as `running`; assert localized task and workflow labels.                                                                 |
+| `packages/overlay/test/task-lifecycle.test.ts` old pipeline lifecycle statuses                               | Align isolated classifier tests with the current task lifecycle: only `queued` and `active` are interruptible.                                                                          |
+| Browser/benchmark fixtures with `board.task.status = "running"`                                              | Change only task lifecycle fixtures to `active`; keep workflow/goal/tool/run `running` values because those are separate status domains.                                                |
+| `packages/overlay/src/i18n/*` `task.status.running` and stale task pipeline keys                             | Do not remove in this iteration because other historical tests/translations still reference the namespace; add `workflow.status.*` as the correct display namespace for workflow steps. |
+| `packages/overlay/src/utils/status-mapping.ts` icon aliases                                                  | Leave for a later icon-domain cleanup. It maps multiple UI domains to icons, but it is not a visible text source.                                                                       |
 
 ## Design
 

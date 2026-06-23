@@ -13,20 +13,20 @@ selector. This makes the test suite protect a dead style hook.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-retire-ndjson-log-css-residue.md` | LogViewer now renders the unified `.log-viewer` / `.log-line` surface, and retired log CSS must be removed rather than preserved. |
-| `2026-06-17-log-viewer-select-style-single-source.md` | LogViewer should stay on shared `SelectControl` and existing `.oc-select-*` popup styling. |
-| `log-viewer-primitive.test.ts` | LogViewer tests already cover virtual list height and mature primitive ownership. |
-| `overlay-architecture-guards.test.ts` | The guard currently requires `.log-path`, which is the incorrect owner contract. |
+| Source                                                | Relevant constraint                                                                                                               |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-retire-ndjson-log-css-residue.md`         | LogViewer now renders the unified `.log-viewer` / `.log-line` surface, and retired log CSS must be removed rather than preserved. |
+| `2026-06-17-log-viewer-select-style-single-source.md` | LogViewer should stay on shared `SelectControl` and existing `.oc-select-*` popup styling.                                        |
+| `log-viewer-primitive.test.ts`                        | LogViewer tests already cover virtual list height and mature primitive ownership.                                                 |
+| `overlay-architecture-guards.test.ts`                 | The guard currently requires `.log-path`, which is the incorrect owner contract.                                                  |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
+| Command                                                                      | Result                                                                 | Decision                                                           |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | `rg -n "log-path" packages/overlay/src packages/overlay/test specs/new-arch` | `.log-path` appears in `settings.css` and the architecture guard only. | Delete the CSS rule and remove it from the required selector list. |
-| `rg -n "log-line|log-msg|log-detail|LogViewer" packages/overlay/src/components/LogViewer.tsx packages/overlay/src/styles/surfaces/settings.css` | Live LogViewer rows render `.log-line`, `.log-line-head`, `.log-level-*`, `.log-msg`, `.log-chip`, and `.log-detail*`. | Keep live log selectors unchanged. |
-| `Get-Content specs/new-arch/2026-06-18-retire-ndjson-log-css-residue.md` | Existing decision already rejects preserving retired log styling. | Treat `.log-path` as residue, not compatibility. |
+| `rg -n "log-line                                                             | log-msg                                                                | log-detail                                                         | LogViewer" packages/overlay/src/components/LogViewer.tsx packages/overlay/src/styles/surfaces/settings.css` | Live LogViewer rows render `.log-line`, `.log-line-head`, `.log-level-*`, `.log-msg`, `.log-chip`, and `.log-detail*`. | Keep live log selectors unchanged. |
+| `Get-Content specs/new-arch/2026-06-18-retire-ndjson-log-css-residue.md`     | Existing decision already rejects preserving retired log styling.      | Treat `.log-path` as residue, not compatibility.                   |
 
 ## Fix Plan
 

@@ -17,22 +17,22 @@ authority and candidate display.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no hidden second target source, test every behavior change. |
-| `2026-06-14-browser-preview-target-diagnostics-and-selection.md` | Saved targets remain the only source; unreachable saved selected target reports `failed`, not `missing`. |
-| `2026-06-17-browser-preview-selected-target-authority.md` | The newest/promoted persisted target is the selected authority; resolver must not switch to another reachable candidate. |
-| `2026-06-15-gui-benchmark-quality-audit.md` | Reachability only marks the selected target ready/failed. |
+| Source                                                           | Constraint carried forward                                                                                               |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                                      | No fallback, no gate, no hidden second target source, test every behavior change.                                        |
+| `2026-06-14-browser-preview-target-diagnostics-and-selection.md` | Saved targets remain the only source; unreachable saved selected target reports `failed`, not `missing`.                 |
+| `2026-06-17-browser-preview-selected-target-authority.md`        | The newest/promoted persisted target is the selected authority; resolver must not switch to another reachable candidate. |
+| `2026-06-15-gui-benchmark-quality-audit.md`                      | Reachability only marks the selected target ready/failed.                                                                |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Resolver | `resolveBrowserPreviewTarget()` currently calls `assessBrowserPreviewTargets()` for all recent targets. | Probe only `persistedTargets[0]`, the selected target. |
-| Candidate list | `browserPreviewCandidates()` maps all recent targets for the overlay selector. | Keep all candidates visible without probing their liveness. |
-| Liveness | `isBrowserPreviewTargetVisible()` is the single reachability probe. | Keep this source; call it once for the selected target. |
-| Routes | `GET /task/:taskID/browser-preview` returns resolver output. | Update route expectations that previously depended on unselected-candidate diagnostics. |
-| Tests | `target.test.ts` already protects selected-target authority. | Add a regression proving only selected target URL is probed. |
+| Surface        | Evidence                                                                                                | Decision                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Resolver       | `resolveBrowserPreviewTarget()` currently calls `assessBrowserPreviewTargets()` for all recent targets. | Probe only `persistedTargets[0]`, the selected target.                                  |
+| Candidate list | `browserPreviewCandidates()` maps all recent targets for the overlay selector.                          | Keep all candidates visible without probing their liveness.                             |
+| Liveness       | `isBrowserPreviewTargetVisible()` is the single reachability probe.                                     | Keep this source; call it once for the selected target.                                 |
+| Routes         | `GET /task/:taskID/browser-preview` returns resolver output.                                            | Update route expectations that previously depended on unselected-candidate diagnostics. |
+| Tests          | `target.test.ts` already protects selected-target authority.                                            | Add a regression proving only selected target URL is probed.                            |
 
 ## Root Cause
 

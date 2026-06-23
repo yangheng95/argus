@@ -55,22 +55,22 @@ debug time:   2026-06-18 17:08:44Z
 Recursive session-tree query under `ses_124cfc109ffeC8ofnSAVXF1O5y` found four
 relevant tool parts:
 
-| Part ID | Tool | Status | Created UTC | Finding |
-| --- | --- | --- | --- | --- |
-| `prt_edc374667001PWlSAr40fKipB1` | `browser_preview_bind_local_module` | `error` | `2026-06-18 19:31:10` | Agent passed `.opencorvus/r/t/S9/qzBwOu/fd/webpage-evidence/reference.png` as `sourceReferenceArtifactID`; runtime rejected it. |
-| `prt_edc377f7c001EpbG6dWCzxj54l` | `browser_preview_bind_local_module` | `completed` | `2026-06-18 19:31:25` | Binding succeeded with canonical `web-clone-source/reference.png`. |
-| `prt_edc37c44c001Y5my538NRJYucd` | `browser_preview_compare_regions` | `completed` | `2026-06-18 19:31:42` | Comparison ran but failed coverage: source `1408x936`, implementation `1216x889`. |
-| `prt_eddb64f0d001NROpcxWRxaxEEH` | `browser_preview_compare_regions` | `completed` | `2026-06-19 02:29:33` | Comparison ran but opened a not-found page and reported the failure as missing locator. |
+| Part ID                          | Tool                                | Status      | Created UTC           | Finding                                                                                                                         |
+| -------------------------------- | ----------------------------------- | ----------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `prt_edc374667001PWlSAr40fKipB1` | `browser_preview_bind_local_module` | `error`     | `2026-06-18 19:31:10` | Agent passed `.opencorvus/r/t/S9/qzBwOu/fd/webpage-evidence/reference.png` as `sourceReferenceArtifactID`; runtime rejected it. |
+| `prt_edc377f7c001EpbG6dWCzxj54l` | `browser_preview_bind_local_module` | `completed` | `2026-06-18 19:31:25` | Binding succeeded with canonical `web-clone-source/reference.png`.                                                              |
+| `prt_edc37c44c001Y5my538NRJYucd` | `browser_preview_compare_regions`   | `completed` | `2026-06-18 19:31:42` | Comparison ran but failed coverage: source `1408x936`, implementation `1216x889`.                                               |
+| `prt_eddb64f0d001NROpcxWRxaxEEH` | `browser_preview_compare_regions`   | `completed` | `2026-06-19 02:29:33` | Comparison ran but opened a not-found page and reported the failure as missing locator.                                         |
 
 Task evidence counts in `engine_artifact` now include:
 
-| Kind | Operation | Status | Count |
-| --- | --- | --- | --- |
-| `browser_preview_evidence` | `preview-capture` | `passed` | 6 |
-| `browser_preview_evidence` | `preview-capture` | `failed` | 12 |
-| `browser_preview_evidence` | `reference-comparison` | `passed` | 1 |
-| `browser_preview_evidence` | `reference-comparison` | `failed` | 3 |
-| `browser_preview_target` | target artifact | n/a | 14 |
+| Kind                       | Operation              | Status   | Count |
+| -------------------------- | ---------------------- | -------- | ----- |
+| `browser_preview_evidence` | `preview-capture`      | `passed` | 6     |
+| `browser_preview_evidence` | `preview-capture`      | `failed` | 12    |
+| `browser_preview_evidence` | `reference-comparison` | `passed` | 1     |
+| `browser_preview_evidence` | `reference-comparison` | `failed` | 3     |
+| `browser_preview_target`   | target artifact        | n/a      | 14    |
 
 The single passed `reference-comparison` evidence is a local-module binding
 puzzle, not the final Reference vs Implementation comparison artifact.
@@ -279,7 +279,7 @@ the current goal worktree.
   toolset and DB proves calls occurred.
 - `data-oc-region="economic-trends-dashboard"` is not missing from source code.
 - AInvest component implementation is not the cause of the `This page could not
-  be found` screenshot.
+be found` screenshot.
 - Visual QA prompt text alone cannot fix this; the tool contract and runner
   diagnostics must be corrected.
 
@@ -402,9 +402,18 @@ metadata to the comparison input or derive it from source image dimensions and
 persist it in each region result:
 
 ```ts
-source_image_size: { width: number; height: number }
-implementation_viewport: { width: number; height: number }
-scale: { x: number; y: number }
+source_image_size: {
+  width: number
+  height: number
+}
+implementation_viewport: {
+  width: number
+  height: number
+}
+scale: {
+  x: number
+  y: number
+}
 normalized_source_bbox: BrowserPreviewRegionBox
 ```
 
@@ -429,7 +438,7 @@ Tests:
   share a viewport and the implementation crop is genuinely smaller.
 - New test with `reference.png` width 1440 and desktop preset 1280 should fail
   with `source reference viewport width 1440 does not match implementation
-  viewport width 1280`, not with `Implementation crop is smaller`.
+viewport width 1280`, not with `Implementation crop is smaller`.
 - New accepted-path test should use a matching source reference width and prove
   the current crop coverage behavior still works.
 
@@ -514,14 +523,14 @@ The repair is complete only when all of these are true:
 
 ## Verification Matrix
 
-| Area | Command |
-| --- | --- |
-| Browser preview source schema | `bun test packages/opencorvus/test/browser-preview/region-comparison.test.ts --timeout 120000` |
-| Tool schema and readable evidence | `bun test packages/opencorvus/test/tool/browser-preview.test.ts --timeout 120000` |
-| Route diagnostics | `bun test packages/opencorvus/test/browser-preview/region-route-diagnostics.test.ts --timeout 120000` |
-| Route state regression | `bun test packages/opencorvus/test/browser-preview/region-route-state.test.ts --timeout 120000` |
-| Visual QA contract | `bun test packages/opencorvus/test/visual-qa/strict-reference-fidelity.test.ts packages/opencorvus/test/visual-qa/agent.test.ts --timeout 60000` |
-| Type safety | `bun run --cwd packages/opencorvus typecheck` |
+| Area                              | Command                                                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Browser preview source schema     | `bun test packages/opencorvus/test/browser-preview/region-comparison.test.ts --timeout 120000`                                                   |
+| Tool schema and readable evidence | `bun test packages/opencorvus/test/tool/browser-preview.test.ts --timeout 120000`                                                                |
+| Route diagnostics                 | `bun test packages/opencorvus/test/browser-preview/region-route-diagnostics.test.ts --timeout 120000`                                            |
+| Route state regression            | `bun test packages/opencorvus/test/browser-preview/region-route-state.test.ts --timeout 120000`                                                  |
+| Visual QA contract                | `bun test packages/opencorvus/test/visual-qa/strict-reference-fidelity.test.ts packages/opencorvus/test/visual-qa/agent.test.ts --timeout 60000` |
+| Type safety                       | `bun run --cwd packages/opencorvus typecheck`                                                                                                    |
 
 ## Risks And Constraints
 

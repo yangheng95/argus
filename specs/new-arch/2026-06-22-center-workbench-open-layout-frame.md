@@ -17,22 +17,22 @@ separator semantics, and keyboard resizing behavior.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate layout source, test changes, and visually verify UI work. |
-| `2026-06-22-overlay-resize-frame-coalescing.md` | High-frequency or layout-affecting work should be coalesced through the shared RAF scheduler. |
-| `2026-06-07-overlay-workbench-resizable-panels.md` | `centerWorkbenchPanelWeights` remains the only persisted panel width source. |
-| `2026-06-07-overlay-center-tab-workbench.md` | Center panels are peer panels that share space with the conversation; no tab-strip fallback. |
+| Source                                             | Constraint carried forward                                                                    |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                        | No fallback, no duplicate layout source, test changes, and visually verify UI work.           |
+| `2026-06-22-overlay-resize-frame-coalescing.md`    | High-frequency or layout-affecting work should be coalesced through the shared RAF scheduler. |
+| `2026-06-07-overlay-workbench-resizable-panels.md` | `centerWorkbenchPanelWeights` remains the only persisted panel width source.                  |
+| `2026-06-07-overlay-center-tab-workbench.md`       | Center panels are peer panels that share space with the conversation; no tab-strip fallback.  |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Panel DOM state | `main.tsx` center workbench effect writes `data-open`, `data-active`, and `data-selected`. | Keep immediate state writes so open/selected semantics stay current. |
-| Panel grow styles | `renderCenterWorkbenchPanelWeights()` writes `--center-workbench-panel-grow`. | Keep the same function and source, but schedule it after DOM state writes on panel open. |
-| Separator state | `renderCenterWorkbenchPanelSeparators()` reads `getBoundingClientRect()` and writes ARIA/hidden state. | Keep the same function and source, but avoid calling it synchronously from panel open. |
+| Surface                 | Evidence                                                                                                | Decision                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel DOM state         | `main.tsx` center workbench effect writes `data-open`, `data-active`, and `data-selected`.              | Keep immediate state writes so open/selected semantics stay current.                                                                      |
+| Panel grow styles       | `renderCenterWorkbenchPanelWeights()` writes `--center-workbench-panel-grow`.                           | Keep the same function and source, but schedule it after DOM state writes on panel open.                                                  |
+| Separator state         | `renderCenterWorkbenchPanelSeparators()` reads `getBoundingClientRect()` and writes ARIA/hidden state.  | Keep the same function and source, but avoid calling it synchronously from panel open.                                                    |
 | Settings weight updates | A separate effect tracks `settingsStore.centerWorkbenchPanelWeights` and re-renders weights/separators. | Keep direct settings-driven updates for drag and keyboard resize; remove the panel-count dependency so panel open does not double-render. |
-| Existing resize/drag | Window resize and pointer drag already use `createAnimationFrameScheduler`. | Reuse the same scheduler utility; do not add a new timing abstraction. |
+| Existing resize/drag    | Window resize and pointer drag already use `createAnimationFrameScheduler`.                             | Reuse the same scheduler utility; do not add a new timing abstraction.                                                                    |
 
 ## Root Cause
 

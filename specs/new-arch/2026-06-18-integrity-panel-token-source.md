@@ -18,21 +18,21 @@ white panel.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-05-24-overlay-integrity-card-performance.md` | Integrity card readability depends on bounded, structured report sections. |
-| `2026-06-11-integrity-verdict-findings-layout.md` | Integrity rows should keep flat, readable report grouping. |
-| `flat-redesign-radius-coverage.test.ts` | Runtime border radii must use canonical `--oc-radius-*` tokens, not legacy aliases. |
-| `design-language.css` | Defines `--oc-radius-soft`, `--surface-inset`, and control tokens as the canonical single source. |
+| Source                                             | Relevant constraint                                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `2026-05-24-overlay-integrity-card-performance.md` | Integrity card readability depends on bounded, structured report sections.                        |
+| `2026-06-11-integrity-verdict-findings-layout.md`  | Integrity rows should keep flat, readable report grouping.                                        |
+| `flat-redesign-radius-coverage.test.ts`            | Runtime border radii must use canonical `--oc-radius-*` tokens, not legacy aliases.               |
+| `design-language.css`                              | Defines `--oc-radius-soft`, `--surface-inset`, and control tokens as the canonical single source. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -g '*.css' -- '--surface-muted|--border-muted|--radius-sm' packages/overlay/src/styles` | Runtime hits for `--border-muted`, `--radius-sm`, and `--surface-muted` are limited to Integrity styles in `inspector.css`. | Replace the undefined local tokens at the Integrity call sites. |
+| Sweep                                                                                           | Result                                                                                                                                          | Decision                                                                               |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `rg -n -g '\*.css' -- '--surface-muted                                                          | --border-muted                                                                                                                                  | --radius-sm' packages/overlay/src/styles`                                              | Runtime hits for `--border-muted`, `--radius-sm`, and `--surface-muted` are limited to Integrity styles in `inspector.css`. | Replace the undefined local tokens at the Integrity call sites. |
 | `rg -n -g '*.css' -- 'var\\(--oc-radius-sm' packages/overlay/src/styles/surfaces/inspector.css` | Integrity manifest chips also use `--oc-radius-sm`, which is not one of the canonical radius tokens in `flat-redesign-radius-coverage.test.ts`. | Move the Integrity call site to `--oc-radius-soft` with the rest of the report chrome. |
-| `packages/overlay/src/styles/surfaces/inspector.css` | The same file already uses `--border`, `--surface-inset`, and `--oc-radius-soft` for inspector cards and sections. | Use those existing tokens directly. |
-| `packages/overlay/test/flat-redesign-radius-coverage.test.ts` | Already rejects non-canonical radius values, but this issue needs a direct guard for undefined Integrity aliases too. | Add targeted test assertions against the retired Integrity aliases. |
+| `packages/overlay/src/styles/surfaces/inspector.css`                                            | The same file already uses `--border`, `--surface-inset`, and `--oc-radius-soft` for inspector cards and sections.                              | Use those existing tokens directly.                                                    |
+| `packages/overlay/test/flat-redesign-radius-coverage.test.ts`                                   | Already rejects non-canonical radius values, but this issue needs a direct guard for undefined Integrity aliases too.                           | Add targeted test assertions against the retired Integrity aliases.                    |
 
 ## Fix Plan
 

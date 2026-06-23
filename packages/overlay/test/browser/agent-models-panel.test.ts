@@ -212,9 +212,8 @@ test("agent model selects patch independent per-agent overrides", async () => {
 
     await page.click('[data-testid="agent-model-select-build"]')
     await page.waitForSelector('.agent-model-select-option[data-model-value=""]')
-    const inheritOption = await page.$eval(
-      '.agent-model-select-option[data-model-value=""]',
-      (node: HTMLElement) => node.textContent?.trim(),
+    const inheritOption = await page.$eval('.agent-model-select-option[data-model-value=""]', (node: HTMLElement) =>
+      node.textContent?.trim(),
     )
     assert.equal(inheritOption, "— 继承项目默认 —")
     await page.click('.agent-model-select-option[data-model-value="anthropic/claude-sonnet-4-6"]')

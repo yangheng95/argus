@@ -185,9 +185,7 @@ async function renderVisualEvidenceSection(input: {
     lines.push("")
     lines.push(`## ${bundle.id}`)
     lines.push(
-      `status=${
-        visualEvidenceBundlePasses(bundle) && comparisonValidation.passing ? "passing" : "not_passing"
-      }`,
+      `status=${visualEvidenceBundlePasses(bundle) && comparisonValidation.passing ? "passing" : "not_passing"}`,
     )
     lines.push(summarizeVisualEvidenceBundle(bundle))
     if (comparisonValidation.issues.length > 0) {

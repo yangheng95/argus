@@ -11,18 +11,18 @@ retired editor as live UI.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-16-prompt-profile-expert-squad-switching.md` | Prompt profiles are the single editable expert-squad surface; the UI must not loop over all agents and mutate prompt append fields. |
-| `prompt-catalog-save.test.ts` | `PromptCatalog` must no longer render per-agent prompt editor cards or `prompt-textarea`. |
-| `2026-06-18-command-palette-config-sections-single-source.md` | Config surfaces should derive from the current single source, not stale local lists. |
+| Source                                                        | Existing decision                                                                                                                   |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-16-prompt-profile-expert-squad-switching.md`         | Prompt profiles are the single editable expert-squad surface; the UI must not loop over all agents and mutate prompt append fields. |
+| `prompt-catalog-save.test.ts`                                 | `PromptCatalog` must no longer render per-agent prompt editor cards or `prompt-textarea`.                                           |
+| `2026-06-18-command-palette-config-sections-single-source.md` | Config surfaces should derive from the current single source, not stale local lists.                                                |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "prompt-textarea|prompt-view-tabs|prompt-view-tab|prompt-editor-actions" packages/overlay/src packages/overlay/test` | Production code no longer references the retired selectors; only `settings.css` and old tests did. |
-| `rg -n "prompt-preview-card|prompt-preview-body" packages/overlay/src/components/settings/PromptCatalog.tsx packages/overlay/src/styles/surfaces/settings.css` | Profile read-only preview still uses `prompt-preview-card` and `prompt-preview-body`; those rules remain live. |
+| Sweep                       | Result                                                                                                                             |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `rg -n "prompt-textarea     | prompt-view-tabs                                                                                                                   | prompt-view-tab                                                                                                | prompt-editor-actions" packages/overlay/src packages/overlay/test` | Production code no longer references the retired selectors; only `settings.css` and old tests did. |
+| `rg -n "prompt-preview-card | prompt-preview-body" packages/overlay/src/components/settings/PromptCatalog.tsx packages/overlay/src/styles/surfaces/settings.css` | Profile read-only preview still uses `prompt-preview-card` and `prompt-preview-body`; those rules remain live. |
 
 ## Fix
 

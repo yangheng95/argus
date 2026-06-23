@@ -572,8 +572,9 @@ export namespace AgentTrace {
     if (!taskID) return []
     const runtimeRoot = taskTraceDir(taskID)
     const file =
-      firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(runtimeRoot, taskID, "trace.jsonl")) ??
-      taskFile(taskID)
+      firstExisting(
+        ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(runtimeRoot, taskID, "trace.jsonl"),
+      ) ?? taskFile(taskID)
     const all = readJsonlTail(file)
     all.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0))
     return all

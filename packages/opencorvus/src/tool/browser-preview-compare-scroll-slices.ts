@@ -12,17 +12,16 @@ import { buildMultimodalToolResult } from "./multimodal-result"
 import { BrowserPreviewCompareScrollSlicesToolID } from "./browser-preview-tool-ids"
 import { Tool } from "./tool"
 
-export const BrowserPreviewCompareScrollSlicesToolParameters =
-  BrowserPreviewScrollSliceComparisonRequest.extend({
-    includeDiff: z.boolean().default(false).describe("Whether to also generate a diagnostic diff PNG."),
-  }).strict()
+export const BrowserPreviewCompareScrollSlicesToolParameters = BrowserPreviewScrollSliceComparisonRequest.extend({
+  includeDiff: z.boolean().default(false).describe("Whether to also generate a diagnostic diff PNG."),
+}).strict()
 export type BrowserPreviewCompareScrollSlicesToolParameters = z.infer<
   typeof BrowserPreviewCompareScrollSlicesToolParameters
 >
 
 export const BrowserPreviewCompareScrollSlicesTool = Tool.define(BrowserPreviewCompareScrollSlicesToolID, {
   description:
-    "Visual QA only: compare a finished implementation page slice against the already captured source reference screenshot at the same absolute scrollY. Uses a persisted browser_preview target and web-clone-source/reference.png or reference-mobile.png; never accepts source URLs and never satisfies formal browser_preview_compare_regions reference-comparison proof. Returns a side-by-side PNG attachment for direct inspection.",
+    "Visual QA only: compare a finished implementation page slice against the already captured source reference screenshot at the same absolute scrollY. Uses a persisted browser_preview target and web-clone-source/reference.png; never accepts source URLs and never satisfies formal browser_preview_compare_regions reference-comparison proof. Returns a side-by-side PNG attachment for direct inspection.",
   parameters: BrowserPreviewCompareScrollSlicesToolParameters,
   async execute(params: BrowserPreviewCompareScrollSlicesToolParameters, ctx: Tool.Context) {
     const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""

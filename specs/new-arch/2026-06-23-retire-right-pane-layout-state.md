@@ -22,25 +22,25 @@ resize ranges or survive as a second layout source.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, no blind patching, test every change, visually verify UI work, and commit/push every round. |
-| `2026-06-17-pane-resizer-right-css-retirement.md` | Runtime DOM has no `#rightPaneResizer`; do not reintroduce a placeholder right handle. |
-| `2026-06-17-left-pane-resizer-accessibility.md` | Pane handle semantics belong in `services/pane.ts`; keep one renderer. |
-| `2026-06-18-retire-workspace-panel-residue.md` | Remove retired surfaces instead of keeping old selectors/contracts alive. |
-| `2026-06-18-right-activity-toolbar-responsive-rail.md` | Right activity UI is the shared toolbar/center workbench path, not a default pane column. |
-| `2026-06-22-pane-semantics-layout-frame.md` | Pane layout and ARIA rendering remain owned by the pane service and RAF-separated semantics. |
-| `2026-06-23-overlay-panel-legal-size-contract.md` | Illegal panel widths must not be written when token minimums cannot be satisfied. |
+| Source                                                 | Constraint carried forward                                                                                                    |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                            | No fallback, no duplicate source, no blind patching, test every change, visually verify UI work, and commit/push every round. |
+| `2026-06-17-pane-resizer-right-css-retirement.md`      | Runtime DOM has no `#rightPaneResizer`; do not reintroduce a placeholder right handle.                                        |
+| `2026-06-17-left-pane-resizer-accessibility.md`        | Pane handle semantics belong in `services/pane.ts`; keep one renderer.                                                        |
+| `2026-06-18-retire-workspace-panel-residue.md`         | Remove retired surfaces instead of keeping old selectors/contracts alive.                                                     |
+| `2026-06-18-right-activity-toolbar-responsive-rail.md` | Right activity UI is the shared toolbar/center workbench path, not a default pane column.                                     |
+| `2026-06-22-pane-semantics-layout-frame.md`            | Pane layout and ARIA rendering remain owned by the pane service and RAF-separated semantics.                                  |
+| `2026-06-23-overlay-panel-legal-size-contract.md`      | Illegal panel widths must not be written when token minimums cannot be satisfied.                                             |
 
 ## Call Point Inventory
 
-| Search | Findings | Decision |
-| --- | --- | --- |
-| `rightPanelCollapsed`, `sectionsWidth` in `packages/overlay/src` | `main.tsx`, `store/settings.ts`, `overlay-settings-storage.ts`, `TitlebarMenubar.tsx`, and `services/pane.ts` still persisted and scheduled retired right pane state. | Delete the settings fields and pane callbacks; left pane state only has `sidebarCollapsed` and `sidebarWidth`. |
-| `rightHandleId`, `rightControls`, `sectionsVar`, `defaultSectionsWidth` | `PANEL_PANE_CONFIG` kept null right-handle placeholders and `renderPaneLayout()` wrote `--ui-sections-width`. | Remove the right handle API from `PaneConfig`; write only `--ui-sidebar-width`. |
-| `oc_right_panel_collapsed`, `oc_sections_width` | Browser settings storage read and wrote the retired keys; many browser tests still seeded them. | Remove storage read/write and cleanup dead test setup lines, keeping explicit stale-key regression tests. |
-| `--ui-sections-width` | Fixed-string search found only the token definition and tests after source removal. | Delete the dead CSS token and update theme/token tests. |
-| Browser pane resize instrumentation | `left-pane-resizer-browser.test.ts` and `center-workbench-separator-browser.test.ts` still treated `--ui-sections-width` as a pane resize write. | Track only `--ui-scale` and `--ui-sidebar-width`; add stale-key max-range coverage before installing geometry probes. |
+| Search                                                                  | Findings                                                                                                                                                              | Decision                                                                                                              |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `rightPanelCollapsed`, `sectionsWidth` in `packages/overlay/src`        | `main.tsx`, `store/settings.ts`, `overlay-settings-storage.ts`, `TitlebarMenubar.tsx`, and `services/pane.ts` still persisted and scheduled retired right pane state. | Delete the settings fields and pane callbacks; left pane state only has `sidebarCollapsed` and `sidebarWidth`.        |
+| `rightHandleId`, `rightControls`, `sectionsVar`, `defaultSectionsWidth` | `PANEL_PANE_CONFIG` kept null right-handle placeholders and `renderPaneLayout()` wrote `--ui-sections-width`.                                                         | Remove the right handle API from `PaneConfig`; write only `--ui-sidebar-width`.                                       |
+| `oc_right_panel_collapsed`, `oc_sections_width`                         | Browser settings storage read and wrote the retired keys; many browser tests still seeded them.                                                                       | Remove storage read/write and cleanup dead test setup lines, keeping explicit stale-key regression tests.             |
+| `--ui-sections-width`                                                   | Fixed-string search found only the token definition and tests after source removal.                                                                                   | Delete the dead CSS token and update theme/token tests.                                                               |
+| Browser pane resize instrumentation                                     | `left-pane-resizer-browser.test.ts` and `center-workbench-separator-browser.test.ts` still treated `--ui-sections-width` as a pane resize write.                      | Track only `--ui-scale` and `--ui-sidebar-width`; add stale-key max-range coverage before installing geometry probes. |
 
 ## Root Cause
 

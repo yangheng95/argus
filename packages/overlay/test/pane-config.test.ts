@@ -30,11 +30,17 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(html).toContain('aria-valuenow="0"')
   expect(html).toContain('tabindex="0"')
   expect(pane).toContain("function renderPaneHandleSemantics")
-  expect(pane).toContain("const renderPaneHandleSemanticsOnFrame = createAnimationFrameScheduler(flushPaneHandleSemantics)")
+  expect(pane).toContain(
+    "const renderPaneHandleSemanticsOnFrame = createAnimationFrameScheduler(flushPaneHandleSemantics)",
+  )
   expect(pane).toContain("function schedulePaneHandleSemantics")
   expect(pane).toContain("function resizePaneByKeyboard")
-  expect(pane).toContain('import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"')
-  expect(pane).toContain('import { createLayoutTokenResolver, currentUIScale, type LayoutTokenResolver } from "../utils/layout-tokens"')
+  expect(pane).toContain(
+    'import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"',
+  )
+  expect(pane).toContain(
+    'import { createLayoutTokenResolver, currentUIScale, type LayoutTokenResolver } from "../utils/layout-tokens"',
+  )
   expect(pane).toContain("remainingMinWidth: (layoutTokens?: LayoutTokenResolver) => number")
   expect(pane).toContain(
     "export function defaultRailWidth(config: PaneConfig, layoutTokens: LayoutTokenResolver = createLayoutTokenResolver())",
@@ -51,8 +57,8 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(pane).toContain("function readPaneGeometrySnapshot(config: PaneConfig): PaneGeometrySnapshot | null")
   expect(pane).toContain("const layoutTokens = createLayoutTokenResolver()")
   expect(pane).toContain("const remainingContentMin = config.remainingMinWidth(layoutTokens)")
-  expect(pane).toContain("if (width <= 0) throw new Error(\"Pane resize handle must render a positive width.\")")
-  expect(pane).not.toContain("getPropertyValue(\"--ui-resizer-width\")")
+  expect(pane).toContain('if (width <= 0) throw new Error("Pane resize handle must render a positive width.")')
+  expect(pane).not.toContain('getPropertyValue("--ui-resizer-width")')
   expect(pane).not.toContain("Falls back to the --ui-resizer-width CSS custom property")
   expect(pane).toContain("leftFixed: renderedControlWidthSum(config.leftFixedControlIds)")
   expect(pane).toContain("remainingFixed: renderedControlWidthSum(config.remainingFixedControlIds)")
@@ -102,7 +108,9 @@ test("pane layout writes and handle semantics run in separate frame phases", () 
 
   const renderPaneLayoutFunction = pane.slice(renderPaneLayoutStart, pane.indexOf("\n}\n", renderPaneLayoutStart) + 3)
   const applyWindowResizeFunction = main.slice(applyWindowResizeStart, applyWindowResizeEnd)
-  const readPaneGeometryStart = pane.indexOf("function readPaneGeometrySnapshot(config: PaneConfig): PaneGeometrySnapshot | null")
+  const readPaneGeometryStart = pane.indexOf(
+    "function readPaneGeometrySnapshot(config: PaneConfig): PaneGeometrySnapshot | null",
+  )
   const readPaneGeometryFunction = pane.slice(readPaneGeometryStart, pane.indexOf("\n}\n", readPaneGeometryStart) + 3)
 
   expect(pane).toContain("const pendingPaneHandleSemantics = new Map<PaneConfig, PaneState>()")

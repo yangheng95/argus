@@ -121,7 +121,10 @@ describe("log routes", () => {
     expect(body.lines.map((line) => JSON.parse(line).index)).toEqual([19_997, 19_998, 19_999])
 
     const source = await fs.readFile(path.join(import.meta.dir, "../../src/util/log.ts"), "utf8")
-    const readBlock = source.slice(source.indexOf("export async function read"), source.indexOf("function createRootLogger"))
+    const readBlock = source.slice(
+      source.indexOf("export async function read"),
+      source.indexOf("function createRootLogger"),
+    )
     expect(readBlock).toContain("readTailLines(pathname, input.lines)")
     expect(readBlock).not.toContain("fs.readFile(pathname")
   })

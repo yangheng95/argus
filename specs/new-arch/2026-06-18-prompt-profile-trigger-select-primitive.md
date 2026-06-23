@@ -11,17 +11,17 @@ reuse gap after option contrast was fixed: the selector popup used shared
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-16-prompt-profile-expert-squad-switching.md` | The Overlay selector must use the same mature select/list pattern as other settings controls. |
-| `2026-06-17-prompt-profile-selector-select-primitive.md` | The prompt-profile picker must not keep native select chrome or a parallel visual control. |
-| `2026-06-18-popup-contrast-light-palette.md` | Expert Squad popup readability belongs to shared `.oc-select-*` popup contracts, not local color overrides. |
+| Source                                                   | Existing decision                                                                                           |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `2026-06-16-prompt-profile-expert-squad-switching.md`    | The Overlay selector must use the same mature select/list pattern as other settings controls.               |
+| `2026-06-17-prompt-profile-selector-select-primitive.md` | The prompt-profile picker must not keep native select chrome or a parallel visual control.                  |
+| `2026-06-18-popup-contrast-light-palette.md`             | Expert Squad popup readability belongs to shared `.oc-select-*` popup contracts, not local color overrides. |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n '<Select\\.Trigger|oc-select-trigger|data-ui="prompt-profile-selector"' packages/overlay/src packages/overlay/test` | AppDialog, Browser Preview, Log Viewer, and settings primitives use `.oc-select-trigger`; Expert Squad was the only active `Select.Trigger` without it. |
+| Sweep                                              | Result                                                                                                                                                    |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n '<Select\\.Trigger                          | oc-select-trigger                                                                                                                                         | data-ui="prompt-profile-selector"' packages/overlay/src packages/overlay/test` | AppDialog, Browser Preview, Log Viewer, and settings primitives use `.oc-select-trigger`; Expert Squad was the only active `Select.Trigger` without it. |
 | `packages/overlay/src/index.html` stylesheet order | `field.css` loads after `composer.css`, so adding the shared class requires a higher-specificity local selector for the compact two-line composer layout. |
 
 ## Fix

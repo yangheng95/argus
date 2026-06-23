@@ -17,27 +17,27 @@ being retried into noise.
 
 Observed task debug data:
 
-| Field | Value |
-| --- | --- |
-| Task | `tsk_ee601ebe400176W5YPgE5bHDqY` |
-| Directory | `C:\Users\chuan\myhexin-local\demos\economy\economy_2` |
-| Active run | `run_ee64523d3001JFtZbDYvu2MI3e` |
-| Run status | `blocked` |
-| Blocking reason | `orchestrator_stream_error` |
-| Error | `OrchestratorAborted: orchestrator aborted` |
-| Active sessions | none |
-| Pending interactions | none |
+| Field                | Value                                                  |
+| -------------------- | ------------------------------------------------------ |
+| Task                 | `tsk_ee601ebe400176W5YPgE5bHDqY`                       |
+| Directory            | `C:\Users\chuan\myhexin-local\demos\economy\economy_2` |
+| Active run           | `run_ee64523d3001JFtZbDYvu2MI3e`                       |
+| Run status           | `blocked`                                              |
+| Blocking reason      | `orchestrator_stream_error`                            |
+| Error                | `OrchestratorAborted: orchestrator aborted`            |
+| Active sessions      | none                                                   |
+| Pending interactions | none                                                   |
 
 Current read-only service check against `http://127.0.0.1:7878` after the
 review started:
 
-| Field | Value |
-| --- | --- |
-| Query time | 2026-06-21 |
-| Summary | `running_tasks=1`, `blocked_tasks=0` |
-| Task status | `active` |
-| Active run status | `running` |
-| Active session | `ses_1197d6635ffePz6KqY5ZkYN8sQ` |
+| Field             | Value                                |
+| ----------------- | ------------------------------------ |
+| Query time        | 2026-06-21                           |
+| Summary           | `running_tasks=1`, `blocked_tasks=0` |
+| Task status       | `active`                             |
+| Active run status | `running`                            |
+| Active session    | `ses_1197d6635ffePz6KqY5ZkYN8sQ`     |
 
 This means the provided debug snapshot was stale by the time of this review.
 The original stuck state still explains the incident, but the live server no
@@ -87,17 +87,17 @@ rg -n "dispatchTaskLoop\(\{[^\n]*(interrupt|operatorMessage|operatorIntent)|inte
 
 Relevant production surfaces:
 
-| Surface | Review result |
-| --- | --- |
-| `packages/opencorvus/src/engine/queue.ts::dispatchTaskLoop` | Accepts only `taskID` and optional event. Live `orchestrator_tool_ownership` queues the wake and returns `queued`; it does not call abort. |
-| `packages/opencorvus/src/task-api/index.ts::appendAndWakeTaskOperatorMessage` | Persists the operator message, clears rewind cursor, reactivates terminal tasks, reopens stale blocked runs, then dispatches a non-destructive wake. |
-| `packages/opencorvus/src/engine/task-message-open.ts::reopenActiveRunForOperatorWake` | Reopens live blocked runs only when there is no pending interaction. Pending user/tool blockers stay blocked. |
-| `packages/opencorvus/src/engine/runtime.ts::syncTerminalGoalRefills` | Preserves the `blocked/orchestrator_stream_error` guard. Explicit operator recovery, not runtime liveness, reopens this state. |
-| `packages/opencorvus/src/orchestrator/tools.ts::cancel_subagent` | Uses `abortLiveOrchestratorToolOwnership` for explicit child cancellation only. |
-| `packages/opencorvus/src/orchestrator/tools.ts::restartTaskFromStage` | Uses task-scoped abort for explicit restart. |
-| `packages/opencorvus/src/task-api/index.ts::cancelTask` | Uses task-scoped abort for explicit task cancellation. |
-| `packages/opencorvus/src/engine/queue.ts::convergeDeadOwnerActiveTasksForCwd` | Uses dead-owner convergence only for orphaned execution state. |
-| `packages/opencorvus/src/agent/runner.ts::classifyAttemptOutcome` | `PromptBudgetOverflowError` and `ToolSchemaBudgetError` are deterministic fail-fast errors. |
+| Surface                                                                               | Review result                                                                                                                                        |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/engine/queue.ts::dispatchTaskLoop`                           | Accepts only `taskID` and optional event. Live `orchestrator_tool_ownership` queues the wake and returns `queued`; it does not call abort.           |
+| `packages/opencorvus/src/task-api/index.ts::appendAndWakeTaskOperatorMessage`         | Persists the operator message, clears rewind cursor, reactivates terminal tasks, reopens stale blocked runs, then dispatches a non-destructive wake. |
+| `packages/opencorvus/src/engine/task-message-open.ts::reopenActiveRunForOperatorWake` | Reopens live blocked runs only when there is no pending interaction. Pending user/tool blockers stay blocked.                                        |
+| `packages/opencorvus/src/engine/runtime.ts::syncTerminalGoalRefills`                  | Preserves the `blocked/orchestrator_stream_error` guard. Explicit operator recovery, not runtime liveness, reopens this state.                       |
+| `packages/opencorvus/src/orchestrator/tools.ts::cancel_subagent`                      | Uses `abortLiveOrchestratorToolOwnership` for explicit child cancellation only.                                                                      |
+| `packages/opencorvus/src/orchestrator/tools.ts::restartTaskFromStage`                 | Uses task-scoped abort for explicit restart.                                                                                                         |
+| `packages/opencorvus/src/task-api/index.ts::cancelTask`                               | Uses task-scoped abort for explicit task cancellation.                                                                                               |
+| `packages/opencorvus/src/engine/queue.ts::convergeDeadOwnerActiveTasksForCwd`         | Uses dead-owner convergence only for orphaned execution state.                                                                                       |
+| `packages/opencorvus/src/agent/runner.ts::classifyAttemptOutcome`                     | `PromptBudgetOverflowError` and `ToolSchemaBudgetError` are deterministic fail-fast errors.                                                          |
 
 No production `POST /task/:id/message` or `/inject` path calls
 `abortLiveOrchestratorToolOwnership`, `abortLiveExecutionForTask`, or
@@ -119,13 +119,13 @@ bun test packages/opencorvus/test/agent/runner-retry-classify.test.ts packages/o
 
 Results:
 
-| Area | Result |
-| --- | --- |
-| `/message` and `/inject` live-owner routes | 3 passed |
-| Queue live-owner wake semantics | 2 passed |
-| Explicit operator wake reopens stale blocked runs | 12 passed |
+| Area                                                | Result    |
+| --------------------------------------------------- | --------- |
+| `/message` and `/inject` live-owner routes          | 3 passed  |
+| Queue live-owner wake semantics                     | 2 passed  |
+| Explicit operator wake reopens stale blocked runs   | 12 passed |
 | Runtime terminal-goal refill and stream-error guard | 14 passed |
-| Prompt-budget fail-fast and transcript hygiene | 4 passed |
+| Prompt-budget fail-fast and transcript hygiene      | 4 passed  |
 
 ## Acceptance Result
 

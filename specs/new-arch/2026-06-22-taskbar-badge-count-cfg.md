@@ -17,11 +17,11 @@ overlay icon behavior.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | Fix tool/build warnings at the source, avoid blind deletion, and keep tests. |
-| `2026-06-21-frontend-design-research-adversarial-repair.md` | Recorded `badge_count_value` as a non-blocking overlay build hygiene warning. |
-| `src-tauri/src/main.rs` call inventory | Windows `overlay_badge_set` uses `set_overlay_icon`; non-Windows `overlay_badge_set` uses `set_badge_count(badge_count_value(count))`; unit tests call `badge_count_value`. |
+| Source                                                      | Constraint carried forward                                                                                                                                                  |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                 | Fix tool/build warnings at the source, avoid blind deletion, and keep tests.                                                                                                |
+| `2026-06-21-frontend-design-research-adversarial-repair.md` | Recorded `badge_count_value` as a non-blocking overlay build hygiene warning.                                                                                               |
+| `src-tauri/src/main.rs` call inventory                      | Windows `overlay_badge_set` uses `set_overlay_icon`; non-Windows `overlay_badge_set` uses `set_badge_count(badge_count_value(count))`; unit tests call `badge_count_value`. |
 
 ## Evidence
 

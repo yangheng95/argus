@@ -108,10 +108,10 @@ export type AuthHook = {
   loader?: (auth: () => Promise<Auth>, provider: Provider) => Promise<Record<string, any>>
   methods: (
     | {
-      type: "oauth"
-      label: string
-      preferred?: boolean
-      prompts?: Array<
+        type: "oauth"
+        label: string
+        preferred?: boolean
+        prompts?: Array<
           | {
               type: "text"
               key: string
@@ -136,10 +136,10 @@ export type AuthHook = {
         authorize(inputs?: Record<string, string>): Promise<AuthOuathResult>
       }
     | {
-      type: "api"
-      label: string
-      preferred?: boolean
-      prompts?: Array<
+        type: "api"
+        label: string
+        preferred?: boolean
+        prompts?: Array<
           | {
               type: "text"
               key: string

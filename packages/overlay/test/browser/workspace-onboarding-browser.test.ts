@@ -38,7 +38,8 @@ async function onboardingFixtureResponse(req: Request, options: OnboardingFixtur
   if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
   const staticResponse = await overlayStaticResponse(path)
   if (staticResponse) return staticResponse
-  if (path === "/global/projects/discover") return send(options.discovery.body, { status: options.discovery.status ?? 200 })
+  if (path === "/global/projects/discover")
+    return send(options.discovery.body, { status: options.discovery.status ?? 200 })
   if (path === "/global/health") return send({ version: "1.2.3" })
   if (path === "/mission") return send([])
   if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
@@ -158,11 +159,13 @@ test("browser overlay opens a project by submitting an explicit server path", as
     assert.notEqual(pathInputState.color, "rgba(0, 0, 0, 0)")
     assert.notEqual(pathInputState.boxShadow, "none")
     assert.ok(
-      (await saveElementScreenshot(
-        page,
-        ".workspace-onboarding-form",
-        "workspace-onboarding-path-input-field-input.png",
-      )).endsWith("workspace-onboarding-path-input-field-input.png"),
+      (
+        await saveElementScreenshot(
+          page,
+          ".workspace-onboarding-form",
+          "workspace-onboarding-path-input-field-input.png",
+        )
+      ).endsWith("workspace-onboarding-path-input-field-input.png"),
     )
     await page.type('[data-testid="workspace-onboarding-browser-path-input"]', projectPath)
     await page.click('[data-testid="workspace-onboarding-browser-path-submit"]')
@@ -337,7 +340,11 @@ test("browser onboarding directory rows use Button focus chrome and keep setDire
     assert.notEqual(detectedFocus.backgroundColor, "rgba(0, 0, 0, 0)")
     assert.ok(detectedFocus.width > 400, JSON.stringify(detectedFocus))
     assert.ok(detectedFocus.height >= 50, JSON.stringify(detectedFocus))
-    assert.ok((await saveElementScreenshot(page, ".workspace-onboarding-form", "workspace-onboarding-detected-row-focus.png")).endsWith("workspace-onboarding-detected-row-focus.png"))
+    assert.ok(
+      (
+        await saveElementScreenshot(page, ".workspace-onboarding-form", "workspace-onboarding-detected-row-focus.png")
+      ).endsWith("workspace-onboarding-detected-row-focus.png"),
+    )
 
     await focusByTab(page, "workspace-onboarding-recent-0")
     const recentFocus = await page.$eval('[data-testid="workspace-onboarding-recent-0"]', (node) => {
@@ -363,7 +370,11 @@ test("browser onboarding directory rows use Button focus chrome and keep setDire
     assert.notEqual(recentFocus.backgroundColor, "rgba(0, 0, 0, 0)")
     assert.ok(recentFocus.width > 400, JSON.stringify(recentFocus))
     assert.ok(recentFocus.height >= 50, JSON.stringify(recentFocus))
-    assert.ok((await saveElementScreenshot(page, ".workspace-onboarding-form", "workspace-onboarding-recent-row-focus.png")).endsWith("workspace-onboarding-recent-row-focus.png"))
+    assert.ok(
+      (
+        await saveElementScreenshot(page, ".workspace-onboarding-form", "workspace-onboarding-recent-row-focus.png")
+      ).endsWith("workspace-onboarding-recent-row-focus.png"),
+    )
 
     await page.click('[data-testid="workspace-onboarding-detected-0"]')
     await page.waitForFunction((expected) => (window as any).settingsStore.directory === expected, {}, detectedPath)

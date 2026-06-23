@@ -15,11 +15,11 @@ settings entrypoint and locked the old behavior into browser tests.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-18-titlebar-brand-guide-popover-primitive.md` | Top-level menus are exactly Workspace, Provider, Run, View, Settings, Help; Tools is retired. |
-| `2026-06-18-retire-titlebar-nav-residue.md` | Kobalte `TitlebarMenubar.tsx` is the live titlebar navigation source; retired titlebar selector families must stay absent. |
-| `packages/overlay/src/store/dialog.ts` | `CONFIG_SECTIONS` is the single source for config sections and is consumed by `TitlebarMenubar`. |
+| Source                                                 | Existing decision                                                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-titlebar-brand-guide-popover-primitive.md` | Top-level menus are exactly Workspace, Provider, Run, View, Settings, Help; Tools is retired.                              |
+| `2026-06-18-retire-titlebar-nav-residue.md`            | Kobalte `TitlebarMenubar.tsx` is the live titlebar navigation source; retired titlebar selector families must stay absent. |
+| `packages/overlay/src/store/dialog.ts`                 | `CONFIG_SECTIONS` is the single source for config sections and is consumed by `TitlebarMenubar`.                           |
 
 The referenced historical file
 `2026-06-17-titlebar-menu-order-tools-removal.md` is not present on the current
@@ -28,11 +28,11 @@ contract.
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'titlebar\\.menu\\.tools|menu\\.id === "tools"|type MenuID|MENU_IDS|MENU_ACCESS_KEYS|id: "tools"' packages/overlay/src packages/overlay/test -S` | `Tools` existed in `MenuID`, `MENU_IDS`, access keys, menu definitions, render branch, i18n, and browser/static tests. | Delete the top-level source path and convert tests to absence guards. |
-| `packages/overlay/src/store/dialog.ts` | `CONFIG_SECTIONS` already includes `permissions`, `prompt`, and `channel`; Settings consumes it. | Keep those sections in Settings only. |
-| Browser titlebar test | It required `tools` trigger and opened `titlebar-menu-tools`. | Assert the exact six trigger IDs and remove `tools` from the panel geometry loop. |
+| Sweep                                  | Result                                                                                           | Decision                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- | -------- | ---------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `rg -n 'titlebar\\.menu\\.tools        | menu\\.id === "tools"                                                                            | type MenuID                                                                       | MENU_IDS | MENU_ACCESS_KEYS | id: "tools"' packages/overlay/src packages/overlay/test -S` | `Tools` existed in `MenuID`, `MENU_IDS`, access keys, menu definitions, render branch, i18n, and browser/static tests. | Delete the top-level source path and convert tests to absence guards. |
+| `packages/overlay/src/store/dialog.ts` | `CONFIG_SECTIONS` already includes `permissions`, `prompt`, and `channel`; Settings consumes it. | Keep those sections in Settings only.                                             |
+| Browser titlebar test                  | It required `tools` trigger and opened `titlebar-menu-tools`.                                    | Assert the exact six trigger IDs and remove `tools` from the panel geometry loop. |
 
 ## Fix
 

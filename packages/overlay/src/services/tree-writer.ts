@@ -1012,9 +1012,7 @@ function handlePartDelta(event: any): void {
 
 function removeCardReferences(cardID: string): void {
   if (cardTreeStore.order.includes(cardID)) {
-    replaceCardTreeOrder(
-      cardTreeStore.order.filter((id) => id !== cardID),
-    )
+    replaceCardTreeOrder(cardTreeStore.order.filter((id) => id !== cardID))
   }
   const affectedParents: string[] = []
   setCardTreeStore(

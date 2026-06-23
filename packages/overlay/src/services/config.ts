@@ -276,7 +276,9 @@ export async function getSessionConfig(input: SessionConfigRequest): Promise<Ses
   }
   const sessionID = input.sessionID.trim()
   if (!sessionID) throw new Error("getSessionConfig: sessionID is required")
-  return await apiJson(directoryScopedPath(`session/${encodeURIComponent(sessionID)}/config`, input.directory, "getSessionConfig"))
+  return await apiJson(
+    directoryScopedPath(`session/${encodeURIComponent(sessionID)}/config`, input.directory, "getSessionConfig"),
+  )
 }
 
 export async function patchSessionConfig(input: SessionConfigPatchRequest): Promise<SessionConfigResponse> {
@@ -285,11 +287,14 @@ export async function patchSessionConfig(input: SessionConfigPatchRequest): Prom
   }
   const sessionID = input.sessionID.trim()
   if (!sessionID) throw new Error("patchSessionConfig: sessionID is required")
-  const saved = await apiJson(directoryScopedPath(`session/${encodeURIComponent(sessionID)}/config`, input.directory, "patchSessionConfig"), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input.diff),
-  })
+  const saved = await apiJson(
+    directoryScopedPath(`session/${encodeURIComponent(sessionID)}/config`, input.directory, "patchSessionConfig"),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input.diff),
+    },
+  )
   markSessionConfigStale(sessionID)
   return saved
 }
@@ -303,7 +308,11 @@ export async function getTaskOperatorModelContext(
   const taskID = input.taskID.trim()
   if (!taskID) throw new Error("getTaskOperatorModelContext: taskID is required")
   return await apiJson(
-    directoryScopedPath(`task/${encodeURIComponent(taskID)}/operator-model-context`, input.directory, "getTaskOperatorModelContext"),
+    directoryScopedPath(
+      `task/${encodeURIComponent(taskID)}/operator-model-context`,
+      input.directory,
+      "getTaskOperatorModelContext",
+    ),
   )
 }
 
@@ -421,9 +430,7 @@ export function parsePromptProfileImportPayload(payload: unknown): PromptProfile
     throw new Error("Prompt profile import must contain prompt_profile.profiles.")
   }
   const active =
-    promptProfile.active === undefined
-      ? undefined
-      : readImportProfileID(promptProfile.active, "prompt_profile.active")
+    promptProfile.active === undefined ? undefined : readImportProfileID(promptProfile.active, "prompt_profile.active")
   const profiles: PromptProfileDraft[] = []
   for (const [profileID, rawProfile] of Object.entries(rawProfiles)) {
     const canonicalProfileID = readImportProfileID(profileID, `prompt_profile.profiles.${profileID}`)

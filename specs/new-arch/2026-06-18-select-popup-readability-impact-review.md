@@ -12,20 +12,20 @@ and browser preview target selection.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
+| Source                                                   | Existing decision                                                                                                                          |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `2026-06-17-prompt-profile-selector-select-primitive.md` | Expert Squad was migrated from native select plus hidden chrome to Kobalte Select because the native popup could inherit transparent text. |
-| `2026-06-17-select-popup-opaque-surface.md` | `.oc-select-content` is the shared popup surface and must use opaque `--menu-panel-bg`, not translucent `--surface`. |
-| `2026-06-17-settings-select-primitive-single-source.md` | Settings panels use `SettingsSelect`; local settings panels must not own raw Select shells. |
+| `2026-06-17-select-popup-opaque-surface.md`              | `.oc-select-content` is the shared popup surface and must use opaque `--menu-panel-bg`, not translucent `--surface`.                       |
+| `2026-06-17-settings-select-primitive-single-source.md`  | Settings panels use `SettingsSelect`; local settings panels must not own raw Select shells.                                                |
 
 ## Evidence
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "prompt-profile|PromptProfile|Expert Squad|专家团" packages/overlay/src packages/overlay/test` | Expert Squad lives in `ChatComposer.tsx` and uses `Select.Root<PromptProfileOption>`. |
-| `rg -n "oc-select-content|oc-select-option|Select\\.Root" packages/overlay/src packages/overlay/test specs/new-arch` | Shared Select popup consumers are Expert Squad, AppDialog, BrowserPreview, LogViewer, and SettingsSelect users. |
-| Current real browser screenshot `.scratch/prompt-profile-selector-current.png` | Current HEAD renders unselected Expert Squad options visibly on the light popup surface. |
-| Independent explorer review | Both explorer agents found the current Expert Squad code already uses Kobalte Select and shared readable tokens; the remaining risk is incomplete matrix coverage for other Select consumers. |
+| Sweep                                                                          | Result                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `rg -n "prompt-profile                                                         | PromptProfile                                                                                                                                                                                 | Expert Squad                                                              | 专家团" packages/overlay/src packages/overlay/test`                                                             | Expert Squad lives in `ChatComposer.tsx` and uses `Select.Root<PromptProfileOption>`. |
+| `rg -n "oc-select-content                                                      | oc-select-option                                                                                                                                                                              | Select\\.Root" packages/overlay/src packages/overlay/test specs/new-arch` | Shared Select popup consumers are Expert Squad, AppDialog, BrowserPreview, LogViewer, and SettingsSelect users. |
+| Current real browser screenshot `.scratch/prompt-profile-selector-current.png` | Current HEAD renders unselected Expert Squad options visibly on the light popup surface.                                                                                                      |
+| Independent explorer review                                                    | Both explorer agents found the current Expert Squad code already uses Kobalte Select and shared readable tokens; the remaining risk is incomplete matrix coverage for other Select consumers. |
 
 ## Decision
 

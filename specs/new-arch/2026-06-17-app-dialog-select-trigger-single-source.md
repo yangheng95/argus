@@ -17,16 +17,16 @@ instead of inheriting the shared truncation rule from `field.css`.
 
 ## Call Points
 
-| Search | Evidence | Decision |
-| --- | --- | --- |
-| `rg -n "AppDialogHost|app-dialog-select|custom-select|oc-select-trigger" packages/overlay/src packages/overlay/test specs/new-arch -S` | `AppDialogHost.tsx` renders `<Select.Trigger class="field-input app-dialog-input custom-select app-dialog-select-trigger">`; the same Select content/listbox/item already uses `.oc-select-*`. | Add `.oc-select-trigger` and remove `custom-select` from the Kobalte trigger. |
+| Search                                                               | Evidence                                                                                            | Decision                                                       |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `rg -n "AppDialogHost                                                | app-dialog-select                                                                                   | custom-select                                                  | oc-select-trigger" packages/overlay/src packages/overlay/test specs/new-arch -S` | `AppDialogHost.tsx` renders `<Select.Trigger class="field-input app-dialog-input custom-select app-dialog-select-trigger">`; the same Select content/listbox/item already uses `.oc-select-*`. | Add `.oc-select-trigger` and remove `custom-select` from the Kobalte trigger. |
 | `specs/new-arch/2026-06-01-overlay-mature-ui-primitives-refactor.md` | AppDialogHost is part of the canonical dialog surface that should preserve ids and store contracts. | Do not change dialog ids, store state, or settlement behavior. |
-| `packages/overlay/test/browser/provider-auth-panel.test.ts` | Provider auth flow opens `#appDialogSelect` and chooses `.app-dialog-select-option`. | Use this browser path for visual verification. |
+| `packages/overlay/test/browser/provider-auth-panel.test.ts`          | Provider auth flow opens `#appDialogSelect` and chooses `.app-dialog-select-option`.                | Use this browser path for visual verification.                 |
 
 ## Fix Shape
 
 - Change the trigger class to `field-input oc-select-trigger app-dialog-input
-  app-dialog-select-trigger`.
+app-dialog-select-trigger`.
 - Keep AppDialog-specific ids/hooks and popup classes.
 - Add source tests requiring shared trigger ownership and rejecting
   `custom-select` on the Kobalte trigger.

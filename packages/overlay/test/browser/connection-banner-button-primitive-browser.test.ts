@@ -104,7 +104,10 @@ test("connection banner actions use the shared Button primitive", async () => {
     })
     assert.equal(focusStart.activeDataUi, "connection-banner-setup", JSON.stringify(focusStart, null, 2))
     await page.keyboard.press("Tab")
-    assert.equal(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.ui ?? ""), "connection-banner-reload")
+    assert.equal(
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.ui ?? ""),
+      "connection-banner-reload",
+    )
 
     const screenshotPath = resolve(".scratch", "connection-banner-button-primitive.png")
     mkdirSync(dirname(screenshotPath), { recursive: true })

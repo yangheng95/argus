@@ -17,13 +17,13 @@ let Enter expand the tree but dropped focus before Space could collapse it.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `packages/overlay/src/components/ui/Button.tsx` | `.oc-button` owns button semantics, size, variant, tone, and focus-visible ring. |
-| `packages/overlay/test/task-list-buttons-primitive.test.ts` | Task row operation buttons already route through the shared `Button` primitive. |
-| `packages/overlay/test/browser/task-list-tree-click.test.ts` | The task tree is active UI and already has a real browser regression flow for row selection/click trapping. |
-| `packages/overlay/src/components/taskTree.ts` | `flattenGroup` returns new entry objects on each expand-state change; render identity must not depend on those objects. |
-| `specs/retired-reference-ledger.md` | The old task tree external note is historical; current behavior must be pinned by local tests and source contracts. |
+| Source                                                       | Constraint                                                                                                              |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/ui/Button.tsx`              | `.oc-button` owns button semantics, size, variant, tone, and focus-visible ring.                                        |
+| `packages/overlay/test/task-list-buttons-primitive.test.ts`  | Task row operation buttons already route through the shared `Button` primitive.                                         |
+| `packages/overlay/test/browser/task-list-tree-click.test.ts` | The task tree is active UI and already has a real browser regression flow for row selection/click trapping.             |
+| `packages/overlay/src/components/taskTree.ts`                | `flattenGroup` returns new entry objects on each expand-state change; render identity must not depend on those objects. |
+| `specs/retired-reference-ledger.md`                          | The old task tree external note is historical; current behavior must be pinned by local tests and source contracts.     |
 
 ## Fix
 

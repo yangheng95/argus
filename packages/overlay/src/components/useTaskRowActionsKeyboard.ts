@@ -43,7 +43,10 @@ export function useTaskRowActionsKeyboard(hasActions: Accessor<boolean>) {
   }
 
   function closeActionsOnFocusOut(event: FocusEvent): void {
-    if (event.currentTarget instanceof HTMLElement && event.currentTarget.contains(event.relatedTarget as Node | null)) {
+    if (
+      event.currentTarget instanceof HTMLElement &&
+      event.currentTarget.contains(event.relatedTarget as Node | null)
+    ) {
       return
     }
     setActionsKeyboardOpen(false)

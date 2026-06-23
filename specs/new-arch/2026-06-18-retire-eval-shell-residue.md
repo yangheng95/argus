@@ -11,22 +11,22 @@ alive even though current evaluation prose renders through goal workflow cards.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-17-agent-card-css-retirement.md` | Dead runtime CSS should be removed when no component or HTML creates the class contract. |
-| `2026-06-18-retire-prompt-editor-css-residue.md` | Tests must reject retired selectors instead of preserving them as live surface ownership. |
-| `2026-06-18-retire-criteria-dom-css-residue.md` | Criteria/evaluation shell DOM ids were retired; business evaluation payloads remain live. |
-| `Board.tsx` current source | Right-panel phase highlighting is driven by Solid `phaseState` props for workflow sections, not an `#evalBody` shell. |
+| Source                                           | Existing decision                                                                                                     |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-17-agent-card-css-retirement.md`        | Dead runtime CSS should be removed when no component or HTML creates the class contract.                              |
+| `2026-06-18-retire-prompt-editor-css-residue.md` | Tests must reject retired selectors instead of preserving them as live surface ownership.                             |
+| `2026-06-18-retire-criteria-dom-css-residue.md`  | Criteria/evaluation shell DOM ids were retired; business evaluation payloads remain live.                             |
+| `Board.tsx` current source                       | Right-panel phase highlighting is driven by Solid `phaseState` props for workflow sections, not an `#evalBody` shell. |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "evalBody|#evalBody" packages/overlay/src packages/overlay/test` | Only `dom.ts`, generic CSS baselines, and tests referenced the old id; no component or HTML creates it. |
-| `rg -n "eval-error|eval-summary" packages/overlay/src packages/overlay/test` | Production TS/TSX creates no `.eval-error*` or `.eval-summary`; CSS/tests were the remaining references. |
+| Sweep                                                                                                     | Result                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "evalBody                                                                                          | #evalBody" packages/overlay/src packages/overlay/test`                                                                                                                              | Only `dom.ts`, generic CSS baselines, and tests referenced the old id; no component or HTML creates it.  |
+| `rg -n "eval-error                                                                                        | eval-summary" packages/overlay/src packages/overlay/test`                                                                                                                           | Production TS/TSX creates no `.eval-error*` or `.eval-summary`; CSS/tests were the remaining references. |
 | `git grep -n "EvaluationCriteriaPanel\|criteria-list" HEAD -- packages/overlay/src packages/overlay/test` | `HEAD` still kept a `Show when={false}` criteria/evaluation block, the dead `EvaluationCriteriaPanel`, and `utils/criteria.ts`; those must be removed with the selector retirement. |
-| `rg -n "gwg-eval-summary" packages/overlay/src packages/overlay/test` | `StepPayloadBody.tsx` still creates `gwg-eval-summary`; those rules stay live. |
-| `rg -n "syncSectionPhases|phaseSections|agentRoleToSectionPhase|evaluation" packages/overlay/src packages/overlay/test` | `syncSectionPhases` still has non-evaluation callers/targets, so this pass removes only orphan `evaluation` phase branches and routes evaluator agents to the live acceptance section. |
+| `rg -n "gwg-eval-summary" packages/overlay/src packages/overlay/test`                                     | `StepPayloadBody.tsx` still creates `gwg-eval-summary`; those rules stay live.                                                                                                      |
+| `rg -n "syncSectionPhases                                                                                 | phaseSections                                                                                                                                                                       | agentRoleToSectionPhase                                                                                  | evaluation" packages/overlay/src packages/overlay/test` | `syncSectionPhases` still has non-evaluation callers/targets, so this pass removes only orphan `evaluation` phase branches and routes evaluator agents to the live acceptance section. |
 
 ## Fix
 

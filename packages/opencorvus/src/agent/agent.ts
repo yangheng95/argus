@@ -138,7 +138,13 @@ export namespace Agent {
     const nonDesignPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
       PermissionNext.merge(defaults, ...rulesets, user, webpageEvidenceDenied)
     const visualQaPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
-      PermissionNext.merge(defaults, ...rulesets, user, webpageEvidenceAnalysisDenied, webpageEvidenceRetiredVisualDenied)
+      PermissionNext.merge(
+        defaults,
+        ...rulesets,
+        user,
+        webpageEvidenceAnalysisDenied,
+        webpageEvidenceRetiredVisualDenied,
+      )
 
     const result: Record<string, Info> = {
       coding: {

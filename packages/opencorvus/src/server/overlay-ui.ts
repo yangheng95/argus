@@ -22,10 +22,7 @@ type OverlayUiConcreteSource = "directory" | "embedded"
 export function overlayUiAssetRefs(html: string): string[] {
   return Array.from(
     new Set(
-      Array.from(
-        html.matchAll(/\b(?:src|href)=["'](?:\.?\/)?(assets\/[^"']+\.(?:js|css))["']/g),
-        (match) => match[1],
-      ),
+      Array.from(html.matchAll(/\b(?:src|href)=["'](?:\.?\/)?(assets\/[^"']+\.(?:js|css))["']/g), (match) => match[1]),
     ),
   ).sort()
 }
@@ -61,10 +58,7 @@ function hasEmbeddedOverlayUi(): boolean {
   return EMBEDDED_OVERLAY_UI_BY_PATH.has("/index.html")
 }
 
-export type OverlayUiServingSource =
-  | { kind: "directory"; dir: string }
-  | { kind: "embedded" }
-  | { kind: "missing" }
+export type OverlayUiServingSource = { kind: "directory"; dir: string } | { kind: "embedded" } | { kind: "missing" }
 
 export interface OverlayUiServingSourceInput {
   dirOverride?: string

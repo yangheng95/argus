@@ -27,7 +27,10 @@ function overlayCss(): string {
   return OVERLAY_STYLE_HREFS.map(readCss).join("\n")
 }
 
-async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+async function saveScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
   const target = join(SCRATCH_ROOT, name)
   mkdirSync(dirname(target), { recursive: true })
   await writeFile(target, await element.screenshot({}))
@@ -358,10 +361,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
 
     let focusedWorktreeRemove = false
     for (let idx = 0; idx < 16; idx += 1) {
-      focusedWorktreeRemove = await page.$eval(
-        worktreeRemoveSelector,
-        (node) => document.activeElement === node,
-      )
+      focusedWorktreeRemove = await page.$eval(worktreeRemoveSelector, (node) => document.activeElement === node)
       if (focusedWorktreeRemove) break
       await page.keyboard.press("Tab")
     }
@@ -408,7 +408,9 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
     )
     assert.ok(worktreeRemoveStates.some((state) => state.status === "active" && !state.disabled))
     assert.ok(worktreeRemoveStates.some((state) => state.status === "expired" && !state.disabled))
-    assert.ok(worktreeRemoveStates.some((state) => state.status === "expired" && state.disabled && state.opacity === "1"))
+    assert.ok(
+      worktreeRemoveStates.some((state) => state.status === "expired" && state.disabled && state.opacity === "1"),
+    )
 
     const recentSubmit = await page.$eval(
       '[data-popup-sample="recent-directory"] .oc-button[data-ui="recent-dir-edit-submit"]',
@@ -493,7 +495,10 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
       highlightedMetrics.executorHighlighted.backgroundColor,
       highlightedMetrics.executorPlain.backgroundColor,
     )
-    assert.notEqual(highlightedMetrics.recentFocusedRow.borderTopColor, highlightedMetrics.recentPlainRow.borderTopColor)
+    assert.notEqual(
+      highlightedMetrics.recentFocusedRow.borderTopColor,
+      highlightedMetrics.recentPlainRow.borderTopColor,
+    )
     assert.equal(highlightedMetrics.recentFocusedRemove.opacity, "1")
     assert.equal(highlightedMetrics.recentFocusedRemove.pointerEvents, "auto")
     assert.deepEqual(

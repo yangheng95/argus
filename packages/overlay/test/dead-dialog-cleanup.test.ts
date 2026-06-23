@@ -82,7 +82,12 @@ describe("retired dialog dead code is removed from overlay runtime", () => {
 
     expect(dialogSurface).toContain(".session-dialog-body")
     expect(inspectorSurface).toContain(".session-msg")
-    for (const selector of [".section-dialog-head", ".section-dialog-meta", ".section-dialog-body", ".session-actions"]) {
+    for (const selector of [
+      ".section-dialog-head",
+      ".section-dialog-meta",
+      ".section-dialog-body",
+      ".session-actions",
+    ]) {
       expect(dialogSurface).not.toContain(selector)
       expect(productionSource).not.toContain(selector.slice(1))
     }

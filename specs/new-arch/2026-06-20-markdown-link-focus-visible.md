@@ -14,20 +14,20 @@ message and `md-content` surfaces.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-19-retire-message-path-link-residue.md` | `workspace.css` is the only live owner for `code .file-link`; retired `.path-*` styles must stay removed. |
-| `2026-06-20-tool-diff-open-file-button.md` | Structured tool diff file openers are separate from Markdown file links and already use `Button`. |
-| `packages/overlay/src/utils/markdown.ts` | File-ish codespans render as `<a class="file-link" href="#" data-file-path="...">`; ordinary safe links render as anchors with `data-browser-preview-url` for HTTP URLs. |
-| `packages/overlay/src/main.tsx` | Document-level click delegates open `[data-file-path]` links in the selected editor and HTTP anchors through browser preview/native open flow. |
+| Source                                           | Existing decision                                                                                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `2026-06-19-retire-message-path-link-residue.md` | `workspace.css` is the only live owner for `code .file-link`; retired `.path-*` styles must stay removed.                                                                |
+| `2026-06-20-tool-diff-open-file-button.md`       | Structured tool diff file openers are separate from Markdown file links and already use `Button`.                                                                        |
+| `packages/overlay/src/utils/markdown.ts`         | File-ish codespans render as `<a class="file-link" href="#" data-file-path="...">`; ordinary safe links render as anchors with `data-browser-preview-url` for HTTP URLs. |
+| `packages/overlay/src/main.tsx`                  | Document-level click delegates open `[data-file-path]` links in the selected editor and HTTP anchors through browser preview/native open flow.                           |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "file-link|data-file-path|renderMarkdown" packages/overlay/src packages/overlay/test specs/new-arch` | `markdown.ts` emits `file-link`; `workspace.css` owns it; `message-file-link-browser.test.ts` already covers real rendered file-link hover. | Keep renderer and owner unchanged; extend CSS and browser coverage. |
-| `rg -n "md-content a|msg-text a|:hover|:focus-visible" packages/overlay/src/styles/surfaces/markdown.css packages/overlay/src/styles/surfaces/workspace.css packages/overlay/test` | `workspace.css` has `code .file-link:hover` only; `markdown.css` has `.msg-text a:hover`, `.md-content a:hover`, and `.md-link:hover` only. | Add matching focus-visible states at the shared surface owners. |
-| `rg -n 'href="#"|target="_blank"|rel="noreferrer"' packages/overlay/src/utils/markdown.ts packages/overlay/src/components packages/overlay/test` | `href="#" data-file-path` is unique to Markdown file codespans; normal HTTP anchors are centralized in the renderer. | Do not add per-call-site link behavior. |
+| Sweep                | Result           | Decision                                                                                                        |
+| -------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `rg -n "file-link    | data-file-path   | renderMarkdown" packages/overlay/src packages/overlay/test specs/new-arch`                                      | `markdown.ts` emits `file-link`; `workspace.css` owns it; `message-file-link-browser.test.ts` already covers real rendered file-link hover. | Keep renderer and owner unchanged; extend CSS and browser coverage.                                                                         |
+| `rg -n "md-content a | msg-text a       | :hover                                                                                                          | :focus-visible" packages/overlay/src/styles/surfaces/markdown.css packages/overlay/src/styles/surfaces/workspace.css packages/overlay/test` | `workspace.css` has `code .file-link:hover` only; `markdown.css` has `.msg-text a:hover`, `.md-content a:hover`, and `.md-link:hover` only. | Add matching focus-visible states at the shared surface owners. |
+| `rg -n 'href="#"     | target="\_blank" | rel="noreferrer"' packages/overlay/src/utils/markdown.ts packages/overlay/src/components packages/overlay/test` | `href="#" data-file-path` is unique to Markdown file codespans; normal HTTP anchors are centralized in the renderer.                        | Do not add per-call-site link behavior.                                                                                                     |
 
 ## Fix
 

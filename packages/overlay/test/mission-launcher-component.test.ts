@@ -179,7 +179,9 @@ test("Mission ledger renders mission-created task projections as task selectors"
   expect(MISSION_LIST_TSX).toContain("props.mission.tasks")
   expect(MISSION_LIST_TSX).toContain("mission.ledger.tasks_label")
   expect(MISSION_CSS).toContain('.mission-task-projection-row .oc-button[data-ui="mission-task-projection-select"]')
-  expect(MISSION_CSS).not.toContain('.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"]')
+  expect(MISSION_CSS).not.toContain(
+    '.mission-task-projection-row .task-row-main[data-ui="mission-task-projection-select"]',
+  )
   expect(MISSION_CSS).not.toContain(".mission-task-projection-button")
   expect(MISSION_CSS).not.toContain("outline: none")
 })
@@ -282,7 +284,7 @@ test("Mission task projection selection explicitly rebinds the left toolbar and 
   expect(MISSION_LIST_TSX).toContain("props.onSelectTask(props.task)")
   expect(SERVICES_TASK).toContain("export interface SelectTaskOptions")
   expect(SERVICES_TASK).toContain("directory?: string")
-  expect(SERVICES_TASK).toContain("const explicitDirectory = options.directory?.trim() ?? \"\"")
+  expect(SERVICES_TASK).toContain('const explicitDirectory = options.directory?.trim() ?? ""')
   expect(SERVICES_TASK).toContain("const taskDirectory =")
   expect(SERVICES_TASK).toContain("explicitDirectory ||")
 })
@@ -295,7 +297,7 @@ test("selected task source does not globally steal Mission or Assistant activity
   const beforeRestore = beforeTaskListMount.slice(0, restoreStart)
   const afterRestore = restoreEnd >= 0 ? beforeTaskListMount.slice(restoreEnd) : ""
   const globalFocusSource = `${beforeRestore}\n${afterRestore}`
-  expect(globalFocusSource).not.toContain('const selectedSource = boardStore.selectedSource')
+  expect(globalFocusSource).not.toContain("const selectedSource = boardStore.selectedSource")
   expect(globalFocusSource).not.toContain('selectedSource?.kind !== "task"')
   expect(globalFocusSource).not.toContain('boardStore.selectedSource?.kind === "task"')
 })

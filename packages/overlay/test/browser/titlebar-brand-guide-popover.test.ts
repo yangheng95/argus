@@ -92,7 +92,8 @@ async function verifyBrandGuide(page: any, url: string, viewport: { width: numbe
       },
       viewport: { w: window.innerWidth, h: window.innerHeight },
       belowTitlebar: Math.round(cardRect.top) >= Math.round(titlebarRect.bottom),
-      withinViewport: cardRect.left >= 0 && cardRect.right <= window.innerWidth && cardRect.bottom <= window.innerHeight,
+      withinViewport:
+        cardRect.left >= 0 && cardRect.right <= window.innerWidth && cardRect.bottom <= window.innerHeight,
       mentionsTools: /\btools\b/i.test(text) || /工具/.test(text),
       hitMenu: hit?.getAttribute?.("data-menu-trigger") || "",
       localeTextPresent: text.includes("Quick Guide") || text.includes("快速指南"),

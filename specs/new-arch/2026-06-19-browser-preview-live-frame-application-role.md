@@ -18,11 +18,11 @@ Interface. DOM means Document Object Model.
 
 ## Evidence
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `BrowserPreviewPanel.tsx` | `.browser-preview-live-frame` is focusable with `tabIndex={0}` and has a visible focus state. | It needs an explicit interactive role. |
-| `BrowserPreviewPanel.tsx` | `handleLivePointerDown`, `handleLiveWheel`, and `handleLiveKeyDown` forward pointer, wheel, and non-Tab/Escape keyboard input to the live preview service. | Use `role="application"` because the focused region behaves as a remote browser input surface, not as a static image or figure. |
-| `browser-preview-visual-stress.test.ts` | Existing stress coverage already focuses `.browser-preview-live-frame`, presses `A`, and asserts click/wheel/key live input routing. | Extend that real browser path to assert role, focus, and accessible name before key forwarding. |
+| Surface                                 | Evidence                                                                                                                                                   | Decision                                                                                                                        |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `BrowserPreviewPanel.tsx`               | `.browser-preview-live-frame` is focusable with `tabIndex={0}` and has a visible focus state.                                                              | It needs an explicit interactive role.                                                                                          |
+| `BrowserPreviewPanel.tsx`               | `handleLivePointerDown`, `handleLiveWheel`, and `handleLiveKeyDown` forward pointer, wheel, and non-Tab/Escape keyboard input to the live preview service. | Use `role="application"` because the focused region behaves as a remote browser input surface, not as a static image or figure. |
+| `browser-preview-visual-stress.test.ts` | Existing stress coverage already focuses `.browser-preview-live-frame`, presses `A`, and asserts click/wheel/key live input routing.                       | Extend that real browser path to assert role, focus, and accessible name before key forwarding.                                 |
 
 ## Root Cause
 

@@ -127,7 +127,10 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
 
   function promptProfiles() {
     const promptProfileConfig = config.prompt_profile as
-      | { active?: string; profiles?: Record<string, { label: string; description?: string; agents?: Record<string, string> }> }
+      | {
+          active?: string
+          profiles?: Record<string, { label: string; description?: string; agents?: Record<string, string> }>
+        }
       | undefined
     const customProfiles = Object.entries(promptProfileConfig?.profiles ?? {}).map(([id, profile]) => ({
       id,
@@ -142,10 +145,7 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       ...basePromptProfiles,
       active: promptProfileConfig?.active ?? basePromptProfiles.active,
       project_active: promptProfileConfig?.active ?? basePromptProfiles.project_active,
-      profiles: [
-        ...basePromptProfiles.profiles.filter((profile) => !customIDs.has(profile.id)),
-        ...customProfiles,
-      ],
+      profiles: [...basePromptProfiles.profiles.filter((profile) => !customIDs.has(profile.id)), ...customProfiles],
     }
   }
 
@@ -316,8 +316,8 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
     })
     await page.keyboard.press("Tab")
     await page.keyboard.press("Shift+Tab")
-    await page.waitForFunction(
-      () => document.activeElement?.matches('[data-ui="prompt-profile-list"] .prompt-profile-list-row[data-active="true"]'),
+    await page.waitForFunction(() =>
+      document.activeElement?.matches('[data-ui="prompt-profile-list"] .prompt-profile-list-row[data-active="true"]'),
     )
     const focusedProfileRow = await page.$eval(
       '[data-ui="prompt-profile-list"] .prompt-profile-list-row[data-active="true"]',
@@ -463,28 +463,31 @@ test("prompt profiles are visible, built-ins stay read-only, and custom saves on
       },
     })
 
-    await page.evaluate((content) => {
-      const input = document.querySelector('[data-ui="prompt-profile-import-input"]') as HTMLInputElement | null
-      if (!input) throw new Error("Missing prompt profile import input")
-      const data = new DataTransfer()
-      data.items.add(new File([content], "imported-squad.json", { type: "application/json" }))
-      input.files = data.files
-      input.dispatchEvent(new Event("change", { bubbles: true }))
-    }, JSON.stringify({
-          prompt_profile: {
-            active: "imported-squad",
-            profiles: {
-              "imported-squad": {
-                label: "Imported Squad",
-                description: "Imported expert overlays.",
-                agents: {
-                  requirements: "Imported requirements guidance.",
-                  build: "Imported build guidance.",
-                },
+    await page.evaluate(
+      (content) => {
+        const input = document.querySelector('[data-ui="prompt-profile-import-input"]') as HTMLInputElement | null
+        if (!input) throw new Error("Missing prompt profile import input")
+        const data = new DataTransfer()
+        data.items.add(new File([content], "imported-squad.json", { type: "application/json" }))
+        input.files = data.files
+        input.dispatchEvent(new Event("change", { bubbles: true }))
+      },
+      JSON.stringify({
+        prompt_profile: {
+          active: "imported-squad",
+          profiles: {
+            "imported-squad": {
+              label: "Imported Squad",
+              description: "Imported expert overlays.",
+              agents: {
+                requirements: "Imported requirements guidance.",
+                build: "Imported build guidance.",
               },
             },
           },
-        }))
+        },
+      }),
+    )
     await page.waitForSelector('[data-ui="prompt-profile-import-preview"]')
     const importPreview = await page.evaluate(() => {
       const preview = document.querySelector('[data-ui="prompt-profile-import-preview"]')

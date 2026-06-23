@@ -18,20 +18,20 @@ owned by settings/message stylesheets.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `packages/overlay/src/components/ui/Button.tsx` | Operation controls must route through the `Button` primitive and its data attributes. |
-| `packages/overlay/src/styles/primitives/button.css` | Button hover/focus/size/tone behavior is the shared control source. |
-| `packages/overlay/test/overlay-architecture-guards.test.ts` | Acceptance panel chrome is intended to be owned by `surfaces/inspector.css`. |
-| `2026-06-17-agent-card-css-retirement.md` | Retired or misplaced surface CSS must be deleted instead of preserved as dead/parallel ownership. |
+| Source                                                      | Relevant constraint                                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/ui/Button.tsx`             | Operation controls must route through the `Button` primitive and its data attributes.             |
+| `packages/overlay/src/styles/primitives/button.css`         | Button hover/focus/size/tone behavior is the shared control source.                               |
+| `packages/overlay/test/overlay-architecture-guards.test.ts` | Acceptance panel chrome is intended to be owned by `surfaces/inspector.css`.                      |
+| `2026-06-17-agent-card-css-retirement.md`                   | Retired or misplaced surface CSS must be deleted instead of preserved as dead/parallel ownership. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "acceptance-summary-toggle|acceptance-files-link|acceptance-evidence-goal-pill" packages/overlay/src packages/overlay/test` | `Board.tsx` renders three action controls; goal pill CSS is in `inspector.css`, summary/files CSS is in `settings.css`. | Convert all three to `Button`; keep operation semantics. |
-| `rg -n "acceptance-panel|acceptance-summary|acceptance-files-link" packages/overlay/src/styles` | Acceptance panel shell is in `inspector.css`; summary/control rules are in `settings.css`; generic overflow guards in `messages.css` also include acceptance selectors. | Move acceptance-specific layout to `inspector.css`; remove acceptance selectors from settings/messages. |
-| `rg -n "data-has-pill|acceptance-evidence-row" packages/overlay/src packages/overlay/test` | CSS has a no-pill branch, but the DOM never sets `data-has-pill`. | Add the row attribute when a goal pill exists and pin it in tests. |
+| Sweep                             | Result                                                               | Decision                                                                   |
+| --------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `rg -n "acceptance-summary-toggle | acceptance-files-link                                                | acceptance-evidence-goal-pill" packages/overlay/src packages/overlay/test` | `Board.tsx` renders three action controls; goal pill CSS is in `inspector.css`, summary/files CSS is in `settings.css`.                                                 | Convert all three to `Button`; keep operation semantics.                                                |
+| `rg -n "acceptance-panel          | acceptance-summary                                                   | acceptance-files-link" packages/overlay/src/styles`                        | Acceptance panel shell is in `inspector.css`; summary/control rules are in `settings.css`; generic overflow guards in `messages.css` also include acceptance selectors. | Move acceptance-specific layout to `inspector.css`; remove acceptance selectors from settings/messages. |
+| `rg -n "data-has-pill             | acceptance-evidence-row" packages/overlay/src packages/overlay/test` | CSS has a no-pill branch, but the DOM never sets `data-has-pill`.          | Add the row attribute when a goal pill exists and pin it in tests.                                                                                                      |
 
 ## Fix Plan
 

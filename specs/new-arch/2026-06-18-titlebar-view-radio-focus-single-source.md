@@ -23,18 +23,18 @@ titlebar CSS classes.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Titlebar Menubar root/menu/trigger/content/item/group and View theme radio semantics are owned by Kobalte Menubar. |
-| `2026-06-18-retire-titlebar-nav-residue.md` | Old titlebar navigation selectors are retired; live titlebar navigation is the Kobalte `.titlebar-menubar*` surface. |
-| `2026-06-18-retire-titlebar-status-residue.md` | Kobalte runtime selectors such as `.titlebar-theme-option[data-highlighted]` are live and must not be treated as dead residue. |
+| Source                                                | Existing decision                                                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Titlebar Menubar root/menu/trigger/content/item/group and View theme radio semantics are owned by Kobalte Menubar.             |
+| `2026-06-18-retire-titlebar-nav-residue.md`           | Old titlebar navigation selectors are retired; live titlebar navigation is the Kobalte `.titlebar-menubar*` surface.           |
+| `2026-06-18-retire-titlebar-status-residue.md`        | Kobalte runtime selectors such as `.titlebar-theme-option[data-highlighted]` are live and must not be treated as dead residue. |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "focusFirstMenuItem|#titlebar-menu-.*titlebar-menubar-item|autoFocusMenu|onAutoFocusMenuChange|focusTrigger|openFromKeyboard" packages/overlay/src packages/overlay/test specs/new-arch` | Before the fix, `focusFirstMenuItem` existed only in `TitlebarMenubar.tsx`; after the fix, it remains only in this record and a negative source guard. `focusTrigger` remains the Alt release trigger focus path; Kobalte `autoFocusMenu` is already wired on `Menubar.Root`. |
-| `rg -n "titlebar-theme-option|titlebar-menu-view|Language" packages/overlay/src packages/overlay/test specs/new-arch` | The View menu theme radio items are live production DOM; the browser test was locking the wrong keyboard-open focus by expecting Language. |
+| Sweep                         | Result                                  |
+| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "focusFirstMenuItem    | #titlebar-menu-.\*titlebar-menubar-item | autoFocusMenu                                                        | onAutoFocusMenuChange                                                                                                                      | focusTrigger | openFromKeyboard" packages/overlay/src packages/overlay/test specs/new-arch` | Before the fix, `focusFirstMenuItem` existed only in `TitlebarMenubar.tsx`; after the fix, it remains only in this record and a negative source guard. `focusTrigger` remains the Alt release trigger focus path; Kobalte `autoFocusMenu` is already wired on `Menubar.Root`. |
+| `rg -n "titlebar-theme-option | titlebar-menu-view                      | Language" packages/overlay/src packages/overlay/test specs/new-arch` | The View menu theme radio items are live production DOM; the browser test was locking the wrong keyboard-open focus by expecting Language. |
 
 ## Fix
 

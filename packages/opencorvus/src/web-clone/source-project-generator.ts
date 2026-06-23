@@ -72,16 +72,6 @@ function buildSourceProjectVisualIterationViewports(primary: {
         "Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement.",
     },
     {
-      name: "mobile-review",
-      width: 390,
-      height: 844,
-      evidenceRole: "responsive_review",
-      evidenceSource: "matching_reference",
-      referenceImage: "web-clone-source/reference-mobile.png",
-      comparison:
-        "Capture and inspect a task-scoped mobile preview screenshot against web-clone-source/reference-mobile.png before claiming responsive parity.",
-    },
-    {
       name: "wide-review",
       width: 1920,
       height: 1080,
@@ -1121,8 +1111,8 @@ export async function generateWebCloneSourceProject(
     visualIteration,
     rules: [
       "Use sourceData.ts and framework components as the editable implementation surface.",
-      "Do not render reference.png, reference-mobile.png, screenshot files, base64 payloads, or hidden semantic coverage layers as the clone.",
-      "Use reference.png and reference-mobile.png only as task-scoped visual validation evidence.",
+      "Do not render reference.png, screenshot files, base64 payloads, or hidden semantic coverage layers as the clone.",
+      "Use reference.png only as task-scoped desktop visual validation evidence.",
     ],
   })
 
@@ -7631,14 +7621,8 @@ async function copyReferenceImage(webpageEvidenceDir: string, outputDir: string)
   if (!(await exists(source))) {
     throw new Error(`webpage evidence is missing required reference image: ${source}`)
   }
-  const mobileSource = path.join(webpageEvidenceDir, "reference-mobile.png")
-  if (!(await exists(mobileSource))) {
-    throw new Error(`webpage evidence is missing required mobile reference image: ${mobileSource}`)
-  }
   await fs.copyFile(source, path.join(outputDir, "reference.png"))
-  await fs.copyFile(mobileSource, path.join(outputDir, "reference-mobile.png"))
-  const copied = ["reference.png", "reference-mobile.png"]
-  return copied
+  return ["reference.png"]
 }
 
 async function copyDecodedImageAssets(sourceDir: string, targetDir: string): Promise<void> {

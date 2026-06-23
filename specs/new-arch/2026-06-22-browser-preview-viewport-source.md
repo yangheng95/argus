@@ -19,30 +19,30 @@ metadata is a visible contract failure, not a fallback to guessed sizes.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, no blind patching, test every change, and frontend/preview work must use task-scoped backend evidence. |
-| `2026-06-14-frontend-design-mobile-reference-image.md` | Mobile visual truth is `reference-mobile.png`, produced by the webpage evidence pipeline for mobile responsive checks. |
-| `2026-06-15-browser-preview-viewport-evidence-binding.md` | Browser preview evidence is keyed by viewport ID; the target response exposes per-viewport latest evidence IDs. |
-| `2026-06-17-browser-preview-region-runner-single-source.md` | Region comparison must use the shared browser evidence runner as the single Playwright capture owner. |
-| `AGENTS.md` right preview rule | The right preview panel must use task-scoped backend preview target/evidence as its single source. |
+| Source                                                      | Constraint carried forward                                                                                                               |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                 | No fallback, no duplicate source, no blind patching, test every change, and frontend/preview work must use task-scoped backend evidence. |
+| `2026-06-14-frontend-design-mobile-reference-image.md`      | Mobile visual truth is `reference-mobile.png`, produced by the webpage evidence pipeline for mobile responsive checks.                   |
+| `2026-06-15-browser-preview-viewport-evidence-binding.md`   | Browser preview evidence is keyed by viewport ID; the target response exposes per-viewport latest evidence IDs.                          |
+| `2026-06-17-browser-preview-region-runner-single-source.md` | Region comparison must use the shared browser evidence runner as the single Playwright capture owner.                                    |
+| `AGENTS.md` right preview rule                              | The right preview panel must use task-scoped backend preview target/evidence as its single source.                                       |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Viewport definition | `packages/opencorvus/src/browser-preview/viewport.ts` hard-codes `desktop 1280x800`, `tablet 834x1112`, `mobile 390x844` and falls back to desktop on lookup miss. | Remove global dimensions and fallback lookup. Keep viewport IDs as semantic labels only. |
-| Target response | `target.ts` returns `viewports: [...BROWSER_PREVIEW_VIEWPORTS]` for ready, missing, and failed targets. | Resolve viewports from persisted target metadata or task source manifest; missing target has no viewports; ready target without viewport source is failed with diagnostics. |
-| Target persistence | `persist.ts` stores only `url` and `source`. | Store normalized target viewports with the target artifact. |
-| Preview tool | `tool/browser-preview.ts` persists discovered URLs without viewport metadata. | Add explicit viewport input and resolve task source viewports before persisting when available; if neither exists, fail visibly. |
-| Capture verification | `verification-core.ts` remaps requested IDs through the global preset. | Select viewport objects from the resolved target's `viewports`. Unknown IDs fail explicitly. |
-| Evidence runner | `evidence-runner.ts` remaps IDs through the global preset. | Accept the already-resolved viewport objects from verification and region comparison. |
-| Live preview | `live.ts` maps `viewportID` through the global preset. | Resolve the viewport from the persisted target/task source before creating or reusing the live sidecar. |
-| Region comparison | `region-comparison.ts` seeds implementation viewports from global presets and special-cases desktop width from source image width. | Use target/source viewport metadata and source reference dimensions as validation, not as a fallback preset table. |
-| Local module binding | `local-module-source-binding.ts` captures local module with the global preset. | Resolve the viewport from target/source metadata for the requested viewport. |
-| Overlay service/types | `packages/overlay/src/services/browser-preview.ts` hard-types IDs and receives backend dimensions. | Keep dimensions as backend-supplied data; do not introduce frontend constants. |
-| Overlay panel | `BrowserPreviewPanel.tsx` starts selected viewport at `"desktop"` and adjusts after target load. | Keep initial semantic ID, but trust target viewports for available choices. |
-| Tests | Browser preview tests assert the three hard-coded IDs and dimensions. | Replace them with tests proving target/source dimensions are used and missing metadata fails. |
+| Surface               | Evidence                                                                                                                                                           | Decision                                                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Viewport definition   | `packages/opencorvus/src/browser-preview/viewport.ts` hard-codes `desktop 1280x800`, `tablet 834x1112`, `mobile 390x844` and falls back to desktop on lookup miss. | Remove global dimensions and fallback lookup. Keep viewport IDs as semantic labels only.                                                                                    |
+| Target response       | `target.ts` returns `viewports: [...BROWSER_PREVIEW_VIEWPORTS]` for ready, missing, and failed targets.                                                            | Resolve viewports from persisted target metadata or task source manifest; missing target has no viewports; ready target without viewport source is failed with diagnostics. |
+| Target persistence    | `persist.ts` stores only `url` and `source`.                                                                                                                       | Store normalized target viewports with the target artifact.                                                                                                                 |
+| Preview tool          | `tool/browser-preview.ts` persists discovered URLs without viewport metadata.                                                                                      | Add explicit viewport input and resolve task source viewports before persisting when available; if neither exists, fail visibly.                                            |
+| Capture verification  | `verification-core.ts` remaps requested IDs through the global preset.                                                                                             | Select viewport objects from the resolved target's `viewports`. Unknown IDs fail explicitly.                                                                                |
+| Evidence runner       | `evidence-runner.ts` remaps IDs through the global preset.                                                                                                         | Accept the already-resolved viewport objects from verification and region comparison.                                                                                       |
+| Live preview          | `live.ts` maps `viewportID` through the global preset.                                                                                                             | Resolve the viewport from the persisted target/task source before creating or reusing the live sidecar.                                                                     |
+| Region comparison     | `region-comparison.ts` seeds implementation viewports from global presets and special-cases desktop width from source image width.                                 | Use target/source viewport metadata and source reference dimensions as validation, not as a fallback preset table.                                                          |
+| Local module binding  | `local-module-source-binding.ts` captures local module with the global preset.                                                                                     | Resolve the viewport from target/source metadata for the requested viewport.                                                                                                |
+| Overlay service/types | `packages/overlay/src/services/browser-preview.ts` hard-types IDs and receives backend dimensions.                                                                 | Keep dimensions as backend-supplied data; do not introduce frontend constants.                                                                                              |
+| Overlay panel         | `BrowserPreviewPanel.tsx` starts selected viewport at `"desktop"` and adjusts after target load.                                                                   | Keep initial semantic ID, but trust target viewports for available choices.                                                                                                 |
+| Tests                 | Browser preview tests assert the three hard-coded IDs and dimensions.                                                                                              | Replace them with tests proving target/source dimensions are used and missing metadata fails.                                                                               |
 
 ## Root Cause
 

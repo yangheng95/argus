@@ -205,7 +205,8 @@ test(
       const url = new URL(req.url)
       const path = route(url)
       if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "file-link-visual-test" })
@@ -232,7 +233,14 @@ test(
         })
       }
       if (path === "/config/prompt" || path === "/config/prompt-profile") {
-        return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+        return send({
+          active: "general",
+          project_active: "general",
+          session_active: null,
+          default: "general",
+          targets: [],
+          profiles: [],
+        })
       }
       if (path === "/channel") return send([])
       if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
@@ -397,7 +405,10 @@ test(
       assert.deepEqual(fileDownloadState, { text: "Download", download: "notes.txt" })
       const fileDownloadChip = await page.$(".chat-bubble .msg-file-chip")
       assert.ok(fileDownloadChip)
-      writeFileSync(resolve(".scratch", "message-file-download-focus-visible.png"), await fileDownloadChip.screenshot({}))
+      writeFileSync(
+        resolve(".scratch", "message-file-download-focus-visible.png"),
+        await fileDownloadChip.screenshot({}),
+      )
 
       await page.mouse.move(0, 0)
       await page.waitForSelector('.card[data-kind="tool"] > .card__head [data-ui="card-head-main"]', { visible: true })

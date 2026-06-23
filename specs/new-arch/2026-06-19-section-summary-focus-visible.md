@@ -18,21 +18,21 @@ uses `overflow: hidden`.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | UI changes require real visual validation; no callsite-only patches for shared UI problems. |
+| Source                                             | Relevant constraint                                                                                                                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                        | UI changes require real visual validation; no callsite-only patches for shared UI problems.                                                                                           |
 | `2026-06-19-retire-section-icon-button-residue.md` | Live section contract is `.oc-section__head`, `.oc-section__icon`, `.oc-section__title`, `.oc-section__badge`, and `.oc-section__body`; retired header action residue must stay gone. |
-| `Section.tsx` | The head is a native `<summary class="oc-section__head">`; no custom button wrapper owns the keyboard state. |
-| `inspector.css` | Surface-level section chrome owns hover/background/badge/caret styling on top of `primitives/section.css`. |
+| `Section.tsx`                                      | The head is a native `<summary class="oc-section__head">`; no custom button wrapper owns the keyboard state.                                                                          |
+| `inspector.css`                                    | Surface-level section chrome owns hover/background/badge/caret styling on top of `primitives/section.css`.                                                                            |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'oc-section__head.*focus|Section.*focus|section.*focus|oc-section__head:hover|oc-section__head:focus' packages/overlay/src packages/overlay/test specs/new-arch` | Only `.oc-section__head:hover` existed; no `focus-visible` owner was present. | Add the keyboard state to the same surface owner as hover. |
-| `rg -n '<Section\\b|Section\\(' packages/overlay/src/components packages/overlay/test -g '*.tsx' -g '*.ts'` | Production callers are `AcceptancePanel` and `SectionFrame` in `Board.tsx`, both going through the shared primitive. | Do not patch call sites. |
-| `rg -n -C 20 '\\.oc-section__head|\\.oc-section\\[open\\] > \\.oc-section__head' packages/overlay/src/styles/primitives/section.css packages/overlay/src/styles/surfaces/inspector.css` | Primitive CSS owns structure; `inspector.css` owns hover wash, active-state background, and shell overflow. | Put focus background/ring in `inspector.css`; keep colors tokenized. |
-| `rg -n 'workflow-section-stack|SectionFrame\\(' packages/overlay/src/components/Board.tsx` | Workflow sections and acceptance sections share the same summary class. | Browser validation should use the real right inspector workflow stack. |
+| Command                             | Result                                                                                                                                                  | Decision                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `rg -n 'oc-section\_\_head.\*focus  | Section.\*focus                                                                                                                                         | section.\*focus                                                                                                      | oc-section\_\_head:hover                                               | oc-section\_\_head:focus' packages/overlay/src packages/overlay/test specs/new-arch` | Only `.oc-section__head:hover` existed; no `focus-visible` owner was present. | Add the keyboard state to the same surface owner as hover. |
+| `rg -n '<Section\\b                 | Section\\(' packages/overlay/src/components packages/overlay/test -g '_.tsx' -g '_.ts'`                                                                 | Production callers are `AcceptancePanel` and `SectionFrame` in `Board.tsx`, both going through the shared primitive. | Do not patch call sites.                                               |
+| `rg -n -C 20 '\\.oc-section\_\_head | \\.oc-section\\[open\\] > \\.oc-section\_\_head' packages/overlay/src/styles/primitives/section.css packages/overlay/src/styles/surfaces/inspector.css` | Primitive CSS owns structure; `inspector.css` owns hover wash, active-state background, and shell overflow.          | Put focus background/ring in `inspector.css`; keep colors tokenized.   |
+| `rg -n 'workflow-section-stack      | SectionFrame\\(' packages/overlay/src/components/Board.tsx`                                                                                             | Workflow sections and acceptance sections share the same summary class.                                              | Browser validation should use the real right inspector workflow stack. |
 
 ## Fix
 

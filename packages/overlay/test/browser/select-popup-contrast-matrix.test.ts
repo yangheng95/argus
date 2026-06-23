@@ -27,7 +27,10 @@ function overlayCss(): string {
   return OVERLAY_STYLE_HREFS.map(readCss).join("\n")
 }
 
-async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+async function saveScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
   const target = join(SCRATCH_ROOT, name)
   mkdirSync(dirname(target), { recursive: true })
   await writeFile(target, await element.screenshot({}))
@@ -328,7 +331,10 @@ test("shared Select popup consumers keep readable options on a light popup surfa
 
     for (const sample of result) {
       assert.equal(sample.contentBackgroundAlpha, 1, `${sample.id} popup background must be opaque`)
-      assert.ok(sample.options.length >= 4, `${sample.id} should include plain, selected, highlighted, and combined options`)
+      assert.ok(
+        sample.options.length >= 4,
+        `${sample.id} should include plain, selected, highlighted, and combined options`,
+      )
       assert.ok(
         sample.options.some((option) => !option.selected),
         `${sample.id} must cover at least one unselected option`,
@@ -355,7 +361,11 @@ test("shared Select popup consumers keep readable options on a light popup surfa
       )
       for (const copy of sample.copyLayouts.filter((layout) => layout.hasDescription)) {
         assert.equal(copy.display, "flex", `${sample.id} described option copy must use shared flex layout`)
-        assert.equal(copy.flexDirection, "column", `${sample.id} described option copy must stack label and description`)
+        assert.equal(
+          copy.flexDirection,
+          "column",
+          `${sample.id} described option copy must stack label and description`,
+        )
         assert.equal(copy.descriptionBelow, true, `${sample.id} description must render below the label`)
       }
       for (const option of sample.options) {

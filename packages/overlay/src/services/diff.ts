@@ -247,7 +247,9 @@ async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): 
       ? await apiJson(
           directoryScopedPath(`goal-run/${encodeURIComponent(scope.goalRunID)}/acceptance`, directory, "goal-run diff"),
         )
-      : await apiJson(directoryScopedPath(`run/${encodeURIComponent(String(scope.runID))}/acceptance`, directory, "run diff"))
+      : await apiJson(
+          directoryScopedPath(`run/${encodeURIComponent(String(scope.runID))}/acceptance`, directory, "run diff"),
+        )
     const diffs = normalizeAcceptanceDiffs((data as any)?.result?.diffs)
     if (diffs.length > 0) diffCache.set(key, diffs)
     return diffs

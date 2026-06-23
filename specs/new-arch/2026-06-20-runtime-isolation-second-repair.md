@@ -37,7 +37,7 @@ other:
   directory.
 - Browser-preview capture has two job-directory allocation sites:
   `verification-core.ts` allocates an old `taskAbsolute(..., "browser-preview",
-  captureID)` directory and passes it to the capture job, while
+captureID)` directory and passes it to the capture job, while
   `evidence-runner.ts` allocates a separate `browserPreviewJobRoot(...)`
   directory and uses that one. The unused old directory is a latent double
   source for task runtime evidence.
@@ -161,7 +161,7 @@ Commands run before writing this plan:
    Any helper or orchestrator call that has a `taskID` and reads/writes
    `frontend_design`, visual binding, PRD evidence, or research bundle runtime
    files must derive `projectDir` from `taskPrimaryProjectRoot(taskID, {
-   activeProjectID: Instance.project.id })`. Current cwd/worktree remains
+activeProjectID: Instance.project.id })`. Current cwd/worktree remains
    relevant for source-code editing, not for task runtime artifact storage.
 
 10. Make overlay project-scoped row actions directory-explicit.

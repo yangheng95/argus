@@ -19,26 +19,26 @@ menu content before the trigger disclosure can mount.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate source, recall before edits, test every change, visually verify UI work, commit and push every round. |
-| `2026-06-20-kobalte-trigger-open-state-single-source.md` | Kobalte trigger state attributes are the open-state source; local mirrors and parallel open sources must stay retired. |
-| `2026-06-19-titlebar-menubar-trigger-button-primitive.md` | `Menubar.Trigger as={Button}` is the single visible trigger chrome path. |
-| `2026-06-20-titlebar-run-checkbox-menubar-primitive.md` | Run-menu booleans use Kobalte `Menubar.CheckboxItem`; current dirty auto-confirm rename must not be overwritten. |
-| Herschel read-only audit 2026-06-23 | `toggleMenuFromTrigger()` manually writes `setOpenMenu` on pointerdown while Kobalte also opens from the trigger; `setMenuAnchor()` duplicates Popper anchor measurement. |
-| Current dirty diff | `TitlebarMenubar.tsx`, titlebar tests, i18n, and the checkbox spec already contain unrelated auto-confirm-proposed-tasks edits. Stage only this round's hunks. |
+| Source                                                    | Constraint carried forward                                                                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                               | No fallback logic, no duplicate source, recall before edits, test every change, visually verify UI work, commit and push every round.                                     |
+| `2026-06-20-kobalte-trigger-open-state-single-source.md`  | Kobalte trigger state attributes are the open-state source; local mirrors and parallel open sources must stay retired.                                                    |
+| `2026-06-19-titlebar-menubar-trigger-button-primitive.md` | `Menubar.Trigger as={Button}` is the single visible trigger chrome path.                                                                                                  |
+| `2026-06-20-titlebar-run-checkbox-menubar-primitive.md`   | Run-menu booleans use Kobalte `Menubar.CheckboxItem`; current dirty auto-confirm rename must not be overwritten.                                                          |
+| Herschel read-only audit 2026-06-23                       | `toggleMenuFromTrigger()` manually writes `setOpenMenu` on pointerdown while Kobalte also opens from the trigger; `setMenuAnchor()` duplicates Popper anchor measurement. |
+| Current dirty diff                                        | `TitlebarMenubar.tsx`, titlebar tests, i18n, and the checkbox spec already contain unrelated auto-confirm-proposed-tasks edits. Stage only this round's hunks.            |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Kobalte value change | `handleMenuValueChange()` calls `setMenuAnchor()`, `setAutoFocusMenu(true)`, and `setOpenMenu()`. | Keep controlled Kobalte value state and remove the anchor call. |
-| Pointer trigger | `Menubar.Trigger onPointerDown` calls `toggleMenuFromTrigger()`, which prevents default, measures the trigger, writes `--titlebar-menu-anchor-left`, and sets `openMenu`. | Keep only the controlled value toggle required by Kobalte's controlled root; delete trigger measurement and CSS writes. |
-| Keyboard Alt path | `openFromKeyboard()` calls `setMenuAnchor()` before opening and focusing. | Keep Alt access-key behavior, but remove manual anchor measurement. |
-| CSS panel width | `titlebar.css` uses `var(--titlebar-menu-anchor-left)` to derive width. | Use preferred shell-capped widths; Kobalte `fitViewport` keeps final viewport fitting through Popper. |
-| Dead viewport shift | `TitlebarMenubar.tsx` writes `transform: translateX(var(--titlebar-menu-viewport-shift, 0px))`; CSS only defines the var as `0px`. | Remove the dead transform and variable. |
+| Surface                  | Evidence                                                                                                                                                                           | Decision                                                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Kobalte value change     | `handleMenuValueChange()` calls `setMenuAnchor()`, `setAutoFocusMenu(true)`, and `setOpenMenu()`.                                                                                  | Keep controlled Kobalte value state and remove the anchor call.                                                                       |
+| Pointer trigger          | `Menubar.Trigger onPointerDown` calls `toggleMenuFromTrigger()`, which prevents default, measures the trigger, writes `--titlebar-menu-anchor-left`, and sets `openMenu`.          | Keep only the controlled value toggle required by Kobalte's controlled root; delete trigger measurement and CSS writes.               |
+| Keyboard Alt path        | `openFromKeyboard()` calls `setMenuAnchor()` before opening and focusing.                                                                                                          | Keep Alt access-key behavior, but remove manual anchor measurement.                                                                   |
+| CSS panel width          | `titlebar.css` uses `var(--titlebar-menu-anchor-left)` to derive width.                                                                                                            | Use preferred shell-capped widths; Kobalte `fitViewport` keeps final viewport fitting through Popper.                                 |
+| Dead viewport shift      | `TitlebarMenubar.tsx` writes `transform: translateX(var(--titlebar-menu-viewport-shift, 0px))`; CSS only defines the var as `0px`.                                                 | Remove the dead transform and variable.                                                                                               |
 | Runtime token allow-list | `css-token-closure.test.ts` still whitelists `--titlebar-menu-anchor-left`, but that test currently exposes broader existing token-classification debt outside this titlebar path. | Do not widen or churn the allow-list in this round; the production writer and CSS consumer are removed and guarded by titlebar tests. |
-| Browser coverage | `titlebar-menubar.test.ts` already opens top-level menus and captures screenshots. | Add a probe that opening menus does not write the retired anchor variable. |
+| Browser coverage         | `titlebar-menubar.test.ts` already opens top-level menus and captures screenshots.                                                                                                 | Add a probe that opening menus does not write the retired anchor variable.                                                            |
 
 ## Root Cause
 

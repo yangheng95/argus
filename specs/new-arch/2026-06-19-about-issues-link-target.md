@@ -13,19 +13,19 @@ OpenCorvus project issue tracker instead of the author profile.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `package.json` | The project repository URL is `https://github.com/yangheng95/opencorvus`. |
-| `2026-06-19-retire-about-author-link-residue.md` | About links use the shared `.about-link` list; do not revive author-specific link styles. |
-| `packages/overlay/src/i18n/en-US.json` and `zh-CN.json` | `about.issues` is user-facing copy for the issue-feedback link. |
-| Feynman independent agent report | The root cause is duplicated hard-coded `href` values in `ConfigDialogHost`, not a CSS or i18n problem. |
+| Source                                                  | Relevant decision                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `package.json`                                          | The project repository URL is `https://github.com/yangheng95/opencorvus`.                               |
+| `2026-06-19-retire-about-author-link-residue.md`        | About links use the shared `.about-link` list; do not revive author-specific link styles.               |
+| `packages/overlay/src/i18n/en-US.json` and `zh-CN.json` | `about.issues` is user-facing copy for the issue-feedback link.                                         |
+| Feynman independent agent report                        | The root cause is duplicated hard-coded `href` values in `ConfigDialogHost`, not a CSS or i18n problem. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "github\\.com/yangheng95|about\\.issues|about\\.links|about-link" package.json packages/overlay/src packages/overlay/test specs/new-arch` | Only `ConfigDialogHost` owns the live About hrefs; tests check only the first `.about-link`. | Fix the component source and strengthen the existing About browser test. |
-| `ConfigDialogHost.tsx` About panel review | Links are duplicated literal anchors inside the panel render branch. | Introduce one `ABOUT_LINKS` array as the link target source. |
+| Sweep                                              | Result                                                                                                                   | Decision                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `rg -n "github\\.com/yangheng95                    | about\\.issues                                                                                                           | about\\.links                                                        | about-link" package.json packages/overlay/src packages/overlay/test specs/new-arch` | Only `ConfigDialogHost` owns the live About hrefs; tests check only the first `.about-link`. | Fix the component source and strengthen the existing About browser test. |
+| `ConfigDialogHost.tsx` About panel review          | Links are duplicated literal anchors inside the panel render branch.                                                     | Introduce one `ABOUT_LINKS` array as the link target source.         |
 | `runtime-icon-single-source-visual.test.ts` review | The test already opens About and screenshots the dialog, but only checks that the first link starts with the author URL. | Assert both visible links, distinct hrefs, and the exact Issues URL. |
 
 ## Fix Plan

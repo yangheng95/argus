@@ -499,9 +499,23 @@ describe("session compaction dispatch anchor", () => {
     const runningInputHead = "RUNNING-INPUT-HEAD-KEEP"
     const runningInputMiddle = "RUNNING-INPUT-MIDDLE-OMIT"
     const runningInputTail = "RUNNING-INPUT-TAIL-KEEP"
-    const pendingInput = [pendingInputHead, "x".repeat(30_000), pendingInputMiddle, "y".repeat(30_000), pendingInputTail].join("\n")
-    const pendingRaw = [pendingRawHead, "x".repeat(30_000), pendingRawMiddle, "y".repeat(30_000), pendingRawTail].join("\n")
-    const runningInput = [runningInputHead, "x".repeat(30_000), runningInputMiddle, "y".repeat(30_000), runningInputTail].join("\n")
+    const pendingInput = [
+      pendingInputHead,
+      "x".repeat(30_000),
+      pendingInputMiddle,
+      "y".repeat(30_000),
+      pendingInputTail,
+    ].join("\n")
+    const pendingRaw = [pendingRawHead, "x".repeat(30_000), pendingRawMiddle, "y".repeat(30_000), pendingRawTail].join(
+      "\n",
+    )
+    const runningInput = [
+      runningInputHead,
+      "x".repeat(30_000),
+      runningInputMiddle,
+      "y".repeat(30_000),
+      runningInputTail,
+    ].join("\n")
     const messages: Message.WithParts[] = [
       textMessage("m-user", "user", "Compact interrupted tool calls"),
       {

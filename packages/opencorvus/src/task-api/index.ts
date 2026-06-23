@@ -1844,7 +1844,8 @@ export namespace EngineService {
           phase: "cancel",
           key: "abort_failed",
           value: JSON.stringify({ label, ...refs, error: err instanceof Error ? err.message : String(err) }),
-          reason: "executor.abort or cleanup failed; cancellation is incomplete and task status was not marked cancelled.",
+          reason:
+            "executor.abort or cleanup failed; cancellation is incomplete and task status was not marked cancelled.",
         })
       }
       throw createTaskCancellationIncomplete({ taskID, handle: label, cause: err })
@@ -2270,7 +2271,11 @@ export namespace EngineService {
         decisions.append({
           phase: "cancel",
           key: "abort_failed",
-          value: JSON.stringify({ label: "executor.abort run", runID, error: err instanceof Error ? err.message : String(err) }),
+          value: JSON.stringify({
+            label: "executor.abort run",
+            runID,
+            error: err instanceof Error ? err.message : String(err),
+          }),
           reason: "abortRun's executor.abort failed; cancellation is incomplete and run status was not marked aborted.",
         })
       }

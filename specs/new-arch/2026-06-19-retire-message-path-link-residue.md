@@ -11,18 +11,18 @@ second CSS source for the same visible file-link surface.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-10-overlay-markdown-url-boundary-fix.md` | File-link code spans stay unchanged inside the shared Markdown renderer while URL preview logic changed. |
-| `2026-06-18-retire-workspace-panel-residue.md` | `code .file-link` remains live and is explicitly owned by `workspace.css`. |
-| `overlay-architecture-guards.test.ts` | Existing guard requires `code .file-link` in `workspace.css`, but did not reject the retired `.path-*` family in `messages.css`. |
+| Source                                            | Relevant constraint                                                                                                              |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-10-overlay-markdown-url-boundary-fix.md` | File-link code spans stay unchanged inside the shared Markdown renderer while URL preview logic changed.                         |
+| `2026-06-18-retire-workspace-panel-residue.md`    | `code .file-link` remains live and is explicitly owned by `workspace.css`.                                                       |
+| `overlay-architecture-guards.test.ts`             | Existing guard requires `code .file-link` in `workspace.css`, but did not reject the retired `.path-*` family in `messages.css`. |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n -F 'path-box' packages/overlay/src packages/overlay/test specs/new-arch` | Only `messages.css` comment/rule hits. | Retire `.path-box`. |
-| `rg -n -F 'path-link' packages/overlay/src packages/overlay/test specs/new-arch` | Only `messages.css` comment/rules hit. | Retire `.path-link` and its states. |
+| Command                                                                          | Result                                                                                                                   | Decision                                    |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| `rg -n -F 'path-box' packages/overlay/src packages/overlay/test specs/new-arch`  | Only `messages.css` comment/rule hits.                                                                                   | Retire `.path-box`.                         |
+| `rg -n -F 'path-link' packages/overlay/src packages/overlay/test specs/new-arch` | Only `messages.css` comment/rules hit.                                                                                   | Retire `.path-link` and its states.         |
 | `rg -n -F 'file-link' packages/overlay/src packages/overlay/test specs/new-arch` | `markdown.ts` emits `class="file-link"`; `workspace.css` owns `code .file-link`; guards already pin workspace ownership. | Keep `file-link` as the single live source. |
 
 ## Fix

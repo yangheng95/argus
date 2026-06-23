@@ -12,21 +12,21 @@ the overlay locale system is active.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | User-visible strings must follow the project i18n system; UI fixes require tests and browser evidence. |
+| Source                                                | Relevant constraint                                                                                                              |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                           | User-visible strings must follow the project i18n system; UI fixes require tests and browser evidence.                           |
 | `2026-06-19-image-preview-trigger-accessible-name.md` | Image preview is a shared entry point for markdown, file, and tool evidence thumbnails. Fixes belong in the shared preview path. |
-| `2026-06-18-image-preview-shadow-token-source.md` | Image preview dialog is already covered by browser visual evidence, so dialog changes must preserve real rendered validation. |
-| `packages/overlay/src/utils/i18n.ts` | Solid components should call strict `t()` at render time after both locale bundles are loaded. |
+| `2026-06-18-image-preview-shadow-token-source.md`     | Image preview dialog is already covered by browser visual evidence, so dialog changes must preserve real rendered validation.    |
+| `packages/overlay/src/utils/i18n.ts`                  | Solid components should call strict `t()` at render time after both locale bundles are loaded.                                   |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'Zoom in|Zoom out|Fit width|Fit image|Fit whole image|Original size|Copy image|Current zoom|Image preview controls|Image preview|Copied|Copy failed...' packages/overlay/src/components/ImagePreview.tsx packages/overlay/test/... packages/overlay/src/i18n` | Production English literals are isolated to `ImagePreview.tsx`; tests in `message-image-preview.test.ts` and `browser/image-preview-copy.test.ts` lock them in. | Replace literals in `ImagePreviewHost` and update tests that asserted the old English source. |
-| `rg -n 'useI18n|createI18n|\bt\(|locale|oc_locale|__OPENCORVUS_LOCALE__' packages/overlay/src` | The overlay already uses `t()` from `utils/i18n.ts`; browser fixtures set locale through `__OPENCORVUS_LOCALE__`, Tauri settings, and `localStorage`. | Import `t()` directly; no new i18n mechanism. |
+| Sweep                                                                                   | Result                                                          | Decision                                                  |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------- | --------- | --------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------- | ------------- | ------ | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `rg -n 'Zoom in                                                                         | Zoom out                                                        | Fit width                                                 | Fit image | Fit whole image | Original size                                | Copy image                                                                                                                                            | Current zoom                                  | Image preview controls | Image preview | Copied | Copy failed...' packages/overlay/src/components/ImagePreview.tsx packages/overlay/test/... packages/overlay/src/i18n` | Production English literals are isolated to `ImagePreview.tsx`; tests in `message-image-preview.test.ts` and `browser/image-preview-copy.test.ts` lock them in. | Replace literals in `ImagePreviewHost` and update tests that asserted the old English source. |
+| `rg -n 'useI18n                                                                         | createI18n                                                      | \bt\(                                                     | locale    | oc_locale       | **OPENCORVUS_LOCALE**' packages/overlay/src` | The overlay already uses `t()` from `utils/i18n.ts`; browser fixtures set locale through `__OPENCORVUS_LOCALE__`, Tauri settings, and `localStorage`. | Import `t()` directly; no new i18n mechanism. |
 | `git diff -- packages/overlay/src/i18n/en-US.json packages/overlay/src/i18n/zh-CN.json` | Existing uncommitted mission download translations are present. | Preserve those lines and add only `image_preview.*` keys. |
-| `rg -n 'image_preview\.' packages/overlay/src/i18n` | No existing image preview namespace exists. | Add one flat namespace in both supported locale files. |
+| `rg -n 'image_preview\.' packages/overlay/src/i18n`                                     | No existing image preview namespace exists.                     | Add one flat namespace in both supported locale files.    |
 
 ## Fix Plan
 

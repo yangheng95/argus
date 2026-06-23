@@ -16,19 +16,19 @@ feedback.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-19-retire-message-path-link-residue.md` | Markdown codespan file links stay as `code .file-link`; tool diff file openers are a separate structured tool surface. |
-| `packages/overlay/src/components/ui/Button.tsx` | Button primitive owns button semantics, variants, tones, disabled handling, and focus-visible chrome. |
-| `packages/overlay/src/styles/primitives/button.css` | `.oc-button:focus-visible` is the shared keyboard focus source. |
-| `packages/overlay/src/main.tsx` | Global `[data-file-path]` activation delegates file opening to `openPathInSelectedEditor(path)`. |
+| Source                                              | Existing decision                                                                                                      |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-19-retire-message-path-link-residue.md`    | Markdown codespan file links stay as `code .file-link`; tool diff file openers are a separate structured tool surface. |
+| `packages/overlay/src/components/ui/Button.tsx`     | Button primitive owns button semantics, variants, tones, disabled handling, and focus-visible chrome.                  |
+| `packages/overlay/src/styles/primitives/button.css` | `.oc-button:focus-visible` is the shared keyboard focus source.                                                        |
+| `packages/overlay/src/main.tsx`                     | Global `[data-file-path]` activation delegates file opening to `openPathInSelectedEditor(path)`.                       |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "msg-tool-diff-link|InlineToolPart|tool-diff|data-file-path|openPathInSelectedEditor" packages/overlay/src packages/overlay/test specs/new-arch` | `.msg-tool-diff-link` has one production owner in `InlineToolPart` and one hover-only CSS rule in `messages.css`. | Replace this structured tool opener with `Button`; keep markdown `file-link` unchanged. |
-| `rg -n "InlineToolPart|msg-tool|file-path|data-file-path|tool diff" packages/overlay/test/browser packages/overlay/test` | `message-file-link-browser.test.ts` already boots a real overlay conversation for file-link behavior. | Extend that fixture with a tool diff card path and focused screenshot. |
+| Sweep                                                     | Result                                                              | Decision                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `rg -n "msg-tool-diff-link                                | InlineToolPart                                                      | tool-diff                                                        | data-file-path | openPathInSelectedEditor" packages/overlay/src packages/overlay/test specs/new-arch` | `.msg-tool-diff-link` has one production owner in `InlineToolPart` and one hover-only CSS rule in `messages.css`. | Replace this structured tool opener with `Button`; keep markdown `file-link` unchanged. |
+| `rg -n "InlineToolPart                                    | msg-tool                                                            | file-path                                                        | data-file-path | tool diff" packages/overlay/test/browser packages/overlay/test`                      | `message-file-link-browser.test.ts` already boots a real overlay conversation for file-link behavior.             | Extend that fixture with a tool diff card path and focused screenshot.                  |
 | `packages/overlay/test/owner-surface-consistency.test.ts` | Message surface guards already protect structured tool card chrome. | Add a guard that the retired hover-only link class stays absent. |
 
 ## Fix
@@ -36,7 +36,7 @@ feedback.
 - Import `Button` in `InlineToolPart`.
 - Render tool diff file openers as
   `Button type="button" variant="ghost" size="sm" tone="accent"
-  data-ui="tool-diff-open-file"` with the existing `data-file-path` and title.
+data-ui="tool-diff-open-file"` with the existing `data-file-path` and title.
 - Replace `.msg-tool-diff-link` CSS with
   `.oc-button[data-ui="tool-diff-open-file"]` layout-only styling, relying on the
   shared Button primitive for hover and `:focus-visible`.

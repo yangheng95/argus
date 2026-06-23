@@ -18,23 +18,23 @@ pane layout writes.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate layout source, test every change, visually verify UI work, and commit/push every round. |
-| `2026-06-22-overlay-resize-frame-coalescing.md` | Window resize work is already coalesced through `createAnimationFrameScheduler`; keep one resize listener path. |
-| `2026-06-22-center-workbench-open-layout-frame.md` | Center workbench panel weights and separator geometry are rendered by one layout helper. |
-| `2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md` | `renderCenterWorkbenchPanelLayoutOnFrame` is the single RAF owner for center workbench layout and reveal. |
-| `2026-06-17-left-pane-resizer-accessibility.md` | `renderPaneLayout()` remains the pane service's single width and separator semantics renderer; do not add pane ARIA writers in `main.tsx`. |
+| Source                                                               | Constraint carried forward                                                                                                                 |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                                          | No fallback, no duplicate layout source, test every change, visually verify UI work, and commit/push every round.                          |
+| `2026-06-22-overlay-resize-frame-coalescing.md`                      | Window resize work is already coalesced through `createAnimationFrameScheduler`; keep one resize listener path.                            |
+| `2026-06-22-center-workbench-open-layout-frame.md`                   | Center workbench panel weights and separator geometry are rendered by one layout helper.                                                   |
+| `2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md` | `renderCenterWorkbenchPanelLayoutOnFrame` is the single RAF owner for center workbench layout and reveal.                                  |
+| `2026-06-17-left-pane-resizer-accessibility.md`                      | `renderPaneLayout()` remains the pane service's single width and separator semantics renderer; do not add pane ARIA writers in `main.tsx`. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Window resize event | `main.tsx` has the only `window.addEventListener("resize", applyWindowResizeOnFrame.schedule)` and `visualViewport.resize` path. | Keep the existing event path and scheduler. |
-| Window resize callback | `applyWindowResize()` calls `applyZoom`, `renderPaneLayout`, and directly calls `renderCenterWorkbenchPanelSeparators()`. | Replace the direct center separator render with the existing center layout RAF owner. |
-| Center workbench geometry | `renderCenterWorkbenchPanelSeparators()` reads `getBoundingClientRect()` through `centerWorkbenchPanelResizeMetrics()`. | Keep the same geometry code, but run it outside the resize write callback. |
-| Pane service | `renderPaneLayout()` owns pane CSS variables and pane separator ARIA semantics. | Leave pane internals unchanged in this round; record them for a separate audit if resize jank remains. |
-| Tests | `resize-observer-frame-scheduler.test.ts` guards scheduler ownership; `center-workbench-separator-browser.test.ts` opens the real overlay and resizes the viewport. | Extend both to prove center geometry is not read in the resize write callback. |
+| Surface                   | Evidence                                                                                                                                                            | Decision                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Window resize event       | `main.tsx` has the only `window.addEventListener("resize", applyWindowResizeOnFrame.schedule)` and `visualViewport.resize` path.                                    | Keep the existing event path and scheduler.                                                            |
+| Window resize callback    | `applyWindowResize()` calls `applyZoom`, `renderPaneLayout`, and directly calls `renderCenterWorkbenchPanelSeparators()`.                                           | Replace the direct center separator render with the existing center layout RAF owner.                  |
+| Center workbench geometry | `renderCenterWorkbenchPanelSeparators()` reads `getBoundingClientRect()` through `centerWorkbenchPanelResizeMetrics()`.                                             | Keep the same geometry code, but run it outside the resize write callback.                             |
+| Pane service              | `renderPaneLayout()` owns pane CSS variables and pane separator ARIA semantics.                                                                                     | Leave pane internals unchanged in this round; record them for a separate audit if resize jank remains. |
+| Tests                     | `resize-observer-frame-scheduler.test.ts` guards scheduler ownership; `center-workbench-separator-browser.test.ts` opens the real overlay and resizes the viewport. | Extend both to prove center geometry is not read in the resize write callback.                         |
 
 ## Root Cause
 

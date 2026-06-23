@@ -90,7 +90,10 @@ describe("shared Kobalte select popup colors", () => {
   const composerCss = stripComments(readCss(join("surfaces", "composer.css")))
   const inspectorCss = stripComments(readCss(join("surfaces", "inspector.css")))
   const settingsCss = stripComments(readCss(join("surfaces", "settings.css")))
-  const selectControl = readFileSync(join(import.meta.dir, "..", "src", "components", "ui", "SelectControl.tsx"), "utf8")
+  const selectControl = readFileSync(
+    join(import.meta.dir, "..", "src", "components", "ui", "SelectControl.tsx"),
+    "utf8",
+  )
   const browserPreviewPanel = readFileSync(
     join(import.meta.dir, "..", "src", "components", "BrowserPreviewPanel.tsx"),
     "utf8",
@@ -102,7 +105,8 @@ describe("shared Kobalte select popup colors", () => {
     const contentBlock = fieldCss.match(/\.oc-select-content\s*{[^}]*}/)?.[0] ?? ""
     const optionBlock = fieldCss.match(/\.oc-select-option\s*{[^}]*}/)?.[0] ?? ""
     const selectedOptionBlock = fieldCss.match(/\.oc-select-option\[data-selected\]\s*{[^}]*}/)?.[0] ?? ""
-    const highlightedOptionBlock = fieldCss.match(/\.oc-select-option\[data-highlighted\],[\s\S]*?\.oc-select-option:hover\s*{[^}]*}/)?.[0] ?? ""
+    const highlightedOptionBlock =
+      fieldCss.match(/\.oc-select-option\[data-highlighted\],[\s\S]*?\.oc-select-option:hover\s*{[^}]*}/)?.[0] ?? ""
     const secondaryBlock = fieldCss.match(/\.oc-select-option\s+small\s*{[^}]*}/)?.[0] ?? ""
     const optionCopyBlock = fieldCss.match(/\.oc-select-option-copy\s*{[^}]*}/)?.[0] ?? ""
 
@@ -176,11 +180,15 @@ describe("shared Kobalte select popup colors", () => {
         if (
           file.endsWith(join("components", "settings", "primitives.tsx")) &&
           tag.includes("class={triggerClass()}") &&
-          source.includes('props.triggerClass ? `field-input oc-select-trigger ${props.triggerClass}` : "field-input oc-select-trigger"')
+          source.includes(
+            'props.triggerClass ? `field-input oc-select-trigger ${props.triggerClass}` : "field-input oc-select-trigger"',
+          )
         ) {
           continue
         }
-        violations.push(`${relative(SRC_ROOT, file)}:${lineNumber(source, match.index ?? 0)} ${tag.replace(/\s+/g, " ")}`)
+        violations.push(
+          `${relative(SRC_ROOT, file)}:${lineNumber(source, match.index ?? 0)} ${tag.replace(/\s+/g, " ")}`,
+        )
       }
     }
 

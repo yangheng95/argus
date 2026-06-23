@@ -21,18 +21,18 @@ current `selectTask` / `selectMissionTask` path.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-11-mission-left-activity-retire-panel.md` | Mission task clicks go through `selectMissionTask`, which activates workflow and calls `selectTask(task.id)`. |
-| `2026-06-05-overlay-deleted-session-stale-card-plan.md` | Task row select and delete keep `selectTask()` as the canonical selected-task clearing and hydration path. |
-| `2026-06-15-task-list-lean-projection.md` | Task list rows are lean; selected task detail belongs to selected task board/conversation routes, not a parallel list overlay. |
+| Source                                                  | Existing decision                                                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `2026-06-11-mission-left-activity-retire-panel.md`      | Mission task clicks go through `selectMissionTask`, which activates workflow and calls `selectTask(task.id)`.                  |
+| `2026-06-05-overlay-deleted-session-stale-card-plan.md` | Task row select and delete keep `selectTask()` as the canonical selected-task clearing and hydration path.                     |
+| `2026-06-15-task-list-lean-projection.md`               | Task list rows are lean; selected task detail belongs to selected task board/conversation routes, not a parallel list overlay. |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "TaskDetailOverlay|task_overlay|task-overlay|location\\.hash|hashchange" packages/overlay/src packages/overlay/test specs/new-arch specs` | Runtime hits were limited to the component itself, locale strings, workspace CSS, hotkey test/comment residue, and a Conversation comment. No JSX mount or import existed. |
-| `rg -n "selectTask|selectMissionTask" packages/overlay/src packages/overlay/test specs/new-arch specs` | `selectTask` and `selectMissionTask` are live canonical paths and are not part of this deletion. |
+| Sweep                     | Result                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "TaskDetailOverlay | task_overlay                                                                        | task-overlay                                                                                     | location\\.hash | hashchange" packages/overlay/src packages/overlay/test specs/new-arch specs` | Runtime hits were limited to the component itself, locale strings, workspace CSS, hotkey test/comment residue, and a Conversation comment. No JSX mount or import existed. |
+| `rg -n "selectTask        | selectMissionTask" packages/overlay/src packages/overlay/test specs/new-arch specs` | `selectTask` and `selectMissionTask` are live canonical paths and are not part of this deletion. |
 
 ## Fix
 

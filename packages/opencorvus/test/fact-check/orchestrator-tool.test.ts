@@ -287,10 +287,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
       directory: tmp.path,
       fn: async () => {
         const rootSessionID = await seedTask("proj_fc_D", "tsk_fc_D", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
-          "Streaming claim.",
-          rootSessionID,
-        )
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Streaming claim.", rootSessionID)
         SessionStatus.set(targetSession, { type: "streaming" })
 
         factCheckAgentImpl = async () => {
@@ -708,10 +705,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
       directory: tmp.path,
       fn: async () => {
         const rootSessionID = await seedTask("proj_fc_H", "tsk_fc_H", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
-          "Truthful claim.",
-          rootSessionID,
-        )
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Truthful claim.", rootSessionID)
 
         factCheckAgentImpl = async (i) => ({
           sessionID: "ses_fc_run_H",
@@ -806,10 +800,7 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
       directory: tmp.path,
       fn: async () => {
         const rootSessionID = await seedTask("proj_fc_stale", "tsk_fc_stale", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
-          "Real message.",
-          rootSessionID,
-        )
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("Real message.", rootSessionID)
 
         // Bypass the FactCheckAgent mock — force the real run() to fire
         // so loadTargetMessageText() is actually exercised.  We point the

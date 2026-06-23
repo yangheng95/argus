@@ -20,26 +20,26 @@ reloading or restarting the overlay process.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no double UI source, no blind patching, test every change, visually verify UI-related work, and commit/push every round. |
-| `2026-06-22-overlay-ui-serving-source.md` | `/ui` must choose one source: explicit override, physical bundle, embedded bundle, or missing. Physical bundle wins over embedded when resolved. |
-| `2026-06-22-packaged-overlay-ui-asset-parity.md` | Packaged overlay-server health must prove the embedded `/ui` asset names match current `dist-vite` at compile time. |
-| `2026-06-22-center-workbench-panel-min-size-contract.md` | Current bundle should set open center panels to `--ui-workbench-panel-min-width`; stale bundles still allow `min-width: 0`. |
-| Live `7878` evidence | Running `/ui/index.html` serves `index-CO3SwO-J.js` and `index-DlM3OgGm.css`; current disk `dist-vite` serves `index--QFkHFpX.js` and `index-Lq6mNSVH.css`. Live CSS still has `.center-workbench-body{overflow:hidden}` and no open-panel minimum width. |
+| Source                                                   | Constraint carried forward                                                                                                                                                                                                                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | No fallback, no double UI source, no blind patching, test every change, visually verify UI-related work, and commit/push every round.                                                                                                                     |
+| `2026-06-22-overlay-ui-serving-source.md`                | `/ui` must choose one source: explicit override, physical bundle, embedded bundle, or missing. Physical bundle wins over embedded when resolved.                                                                                                          |
+| `2026-06-22-packaged-overlay-ui-asset-parity.md`         | Packaged overlay-server health must prove the embedded `/ui` asset names match current `dist-vite` at compile time.                                                                                                                                       |
+| `2026-06-22-center-workbench-panel-min-size-contract.md` | Current bundle should set open center panels to `--ui-workbench-panel-min-width`; stale bundles still allow `min-width: 0`.                                                                                                                               |
+| Live `7878` evidence                                     | Running `/ui/index.html` serves `index-CO3SwO-J.js` and `index-DlM3OgGm.css`; current disk `dist-vite` serves `index--QFkHFpX.js` and `index-Lq6mNSVH.css`. Live CSS still has `.center-workbench-body{overflow:hidden}` and no open-panel minimum width. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| UI source selection | `packages/opencorvus/src/server/overlay-ui.ts` owns `selectOverlayUiServingSource`. | Keep source selection unchanged; do not add a new lookup path. |
-| Directory HTML serving | `OverlayUI.routes()` reads physical `index.html`, rewrites assets, and sends `Cache-Control: no-cache`. | Add source and asset fingerprint headers derived from the exact HTML being served. |
-| Embedded HTML serving | `serveEmbedded()` reads the embedded `/index.html` Bun file. | Add the same fingerprint headers with `embedded` source. |
-| Static asset misses | Directory and embedded serving previously fell back to `/index.html` for missing `/assets/*` and `/i18n/*`. | Return 404 for missing static asset requests so stale or absent bundles cannot be masked by SPA HTML. |
-| Handler tests | `overlay-ui-handler.test.ts` already tests source selection and directory route behavior. | Add assertions for directory source and asset header. |
-| Packaged health test | `packaged-overlay-server-health.test.ts` already compares packaged asset refs to current dist refs. | Add assertions that the compiled server exposes the same asset refs in response headers. |
-| Generated embedded module | `overlay-ui-embedded.generated.ts` should remain empty in source after build tooling exits. | Add a source-form guard in `build-artifact.test.ts`. |
-| Live browser QA | In-app browser can read headers through HTTP fetch without reloading the page. | Use this header in future live performance checks to fail fast on stale UI. |
+| Surface                   | Evidence                                                                                                    | Decision                                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| UI source selection       | `packages/opencorvus/src/server/overlay-ui.ts` owns `selectOverlayUiServingSource`.                         | Keep source selection unchanged; do not add a new lookup path.                                        |
+| Directory HTML serving    | `OverlayUI.routes()` reads physical `index.html`, rewrites assets, and sends `Cache-Control: no-cache`.     | Add source and asset fingerprint headers derived from the exact HTML being served.                    |
+| Embedded HTML serving     | `serveEmbedded()` reads the embedded `/index.html` Bun file.                                                | Add the same fingerprint headers with `embedded` source.                                              |
+| Static asset misses       | Directory and embedded serving previously fell back to `/index.html` for missing `/assets/*` and `/i18n/*`. | Return 404 for missing static asset requests so stale or absent bundles cannot be masked by SPA HTML. |
+| Handler tests             | `overlay-ui-handler.test.ts` already tests source selection and directory route behavior.                   | Add assertions for directory source and asset header.                                                 |
+| Packaged health test      | `packaged-overlay-server-health.test.ts` already compares packaged asset refs to current dist refs.         | Add assertions that the compiled server exposes the same asset refs in response headers.              |
+| Generated embedded module | `overlay-ui-embedded.generated.ts` should remain empty in source after build tooling exits.                 | Add a source-form guard in `build-artifact.test.ts`.                                                  |
+| Live browser QA           | In-app browser can read headers through HTTP fetch without reloading the page.                              | Use this header in future live performance checks to fail fast on stale UI.                           |
 
 ## Root Cause
 

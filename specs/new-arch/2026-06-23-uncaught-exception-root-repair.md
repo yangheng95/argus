@@ -9,12 +9,12 @@ Find and fix process-level `uncaughtException` / `unhandledRejection` paths that
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no masking crashes in UI retries. Root-cause repair only. |
-| `specs/new-arch/2026-06-11-coding-assistant-session-history.md` | Coding Assistant delete must use canonical session history and queue cancellation, not parallel message APIs. |
-| `specs/new-arch/2026-06-22-delete-active-task-record-context.md` | Active deletion paths must resolve task/session context explicitly and must not crash with `No context found for instance`. |
-| `specs/new-arch/2026-06-12-deleted-project-task-record-routes.md` | Record-level delete paths must not depend on stale physical project bootstrap. |
+| Source                                                            | Constraint                                                                                                                  |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                       | No fallback, no gate, no masking crashes in UI retries. Root-cause repair only.                                             |
+| `specs/new-arch/2026-06-11-coding-assistant-session-history.md`   | Coding Assistant delete must use canonical session history and queue cancellation, not parallel message APIs.               |
+| `specs/new-arch/2026-06-22-delete-active-task-record-context.md`  | Active deletion paths must resolve task/session context explicitly and must not crash with `No context found for instance`. |
+| `specs/new-arch/2026-06-12-deleted-project-task-record-routes.md` | Record-level delete paths must not depend on stale physical project bootstrap.                                              |
 
 ## Current Evidence
 
@@ -24,16 +24,16 @@ This is correct fail-loud behavior for cloud restarts. The repair must prevent b
 
 ## Confirmed P0 Call Points
 
-| Surface | File | Evidence | Risk |
-| --- | --- | --- | --- |
-| Coding Assistant delete route | `packages/opencorvus/src/server/routes/coding.ts` | `DELETE /coding/session/:sessionID` calls `EngineService.deleteSession(sessionID)`. | Deletes canonical session history for right-sidebar assistant. |
-| Canonical session delete | `packages/opencorvus/src/task-api/index.ts` | `deleteSession()` cancels prompts and queue rows, then immediately calls `Session.remove(sessionID)`. | Active `SessionPrompt` can still unwind after its DB row/messages are gone. |
-| Prompt cancellation | `packages/opencorvus/src/engine/cancellation-scope.ts` | `cancelSessionPromptByID()` calls `cancelSessionPromptInScope()` but does not wait for prompt finish. | Physical deletion can race late prompt finalizers. |
-| Queue cancellation | `packages/opencorvus/src/scheduler/task-queue-service.ts` | `cancelSessionPrompts()` only updates queued/running rows to failed. | In-flight `execute()` still completes/fails later and may publish/update after deletion. |
-| Session mirror | `packages/opencorvus/src/protocol/session-mirror.ts` | `subscribeSessionMirror()` does `void mirrorSessionBusEvent(event, sessionID)` without `.catch()`. | Any DB enrichment error becomes unhandled rejection. |
-| Session event SSE | `packages/opencorvus/src/server/routes/session.ts` | session event route calls `void writeData(...)`; heartbeat and protocol subscriber writes are not catch-bound. | Aborted streams can leak rejected writes into process error handling. |
-| Global event SSE | `packages/opencorvus/src/server/routes/global.ts` | `GlobalBus.on("event", async handler)` awaits `stream.writeSSE()` inside EventEmitter listener. | Rejected async listener promises are not caught by EventEmitter. |
-| Project event SSE | `packages/opencorvus/src/server/routes/app.ts` | `Bus.subscribeAll(async event => stream.writeSSE(...))` relies on bus catch, but heartbeat uses `stream.writeSSE()` without catch. | Stream-close races can still leak through heartbeat writes. |
+| Surface                       | File                                                      | Evidence                                                                                                                           | Risk                                                                                     |
+| ----------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Coding Assistant delete route | `packages/opencorvus/src/server/routes/coding.ts`         | `DELETE /coding/session/:sessionID` calls `EngineService.deleteSession(sessionID)`.                                                | Deletes canonical session history for right-sidebar assistant.                           |
+| Canonical session delete      | `packages/opencorvus/src/task-api/index.ts`               | `deleteSession()` cancels prompts and queue rows, then immediately calls `Session.remove(sessionID)`.                              | Active `SessionPrompt` can still unwind after its DB row/messages are gone.              |
+| Prompt cancellation           | `packages/opencorvus/src/engine/cancellation-scope.ts`    | `cancelSessionPromptByID()` calls `cancelSessionPromptInScope()` but does not wait for prompt finish.                              | Physical deletion can race late prompt finalizers.                                       |
+| Queue cancellation            | `packages/opencorvus/src/scheduler/task-queue-service.ts` | `cancelSessionPrompts()` only updates queued/running rows to failed.                                                               | In-flight `execute()` still completes/fails later and may publish/update after deletion. |
+| Session mirror                | `packages/opencorvus/src/protocol/session-mirror.ts`      | `subscribeSessionMirror()` does `void mirrorSessionBusEvent(event, sessionID)` without `.catch()`.                                 | Any DB enrichment error becomes unhandled rejection.                                     |
+| Session event SSE             | `packages/opencorvus/src/server/routes/session.ts`        | session event route calls `void writeData(...)`; heartbeat and protocol subscriber writes are not catch-bound.                     | Aborted streams can leak rejected writes into process error handling.                    |
+| Global event SSE              | `packages/opencorvus/src/server/routes/global.ts`         | `GlobalBus.on("event", async handler)` awaits `stream.writeSSE()` inside EventEmitter listener.                                    | Rejected async listener promises are not caught by EventEmitter.                         |
+| Project event SSE             | `packages/opencorvus/src/server/routes/app.ts`            | `Bus.subscribeAll(async event => stream.writeSSE(...))` relies on bus catch, but heartbeat uses `stream.writeSSE()` without catch. | Stream-close races can still leak through heartbeat writes.                              |
 
 ## Causal Chain For Coding Assistant Delete
 
@@ -75,21 +75,21 @@ This is correct fail-loud behavior for cloud restarts. The repair must prevent b
 
 Four independent read-only agents are auditing:
 
-| Agent | Scope |
-| --- | --- |
-| A | Coding Assistant/session delete chain. |
-| B | Bus/SSE/void Promise async error boundaries. |
-| C | Scheduler/runtime long-lived services. |
-| D | Test gaps and regression design. |
+| Agent | Scope                                        |
+| ----- | -------------------------------------------- |
+| A     | Coding Assistant/session delete chain.       |
+| B     | Bus/SSE/void Promise async error boundaries. |
+| C     | Scheduler/runtime long-lived services.       |
+| D     | Test gaps and regression design.             |
 
 Final reconciled findings:
 
-| Agent | Result |
-| --- | --- |
-| A | Confirmed delete race: `EngineService.deleteSession()` cancelled prompt state but deleted the session tree before prompt settlement. Also found direct external cleanup/delete call sites. |
-| B | Confirmed naked async boundaries in session mirror, global/project/session/orchestrator SSE, panel streaming, and `GlobalBus` EventEmitter listeners. |
-| C | Confirmed runtime boundaries in engine queue `.finally()`, LSP process errors, browser preview live sidecar, MCP browser cleanup, task queue completion publishing, and memory metrics logging. |
-| D | Confirmed regression coverage gaps and recommended a process-error test helper plus targeted delete/SSE/runtime tests. |
+| Agent | Result                                                                                                                                                                                          |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A     | Confirmed delete race: `EngineService.deleteSession()` cancelled prompt state but deleted the session tree before prompt settlement. Also found direct external cleanup/delete call sites.      |
+| B     | Confirmed naked async boundaries in session mirror, global/project/session/orchestrator SSE, panel streaming, and `GlobalBus` EventEmitter listeners.                                           |
+| C     | Confirmed runtime boundaries in engine queue `.finally()`, LSP process errors, browser preview live sidecar, MCP browser cleanup, task queue completion publishing, and memory metrics logging. |
+| D     | Confirmed regression coverage gaps and recommended a process-error test helper plus targeted delete/SSE/runtime tests.                                                                          |
 
 ## Implemented Repair
 

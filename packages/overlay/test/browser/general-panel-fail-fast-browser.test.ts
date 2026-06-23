@@ -37,18 +37,16 @@ async function savePanelScreenshot(page: any, filename: string) {
 }
 
 async function readGeneralHeaderState(page: any) {
-  return page.$$eval(
-    ".general-panel .s-group-head-title",
-    (nodes: HTMLElement[]) =>
-      nodes.map((node) => {
-        const style = getComputedStyle(node)
-        return {
-          text: node.textContent?.trim() || "",
-          textTransform: style.textTransform,
-          letterSpacing: style.letterSpacing,
-          fontWeight: style.fontWeight,
-        }
-      }),
+  return page.$$eval(".general-panel .s-group-head-title", (nodes: HTMLElement[]) =>
+    nodes.map((node) => {
+      const style = getComputedStyle(node)
+      return {
+        text: node.textContent?.trim() || "",
+        textTransform: style.textTransform,
+        letterSpacing: style.letterSpacing,
+        fontWeight: style.fontWeight,
+      }
+    }),
   )
 }
 
@@ -89,7 +87,14 @@ test("General Settings write failures stay visible and do not report saved state
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile") {
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     }
     if (path === "/config" && req.method === "GET") {
       return send({

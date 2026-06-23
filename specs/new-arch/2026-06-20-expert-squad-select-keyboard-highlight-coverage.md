@@ -11,19 +11,19 @@ the keyboard ArrowDown path that Kobalte Select exposes for listbox navigation.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-17-expert-squad-select-readability-impact.md` | Expert Squad must use Kobalte Select and shared `.oc-select-*` styling. |
-| `2026-06-18-popup-contrast-light-palette.md` | Select popup readability belongs to the shared popup contract, not local color overrides. |
+| Source                                                      | Relevant decision                                                                                           |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `2026-06-17-expert-squad-select-readability-impact.md`      | Expert Squad must use Kobalte Select and shared `.oc-select-*` styling.                                     |
+| `2026-06-18-popup-contrast-light-palette.md`                | Select popup readability belongs to the shared popup contract, not local color overrides.                   |
 | `2026-06-20-expert-squad-zh-select-readability-coverage.md` | English and Chinese runtime Expert Squad screenshots are the direct evidence for the user-reported surface. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "prompt-profile-selector|prompt-profile-select-option|ArrowDown|data-highlighted" packages/overlay/test/browser/prompt-profile-selector-browser.test.ts packages/overlay/src/components` | The real Expert Squad browser test already opens the live selector and asserts `data-highlighted` after hover. No keyboard path exists. | Extend this test instead of creating a second selector fixture. |
+| Sweep                                                  | Result                                                                                                      | Decision                                                      |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `rg -n "prompt-profile-selector                        | prompt-profile-select-option                                                                                | ArrowDown                                                     | data-highlighted" packages/overlay/test/browser/prompt-profile-selector-browser.test.ts packages/overlay/src/components` | The real Expert Squad browser test already opens the live selector and asserts `data-highlighted` after hover. No keyboard path exists. | Extend this test instead of creating a second selector fixture. |
 | `packages/overlay/src/components/ui/SelectControl.tsx` | Kobalte owns option state and applies `data-highlighted`; overlay only composes classes and option content. | Do not change production code unless the keyboard test fails. |
-| `select-popup-contrast-matrix.test.ts` | Shared Select matrix covers static plain/selected/highlighted/combined states. | Keep matrix unchanged; it is not a keyboard behavior test. |
+| `select-popup-contrast-matrix.test.ts`                 | Shared Select matrix covers static plain/selected/highlighted/combined states.                              | Keep matrix unchanged; it is not a keyboard behavior test.    |
 
 ## Fix Plan
 

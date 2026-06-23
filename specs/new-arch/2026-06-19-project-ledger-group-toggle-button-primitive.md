@@ -15,19 +15,19 @@ second button construction path.
 
 ## Recall
 
-| Source | Evidence | Decision |
-| --- | --- | --- |
-| `2026-06-18-project-ledger-group-primitive.md` | `ProjectLedgerGroup` is the canonical grouped ledger component. | Keep the component boundary. |
-| `ProjectLedgerGroup.tsx` | Renders a raw `<button class="project-group-heading">`. | Replace the visible toggle with `Button`. |
-| `sidebar.css` | `.project-group-heading` defines appearance, layout, hover, and focus chrome. | Move layout to `.oc-button[data-ui="project-group-toggle"]`; let `Button` own primitive chrome. |
-| `mission.css` | Mission density overrides target `.mission-project-group .project-group-heading`. | Retarget to the same Button data hook. |
-| `project-ledger-group-browser.test.ts` | Browser test focuses and keyboard-toggles `.project-group-heading`. | Preserve keyboard behavior through the Button node and retarget selectors. |
+| Source                                         | Evidence                                                                          | Decision                                                                                        |
+| ---------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `2026-06-18-project-ledger-group-primitive.md` | `ProjectLedgerGroup` is the canonical grouped ledger component.                   | Keep the component boundary.                                                                    |
+| `ProjectLedgerGroup.tsx`                       | Renders a raw `<button class="project-group-heading">`.                           | Replace the visible toggle with `Button`.                                                       |
+| `sidebar.css`                                  | `.project-group-heading` defines appearance, layout, hover, and focus chrome.     | Move layout to `.oc-button[data-ui="project-group-toggle"]`; let `Button` own primitive chrome. |
+| `mission.css`                                  | Mission density overrides target `.mission-project-group .project-group-heading`. | Retarget to the same Button data hook.                                                          |
+| `project-ledger-group-browser.test.ts`         | Browser test focuses and keyboard-toggles `.project-group-heading`.               | Preserve keyboard behavior through the Button node and retarget selectors.                      |
 
 ## Fix
 
 - Import `Button` in `ProjectLedgerGroup`.
 - Render the group toggle as `<Button variant="ghost" size="mini"
-  tone="neutral" data-ui="project-group-toggle">`.
+tone="neutral" data-ui="project-group-toggle">`.
 - Retire `.project-group-heading` from production CSS and source.
 - Retarget Mission density overrides and browser/static tests to
   `[data-ui="project-group-toggle"]`.

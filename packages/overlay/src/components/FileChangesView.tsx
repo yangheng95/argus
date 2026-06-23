@@ -328,8 +328,7 @@ export function FileChangesView(props: FileChangesViewProps) {
           </span>
         </>
       ),
-      tone:
-        status === "added" ? "ok" : status === "deleted" ? "bad" : status === "modified" ? "accent" : "neutral",
+      tone: status === "added" ? "ok" : status === "deleted" ? "bad" : status === "modified" ? "accent" : "neutral",
       title: statusFilterLabel(status),
     })),
   )

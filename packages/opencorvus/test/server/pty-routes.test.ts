@@ -213,52 +213,48 @@ describe("server.pty-routes", () => {
     })
   })
 
-  test(
-    "Server.App hides project A PTY sessions from project B",
-    async () => {
-      await using one = await tmpdir({ git: true })
-      await using two = await tmpdir({ git: true })
-      const app = Server.App()
-      const oneHeaders = { "x-opencorvus-directory": one.path }
-      const twoHeaders = { "x-opencorvus-directory": two.path }
+  test("Server.App hides project A PTY sessions from project B", async () => {
+    await using one = await tmpdir({ git: true })
+    await using two = await tmpdir({ git: true })
+    const app = Server.App()
+    const oneHeaders = { "x-opencorvus-directory": one.path }
+    const twoHeaders = { "x-opencorvus-directory": two.path }
 
-      const create = await app.request("/pty", {
-        method: "POST",
-        headers: { ...oneHeaders, "content-type": "application/json" },
-        body: ptyCreateBody(inputEchoCommand(one.path), "Project A PTY"),
-      })
-      expect(create.status).toBe(200)
-      const active = (await create.json()) as { id: string; title: string }
+    const create = await app.request("/pty", {
+      method: "POST",
+      headers: { ...oneHeaders, "content-type": "application/json" },
+      body: ptyCreateBody(inputEchoCommand(one.path), "Project A PTY"),
+    })
+    expect(create.status).toBe(200)
+    const active = (await create.json()) as { id: string; title: string }
 
-      const foreignList = await app.request("/pty", { headers: twoHeaders })
-      expect(foreignList.status).toBe(200)
-      expect(await foreignList.json()).toEqual([])
+    const foreignList = await app.request("/pty", { headers: twoHeaders })
+    expect(foreignList.status).toBe(200)
+    expect(await foreignList.json()).toEqual([])
 
-      const foreignGet = await app.request(`/pty/${active.id}`, { headers: twoHeaders })
-      expect(foreignGet.status).toBe(404)
+    const foreignGet = await app.request(`/pty/${active.id}`, { headers: twoHeaders })
+    expect(foreignGet.status).toBe(404)
 
-      const foreignUpdate = await app.request(`/pty/${active.id}`, {
-        method: "PUT",
-        headers: { ...twoHeaders, "content-type": "application/json" },
-        body: JSON.stringify({ title: "Project B Rename" }),
-      })
-      expect(foreignUpdate.status).toBe(404)
+    const foreignUpdate = await app.request(`/pty/${active.id}`, {
+      method: "PUT",
+      headers: { ...twoHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ title: "Project B Rename" }),
+    })
+    expect(foreignUpdate.status).toBe(404)
 
-      const foreignRemove = await app.request(`/pty/${active.id}`, { method: "DELETE", headers: twoHeaders })
-      expect(foreignRemove.status).toBe(404)
+    const foreignRemove = await app.request(`/pty/${active.id}`, { method: "DELETE", headers: twoHeaders })
+    expect(foreignRemove.status).toBe(404)
 
-      const foreignConnect = await app.request(`/pty/${active.id}/connect`, { headers: twoHeaders })
-      expect(foreignConnect.status).toBe(404)
+    const foreignConnect = await app.request(`/pty/${active.id}/connect`, { headers: twoHeaders })
+    expect(foreignConnect.status).toBe(404)
 
-      const ownGet = await app.request(`/pty/${active.id}`, { headers: oneHeaders })
-      expect(ownGet.status).toBe(200)
-      expect(await ownGet.json()).toMatchObject({ id: active.id, title: "Project A PTY" })
+    const ownGet = await app.request(`/pty/${active.id}`, { headers: oneHeaders })
+    expect(ownGet.status).toBe(200)
+    expect(await ownGet.json()).toMatchObject({ id: active.id, title: "Project A PTY" })
 
-      const ownRemove = await app.request(`/pty/${active.id}`, { method: "DELETE", headers: oneHeaders })
-      expect(ownRemove.status).toBe(200)
-    },
-    30_000,
-  )
+    const ownRemove = await app.request(`/pty/${active.id}`, { method: "DELETE", headers: oneHeaders })
+    expect(ownRemove.status).toBe(200)
+  }, 30_000)
 
   test("streams PTY input and output through the OpenCode connect route", async () => {
     await using tmp = await tmpdir()

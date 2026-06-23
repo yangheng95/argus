@@ -17,13 +17,13 @@ calls (`clearMessages()` and `resetWriter()`) do not run.
 
 ## Call-Site Evidence
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Sidebar New Task binding | `packages/overlay/src/main.tsx::bindSidebarStaticControls` inlines launcher logic. | Restore a single `openTaskLauncher()` helper so New Task owns Tasks focus and deselection in one place. |
-| Historical launcher contract | `specs/new-arch/2026-06-16-left-activity-composer-binding.md` says New Task should select the Tasks left activity and center panel. | Reuse that contract; do not add a parallel New Task panel or hidden message path. |
-| Deselection lifecycle | `packages/overlay/src/services/task.ts::selectTask("")` clears board/messages/writer, but only after its early no-op guard. | Tighten the no-op guard so it only skips work when the message panel stores are also empty. |
-| Writer projection | `packages/overlay/src/services/tree-writer.ts::resetWriter()` clears `cardTreeStore` and writer indices. | Keep it as the single visual message-panel clear path. |
-| Message store | `packages/overlay/src/store/messages.ts::clearMessages()` clears message arrays and pending parts. | Include message store emptiness in the deselection no-op predicate. |
+| Area                         | Evidence                                                                                                                            | Decision                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Sidebar New Task binding     | `packages/overlay/src/main.tsx::bindSidebarStaticControls` inlines launcher logic.                                                  | Restore a single `openTaskLauncher()` helper so New Task owns Tasks focus and deselection in one place. |
+| Historical launcher contract | `specs/new-arch/2026-06-16-left-activity-composer-binding.md` says New Task should select the Tasks left activity and center panel. | Reuse that contract; do not add a parallel New Task panel or hidden message path.                       |
+| Deselection lifecycle        | `packages/overlay/src/services/task.ts::selectTask("")` clears board/messages/writer, but only after its early no-op guard.         | Tighten the no-op guard so it only skips work when the message panel stores are also empty.             |
+| Writer projection            | `packages/overlay/src/services/tree-writer.ts::resetWriter()` clears `cardTreeStore` and writer indices.                            | Keep it as the single visual message-panel clear path.                                                  |
+| Message store                | `packages/overlay/src/store/messages.ts::clearMessages()` clears message arrays and pending parts.                                  | Include message store emptiness in the deselection no-op predicate.                                     |
 
 ## Implementation
 

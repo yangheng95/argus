@@ -7,12 +7,12 @@ OpenCorvus 为 session prompt 提供 slash 命令系统，包括 ACP `session/pr
 
 ## 内置 slash 命令
 
-| 命令     | 用途                                   |
-| -------- | -------------------------------------- |
-| `/init`  | 从当前仓库初始化 `AGENTS.md`           |
-| `/share` | 为当前 session 生成分享链接            |
-| `/undo`  | 回滚 agent 上一次修改（基于 snapshot） |
-| `/help`  | 列出所有命令                           |
+| 命令     | 用途                                      |
+| -------- | ----------------------------------------- |
+| `/init`  | 从当前仓库初始化 `AGENTS.md`              |
+| `/share` | 为当前 session 生成分享链接               |
+| `/undo`  | 显式启用 snapshot 后回滚 agent 上一次修改 |
+| `/help`  | 列出所有命令                              |
 
 具体集合按版本不同；以 `/help` 为准。
 
@@ -49,4 +49,4 @@ OpenCorvus 为 session prompt 提供 slash 命令系统，包括 ACP `session/pr
 
 ## Snapshot 与 `/undo`
 
-`/undo` 能工作是因为 OpenCorvus 在每步 agent 操作前做文件 snapshot。若你在 config 里关掉 `snapshot`，`/undo` 即变为 no-op。
+`/undo` 需要在 [config](/docs/zh-cn/config/) 中显式设置 `snapshot: true`。Snapshot 默认关闭；没有该设置时，`/undo` 是 no-op。

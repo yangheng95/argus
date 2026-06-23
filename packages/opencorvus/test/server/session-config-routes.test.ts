@@ -36,7 +36,10 @@ describe("session config route contract", () => {
     expect(body).toContain("Bus.publish(Event.Updated")
     expect(body).toContain("Bus.publish(Event.ConfigChanged")
 
-    const wrapper = source.slice(source.indexOf("export const mergeConfigOverlay =", start), source.indexOf("export const setArchived", start))
+    const wrapper = source.slice(
+      source.indexOf("export const mergeConfigOverlay =", start),
+      source.indexOf("export const setArchived", start),
+    )
     expect(wrapper).toContain("projectID: Instance.project.id")
   })
 
@@ -85,110 +88,102 @@ describe("session config route contract", () => {
     })
   })
 
-  test(
-    "session config routes reject foreign project sessions before reading or writing overlays",
-    async () => {
-      await using one = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
-      await using two = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
-      const app = Server.App()
-      let oneSessionID = ""
-      let twoSessionID = ""
+  test("session config routes reject foreign project sessions before reading or writing overlays", async () => {
+    await using one = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
+    await using two = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
+    const app = Server.App()
+    let oneSessionID = ""
+    let twoSessionID = ""
 
-      await Instance.provide({
-        directory: one.path,
-        fn: async () => {
-          oneSessionID = (await Session.create({ kind: "root", title: "project a config owner" })).id
-        },
-      })
-      await Instance.provide({
-        directory: two.path,
-        fn: async () => {
-          const session = await Session.create({ kind: "root", title: "project b config owner" })
-          twoSessionID = session.id
-          await Session.mergeConfigOverlay({
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        oneSessionID = (await Session.create({ kind: "root", title: "project a config owner" })).id
+      },
+    })
+    await Instance.provide({
+      directory: two.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "project b config owner" })
+        twoSessionID = session.id
+        await Session.mergeConfigOverlay({
+          sessionID: twoSessionID,
+          patch: { prompt: { core: "project-b/session" } },
+        })
+      },
+    })
+
+    const foreignGet = await app.request(`/session/${twoSessionID}/config`, {
+      headers: {
+        "x-opencorvus-directory": one.path,
+      },
+    })
+    expect(foreignGet.status).toBe(404)
+    expect(await foreignGet.text()).not.toContain("project-b/session")
+
+    const foreignPatch = await app.request(`/session/${twoSessionID}/config`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": one.path,
+      },
+      body: JSON.stringify({ prompt: { core: "project-a/foreign-write" } }),
+    })
+    expect(foreignPatch.status).toBe(404)
+    expect((await Session.get(twoSessionID)).metadata?.configOverlay).toMatchObject({
+      prompt: { core: "project-b/session" },
+    })
+
+    const ownPatch = await app.request(`/session/${oneSessionID}/config`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": one.path,
+      },
+      body: JSON.stringify({ prompt: { core: "project-a/session" } }),
+    })
+    expect(ownPatch.status).toBe(200)
+    const ownBody = (await ownPatch.json()) as {
+      config: { prompt: { core: string } }
+      origin: { prompt: { core: string } }
+    }
+    expect(ownBody.config.prompt.core).toBe("project-a/session")
+    expect(ownBody.origin.prompt.core).toBe("session")
+  }, 30_000)
+
+  test("Session.mergeConfigOverlay rejects foreign sessions in the active project context", async () => {
+    await using one = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
+    await using two = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
+    let twoSessionID = ""
+
+    await Instance.provide({
+      directory: two.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "project b service owner" })
+        twoSessionID = session.id
+        await Session.mergeConfigOverlay({
+          sessionID: twoSessionID,
+          patch: { prompt: { core: "project-b/session" } },
+        })
+      },
+    })
+
+    await Instance.provide({
+      directory: one.path,
+      fn: async () => {
+        await expect(
+          Session.mergeConfigOverlay({
             sessionID: twoSessionID,
-            patch: { prompt: { core: "project-b/session" } },
-          })
-        },
-      })
+            patch: { prompt: { core: "project-a/foreign-service-write" } },
+          }),
+        ).rejects.toThrow("Session not found")
+      },
+    })
 
-      const foreignGet = await app.request(`/session/${twoSessionID}/config`, {
-        headers: {
-          "x-opencorvus-directory": one.path,
-        },
-      })
-      expect(foreignGet.status).toBe(404)
-      expect(await foreignGet.text()).not.toContain("project-b/session")
-
-      const foreignPatch = await app.request(`/session/${twoSessionID}/config`, {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": one.path,
-        },
-        body: JSON.stringify({ prompt: { core: "project-a/foreign-write" } }),
-      })
-      expect(foreignPatch.status).toBe(404)
-      expect((await Session.get(twoSessionID)).metadata?.configOverlay).toMatchObject({
-        prompt: { core: "project-b/session" },
-      })
-
-      const ownPatch = await app.request(`/session/${oneSessionID}/config`, {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          "x-opencorvus-directory": one.path,
-        },
-        body: JSON.stringify({ prompt: { core: "project-a/session" } }),
-      })
-      expect(ownPatch.status).toBe(200)
-      const ownBody = (await ownPatch.json()) as {
-        config: { prompt: { core: string } }
-        origin: { prompt: { core: string } }
-      }
-      expect(ownBody.config.prompt.core).toBe("project-a/session")
-      expect(ownBody.origin.prompt.core).toBe("session")
-    },
-    30_000,
-  )
-
-  test(
-    "Session.mergeConfigOverlay rejects foreign sessions in the active project context",
-    async () => {
-      await using one = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
-      await using two = await tmpdir({ git: true, config: { model: "opencorvus/auto" } })
-      let twoSessionID = ""
-
-      await Instance.provide({
-        directory: two.path,
-        fn: async () => {
-          const session = await Session.create({ kind: "root", title: "project b service owner" })
-          twoSessionID = session.id
-          await Session.mergeConfigOverlay({
-            sessionID: twoSessionID,
-            patch: { prompt: { core: "project-b/session" } },
-          })
-        },
-      })
-
-      await Instance.provide({
-        directory: one.path,
-        fn: async () => {
-          await expect(
-            Session.mergeConfigOverlay({
-              sessionID: twoSessionID,
-              patch: { prompt: { core: "project-a/foreign-service-write" } },
-            }),
-          ).rejects.toThrow("Session not found")
-        },
-      })
-
-      expect((await Session.get(twoSessionID)).metadata?.configOverlay).toMatchObject({
-        prompt: { core: "project-b/session" },
-      })
-    },
-    30_000,
-  )
+    expect((await Session.get(twoSessionID)).metadata?.configOverlay).toMatchObject({
+      prompt: { core: "project-b/session" },
+    })
+  }, 30_000)
 
   test("session config PATCH validates model refs before writing overlay", async () => {
     const source = await repoFile("packages", "opencorvus", "src", "server", "routes", "session.ts")

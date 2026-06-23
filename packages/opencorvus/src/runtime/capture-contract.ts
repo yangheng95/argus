@@ -137,7 +137,9 @@ export function runtimeCaptureFailedLayers(layers: RuntimeCaptureLayers): string
 export function runtimeCaptureFailureSummary(layers: RuntimeCaptureLayers): string {
   const failedLayers = runtimeCaptureFailedLayers(layers)
   const jsDetail = runtimeCaptureJSFailureDetail(layers)
-  return jsDetail ? `failed layers: ${failedLayers.join(", ")}; ${jsDetail}` : `failed layers: ${failedLayers.join(", ")}`
+  return jsDetail
+    ? `failed layers: ${failedLayers.join(", ")}; ${jsDetail}`
+    : `failed layers: ${failedLayers.join(", ")}`
 }
 
 function runtimeCaptureJSFailureDetail(layers: RuntimeCaptureLayers): string | undefined {

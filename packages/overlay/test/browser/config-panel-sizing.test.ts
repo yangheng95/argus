@@ -225,12 +225,16 @@ test(
       await page.click('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]')
       await refreshStarted
       await page.waitForFunction(() => {
-        const button = document.querySelector('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]') as HTMLElement | null
+        const button = document.querySelector(
+          '.provider-head-actions .oc-button[data-ui="provider-refresh-button"]',
+        ) as HTMLElement | null
         const icon = button?.querySelector(".provider-refresh-icon") as HTMLElement | null
         return button?.dataset.spinning === "true" && icon && getComputedStyle(icon).transform !== "none"
       })
       const refreshState = await page.evaluate(() => {
-        const button = document.querySelector('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]') as HTMLButtonElement
+        const button = document.querySelector(
+          '.provider-head-actions .oc-button[data-ui="provider-refresh-button"]',
+        ) as HTMLButtonElement
         const icon = button.querySelector(".provider-refresh-icon") as HTMLElement
         return {
           oldOwnerCount: document.querySelectorAll(".provider-refresh-btn").length,
@@ -253,7 +257,9 @@ test(
       assert.ok(resolveRefreshResponse)
       resolveRefreshResponse(send({ ok: true, fetchedAt: Date.now() }))
       await page.waitForFunction(() => {
-        const button = document.querySelector('.provider-head-actions .oc-button[data-ui="provider-refresh-button"]') as HTMLElement | null
+        const button = document.querySelector(
+          '.provider-head-actions .oc-button[data-ui="provider-refresh-button"]',
+        ) as HTMLElement | null
         return button?.dataset.spinning === "false"
       })
 

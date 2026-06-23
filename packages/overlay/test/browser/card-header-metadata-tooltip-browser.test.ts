@@ -133,7 +133,8 @@ test(
       const url = new URL(req.url)
       const path = route(url)
       if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "card-meta-tooltip-test" })
@@ -160,7 +161,14 @@ test(
         })
       }
       if (path === "/config/prompt" || path === "/config/prompt-profile") {
-        return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+        return send({
+          active: "general",
+          project_active: "general",
+          session_active: null,
+          default: "general",
+          targets: [],
+          profiles: [],
+        })
       }
       if (path === "/channel") return send([])
       if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
@@ -252,10 +260,11 @@ test(
           tag: chip.tagName,
         })),
       )
-      assert.deepEqual(
-        chipState.map((chip) => chip.dataUi).sort(),
-        ["card-model-hint", "card-token-hint", "card-usage-hint"],
-      )
+      assert.deepEqual(chipState.map((chip) => chip.dataUi).sort(), [
+        "card-model-hint",
+        "card-token-hint",
+        "card-usage-hint",
+      ])
       for (const chip of chipState) {
         assert.equal(chip.tag, "SPAN")
         assert.equal(chip.tabIndex, 0)

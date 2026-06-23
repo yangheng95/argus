@@ -289,10 +289,14 @@ function* chunkGitEntries(entries: GitIndexEntry[]): Generator<GitIndexEntry[]> 
 
 function readGitObjectSizes(repoRoot: string, objectIds: string[]): Map<string, number> {
   const input = Buffer.from(objectIds.join("\n") + "\n")
-  const result = spawnSync("git", ["-C", repoRoot, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)"], {
-    input,
-    maxBuffer: Math.max(objectIds.length * 256, 1024 * 1024),
-  })
+  const result = spawnSync(
+    "git",
+    ["-C", repoRoot, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)"],
+    {
+      input,
+      maxBuffer: Math.max(objectIds.length * 256, 1024 * 1024),
+    },
+  )
   if (result.error) throw result.error
   if (result.status !== 0) {
     const stderr = result.stderr.toString("utf8").trim()

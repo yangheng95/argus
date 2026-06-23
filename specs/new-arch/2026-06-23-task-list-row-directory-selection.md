@@ -19,25 +19,25 @@ row that the operator actually clicked.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, recall disk plans before edits, test every change, visual verify UI work, commit and push each round. |
-| `2026-06-22-overlay-directory-switch-task-ownership-race.md` | `BoardSource` task selections must carry the selected task's owning directory when the caller has it from the task row or explicit task projection. |
-| `2026-06-22-task-switch-directory-source.md` | During task switch, selected task directory ownership is strict and fail-loud through `taskOwningDirectory()`. |
-| `2026-06-22-task-switch-stable-request-keys.md` | Task switching still needs request fan-out reduction at trigger-level causes; avoid broad caches. |
-| Live 7878 read-only sampling | The running process is stale, but selecting visible task rows measured 443-2570ms; current-source fixes should reduce handoff ambiguity before chasing old-bundle symptoms. |
+| Source                                                       | Constraint carried forward                                                                                                                                                  |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                  | No fallback, no duplicate source, recall disk plans before edits, test every change, visual verify UI work, commit and push each round.                                     |
+| `2026-06-22-overlay-directory-switch-task-ownership-race.md` | `BoardSource` task selections must carry the selected task's owning directory when the caller has it from the task row or explicit task projection.                         |
+| `2026-06-22-task-switch-directory-source.md`                 | During task switch, selected task directory ownership is strict and fail-loud through `taskOwningDirectory()`.                                                              |
+| `2026-06-22-task-switch-stable-request-keys.md`              | Task switching still needs request fan-out reduction at trigger-level causes; avoid broad caches.                                                                           |
+| Live 7878 read-only sampling                                 | The running process is stale, but selecting visible task rows measured 443-2570ms; current-source fixes should reduce handoff ambiguity before chasing old-bundle symptoms. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Mission task selection | `Mission.tsx::handleTaskSelect()` calls `props.onSelectTask(task.id, task.directory)`. | Keep as the reference task-projection contract. |
-| Main Mission entry | `selectMissionTask(taskID, directory?)` passes `{ directory }` to `selectTask()`. | Keep unchanged. |
-| Ordinary TaskList row | `TaskRow` has `directory()` from `props.item.task.directory`, but row and main-button clicks call `props.onSelectTask(id())`. | Pass `id(), directory()` so the clicked row owns the handoff. |
-| TaskList prop type | `TaskListProps.onSelectTask` currently accepts only `taskID`. | Extend to `(taskID, directory)`; no new store or lookup path. |
-| Main TaskList entry | `selectTaskFromTaskList(taskID)` calls `selectTask(taskID)`. | Accept optional directory and call `selectTask(taskID, { directory })`. |
-| `selectTask()` | Already prefers explicit `options.directory` over task row lookup. | Reuse the existing explicit directory contract; no service change needed. |
-| Tests | Existing task switch tests cover explicit directory behavior and cross-directory hydrate; no test pins the TaskList row handoff. | Add source-level regression for TaskList passing row directory and main using the explicit option. |
+| Surface                | Evidence                                                                                                                         | Decision                                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Mission task selection | `Mission.tsx::handleTaskSelect()` calls `props.onSelectTask(task.id, task.directory)`.                                           | Keep as the reference task-projection contract.                                                    |
+| Main Mission entry     | `selectMissionTask(taskID, directory?)` passes `{ directory }` to `selectTask()`.                                                | Keep unchanged.                                                                                    |
+| Ordinary TaskList row  | `TaskRow` has `directory()` from `props.item.task.directory`, but row and main-button clicks call `props.onSelectTask(id())`.    | Pass `id(), directory()` so the clicked row owns the handoff.                                      |
+| TaskList prop type     | `TaskListProps.onSelectTask` currently accepts only `taskID`.                                                                    | Extend to `(taskID, directory)`; no new store or lookup path.                                      |
+| Main TaskList entry    | `selectTaskFromTaskList(taskID)` calls `selectTask(taskID)`.                                                                     | Accept optional directory and call `selectTask(taskID, { directory })`.                            |
+| `selectTask()`         | Already prefers explicit `options.directory` over task row lookup.                                                               | Reuse the existing explicit directory contract; no service change needed.                          |
+| Tests                  | Existing task switch tests cover explicit directory behavior and cross-directory hydrate; no test pins the TaskList row handoff. | Add source-level regression for TaskList passing row directory and main using the explicit option. |
 
 ## Root Cause
 

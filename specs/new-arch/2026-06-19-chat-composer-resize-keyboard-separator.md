@@ -14,20 +14,20 @@ technology users cannot adjust the composer height.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `ChatComposer.tsx` | `.chat-resize-handle` owns pointer resize for `--chat-textarea-height`. |
-| `ConfigDialogHost.tsx` | The settings sidebar resizer already exposes `tabIndex`, `aria-valuemin/max/now`, `aria-controls`, and a keyboard resize handler. |
-| `composer-toolbar-retired.test.ts` | Existing composer tests only assert the handle exists and has CSS. |
-| `chat-composer-button-primitives.test.ts` | Existing browser coverage checks composer button focus and hover, not resize keyboard behavior. |
+| Source                                    | Relevant constraint                                                                                                               |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ChatComposer.tsx`                        | `.chat-resize-handle` owns pointer resize for `--chat-textarea-height`.                                                           |
+| `ConfigDialogHost.tsx`                    | The settings sidebar resizer already exposes `tabIndex`, `aria-valuemin/max/now`, `aria-controls`, and a keyboard resize handler. |
+| `composer-toolbar-retired.test.ts`        | Existing composer tests only assert the handle exists and has CSS.                                                                |
+| `chat-composer-button-primitives.test.ts` | Existing browser coverage checks composer button focus and hover, not resize keyboard behavior.                                   |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n "chat-resize-handle|textarea-height|handleResize" packages/overlay/src packages/overlay/test` | The handle has pointer events only; CSS already has `.chat-resize-handle:focus-visible`, but the element is not focusable. | Add real keyboard semantics instead of deleting the focus affordance. |
-| `rg -n "aria-valuemin|nextConfigSidebarKeyboardWidth" packages/overlay/src packages/overlay/test` | `ConfigDialogHost` already has an adjustable separator pattern backed by helper tests. | Mirror the same contract for the composer handle. |
-| `rg -n "ChatComposer|chatTextarea" packages/overlay/test/browser` | Existing app browser fixtures mount the real `#solidChatComposer` textarea. | Add a real browser test for focus and Arrow/Home/End resize behavior. |
+| Command                    | Result                                                                      | Decision                                                                               |
+| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `rg -n "chat-resize-handle | textarea-height                                                             | handleResize" packages/overlay/src packages/overlay/test`                              | The handle has pointer events only; CSS already has `.chat-resize-handle:focus-visible`, but the element is not focusable. | Add real keyboard semantics instead of deleting the focus affordance. |
+| `rg -n "aria-valuemin      | nextConfigSidebarKeyboardWidth" packages/overlay/src packages/overlay/test` | `ConfigDialogHost` already has an adjustable separator pattern backed by helper tests. | Mirror the same contract for the composer handle.                                                                          |
+| `rg -n "ChatComposer       | chatTextarea" packages/overlay/test/browser`                                | Existing app browser fixtures mount the real `#solidChatComposer` textarea.            | Add a real browser test for focus and Arrow/Home/End resize behavior.                                                      |
 
 ## Fix Plan
 

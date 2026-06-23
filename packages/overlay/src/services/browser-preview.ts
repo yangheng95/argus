@@ -93,7 +93,9 @@ export async function loadTaskBrowserPreviewTarget(input: {
   directory: string
   signal?: AbortSignal
 }): Promise<BrowserPreviewTarget> {
-  return (await apiJson(taskBrowserPreviewPath(input.taskID, input.directory), { signal: input.signal })) as BrowserPreviewTarget
+  return (await apiJson(taskBrowserPreviewPath(input.taskID, input.directory), {
+    signal: input.signal,
+  })) as BrowserPreviewTarget
 }
 
 export async function selectTaskBrowserPreviewTarget(input: {

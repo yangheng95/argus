@@ -64,24 +64,24 @@ Shared base prompt semantics:
 
 Role-specific base semantics:
 
-| Agent surface | Base responsibility |
-| --- | --- |
-| `coding`, `coding-assistant` | Direct assistant prompt for interactive coding sessions. |
-| `general` | General autonomous subagent for complex questions and multi-step work. |
-| `explore` | Read-only codebase and web investigation; returns findings, not file dumps. |
-| `mission` | Long-running goal coordinator; delegates concrete implementation to tasks. |
-| `intent-analysis` | First read of request intent, complexity, missing slots, and clarification needs. |
-| `requirements` | Extracts REQ rows and foundational decisions. |
-| `architect` | Produces goal graph, contracts, dependencies, and verification structure. |
-| `frontend-research` | Produces source-backed webpage investigation packets and frontend research brief. |
-| `frontend-design` | Produces visual HTML skeleton and frontend design/replica contract. |
-| `build` | Executes scoped delivery, edits files, verifies, and reports. |
-| `visual-qa` | Audits rendered UI and interaction evidence. |
-| `deep-research` | Gathers durable external/source evidence for unresolved facts. |
-| `fact-check` | Verifies explicit factual claims from upstream worker reports. |
-| `goal-workload-analyst` | Reviews whether architect goals are too large or under-specified. |
-| `integrity` | Performs adversarial final review and repair-oriented consensus reporting. |
-| `orchestrator` | Makes task-level lifecycle and dispatch decisions. |
+| Agent surface                | Base responsibility                                                               |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `coding`, `coding-assistant` | Direct assistant prompt for interactive coding sessions.                          |
+| `general`                    | General autonomous subagent for complex questions and multi-step work.            |
+| `explore`                    | Read-only codebase and web investigation; returns findings, not file dumps.       |
+| `mission`                    | Long-running goal coordinator; delegates concrete implementation to tasks.        |
+| `intent-analysis`            | First read of request intent, complexity, missing slots, and clarification needs. |
+| `requirements`               | Extracts REQ rows and foundational decisions.                                     |
+| `architect`                  | Produces goal graph, contracts, dependencies, and verification structure.         |
+| `frontend-research`          | Produces source-backed webpage investigation packets and frontend research brief. |
+| `frontend-design`            | Produces visual HTML skeleton and frontend design/replica contract.               |
+| `build`                      | Executes scoped delivery, edits files, verifies, and reports.                     |
+| `visual-qa`                  | Audits rendered UI and interaction evidence.                                      |
+| `deep-research`              | Gathers durable external/source evidence for unresolved facts.                    |
+| `fact-check`                 | Verifies explicit factual claims from upstream worker reports.                    |
+| `goal-workload-analyst`      | Reviews whether architect goals are too large or under-specified.                 |
+| `integrity`                  | Performs adversarial final review and repair-oriented consensus reporting.        |
+| `orchestrator`               | Makes task-level lifecycle and dispatch decisions.                                |
 
 Expert-squad append prompts should therefore contain only scenario emphasis:
 
@@ -98,19 +98,19 @@ They must not repeat base prompt role contracts or tool lists.
 
 Prompt profile runtime is already partially implemented.
 
-| Surface | Current role |
-| --- | --- |
-| `packages/opencorvus/src/agent/prompt-profile.ts` | Single source for built-in profiles, custom profile schema, target metadata, overlay lookup, and prompt composition. |
-| `packages/opencorvus/src/config/config.ts` | Persists `config.prompt_profile`; session overlay only allows `prompt_profile.active`. |
-| `packages/opencorvus/src/config/prompt-catalog.ts` | Returns `editable_prompt`, `profile_prompt`, and `effective_prompt`. |
-| `packages/opencorvus/src/server/routes/config.ts` | Exposes `GET /config/prompt-profile` and validates `PATCH /config`. |
-| `packages/opencorvus/src/server/routes/session.ts` | Validates session-scoped profile switches through `PATCH /session/:id/config`. |
-| `packages/opencorvus/src/agent/runner.ts` | Worker agents compose base core + active profile overlay + user append. |
-| `packages/opencorvus/src/session/llm.ts` | Direct session prompts apply profiles outside complete-system mode. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | Orchestrator manually applies the profile compiler before dynamic DB context. |
-| `packages/overlay/src/components/settings/PromptCatalog.tsx` | Shows prompt-profile management plus the older per-prompt editor cards. |
-| `packages/overlay/src/services/config.ts` | Saves custom profiles under `prompt_profile.profiles`; also still saves per-agent prompt fields. |
-| `packages/overlay/src/ChatComposer.tsx` and `packages/overlay/src/main.tsx` | Expose the prompt-profile selector for task/session-scoped switching. |
+| Surface                                                                     | Current role                                                                                                         |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/agent/prompt-profile.ts`                           | Single source for built-in profiles, custom profile schema, target metadata, overlay lookup, and prompt composition. |
+| `packages/opencorvus/src/config/config.ts`                                  | Persists `config.prompt_profile`; session overlay only allows `prompt_profile.active`.                               |
+| `packages/opencorvus/src/config/prompt-catalog.ts`                          | Returns `editable_prompt`, `profile_prompt`, and `effective_prompt`.                                                 |
+| `packages/opencorvus/src/server/routes/config.ts`                           | Exposes `GET /config/prompt-profile` and validates `PATCH /config`.                                                  |
+| `packages/opencorvus/src/server/routes/session.ts`                          | Validates session-scoped profile switches through `PATCH /session/:id/config`.                                       |
+| `packages/opencorvus/src/agent/runner.ts`                                   | Worker agents compose base core + active profile overlay + user append.                                              |
+| `packages/opencorvus/src/session/llm.ts`                                    | Direct session prompts apply profiles outside complete-system mode.                                                  |
+| `packages/opencorvus/src/orchestrator/agent.ts`                             | Orchestrator manually applies the profile compiler before dynamic DB context.                                        |
+| `packages/overlay/src/components/settings/PromptCatalog.tsx`                | Shows prompt-profile management plus the older per-prompt editor cards.                                              |
+| `packages/overlay/src/services/config.ts`                                   | Saves custom profiles under `prompt_profile.profiles`; also still saves per-agent prompt fields.                     |
+| `packages/overlay/src/ChatComposer.tsx` and `packages/overlay/src/main.tsx` | Expose the prompt-profile selector for task/session-scoped switching.                                                |
 
 Important known mismatch:
 
@@ -241,26 +241,26 @@ explicit new id before saving; it must not silently overwrite.
 
 ## Call-Site Inventory
 
-| Call site | Action |
-| --- | --- |
-| `packages/opencorvus/src/agent/prompt-profile.ts` | Add import schema/helper, keep built-ins and target catalog as single source. |
-| `packages/opencorvus/src/config/config.ts` | Keep hard validation for active id, unknown targets, and built-in-only custom targets. |
-| `packages/opencorvus/src/config/prompt-catalog.ts` | Keep `profile_prompt` separate from `editable_prompt`; consider returning ordinary prompt entries as read-only diagnostics only. |
-| `packages/opencorvus/src/agent/runner.ts` | Preserve base + profile + user append order for worker agents. |
-| `packages/opencorvus/src/session/llm.ts` | Preserve no-profile behavior in complete-system mode. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | Preserve orchestrator profile compilation before dynamic DB context. |
-| `packages/opencorvus/src/build/agent.ts` | Compile external coding system prompts through the build profile overlay. |
-| `packages/opencorvus/src/server/routes/config.ts` | Reuse `PATCH /config`; add route only if backend-owned import validation is required by implementation. |
-| `packages/opencorvus/src/server/routes/session.ts` | Keep session overlay limited to active profile id. |
-| `packages/overlay/src/components/settings/PromptCatalog.tsx` | Make profile overlays the only editable prompt surface; add import UI. |
-| `packages/overlay/src/services/config.ts` | Add import/merge helper that writes only `prompt_profile`. Remove fail-open prompt catalog handling if touched. |
-| `packages/overlay/src/i18n/en-US.json` and `zh-CN.json` | Add import labels/errors if UI changes. |
-| `packages/opencorvus/test/agent/prompt-profile.test.ts` | Add import schema, matrix, compiler ordering, and built-in-only rejection tests. |
-| `packages/opencorvus/test/build-agent/external-system.test.ts` | Add profile overlay coverage for external executors. |
-| `packages/opencorvus/test/server/config-routes.test.ts` | Keep `/config/prompt-profile` and `PATCH /config` hard-error coverage. |
-| `packages/overlay/test/prompt-profile-config.test.ts` | Add import merge and legacy-field non-mutation coverage. |
-| `packages/overlay/test/browser/prompt-profile-panel.test.ts` | Add visual/interaction coverage for import and profile-only editing. |
-| `packages/overlay/test/prompt-catalog-save.test.ts` | Reject profile overlay leakage into `agent.*.prompt_append`. |
+| Call site                                                      | Action                                                                                                                           |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/agent/prompt-profile.ts`              | Add import schema/helper, keep built-ins and target catalog as single source.                                                    |
+| `packages/opencorvus/src/config/config.ts`                     | Keep hard validation for active id, unknown targets, and built-in-only custom targets.                                           |
+| `packages/opencorvus/src/config/prompt-catalog.ts`             | Keep `profile_prompt` separate from `editable_prompt`; consider returning ordinary prompt entries as read-only diagnostics only. |
+| `packages/opencorvus/src/agent/runner.ts`                      | Preserve base + profile + user append order for worker agents.                                                                   |
+| `packages/opencorvus/src/session/llm.ts`                       | Preserve no-profile behavior in complete-system mode.                                                                            |
+| `packages/opencorvus/src/orchestrator/agent.ts`                | Preserve orchestrator profile compilation before dynamic DB context.                                                             |
+| `packages/opencorvus/src/build/agent.ts`                       | Compile external coding system prompts through the build profile overlay.                                                        |
+| `packages/opencorvus/src/server/routes/config.ts`              | Reuse `PATCH /config`; add route only if backend-owned import validation is required by implementation.                          |
+| `packages/opencorvus/src/server/routes/session.ts`             | Keep session overlay limited to active profile id.                                                                               |
+| `packages/overlay/src/components/settings/PromptCatalog.tsx`   | Make profile overlays the only editable prompt surface; add import UI.                                                           |
+| `packages/overlay/src/services/config.ts`                      | Add import/merge helper that writes only `prompt_profile`. Remove fail-open prompt catalog handling if touched.                  |
+| `packages/overlay/src/i18n/en-US.json` and `zh-CN.json`        | Add import labels/errors if UI changes.                                                                                          |
+| `packages/opencorvus/test/agent/prompt-profile.test.ts`        | Add import schema, matrix, compiler ordering, and built-in-only rejection tests.                                                 |
+| `packages/opencorvus/test/build-agent/external-system.test.ts` | Add profile overlay coverage for external executors.                                                                             |
+| `packages/opencorvus/test/server/config-routes.test.ts`        | Keep `/config/prompt-profile` and `PATCH /config` hard-error coverage.                                                           |
+| `packages/overlay/test/prompt-profile-config.test.ts`          | Add import merge and legacy-field non-mutation coverage.                                                                         |
+| `packages/overlay/test/browser/prompt-profile-panel.test.ts`   | Add visual/interaction coverage for import and profile-only editing.                                                             |
+| `packages/overlay/test/prompt-catalog-save.test.ts`            | Reject profile overlay leakage into `agent.*.prompt_append`.                                                                     |
 
 ## Non-Goals
 

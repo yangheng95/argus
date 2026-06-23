@@ -42,12 +42,12 @@ Commands run before this plan:
 
 Relevant implementation facts:
 
-| Surface | Current behavior | Required change |
-| --- | --- | --- |
-| `packages/opencorvus/src/engine/describe.ts` | `TaskDesc` projects deep research and frontend research, but no frontend-design handoff facts from `decision_log`. | Add a typed `frontend_design` handoff projection with completion booleans, materialized report/manifest paths, present/missing keys, latest decision id, and latest updated time. Render it beside frontend research. |
-| `packages/opencorvus/src/engine/workflow.ts` | `projectTaskSteps()` can infer `frontend_design` completion from decision-log keys, but the required key list is local to workflow. | Move the frontend-design completion key list to the frontend-design handoff module and reuse it from workflow and describe. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | `buildSystemParts()` calls `renderWorkflowPrompt(workflow, workflowState)` without `task.id`, so task-scope steps cannot be projected from persisted task facts. | Pass `task.id` so `renderWorkflowPrompt()` calls `projectTaskSteps()` and shows completed frontend-design when decision-log facts exist. |
-| Tests | Existing workflow test checks `projectTaskSteps()` directly but not the rendered prompt used by orchestrator. | Add regression tests for task description handoff rendering and workflow prompt DONE rendering with taskID. |
+| Surface                                         | Current behavior                                                                                                                                                 | Required change                                                                                                                                                                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/engine/describe.ts`    | `TaskDesc` projects deep research and frontend research, but no frontend-design handoff facts from `decision_log`.                                               | Add a typed `frontend_design` handoff projection with completion booleans, materialized report/manifest paths, present/missing keys, latest decision id, and latest updated time. Render it beside frontend research. |
+| `packages/opencorvus/src/engine/workflow.ts`    | `projectTaskSteps()` can infer `frontend_design` completion from decision-log keys, but the required key list is local to workflow.                              | Move the frontend-design completion key list to the frontend-design handoff module and reuse it from workflow and describe.                                                                                           |
+| `packages/opencorvus/src/orchestrator/agent.ts` | `buildSystemParts()` calls `renderWorkflowPrompt(workflow, workflowState)` without `task.id`, so task-scope steps cannot be projected from persisted task facts. | Pass `task.id` so `renderWorkflowPrompt()` calls `projectTaskSteps()` and shows completed frontend-design when decision-log facts exist.                                                                              |
+| Tests                                           | Existing workflow test checks `projectTaskSteps()` directly but not the rendered prompt used by orchestrator.                                                    | Add regression tests for task description handoff rendering and workflow prompt DONE rendering with taskID.                                                                                                           |
 
 ## Decisions
 
@@ -84,4 +84,3 @@ Relevant implementation facts:
   `renderWorkflowPrompt()`.
 - No fallback, no repeated-call blocker, no host gate.
 - Focused tests and `packages/opencorvus` typecheck pass.
-

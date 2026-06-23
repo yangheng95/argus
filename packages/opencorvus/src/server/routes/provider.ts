@@ -388,7 +388,9 @@ export const ProviderRoutes = lazy(() =>
           )
         }
         if (!explicitKey && savedKey) {
-          const provider = body.providerID ? await Provider.getProvider(body.providerID).catch(() => undefined) : undefined
+          const provider = body.providerID
+            ? await Provider.getProvider(body.providerID).catch(() => undefined)
+            : undefined
           if (!providerAllowsSavedKey(provider, requestedApi)) {
             return c.json(
               {

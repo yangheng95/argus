@@ -17,26 +17,26 @@ or when rendered verification evidence is the current preview owner.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no dual source, test every change, visually verify UI changes, and keep Node as the Playwright runner on Windows. |
-| `2026-06-11-browser-preview-interactive-live-session.md` | Live preview is an interactive backend-owned browser session; evidence capture remains a separate diagnostic surface backed by the same target ID. |
-| `2026-06-15-browser-preview-live-target-boundary.md` | Live preview must never mix task and target IDs; failures should re-resolve the task-scoped target, not invent replacements. |
-| `2026-06-19-browser-preview-loading-status-live.md` | Live loading remains a real async surface, but only for live preview ownership. |
-| `2026-06-22-browser-preview-evidence-previewable-image.md` | Persisted evidence screenshots render through `PreviewableImage`; live screenshots remain direct only because they route interactive input. |
-| `2026-06-22-browser-preview-selected-target-probe.md` | The selected persisted target is the single target authority; older candidates are not fallback owners. |
+| Source                                                     | Constraint carried forward                                                                                                                         |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                | No fallback, no dual source, test every change, visually verify UI changes, and keep Node as the Playwright runner on Windows.                     |
+| `2026-06-11-browser-preview-interactive-live-session.md`   | Live preview is an interactive backend-owned browser session; evidence capture remains a separate diagnostic surface backed by the same target ID. |
+| `2026-06-15-browser-preview-live-target-boundary.md`       | Live preview must never mix task and target IDs; failures should re-resolve the task-scoped target, not invent replacements.                       |
+| `2026-06-19-browser-preview-loading-status-live.md`        | Live loading remains a real async surface, but only for live preview ownership.                                                                    |
+| `2026-06-22-browser-preview-evidence-previewable-image.md` | Persisted evidence screenshots render through `PreviewableImage`; live screenshots remain direct only because they route interactive input.        |
+| `2026-06-22-browser-preview-selected-target-probe.md`      | The selected persisted target is the single target authority; older candidates are not fallback owners.                                            |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `BrowserPreviewPanel.tsx` `latestEvidence` | The resource source directly reads `currentTarget()?.latestEvidenceIDs?.[viewportID()]`. | Extract this source into `latestEvidenceScope` so evidence ownership is available before the resource resolves. |
-| `BrowserPreviewPanel.tsx` `renderedEvidence` | The stage renders persisted evidence before `liveImageUrl()`. | Keep visual precedence, but make request ownership match this precedence. |
-| `BrowserPreviewPanel.tsx` `liveScope` | It currently becomes ready as soon as panel, task, directory, target, and viewport are ready. | Return `undefined` while `latestEvidenceScope()` exists or `renderedEvidence()` exists. |
-| `BrowserPreviewPanel.tsx` live input handlers | Pointer, wheel, and key input call `sendLiveInput()` only when `liveScope()` and `liveImage()` match. | Preserve interactive live behavior when no persisted evidence owns the selected viewport. |
-| `packages/overlay/src/services/browser-preview.ts` | `loadTaskBrowserPreviewLiveSnapshotObjectUrl()` and `sendTaskBrowserPreviewLiveInputObjectUrl()` are route clients only. | Leave service contracts unchanged; do not add client-side request fallback or route-level gates. |
-| `browser-preview-evidence.test.ts` | The persisted viewport test visually proves evidence wins, but the fixture route still permits unnoticed live snapshot requests. | Record `/live/snapshot` requests and assert persisted evidence opens with none. |
-| `browser-preview-panel.test.ts` | Static guard already checks evidence-before-live stage order. | Add source guard requiring live scope to be suppressed by evidence ownership and verification ownership. |
+| Surface                                            | Evidence                                                                                                                         | Decision                                                                                                        |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `BrowserPreviewPanel.tsx` `latestEvidence`         | The resource source directly reads `currentTarget()?.latestEvidenceIDs?.[viewportID()]`.                                         | Extract this source into `latestEvidenceScope` so evidence ownership is available before the resource resolves. |
+| `BrowserPreviewPanel.tsx` `renderedEvidence`       | The stage renders persisted evidence before `liveImageUrl()`.                                                                    | Keep visual precedence, but make request ownership match this precedence.                                       |
+| `BrowserPreviewPanel.tsx` `liveScope`              | It currently becomes ready as soon as panel, task, directory, target, and viewport are ready.                                    | Return `undefined` while `latestEvidenceScope()` exists or `renderedEvidence()` exists.                         |
+| `BrowserPreviewPanel.tsx` live input handlers      | Pointer, wheel, and key input call `sendLiveInput()` only when `liveScope()` and `liveImage()` match.                            | Preserve interactive live behavior when no persisted evidence owns the selected viewport.                       |
+| `packages/overlay/src/services/browser-preview.ts` | `loadTaskBrowserPreviewLiveSnapshotObjectUrl()` and `sendTaskBrowserPreviewLiveInputObjectUrl()` are route clients only.         | Leave service contracts unchanged; do not add client-side request fallback or route-level gates.                |
+| `browser-preview-evidence.test.ts`                 | The persisted viewport test visually proves evidence wins, but the fixture route still permits unnoticed live snapshot requests. | Record `/live/snapshot` requests and assert persisted evidence opens with none.                                 |
+| `browser-preview-panel.test.ts`                    | Static guard already checks evidence-before-live stage order.                                                                    | Add source guard requiring live scope to be suppressed by evidence ownership and verification ownership.        |
 
 ## Root Cause
 

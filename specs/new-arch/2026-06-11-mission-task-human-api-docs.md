@@ -39,11 +39,11 @@ The first Chinese draft was still shaped like an endpoint inventory and was too 
 
 Follow-up grep before the refresh:
 
-| Surface | Evidence | Decision |
-| ------- | -------- | -------- |
-| SDK directory injection | `packages/sdk/js/src/client.ts` uses `withDirectoryQuery()` and `routeRequiresProjectDirectory()` to append `directory` as a query parameter for project-scoped routes. | Update the SDK reference and Mission/Task guide so they no longer claim the SDK sends `x-opencorvus-directory`. |
+| Surface                    | Evidence                                                                                                                                                                          | Decision                                                                                                            |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| SDK directory injection    | `packages/sdk/js/src/client.ts` uses `withDirectoryQuery()` and `routeRequiresProjectDirectory()` to append `directory` as a query parameter for project-scoped routes.           | Update the SDK reference and Mission/Task guide so they no longer claim the SDK sends `x-opencorvus-directory`.     |
 | Server directory selection | `packages/opencorvus/src/server/server.ts` accepts either `?directory=` or `x-opencorvus-directory`; `packages/opencorvus/src/server/directory.ts` prefers query when both exist. | Keep raw HTTP examples valid, but describe query as the generated OpenAPI/SDK path and header as a raw HTTP option. |
-| Task follow-up input | `packages/opencorvus/src/engine/model.ts::TaskMessageInput` requires `source`; `packages/sdk/js/src/gen/sdk.gen.ts::Task.message()` exposes `source: string`. | Add `source: "api"` to SDK and curl examples, and add a docs health test so this does not regress. |
+| Task follow-up input       | `packages/opencorvus/src/engine/model.ts::TaskMessageInput` requires `source`; `packages/sdk/js/src/gen/sdk.gen.ts::Task.message()` exposes `source: string`.                     | Add `source: "api"` to SDK and curl examples, and add a docs health test so this does not regress.                  |
 
 Required end state for this refresh:
 

@@ -236,7 +236,10 @@ function equalScreenshotItem(a: ScreenshotBrowserItem | undefined, b: Screenshot
   )
 }
 
-function equalScreenshotItems(a: readonly ScreenshotBrowserItem[] | undefined, b: readonly ScreenshotBrowserItem[]): boolean {
+function equalScreenshotItems(
+  a: readonly ScreenshotBrowserItem[] | undefined,
+  b: readonly ScreenshotBrowserItem[],
+): boolean {
   if (a === b) return true
   if (!a || a.length !== b.length) return false
   for (let index = 0; index < b.length; index += 1) {
@@ -276,10 +279,7 @@ function compareTopLevelScreenshotOwnedItem(a: TopLevelScreenshotOwnedItem, b: T
   return a.index - b.index
 }
 
-function isTopLevelScreenshotHeapEntryHigher(
-  a: TopLevelScreenshotHeapEntry,
-  b: TopLevelScreenshotHeapEntry,
-): boolean {
+function isTopLevelScreenshotHeapEntryHigher(a: TopLevelScreenshotHeapEntry, b: TopLevelScreenshotHeapEntry): boolean {
   if (a.item.time !== b.item.time) return a.item.time > b.item.time
   const ownerOrder = compareTopLevelScreenshotOwnedItem(a, b)
   if (ownerOrder !== 0) return ownerOrder < 0

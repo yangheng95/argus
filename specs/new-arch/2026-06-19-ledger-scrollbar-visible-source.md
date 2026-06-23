@@ -16,10 +16,10 @@ That makes long Mission and Coding Assistant ledgers scrollable without a visibl
 
 ## Impact Search
 
-| Search | Result |
-| --- | --- |
-| `rg -n "mission-ledger-list|coding-assistant-ledger-list|#taskListPanel|#chatScroll|scrollbar-width:\\s*auto|session-scrollbar-size" packages/overlay/src/styles packages/overlay/src/components packages/overlay/test specs/new-arch -g "*.css" -g "*.tsx" -g "*.ts" -g "*.md"` | `base.css` only whitelists `#chatScroll` / `#taskListPanel`; Mission and Assistant ledger lists are live scrollers. |
-| `rg -n "ledger.*scrollbar|scrollbar.*ledger|mission-ledger-list|coding-assistant-ledger-list|left activity.*scrollbar|activity.*scrollbar" specs/new-arch packages/overlay/test packages/overlay/src -g "*.md" -g "*.ts" -g "*.tsx" -g "*.css"` | No existing active ledger scrollbar fix record. |
+| Search                                                                                           | Result                                                               |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- | ------------------- | ---------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "mission-ledger-list                                                                      | coding-assistant-ledger-list                                         | #taskListPanel      | #chatScroll                  | scrollbar-width:\\s\*auto | session-scrollbar-size" packages/overlay/src/styles packages/overlay/src/components packages/overlay/test specs/new-arch -g "_.css" -g "_.tsx" -g "_.ts" -g "_.md"` | `base.css` only whitelists `#chatScroll` / `#taskListPanel`; Mission and Assistant ledger lists are live scrollers. |
+| `rg -n "ledger.\*scrollbar                                                                       | scrollbar.\*ledger                                                   | mission-ledger-list | coding-assistant-ledger-list | left activity.\*scrollbar | activity._scrollbar" specs/new-arch packages/overlay/test packages/overlay/src -g "_.md" -g "_.ts" -g "_.tsx" -g "\*.css"`                                          | No existing active ledger scrollbar fix record.                                                                     |
 | `rg -n -F "mission-conversation-body" packages/overlay/src packages/overlay/test specs/new-arch` | Old Mission conversation selector is retired and must not be reused. |
 
 ## Fix Plan

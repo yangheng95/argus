@@ -258,7 +258,10 @@ export namespace SessionCompaction {
       chars: serialized.length,
       sha256: sha256(serialized),
       ...topLevel,
-      excerpt: compactTranscriptField(serialized, Math.min(TOOL_INPUT_JSON_MAX_CHARS, DISPATCH_ANCHOR_REFERENCE_MAX_CHARS)),
+      excerpt: compactTranscriptField(
+        serialized,
+        Math.min(TOOL_INPUT_JSON_MAX_CHARS, DISPATCH_ANCHOR_REFERENCE_MAX_CHARS),
+      ),
     }
   }
 
@@ -268,7 +271,8 @@ export namespace SessionCompaction {
 
   function compactToolStateProjection(state: ToolStateForTranscript): unknown {
     const projectedState = compactToolInputProjection(state)
-    if (projectedState === null || typeof projectedState !== "object" || Array.isArray(projectedState)) return projectedState
+    if (projectedState === null || typeof projectedState !== "object" || Array.isArray(projectedState))
+      return projectedState
     if ("kind" in projectedState) return projectedState
 
     return {

@@ -66,10 +66,7 @@ export function CardHeader(props: {
     props.node.kind === "step" ? goalRevisionLabel(props.node.round, props.node.attempt) : ""
 
   return (
-    <div
-      class="card__head"
-      classList={{ "card__head--with-meta": hasSecondaryText() }}
-    >
+    <div class="card__head" classList={{ "card__head--with-meta": hasSecondaryText() }}>
       <Button
         type="button"
         variant="ghost"
@@ -114,9 +111,7 @@ export function CardHeader(props: {
               </span>
             </span>
           </Show>
-          <Show when={todoSummary()}>
-            {(summary) => <CardTodoSummary summary={summary()} />}
-          </Show>
+          <Show when={todoSummary()}>{(summary) => <CardTodoSummary summary={summary()} />}</Show>
         </span>
       </Button>
       <CardHeaderChrome

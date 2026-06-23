@@ -16,19 +16,19 @@ problem already fixed by `2026-06-18-ledger-row-nested-interactions.md`.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-ledger-row-nested-interactions.md` | Row containers must not be keyboard buttons when they contain sibling action buttons; the main row button owns selection. |
-| `2026-06-18-retire-settings-extension-memory-residue.md` | Live memory row contracts are `.knowledge-item*` and `data-action="delete-memory"`. |
-| `MemoryPanel.tsx` | The panel is mounted both in Settings and the left activity tool panel, so both surfaces need the same DOM contract. |
+| Source                                                   | Relevant constraint                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-ledger-row-nested-interactions.md`           | Row containers must not be keyboard buttons when they contain sibling action buttons; the main row button owns selection. |
+| `2026-06-18-retire-settings-extension-memory-residue.md` | Live memory row contracts are `.knowledge-item*` and `data-action="delete-memory"`.                                       |
+| `MemoryPanel.tsx`                                        | The panel is mounted both in Settings and the left activity tool panel, so both surfaces need the same DOM contract.      |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'knowledge-item|delete-memory|MemoryPanel|role="button"' packages/overlay/src packages/overlay/test specs/new-arch` | Only `MemoryPanel.tsx` creates `.knowledge-item` rows and nests the delete Button under the row button semantics. | Fix `MemoryPanel` directly; do not create a second row primitive for this narrow case. |
+| Sweep                                               | Result                                                                                                                     | Decision                                                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `rg -n 'knowledge-item                              | delete-memory                                                                                                              | MemoryPanel                                                                                            | role="button"' packages/overlay/src packages/overlay/test specs/new-arch` | Only `MemoryPanel.tsx` creates `.knowledge-item` rows and nests the delete Button under the row button semantics. | Fix `MemoryPanel` directly; do not create a second row primitive for this narrow case. |
 | `packages/overlay/src/styles/surfaces/settings.css` | Settings surface owns `.knowledge-item`, `.knowledge-item-main`, `.knowledge-item-meta-row`, and the delete button sizing. | Add a `.knowledge-item-row` layout wrapper and make `.knowledge-item-main` a button-reset row control. |
-| `packages/overlay/src/styles/surfaces/activity.css` | The left side activity panel overrides memory row density. | Update the side-panel delete-button selector after the DOM split. |
+| `packages/overlay/src/styles/surfaces/activity.css` | The left side activity panel overrides memory row density.                                                                 | Update the side-panel delete-button selector after the DOM split.                                      |
 
 ## Fix
 

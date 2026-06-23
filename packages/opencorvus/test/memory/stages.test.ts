@@ -593,65 +593,61 @@ describe("memory multi-stage lifecycle", () => {
     })
   })
 
-  test(
-    "deleteFileInProject cannot delete another project's file, chunks, or FTS entries",
-    async () => {
-      await using projectA = await tmpdir({ git: true })
-      await using projectB = await tmpdir({ git: true })
-      let projectAID = ""
-      let projectBID = ""
-      let projectBFileID = ""
+  test("deleteFileInProject cannot delete another project's file, chunks, or FTS entries", async () => {
+    await using projectA = await tmpdir({ git: true })
+    await using projectB = await tmpdir({ git: true })
+    let projectAID = ""
+    let projectBID = ""
+    let projectBFileID = ""
 
-      await Instance.provide({
-        directory: projectA.path,
-        fn: async () => {
-          projectAID = Instance.project.id
-        },
-      })
+    await Instance.provide({
+      directory: projectA.path,
+      fn: async () => {
+        projectAID = Instance.project.id
+      },
+    })
 
-      await Instance.provide({
-        directory: projectB.path,
-        fn: async () => {
-          projectBID = Instance.project.id
-          const file = Memory.writeFile({
-            title: "Fact: Scoped delete foreign sentinel",
-            content: "## Foreign Sentinel\nScoped delete must leave this project B memory searchable.",
-            source: "agent",
-            projectId: projectBID,
-            kind: "fact",
-          })
-          projectBFileID = file.id
-          expect(Memory.getChunksInProject({ fileId: projectBFileID, projectId: projectBID }).length).toBeGreaterThan(0)
-          const beforeSearch = Memory.search({
-            query: "scoped delete project b memory searchable",
-            projectId: projectBID,
-            limit: 5,
-          })
-          expect(beforeSearch.some((r) => r.fileId === projectBFileID)).toBe(true)
-        },
-      })
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        projectBID = Instance.project.id
+        const file = Memory.writeFile({
+          title: "Fact: Scoped delete foreign sentinel",
+          content: "## Foreign Sentinel\nScoped delete must leave this project B memory searchable.",
+          source: "agent",
+          projectId: projectBID,
+          kind: "fact",
+        })
+        projectBFileID = file.id
+        expect(Memory.getChunksInProject({ fileId: projectBFileID, projectId: projectBID }).length).toBeGreaterThan(0)
+        const beforeSearch = Memory.search({
+          query: "scoped delete project b memory searchable",
+          projectId: projectBID,
+          limit: 5,
+        })
+        expect(beforeSearch.some((r) => r.fileId === projectBFileID)).toBe(true)
+      },
+    })
 
-      const foreignDelete = Memory.deleteFileInProject({ fileId: projectBFileID, projectId: projectAID })
-      expect(foreignDelete).toBeNull()
+    const foreignDelete = Memory.deleteFileInProject({ fileId: projectBFileID, projectId: projectAID })
+    expect(foreignDelete).toBeNull()
 
-      await Instance.provide({
-        directory: projectB.path,
-        fn: async () => {
-          expect(Memory.getFileInProject({ fileId: projectBFileID, projectId: projectBID })?.title).toBe(
-            "Fact: Scoped delete foreign sentinel",
-          )
-          expect(Memory.getChunksInProject({ fileId: projectBFileID, projectId: projectBID }).length).toBeGreaterThan(0)
-          const afterSearch = Memory.search({
-            query: "scoped delete project b memory searchable",
-            projectId: projectBID,
-            limit: 5,
-          })
-          expect(afterSearch.some((r) => r.fileId === projectBFileID)).toBe(true)
-        },
-      })
-    },
-    30_000,
-  )
+    await Instance.provide({
+      directory: projectB.path,
+      fn: async () => {
+        expect(Memory.getFileInProject({ fileId: projectBFileID, projectId: projectBID })?.title).toBe(
+          "Fact: Scoped delete foreign sentinel",
+        )
+        expect(Memory.getChunksInProject({ fileId: projectBFileID, projectId: projectBID }).length).toBeGreaterThan(0)
+        const afterSearch = Memory.search({
+          query: "scoped delete project b memory searchable",
+          projectId: projectBID,
+          limit: 5,
+        })
+        expect(afterSearch.some((r) => r.fileId === projectBFileID)).toBe(true)
+      },
+    })
+  }, 30_000)
 
   test("delete removes memory from both listing and search", async () => {
     await using tmp = await tmpdir({ git: true })

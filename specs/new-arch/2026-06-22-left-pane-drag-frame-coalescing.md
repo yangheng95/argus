@@ -17,24 +17,24 @@ on every pointermove.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate resize owner, test every change, visually verify UI changes, and commit/push each round. |
-| `2026-06-17-left-pane-resizer-accessibility.md` | `renderPaneLayout()` is the single CSS width and separator semantics writer for pane resizing. |
-| `2026-06-22-overlay-resize-frame-coalescing.md` | High-frequency resize work must be coalesced through the shared RAF scheduler. |
-| `2026-06-22-window-resize-center-layout-frame.md` | Window resize already schedules pane layout; this round targets pointer drag inside `services/pane.ts`. |
-| Faraday GUI audit | `onPaneResizeMove -> resizePane` synchronously reads pane bounds and writes layout for every pointermove. |
+| Source                                            | Constraint carried forward                                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                       | No fallback, no duplicate resize owner, test every change, visually verify UI changes, and commit/push each round. |
+| `2026-06-17-left-pane-resizer-accessibility.md`   | `renderPaneLayout()` is the single CSS width and separator semantics writer for pane resizing.                     |
+| `2026-06-22-overlay-resize-frame-coalescing.md`   | High-frequency resize work must be coalesced through the shared RAF scheduler.                                     |
+| `2026-06-22-window-resize-center-layout-frame.md` | Window resize already schedules pane layout; this round targets pointer drag inside `services/pane.ts`.            |
+| Faraday GUI audit                                 | `onPaneResizeMove -> resizePane` synchronously reads pane bounds and writes layout for every pointermove.          |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Pointer drag owner | `initPaneResizers()` attaches pointerdown listeners for left/right handles and closes over pane callbacks. | Keep this service as the only default pane drag owner. |
-| Pointermove path | `onPaneResizeMove()` calls `resizePane()` directly for every event. | Store latest `clientX` and schedule one RAF resize. |
-| Bounds/layout path | `resizePane()` calls `paneResizeBounds()` and `renderPaneLayout()`. | Keep this math and renderer unchanged; only change when it runs. |
-| Pointerup/cancel | `stopPaneResize()` persists rendered widths. | Cancel scheduled RAF and flush the last pending `clientX` before persistence. |
-| Keyboard resize | `resizePaneByKeyboard()` is immediate and accessibility-driven. | Leave keyboard behavior immediate. |
-| Tests | `pane-config.test.ts` and `browser/left-pane-resizer-browser.test.ts` cover pane service ownership and real separator behavior. | Extend both to prove pointermove work is RAF-coalesced and visually unchanged. |
+| Surface            | Evidence                                                                                                                        | Decision                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Pointer drag owner | `initPaneResizers()` attaches pointerdown listeners for left/right handles and closes over pane callbacks.                      | Keep this service as the only default pane drag owner.                         |
+| Pointermove path   | `onPaneResizeMove()` calls `resizePane()` directly for every event.                                                             | Store latest `clientX` and schedule one RAF resize.                            |
+| Bounds/layout path | `resizePane()` calls `paneResizeBounds()` and `renderPaneLayout()`.                                                             | Keep this math and renderer unchanged; only change when it runs.               |
+| Pointerup/cancel   | `stopPaneResize()` persists rendered widths.                                                                                    | Cancel scheduled RAF and flush the last pending `clientX` before persistence.  |
+| Keyboard resize    | `resizePaneByKeyboard()` is immediate and accessibility-driven.                                                                 | Leave keyboard behavior immediate.                                             |
+| Tests              | `pane-config.test.ts` and `browser/left-pane-resizer-browser.test.ts` cover pane service ownership and real separator behavior. | Extend both to prove pointermove work is RAF-coalesced and visually unchanged. |
 
 ## Root Cause
 

@@ -29,12 +29,12 @@ rg -n "goal_refill|syncTerminalGoalRefills|orchestrator_stream_error|blocked" pa
 
 Relevant call points:
 
-| Surface | Existing behavior | Repair decision |
-| --- | --- | --- |
-| `/task/:id/message` | Appended the operator message and dispatched the task loop, but left a stale active run in `blocked/orchestrator_stream_error`. | Reuse `reopenActiveRunForOperatorWake` after task reactivation and before dispatch. |
-| `EngineService.recordOperatorNote` | Woke the orchestrator but preserved the stale blocked run. | Reuse the same run reopen helper for operator notes. |
-| `EngineRuntime.syncTerminalGoalRefills` | Correctly refuses to wake when the parent run is still `blocked/orchestrator_stream_error`. | Keep this guard; recovery must come from explicit operator action, not liveness fallback. |
-| Completed-task continuation | Terminal completed tasks must remain behind the directory queue when another same-cwd task is active. | Completed tasks reactivate to `queued`; failed and cancelled tasks continue to reactivate to `active`. |
+| Surface                                 | Existing behavior                                                                                                               | Repair decision                                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `/task/:id/message`                     | Appended the operator message and dispatched the task loop, but left a stale active run in `blocked/orchestrator_stream_error`. | Reuse `reopenActiveRunForOperatorWake` after task reactivation and before dispatch.                    |
+| `EngineService.recordOperatorNote`      | Woke the orchestrator but preserved the stale blocked run.                                                                      | Reuse the same run reopen helper for operator notes.                                                   |
+| `EngineRuntime.syncTerminalGoalRefills` | Correctly refuses to wake when the parent run is still `blocked/orchestrator_stream_error`.                                     | Keep this guard; recovery must come from explicit operator action, not liveness fallback.              |
+| Completed-task continuation             | Terminal completed tasks must remain behind the directory queue when another same-cwd task is active.                           | Completed tasks reactivate to `queued`; failed and cancelled tasks continue to reactivate to `active`. |
 
 ## Tests
 

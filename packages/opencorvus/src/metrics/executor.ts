@@ -467,7 +467,8 @@ async function runAggregator(spec: MetricSpec, input: ExecuteMetricsInput): Prom
       if (!row.evidence_fresh) {
         continue
       }
-      const isNewer = fresh && (row.computed_at > fresh.computed_at || (row.computed_at === fresh.computed_at && row.id > fresh.id))
+      const isNewer =
+        fresh && (row.computed_at > fresh.computed_at || (row.computed_at === fresh.computed_at && row.id > fresh.id))
       if (!fresh || isNewer) {
         fresh = row
       }

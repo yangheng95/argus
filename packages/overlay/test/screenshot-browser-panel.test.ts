@@ -39,7 +39,9 @@ function withScreenshotCaches<T extends Record<string, CardNode>>(cards: T): T {
   return cards
 }
 
-function screenshotItem(input: Partial<ScreenshotBrowserItem> & Pick<ScreenshotBrowserItem, "src" | "time">): ScreenshotBrowserItem {
+function screenshotItem(
+  input: Partial<ScreenshotBrowserItem> & Pick<ScreenshotBrowserItem, "src" | "time">,
+): ScreenshotBrowserItem {
   const src = input.src
   return {
     id: input.id ?? `file:${src}`,
@@ -202,9 +204,9 @@ describe("screenshot browser panel", () => {
       `/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
     )
     expect(() => screenshotBrowserThumbnailUrl("/api/a.png")).toThrow("stored attachment")
-    expect(isScreenshotBrowserThumbnailUrl(`/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`)).toBe(
-      true,
-    )
+    expect(
+      isScreenshotBrowserThumbnailUrl(`/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`),
+    ).toBe(true)
     expect(isScreenshotBrowserThumbnailUrl("/attachment/project/a.png")).toBe(false)
     expect(isScreenshotBrowserThumbnailUrl("/attachment/project/a.png?variant=unknown")).toBe(false)
     expect(
@@ -289,10 +291,7 @@ describe("screenshot browser panel", () => {
         childIDs: [],
       },
     })
-    const items = collectScreenshotBrowserItemsFromCardTree(
-      ["card_visual", "card_build"],
-      cards,
-    )
+    const items = collectScreenshotBrowserItemsFromCardTree(["card_visual", "card_build"], cards)
 
     expect(items.map((item) => item.src)).toEqual([
       "/attachment/project/browser.png",
@@ -524,7 +523,9 @@ describe("screenshot browser panel", () => {
     expect(component).toContain("let thumbnailLoadController: AbortController | undefined")
     expect(component).toContain('new DOMException("Screenshot thumbnail source changed", "AbortError")')
     expect(component).toContain('new DOMException("Screenshot thumbnail unmounted", "AbortError")')
-    expect(component).toContain("!isStoredAttachmentUrl(props.item.src) || !isScreenshotBrowserThumbnailUrl(props.item.thumbnailSrc)")
+    expect(component).toContain(
+      "!isStoredAttachmentUrl(props.item.src) || !isScreenshotBrowserThumbnailUrl(props.item.thumbnailSrc)",
+    )
     expect(component).toContain("props.item.thumbnailSrc")
     expect(component).toContain("const cached = peekResourceObjectUrl(url)")
     expect(component).toContain("if (cached) return cached")

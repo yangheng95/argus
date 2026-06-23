@@ -12,21 +12,21 @@ English accessible names and copy feedback for every rendered code block.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | User-visible strings must follow the existing i18n system; no per-entry fallback strings. |
+| Source                                              | Relevant constraint                                                                                                                                  |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                         | User-visible strings must follow the existing i18n system; no per-entry fallback strings.                                                            |
 | `2026-06-19-markdown-code-copy-button-primitive.md` | The copy control is a shared generated HTML path: `wrapCodeBlock` emits the button and `main.tsx` delegates behavior through `button[data-md-copy]`. |
-| `packages/overlay/src/utils/i18n.ts` | Components and utilities can call strict `t()` once locale data is loaded. |
-| `2026-06-19-image-preview-dialog-i18n-source.md` | Copy feedback state should keep semantic keys or labels from i18n rather than English message strings. |
+| `packages/overlay/src/utils/i18n.ts`                | Components and utilities can call strict `t()` once locale data is loaded.                                                                           |
+| `2026-06-19-image-preview-dialog-i18n-source.md`    | Copy feedback state should keep semantic keys or labels from i18n rather than English message strings.                                               |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'Copy code|Copied|Copy failed|data-md-copy|wrapCodeBlock' packages/overlay/src packages/overlay/test specs/new-arch` | Active production literals are in `utils/markdown.ts` and `main.tsx`; browser and markdown-safety tests assert the English strings. | Fix the shared generated HTML and delegated listener, then update both tests. |
-| `rg -n 'renderMarkdown\\(' packages/overlay/src packages/overlay/test` | Markdown rendering is used across cards, dialogs, prompts, reasoning, and text parts. | Do not fix per surface; the renderer label must be localized once. |
-| `rg -n 'markdown\\.' packages/overlay/src/i18n` | No code-copy markdown namespace exists. | Add `markdown.copy_code`, `markdown.copied`, and `markdown.copy_failed` to both locale bundles. |
-| `git status --short -- packages/overlay/src/i18n/*.json specs/new-arch/HISTORY.md` | Locale and HISTORY files already contain unrelated unstaged work. | Stage only this hunk when committing. |
+| Sweep                                                                              | Result                                                                                | Decision                                                                                        |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `rg -n 'Copy code                                                                  | Copied                                                                                | Copy failed                                                                                     | data-md-copy | wrapCodeBlock' packages/overlay/src packages/overlay/test specs/new-arch` | Active production literals are in `utils/markdown.ts` and `main.tsx`; browser and markdown-safety tests assert the English strings. | Fix the shared generated HTML and delegated listener, then update both tests. |
+| `rg -n 'renderMarkdown\\(' packages/overlay/src packages/overlay/test`             | Markdown rendering is used across cards, dialogs, prompts, reasoning, and text parts. | Do not fix per surface; the renderer label must be localized once.                              |
+| `rg -n 'markdown\\.' packages/overlay/src/i18n`                                    | No code-copy markdown namespace exists.                                               | Add `markdown.copy_code`, `markdown.copied`, and `markdown.copy_failed` to both locale bundles. |
+| `git status --short -- packages/overlay/src/i18n/*.json specs/new-arch/HISTORY.md` | Locale and HISTORY files already contain unrelated unstaged work.                     | Stage only this hunk when committing.                                                           |
 
 ## Fix Plan
 

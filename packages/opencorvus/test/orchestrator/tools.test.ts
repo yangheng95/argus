@@ -141,7 +141,12 @@ function toolText(result: unknown): string {
   throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
 }
 
-function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string; sourceURL: string; request?: string }) {
+function minimalFrontendResearchBrief(input: {
+  taskID: string
+  sessionID: string
+  sourceURL: string
+  request?: string
+}) {
   const evidence = [
     {
       id: "ev_page_reference",
@@ -1245,7 +1250,9 @@ describe("orchestrator tools", () => {
       "const webpageEvidenceProjectDir = taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })",
     )
     expect(source).toContain("projectDir: webpageEvidenceProjectDir,")
-    expect(source).not.toContain("projectDir: Instance.project.worktree,\n              worktreeDir: Instance.directory,")
+    expect(source).not.toContain(
+      "projectDir: Instance.project.worktree,\n              worktreeDir: Instance.directory,",
+    )
   })
 
   test("inject_operator_message reads the current wake message without creating a second task message", async () => {
@@ -2004,7 +2011,9 @@ describe("orchestrator tools", () => {
         const firstText = toolText(first)
         expect(firstText).toContain("same-session continuation is ready")
         expect(firstText).toContain("frontend_research({")
-        expect(firstText).toContain('"reason":"Continue after missing submit_research_brief: Need webpage investigation packets."')
+        expect(firstText).toContain(
+          '"reason":"Continue after missing submit_research_brief: Need webpage investigation packets."',
+        )
         expect(firstText).not.toContain("frontend-research({")
         const match = firstText.match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
         expect(match?.[1]).toBeTruthy()
@@ -2037,7 +2046,10 @@ describe("orchestrator tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "frontend research unavailable continuation parent" })
+        const parent = await Session.create({
+          kind: "root",
+          title: "frontend research unavailable continuation parent",
+        })
         const projectID = Instance.project.id
         Database.use((db) => {
           db.insert(EngineTaskTable)
@@ -3711,7 +3723,9 @@ describe("orchestrator tools", () => {
 
         expect(replySpy).not.toHaveBeenCalled()
         expect(toolText(result)).toContain(`Error: steer_subagent cannot generically steer build session ${child.id}.`)
-        expect(toolText(result)).toContain("Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead.")
+        expect(toolText(result)).toContain(
+          "Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead.",
+        )
       },
     })
   })
@@ -4885,7 +4899,9 @@ describe("orchestrator tools", () => {
             run_id: runID,
             fingerprint,
             terminal_goal_run: { id: terminalGoalRunID, goal_id: goalID, status: "completed" },
-            live_sibling_goal_runs: [{ id: liveGoalRunID, goal_id: `gol_read_context_goal_refill_live_${stamp}`, status: "running" }],
+            live_sibling_goal_runs: [
+              { id: liveGoalRunID, goal_id: `gol_read_context_goal_refill_live_${stamp}`, status: "running" },
+            ],
             dispatch_result: "started",
             time_dispatched: now + 1,
           },
@@ -5485,7 +5501,9 @@ describe("orchestrator tools", () => {
         expect(toolText(result)).toContain("rejected task-level build")
         expect(toolText(result)).toContain(`directBuildIntent="${retiredIntent}" is not supported`)
         expect(toolText(result)).toContain("build is implementation-only")
-        expect(toolText(result)).toContain("Repository investigation belongs to analyze_intent, requirements, or explore")
+        expect(toolText(result)).toContain(
+          "Repository investigation belongs to analyze_intent, requirements, or explore",
+        )
         const run = findActiveRunForTask(taskID)
         expect(run).toBeUndefined()
       },
@@ -6210,7 +6228,10 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.integrity.execute({ reason: "post-build review" }, buildToolOptions("integrity_review"))
+        const result = await tools.integrity.execute(
+          { reason: "post-build review" },
+          buildToolOptions("integrity_review"),
+        )
 
         const resultText = toolText(result)
         expect(resultText).toContain("Integrity verdict: pass")
@@ -6340,7 +6361,10 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.integrity.execute({ reason: "post-build review" }, buildToolOptions("integrity_review"))
+        const result = await tools.integrity.execute(
+          { reason: "post-build review" },
+          buildToolOptions("integrity_review"),
+        )
 
         const resultText = toolText(result)
         expect(resultText).toContain("Integrity verdict: pass")
@@ -6427,7 +6451,10 @@ describe("orchestrator tools", () => {
           signal: new AbortController().signal,
         })
 
-        const result = await tools.integrity.execute({ reason: "post-build review" }, buildToolOptions("integrity_review"))
+        const result = await tools.integrity.execute(
+          { reason: "post-build review" },
+          buildToolOptions("integrity_review"),
+        )
 
         const resultText = toolText(result)
         expect(resultText).toContain("Integrity verdict: pass")
@@ -7933,9 +7960,7 @@ describe("orchestrator tools", () => {
         expect(JSON.stringify(buildInput.context.collaborationGoals)).not.toContain(unrelatedGoalID)
         expect(buildInput.context.fidelity.sourceCoverage.map((row: any) => row.id)).toEqual(["src-feature"])
         expect(buildInput.context.fidelity.referenceCoverage.map((row: any) => row.id)).toEqual(["ref-feature"])
-        expect(buildInput.context.fidelity.assemblyOwners.map((row: any) => row.surface)).toEqual([
-          "feature-assembly",
-        ])
+        expect(buildInput.context.fidelity.assemblyOwners.map((row: any) => row.surface)).toEqual(["feature-assembly"])
 
         const contractArtifact = Database.use((db) =>
           db
@@ -7947,9 +7972,9 @@ describe("orchestrator tools", () => {
         expect((contractArtifact?.payload as any).requirements_snapshot.map((row: any) => row.id)).toEqual([
           "REQ-feature",
         ])
-        expect((contractArtifact?.payload as any).collaboration_goals_snapshot.map((goal: any) => goal.id)).not.toContain(
-          unrelatedGoalID,
-        )
+        expect(
+          (contractArtifact?.payload as any).collaboration_goals_snapshot.map((goal: any) => goal.id),
+        ).not.toContain(unrelatedGoalID)
       },
     })
   }, 15000)
@@ -9762,180 +9787,191 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("goal build returns started after binding goal_run and finalizes in the background", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
+  test(
+    "goal build returns started after binding goal_run and finalizes in the background",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
 
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const taskID = `tsk_goal_build_session_bind_${stamp}`
-    const goalID = `gol_build_session_bind_${stamp}`
-    let observedSessionID: string | null | undefined
-    const terminal = deferred<void>()
+      const now = Date.now()
+      const stamp = now.toString(16)
+      const taskID = `tsk_goal_build_session_bind_${stamp}`
+      const goalID = `gol_build_session_bind_${stamp}`
+      let observedSessionID: string | null | undefined
+      const terminal = deferred<void>()
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "build session bind test" })
-        const current = Instance.current()
-        if (!current) throw new Error("Expected current instance while seeding build session bind task")
-        insertWorkflowTaskWithGoal({
-          projectID: current.project.id,
-          taskID,
-          goalID,
-          sessionID: parent.id,
-          worktree: tmp.path,
-          projectName: "Build session bind test",
-          taskTitle: "Build session bind task",
-          request: "Bind build session to goal_run while it is still running",
-          goalTitle: "Bind build session",
-          goalSlug: "bind-build-session",
-          objective: "Verify live goal_run attempts have a session_id before the build result returns",
-          now,
-          insertProject: false,
-        })
-        buildAgentRunImpl = async (input: any) => {
-          expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
-          await markBuildSlotAcquired(input, "ses_build_session_bind")
-          expect(goalStatusByID(goalID)).toBe("running")
-          observedSessionID = listGoalRunsByGoal(goalID)[0]?.session_id
-          await terminal.promise
-          return {
-            result: {
-              status: "passed",
-              summary: "Build completed after early session binding.",
-              files_changed: [
-                {
-                  path: "src/index.ts",
-                  summary: "Confirmed session binding contract.",
-                  reason: "The build milestone must be traceable while it is running.",
-                },
-              ],
-              tests: [],
-              commit_ref: "abc1234",
-            },
-            sessionID: "ses_build_session_bind",
-            worktreeDir: input.managedWorktree.directory,
-            worktreeBranch: input.managedWorktree.branch,
-            worktreeBaseRef: input.managedWorktree.baseRef,
-          }
-        }
-
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
-
-        const result = await tools.build.execute(
-          {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "build session bind test" })
+          const current = Instance.current()
+          if (!current) throw new Error("Expected current instance while seeding build session bind task")
+          insertWorkflowTaskWithGoal({
+            projectID: current.project.id,
+            taskID,
             goalID,
-            request: "Implement the goal",
-            reason: "Per-goal pipeline execution.",
-          },
-          buildToolOptions(),
-        )
-
-        expect(toolText(result)).toContain("Build agent started (status=running")
-        expect(toolText(result)).toContain("goal_run")
-        expect(observedSessionID).toBe("ses_build_session_bind")
-        expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe("ses_build_session_bind")
-        expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("running")
-
-        terminal.resolve()
-        await waitForCondition("background goal build finalization", () => listGoalRunsByGoal(goalID)[0]?.status === "completed")
-        expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe("ses_build_session_bind")
-      },
-    })
-  }, { timeout: 15_000 })
-
-  test("goal build background finalize failure does not leave a live goal_run", async () => {
-    await tmp?.[Symbol.asyncDispose]?.()
-    tmp = await tmpdir({ git: true })
-
-    const now = Date.now()
-    const stamp = now.toString(16)
-    const taskID = `tsk_goal_finalize_failure_${stamp}`
-    const goalID = `gol_finalize_failure_${stamp}`
-    const terminal = deferred<void>()
-    const finalize = spyOn(EnginePersist, "finalizeBuildAttempt").mockImplementationOnce(() => {
-      throw new Error("simulated terminal persistence failure")
-    })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({ kind: "root", title: "goal finalize failure test" })
-        const current = Instance.current()
-        if (!current) throw new Error("Expected current instance while seeding goal finalize failure task")
-        insertWorkflowTaskWithGoal({
-          projectID: current.project.id,
-          taskID,
-          goalID,
-          sessionID: parent.id,
-          worktree: tmp.path,
-          projectName: "Goal finalize failure test",
-          taskTitle: "Goal finalize failure task",
-          request: "Do not leave live goal_run when finalize persistence fails",
-          goalTitle: "Finalize failure guard",
-          goalSlug: "finalize-failure-guard",
-          objective: "Verify background finalization failure reaches terminal failed state",
-          now,
-          insertProject: false,
-        })
-        buildAgentRunImpl = async (input: any) => {
-          await markBuildSlotAcquired(input, "ses_goal_finalize_failure")
-          await terminal.promise
-          return {
-            result: {
-              status: "passed",
-              summary: "Build completed but persistence will fail.",
-              files_changed: [
-                {
-                  path: "src/index.ts",
-                  summary: "Changed implementation.",
-                  reason: "The test needs a normal passed build result before finalization fails.",
-                },
-              ],
-              tests: [],
-              commit_ref: "abc1234",
-            },
-            sessionID: "ses_goal_finalize_failure",
-            worktreeDir: input.managedWorktree.directory,
-            worktreeBranch: input.managedWorktree.branch,
-            worktreeBaseRef: input.managedWorktree.baseRef,
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: "Build session bind test",
+            taskTitle: "Build session bind task",
+            request: "Bind build session to goal_run while it is still running",
+            goalTitle: "Bind build session",
+            goalSlug: "bind-build-session",
+            objective: "Verify live goal_run attempts have a session_id before the build result returns",
+            now,
+            insertProject: false,
+          })
+          buildAgentRunImpl = async (input: any) => {
+            expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
+            await markBuildSlotAcquired(input, "ses_build_session_bind")
+            expect(goalStatusByID(goalID)).toBe("running")
+            observedSessionID = listGoalRunsByGoal(goalID)[0]?.session_id
+            await terminal.promise
+            return {
+              result: {
+                status: "passed",
+                summary: "Build completed after early session binding.",
+                files_changed: [
+                  {
+                    path: "src/index.ts",
+                    summary: "Confirmed session binding contract.",
+                    reason: "The build milestone must be traceable while it is running.",
+                  },
+                ],
+                tests: [],
+                commit_ref: "abc1234",
+              },
+              sessionID: "ses_build_session_bind",
+              worktreeDir: input.managedWorktree.directory,
+              worktreeBranch: input.managedWorktree.branch,
+              worktreeBaseRef: input.managedWorktree.baseRef,
+            }
           }
-        }
 
-        const { tools } = createOrchestratorTools({
-          taskID,
-          agentSessionID: parent.id,
-          signal: new AbortController().signal,
-        })
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
 
-        const result = await tools.build.execute(
-          {
+          const result = await tools.build.execute(
+            {
+              goalID,
+              request: "Implement the goal",
+              reason: "Per-goal pipeline execution.",
+            },
+            buildToolOptions(),
+          )
+
+          expect(toolText(result)).toContain("Build agent started (status=running")
+          expect(toolText(result)).toContain("goal_run")
+          expect(observedSessionID).toBe("ses_build_session_bind")
+          expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe("ses_build_session_bind")
+          expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("running")
+
+          terminal.resolve()
+          await waitForCondition(
+            "background goal build finalization",
+            () => listGoalRunsByGoal(goalID)[0]?.status === "completed",
+          )
+          expect(listGoalRunsByGoal(goalID)[0]?.session_id).toBe("ses_build_session_bind")
+        },
+      })
+    },
+    { timeout: 15_000 },
+  )
+
+  test(
+    "goal build background finalize failure does not leave a live goal_run",
+    async () => {
+      await tmp?.[Symbol.asyncDispose]?.()
+      tmp = await tmpdir({ git: true })
+
+      const now = Date.now()
+      const stamp = now.toString(16)
+      const taskID = `tsk_goal_finalize_failure_${stamp}`
+      const goalID = `gol_finalize_failure_${stamp}`
+      const terminal = deferred<void>()
+      const finalize = spyOn(EnginePersist, "finalizeBuildAttempt").mockImplementationOnce(() => {
+        throw new Error("simulated terminal persistence failure")
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({ kind: "root", title: "goal finalize failure test" })
+          const current = Instance.current()
+          if (!current) throw new Error("Expected current instance while seeding goal finalize failure task")
+          insertWorkflowTaskWithGoal({
+            projectID: current.project.id,
+            taskID,
             goalID,
-            request: "Implement the goal",
-            reason: "Per-goal pipeline execution.",
-          },
-          buildToolOptions(),
-        )
+            sessionID: parent.id,
+            worktree: tmp.path,
+            projectName: "Goal finalize failure test",
+            taskTitle: "Goal finalize failure task",
+            request: "Do not leave live goal_run when finalize persistence fails",
+            goalTitle: "Finalize failure guard",
+            goalSlug: "finalize-failure-guard",
+            objective: "Verify background finalization failure reaches terminal failed state",
+            now,
+            insertProject: false,
+          })
+          buildAgentRunImpl = async (input: any) => {
+            await markBuildSlotAcquired(input, "ses_goal_finalize_failure")
+            await terminal.promise
+            return {
+              result: {
+                status: "passed",
+                summary: "Build completed but persistence will fail.",
+                files_changed: [
+                  {
+                    path: "src/index.ts",
+                    summary: "Changed implementation.",
+                    reason: "The test needs a normal passed build result before finalization fails.",
+                  },
+                ],
+                tests: [],
+                commit_ref: "abc1234",
+              },
+              sessionID: "ses_goal_finalize_failure",
+              worktreeDir: input.managedWorktree.directory,
+              worktreeBranch: input.managedWorktree.branch,
+              worktreeBaseRef: input.managedWorktree.baseRef,
+            }
+          }
 
-        expect(toolText(result)).toContain("Build agent started (status=running")
-        expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("running")
+          const { tools } = createOrchestratorTools({
+            taskID,
+            agentSessionID: parent.id,
+            signal: new AbortController().signal,
+          })
 
-        terminal.resolve()
-        await waitForCondition(
-          "background goal build finalization failure",
-          () => listGoalRunsByGoal(goalID)[0]?.status === "failed",
-        )
-        const run = listGoalRunsByGoal(goalID)[0]
-        expect(run?.error).toContain("build finalization failed: simulated terminal persistence failure")
-        expect(finalize).toHaveBeenCalledTimes(1)
-      },
-    })
-  }, { timeout: 15_000 })
+          const result = await tools.build.execute(
+            {
+              goalID,
+              request: "Implement the goal",
+              reason: "Per-goal pipeline execution.",
+            },
+            buildToolOptions(),
+          )
+
+          expect(toolText(result)).toContain("Build agent started (status=running")
+          expect(listGoalRunsByGoal(goalID)[0]?.status).toBe("running")
+
+          terminal.resolve()
+          await waitForCondition(
+            "background goal build finalization failure",
+            () => listGoalRunsByGoal(goalID)[0]?.status === "failed",
+          )
+          const run = listGoalRunsByGoal(goalID)[0]
+          expect(run?.error).toContain("build finalization failed: simulated terminal persistence failure")
+          expect(finalize).toHaveBeenCalledTimes(1)
+        },
+      })
+    },
+    { timeout: 15_000 },
+  )
 
   test("goal build rejects duplicate dispatch while a live goal_run exists", async () => {
     await tmp?.[Symbol.asyncDispose]?.()

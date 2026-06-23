@@ -462,7 +462,7 @@ test(
         await page.$eval(selector, (node) => {
           const rect = (node as HTMLElement).getBoundingClientRect()
           const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-          return target instanceof Element ? target.closest<HTMLElement>("[data-ui]")?.dataset.ui ?? "" : ""
+          return target instanceof Element ? (target.closest<HTMLElement>("[data-ui]")?.dataset.ui ?? "") : ""
         })
 
       const activeState = async () =>
@@ -966,7 +966,9 @@ test(
       )
       assert.ok(illegalNarrowToolbarLayout.toolbarWidth <= 48, JSON.stringify(illegalNarrowToolbarLayout))
       assert.deepEqual(illegalNarrowToolbarLayout.clippedButtons, [], JSON.stringify(illegalNarrowToolbarLayout))
-      const illegalNarrowToolbarScreenshotPath = resolve(".scratch/side-activity-toolbar-illegal-narrow-legal-frame.png")
+      const illegalNarrowToolbarScreenshotPath = resolve(
+        ".scratch/side-activity-toolbar-illegal-narrow-legal-frame.png",
+      )
       mkdirSync(dirname(illegalNarrowToolbarScreenshotPath), { recursive: true })
       writeFileSync(illegalNarrowToolbarScreenshotPath, await page.screenshot({ fullPage: true }))
       await page.evaluate(() => window.scrollTo({ left: 0, top: 0, behavior: "auto" }))
@@ -1110,10 +1112,14 @@ test(
           },
         }),
       )
-      await page.waitForFunction((selector) => {
-        const button = document.querySelector<HTMLButtonElement>(selector)
-        return !!button && !button.disabled
-      }, {}, missionDownloadSelector)
+      await page.waitForFunction(
+        (selector) => {
+          const button = document.querySelector<HTMLButtonElement>(selector)
+          return !!button && !button.disabled
+        },
+        {},
+        missionDownloadSelector,
+      )
 
       await page.hover(missionRowSelector)
       await clickButton(missionAbortSelector)
@@ -1243,10 +1249,7 @@ test(
       let projectionFocused = false
       for (let attempt = 0; attempt < 100; attempt += 1) {
         await page.keyboard.press("Tab")
-        projectionFocused = await page.$eval(
-          projectionSelector,
-          (node) => document.activeElement === node,
-        )
+        projectionFocused = await page.$eval(projectionSelector, (node) => document.activeElement === node)
         if (projectionFocused) break
       }
       assert.equal(projectionFocused, true)
@@ -1790,7 +1793,9 @@ test(
           (entry) => entry.method === "DELETE" && entry.path === "/coding/session/ses_right_sidebar_delete",
         ),
       )
-      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main')
+      await clickButton(
+        '[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main',
+      )
       await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
       const assistantCurrentState = await page.$eval(assistantRowSelector, (node) => {
         const row = node as HTMLElement
@@ -1841,7 +1846,9 @@ test(
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
       await page.waitForSelector('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
-      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main')
+      await clickButton(
+        '[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main',
+      )
       await waitForState(
         "assistant row should reselect assistant session",
         (state) => state.selectedSourceID === "ses_right_sidebar_assistant",
@@ -1919,7 +1926,9 @@ test(
           )?.dataset.active === "true",
       )
       await page.waitForSelector('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"]')
-      await clickButton('[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main')
+      await clickButton(
+        '[data-ui="coding-assistant-row"][data-session-id="ses_right_sidebar_assistant"] .coding-assistant-row-main',
+      )
       await page.waitForFunction(() => (window as any).boardStore?.selectedSource?.kind === "session")
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
       await page.waitForFunction(

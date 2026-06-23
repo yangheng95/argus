@@ -16,22 +16,22 @@ active-text spacing reset for current `TextPart` output.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | Do not delete CSS blindly; migrate live semantics to the current owner and test it. |
-| `2026-05-15-overlay-streaming-text-main-thread-plan.md` | Streaming text must keep the active tail raw and avoid markdown parsing during deltas. |
-| `2026-06-19-retire-overlay-orphan-css-residue.md` | Markdown renderer-emitted selectors can remain live; only orphan selectors should be retired. |
-| `2026-06-19-markdown-syntax-theme-contrast.md` | `markdown.css` remains the syntax/rendered markdown owner; do not disturb code/highlight classes. |
+| Source                                                  | Constraint carried forward                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                             | Do not delete CSS blindly; migrate live semantics to the current owner and test it.               |
+| `2026-05-15-overlay-streaming-text-main-thread-plan.md` | Streaming text must keep the active tail raw and avoid markdown parsing during deltas.            |
+| `2026-06-19-retire-overlay-orphan-css-residue.md`       | Markdown renderer-emitted selectors can remain live; only orphan selectors should be retired.     |
+| `2026-06-19-markdown-syntax-theme-contrast.md`          | `markdown.css` remains the syntax/rendered markdown owner; do not disturb code/highlight classes. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Producer | `TextPart.tsx` renders `.md-frozen-block` and `.md-active-text`; no `.md-active-block` owner exists. | Keep producer unchanged. |
-| Card CSS | `card.css` reset targeted `.card__goal-desc-text .md-active-block`. | Migrate the reset to `.md-active-text`. |
-| Inspector CSS | `inspector.css` goal/workflow prose reset targeted `.md-active-block`. | Migrate those reset selectors to `.md-active-text`. |
-| Markdown renderer | `markdown.ts` owns generated markdown/code/link classes. | Leave renderer-owned selectors unchanged. |
-| Tests | `streaming-text-render.test.ts` already covers active raw text behavior. | Extend it with a source/CSS contract that forbids `.md-active-block`. |
+| Surface           | Evidence                                                                                             | Decision                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Producer          | `TextPart.tsx` renders `.md-frozen-block` and `.md-active-text`; no `.md-active-block` owner exists. | Keep producer unchanged.                                              |
+| Card CSS          | `card.css` reset targeted `.card__goal-desc-text .md-active-block`.                                  | Migrate the reset to `.md-active-text`.                               |
+| Inspector CSS     | `inspector.css` goal/workflow prose reset targeted `.md-active-block`.                               | Migrate those reset selectors to `.md-active-text`.                   |
+| Markdown renderer | `markdown.ts` owns generated markdown/code/link classes.                                             | Leave renderer-owned selectors unchanged.                             |
+| Tests             | `streaming-text-render.test.ts` already covers active raw text behavior.                             | Extend it with a source/CSS contract that forbids `.md-active-block`. |
 
 ## Root Cause
 

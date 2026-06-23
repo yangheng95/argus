@@ -17,21 +17,21 @@ keyframe owner was dead while tokenized loop durations already existed in
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-19-provider-refresh-spinner-owner.md` | Spinner styling must bind to the live DOM owner instead of a retired selector. |
-| `2026-06-19-retire-card-status-badge-residue.md` | `.card__spinner` remains live for BrowserPreview, Architect, FrontendResearch, and Requirements loading states. |
-| `2026-06-18-notification-live-region-task-action.md` | `NotificationCenter` is the single shared notification component for toast and panel surfaces. |
-| `flat-redesign-motion-coverage.test.ts` | Motion durations must route through `--ui-duration-*` tokens. |
+| Source                                               | Relevant constraint                                                                                             |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `2026-06-19-provider-refresh-spinner-owner.md`       | Spinner styling must bind to the live DOM owner instead of a retired selector.                                  |
+| `2026-06-19-retire-card-status-badge-residue.md`     | `.card__spinner` remains live for BrowserPreview, Architect, FrontendResearch, and Requirements loading states. |
+| `2026-06-18-notification-live-region-task-action.md` | `NotificationCenter` is the single shared notification component for toast and panel surfaces.                  |
+| `flat-redesign-motion-coverage.test.ts`              | Motion durations must route through `--ui-duration-*` tokens.                                                   |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n -C 3 'card__spinner|@keyframes card-spin|app-notification__spinner' packages/overlay/src/styles/surfaces/card.css packages/overlay/src/styles/surfaces/notifications.css` | `.card__spinner` and `.app-notification__spinner` drew static rings; `@keyframes card-spin` had no caller. | Replace the dead keyframe with one shared live spin owner. |
-| `rg -n -C 2 '<span class="card__spinner"|<span class="app-notification__spinner"' packages/overlay/src/components -g '*.tsx'` | BrowserPreview, Architect, FrontendResearch, Requirements, and NotificationCenter render these classes. | Do not edit JSX call sites. |
-| `rg -n -C 3 'ui-duration-loop-agent-spin|ui-duration-loop-notification-spin|prefers-reduced-motion' packages/overlay/src/styles/tokens/design-language.css packages/overlay/src/styles/cascade/base.css` | Token source already declares agent and notification spin durations; base owns shared reduced-motion overrides. | Use those tokens and keep reduced-motion in the cascade layer. |
-| `bun test packages/overlay/test/flat-redesign-motion-coverage.test.ts ...` | The existing guard also exposed `task-row-children-pulse 1.4s ease-in-out infinite` in `sidebar.css`. | Treat it as the same motion-source bug and replace the literal pulse duration/timing with existing tokens. |
+| Command                                                                    | Result                                                                                                | Decision                                                                                                                           |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `rg -n -C 3 'card\_\_spinner                                               | @keyframes card-spin                                                                                  | app-notification\_\_spinner' packages/overlay/src/styles/surfaces/card.css packages/overlay/src/styles/surfaces/notifications.css` | `.card__spinner` and `.app-notification__spinner` drew static rings; `@keyframes card-spin` had no caller.      | Replace the dead keyframe with one shared live spin owner.     |
+| `rg -n -C 2 '<span class="card\_\_spinner"                                 | <span class="app-notification\_\_spinner"' packages/overlay/src/components -g '\*.tsx'`               | BrowserPreview, Architect, FrontendResearch, Requirements, and NotificationCenter render these classes.                            | Do not edit JSX call sites.                                                                                     |
+| `rg -n -C 3 'ui-duration-loop-agent-spin                                   | ui-duration-loop-notification-spin                                                                    | prefers-reduced-motion' packages/overlay/src/styles/tokens/design-language.css packages/overlay/src/styles/cascade/base.css`       | Token source already declares agent and notification spin durations; base owns shared reduced-motion overrides. | Use those tokens and keep reduced-motion in the cascade layer. |
+| `bun test packages/overlay/test/flat-redesign-motion-coverage.test.ts ...` | The existing guard also exposed `task-row-children-pulse 1.4s ease-in-out infinite` in `sidebar.css`. | Treat it as the same motion-source bug and replace the literal pulse duration/timing with existing tokens.                         |
 
 ## Fix
 

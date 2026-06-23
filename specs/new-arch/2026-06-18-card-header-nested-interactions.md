@@ -17,21 +17,21 @@ plans.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-ledger-row-nested-interactions.md` | Row containers must not be keyboard buttons when they contain sibling action buttons; the main row button owns selection. |
-| `2026-06-18-memory-row-nested-interactions.md` | Disclosure state belongs to a native main button; sibling actions must stay outside that button. |
-| `2026-06-17-card-header-action-rhythm.md` | `CardHeader` and `ChatBubble` share the same metadata/control action rail rhythm; do not introduce a second visual system. |
-| `12-overlay-card-system.md` | `CardHeader.tsx` is the single structured card header implementation for non-message cards. |
+| Source                                         | Relevant constraint                                                                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-ledger-row-nested-interactions.md` | Row containers must not be keyboard buttons when they contain sibling action buttons; the main row button owns selection.  |
+| `2026-06-18-memory-row-nested-interactions.md` | Disclosure state belongs to a native main button; sibling actions must stay outside that button.                           |
+| `2026-06-17-card-header-action-rhythm.md`      | `CardHeader` and `ChatBubble` share the same metadata/control action rail rhythm; do not introduce a second visual system. |
+| `12-overlay-card-system.md`                    | `CardHeader.tsx` is the single structured card header implementation for non-message cards.                                |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -e "card__head" -e "chat-bubble__head" -e "card__actions" -e "chat-bubble__actions" packages/overlay/src packages/overlay/test specs/new-arch specs` | `CardHeader.tsx` and `ChatBubble.tsx` are the live creation points. `card.css` and `chat-bubble.css` own the visual contract. Static visual HTML contains old sample markup. | Fix the two live components and CSS first. Keep visual fixture updates scoped if tests require them. |
-| `rg -n -e "CardHeader" -e "ChatBubble" packages/overlay/test packages/overlay/src specs/new-arch specs` | `chat-bubble.test.ts`, `card-header-chrome.test.ts`, and `card-expand-collapse-contract.test.ts` pin the header source contract. | Turn old role/tabindex expectations into guards and pin the new native disclosure button. |
-| `packages/overlay/src/styles/surfaces/card.css` | Hover/focus styling is attached to `.card__head[role="button"]` and `.card__head[tabindex]`. | Move hover/focus affordances to `.card__head-main` while keeping the existing header spacing and action rail. |
-| `packages/overlay/src/styles/surfaces/chat-bubble.css` | Bubble header owns column layout and right/user alignment. | Add `.chat-bubble__head-main` as the native disclosure control without changing the action rail grouping. |
+| Sweep                                                                                                                                                       | Result                                                                                                                                                                       | Decision                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `rg -n -e "card__head" -e "chat-bubble__head" -e "card__actions" -e "chat-bubble__actions" packages/overlay/src packages/overlay/test specs/new-arch specs` | `CardHeader.tsx` and `ChatBubble.tsx` are the live creation points. `card.css` and `chat-bubble.css` own the visual contract. Static visual HTML contains old sample markup. | Fix the two live components and CSS first. Keep visual fixture updates scoped if tests require them.          |
+| `rg -n -e "CardHeader" -e "ChatBubble" packages/overlay/test packages/overlay/src specs/new-arch specs`                                                     | `chat-bubble.test.ts`, `card-header-chrome.test.ts`, and `card-expand-collapse-contract.test.ts` pin the header source contract.                                             | Turn old role/tabindex expectations into guards and pin the new native disclosure button.                     |
+| `packages/overlay/src/styles/surfaces/card.css`                                                                                                             | Hover/focus styling is attached to `.card__head[role="button"]` and `.card__head[tabindex]`.                                                                                 | Move hover/focus affordances to `.card__head-main` while keeping the existing header spacing and action rail. |
+| `packages/overlay/src/styles/surfaces/chat-bubble.css`                                                                                                      | Bubble header owns column layout and right/user alignment.                                                                                                                   | Add `.chat-bubble__head-main` as the native disclosure control without changing the action rail grouping.     |
 
 ## Fix Plan
 

@@ -19,19 +19,19 @@ correct, and can push future fixes toward duplicated caller-owned class logic.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-17-prompt-profile-selector-select-primitive.md` | Expert Squad must use Kobalte Select rather than native select plus hidden chrome. |
-| `2026-06-17-expert-squad-select-readability-impact.md` | Shared `.oc-select-*` popup styling is the single Select readability source. |
-| `2026-06-18-select-popup-readability-impact-review.md` | Do not add component-local foreground/background overrides to `.prompt-profile-select-*`. |
-| `2026-06-18-popup-contrast-light-palette.md` | Select and non-Select popup contrast are guarded by browser matrices. |
+| Source                                                   | Relevant decision                                                                         |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `2026-06-17-prompt-profile-selector-select-primitive.md` | Expert Squad must use Kobalte Select rather than native select plus hidden chrome.        |
+| `2026-06-17-expert-squad-select-readability-impact.md`   | Shared `.oc-select-*` popup styling is the single Select readability source.              |
+| `2026-06-18-select-popup-readability-impact-review.md`   | Do not add component-local foreground/background overrides to `.prompt-profile-select-*`. |
+| `2026-06-18-popup-contrast-light-palette.md`             | Select and non-Select popup contrast are guarded by browser matrices.                     |
 
 ## Evidence
 
-| Check | Result | Decision |
-| --- | --- | --- |
-| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/prompt-profile-selector-browser.test.ts` | Passes and saves `.scratch/prompt-profile-selector-current.png`; unselected Expert Squad options are readable. | Do not change production Expert Squad CSS. |
-| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/select-popup-contrast-matrix.test.ts` | Passes and saves `.scratch/select-popup-contrast-matrix.png`; every Select consumer includes unselected option coverage. | Keep the matrix as the visual source. |
+| Check                                                                                                                                                                                      | Result                                                                                                                                           | Decision                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/prompt-profile-selector-browser.test.ts`                                                                      | Passes and saves `.scratch/prompt-profile-selector-current.png`; unselected Expert Squad options are readable.                                   | Do not change production Expert Squad CSS.                                        |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/select-popup-contrast-matrix.test.ts`                                                                         | Passes and saves `.scratch/select-popup-contrast-matrix.png`; every Select consumer includes unselected option coverage.                         | Keep the matrix as the visual source.                                             |
 | `bun test packages/overlay/test/theme-form-control-coverage.test.ts packages/overlay/test/select-control-single-source.test.ts packages/overlay/test/popup-contrast-matrix-source.test.ts` | Fails only on stale static expectations that callers contain composed `oc-select-*` class strings or that `SelectControl` itself is a violation. | Update the static guard to inspect the single source and caller props separately. |
 
 ## Fix Plan

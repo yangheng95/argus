@@ -13,19 +13,19 @@ and bypasses the theme token source used by the rest of the overlay.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | UI colors must not drift into parallel raw-color systems. |
-| `flat-redesign-color-literal-coverage.test.ts` | Surface and primitive CSS already reject raw color literals outside theme token files. |
-| `dev-error.ts` header comment | The overlay is dev-only and lazily injected; the fix should keep the existing DOM/dedup behavior unchanged. |
+| Source                                         | Relevant constraint                                                                                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                    | UI colors must not drift into parallel raw-color systems.                                                   |
+| `flat-redesign-color-literal-coverage.test.ts` | Surface and primitive CSS already reject raw color literals outside theme token files.                      |
+| `dev-error.ts` header comment                  | The overlay is dev-only and lazily injected; the fix should keep the existing DOM/dedup behavior unchanged. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "devWarn\\(|devError\\(|DEV_ERROR_CSS|dev-error" packages/overlay/src packages/overlay/test specs/new-arch` | `DEV_ERROR_CSS` is the only style owner for the dev overlay; callers use `devWarn` / `devError` and do not style it. | Fix the single style owner; do not add a second stylesheet. |
-| `rg -n "#[0-9a-fA-F]{3,8}|rgba?\\(|hsla?\\(" packages/overlay/src/utils/dev-error.ts packages/overlay/test -g "*.ts"` | Raw colors are isolated to `DEV_ERROR_CSS`; brand-icon and browser-fixture literals are separate accepted surfaces. | Add a focused source guard for the injected CSS string. |
-| `rg -n -- "--bad|--bad-dim|--warn|--warn-dim|--info|--text|--text-strong|--text-muted|--menu-panel-bg|--divider-soft|--shadow" packages/overlay/src/styles -g "*.css"` | Existing cascade tokens cover every dev overlay semantic color. | Reuse existing tokens; do not create `--dev-error-*` aliases. |
+| Sweep                     | Result      | Decision                                                                            |
+| ------------------------- | ----------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------- | ------------ | --------------- | -------------- | -------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| `rg -n "devWarn\\(        | devError\\( | DEV_ERROR_CSS                                                                       | dev-error" packages/overlay/src packages/overlay/test specs/new-arch`                                               | `DEV_ERROR_CSS` is the only style owner for the dev overlay; callers use `devWarn` / `devError` and do not style it. | Fix the single style owner; do not add a second stylesheet. |
+| `rg -n "#[0-9a-fA-F]{3,8} | rgba?\\(    | hsla?\\(" packages/overlay/src/utils/dev-error.ts packages/overlay/test -g "\*.ts"` | Raw colors are isolated to `DEV_ERROR_CSS`; brand-icon and browser-fixture literals are separate accepted surfaces. | Add a focused source guard for the injected CSS string.                                                              |
+| `rg -n -- "--bad          | --bad-dim   | --warn                                                                              | --warn-dim                                                                                                          | --info                                                                                                               | --text                                                      | --text-strong | --text-muted | --menu-panel-bg | --divider-soft | --shadow" packages/overlay/src/styles -g "\*.css"` | Existing cascade tokens cover every dev overlay semantic color. | Reuse existing tokens; do not create `--dev-error-*` aliases. |
 
 ## Fix Plan
 

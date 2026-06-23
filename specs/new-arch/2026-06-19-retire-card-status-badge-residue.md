@@ -9,13 +9,13 @@ fixtures. The live `CardHeader` no longer renders `statusBadge` or
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `packages/overlay/src/components/CardHeader.tsx` | Renders `.card__icon`, title/meta text, duration, and `CardHeaderChrome`; no status badge. |
-| `packages/overlay/test/card-header-chrome.test.ts` | Already rejects `statusBadge` and `class="card__badge"` in `CardHeader`. |
-| `packages/overlay/src/utils/status-badge.ts` | No production import; only tests import it. |
-| `packages/overlay/src/styles/surfaces/card.css` | Still defines `.card__badge` and tone selectors, creating orphan chrome. |
-| `rg -n "card__badge|statusBadge|status-badge" packages/overlay/src packages/overlay/test` | Live hits are stale CSS, a dead helper/test, static fixtures, and negative tests. |
+| Source                                             | Constraint                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/CardHeader.tsx`   | Renders `.card__icon`, title/meta text, duration, and `CardHeaderChrome`; no status badge. |
+| `packages/overlay/test/card-header-chrome.test.ts` | Already rejects `statusBadge` and `class="card__badge"` in `CardHeader`.                   |
+| `packages/overlay/src/utils/status-badge.ts`       | No production import; only tests import it.                                                |
+| `packages/overlay/src/styles/surfaces/card.css`    | Still defines `.card__badge` and tone selectors, creating orphan chrome.                   |
+| `rg -n "card\_\_badge                              | statusBadge                                                                                | status-badge" packages/overlay/src packages/overlay/test` | Live hits are stale CSS, a dead helper/test, static fixtures, and negative tests. |
 
 ## Fix
 

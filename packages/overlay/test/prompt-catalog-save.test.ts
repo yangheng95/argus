@@ -71,8 +71,10 @@ describe("prompt catalog save values", () => {
     expect(source).toContain('data-active={selectedProfileID() === profile.id ? "true" : "false"}')
     expect(source).toContain('aria-current={selectedProfileID() === profile.id ? "true" : undefined}')
     expect(source).not.toContain('class="prompt-profile-list-item"')
-    expect(source).not.toContain('aria-selected={selectedProfileID() === profile.id')
-    expect(source).not.toContain('aria-pressed={selectedProfileID() === profile.id')
-    expect(source).not.toContain('class="composer-textarea prompt-profile-textarea"\n                                  aria-label=')
+    expect(source).not.toContain("aria-selected={selectedProfileID() === profile.id")
+    expect(source).not.toContain("aria-pressed={selectedProfileID() === profile.id")
+    expect(source).not.toContain(
+      'class="composer-textarea prompt-profile-textarea"\n                                  aria-label=',
+    )
   })
 })

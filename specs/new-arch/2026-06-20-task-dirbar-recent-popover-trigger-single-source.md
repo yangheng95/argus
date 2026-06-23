@@ -7,12 +7,12 @@ Document Object Model. ARIA means Accessible Rich Internet Applications.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | Mature UI primitives must own interaction semantics; frontend fixes require real browser screenshots. |
-| `2026-06-19-task-dirbar-recent-popover-semantics.md` | The CWD recent surface is a Kobalte Popover dialog anchored to the CWD shell. |
-| `2026-06-20-kobalte-trigger-open-state-single-source.md` | Kobalte triggers emit `aria-expanded` and `data-expanded`; caller-owned open-state mirrors are a second visual source. |
-| `ExecutorSelector.tsx` | Existing project pattern uses `Popover.Trigger as={Button}` inside an anchor shell while `anchorRef` still points at the shell. |
+| Source                                                   | Relevant constraint                                                                                                             |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | Mature UI primitives must own interaction semantics; frontend fixes require real browser screenshots.                           |
+| `2026-06-19-task-dirbar-recent-popover-semantics.md`     | The CWD recent surface is a Kobalte Popover dialog anchored to the CWD shell.                                                   |
+| `2026-06-20-kobalte-trigger-open-state-single-source.md` | Kobalte triggers emit `aria-expanded` and `data-expanded`; caller-owned open-state mirrors are a second visual source.          |
+| `ExecutorSelector.tsx`                                   | Existing project pattern uses `Popover.Trigger as={Button}` inside an anchor shell while `anchorRef` still points at the shell. |
 
 ## Problem
 
@@ -32,11 +32,11 @@ tests protecting the obsolete shape.
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "cwd-recent-trigger|task-cwd-dropdown|Popover\\.Trigger|data-open|data-expanded|aria-expanded" packages/overlay/src/components/TaskDirBar.tsx packages/overlay/src/styles/surfaces/conversation.css packages/overlay/test/task-cwd-row-layout.test.ts packages/overlay/test/browser/task-dirbar-keyboard.test.ts specs/new-arch -S` | The remaining recent-trigger mirror is isolated to `TaskDirBar`, `conversation.css`, and its tests. | Fix only this surface. |
-| `rg -n "<Popover\\.Trigger" packages/overlay/src packages/overlay/test specs/new-arch -S` | `ExecutorSelector` and Titlebar Brand Guide already use Kobalte Popover triggers. | Reuse `Popover.Trigger as={Button}` for the recent trigger. |
-| Browser test review | `task-dirbar-keyboard.test.ts` opens the real panel, checks dialog semantics and screenshots the panel, but still expects shell `data-open`. | Update it to require trigger `data-expanded` and reject local `data-open`. |
+| Sweep                                                                                     | Result                                                                                                                                       | Decision                                                                   |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | --------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
+| `rg -n "cwd-recent-trigger                                                                | task-cwd-dropdown                                                                                                                            | Popover\\.Trigger                                                          | data-open | data-expanded | aria-expanded" packages/overlay/src/components/TaskDirBar.tsx packages/overlay/src/styles/surfaces/conversation.css packages/overlay/test/task-cwd-row-layout.test.ts packages/overlay/test/browser/task-dirbar-keyboard.test.ts specs/new-arch -S` | The remaining recent-trigger mirror is isolated to `TaskDirBar`, `conversation.css`, and its tests. | Fix only this surface. |
+| `rg -n "<Popover\\.Trigger" packages/overlay/src packages/overlay/test specs/new-arch -S` | `ExecutorSelector` and Titlebar Brand Guide already use Kobalte Popover triggers.                                                            | Reuse `Popover.Trigger as={Button}` for the recent trigger.                |
+| Browser test review                                                                       | `task-dirbar-keyboard.test.ts` opens the real panel, checks dialog semantics and screenshots the panel, but still expects shell `data-open`. | Update it to require trigger `data-expanded` and reject local `data-open`. |
 
 ## Fix Plan
 

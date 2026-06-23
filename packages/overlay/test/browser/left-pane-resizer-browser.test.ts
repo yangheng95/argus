@@ -180,7 +180,8 @@ async function installPaneDragProbe(page: OverlayPage) {
       },
       summary(): PaneDragProbeSummary {
         const total = (bucket: Record<string, number>) => Object.values(bucket).reduce((sum, value) => sum + value, 0)
-        const frames = (bucket: Record<string, number>) => Object.keys(bucket).filter((key) => (bucket[key] ?? 0) > 0).length
+        const frames = (bucket: Record<string, number>) =>
+          Object.keys(bucket).filter((key) => (bucket[key] ?? 0) > 0).length
         const styleWriteFrames = new Set<number>()
         const uiScaleWriteFrames = new Set<number>()
         const styleSeenByFrame = new Set<number>()
@@ -242,7 +243,11 @@ async function installPaneDragProbe(page: OverlayPage) {
     }
 
     const setPropertyOriginal = CSSStyleDeclaration.prototype.setProperty
-    CSSStyleDeclaration.prototype.setProperty = function (propertyName: string, value?: string | null, priority?: string) {
+    CSSStyleDeclaration.prototype.setProperty = function (
+      propertyName: string,
+      value?: string | null,
+      priority?: string,
+    ) {
       if (propertyName === "--ui-scale" || propertyName === "--ui-sidebar-width") {
         probe.record("pane-style-write", probe.styleWritesByFrame, { name: propertyName })
       }
@@ -614,7 +619,8 @@ test(
       const illegalNarrow = await waitForLeftPaneState(
         page,
         "illegal narrow viewport keeps the legal desktop left pane separator",
-        (state) => state.display === "block" && state.disabled === "false" && state.tabIndex === 0 && state.now !== null,
+        (state) =>
+          state.display === "block" && state.disabled === "false" && state.tabIndex === 0 && state.now !== null,
       )
       await waitForAnimationFrames(page, 3)
       const illegalNarrowResize = await paneDragProbeSummary(page)

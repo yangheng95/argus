@@ -145,7 +145,8 @@ result: concern until verified</pre>
         manifest: sample(".integrity__manifest-meta span"),
         badge: sample('.oc-badge[data-ui="integrity-issue-tag"]'),
         retiredBadgePresent:
-          document.querySelector(".integrity__reviewer-chip") !== null || document.querySelector(".integrity__tag") !== null,
+          document.querySelector(".integrity__reviewer-chip") !== null ||
+          document.querySelector(".integrity__tag") !== null,
       }
     })
 

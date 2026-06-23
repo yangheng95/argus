@@ -12,18 +12,18 @@ expose an equivalent current-location state to assistive technologies.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
+| Source                                               | Relevant decision                                                                                                                               |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `2026-06-18-task-dirbar-recent-trigger-semantics.md` | `pathBreadcrumb()` is the single source for native breadcrumb buttons; it must not be converted into menu markup or duplicated in `TaskDirBar`. |
-| `2026-06-18-task-dirbar-current-location-aria.md` | Current directory commands use `aria-current="location"` and must not use `aria-selected` or `aria-pressed`. |
-| `2026-06-18-file-explorer-row-button-semantics.md` | Visual current state on a command button must be mirrored onto the same focusable control. |
+| `2026-06-18-task-dirbar-current-location-aria.md`    | Current directory commands use `aria-current="location"` and must not use `aria-selected` or `aria-pressed`.                                    |
+| `2026-06-18-file-explorer-row-button-semantics.md`   | Visual current state on a command button must be mirrored onto the same focusable control.                                                      |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'pathBreadcrumb\(|task-dir-node|data-current|aria-current|aria-selected|aria-pressed' packages/overlay/src packages/overlay/test specs/new-arch` | `dom-utils.ts::pathBreadcrumb()` was the only runtime source for `.task-dir-node[data-current="true"]`; no existing breadcrumb test asserted current ARIA. | Fix `pathBreadcrumb()` and add direct unit coverage. |
-| `packages/overlay/src/styles/surfaces/conversation.css` | `.task-dir-node[data-current="true"]` owns the visible current segment styling. | Preserve the visual hook and add semantics beside it. |
+| Sweep                                                        | Result                                                                                      | Decision                                                 |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------ | ------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `rg -n 'pathBreadcrumb\(                                     | task-dir-node                                                                               | data-current                                             | aria-current | aria-selected | aria-pressed' packages/overlay/src packages/overlay/test specs/new-arch` | `dom-utils.ts::pathBreadcrumb()` was the only runtime source for `.task-dir-node[data-current="true"]`; no existing breadcrumb test asserted current ARIA. | Fix `pathBreadcrumb()` and add direct unit coverage. |
+| `packages/overlay/src/styles/surfaces/conversation.css`      | `.task-dir-node[data-current="true"]` owns the visible current segment styling.             | Preserve the visual hook and add semantics beside it.    |
 | `packages/overlay/test/browser/task-dirbar-keyboard.test.ts` | The real browser flow already renders the cwd breadcrumb and saves a TaskDirBar screenshot. | Extend it to verify the live current breadcrumb segment. |
 
 ## Fix

@@ -400,10 +400,7 @@ describe("research brief persistence and describe projection", () => {
           expect(buildPrompt).toContain(secondEvidenceRef)
 
           const desc = await describeTask(taskID)
-          expect(desc.frontend_research?.map((item) => item.artifact_id)).toEqual([
-            secondArtifactID,
-            firstArtifactID,
-          ])
+          expect(desc.frontend_research?.map((item) => item.artifact_id)).toEqual([secondArtifactID, firstArtifactID])
           expect(desc.frontend_research?.map((item) => item.source_urls)).toEqual([
             ["https://example.com/second"],
             ["https://example.com/first"],
@@ -594,10 +591,7 @@ describe("research brief persistence and describe projection", () => {
           const frontendEvidenceRef = `frontend_research:${frontendArtifactID}:ev_1`
           const deepEvidenceRef = `deep_research:${deepArtifactID}:ev_1`
 
-          expect(allResearchEvidenceRefsForTask({ taskID, request })).toEqual([
-            deepEvidenceRef,
-            frontendEvidenceRef,
-          ])
+          expect(allResearchEvidenceRefsForTask({ taskID, request })).toEqual([deepEvidenceRef, frontendEvidenceRef])
 
           const deepPrompt = renderResearchBriefPromptSection({ taskID, request })
           const frontendPrompt = renderFrontendResearchBriefPromptSection({ taskID, request })
@@ -612,9 +606,7 @@ describe("research brief persistence and describe projection", () => {
   )
 
   test("research prompt section exposes only list-based non-stale brief helpers", async () => {
-    const source = await Bun.file(
-      new URL("../../src/research/prompt-section.ts", import.meta.url),
-    ).text()
+    const source = await Bun.file(new URL("../../src/research/prompt-section.ts", import.meta.url)).text()
     expect(source).not.toContain("export function findNonStaleResearchBrief(")
     expect(source).not.toContain("export function findNonStaleFrontendResearchBrief(")
     expect(source).toContain("export function findNonStaleResearchBriefs(")

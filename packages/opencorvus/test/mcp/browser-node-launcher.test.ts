@@ -79,7 +79,9 @@ describe("browser MCP node launcher", () => {
     const source = readFileSync(path.resolve(import.meta.dir, "../../src/mcp/browser/node-launcher.ts"), "utf8")
     expect(source).toContain('.catch((error) => logLauncherError("SIGINT terminate failed", error))')
     expect(source).toContain('.catch((error) => logLauncherError("SIGTERM terminate failed", error))')
-    expect(source).toContain('void terminate("SIGTERM").catch((error) => logLauncherError("stdin close terminate failed", error))')
+    expect(source).toContain(
+      'void terminate("SIGTERM").catch((error) => logLauncherError("stdin close terminate failed", error))',
+    )
     expect(source).toContain('logLauncherError("process group force kill fallback failed", error)')
   })
 })

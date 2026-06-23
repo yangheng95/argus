@@ -50,7 +50,9 @@ describe("Integrity panel token source", () => {
     expect(detail).toContain("background: color-mix(in srgb, var(--surface-inset) 88%, transparent)")
 
     const reviewer = extractRule(inspectorCss, ".integrity__reviewer")
-    expect(reviewer).toContain("border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent)")
+    expect(reviewer).toContain(
+      "border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent)",
+    )
     expect(reviewer).toContain("border-radius: var(--oc-radius-soft)")
 
     const manifestMeta = extractRule(inspectorCss, ".integrity__manifest-meta span")

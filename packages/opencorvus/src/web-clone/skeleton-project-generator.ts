@@ -485,12 +485,6 @@ async function copyReferenceImage(sourcePackageDir: string, outputDir: string): 
   } catch {
     // The generator can still emit a skeleton; audits will report missing visual truth.
   }
-  try {
-    await fs.copyFile(path.join(sourcePackageDir, "reference-mobile.png"), path.join(outputDir, "reference-mobile.png"))
-    copied.push("reference-mobile.png")
-  } catch {
-    // The generator can still emit a skeleton; audits will report missing mobile visual truth.
-  }
   return copied
 }
 
@@ -538,7 +532,6 @@ function renderReadme(input: {
     "- Extracted styles: `src/generated/source-head-styles.html`",
     "- Fillable slots: `src/slots.json`",
     "- Visual truth: `reference.png`",
-    "- Mobile visual truth: `reference-mobile.png`",
     "",
     "Rules for downstream LLM work:",
     "- Do not present this raw extracted baseline as the final project.",

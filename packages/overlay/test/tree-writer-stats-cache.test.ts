@@ -382,10 +382,11 @@ test("screenshot file, browser evidence, and tool attachment items are cached an
   })
   flushBufferedPartDeltas()
   expectCacheMatchesWalk()
-  expect(cardTreeStore.cards[`assistant:session:${SID}:message:${MSG_ID_A}`]?.subtreeScreenshotItems?.map((item) => item.src)).toEqual([
-    "/attachment/project/file.png",
-    "/attachment/project/tool.webp",
-  ])
+  expect(
+    cardTreeStore.cards[`assistant:session:${SID}:message:${MSG_ID_A}`]?.subtreeScreenshotItems?.map(
+      (item) => item.src,
+    ),
+  ).toEqual(["/attachment/project/file.png", "/attachment/project/tool.webp"])
   expect(cardTreeStore.screenshotItems.map((item) => item.src)).toEqual([
     "/attachment/project/file.png",
     "/attachment/project/tool.webp",
@@ -598,7 +599,9 @@ test("top-level screenshot cache updates one dirty root without reading unrelate
           if (
             countUnrelatedReads &&
             rootID !== changedRootID &&
-            (property === "length" || property === Symbol.iterator || (typeof property === "string" && /^\d+$/.test(property)))
+            (property === "length" ||
+              property === Symbol.iterator ||
+              (typeof property === "string" && /^\d+$/.test(property)))
           ) {
             unrelatedArrayReads += 1
           }
@@ -684,7 +687,9 @@ test("top-level screenshot cache appends and removes roots without reading stabl
           if (
             countStableReads &&
             rootID !== "root-appended" &&
-            (property === "length" || property === Symbol.iterator || (typeof property === "string" && /^\d+$/.test(property)))
+            (property === "length" ||
+              property === Symbol.iterator ||
+              (typeof property === "string" && /^\d+$/.test(property)))
           ) {
             stableArrayReads += 1
           }
@@ -845,20 +850,12 @@ test("top-level screenshot cache preserves duplicate-owner and equal-time order 
     replaceCardTreeOrder(["duplicate_a", "duplicate_b", "equal_a", "equal_b"])
     flushCardStats()
 
-    expect(cardTreeStore.screenshotItems.map((entry) => entry.title)).toEqual([
-      "first owner",
-      "equal-a",
-      "equal-b",
-    ])
+    expect(cardTreeStore.screenshotItems.map((entry) => entry.title)).toEqual(["first owner", "equal-a", "equal-b"])
 
     replaceCardTreeOrder(["duplicate_b", "equal_b", "equal_a"])
     flushCardStats()
 
-    expect(cardTreeStore.screenshotItems.map((entry) => entry.title)).toEqual([
-      "second owner",
-      "equal-b",
-      "equal-a",
-    ])
+    expect(cardTreeStore.screenshotItems.map((entry) => entry.title)).toEqual(["second owner", "equal-b", "equal-a"])
   } finally {
     resetWriter()
   }

@@ -43,7 +43,7 @@ Override or extend in [config](/docs/config/) under `formatter`:
 
 ## When formatters run
 
-Formatters run **after** a successful `write` / `edit` / `apply_patch` tool call but **before** the change is persisted to the snapshot. Failures fall through with a warning — they do not block the agent.
+Formatters run **after** a successful `write` / `edit` / `apply_patch` tool call and before the step result is recorded. Failures fall through with a warning — they do not block the agent.
 
 ## Disabling all formatting
 

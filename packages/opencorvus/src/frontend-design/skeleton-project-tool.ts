@@ -50,7 +50,9 @@ export function createFrontendSkeletonProjectTool(
         const projectRoot = options.taskID
           ? taskPrimaryProjectRoot(options.taskID, { activeProjectID: Instance.project.id })
           : Instance.directory
-        const defaults = options.taskID ? ProjectRuntimePaths.frontendDesignPaths(projectRoot, options.taskID) : undefined
+        const defaults = options.taskID
+          ? ProjectRuntimePaths.frontendDesignPaths(projectRoot, options.taskID)
+          : undefined
         const sourcePackageDir = resolveProjectPath(
           params.sourcePackageDir ?? requireTaskRuntimeDefault(defaults?.sourcePackageAbsolute, "sourcePackageDir"),
           projectRoot,

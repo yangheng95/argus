@@ -19,29 +19,29 @@ toolbar/panel operations feel stuck.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate source, no blind patches, test every change, visually verify UI work, and commit/push every round. |
-| `2026-06-22-overlay-resize-frame-coalescing.md` | Resize work is already frame-coalesced; do not add debounce/gate paths. |
-| `2026-06-22-window-resize-center-layout-frame.md` | Center workbench layout has one RAF owner. |
-| `2026-06-22-pane-semantics-layout-frame.md` | Pane layout and ARIA semantics remain owned by `services/pane.ts`. |
-| Live 7878 visual evidence | `700x720` viewport shows titlebar wordmark/menu overlap and crowded project chrome. |
-| Archimedes read-only audit | `.titlebar-brand` is forced to `32px` at `max-width: 760px`, while `.brand-guide-copyblock` stays visible until `520px`. |
-| Zeno read-only audit | `900px` is below the generated `1120px` desktop layout boundary from `tauri.conf.json`; native overlay should reject that geometry instead of treating it as a valid full workbench. |
+| Source                                            | Constraint carried forward                                                                                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                       | No fallback logic, no duplicate source, no blind patches, test every change, visually verify UI work, and commit/push every round.                                                   |
+| `2026-06-22-overlay-resize-frame-coalescing.md`   | Resize work is already frame-coalesced; do not add debounce/gate paths.                                                                                                              |
+| `2026-06-22-window-resize-center-layout-frame.md` | Center workbench layout has one RAF owner.                                                                                                                                           |
+| `2026-06-22-pane-semantics-layout-frame.md`       | Pane layout and ARIA semantics remain owned by `services/pane.ts`.                                                                                                                   |
+| Live 7878 visual evidence                         | `700x720` viewport shows titlebar wordmark/menu overlap and crowded project chrome.                                                                                                  |
+| Archimedes read-only audit                        | `.titlebar-brand` is forced to `32px` at `max-width: 760px`, while `.brand-guide-copyblock` stays visible until `520px`.                                                             |
+| Zeno read-only audit                              | `900px` is below the generated `1120px` desktop layout boundary from `tauri.conf.json`; native overlay should reject that geometry instead of treating it as a valid full workbench. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Native window creation | `packages/overlay/src-tauri/tauri.conf.json` sets `width`, `height`, `minWidth`, and `minHeight`. | Raise native min dimensions to the desktop layout contract and keep the config as the creation-time source. |
-| Native startup sizing | `packages/overlay/src-tauri/src/main.rs` independently clamps startup size to `760..1600` and `480..920`. | Read the configured `main` window minimum from `tauri.conf.json` through `app.config()` and use a pure size-contract helper. |
-| Native resize | `main.rs` currently only handles `RunEvent::Exit`; Windows has a `WM_SIZING` pre-commit hook in the later aspect-frame follow-up. | Enforce native aspect before commit only where the OS/Tauri stack exposes a supported hook; do not add a post-resize `set_size()` feedback loop on other platforms. |
-| Browser shell sizing | `base.css` owns the body shell. | Add overlay minimum viewport dimensions so browser/dev fixtures cannot compress the workbench below the desktop contract. |
-| Layout tokens | `design-language.css` owns structural layout tokens. | Add overlay viewport and center workbench panel minimum tokens here. |
-| Pane layout | `services/pane.ts` uses hardcoded `120 * scale` and `300 * scale` floors while tokens already define `--ui-rail-min-width` and `--ui-chat-min-width`. | Resolve layout tokens from CSS and remove the smaller hardcoded floors. |
-| Center workbench panels | `main.tsx` uses `CENTER_WORKBENCH_MIN_PANEL_WIDTH = 128`; `workspace.css` uses `280px` for compact open panel width. | Route both through one `--ui-workbench-panel-min-width` token. |
-| Titlebar compact chrome | `titlebar.css` hides the brand label at `760px` but hides the whole copyblock only at `520px`. | Compact titlebar mode must hide the copyblock at the same `760px` breakpoint that constrains the brand slot. |
-| Tests | `titlebar-menubar.test.ts`, `pane-config.test.ts`, `resize-observer-frame-scheduler.test.ts`, and `left-pane-resizer-browser.test.ts` cover pieces of this area. | Add static contract tests and browser geometry/screenshot coverage for the illegal-width visual regression. |
+| Surface                 | Evidence                                                                                                                                                         | Decision                                                                                                                                                            |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native window creation  | `packages/overlay/src-tauri/tauri.conf.json` sets `width`, `height`, `minWidth`, and `minHeight`.                                                                | Raise native min dimensions to the desktop layout contract and keep the config as the creation-time source.                                                         |
+| Native startup sizing   | `packages/overlay/src-tauri/src/main.rs` independently clamps startup size to `760..1600` and `480..920`.                                                        | Read the configured `main` window minimum from `tauri.conf.json` through `app.config()` and use a pure size-contract helper.                                        |
+| Native resize           | `main.rs` currently only handles `RunEvent::Exit`; Windows has a `WM_SIZING` pre-commit hook in the later aspect-frame follow-up.                                | Enforce native aspect before commit only where the OS/Tauri stack exposes a supported hook; do not add a post-resize `set_size()` feedback loop on other platforms. |
+| Browser shell sizing    | `base.css` owns the body shell.                                                                                                                                  | Add overlay minimum viewport dimensions so browser/dev fixtures cannot compress the workbench below the desktop contract.                                           |
+| Layout tokens           | `design-language.css` owns structural layout tokens.                                                                                                             | Add overlay viewport and center workbench panel minimum tokens here.                                                                                                |
+| Pane layout             | `services/pane.ts` uses hardcoded `120 * scale` and `300 * scale` floors while tokens already define `--ui-rail-min-width` and `--ui-chat-min-width`.            | Resolve layout tokens from CSS and remove the smaller hardcoded floors.                                                                                             |
+| Center workbench panels | `main.tsx` uses `CENTER_WORKBENCH_MIN_PANEL_WIDTH = 128`; `workspace.css` uses `280px` for compact open panel width.                                             | Route both through one `--ui-workbench-panel-min-width` token.                                                                                                      |
+| Titlebar compact chrome | `titlebar.css` hides the brand label at `760px` but hides the whole copyblock only at `520px`.                                                                   | Compact titlebar mode must hide the copyblock at the same `760px` breakpoint that constrains the brand slot.                                                        |
+| Tests                   | `titlebar-menubar.test.ts`, `pane-config.test.ts`, `resize-observer-frame-scheduler.test.ts`, and `left-pane-resizer-browser.test.ts` cover pieces of this area. | Add static contract tests and browser geometry/screenshot coverage for the illegal-width visual regression.                                                         |
 
 ## Root Cause
 

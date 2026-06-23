@@ -119,9 +119,14 @@ test("completed tool state is not overwritten by stale error update", async () =
       const message = await createAssistantMessage(session.id, tmp.path)
       const partID = Identifier.ascending("part")
 
-      await Session.updatePart(completedToolPart({ sessionID: session.id, messageID: message.id, partID, output: "ok" }))
-      const stale = await collectPartUpdatedEvents(async () =>
-        await Session.updatePart(erroredToolPart({ sessionID: session.id, messageID: message.id, partID, message: "late" })),
+      await Session.updatePart(
+        completedToolPart({ sessionID: session.id, messageID: message.id, partID, output: "ok" }),
+      )
+      const stale = await collectPartUpdatedEvents(
+        async () =>
+          await Session.updatePart(
+            erroredToolPart({ sessionID: session.id, messageID: message.id, partID, message: "late" }),
+          ),
       )
 
       const stored = await readToolPart(session.id, partID)
@@ -141,9 +146,14 @@ test("error tool state is not overwritten by stale completed update", async () =
       const message = await createAssistantMessage(session.id, tmp.path)
       const partID = Identifier.ascending("part")
 
-      await Session.updatePart(erroredToolPart({ sessionID: session.id, messageID: message.id, partID, message: "boom" }))
-      const stale = await collectPartUpdatedEvents(async () =>
-        await Session.updatePart(completedToolPart({ sessionID: session.id, messageID: message.id, partID, output: "late" })),
+      await Session.updatePart(
+        erroredToolPart({ sessionID: session.id, messageID: message.id, partID, message: "boom" }),
+      )
+      const stale = await collectPartUpdatedEvents(
+        async () =>
+          await Session.updatePart(
+            completedToolPart({ sessionID: session.id, messageID: message.id, partID, output: "late" }),
+          ),
       )
 
       const stored = await readToolPart(session.id, partID)
@@ -163,11 +173,14 @@ test("same terminal tool state can refresh completed metadata", async () => {
       const message = await createAssistantMessage(session.id, tmp.path)
       const partID = Identifier.ascending("part")
 
-      await Session.updatePart(completedToolPart({ sessionID: session.id, messageID: message.id, partID, output: "ok" }))
-      const refreshed = await collectPartUpdatedEvents(async () =>
-        await Session.updatePart(
-          completedToolPart({ sessionID: session.id, messageID: message.id, partID, output: "ok", compacted: 123 }),
-        ),
+      await Session.updatePart(
+        completedToolPart({ sessionID: session.id, messageID: message.id, partID, output: "ok" }),
+      )
+      const refreshed = await collectPartUpdatedEvents(
+        async () =>
+          await Session.updatePart(
+            completedToolPart({ sessionID: session.id, messageID: message.id, partID, output: "ok", compacted: 123 }),
+          ),
       )
 
       const stored = await readToolPart(session.id, partID)

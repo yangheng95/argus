@@ -22,20 +22,20 @@ second input-action primitive beside the current search/Button primitives.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-19-memory-search-field-primitive.md` | Search rows should use the shared `.search-field*` primitive and Button clear actions. |
+| Source                                               | Relevant constraint                                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `2026-06-19-memory-search-field-primitive.md`        | Search rows should use the shared `.search-field*` primitive and Button clear actions.      |
 | `2026-06-19-retire-settings-continuation-residue.md` | CSS-only field/config selector families should be retired once no production owner remains. |
-| `theme-form-control-coverage.test.ts` | `.field-input` remains the canonical plain form-control chrome and must not be deleted. |
-| `SkillMarketPanel.tsx` | `.field-input-group` remains live for inline value plus browse action layout. |
+| `theme-form-control-coverage.test.ts`                | `.field-input` remains the canonical plain form-control chrome and must not be deleted.     |
+| `SkillMarketPanel.tsx`                               | `.field-input-group` remains live for inline value plus browse action layout.               |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n "field-input-actions|field-input-icon|field-row" packages/overlay/src/components packages/overlay/src/services packages/overlay/src/main.tsx packages/overlay/src/index.html --glob "*.tsx" --glob "*.ts" --glob "*.html"` | No production DOM owner exists. | Delete the old selector family. |
-| `rg -n "field-input-actions|field-input-icon|field-row|field-input-group|search-field" specs/new-arch packages/overlay/test packages/overlay/src --glob "*.*"` | Before the fix, the target selector family only appeared in `field.css`. Live `.field-input-group` and `.search-field*` owners remained in components/tests. | Keep the live primitive families and guard against exact retired class tokens only. |
-| Independent explorer audit | Confirmed high-confidence deletion and highlighted false-positive risk around `config-field-row` and `search-field-icon`. | Use exact class-token guards that do not match those live siblings. |
+| Command                     | Result                                                                                                                    | Decision                                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `rg -n "field-input-actions | field-input-icon                                                                                                          | field-row" packages/overlay/src/components packages/overlay/src/services packages/overlay/src/main.tsx packages/overlay/src/index.html --glob "_.tsx" --glob "_.ts" --glob "\*.html"` | No production DOM owner exists. | Delete the old selector family.                                                       |
+| `rg -n "field-input-actions | field-input-icon                                                                                                          | field-row                                                                                                                                                                             | field-input-group               | search-field" specs/new-arch packages/overlay/test packages/overlay/src --glob "_._"` | Before the fix, the target selector family only appeared in `field.css`. Live `.field-input-group` and `.search-field*` owners remained in components/tests. | Keep the live primitive families and guard against exact retired class tokens only. |
+| Independent explorer audit  | Confirmed high-confidence deletion and highlighted false-positive risk around `config-field-row` and `search-field-icon`. | Use exact class-token guards that do not match those live siblings.                                                                                                                   |
 
 ## Fix
 

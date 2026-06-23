@@ -1,7 +1,13 @@
 import { afterEach, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
 import { HOST_CAPABILITIES, __setHostTransportForTest } from "../src/services/host-transport"
-import type { HostTransport, StreamHandlers, StreamOpenRequest, TransportRequest, TransportResponse } from "../src/services/host-transport"
+import type {
+  HostTransport,
+  StreamHandlers,
+  StreamOpenRequest,
+  TransportRequest,
+  TransportResponse,
+} from "../src/services/host-transport"
 import { loadBoard, setBoardStore, setTasksData } from "../src/store/board"
 import { setChatRequest } from "../src/store/messages"
 import { registerConversationSourceDirectory } from "../src/services/conversation"

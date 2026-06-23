@@ -32,22 +32,22 @@ virtualized screenshot browser bundle.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no double UI source, test every change, and visually verify UI-related changes. |
-| `2026-06-19-vscode-media-ui-dist-vite-single-source.md` | Stale shipped UI assets can mask current source fixes; `dist-vite` is the bundle source for local verification and VSIX media sync. |
-| `2026-06-21-overlay-payload-stamp-rerun-discipline.md` | Packaged overlay-server artifacts are generated from one build script and should not depend on loose sidecar UI directories. |
+| Source                                                          | Constraint carried forward                                                                                                           |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                                     | No fallback, no double UI source, test every change, and visually verify UI-related changes.                                         |
+| `2026-06-19-vscode-media-ui-dist-vite-single-source.md`         | Stale shipped UI assets can mask current source fixes; `dist-vite` is the bundle source for local verification and VSIX media sync.  |
+| `2026-06-21-overlay-payload-stamp-rerun-discipline.md`          | Packaged overlay-server artifacts are generated from one build script and should not depend on loose sidecar UI directories.         |
 | `2026-06-21-dispatch-algorithm-agent-audit.md` HOUSEKEEPING-001 | Generated embedded UI modules must reset to the empty source form after builds so typecheck does not depend on local dist artifacts. |
-| `2026-06-22-screenshot-browser-open-jank.md` | Screenshot browser performance acceptance depends on the current virtualized `dist-vite` bundle, not stale embedded assets. |
+| `2026-06-22-screenshot-browser-open-jank.md`                    | Screenshot browser performance acceptance depends on the current virtualized `dist-vite` bundle, not stale embedded assets.          |
 
 ## Call Point Inventory
 
-| Surface | Current evidence | Decision |
-| --- | --- | --- |
-| `/ui` route mount | `server.ts` mounts `OverlayUI.routes()` in two server modes. | Keep one route factory. |
-| Physical bundle resolver | `resolveOverlayDir()` finds executable-sibling `ui/` first, then workspace `packages/overlay/dist-vite`. | Treat a resolved physical bundle as the serving source before embedded files. |
-| Embedded bundle | `overlay-ui-embedded.generated.ts` is empty in source and populated only during overlay-server compile/package. | Use embedded files only when no physical bundle is available. |
-| Tests | Existing handler tests cover route semantics through `dirOverride`; package tests cover embedded module generation. | Add a pure source-selection regression so embedded cannot shadow the current physical bundle. |
+| Surface                  | Current evidence                                                                                                    | Decision                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `/ui` route mount        | `server.ts` mounts `OverlayUI.routes()` in two server modes.                                                        | Keep one route factory.                                                                       |
+| Physical bundle resolver | `resolveOverlayDir()` finds executable-sibling `ui/` first, then workspace `packages/overlay/dist-vite`.            | Treat a resolved physical bundle as the serving source before embedded files.                 |
+| Embedded bundle          | `overlay-ui-embedded.generated.ts` is empty in source and populated only during overlay-server compile/package.     | Use embedded files only when no physical bundle is available.                                 |
+| Tests                    | Existing handler tests cover route semantics through `dirOverride`; package tests cover embedded module generation. | Add a pure source-selection regression so embedded cannot shadow the current physical bundle. |
 
 ## Root Cause
 

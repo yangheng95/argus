@@ -97,7 +97,9 @@ describe("task global project binding is forbidden", () => {
       },
     })
 
-    const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, legacy.taskID)).get())
+    const task = Database.use((db) =>
+      db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, legacy.taskID)).get(),
+    )
     expect(task?.project_id).toBe("global")
     expect(task?.attachments ?? null).toBeNull()
     expect(messageCount(legacy.sessionID)).toBe(0)
@@ -110,9 +112,7 @@ describe("task global project binding is forbidden", () => {
       directory: legacy.directory,
       fn: async () => {
         expect(Instance.project.id).not.toBe("global")
-        await expect(EngineService.injectMessage(legacy.taskID, "retry")).rejects.toThrow(
-          TaskGlobalProjectBindingError,
-        )
+        await expect(EngineService.injectMessage(legacy.taskID, "retry")).rejects.toThrow(TaskGlobalProjectBindingError)
       },
     })
 
@@ -167,7 +167,9 @@ describe("task global project binding is forbidden", () => {
       },
     })
 
-    const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, legacy.taskID)).get())
+    const task = Database.use((db) =>
+      db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, legacy.taskID)).get(),
+    )
     expect(task?.title).toBe("legacy global task")
     expect(task?.time_completed).toBeNull()
     expect(progressCount(legacy.taskID)).toBe(0)

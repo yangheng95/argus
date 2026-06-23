@@ -16,23 +16,23 @@ rendered CSS width, and separator ARIA value share one clamped width source.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, recall before edits, test every change, visually verify UI changes, commit and push every round. |
-| `2026-06-15-config-dialog-resizer-accessibility.md` | `setConfigSidebarWidth` is the single persistence/update path; pointer and keyboard resizing must share clamp bounds. |
-| Independent GUI audit 2026-06-22 | `sidebarStyle` rendered raw `dialogStore.config.sidebarWidth`, while `aria-valuenow` used a clamped `currentSidebarWidth()`. |
-| User constraint 2026-06-22 | Illegal aspect ratios and illegal panel sizes are not allowed. |
+| Source                                              | Constraint carried forward                                                                                                         |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                         | No fallback, no duplicate source, recall before edits, test every change, visually verify UI changes, commit and push every round. |
+| `2026-06-15-config-dialog-resizer-accessibility.md` | `setConfigSidebarWidth` is the single persistence/update path; pointer and keyboard resizing must share clamp bounds.              |
+| Independent GUI audit 2026-06-22                    | `sidebarStyle` rendered raw `dialogStore.config.sidebarWidth`, while `aria-valuenow` used a clamped `currentSidebarWidth()`.       |
+| User constraint 2026-06-22                          | Illegal aspect ratios and illegal panel sizes are not allowed.                                                                     |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Width writer | `services/dialog.ts#setConfigSidebarWidth` only rejected non-positive values and wrote any positive finite number. | Clamp through `clampConfigSidebarWidth(width, configSidebarResizeBounds(currentUIScale()))` before writing the store. |
-| Rendered style | `ConfigDialogHost.sidebarStyle` used raw `dialogStore.config.sidebarWidth`. | Introduce `configuredSidebarWidth` as the clamped memo and render style from it. |
-| ARIA value | `ConfigDialogHost.currentSidebarWidth()` already clamped store values and DOM fallback values. | Reuse `configuredSidebarWidth` so ARIA and style cannot diverge. |
-| Pointer drag | `ConfigDialogHost` already clamps pointer movement before calling `setConfigSidebarWidth`. | Keep behavior; service clamp is the single write guard. |
-| Keyboard resize | `nextConfigSidebarKeyboardWidth()` already clamps. | Keep behavior; service clamp is the single write guard. |
-| Tests | `config-panel-sizing.test.ts` covers helper math and static ARIA semantics; `config-dialog-resizer.test.ts` covers real keyboard resize. | Add a static contract that writer, style, and ARIA all use the clamped source. |
+| Surface         | Evidence                                                                                                                                 | Decision                                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Width writer    | `services/dialog.ts#setConfigSidebarWidth` only rejected non-positive values and wrote any positive finite number.                       | Clamp through `clampConfigSidebarWidth(width, configSidebarResizeBounds(currentUIScale()))` before writing the store. |
+| Rendered style  | `ConfigDialogHost.sidebarStyle` used raw `dialogStore.config.sidebarWidth`.                                                              | Introduce `configuredSidebarWidth` as the clamped memo and render style from it.                                      |
+| ARIA value      | `ConfigDialogHost.currentSidebarWidth()` already clamped store values and DOM fallback values.                                           | Reuse `configuredSidebarWidth` so ARIA and style cannot diverge.                                                      |
+| Pointer drag    | `ConfigDialogHost` already clamps pointer movement before calling `setConfigSidebarWidth`.                                               | Keep behavior; service clamp is the single write guard.                                                               |
+| Keyboard resize | `nextConfigSidebarKeyboardWidth()` already clamps.                                                                                       | Keep behavior; service clamp is the single write guard.                                                               |
+| Tests           | `config-panel-sizing.test.ts` covers helper math and static ARIA semantics; `config-dialog-resizer.test.ts` covers real keyboard resize. | Add a static contract that writer, style, and ARIA all use the clamped source.                                        |
 
 ## Root Cause
 
@@ -65,13 +65,13 @@ while assistive semantics reported a legal width.
 
 ## Implementation
 
-| Change | Reason |
-| --- | --- |
-| Moved config sidebar resize helpers to `src/utils/config-sidebar-resizer.ts`. | The service writer and Solid component both need the helper; keeping it under `components/` would create a service-to-component dependency. |
-| `setConfigSidebarWidth()` clamps through `configSidebarResizeBounds(currentUIScale())` before writing `dialogStore.config.sidebarWidth`. | The single writer path can no longer persist illegal positive widths. |
-| `ConfigDialogHost` added `configuredSidebarWidth`. | Sidebar style and `aria-valuenow` now read the same clamped memo. |
-| Browser fixture now serves `/config/prompt-profile` and asserts there are no alert toasts. | Visual settings-dialog acceptance should not hide fixture errors under the dialog. |
-| Browser resizer test saves `.scratch/config-dialog-resizer.png`. | Keeps visual evidence attached to the settings dialog surface. |
+| Change                                                                                                                                   | Reason                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Moved config sidebar resize helpers to `src/utils/config-sidebar-resizer.ts`.                                                            | The service writer and Solid component both need the helper; keeping it under `components/` would create a service-to-component dependency. |
+| `setConfigSidebarWidth()` clamps through `configSidebarResizeBounds(currentUIScale())` before writing `dialogStore.config.sidebarWidth`. | The single writer path can no longer persist illegal positive widths.                                                                       |
+| `ConfigDialogHost` added `configuredSidebarWidth`.                                                                                       | Sidebar style and `aria-valuenow` now read the same clamped memo.                                                                           |
+| Browser fixture now serves `/config/prompt-profile` and asserts there are no alert toasts.                                               | Visual settings-dialog acceptance should not hide fixture errors under the dialog.                                                          |
+| Browser resizer test saves `.scratch/config-dialog-resizer.png`.                                                                         | Keeps visual evidence attached to the settings dialog surface.                                                                              |
 
 ## Verification
 
@@ -96,22 +96,22 @@ while assistive semantics reported a legal width.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Arendt read-only audit | Config sidebar pointermove still calls `setConfigSidebarWidth()` on every event and `configSidebarResizeBounds()` silently normalizes invalid scale to `1`. |
-| `2026-06-22-left-pane-drag-frame-coalescing.md` | Drag streams should coalesce high-frequency pointermove work per animation frame and flush the last pending point on pointerup. |
-| This spec | `setConfigSidebarWidth()` remains the single width writer; pointer and keyboard resize share clamp bounds. |
-| `layout-tokens.ts` | `currentUIScale()` is fail-fast and must not be rewrapped by helper-level scale fallbacks. |
+| Source                                          | Constraint carried forward                                                                                                                                  |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Arendt read-only audit                          | Config sidebar pointermove still calls `setConfigSidebarWidth()` on every event and `configSidebarResizeBounds()` silently normalizes invalid scale to `1`. |
+| `2026-06-22-left-pane-drag-frame-coalescing.md` | Drag streams should coalesce high-frequency pointermove work per animation frame and flush the last pending point on pointerup.                             |
+| This spec                                       | `setConfigSidebarWidth()` remains the single width writer; pointer and keyboard resize share clamp bounds.                                                  |
+| `layout-tokens.ts`                              | `currentUIScale()` is fail-fast and must not be rewrapped by helper-level scale fallbacks.                                                                  |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Pointermove hook | `ConfigDialogHost.useResizable()` calls `opts.onMove()` directly from the window `pointermove` listener. | Coalesce pending move deltas through a single RAF owner and flush on session end. |
-| Width write | `ConfigDialogHost.onMove()` calls `setConfigSidebarWidth(next)`. | Keep the single writer, but call it only from the frame owner. |
-| Scale helper | `configSidebarResizeBounds(scale)` maps invalid scales to `1`. | Throw on non-positive or non-finite scale, matching `currentUIScale()`. |
-| Missing DOM width | `currentSidebarWidth()` still has `220 * currentUIScale()` when `#configSidebar` is unavailable. | Use the legal bounds source instead of an arbitrary fallback width. |
-| Browser test | `config-dialog-resizer.test.ts` covers keyboard and semantics but not pointermove bursts. | Add a burst probe that records sidebar width writes during input events and before/after RAF. |
+| Surface           | Evidence                                                                                                 | Decision                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Pointermove hook  | `ConfigDialogHost.useResizable()` calls `opts.onMove()` directly from the window `pointermove` listener. | Coalesce pending move deltas through a single RAF owner and flush on session end.             |
+| Width write       | `ConfigDialogHost.onMove()` calls `setConfigSidebarWidth(next)`.                                         | Keep the single writer, but call it only from the frame owner.                                |
+| Scale helper      | `configSidebarResizeBounds(scale)` maps invalid scales to `1`.                                           | Throw on non-positive or non-finite scale, matching `currentUIScale()`.                       |
+| Missing DOM width | `currentSidebarWidth()` still has `220 * currentUIScale()` when `#configSidebar` is unavailable.         | Use the legal bounds source instead of an arbitrary fallback width.                           |
+| Browser test      | `config-dialog-resizer.test.ts` covers keyboard and semantics but not pointermove bursts.                | Add a burst probe that records sidebar width writes during input events and before/after RAF. |
 
 ### Root Cause
 

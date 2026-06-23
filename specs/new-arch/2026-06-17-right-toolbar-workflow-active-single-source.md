@@ -13,11 +13,11 @@ because `isRightActivityOpen("workflow")` also requires
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n -F 'primaryCenterPanel() === "task"' packages/overlay/src packages/overlay/test specs` | Only `isRightActivityOpen("workflow")` uses this extra active-state condition. | Remove the extra condition; visible workflow state is `centerWorkbenchPanels`. |
-| `rg -n -F 'selectedRightActivity' packages/overlay/src/main.tsx packages/overlay/test/acceptance-panel-mount.test.ts specs/new-arch` | `main.tsx` and static tests still keep the residual signal. Specs say it should be removed. | Delete the signal and derive selected/active state from `centerWorkbenchPanels`. |
-| `node --test --test-name-pattern "workspace intro owns first-run directory setup when no directory is set" packages/overlay/test/browser/titlebar-menubar.test.ts` | Fails because workflow button active is `false` while the onboarding workflow surface is visible. | Browser test becomes the regression check. |
+| Command                                                                                                                                                            | Result                                                                                            | Decision                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `rg -n -F 'primaryCenterPanel() === "task"' packages/overlay/src packages/overlay/test specs`                                                                      | Only `isRightActivityOpen("workflow")` uses this extra active-state condition.                    | Remove the extra condition; visible workflow state is `centerWorkbenchPanels`.   |
+| `rg -n -F 'selectedRightActivity' packages/overlay/src/main.tsx packages/overlay/test/acceptance-panel-mount.test.ts specs/new-arch`                               | `main.tsx` and static tests still keep the residual signal. Specs say it should be removed.       | Delete the signal and derive selected/active state from `centerWorkbenchPanels`. |
+| `node --test --test-name-pattern "workspace intro owns first-run directory setup when no directory is set" packages/overlay/test/browser/titlebar-menubar.test.ts` | Fails because workflow button active is `false` while the onboarding workflow surface is visible. | Browser test becomes the regression check.                                       |
 
 ## Fix
 

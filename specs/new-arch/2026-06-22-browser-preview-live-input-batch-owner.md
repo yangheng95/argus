@@ -21,31 +21,31 @@ batch.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no compatibility contract, test every change, run Playwright through Node on Windows, and visually verify UI changes. |
-| `2026-06-11-browser-preview-interactive-live-session.md` | Live preview is a task-scoped backend-owned browser session; overlay must not embed arbitrary URLs or local query overrides. |
-| `2026-06-15-browser-preview-live-target-boundary.md` | Live preview must not mix task and target IDs; target misses re-resolve through the task-scoped route. |
-| `2026-06-17-browser-preview-visual-stress-benchmark.md` | Browser Preview visual stress must exercise real live frames, input routing, screenshots, and task-scoped request logs. |
-| `2026-06-19-browser-preview-live-frame-application-role.md` | `.browser-preview-live-frame` is an interactive application region and must keep click, wheel, and keyboard routing. |
-| `2026-06-22-browser-preview-evidence-live-snapshot-boundary.md` | Persisted evidence ownership suppresses live snapshot requests; this batch only repairs active live-surface input burst. |
-| Explorer audit `019eee5e...` | `liveFrameRequestSequence` only discards stale results after HTTP, PNG transport, Blob creation, and decode; it does not prevent backend/VS Code binary pressure. |
+| Source                                                          | Constraint carried forward                                                                                                                                        |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                     | No fallback, no gate, no compatibility contract, test every change, run Playwright through Node on Windows, and visually verify UI changes.                       |
+| `2026-06-11-browser-preview-interactive-live-session.md`        | Live preview is a task-scoped backend-owned browser session; overlay must not embed arbitrary URLs or local query overrides.                                      |
+| `2026-06-15-browser-preview-live-target-boundary.md`            | Live preview must not mix task and target IDs; target misses re-resolve through the task-scoped route.                                                            |
+| `2026-06-17-browser-preview-visual-stress-benchmark.md`         | Browser Preview visual stress must exercise real live frames, input routing, screenshots, and task-scoped request logs.                                           |
+| `2026-06-19-browser-preview-live-frame-application-role.md`     | `.browser-preview-live-frame` is an interactive application region and must keep click, wheel, and keyboard routing.                                              |
+| `2026-06-22-browser-preview-evidence-live-snapshot-boundary.md` | Persisted evidence ownership suppresses live snapshot requests; this batch only repairs active live-surface input burst.                                          |
+| Explorer audit `019eee5e...`                                    | `liveFrameRequestSequence` only discards stale results after HTTP, PNG transport, Blob creation, and decode; it does not prevent backend/VS Code binary pressure. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `BrowserPreviewPanel.tsx` `handleLiveWheel` | Each wheel event calls `sendLiveInput()` immediately. | Route input through a component-owned batcher; aggregate wheel deltas by animation frame/current in-flight period. |
-| `BrowserPreviewPanel.tsx` `sendLiveInput` | Only checks current live image/scope, then starts `loadLiveFrame(scope, input)`. | Queue click/key/wheel inputs for the current live owner and flush one batch. |
-| `BrowserPreviewPanel.tsx` auto capture effect | Missing viewport evidence starts `captureTaskBrowserPreviewEvidence` without an explicit user action. | Remove hidden auto capture; the `Capture evidence` button is the single evidence-capture trigger. |
-| `BrowserPreviewPanel.tsx` `loadLiveFrame` | Uses `sendTaskBrowserPreviewLiveInputObjectUrl({ input })`. | Replace with batch calls using `inputs[]`; keep snapshot path unchanged. |
-| `browser-preview.ts` overlay service | `sendTaskBrowserPreviewLiveInputObjectUrl` serializes `{ targetID, viewportID, input }`. | Replace with `sendTaskBrowserPreviewLiveInputsObjectUrl` serializing `{ targetID, viewportID, inputs }`. |
-| `server/routes/browser-preview.ts` | `BrowserPreviewLiveInputRequest` validates a single `input`. | Replace request schema with strict `inputs: BrowserPreviewLiveInput.array().min(1)`; old `{ input }` must be 400. |
-| `browser-preview/live.ts` | `interactBrowserPreviewLive` sends one input to the sidecar. | Accept `inputs[]`; sidecar applies inputs in order and captures once at the end. |
-| `browser-preview-routes.test.ts` | Route tests post single `input` and concurrent same-session commands. | Update to `inputs[]`, add old-body rejection, and add batch-order/one-response coverage. |
-| `browser-preview-service.test.ts` | Asserts service body contains `input`. | Assert service body contains `inputs[]` and no singular input. |
-| `browser-preview-visual-stress.test.ts` | Expects click, wheel, key as three request bodies. | Update request assertions to inspect batch contents and add wheel-burst request coalescing coverage. |
-| SDK generated output | `types.gen.ts` and `sdk.gen.ts` currently expose singular `input`. | Regenerate/update after route schema changes through existing docs/pre-push flow. |
+| Surface                                       | Evidence                                                                                              | Decision                                                                                                           |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `BrowserPreviewPanel.tsx` `handleLiveWheel`   | Each wheel event calls `sendLiveInput()` immediately.                                                 | Route input through a component-owned batcher; aggregate wheel deltas by animation frame/current in-flight period. |
+| `BrowserPreviewPanel.tsx` `sendLiveInput`     | Only checks current live image/scope, then starts `loadLiveFrame(scope, input)`.                      | Queue click/key/wheel inputs for the current live owner and flush one batch.                                       |
+| `BrowserPreviewPanel.tsx` auto capture effect | Missing viewport evidence starts `captureTaskBrowserPreviewEvidence` without an explicit user action. | Remove hidden auto capture; the `Capture evidence` button is the single evidence-capture trigger.                  |
+| `BrowserPreviewPanel.tsx` `loadLiveFrame`     | Uses `sendTaskBrowserPreviewLiveInputObjectUrl({ input })`.                                           | Replace with batch calls using `inputs[]`; keep snapshot path unchanged.                                           |
+| `browser-preview.ts` overlay service          | `sendTaskBrowserPreviewLiveInputObjectUrl` serializes `{ targetID, viewportID, input }`.              | Replace with `sendTaskBrowserPreviewLiveInputsObjectUrl` serializing `{ targetID, viewportID, inputs }`.           |
+| `server/routes/browser-preview.ts`            | `BrowserPreviewLiveInputRequest` validates a single `input`.                                          | Replace request schema with strict `inputs: BrowserPreviewLiveInput.array().min(1)`; old `{ input }` must be 400.  |
+| `browser-preview/live.ts`                     | `interactBrowserPreviewLive` sends one input to the sidecar.                                          | Accept `inputs[]`; sidecar applies inputs in order and captures once at the end.                                   |
+| `browser-preview-routes.test.ts`              | Route tests post single `input` and concurrent same-session commands.                                 | Update to `inputs[]`, add old-body rejection, and add batch-order/one-response coverage.                           |
+| `browser-preview-service.test.ts`             | Asserts service body contains `input`.                                                                | Assert service body contains `inputs[]` and no singular input.                                                     |
+| `browser-preview-visual-stress.test.ts`       | Expects click, wheel, key as three request bodies.                                                    | Update request assertions to inspect batch contents and add wheel-burst request coalescing coverage.               |
+| SDK generated output                          | `types.gen.ts` and `sdk.gen.ts` currently expose singular `input`.                                    | Regenerate/update after route schema changes through existing docs/pre-push flow.                                  |
 
 ## Root Cause
 

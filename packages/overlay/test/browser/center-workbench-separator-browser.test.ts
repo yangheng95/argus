@@ -124,9 +124,7 @@ function assertCenterWorkbenchPointerdownHasNoPreFrameGeometryReads(
   events: CenterWorkbenchResizeEvent[],
   label: string,
 ) {
-  const preFrameRectReads = events.filter(
-    (event) => event.type === "center-workbench-rect-read" && !event.inRaf,
-  )
+  const preFrameRectReads = events.filter((event) => event.type === "center-workbench-rect-read" && !event.inRaf)
   assert.deepEqual(
     preFrameRectReads,
     [],

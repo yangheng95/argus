@@ -22,15 +22,15 @@ Command:
 
 `rg "ImagePreview|image preview|copy image|clipboard|canvasPreviewImageBlob|copyPreviewImage" specs packages/overlay/src packages/overlay/test -n`
 
-| Surface | Call points | Decision |
-| --- | --- | --- |
-| `PreviewableImage` | `packages/overlay/src/components/FilePart.tsx`, `packages/overlay/src/components/InlineToolPart.tsx`, markdown delegated click in `packages/overlay/src/main.tsx` | Keep the shared preview entry point unchanged. |
-| `ImagePreviewHost` | `packages/overlay/src/components/App.tsx`, `packages/overlay/src/components/ImagePreview.tsx` | Replace copy internals only; keep one host and one dialog. |
-| `imagePreviewState().src` | `packages/overlay/src/services/image-preview.ts`, `ImagePreviewHost` | Use as the single copy byte source. |
+| Surface                        | Call points                                                                                                                                                        | Decision                                                                                                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PreviewableImage`             | `packages/overlay/src/components/FilePart.tsx`, `packages/overlay/src/components/InlineToolPart.tsx`, markdown delegated click in `packages/overlay/src/main.tsx`  | Keep the shared preview entry point unchanged.                                                                                                       |
+| `ImagePreviewHost`             | `packages/overlay/src/components/App.tsx`, `packages/overlay/src/components/ImagePreview.tsx`                                                                      | Replace copy internals only; keep one host and one dialog.                                                                                           |
+| `imagePreviewState().src`      | `packages/overlay/src/services/image-preview.ts`, `ImagePreviewHost`                                                                                               | Use as the single copy byte source.                                                                                                                  |
 | Protected resource object URLs | `packages/overlay/src/components/FilePart.tsx`, `packages/overlay/src/components/InlineToolPart.tsx`, `packages/overlay/src/components/ScreenshotBrowserPanel.tsx` | Keep the existing `fetchResourceAsObjectUrl` resource path; copy fetches the preview `blob:` URL because that is the current visible preview source. |
-| `canvasPreviewImageBlob` | `packages/overlay/src/components/ImagePreview.tsx`, static assertion in `packages/overlay/test/message-image-preview.test.ts` | Delete the canvas copy path and assert it stays deleted. |
-| Browser copy test | `packages/overlay/test/browser/image-preview-copy.test.ts` | Keep success coverage and add visible failure coverage for fetch failure, clipboard rejection, and missing clipboard API. |
-| Toolbar CSS | `packages/overlay/src/styles/surfaces/messages.css` | Add a compact status/alert pill inside the existing toolbar. |
+| `canvasPreviewImageBlob`       | `packages/overlay/src/components/ImagePreview.tsx`, static assertion in `packages/overlay/test/message-image-preview.test.ts`                                      | Delete the canvas copy path and assert it stays deleted.                                                                                             |
+| Browser copy test              | `packages/overlay/test/browser/image-preview-copy.test.ts`                                                                                                         | Keep success coverage and add visible failure coverage for fetch failure, clipboard rejection, and missing clipboard API.                            |
+| Toolbar CSS                    | `packages/overlay/src/styles/surfaces/messages.css`                                                                                                                | Add a compact status/alert pill inside the existing toolbar.                                                                                         |
 
 ## Acceptance
 

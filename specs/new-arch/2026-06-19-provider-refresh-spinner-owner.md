@@ -16,19 +16,19 @@ refreshing label could appear while the icon transform never matched.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-settings-primitives-single-source-completion.md` | Settings actions should route through shared primitives while keeping only live domain hooks. |
-| `2026-06-19-retire-llm-provider-summary-residue.md` | Provider-specific classes remain valid only when `ProvidersPanel.tsx` owns them. |
-| `config-panel-sizing.test.ts` | Provider header actions already assert the live `data-ui="provider-refresh-button"` Button contract. |
-| `ProvidersPanel.tsx` | The refresh state owner is the Button primitive carrying `data-spinning={refreshing() ? "true" : "false"}`. |
+| Source                                                       | Relevant constraint                                                                                         |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-settings-primitives-single-source-completion.md` | Settings actions should route through shared primitives while keeping only live domain hooks.               |
+| `2026-06-19-retire-llm-provider-summary-residue.md`          | Provider-specific classes remain valid only when `ProvidersPanel.tsx` owns them.                            |
+| `config-panel-sizing.test.ts`                                | Provider header actions already assert the live `data-ui="provider-refresh-button"` Button contract.        |
+| `ProvidersPanel.tsx`                                         | The refresh state owner is the Button primitive carrying `data-spinning={refreshing() ? "true" : "false"}`. |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n "provider-refresh-btn|provider-refresh-button|provider-refresh-icon|data-spinning" packages/overlay/src packages/overlay/test specs/new-arch docs --glob "*.*"` | `.provider-refresh-btn` appeared only in CSS. `ProvidersPanel.tsx` owns `data-ui="provider-refresh-button"`, `data-spinning`, and `.provider-refresh-icon`. | Retire `.provider-refresh-btn` and bind spinner styling to the live Button selector. |
-| `rg -n "provider refresh|provider-refresh|ProvidersPanel|provider-head-actions|provider section" specs/new-arch packages/overlay/test --glob "*.*"` | Existing specs/tests treat `ProvidersPanel` and `provider-head-actions` as the active owner surface. | Add guard coverage to the existing provider/config tests rather than creating a parallel test source. |
+| Command                                                                                                     | Result                          | Decision                                                   |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `rg -n "provider-refresh-btn                                                                                | provider-refresh-button         | provider-refresh-icon                                      | data-spinning" packages/overlay/src packages/overlay/test specs/new-arch docs --glob "_._"` | `.provider-refresh-btn` appeared only in CSS. `ProvidersPanel.tsx` owns `data-ui="provider-refresh-button"`, `data-spinning`, and `.provider-refresh-icon`. | Retire `.provider-refresh-btn` and bind spinner styling to the live Button selector.                 |
+| `rg -n "provider refresh                                                                                    | provider-refresh                | ProvidersPanel                                             | provider-head-actions                                                                       | provider section" specs/new-arch packages/overlay/test --glob "_._"`                                                                                        | Existing specs/tests treat `ProvidersPanel` and `provider-head-actions` as the active owner surface. | Add guard coverage to the existing provider/config tests rather than creating a parallel test source. |
 | `rg -n "provider-refresh-btn" packages/overlay/src/components packages/overlay/src/index.html --glob "*.*"` | No production DOM owner exists. | Do not add compatibility markup; delete the dead selector. |
 
 ## Fix

@@ -12,19 +12,19 @@ content.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-retire-settings-config-shell-residue.md` | Settings selectors without production creation points should be retired instead of kept as CSS-only shells. |
-| `2026-06-18-runtime-inline-svg-icon-single-source.md` | The About author card still owns avatar/name visuals through `.about-author-*`, but the link surface is the shared `.about-link` list. |
-| `2026-06-18-settings-primitives-single-source-completion.md` | Settings surface rules should stay tied to live primitive or domain classes, not stale local chrome. |
+| Source                                                       | Relevant constraint                                                                                                                    |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-retire-settings-config-shell-residue.md`         | Settings selectors without production creation points should be retired instead of kept as CSS-only shells.                            |
+| `2026-06-18-runtime-inline-svg-icon-single-source.md`        | The About author card still owns avatar/name visuals through `.about-author-*`, but the link surface is the shared `.about-link` list. |
+| `2026-06-18-settings-primitives-single-source-completion.md` | Settings surface rules should stay tied to live primitive or domain classes, not stale local chrome.                                   |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n "about-author-link|about-link|about-author" packages/overlay/src/components packages/overlay/src/styles packages/overlay/test specs specs/new-arch` | Production component source creates `.about-author-card`, `.about-author-avatar`, `.about-author-info`, `.about-author-name`, and `.about-link`; no component creates `.about-author-link`. | Delete the dead `.about-author-link` style rules. |
-| `ConfigDialogHost.tsx` About panel review | The author card renders only the avatar and strong author name; GitHub/issues anchors use `.about-link`. | Keep author-card/name/avatar styles and the shared link styles unchanged. |
-| `overlay-architecture-guards.test.ts` review | The guard required `.about-author-link` and `.about-author-link:hover`, locking in the stale selector. | Convert that requirement into an absence guard. |
+| Command                                      | Result                                                                                                   | Decision                                                                                                              |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `rg -n "about-author-link                    | about-link                                                                                               | about-author" packages/overlay/src/components packages/overlay/src/styles packages/overlay/test specs specs/new-arch` | Production component source creates `.about-author-card`, `.about-author-avatar`, `.about-author-info`, `.about-author-name`, and `.about-link`; no component creates `.about-author-link`. | Delete the dead `.about-author-link` style rules. |
+| `ConfigDialogHost.tsx` About panel review    | The author card renders only the avatar and strong author name; GitHub/issues anchors use `.about-link`. | Keep author-card/name/avatar styles and the shared link styles unchanged.                                             |
+| `overlay-architecture-guards.test.ts` review | The guard required `.about-author-link` and `.about-author-link:hover`, locking in the stale selector.   | Convert that requirement into an absence guard.                                                                       |
 
 ## Fix
 

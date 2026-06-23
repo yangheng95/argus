@@ -144,7 +144,10 @@ export const PanelCapabilityRegistry = list(
     params: {
       taskIDs: z.array(z.string().min(1)).min(1).max(50).describe("Task IDs to query in one request."),
       includeChildren: z.boolean().optional().describe("Include direct child task summaries for each requested task."),
-      includeInteractions: z.boolean().optional().describe("Include pending interaction counts for each requested task."),
+      includeInteractions: z
+        .boolean()
+        .optional()
+        .describe("Include pending interaction counts for each requested task."),
     },
   }),
   item({

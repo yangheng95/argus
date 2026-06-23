@@ -76,9 +76,10 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
     acceptance: {
       status: "candidate",
       verdict: "rejected",
-      summary: Array.from({ length: 12 }, (_, index) => `Summary line ${index + 1}: acceptance evidence stays readable.`).join(
-        "\n",
-      ),
+      summary: Array.from(
+        { length: 12 },
+        (_, index) => `Summary line ${index + 1}: acceptance evidence stays readable.`,
+      ).join("\n"),
       evidenceManifest: {
         iteration: 3,
         checkResults: [
@@ -131,7 +132,8 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
       return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
     if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
@@ -153,7 +155,14 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
@@ -180,10 +189,20 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
     if (path === `/task/${taskID}/operator-model-context`)
       return send({ taskID, sessionID: "session-acceptance", agent: "orchestrator", model: null })
     if (path === `/task/${taskID}/browser-preview`)
-      return send({ taskID, kind: "missing", status: "missing", viewports: [], diagnostics: [], candidates: [], source: "none" })
-    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+      return send({
+        taskID,
+        kind: "missing",
+        status: "missing",
+        viewports: [],
+        diagnostics: [],
+        candidates: [],
+        source: "none",
+      })
+    if (path === `/task/${taskID}/conversation/events`)
+      return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send([])
-    if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace" })
+    if (path === `/task/${taskID}/trace`)
+      return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace" })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
@@ -202,56 +221,59 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 860 })
-    await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string }) => {
-      const serverUrl = seed.serverUrl
-      const selectedTaskID = seed.taskID
-      ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
-      ;(window as any).__acceptanceFocusEvents = []
-      ;(window as any).__acceptanceSettingsInvokes = []
-      window.addEventListener("acceptance:focus-changes", (event: Event) => {
-        ;(window as any).__acceptanceFocusEvents.push((event as CustomEvent).detail ?? null)
-      })
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
-      localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
-      localStorage.setItem("oc_workspace_task", selectedTaskID)
-      window.__TAURI__ = {
-        core: {
-          invoke: async (command: string, args: Record<string, unknown> = {}) => {
-            ;(window as any).__acceptanceSettingsInvokes.push({ command, args })
-            if (command === "overlay_settings_load") {
-              return {
-                serverUrl,
-                autoServer: false,
-                locale: "en-US",
-                theme: "light",
-                directory: "D:/overlay/workspace/app",
-                workspaceDirectory: "D:/overlay/workspace/app",
-                workspaceTaskID: selectedTaskID,
+    await page.evaluateOnNewDocument(
+      (seed: { serverUrl: string; taskID: string }) => {
+        const serverUrl = seed.serverUrl
+        const selectedTaskID = seed.taskID
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        ;(window as any).__acceptanceFocusEvents = []
+        ;(window as any).__acceptanceSettingsInvokes = []
+        window.addEventListener("acceptance:focus-changes", (event: Event) => {
+          ;(window as any).__acceptanceFocusEvents.push((event as CustomEvent).detail ?? null)
+        })
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_workspace_task", selectedTaskID)
+        window.__TAURI__ = {
+          core: {
+            invoke: async (command: string, args: Record<string, unknown> = {}) => {
+              ;(window as any).__acceptanceSettingsInvokes.push({ command, args })
+              if (command === "overlay_settings_load") {
+                return {
+                  serverUrl,
+                  autoServer: false,
+                  locale: "en-US",
+                  theme: "light",
+                  directory: "D:/overlay/workspace/app",
+                  workspaceDirectory: "D:/overlay/workspace/app",
+                  workspaceTaskID: selectedTaskID,
+                }
               }
-            }
-            if (command === "overlay_settings_save") return true
-            if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
-            return null
+              if (command === "overlay_settings_save") return true
+              if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
+              return null
+            },
           },
-        },
-        window: {
-          getCurrentWindow() {
-            return {
-              close: async () => undefined,
-              hide: async () => undefined,
-              minimize: async () => undefined,
-              startDragging: async () => undefined,
-              isMaximized: async () => false,
-              onResized: async () => ({ unlisten: async () => undefined }),
-            }
+          window: {
+            getCurrentWindow() {
+              return {
+                close: async () => undefined,
+                hide: async () => undefined,
+                minimize: async () => undefined,
+                startDragging: async () => undefined,
+                isMaximized: async () => false,
+                onResized: async () => ({ unlisten: async () => undefined }),
+              }
+            },
           },
-        },
-      }
-    }, { serverUrl: server.origin, taskID })
+        }
+      },
+      { serverUrl: server.origin, taskID },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
@@ -277,7 +299,8 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
           bodyText: document.body.innerText.slice(0, 1600),
           hasAcceptanceSection: Boolean(document.querySelector("#acceptanceSection")),
           acceptanceSection: document.querySelector("#acceptanceSection")?.outerHTML.slice(0, 1200) || "",
-          workflowStackText: document.querySelector('[data-ui="workflow-section-stack"]')?.textContent?.slice(0, 1200) || "",
+          workflowStackText:
+            document.querySelector('[data-ui="workflow-section-stack"]')?.textContent?.slice(0, 1200) || "",
           localStorageWorkspaceTask: localStorage.getItem("oc_workspace_task") || "",
           settingsInvokes: (window as any).__acceptanceSettingsInvokes || [],
           rightButtons,
@@ -296,7 +319,9 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
       const rowWithPill = panel.querySelector<HTMLElement>(".acceptance-evidence-row[data-has-pill]")
       const rowWithoutPill = panel.querySelector<HTMLElement>(".acceptance-evidence-row:not([data-has-pill])")
       return {
-        rawActionCount: panel.querySelectorAll(".acceptance-summary-toggle, .acceptance-files-link, .acceptance-evidence-goal-pill").length,
+        rawActionCount: panel.querySelectorAll(
+          ".acceptance-summary-toggle, .acceptance-files-link, .acceptance-evidence-goal-pill",
+        ).length,
         summary: {
           tag: summary?.tagName ?? "",
           className: summary?.className ?? "",
@@ -319,7 +344,9 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
           tone: goal?.dataset.tone ?? "",
         },
         rowWithPillColumns: rowWithPill ? getComputedStyle(rowWithPill).gridTemplateColumns.split(" ").length : 0,
-        rowWithoutPillColumns: rowWithoutPill ? getComputedStyle(rowWithoutPill).gridTemplateColumns.split(" ").length : 0,
+        rowWithoutPillColumns: rowWithoutPill
+          ? getComputedStyle(rowWithoutPill).gridTemplateColumns.split(" ").length
+          : 0,
       }
     })
     assert.deepEqual(state, {
@@ -337,9 +364,15 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
       "acceptance-summary-toggle",
     )
     await page.click('[data-ui="acceptance-summary-toggle"]')
-    await page.waitForFunction(() => document.querySelector(".acceptance-summary")?.getAttribute("data-clamped") === "false")
+    await page.waitForFunction(
+      () => document.querySelector(".acceptance-summary")?.getAttribute("data-clamped") === "false",
+    )
 
-    const desktopScreenshot = await saveElementScreenshot(page, ".acceptance-panel", "acceptance-panel-button-owner-desktop.png")
+    const desktopScreenshot = await saveElementScreenshot(
+      page,
+      ".acceptance-panel",
+      "acceptance-panel-button-owner-desktop.png",
+    )
     assert.ok(desktopScreenshot.endsWith("acceptance-panel-button-owner-desktop.png"))
     await page.setViewport({ width: 760, height: 820 })
     await new Promise((resolve) => setTimeout(resolve, 150))
@@ -373,7 +406,9 @@ test("AcceptancePanel actions use Button primitives without layout overlap", asy
         }
         return { debugScreenshot: screenshotPath, chain, bodyText: document.body.innerText.slice(0, 1200) }
       }, debugScreenshot)
-      throw new Error(`acceptance panel hidden after narrow resize: ${JSON.stringify(diagnostics)}; original=${String(error)}`)
+      throw new Error(
+        `acceptance panel hidden after narrow resize: ${JSON.stringify(diagnostics)}; original=${String(error)}`,
+      )
     }
     const narrowScreenshot = await saveElementScreenshot(
       page,

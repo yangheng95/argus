@@ -23,12 +23,12 @@ Cascading Style Sheets. DOM means Document Object Model.
 
 ## Evidence
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n '<button\\b|<a\\b|role="button"|tabIndex=\\{0\\}|tabindex="0"' packages/overlay/src --glob '*.tsx'` | `GoalWorkflowGroup.tsx` still rendered two live raw buttons: `.gwg-header` and `.gwg-worktree`. | Migrate both visible clickable GWG controls to `Button`. |
-| `rg -n "GoalWorkflowGroup|gwg-header|gwg-worktree|goal-worktree-open|goal workflow" specs packages/overlay/src packages/overlay/test --glob '*.{md,ts,tsx,css}'` | The only live GWG button call sites are `GoalWorkflowGroup.tsx`; CSS owner is `surfaces/inspector.css`; tests pin the old raw-button contract. | Update the component, CSS owner, static guards, and browser test together. |
-| `packages/overlay/test/browser/goal-workflow-css-residue-browser.test.ts` | Real browser coverage already mounts the right inspector, focuses the GWG header, sends Enter/Space, and screenshots the GWG list. | Reuse this test and assert `.oc-button` primitive ownership. |
-| `packages/overlay/test/goal-workflow-group-worktree.test.ts` | Source guard confirms the worktree row remains per-goal and capability gated. | Keep the same data source and capability gate, but require `Button` for the clickable row. |
+| Sweep                                                                     | Result                                                                                                                             | Decision                                                                                   |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------ | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `rg -n '<button\\b                                                        | <a\\b                                                                                                                              | role="button"                                                                              | tabIndex=\\{0\\}   | tabindex="0"' packages/overlay/src --glob '\*.tsx'`                                          | `GoalWorkflowGroup.tsx` still rendered two live raw buttons: `.gwg-header` and `.gwg-worktree`.                                                | Migrate both visible clickable GWG controls to `Button`.                   |
+| `rg -n "GoalWorkflowGroup                                                 | gwg-header                                                                                                                         | gwg-worktree                                                                               | goal-worktree-open | goal workflow" specs packages/overlay/src packages/overlay/test --glob '\*.{md,ts,tsx,css}'` | The only live GWG button call sites are `GoalWorkflowGroup.tsx`; CSS owner is `surfaces/inspector.css`; tests pin the old raw-button contract. | Update the component, CSS owner, static guards, and browser test together. |
+| `packages/overlay/test/browser/goal-workflow-css-residue-browser.test.ts` | Real browser coverage already mounts the right inspector, focuses the GWG header, sends Enter/Space, and screenshots the GWG list. | Reuse this test and assert `.oc-button` primitive ownership.                               |
+| `packages/overlay/test/goal-workflow-group-worktree.test.ts`              | Source guard confirms the worktree row remains per-goal and capability gated.                                                      | Keep the same data source and capability gate, but require `Button` for the clickable row. |
 
 ## Root Cause
 
@@ -41,9 +41,9 @@ focus, padding, and color behavior beside the shared `.oc-button` contract.
 
 1. Import `Button` in `GoalWorkflowGroup.tsx`.
 2. Render the header disclosure as `Button variant="ghost" size="mini"
-   tone="neutral" data-ui="gwg-header"`.
+tone="neutral" data-ui="gwg-header"`.
 3. Render the clickable worktree row as `Button variant="ghost" size="mini"
-   tone="neutral" data-ui="goal-worktree-open"`.
+tone="neutral" data-ui="goal-worktree-open"`.
 4. Keep the non-clickable fallback row as `.gwg-worktree` because it is static
    display, not a control.
 5. Move interactive styles from `.gwg-header` / clickable `.gwg-worktree` to

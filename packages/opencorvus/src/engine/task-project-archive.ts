@@ -199,12 +199,15 @@ async function collectTaskExecutionFlow(input: {
   }
 }
 
-async function addTaskExecutionFlow(zip: ZipWriter<Blob>, input: {
-  taskID: string
-  project: Project.Info
-  fileCount: number
-  transcript: unknown[]
-}): Promise<void> {
+async function addTaskExecutionFlow(
+  zip: ZipWriter<Blob>,
+  input: {
+    taskID: string
+    project: Project.Info
+    fileCount: number
+    transcript: unknown[]
+  },
+): Promise<void> {
   const flow = await collectTaskExecutionFlow(input)
   const flowRoot = "opencorvus-task-execution-flow"
   await addJson(zip, zipPath(flowRoot, "manifest.json"), flow.manifest)
@@ -218,18 +221,21 @@ async function addTaskExecutionFlow(zip: ZipWriter<Blob>, input: {
   await addJson(zip, zipPath(flowRoot, "transcript.json"), flow.transcript)
 }
 
-async function addMissionExecutionFlow(zip: ZipWriter<Blob>, input: {
-  missionID: string
-  sessionID: string
-  title: string
-  directory: string
-  project: Project.Info
-  fileCount: number
-  record: unknown
-  status: unknown
-  tasks: unknown
-  transcript: unknown[]
-}): Promise<void> {
+async function addMissionExecutionFlow(
+  zip: ZipWriter<Blob>,
+  input: {
+    missionID: string
+    sessionID: string
+    title: string
+    directory: string
+    project: Project.Info
+    fileCount: number
+    record: unknown
+    status: unknown
+    tasks: unknown
+    transcript: unknown[]
+  },
+): Promise<void> {
   const executionFiles = ["manifest.json", "mission.json", "status.json", "tasks.json", "transcript.json"]
   const flowRoot = "opencorvus-mission-execution-flow"
   const manifest = {

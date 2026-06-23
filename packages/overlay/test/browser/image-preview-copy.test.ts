@@ -324,7 +324,9 @@ test(
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
       await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
       await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
-      await page.waitForFunction(() => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true")
+      await page.waitForFunction(
+        () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
+      )
       await page.waitForSelector(`.task-row-main[data-task-id='${taskID}']`, { visible: true })
       await page.click(`.task-row-main[data-task-id='${taskID}']`)
       try {
@@ -636,11 +638,31 @@ test(
       })
       for (const [label, result] of Object.entries(wheelProbe)) {
         assert.deepEqual(result.eventRectReads, [], `${label} burst must not read body rect during wheel events`)
-        assert.equal(result.eventClientWidthReads, 0, `${label} burst must not read body clientWidth during wheel events`)
-        assert.equal(result.eventClientHeightReads, 0, `${label} burst must not read body clientHeight during wheel events`)
-        assert.equal(result.rafRectReads.length, 1, `${label} burst should read body rect once in RAF: ${JSON.stringify(result)}`)
-        assert.equal(result.rafClientWidthReads, 1, `${label} burst should read body width once in RAF: ${JSON.stringify(result)}`)
-        assert.equal(result.rafClientHeightReads, 1, `${label} burst should read body height once in RAF: ${JSON.stringify(result)}`)
+        assert.equal(
+          result.eventClientWidthReads,
+          0,
+          `${label} burst must not read body clientWidth during wheel events`,
+        )
+        assert.equal(
+          result.eventClientHeightReads,
+          0,
+          `${label} burst must not read body clientHeight during wheel events`,
+        )
+        assert.equal(
+          result.rafRectReads.length,
+          1,
+          `${label} burst should read body rect once in RAF: ${JSON.stringify(result)}`,
+        )
+        assert.equal(
+          result.rafClientWidthReads,
+          1,
+          `${label} burst should read body width once in RAF: ${JSON.stringify(result)}`,
+        )
+        assert.equal(
+          result.rafClientHeightReads,
+          1,
+          `${label} burst should read body height once in RAF: ${JSON.stringify(result)}`,
+        )
       }
       assert.equal(wheelProbe.ctrlResult.scaleText, "400%")
       assert.equal(wheelProbe.metaResult.scaleText, "300%")
@@ -655,7 +677,10 @@ test(
         return image?.src || ""
       })
       assert.ok(previewSrc, "expected image preview src")
-      assert.ok(previewSrc.startsWith("blob:"), `expected protected screenshot to render from object URL, got ${previewSrc}`)
+      assert.ok(
+        previewSrc.startsWith("blob:"),
+        `expected protected screenshot to render from object URL, got ${previewSrc}`,
+      )
       const initialFetches = await page.evaluate(() => {
         const state = (
           window as typeof window & {

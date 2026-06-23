@@ -115,7 +115,7 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
     if (typeof IntersectionObserver === "undefined") {
       throw new Error("Screenshot thumbnail lazy loading requires IntersectionObserver")
     }
-    const root = thumbnailHost.closest<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+    const root = thumbnailHost.closest<HTMLElement>('.screenshot-browser-groups[data-virtualized="true"]')
     if (!root) throw new Error("Screenshot thumbnail must mount inside the virtual screenshot browser list")
     const observer = new IntersectionObserver(
       (entries) => {
@@ -152,7 +152,9 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
       >
         <Show
           when={src()}
-          fallback={<div class="screenshot-browser__thumb-trigger screenshot-browser__thumb-placeholder" aria-hidden="true" />}
+          fallback={
+            <div class="screenshot-browser__thumb-trigger screenshot-browser__thumb-placeholder" aria-hidden="true" />
+          }
         >
           {(resolved) => (
             <PreviewableImage

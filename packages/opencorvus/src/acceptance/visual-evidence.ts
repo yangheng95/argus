@@ -4,62 +4,74 @@ import z from "zod"
 import { findReadableBrowserPreviewEvidenceByID } from "@/browser-preview/persist"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
-export const VisualRegionEvidenceSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  requirementIDs: z.array(z.string().min(1)),
-  acceptanceSpecIDs: z.array(z.string().min(1)),
-  sourceRefs: z.array(z.string().min(1)),
-  viewport: z.string().min(1),
-  bounds: z
-    .object({
-      x: z.number(),
-      y: z.number(),
-      width: z.number(),
-      height: z.number(),
-    })
-    .strict()
-    .optional(),
-  required: z.boolean(),
-  status: z.enum(["passing", "failing", "deferred"]),
-  evidenceRefs: z.array(z.string().min(1)),
-  notes: z.string(),
-}).strict()
+export const VisualRegionEvidenceSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    requirementIDs: z.array(z.string().min(1)),
+    acceptanceSpecIDs: z.array(z.string().min(1)),
+    sourceRefs: z.array(z.string().min(1)),
+    viewport: z.string().min(1),
+    bounds: z
+      .object({
+        x: z.number(),
+        y: z.number(),
+        width: z.number(),
+        height: z.number(),
+      })
+      .strict()
+      .optional(),
+    required: z.boolean(),
+    status: z.enum(["passing", "failing", "deferred"]),
+    evidenceRefs: z.array(z.string().min(1)),
+    notes: z.string(),
+  })
+  .strict()
 
-export const VisualEvidenceBundleSchema = z.object({
-  id: z.string().min(1),
-  taskID: z.string().min(1),
-  source: z.enum(["frontend_design", "build", "integrity"]),
-  reference: z.object({
-    path: z.string().min(1),
-    sha256: z.string().min(1),
-    width: z.number().int().positive(),
-    height: z.number().int().positive(),
-  }).strict(),
-  rendered: z.object({
-    path: z.string().min(1),
-    sha256: z.string().min(1),
-    width: z.number().int().positive(),
-    height: z.number().int().positive(),
-    capturedAt: z.string().min(1),
-    viewport: z.object({
-      width: z.number().int().positive(),
-      height: z.number().int().positive(),
-      deviceScaleFactor: z.number().positive().optional(),
-    }).strict(),
-    appURL: z.string().min(1),
-    projectDirectory: z.string().min(1),
-    commitRef: z.string().min(1).optional(),
-  }).strict(),
-  inspection: z.object({
-    path: z.string().min(1).optional(),
-    reviewedAt: z.string().min(1),
-    status: z.enum(["passing", "failing", "incomplete"]),
-    blockerCount: z.number().int().min(0),
-    notes: z.string().min(1),
-  }).strict(),
-  regions: z.array(VisualRegionEvidenceSchema),
-}).strict()
+export const VisualEvidenceBundleSchema = z
+  .object({
+    id: z.string().min(1),
+    taskID: z.string().min(1),
+    source: z.enum(["frontend_design", "build", "integrity"]),
+    reference: z
+      .object({
+        path: z.string().min(1),
+        sha256: z.string().min(1),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      })
+      .strict(),
+    rendered: z
+      .object({
+        path: z.string().min(1),
+        sha256: z.string().min(1),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+        capturedAt: z.string().min(1),
+        viewport: z
+          .object({
+            width: z.number().int().positive(),
+            height: z.number().int().positive(),
+            deviceScaleFactor: z.number().positive().optional(),
+          })
+          .strict(),
+        appURL: z.string().min(1),
+        projectDirectory: z.string().min(1),
+        commitRef: z.string().min(1).optional(),
+      })
+      .strict(),
+    inspection: z
+      .object({
+        path: z.string().min(1).optional(),
+        reviewedAt: z.string().min(1),
+        status: z.enum(["passing", "failing", "incomplete"]),
+        blockerCount: z.number().int().min(0),
+        notes: z.string().min(1),
+      })
+      .strict(),
+    regions: z.array(VisualRegionEvidenceSchema),
+  })
+  .strict()
 
 export const VisualEvidenceBundleListSchema = z.array(VisualEvidenceBundleSchema)
 

@@ -355,7 +355,7 @@ test("agent file changes render only through the right-panel Files workbench", (
   expect(sharedView).toContain("changes-group-header")
   expect(sharedView).toContain("change-scope")
   expect(sharedView).toContain('import { Button } from "./ui/Button"')
-  expect(sharedView).toContain('import { SegmentedControl')
+  expect(sharedView).toContain("import { SegmentedControl")
   expect(sharedView).toContain('class="changes-filter-field search-field"')
   expect(sharedView).toContain('class="changes-filter-icon search-field-icon"')
   expect(sharedView).toContain('class="changes-filter-input search-field-input"')

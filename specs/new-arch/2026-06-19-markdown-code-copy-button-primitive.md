@@ -15,20 +15,20 @@ duplicates icon-button border, background, hover, and focus-visible styling.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
+| Source                                                | Relevant constraint                                                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Markdown code-copy already moved to shared `iconHtml("copy")`; icon source is not the remaining issue. |
-| `2026-06-17-icon-html-single-source.md` | `utils/markdown.ts` keeps `iconHtml("copy", 12)` and generated HTML must use the central Icon source. |
-| `packages/overlay/src/main.tsx` | Code-copy behavior is delegated through `button[data-md-copy]`, not through `.md-code-copy`. |
-| `packages/overlay/src/styles/primitives/button.css` | `.oc-button:focus-visible` and `data-chrome="icon-action"` own icon-button focus and hover chrome. |
+| `2026-06-17-icon-html-single-source.md`               | `utils/markdown.ts` keeps `iconHtml("copy", 12)` and generated HTML must use the central Icon source.  |
+| `packages/overlay/src/main.tsx`                       | Code-copy behavior is delegated through `button[data-md-copy]`, not through `.md-code-copy`.           |
+| `packages/overlay/src/styles/primitives/button.css`   | `.oc-button:focus-visible` and `data-chrome="icon-action"` own icon-button focus and hover chrome.     |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -e "md-code-copy" -e "data-md-copy" -e "markdown-code-copy" packages/overlay/src packages/overlay/test specs specs/new-arch` | Production ownership is `wrapCodeBlock` and `markdown.css`; click behavior only uses `button[data-md-copy]`. | Add `.oc-button` and data attributes without changing clipboard delegation. |
-| `markdown.css` inspection | `.md-code-copy`, `.md-code-copy:hover`, and `.md-code-copy:focus-visible` duplicate button chrome. | Retire private hover/focus shell; keep only code-toolbar geometry/success token overrides. |
-| `markdown-safety.test.ts` inspection | Current tests cover copy payload budget, not the emitted button primitive contract. | Extend the existing Markdown test file. |
+| Sweep                                                                                                                               | Result                                                                                                       | Decision                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `rg -n -e "md-code-copy" -e "data-md-copy" -e "markdown-code-copy" packages/overlay/src packages/overlay/test specs specs/new-arch` | Production ownership is `wrapCodeBlock` and `markdown.css`; click behavior only uses `button[data-md-copy]`. | Add `.oc-button` and data attributes without changing clipboard delegation.                |
+| `markdown.css` inspection                                                                                                           | `.md-code-copy`, `.md-code-copy:hover`, and `.md-code-copy:focus-visible` duplicate button chrome.           | Retire private hover/focus shell; keep only code-toolbar geometry/success token overrides. |
+| `markdown-safety.test.ts` inspection                                                                                                | Current tests cover copy payload budget, not the emitted button primitive contract.                          | Extend the existing Markdown test file.                                                    |
 
 ## Fix Plan
 

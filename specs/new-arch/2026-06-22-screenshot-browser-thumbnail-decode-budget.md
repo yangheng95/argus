@@ -19,25 +19,25 @@ response separately from image decode completion.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, recall before edits, test every change, visually verify UI changes, commit and push every round. |
-| `2026-06-22-screenshot-browser-open-jank.md` | Screenshot rendering is virtualized and thumbnail fetches are lazy and frame-batched. |
-| `2026-06-22-screenshot-browser-defer-initial-measure.md` | Toolbar open must not synchronously read screenshot list width outside RAF. |
-| `2026-06-22-screenshot-browser-top-level-index.md` | Screenshot panel reads `cardTreeStore.screenshotItems`; no panel-local source or traversal fallback. |
-| `2026-06-22-screenshot-browser-virtual-row-measurement.md` | CSS and `virtua/solid` own row geometry; no fixed TypeScript row-height source. |
-| Live 7878 audit 2026-06-22 | Existing in-app tab can be stale and slow; isolated new browser pages on current assets are the authoritative code verification path unless user permits refresh. |
+| Source                                                     | Constraint carried forward                                                                                                                                        |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                | No fallback, no duplicate source, recall before edits, test every change, visually verify UI changes, commit and push every round.                                |
+| `2026-06-22-screenshot-browser-open-jank.md`               | Screenshot rendering is virtualized and thumbnail fetches are lazy and frame-batched.                                                                             |
+| `2026-06-22-screenshot-browser-defer-initial-measure.md`   | Toolbar open must not synchronously read screenshot list width outside RAF.                                                                                       |
+| `2026-06-22-screenshot-browser-top-level-index.md`         | Screenshot panel reads `cardTreeStore.screenshotItems`; no panel-local source or traversal fallback.                                                              |
+| `2026-06-22-screenshot-browser-virtual-row-measurement.md` | CSS and `virtua/solid` own row geometry; no fixed TypeScript row-height source.                                                                                   |
+| Live 7878 audit 2026-06-22                                 | Existing in-app tab can be stale and slow; isolated new browser pages on current assets are the authoritative code verification path unless user permits refresh. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Screenshot thumbnail | `ScreenshotBrowserPanel.tsx` renders `PreviewableImage` without `imageAttributes`. | Add `decoding="async"` and `fetchpriority="low"` only for screenshot thumbnails. |
-| Shared preview component | `ImagePreview.tsx` already exposes `imageAttributes?: JSX.ImgHTMLAttributes<HTMLImageElement>`. | Reuse the existing shared primitive; do not add a second image path. |
-| Browser preview evidence | `BrowserPreviewPanel.tsx` already passes `decoding: "async"` to `PreviewableImage`. | Keep evidence screenshots unchanged; screenshot thumbnails have their own lower priority because they are dense list content. |
-| Message/file images | `FilePart.tsx`, `InlineToolPart.tsx`, and markdown image rendering also use image preview paths. | Leave them unchanged; user-facing inline message images should not inherit screenshot-browser thumbnail priority. |
-| Static screenshot test | `screenshot-browser-panel.test.ts` already checks shared preview reuse, lazy loading, bounded requests, and forbidden local storage/fetch paths. | Extend it to pin screenshot thumbnail async decode and low fetch priority. |
-| Browser benchmark | `screenshot-browser-panel-browser.test.ts` currently asserts `openElapsed < 5000` after waiting for image decode. | Split visible toolbar response from image decode completion, add long-task and frame-gap budgets, and tighten the open budget. |
+| Surface                  | Evidence                                                                                                                                         | Decision                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Screenshot thumbnail     | `ScreenshotBrowserPanel.tsx` renders `PreviewableImage` without `imageAttributes`.                                                               | Add `decoding="async"` and `fetchpriority="low"` only for screenshot thumbnails.                                               |
+| Shared preview component | `ImagePreview.tsx` already exposes `imageAttributes?: JSX.ImgHTMLAttributes<HTMLImageElement>`.                                                  | Reuse the existing shared primitive; do not add a second image path.                                                           |
+| Browser preview evidence | `BrowserPreviewPanel.tsx` already passes `decoding: "async"` to `PreviewableImage`.                                                              | Keep evidence screenshots unchanged; screenshot thumbnails have their own lower priority because they are dense list content.  |
+| Message/file images      | `FilePart.tsx`, `InlineToolPart.tsx`, and markdown image rendering also use image preview paths.                                                 | Leave them unchanged; user-facing inline message images should not inherit screenshot-browser thumbnail priority.              |
+| Static screenshot test   | `screenshot-browser-panel.test.ts` already checks shared preview reuse, lazy loading, bounded requests, and forbidden local storage/fetch paths. | Extend it to pin screenshot thumbnail async decode and low fetch priority.                                                     |
+| Browser benchmark        | `screenshot-browser-panel-browser.test.ts` currently asserts `openElapsed < 5000` after waiting for image decode.                                | Split visible toolbar response from image decode completion, add long-task and frame-gap budgets, and tighten the open budget. |
 
 ## Root Cause
 
@@ -80,13 +80,13 @@ correctness and can compete with the toolbar reveal frame.
 
 ## Implementation
 
-| Change | Reason |
-| --- | --- |
+| Change                                                                                                                                          | Reason                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `ScreenshotBrowserPanel` now passes `imageAttributes={{ decoding: "async", fetchpriority: "low" }}` to screenshot thumbnail `PreviewableImage`. | Keeps the shared preview primitive while moving dense thumbnail decode/fetch priority off the toolbar-open critical path. |
-| `SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME` changed from 3 to 1. | Large screenshots should not start multiple full-image fetch/decode operations in the same visual frame. |
-| The browser fixture now generates distinct 1440x900 PNG attachments per screenshot index. | Prevents the benchmark from being satisfied by a tiny repeated 320x180 PNG or decode cache. |
-| Browser perf sampling waits for conversation data before timing toolbar open and runs until all mounted first-screen thumbnails complete. | Separates toolbar response from initial data load, then still covers visible thumbnail decode pressure. |
-| The narrow-panel screenshot uses the computed `--ui-workbench-panel-min-width` instead of a hard-coded 320px. | Prevents the test from creating an illegal panel width below the project size contract. |
+| `SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME` changed from 3 to 1.                                                                             | Large screenshots should not start multiple full-image fetch/decode operations in the same visual frame.                  |
+| The browser fixture now generates distinct 1440x900 PNG attachments per screenshot index.                                                       | Prevents the benchmark from being satisfied by a tiny repeated 320x180 PNG or decode cache.                               |
+| Browser perf sampling waits for conversation data before timing toolbar open and runs until all mounted first-screen thumbnails complete.       | Separates toolbar response from initial data load, then still covers visible thumbnail decode pressure.                   |
+| The narrow-panel screenshot uses the computed `--ui-workbench-panel-min-width` instead of a hard-coded 320px.                                   | Prevents the test from creating an illegal panel width below the project size contract.                                   |
 
 ## Verification
 

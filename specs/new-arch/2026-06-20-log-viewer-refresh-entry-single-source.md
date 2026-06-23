@@ -16,20 +16,20 @@ real action.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `AGENTS.md` | Remove double-source UI instead of preserving compatibility controls. Add tests and visual evidence. |
+| Source                                                | Constraint                                                                                                                 |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                           | Remove double-source UI instead of preserving compatibility controls. Add tests and visual evidence.                       |
 | `2026-06-01-overlay-mature-ui-primitives-refactor.md` | LogViewer is already on mature primitives for parsing, Select, and virtualized rendering. Do not add a new primitive path. |
-| `2026-06-15-help-open-logs.md` | Logs open through the existing `oc:open-logs` event and use `/log/tail`; do not change opening or fetch semantics. |
-| `2026-06-17-log-viewer-select-style-single-source.md` | Keep the severity Select on shared `SelectControl`; this fix must not touch Select styling. |
-| `2026-06-19-retire-log-path-residue.md` | Remove LogViewer residue when it has no production owner. |
+| `2026-06-15-help-open-logs.md`                        | Logs open through the existing `oc:open-logs` event and use `/log/tail`; do not change opening or fetch semantics.         |
+| `2026-06-17-log-viewer-select-style-single-source.md` | Keep the severity Select on shared `SelectControl`; this fix must not touch Select styling.                                |
+| `2026-06-19-retire-log-path-residue.md`               | Remove LogViewer residue when it has no production owner.                                                                  |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n "btnLog(ServerLogs|Refresh)|log\\.load_server|refreshAction\\.run\\(\\)" packages/overlay/src packages/overlay/test -S` | `LogViewer.tsx` renders both `btnLogServerLogs` and `btnLogRefresh`; both call `refreshAction.run()`. `dom.ts` exposes both refs. `log.load_server` only labels the duplicate button. | Keep `btnLogRefresh` and `common.refresh`; delete `btnLogServerLogs` and `log.load_server`. |
-| `rg -n "LogViewer|log viewer|btnLog(ServerLogs|Refresh)" specs packages/overlay -g "*.md" -g "*.tsx" -g "*.ts" -g "*.json"` | Existing LogViewer specs cover opening, virtual list sizing, Select single source, and residue removal; none require a separate server-log button. | Treat the extra button as residue, not a compatibility contract. |
+| Command                   | Result     | Decision          |
+| ------------------------- | ---------- | ----------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `rg -n "btnLog(ServerLogs | Refresh)   | log\\.load_server | refreshAction\\.run\\(\\)" packages/overlay/src packages/overlay/test -S`    | `LogViewer.tsx` renders both `btnLogServerLogs` and `btnLogRefresh`; both call `refreshAction.run()`. `dom.ts` exposes both refs. `log.load_server` only labels the duplicate button. | Keep `btnLogRefresh` and `common.refresh`; delete `btnLogServerLogs` and `log.load_server`. |
+| `rg -n "LogViewer         | log viewer | btnLog(ServerLogs | Refresh)" specs packages/overlay -g "_.md" -g "_.tsx" -g "_.ts" -g "_.json"` | Existing LogViewer specs cover opening, virtual list sizing, Select single source, and residue removal; none require a separate server-log button.                                    | Treat the extra button as residue, not a compatibility contract.                            |
 
 ## Fix Plan
 
