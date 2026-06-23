@@ -186,12 +186,22 @@ test("file explorer current file and directory expansion are exposed on the row 
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
+    assert.equal(
+      requestLog.some((entry) => entry.startsWith("GET /file")),
+      false,
+      "inactive File Explorer must not load directories before its activity is opened",
+    )
+    requestLog.length = 0
     await page.waitForFunction(
       () => document.documentElement.dataset.theme === "dark" && document.body.dataset.theme === "dark",
     )
     await page.evaluate(() => document.documentElement.style.setProperty("--ui-scale", "1.25"))
     await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
     await page.waitForSelector('.file-explorer-row[title="README.md"]', { visible: true })
+    assert.ok(
+      requestLog.some((entry) => entry.startsWith("GET /file?") && entry.includes("path=")),
+      `active File Explorer should load the root directory after opening: ${JSON.stringify(requestLog)}`,
+    )
 
     const darkDensityScreenshotPath = resolve(".scratch/file-explorer-dark-row-density.png")
     mkdirSync(dirname(darkDensityScreenshotPath), { recursive: true })

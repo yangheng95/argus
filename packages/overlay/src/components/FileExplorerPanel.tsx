@@ -174,6 +174,8 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   })
 
   createEffect(() => {
+    const currentDirectory = directory()
+    if (!active() || !currentDirectory) return
     const selected = selectedFilePath()
     if (!selected) return
     const ancestors: string[] = []

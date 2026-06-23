@@ -53,3 +53,60 @@ their visual hierarchy is a dense file list, not a toolbar button group.
 - Existing row geometry and accessibility tests still pass.
 - Dark-theme browser evidence is captured from an isolated test page; no running user
   OpenCorvus / overlay process is restarted, closed, or refreshed.
+
+## Follow-up 2026-06-23: Inactive Selected File Load
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Sartre read-only audit | The `selectedFilePath()` expansion effect can call `loadDirectory()` while the center Explorer panel is inactive. |
+| `FileExplorerPanel.tsx` | Initial root load and refresh interval are already active-gated; selected-file ancestor loading is the remaining trigger gap. |
+| `2026-06-20-file-explorer-row-button-size-source.md` | Keep row geometry and Button primitive ownership unchanged. |
+
+### Fix Plan
+
+1. Make the selected-file expansion effect read `active()` and `directory()`
+   before reading `selectedFilePath()`.
+2. Leave `loadDirectory()` and row rendering unchanged; this is a trigger-owner
+   fix, not a second cache or data source.
+3. Add a source guard proving selected-file expansion is active-gated.
+4. Extend the mounted browser test to assert no `/file` request is sent before
+   the Explorer activity is opened, then verify the existing visible Explorer
+   path still loads and renders.
+
+### Acceptance
+
+- Hidden Explorer panels do not load root or selected-file ancestor
+  directories.
+- Opening Explorer still loads root and selected ancestors from the active
+  workspace directory.
+- No fallback directory source, alternate file store, duplicate row component,
+  or panel-local cache is introduced.
+
+### Implementation
+
+- The selected-file expansion effect now reads `active()` and `directory()`
+  before `selectedFilePath()`, so selected-file signal changes are not
+  subscribed while the Explorer panel is inactive.
+- The existing initial-load and refresh active guards remain unchanged.
+- The browser fixture now asserts no `/file` directory request is sent before
+  the Explorer activity is opened, then verifies root load after opening.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `bun test packages/overlay/test/file-explorer-editor.test.ts --timeout 30000` | 4 pass |
+| `bun run --cwd packages/overlay typecheck` | Pass |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/file-explorer-accessibility.test.ts` | 2 pass |
+| Visual QA | Reviewed `.scratch/file-explorer-dark-row-density.png`, `.scratch/file-explorer-search-field-focus.png`, `.scratch/file-explorer-row-focus-visible.png`, and `.scratch/file-explorer-retry-button-primitive.png`. |
+
+### Self Review
+
+- The change removes a hidden trigger source; it does not add a request cache or
+  alternate file tree source.
+- Row Button primitive ownership, virtual row sizing, upload flow, and editor
+  opening behavior remain unchanged.
+- The source test also updated a stale assertion so `FileChangesPanel` continues
+  to assert the current active prop contract.

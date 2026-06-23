@@ -164,7 +164,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(service).toContain('apiJson("file/upload"')
   expect(service).toContain("file.arrayBuffer()")
   expect(editor).not.toContain("showMessagesPane")
-  expect(filesPanel).toContain("<ChangesPanel hasSelectedTask />")
+  expect(filesPanel).toContain("<ChangesPanel active={props.active} hasSelectedTask />")
   expect(filesPanel).toContain("<DiffPreviewPanel")
   expect(filesPanel).not.toContain("<FileEditorPane")
   expect(filesPanel).toContain("data-active-view={activeView()}")
@@ -262,6 +262,16 @@ test("file workbench open state is independent from selected task presence", () 
   closeFileEditor()
   expect(fileWorkbenchOpen()).toBe(false)
   expect(selectedFilePath()).toBe("")
+})
+
+test("file explorer selected-file expansion is active-gated", () => {
+  const explorer = readText("src/components/FileExplorerPanel.tsx")
+  expect(explorer).toMatch(
+    /createEffect\(\(\) => \{\s*const currentDirectory = directory\(\)\s*if \(!active\(\) \|\| !currentDirectory\) return\s*const selected = selectedFilePath\(\)/,
+  )
+  expect(explorer).not.toMatch(
+    /createEffect\(\(\) => \{\s*const selected = selectedFilePath\(\)\s*if \(!selected\) return/,
+  )
 })
 
 test("file explorer rows expose truthful button semantics instead of an incomplete aria tree", () => {
