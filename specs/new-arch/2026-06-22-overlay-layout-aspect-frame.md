@@ -47,7 +47,7 @@ it caused live resize jank.
 ## Root Cause
 
 After removing the native live resize `set_size()` loop, there was no remaining
-native owner for the minimum aspect-ratio part of the `1120x720` contract. The
+pre-commit Windows native owner for the minimum aspect-ratio part of the `1120x720` contract. The
 browser shell and zoom service also treated any raw viewport height as valid.
 That creates two observable defects: the app surface can stretch beyond the
 aspect ratio implied by the `1120x720` contract, and `applyZoom()` can scale the
@@ -58,7 +58,7 @@ is defined for the legal frame.
 
 1. Change overlay minimum dimensions into numeric CSS source tokens, then derive
    `--ui-overlay-min-width`, `--ui-overlay-min-height`, and the minimum aspect
-   ratio from those tokens.
+   ratio from those width/height units.
 2. Clamp the body layout frame height with that derived aspect ratio while
    preserving the existing native minimum width and height floor.
 3. Install a Windows `WM_SIZING` subclass that constrains the mutable resize
@@ -106,9 +106,9 @@ is defined for the legal frame.
   `tauri::WindowEvent::Resized` and the removed `overlay_window_needs_resize`
   loop, while Windows `WM_SIZING` constrains the rectangle before the OS
   finishes resizing.
-- Rechecked source ownership: overlay min width, min height, min aspect ratio,
-  and center workbench panel minimum all derive from CSS tokens; no duplicate
-  panel minimum was added.
+- Rechecked source ownership: overlay min width, min height, derived aspect
+  ratio, and center workbench panel minimum all come from the same width/height
+  units; no duplicate panel minimum was added.
 - Rechecked the web layout frame: browser/dev illegal tall evidence is
   aspect-clamped instead of stretched, and the blank area below the shell is a
   browser fixture artifact that native `WM_SIZING` prevents in the real overlay.
