@@ -105,8 +105,7 @@ export namespace SkillMount {
   }): Promise<ResolvedAgentSkillSurface> {
     const skills = input.skills ?? (await Skill.all())
     const allAgents: Agent.Info[] =
-      input.agents ??
-      (await import("@/agent/agent").then(({ Agent }) => Agent.list({ config: input.config })))
+      input.agents ?? (await import("@/agent/agent").then(({ Agent }) => Agent.list({ config: input.config })))
     assertKnownMountedAgents(skills, allAgents)
     const byName = skillByName(skills)
     const mountedNames = skills

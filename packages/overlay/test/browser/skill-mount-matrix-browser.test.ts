@@ -488,7 +488,11 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     )
     assert.ok(layout.headers.includes("frontend-research"), "agent header should use the full agent name")
     assert.equal(layout.headers.includes("mission"), false, "agents without skill tool should not render as X columns")
-    assert.equal(layout.headers.includes("orchestrator"), false, "orchestrator should not render as an unsettable column")
+    assert.equal(
+      layout.headers.includes("orchestrator"),
+      false,
+      "orchestrator should not render as an unsettable column",
+    )
     assert.equal(layout.mountedCells, 2, "enabled mounts should render as cell state")
     assert.equal(layout.conflictCells, 1, "disabled mounted skills should render as conflict cells")
     assert.equal(layout.unavailableCells, 0, "unavailable agent columns should be removed")
@@ -509,9 +513,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       const names = Array.from(document.querySelectorAll("#leftPanelSkills .agent-skill-grid-skill__name")).map(
         (item) => (item.textContent || "").trim(),
       )
-      const mounted = document.querySelector(
-        '#leftPanelSkills [aria-label="Unmount: claude-debug -> requirements"]',
-      )
+      const mounted = document.querySelector('#leftPanelSkills [aria-label="Unmount: claude-debug -> requirements"]')
       return mounted && names.join("|") === "opencorvus-plan|claude-debug|agents-legacy|codex-review"
     })
 
@@ -521,9 +523,9 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       const actionButtonText = Array.from(node.querySelectorAll('[data-ui="skill-form-icon-action"]')).map((button) =>
         (button.textContent || "").trim(),
       )
-      const browse = node.querySelector('[data-ui="skill-form-icon-action"][aria-label="Browse Folder"]') as
-        | HTMLElement
-        | null
+      const browse = node.querySelector(
+        '[data-ui="skill-form-icon-action"][aria-label="Browse Folder"]',
+      ) as HTMLElement | null
       const input = browse?.closest(".field-input-group")?.querySelector(".field-input") as HTMLElement | null
       return {
         actionButtonText,
@@ -531,11 +533,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         browse: browse ? browse.getBoundingClientRect().toJSON() : null,
       }
     })
-    assert.deepEqual(
-      compactForm.actionButtonText.filter(Boolean),
-      [],
-      "compact skill form actions should be icon-only",
-    )
+    assert.deepEqual(compactForm.actionButtonText.filter(Boolean), [], "compact skill form actions should be icon-only")
     assert.ok(compactForm.browse && compactForm.browse.width > 12, "browse action should render as an icon button")
     assert.ok(compactForm.input, "source input should render")
     assert.ok(
@@ -619,7 +617,10 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     assert.equal(settingsLayout.display, "grid")
     assert.ok(settingsLayout.height >= 240, "settings matrix must be visibly rendered above the skill registry")
     assert.ok(settingsLayout.columns.includes("px"), "settings matrix should receive explicit grid columns")
-    assert.ok(settingsLayout.scrollWidth >= settingsLayout.clientWidth, "settings matrix should not underflow its viewport")
+    assert.ok(
+      settingsLayout.scrollWidth >= settingsLayout.clientWidth,
+      "settings matrix should not underflow its viewport",
+    )
     assert.ok(settingsLayout.headers.includes("frontend-research"), "settings matrix should show full agent names")
     assert.equal(settingsLayout.headers.includes("mission"), false)
     assert.equal(settingsLayout.headers.includes("orchestrator"), false)

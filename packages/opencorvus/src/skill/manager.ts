@@ -379,10 +379,7 @@ export namespace SkillManager {
     }
   }
 
-  export async function importFile(
-    raw: z.input<typeof ImportFileInput>,
-    options: { mountedAgent?: string } = {},
-  ) {
+  export async function importFile(raw: z.input<typeof ImportFileInput>, options: { mountedAgent?: string } = {}) {
     const input = ImportFileInput.parse(raw)
     const projectConfigDir = Config.projectConfigDirectory()
     const skillRoots = await readImportSkillRoots(input)
@@ -701,7 +698,10 @@ type NormalizedSkillFile = {
   bytes: Uint8Array
 }
 type ParsedSkillRoot = {
-  info: Pick<z.infer<typeof Skill.Info>, "name" | "description" | "platforms" | "required_tools" | "agents" | "mounted_agents">
+  info: Pick<
+    z.infer<typeof Skill.Info>,
+    "name" | "description" | "platforms" | "required_tools" | "agents" | "mounted_agents"
+  >
   files: Array<{
     sourcePath: string
     relativePath: string
