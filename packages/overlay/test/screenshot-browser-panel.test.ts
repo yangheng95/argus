@@ -487,8 +487,18 @@ describe("screenshot browser panel", () => {
     expect(component).toContain("pendingWidth = entry.contentRect.width")
     expect(component).not.toContain("element.clientWidth")
     expect(component).toContain("groupScreenshotBrowserItems")
+    expect(component).toContain("isStoredAttachmentUrl")
+    expect(component).not.toContain("needsAuthedFetch")
+    expect(component).not.toContain("resolveResourceUrl")
     expect(component).toContain("fetchResourceAsObjectUrl")
     expect(component).toContain("peekResourceObjectUrl")
+    expect(component).toContain("peekResourceObjectUrl(url) ?? fetchResourceAsObjectUrl(url)")
+    expect(component).toContain("const src = () => (loadAllowed() && !sourceError() ? objectUrl() : null)")
+    expect(component).toContain('t("screenshots.thumbnail_invalid_source")')
+    expect(component).toContain('t("screenshots.thumbnail_load_failed")')
+    expect(component).toContain('class="screenshot-browser__thumb-trigger screenshot-browser__thumb-error"')
+    expect(component).not.toContain("initialValue: authed() ?")
+    expect(component).not.toContain("peekResourceObjectUrl(props.item.src)")
     expect(component).toContain("<PreviewableImage")
     expect(component).toContain("imageAttributes={{")
     expect(component).toContain('decoding: "async"')
@@ -514,6 +524,7 @@ describe("screenshot browser panel", () => {
     expect(css).not.toContain(".screenshot-browser-grid")
     expect(css).toContain("grid-template-rows: calc(86px * var(--ui-scale))")
     expect(css).toContain(".screenshot-browser__thumb-trigger .screenshot-browser__thumb-image")
+    expect(css).toContain(".screenshot-browser__thumb-error")
     expect(css).toContain("max-width: none")
     expect(css).toContain("max-height: none")
     for (const key of [
@@ -521,6 +532,8 @@ describe("screenshot browser panel", () => {
       "screenshots.empty",
       "screenshots.count",
       "screenshots.group_count",
+      "screenshots.thumbnail_invalid_source",
+      "screenshots.thumbnail_load_failed",
       "activity.tooltip.screenshots",
     ]) {
       expect(en).toContain(`"${key}"`)

@@ -817,6 +817,8 @@
   "screenshots.count": "{{count}} 张截图",
   "screenshots.empty": "任务消息和工具结果中的截图会显示在这里。",
   "screenshots.group_count": "{{count}}",
+  "screenshots.thumbnail_invalid_source": "来源无效",
+  "screenshots.thumbnail_load_failed": "加载失败",
   "screenshots.title": "截图",
   "explorer.search_placeholder": "搜索文件",
   "explorer.drop_upload_title": "拖入文件以上传",

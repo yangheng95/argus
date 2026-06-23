@@ -615,6 +615,22 @@ test(
             requestAnimationFrame(() => resolve())
           }),
       )
+      await page.waitForFunction(() => {
+        const root = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+        if (!root) return false
+        const rootRect = root.getBoundingClientRect()
+        const visibleCards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card")).filter((card) => {
+          const rect = card.getBoundingClientRect()
+          return rect.bottom > rootRect.top && rect.top < rootRect.bottom && rect.right > rootRect.left && rect.left < rootRect.right
+        })
+        return (
+          visibleCards.length > 1 &&
+          visibleCards.every((card) => {
+            const img = card.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
+            return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+          })
+        )
+      })
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForFunction(
         () => document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open === "false",
@@ -631,12 +647,96 @@ test(
         `closing screenshots left too many thumbnail loads active: ${closedAttachmentRequests}`,
       )
       const requestsBeforeReopen = attachmentRequests.length
+      await page.evaluate(() => {
+        const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window)
+        const originalCancelAnimationFrame = window.cancelAnimationFrame.bind(window)
+        let activeFrameID = 0
+        let nextFrameID = 1
+        const seenImages = new WeakSet<HTMLImageElement>()
+        const imageInsertions: Array<{ frameID: number; src: string }> = []
+        const recordImage = (image: HTMLImageElement) => {
+          if (seenImages.has(image)) return
+          seenImages.add(image)
+          imageInsertions.push({
+            frameID: activeFrameID,
+            src: image.currentSrc || image.src,
+          })
+        }
+        const recordNode = (node: Node) => {
+          if (!(node instanceof Element)) return
+          if (node.matches(".screenshot-browser__thumb-image")) recordImage(node as HTMLImageElement)
+          for (const image of node.querySelectorAll<HTMLImageElement>(".screenshot-browser__thumb-image")) {
+            recordImage(image)
+          }
+        }
+        const observer = new MutationObserver((records) => {
+          for (const record of records) {
+            for (const node of record.addedNodes) recordNode(node)
+          }
+        })
+        observer.observe(document.body, { childList: true, subtree: true })
+        window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+          originalRequestAnimationFrame((time) => {
+            activeFrameID = nextFrameID++
+            callback(time)
+          })) as typeof requestAnimationFrame
+        window.cancelAnimationFrame = originalCancelAnimationFrame
+        ;(window as any).__screenshotBrowserStopWarmCacheProbe = () => {
+          observer.disconnect()
+          window.requestAnimationFrame = originalRequestAnimationFrame
+          window.cancelAnimationFrame = originalCancelAnimationFrame
+          return { imageInsertions }
+        }
+      })
       const reopenStart = Date.now()
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']")
       await page.waitForSelector(".screenshot-browser-card")
       const reopenFirstCardElapsed = Date.now() - reopenStart
       assert.ok(reopenFirstCardElapsed < 1_500, `screenshot browser reopen first card took ${reopenFirstCardElapsed}ms`)
+      await page.waitForFunction(() => {
+        const root = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+        if (!root) return false
+        const rootRect = root.getBoundingClientRect()
+        const visibleCards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card")).filter((card) => {
+          const rect = card.getBoundingClientRect()
+          return rect.bottom > rootRect.top && rect.top < rootRect.bottom && rect.right > rootRect.left && rect.left < rootRect.right
+        })
+        return (
+          visibleCards.length > 1 &&
+          visibleCards.every((card) => {
+            const img = card.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
+            return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+          })
+        )
+      })
+      const warmCacheProbe = await page.evaluate(() => (window as any).__screenshotBrowserStopWarmCacheProbe())
+      const insertions = (warmCacheProbe?.imageInsertions ?? []) as Array<{ frameID: number; src: string }>
+      const insertionFrames = new Set(insertions.map((insertion) => insertion.frameID))
+      const insertionsPerFrame = insertions.reduce<Record<string, number>>((counts, insertion) => {
+        const key = String(insertion.frameID)
+        counts[key] = (counts[key] ?? 0) + 1
+        return counts
+      }, {})
+      const maxInsertionsPerFrame = Math.max(0, ...Object.values(insertionsPerFrame))
+      assert.ok(insertions.length > 1, `warm-cache reopen did not insert multiple images: ${JSON.stringify(insertions)}`)
+      assert.ok(
+        [...insertionFrames].every((frameID) => frameID > 0),
+        `warm-cache images bypassed RAF scheduling: ${JSON.stringify(insertions)}`,
+      )
+      assert.ok(
+        insertionFrames.size > 1,
+        `warm-cache images were inserted in one frame: ${JSON.stringify(insertions)}`,
+      )
+      assert.ok(
+        maxInsertionsPerFrame <= 1,
+        `warm-cache image insertion exceeded one per frame: ${JSON.stringify(insertionsPerFrame)}`,
+      )
+      assert.equal(
+        attachmentRequests.length - requestsBeforeReopen,
+        0,
+        `warm-cache reopen refetched attachments: ${attachmentRequests.length - requestsBeforeReopen}`,
+      )
       assert.ok(
         attachmentRequests.length - requestsBeforeReopen < 24,
         `reopening screenshots materialized too many attachments: ${attachmentRequests.length - requestsBeforeReopen}`,

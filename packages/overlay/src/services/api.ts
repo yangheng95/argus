@@ -462,10 +462,10 @@ function releaseInFlightSlot(): void {
 /**
  * Synchronous cache peek. Returns the blob object URL already materialised
  * for this raw resource URL, or `undefined` if nothing is cached. Callers
- * that want a flicker-free first render should pass this to
- * `createResource`'s `initialValue` — even with a cache hit the fetcher
- * still runs, but `createResource`'s signal has the resolved value from
- * frame zero so any `<Show>` gate stays open through the mount.
+ * that are allowed to render cached media immediately can pass this to
+ * `createResource`'s `initialValue`; staged or lazy renderers must peek only
+ * after their reveal gate opens, so a warm cache cannot bypass their frame
+ * budget.
  */
 export function peekResourceObjectUrl(raw: string): string | undefined {
   if (!raw) return undefined
