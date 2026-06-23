@@ -125,3 +125,83 @@ refusing the resize.
 - Rechecked the follow-up range helper; it receives the token-resolved minimum
   and returns `null` instead of inventing a smaller emergency minimum, so it
   does not add a fallback size source.
+
+## Follow-up 2026-06-23: Pane Chrome Reserve
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User feedback 2026-06-23 | Aspect ratio and minimum panel width are hard legality constraints; illegal aspect ratios and too-small panels are not acceptable. |
+| `2026-06-22-overlay-viewport-size-contract.md` | The operable native frame is `1120x720`; browser layout tokens mirror this source. |
+| `2026-06-22-pane-semantics-layout-frame.md` | `services/pane.ts` owns pane layout and separator ARIA, with no `main.tsx` duplicate writer. |
+| `2026-06-22-center-workbench-panel-min-size-contract.md` | Open center panels keep `--ui-workbench-panel-min-width`; constrained peer panels scroll instead of compressing. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Resize and toolbar-open work must remain frame-split; do not add synchronous geometry work to click paths. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Left activity toolbar | `#solidLeftActivityToolbar` is fixed chrome inside the left shell; `sidebarWidth` only represents `#sidebar`. | Add it to `PANEL_PANE_CONFIG` as left fixed chrome, so sidebar max cannot consume that width implicitly. |
+| Right activity toolbar | `#solidRightActivityToolbar` is fixed chrome inside `#workspaceMain`; the current pane max only reserves `--ui-chat-min-width`. | Add it to `PANEL_PANE_CONFIG` as remaining fixed chrome, so chat/workbench content gets the token minimum after toolbar width is paid. |
+| Remaining content minimum | `services/pane.ts` reads `layoutTokenPx("--ui-chat-min-width")` as the remaining work area minimum. | Keep the token as the content minimum and make fixed chrome explicit in the same pane solver. |
+| Pane drag and keyboard | Both call `paneResizeBounds()` / `resolvedPaneWidths()`. | Fix the solver once so pointer drag, keyboard resize, persisted restore, and window resize share the same legality math. |
+| Browser test | `left-pane-resizer-browser.test.ts` currently computes max as `panelWidth - resizer - chatMin`. | Update it to include both activity toolbars and assert chat width is still at least the token at max sidebar width. |
+
+### Root Cause
+
+`sidebarWidth` is the width of `#sidebar`, not the whole left activity shell.
+The previous max calculation subtracted only the pane resizer and
+`--ui-chat-min-width` from `#panelBody`. It forgot the fixed left activity
+toolbar and the fixed right activity toolbar. At the separator `End` position,
+the rendered workspace could therefore be short by those toolbar widths even
+though ARIA claimed the pane was legal.
+
+### Fix Plan
+
+1. Extend `PaneConfig` with left fixed chrome ids, remaining fixed chrome ids,
+   and one content-minimum resolver.
+2. Keep `--ui-chat-min-width` as the remaining content minimum source.
+3. In `resolvedPaneWidths()`, subtract rendered left fixed chrome before
+   computing sidebar max, and add rendered remaining fixed chrome to the
+   remaining minimum.
+4. Re-render pane layout from the existing scheduled owner; do not add another
+   ARIA writer or resize listener.
+5. Extend static and browser tests for the fixed chrome reserve.
+6. Run focused tests, browser visual QA, typecheck, self-review, commit, and
+   push.
+
+### Acceptance
+
+- Dragging the left pane to its maximum cannot leave `#chatSection` narrower
+  than `--ui-chat-min-width` because left and right fixed toolbars are now
+  accounted for.
+- Pane resize math remains in `services/pane.ts`; `main.tsx` still only
+  schedules that owner.
+- Center panel minimums and overlay aspect-ratio handling remain token-owned
+  and unchanged.
+- No fallback width, hidden alternate layout, duplicate pane writer, or new
+  resize gate is introduced.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/pane-config.test.ts packages/overlay/test/overlay-window-size-contract.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts`.
+- Visual QA reviewed:
+  `.scratch/left-pane-resizer-accessibility.png`,
+  `.scratch/left-pane-resizer-desktop-resize.png`,
+  `.scratch/left-pane-resizer-illegal-narrow-legal-frame.png`, and
+  `.scratch/left-pane-resizer-restored-desktop-resize.png`.
+
+### Self Review
+
+- Rechecked `services/pane.ts`: `sidebarWidth` remains the sidebar width, while
+  fixed left and right activity toolbar chrome are now explicit inputs to the
+  same pane solver.
+- Rechecked the browser assertion: separator `End` now proves the rendered
+  `#chatSection` remains at or above `--ui-chat-min-width`.
+- Rechecked architecture boundaries: `main.tsx` did not gain a duplicate pane
+  writer, center workbench panel minimums still use
+  `--ui-workbench-panel-min-width`, and overlay aspect-ratio handling remains
+  unchanged.

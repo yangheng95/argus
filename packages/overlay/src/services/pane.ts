@@ -38,8 +38,14 @@ export interface PaneConfig {
   bodyId: string
   /** Left (sidebar) resize handle element id. */
   leftHandleId: string
+  /** Fixed inline chrome that shares the left side with the sidebar. */
+  leftFixedControlIds: readonly string[]
   /** Element ids controlled by the left resize handle. */
   leftControls: readonly string[]
+  /** Fixed inline chrome that shares the remaining work area. */
+  remainingFixedControlIds: readonly string[]
+  /** Minimum width for the remaining work content, excluding fixed chrome. */
+  remainingMinWidth: () => number
   /** CSS custom property that carries the left column width (px). */
   sidebarVar: string
 }
@@ -48,7 +54,10 @@ export interface PaneConfig {
 export const PANEL_PANE_CONFIG: PaneConfig = {
   bodyId: "panelBody",
   leftHandleId: "leftPaneResizer",
+  leftFixedControlIds: ["solidLeftActivityToolbar"],
   leftControls: ["sidebar", "workspaceMain"],
+  remainingFixedControlIds: ["solidRightActivityToolbar"],
+  remainingMinWidth: defaultPanelRemainingMinWidth,
   sidebarVar: "--ui-sidebar-width",
 }
 
@@ -133,6 +142,18 @@ function paneHandleElement(config: PaneConfig): HTMLElement | null {
   return document.getElementById(config.leftHandleId)
 }
 
+function renderedControlWidth(id: string): number {
+  const node = document.getElementById(id)
+  if (!node) throw new Error(`Pane fixed control element not found: ${id}`)
+  const style = getComputedStyle(node)
+  if (node.hidden || style.display === "none" || style.visibility === "hidden") return 0
+  return node.getBoundingClientRect().width
+}
+
+function renderedControlWidthSum(ids: readonly string[]): number {
+  return ids.reduce((sum, id) => sum + renderedControlWidth(id), 0)
+}
+
 function paneHandleEnabled(state: PaneState, config: PaneConfig): boolean {
   const handle = paneHandleElement(config)
   return !state.sidebarCollapsed && paneHandleWidth(handle) > 0
@@ -149,6 +170,10 @@ function paneResolvedSidebarWidth(state: PaneState, config: PaneConfig): number 
 export function defaultRailWidth(config: PaneConfig): number {
   void config
   return layoutTokenPx("--ui-rail-width")
+}
+
+export function defaultPanelRemainingMinWidth(): number {
+  return layoutTokenPx("--ui-chat-min-width")
 }
 
 /**
@@ -182,11 +207,16 @@ export function resolvedPaneWidths(
 } {
   const panelWidth = paneBodyWidth(config)
   const railMin = layoutTokenPx("--ui-rail-min-width")
-  const chatMin = layoutTokenPx("--ui-chat-min-width")
+  const remainingContentMin = config.remainingMinWidth()
+  if (!Number.isFinite(remainingContentMin) || remainingContentMin <= 0) {
+    throw new Error("Pane remaining minimum width must be a positive finite number.")
+  }
 
   const leftHandle = paneHandleWidth(paneHandleElement(config))
-  const total = panelWidth - leftHandle
-  const railMax = Math.max(railMin, total - chatMin)
+  const leftFixed = renderedControlWidthSum(config.leftFixedControlIds)
+  const remainingFixed = renderedControlWidthSum(config.remainingFixedControlIds)
+  const total = panelWidth - leftHandle - leftFixed
+  const railMax = Math.max(railMin, total - remainingFixed - remainingContentMin)
   const sidebar = clampNumber(state.sidebarWidth ?? defaultRailWidth(config), railMin, railMax)
   return { sidebar: Math.round(sidebar) }
 }

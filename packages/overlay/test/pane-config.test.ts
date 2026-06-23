@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { PANEL_PANE_CONFIG, type PaneConfig } from "../src/services/pane"
+import { defaultPanelRemainingMinWidth, PANEL_PANE_CONFIG, type PaneConfig } from "../src/services/pane"
 
 function readSrc(rel: string): string {
   return readFileSync(join(import.meta.dir, "..", "src", rel), "utf8")
@@ -11,7 +11,10 @@ test("PANEL_PANE_CONFIG targets the default panel's elements and variables", () 
   expect(PANEL_PANE_CONFIG).toEqual({
     bodyId: "panelBody",
     leftHandleId: "leftPaneResizer",
+    leftFixedControlIds: ["solidLeftActivityToolbar"],
     leftControls: ["sidebar", "workspaceMain"],
+    remainingFixedControlIds: ["solidRightActivityToolbar"],
+    remainingMinWidth: defaultPanelRemainingMinWidth,
     sidebarVar: "--ui-sidebar-width",
   } satisfies PaneConfig)
 })
@@ -35,6 +38,13 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(pane).toContain('layoutTokenPx("--ui-rail-width")')
   expect(pane).toContain('layoutTokenPx("--ui-rail-min-width")')
   expect(pane).toContain('layoutTokenPx("--ui-chat-min-width")')
+  expect(pane).toContain('leftFixedControlIds: ["solidLeftActivityToolbar"]')
+  expect(pane).toContain('remainingFixedControlIds: ["solidRightActivityToolbar"]')
+  expect(pane).toContain("remainingMinWidth: defaultPanelRemainingMinWidth")
+  expect(pane).toContain("const leftFixed = renderedControlWidthSum(config.leftFixedControlIds)")
+  expect(pane).toContain("const remainingFixed = renderedControlWidthSum(config.remainingFixedControlIds)")
+  expect(pane).toContain("const total = panelWidth - leftHandle - leftFixed")
+  expect(pane).toContain("const railMax = Math.max(railMin, total - remainingFixed - remainingContentMin)")
   expect(pane).not.toContain("120 * scale")
   expect(pane).not.toContain("300 * scale")
   expect(pane).toContain("function flushPendingPaneResize")
@@ -113,6 +123,8 @@ test("default pane layout has no retired right pane width source", () => {
   expect(pane).not.toContain("export function defaultSectionsWidth")
   expect(pane).not.toContain("state.sectionsWidth")
   expect(pane).not.toContain("document.getElementById(config.centerId)")
+  expect(pane).toContain("renderedControlWidthSum(config.leftFixedControlIds)")
+  expect(pane).toContain("renderedControlWidthSum(config.remainingFixedControlIds)")
 })
 
 test("settings no longer persist retired right pane state", () => {
