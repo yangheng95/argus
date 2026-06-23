@@ -162,6 +162,88 @@ The investigation below is based on the current worktree snapshot, not only `HEA
 
 ## Target Architecture And Binding Model
 
+## Follow-up 2026-06-23: Retire Stale Right Tab Body Class
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| This spec | Right horizontal tabs were replaced by side activity toolbar controls; old right-tab meanings must not be kept as compatibility mappings. |
+| Sagan read-only audit | Active DOM/CSS still uses `.sections-tab-body`, preserving the old tab vocabulary after `RightPanelTabs` was deleted. |
+| `AGENTS.md` | No fallback/compat classes; replace old sources directly and test the absence of stale contracts. |
+
+### Call Point Inventory
+
+| Call point | Current evidence | Decision |
+| --- | --- | --- |
+| `src/index.html` | `#rightPanelInspector` and `#rightPanelNotifications` use `class="sections-tab-body"`. | Rename both to `right-activity-body`. |
+| `src/styles/surfaces/inspector.css` | Four selectors target `.sections-tab-body[...]`. | Rename selectors to `.right-activity-body[...]`; do not keep an alias. |
+| `overlay-architecture-guards.test.ts` | Guards old class ownership and old tab selector absence. | Update ownership to the activity body class and assert the old class is absent from HTML/CSS. |
+| `right-panel-tabs-flat.test.ts` | Guards removed horizontal tab mount/selectors. | Add a no-`sections-tab-body` assertion so the stale tab vocabulary cannot return. |
+
+### Root Cause
+
+The functional right-tab component was removed, but the right activity body kept
+the old `.sections-tab-body` class. That keeps tests and CSS vocabulary tied to
+a retired interaction model and makes future right activity work look like it
+still has a tab body layer.
+
+### Fix Plan
+
+1. Replace `.sections-tab-body` with `.right-activity-body` in DOM and CSS.
+2. Update architecture tests to make the new class the CSS owner.
+3. Add explicit absence checks for the stale class in HTML and CSS.
+4. Run focused static tests, side activity browser visual QA, typecheck,
+   self-review, commit, and push.
+
+### Acceptance
+
+- No production HTML/CSS uses `.sections-tab-body`.
+- The active right inspector/notifications bodies still toggle through
+  `data-side-activity` and `data-active`.
+- Browser visual QA confirms the right activity toolbar and inspector/
+  notifications layout still render correctly.
+
+### Browser Test Finding: Center Workbench Keyboard Resize Refresh
+
+While running the side activity browser test for this rename, the separator
+keyboard resize assertion failed: `ArrowLeft` reached a focused separator but
+the panel widths stayed unchanged after the pointer resize state. The root cause
+is in the center workbench weight write path, not in the renamed right activity
+body class. `updateCenterWorkbenchPanelWeights()` is the single writer for
+pointer and keyboard resize weights, but it only writes settings; keyboard
+resize relies on a store effect to schedule layout. The fix is to schedule the
+existing `renderCenterWorkbenchPanelLayoutOnFrame` from that single writer so
+pointer and keyboard paths share one post-write render owner.
+
+Additional acceptance:
+
+- `updateCenterWorkbenchPanelWeights()` schedules the existing center workbench
+  layout frame owner after writing weights.
+- Separator keyboard resize changes visible panel widths in the real browser
+  side activity test.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/right-panel-tabs-flat.test.ts packages/overlay/test/overlay-architecture-guards.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/side-activity-toolbar-browser.test.ts`.
+- PASS: `bun test packages/overlay/test/resize-observer-frame-scheduler.test.ts --timeout 30000`.
+- Visual QA reviewed:
+  `.scratch/side-activity-toolbar-illegal-narrow-legal-frame.png`.
+
+### Self Review
+
+- Rechecked production source: `.sections-tab-body` is absent from
+  `packages/overlay/src/**`; the remaining occurrences are historical recall
+  text and explicit no-regression assertions.
+- Rechecked right activity behavior: inspector and notifications still use
+  `data-side-activity` and `data-active` on `#rightPanelInspector` and
+  `#rightPanelNotifications`.
+- Rechecked keyboard resize fix: `updateCenterWorkbenchPanelWeights()` remains
+  the single center workbench weight writer and now schedules the existing
+  `renderCenterWorkbenchPanelLayoutOnFrame` owner after writing.
+
 ### One Activity Registry Per Side
 
 Use one registry per side as the source for toolbar items and body activation:

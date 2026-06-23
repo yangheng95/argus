@@ -642,14 +642,16 @@ describe("overlay architecture guards", () => {
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
-    for (const className of ["sections", "sections-title", "sections-stack", "sections-tab-body"]) {
+    for (const className of ["sections", "sections-title", "sections-stack", "right-activity-body"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-active="false"\]/)
-    expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-side-activity\]/)
-    expect(inspectorSurface).not.toMatch(/\.sections-tab-body\[data-panel-tab=/)
+    expect(html).not.toContain("sections-tab-body")
+    expect(inspectorSurface).toMatch(/\.right-activity-body\[data-active="false"\]/)
+    expect(inspectorSurface).toMatch(/\.right-activity-body\[data-side-activity\]/)
+    expect(inspectorSurface).not.toContain("sections-tab-body")
+    expect(inspectorSurface).not.toMatch(/\.right-activity-body\[data-panel-tab=/)
     expect(inspectorSurface).toContain("var(--inspector-surface)")
     expect(inspectorSurface).toContain("--ui-collapsed-pane-width")
 

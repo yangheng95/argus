@@ -29,6 +29,8 @@ describe("right side activity toolbar replaces horizontal panel tabs", () => {
     expect(main).not.toContain("RightPanelTabs")
     expect(main).not.toContain("rightPanelTab")
     expect(inspectorCss).not.toContain(".sections-tabs")
+    expect(html).not.toContain("sections-tab-body")
+    expect(inspectorCss).not.toContain("sections-tab-body")
     expect(inspectorCss).not.toContain('[data-ui="right-tab"]')
     expect(inspectorCss).not.toContain("[data-panel-tab")
   })

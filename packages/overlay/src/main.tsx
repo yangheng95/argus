@@ -1939,6 +1939,7 @@ function updateCenterWorkbenchPanelWeights(
     [metrics.leftPanel]: leftWeight,
     [metrics.rightPanel]: rightWeight,
   })
+  renderCenterWorkbenchPanelLayoutOnFrame.schedule()
 }
 
 function updateCenterWorkbenchPanelResize(event: PointerEvent): void {
