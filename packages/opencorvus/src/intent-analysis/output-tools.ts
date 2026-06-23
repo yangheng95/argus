@@ -41,6 +41,36 @@ export const COMPLEXITY_BANDS = [
 
 const CLARIFICATION_PRIORITIES = ["blocker", "nice"] as const
 
+const ClarificationOptionSchema = z
+  .object({
+    label: z.string().min(1).describe("Short selectable answer label shown to the operator."),
+    description: z.string().min(1).describe("One sentence explaining when to choose this answer."),
+  })
+  .strict()
+
+export const IntentClarificationInputSchema = z
+  .object({
+    header: z.string().min(1).max(30).describe("Short label for the question, at most 30 characters."),
+    question: z.string().min(1).describe("The clarifying question, phrased directly to the user."),
+    options: z
+      .array(ClarificationOptionSchema)
+      .describe("Concrete selectable answers. Use [] only when the answer must be free-form."),
+    multiple: z.boolean().describe("Whether the user may select more than one option."),
+    custom: z.boolean().describe("Whether the user may type a custom free-form answer."),
+    why_needed: z.string().min(1).describe("Why answering is needed — which downstream decision it unblocks."),
+    priority: z.enum(CLARIFICATION_PRIORITIES).describe("'blocker' or 'nice'."),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.options.length === 0 && value.custom !== true) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Free-form-only clarification questions must set custom=true.",
+        path: ["custom"],
+      })
+    }
+  })
+
 // ---------------------------------------------------------------------------
 // Terminal JSON-schema: payload the StructuredOutput tool must deliver.
 // The incremental fields (slots / missing / clarifications) stay in the
@@ -141,14 +171,12 @@ export function createIntentOutputTools() {
         "Record one clarification question the user would need to answer " +
         "before downstream agents can proceed safely. Use priority='blocker' " +
         "when downstream cannot start without it, 'nice' when it is merely " +
-        "helpful. Skip entirely when the request is already unambiguous.",
-      inputSchema: z.object({
-        question: z.string().min(1).describe("The clarifying question, phrased directly to the user."),
-        why_needed: z.string().min(1).describe("Why answering is needed — which downstream decision it unblocks."),
-        priority: z.enum(CLARIFICATION_PRIORITIES).describe("'blocker' or 'nice'."),
-      }),
-      execute: async ({ question, why_needed, priority }) => {
-        collector.clarifications.push({ question, why_needed, priority })
+        "helpful. Provide concrete options when there are known likely answers, " +
+        "and set custom=true when the user may need to type their own answer. " +
+        "Skip entirely when the request is already unambiguous.",
+      inputSchema: IntentClarificationInputSchema,
+      execute: async ({ header, question, options, multiple, custom, why_needed, priority }) => {
+        collector.clarifications.push({ header, question, options, multiple, custom, why_needed, priority })
         const output = `OK: clarification recorded (${collector.clarifications.length} total)`
         return {
           output,
