@@ -236,7 +236,6 @@ export function TitlebarMenubar() {
   function handleMenuValueChange(value: string | null | undefined) {
     if (value && MENU_IDS.includes(value as MenuID)) {
       setRecentDirs(loadRecentDirectories())
-      setMenuAnchor(value as MenuID)
       setAutoFocusMenu(true)
       setOpenMenu(value as MenuID)
       return
@@ -244,21 +243,10 @@ export function TitlebarMenubar() {
     closeMenu()
   }
 
-  function setMenuAnchor(id: MenuID) {
-    const trigger = document.querySelector<HTMLElement>(`[data-menu-trigger="${id}"]`)
-    const left = trigger?.getBoundingClientRect().left ?? 0
-    document.documentElement.style.setProperty("--titlebar-menu-anchor-left", `${left}px`)
-  }
-
-  function toggleMenuFromTrigger(event: PointerEvent, id: MenuID) {
+  function toggleControlledMenuFromTrigger(event: PointerEvent, id: MenuID) {
     if (event.button !== 0 || event.isPrimary === false) return
     event.preventDefault()
     setRecentDirs(loadRecentDirectories())
-    const trigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-    document.documentElement.style.setProperty(
-      "--titlebar-menu-anchor-left",
-      `${trigger?.getBoundingClientRect().left ?? 0}px`,
-    )
     setAutoFocusMenu(false)
     setOpenMenu((current) => (current === id ? null : id))
   }
@@ -298,7 +286,6 @@ export function TitlebarMenubar() {
 
   function openFromKeyboard(id: MenuID) {
     setRecentDirs(loadRecentDirectories())
-    setMenuAnchor(id)
     setAutoFocusMenu(true)
     setOpenMenu(id)
     focusInitialMenuItem(id)
@@ -457,7 +444,7 @@ export function TitlebarMenubar() {
                 title={menu.label}
                 aria-label={menu.label}
                 aria-keyshortcuts={`Alt+${menu.accessKey.toUpperCase()}`}
-                onPointerDown={(event) => toggleMenuFromTrigger(event, menu.id)}
+                onPointerDown={(event) => toggleControlledMenuFromTrigger(event, menu.id)}
               >
                 <span class="titlebar-menu-trigger-label">{menu.label}</span>
                 <span class="titlebar-menu-trigger-compact" aria-hidden="true">
@@ -471,7 +458,6 @@ export function TitlebarMenubar() {
                 class="titlebar-menubar-panel"
                 data-menu={menu.id}
                 data-testid={`titlebar-menu-${menu.id}`}
-                style={{ transform: "translateX(var(--titlebar-menu-viewport-shift, 0px))" }}
               >
                 <Show when={menu.id === "workspace"}>
                   <MenuGroup title={t("titlebar.menu.workspace")}>

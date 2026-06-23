@@ -437,13 +437,8 @@
 }
 
 .titlebar-menubar-panel {
-  --titlebar-menu-viewport-shift: 0px;
-
   z-index: var(--ui-z-dialog);
-  width: min(
-    calc(340px * var(--ui-scale)),
-    calc(100cqw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)))
-  );
+  width: min(calc(340px * var(--ui-scale)), calc(100cqw - calc(24px * var(--ui-scale))));
   box-sizing: border-box;
   max-height: min(calc(620px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - calc(88px * var(--ui-scale))));
   overflow: auto;
@@ -458,17 +453,11 @@
 }
 
 .titlebar-menubar-panel[data-menu="workspace"] {
-  width: min(
-    calc(460px * var(--ui-scale)),
-    calc(100cqw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)))
-  );
+  width: min(calc(460px * var(--ui-scale)), calc(100cqw - calc(24px * var(--ui-scale))));
 }
 
 .titlebar-menubar-panel[data-menu="help"] {
-  width: min(
-    calc(520px * var(--ui-scale)),
-    calc(100cqw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)))
-  );
+  width: min(calc(520px * var(--ui-scale)), calc(100cqw - calc(24px * var(--ui-scale))));
 }
 
 
