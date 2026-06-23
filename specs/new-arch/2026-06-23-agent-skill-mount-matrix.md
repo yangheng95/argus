@@ -201,6 +201,10 @@ Layout:
   tool, and preserve visible skill row order after mount/unmount responses. Toolbar
   compact mode may rely on horizontal scrolling, but it must still use the same component
   contract rather than a second renderer.
+- Matrix pool rows must render a source-directory badge with stable directory-scoped color.
+  `.opencorvus`, `.claude`, `.agents`, `.codex`, built-in, and custom source directories
+  must not collapse into the same visual treatment, and the color must derive from the
+  directory identity rather than row position.
 
 Implementation guidance:
 
@@ -273,6 +277,8 @@ Visual:
 
 - Capture the new matrix panel in project scope and selected-session scope.
 - Verify dense lists do not overlap or resize unexpectedly at compact overlay widths.
+- Verify pool rows show stable, distinct source-directory color badges for `.opencorvus`,
+  `.claude`, `.agents`, `.codex`, built-in, and custom source directories.
 
 ## Non-Goals
 
