@@ -586,9 +586,9 @@ function focusInitialRestoredTaskWorkspace(): void {
   setSelectedLeftPanelActivity("tasks")
 }
 
-function selectTaskFromTaskList(taskID: string): void {
+function selectTaskFromTaskList(taskID: string, directory?: string): void {
   if (activeTaskID() !== taskID) focusTaskPanel()
-  void selectTask(taskID)
+  void selectTask(taskID, { directory })
 }
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {

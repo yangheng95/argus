@@ -272,7 +272,7 @@ function TaskRow(props: {
    *  re-running every row's `isActive` memo. */
   isSelected: (id: string) => boolean
   queuePos?: number
-  onSelectTask: (id: string) => void
+  onSelectTask: (id: string, directory: string) => void
   onDeleteTask?: (id: string) => void
   onCancelTask?: (id: string) => void
   onStartNow?: (id: string, directory: string) => void
@@ -382,7 +382,7 @@ function TaskRow(props: {
       title={rowTip()}
       onClick={(event) => {
         if (event.defaultPrevented || editing()) return
-        if (!pending() && id()) props.onSelectTask(id())
+        if (!pending() && id()) props.onSelectTask(id(), directory())
       }}
       onDragStart={(event) => {
         if (!canDrag()) return
@@ -522,7 +522,7 @@ function TaskRow(props: {
             onKeyDown={rowActions.openActionsFromKeyboard}
             onClick={(event) => {
               event.stopPropagation()
-              if (!pending() && id()) props.onSelectTask(id())
+              if (!pending() && id()) props.onSelectTask(id(), directory())
             }}
             onDblClick={(e) => {
               if (!canRename()) return
@@ -585,7 +585,7 @@ function TaskSection(props: {
   entries: TaskTreeEntry[]
   isSelected: (id: string) => boolean
   queuePositions?: Map<string, number>
-  onSelectTask: (id: string) => void
+  onSelectTask: (id: string, directory: string) => void
   onDeleteTask?: (id: string) => void
   onCancelTask?: (id: string) => void
   onStartNow?: (id: string, directory: string) => void
@@ -666,7 +666,7 @@ export interface TaskListProps {
   /** Empty text for externally-filtered usages such as Mission. */
   emptyLabel?: string
   /** Called when the user clicks a task row. */
-  onSelectTask: (taskID: string) => void
+  onSelectTask: (taskID: string, directory: string) => void
   /** Called when the user confirms deletion via the row's delete button. */
   onDeleteTask?: (taskID: string) => void
   /** Called when the user confirms cancellation via the row's cancel button. */
