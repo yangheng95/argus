@@ -24,7 +24,7 @@
 // and which DOM handles / CSS variables back them via the PaneConfig.
 
 import { createAnimationFrameScheduler, type AnimationFrameScheduler } from "../utils/animation-frame"
-import { currentUIScale, layoutTokenPx } from "../utils/layout-tokens"
+import { createLayoutTokenResolver, currentUIScale, type LayoutTokenResolver } from "../utils/layout-tokens"
 
 // ── Types ──
 
@@ -45,7 +45,7 @@ export interface PaneConfig {
   /** Fixed inline chrome that shares the remaining work area. */
   remainingFixedControlIds: readonly string[]
   /** Minimum width for the remaining work content, excluding fixed chrome. */
-  remainingMinWidth: () => number
+  remainingMinWidth: (layoutTokens?: LayoutTokenResolver) => number
   /** CSS custom property that carries the left column width (px). */
   sidebarVar: string
 }
@@ -161,13 +161,13 @@ function renderedControlWidthSum(ids: readonly string[]): number {
 /**
  * Compute the default rail width from the shared layout token contract.
  */
-export function defaultRailWidth(config: PaneConfig): number {
+export function defaultRailWidth(config: PaneConfig, layoutTokens: LayoutTokenResolver = createLayoutTokenResolver()): number {
   void config
-  return layoutTokenPx("--ui-rail-width")
+  return layoutTokens.tokenPx("--ui-rail-width")
 }
 
-export function defaultPanelRemainingMinWidth(): number {
-  return layoutTokenPx("--ui-chat-min-width")
+export function defaultPanelRemainingMinWidth(layoutTokens: LayoutTokenResolver = createLayoutTokenResolver()): number {
+  return layoutTokens.tokenPx("--ui-chat-min-width")
 }
 
 function paneWidthStyleScope(): HTMLElement {
@@ -186,18 +186,19 @@ function readPaneGeometrySnapshot(config: PaneConfig): PaneGeometrySnapshot | nu
   const body = document.getElementById(config.bodyId)
   if (!body) return null
   const bodyRect = body.getBoundingClientRect()
-  const remainingContentMin = config.remainingMinWidth()
+  const layoutTokens = createLayoutTokenResolver()
+  const remainingContentMin = config.remainingMinWidth(layoutTokens)
   if (!Number.isFinite(remainingContentMin) || remainingContentMin <= 0) {
     throw new Error("Pane remaining minimum width must be a positive finite number.")
   }
   return {
     bodyRect,
-    railMin: layoutTokenPx("--ui-rail-min-width"),
+    railMin: layoutTokens.tokenPx("--ui-rail-min-width"),
     remainingContentMin,
     leftHandle: paneHandleWidth(paneHandleElement(config)),
     leftFixed: renderedControlWidthSum(config.leftFixedControlIds),
     remainingFixed: renderedControlWidthSum(config.remainingFixedControlIds),
-    defaultSidebarWidth: defaultRailWidth(config),
+    defaultSidebarWidth: defaultRailWidth(config, layoutTokens),
   }
 }
 
