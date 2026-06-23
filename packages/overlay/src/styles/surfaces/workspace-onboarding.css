@@ -297,9 +297,3 @@
   font-size: var(--ui-font-meta);
   color: var(--text-muted);
 }
-
-@container overlay-shell (width < 560px) {
-  .workspace-onboarding-browser-path-form {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}

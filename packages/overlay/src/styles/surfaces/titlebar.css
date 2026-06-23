@@ -148,28 +148,6 @@
   text-transform: none;
 }
 
-@container overlay-shell (width < 760px) {
-  /* breakpoint: --ui-breakpoint-md */
-  .titlebar {
-    display: flex;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    height: auto;
-    gap: calc(8px * var(--ui-scale));
-  }
-
-  .titlebar-left,
-  .titlebar-brand,
-  .titlebar-utility {
-    grid-column: auto;
-    justify-self: auto;
-  }
-
-  .titlebar-spacer {
-    display: none;
-  }
-
-}
 
 .titlebar-theme-options {
   display: grid;
@@ -493,16 +471,6 @@
   );
 }
 
-@container overlay-shell (width < 520px) {
-  /* breakpoint: --ui-breakpoint-sm */
-  .titlebar-menubar-panel {
-    top: calc(var(--ui-titlebar-height) + calc(8px * var(--ui-scale)));
-    left: calc(12px * var(--ui-scale));
-    right: calc(12px * var(--ui-scale));
-    width: calc(100cqw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)));
-    max-height: calc(var(--ui-overlay-shell-height) - var(--ui-titlebar-height) - calc(24px * var(--ui-scale)));
-  }
-}
 
 .titlebar-menubar-group {
   display: grid;
@@ -720,57 +688,6 @@
   padding: calc(4px * var(--ui-scale));
 }
 
-@container overlay-shell (width < 760px) {
-  /* breakpoint: --ui-breakpoint-md */
-  .titlebar-menubar {
-    flex: 1 1 auto;
-    min-width: 0;
-    gap: calc(1px * var(--ui-scale));
-  }
-
-  .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"] {
-    --oc-button-padding-x: 0;
-
-    width: calc(24px * var(--ui-scale));
-    min-width: calc(24px * var(--ui-scale));
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    font-size: 0;
-  }
-
-  .titlebar-menu-trigger-label {
-    display: none;
-  }
-
-  .titlebar-menu-trigger-compact {
-    display: inline;
-    font-size: var(--ui-font-control);
-  }
-
-  .titlebar-menubar-panel {
-    --titlebar-menu-viewport-shift: calc(-1 * var(--titlebar-menu-anchor-left, 0px));
-
-    top: calc(var(--ui-titlebar-height) + calc(13px * var(--ui-scale)));
-    left: calc(12px * var(--ui-scale));
-    right: calc(12px * var(--ui-scale));
-    width: calc(100cqw - calc(24px * var(--ui-scale)));
-    max-height: calc(var(--ui-overlay-shell-height) - calc(var(--ui-titlebar-height) + calc(44px * var(--ui-scale))));
-  }
-
-  .titlebar-menubar-panel[data-menu="help"] {
-    left: calc(12px * var(--ui-scale));
-    right: calc(12px * var(--ui-scale));
-    width: calc(100cqw - calc(24px * var(--ui-scale)));
-  }
-
-  .titlebar-menubar-panel[data-menu="help"] .titlebar-menubar-item {
-    grid-template-columns: minmax(calc(92px * var(--ui-scale)), max-content) minmax(0, 1fr);
-    column-gap: calc(10px * var(--ui-scale));
-  }
-}
 
 .status-icon {
   width: var(--oc-titlebar-status-icon);
@@ -819,89 +736,8 @@
   color: var(--text-muted);
 }
 
-@container overlay-shell (width < 520px) {
-  /* breakpoint: --ui-breakpoint-sm */
-  .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"] {
-    --oc-button-padding-x: 0;
-
-    width: var(--oc-density-icon-button);
-    min-width: var(--oc-density-icon-button);
-    overflow: hidden;
-  }
-
-  .titlebar-menu-trigger-label {
-    display: none;
-  }
-
-  .titlebar-menu-trigger-compact {
-    display: inline;
-  }
-}
 
 /* ─────────────────────────────────────────────────────────────
    Titlebar responsive collapse (extracted 2026-05-04). At
    max-width 760px, the titlebar reflows to two stacked rows.
    ───────────────────────────────────────────────────────────── */
-
-@container overlay-shell (width < 760px) {
-  /* breakpoint: --ui-breakpoint-md */
-  .titlebar-left,
-  .titlebar-utility {
-    flex-basis: 100%;
-    justify-content: flex-start;
-  }
-
-  .titlebar-left {
-    width: 100%;
-  }
-
-  .titlebar-utility,
-  .titlebar-actions {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .titlebar-utility {
-    margin-left: 0;
-  }
-
-  .titlebar-actions {
-    flex: 1 1 auto;
-    width: auto;
-    justify-content: flex-end;
-    gap: calc(3px * var(--ui-scale));
-  }
-
-  .conn-badge__label {
-    display: none;
-  }
-
-  .brand-guide {
-    padding-inline: calc(4px * var(--ui-scale));
-    justify-content: center;
-  }
-
-  .brand-guide-card {
-    width: min(calc(320px * var(--ui-scale)), calc(100cqw - calc(20px * var(--ui-scale))));
-    transform: translateY(var(--ui-titlebar-height));
-  }
-
-  .brand-guide-label {
-    display: none;
-  }
-
-  .brand-guide-copyblock {
-    display: none;
-  }
-
-  .titlebar-brand {
-    flex: 0 0 calc(32px * var(--ui-scale));
-    width: calc(32px * var(--ui-scale));
-    min-width: calc(32px * var(--ui-scale));
-  }
-
-  .engine-bar {
-    max-width: 100%;
-    overflow-x: auto;
-  }
-}

@@ -62,9 +62,7 @@ describe("overlay window and pane size contract", () => {
     expect(tokens).toContain("--ui-workbench-panel-min-width: calc(280px * var(--ui-scale))")
     expect(tokens).toContain("--ui-overlay-min-width: calc(var(--ui-overlay-min-width-units) * 1px)")
     expect(tokens).toContain("--ui-overlay-min-height: calc(var(--ui-overlay-min-height-units) * 1px)")
-    expect(tokens).toContain(
-      "--ui-overlay-min-aspect-ratio: calc(var(--ui-overlay-min-width-units) / var(--ui-overlay-min-height-units))",
-    )
+    expect(tokens).not.toContain("--ui-overlay-min-aspect-ratio")
     expect(base).toContain("--ui-overlay-shell-width: max(100vw, var(--ui-overlay-min-width))")
     expect(base).toContain("--ui-overlay-shell-height: max(")
     expect(base).toContain("var(--ui-overlay-min-height)")
@@ -76,8 +74,8 @@ describe("overlay window and pane size contract", () => {
     )
     expect(base).toContain("height: var(--ui-overlay-shell-height)")
     expect(base).toContain("container: overlay-shell / inline-size")
-    expect(workspace).toContain("@container overlay-shell (width < 1120px)")
-    expect(activity).toContain("@container overlay-shell (width < 1120px)")
+    expect(workspace).not.toContain("@container overlay-shell (width < 1120px)")
+    expect(activity).not.toContain("@container overlay-shell (width < 1120px)")
     expect(workspace).not.toContain("@media (width < 1120px)")
     expect(activity).not.toContain("@media (width < 1120px)")
     expect(workspace).not.toContain("@media (max-width: 1120px)")
@@ -87,6 +85,17 @@ describe("overlay window and pane size contract", () => {
   test("width responsive CSS uses layout containers instead of raw viewport media queries", () => {
     const offenders = readStyleFiles().flatMap(({ file, source }) =>
       Array.from(source.matchAll(/@media\s*\([^)]*\b(?:max-width|min-width|width\s*[<>=])[^)]*\)/g)).map((match) => ({
+        file,
+        query: match[0],
+      })),
+    )
+
+    expect(offenders).toEqual([])
+  })
+
+  test("legal overlay shell does not define unreachable compact branches", () => {
+    const offenders = readStyleFiles().flatMap(({ file, source }) =>
+      Array.from(source.matchAll(/@container\s+overlay-shell\s+\(width\s*</g)).map((match) => ({
         file,
         query: match[0],
       })),
@@ -164,7 +173,7 @@ describe("overlay window and pane size contract", () => {
     expect(dialog).toContain("const shellRect = document.body.getBoundingClientRect()")
     expect(dialog).not.toContain("window.innerWidth")
     expect(dialog).not.toContain("window.innerHeight")
-    expect(workspace).toContain("max(var(--ui-workbench-panel-min-width), calc(50cqw))")
+    expect(workspace).not.toContain("max(var(--ui-workbench-panel-min-width), calc(50cqw))")
     expect(workspace).not.toContain("max(calc(280px * var(--ui-scale)), calc(50cqw))")
     expect(workspace).not.toContain("calc(50vw)")
   })

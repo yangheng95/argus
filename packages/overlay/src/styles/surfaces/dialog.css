@@ -365,8 +365,3 @@
 }
 
 /* Matches --ui-breakpoint-sm; media queries cannot consume var(). */
-@container overlay-shell (width < 520px) {
-  .app-dialog-decision__choices {
-    grid-template-columns: 1fr;
-  }
-}
