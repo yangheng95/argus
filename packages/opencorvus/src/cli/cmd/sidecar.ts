@@ -3,6 +3,7 @@ import { Server } from "../../server/server"
 import { SidecarLock } from "../../server/sidecar-lock"
 import { ParentWatchdog } from "../../server/parent-watchdog"
 import { clearServerShutdownHandler, registerServerShutdownHandler } from "../../server/shutdown"
+import { stopServerWithTimeout } from "../../server/stop"
 import { cmd } from "./cmd"
 import { Log } from "../../util/log"
 
@@ -144,21 +145,17 @@ export const SidecarCommand = cmd({
         // the same DB, which is exactly the §19.1.1 failure.
         // Cap stop with a hard timeout so a hung server can't
         // indefinitely hold the lock either.
-        const STOP_TIMEOUT_MS = 5000
-        await Promise.race([
-          server.stop(true).catch((error) => {
+        const STOP_TIMEOUT_MILLISECONDS = 5000
+        await stopServerWithTimeout({
+          stop: () => server.stop(true),
+          timeoutMilliseconds: STOP_TIMEOUT_MILLISECONDS,
+          onStopError: (error) => {
             log.error("server.stop failed", { error: String(error) })
-          }),
-          new Promise<void>((resolve) => {
-            const t = setTimeout(() => {
-              log.error("server.stop timeout, escalating", { ms: STOP_TIMEOUT_MS })
-              resolve()
-            }, STOP_TIMEOUT_MS)
-            if (typeof (t as { unref?: () => void }).unref === "function") {
-              ;(t as { unref?: () => void }).unref!()
-            }
-          }),
-        ])
+          },
+          onTimeout: () => {
+            log.error("server.stop timeout, escalating", { ms: STOP_TIMEOUT_MILLISECONDS })
+          },
+        })
         try {
           lock.release()
         } catch {}

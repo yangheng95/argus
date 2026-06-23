@@ -3,6 +3,7 @@ import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions, type NetworkOptions } from "../network"
 import { Flag } from "../../flag/flag"
 import { clearServerShutdownHandler, registerServerShutdownHandler } from "../../server/shutdown"
+import { stopServerWithTimeout } from "../../server/stop"
 import { closeBrowserPreviewLiveSessions } from "../../browser-preview/live"
 import type { ArgumentsCamelCase } from "yargs"
 
@@ -25,6 +26,7 @@ function hideConsoleWindow() {
 }
 
 type ServeOptions = NetworkOptions & { "project-dir"?: string }
+const SERVE_STOP_TIMEOUT_MILLISECONDS = 5000
 
 const serveBuilder = (yargs: Parameters<typeof withNetworkOptions>[0]) =>
   withNetworkOptions(yargs).option("project-dir", {
@@ -86,11 +88,16 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
       } catch (error) {
         console.error("[serve] browser preview shutdown failed:", error)
       }
-      try {
-        await server.stop(true)
-      } catch (error) {
-        console.error("[serve] server.stop failed during shutdown:", error)
-      }
+      await stopServerWithTimeout({
+        stop: () => server.stop(true),
+        timeoutMilliseconds: SERVE_STOP_TIMEOUT_MILLISECONDS,
+        onStopError: (error) => {
+          console.error("[serve] server.stop failed during shutdown:", error)
+        },
+        onTimeout: () => {
+          console.error("[serve] server.stop timeout, escalating:", SERVE_STOP_TIMEOUT_MILLISECONDS)
+        },
+      })
     })().finally(() => {
       clearServerShutdownHandler(requestShutdown)
       setTimeout(() => process.exit(0), 0)
