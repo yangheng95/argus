@@ -681,6 +681,51 @@ test(
       )
       assert.equal(darkTriggerColor, "rgb(232, 236, 241)")
 
+      await page.evaluate(() => {
+        const style = document.documentElement.style
+        const originalSetProperty = style.setProperty.bind(style)
+        const writes: string[] = []
+        Object.defineProperty(window, "__titlebarAnchorWrites", {
+          configurable: true,
+          value: writes,
+        })
+        Object.defineProperty(window, "__restoreTitlebarAnchorProbe", {
+          configurable: true,
+          value: () => {
+            Object.defineProperty(style, "setProperty", {
+              configurable: true,
+              value: originalSetProperty,
+            })
+          },
+        })
+        Object.defineProperty(style, "setProperty", {
+          configurable: true,
+          value: (name: string, value?: string | null, priority?: string) => {
+            if (name === "--titlebar-menu-anchor-left") writes.push(`${name}:${value ?? ""}`)
+            return originalSetProperty(name, value ?? "", priority ?? "")
+          },
+        })
+      })
+      await page.click('[data-menu-trigger="workspace"]')
+      await page.waitForSelector('[data-testid="titlebar-menu-workspace"]', { visible: true })
+      const pointerOpenState = await page.$eval('[data-menu-trigger="workspace"]', (node) => ({
+        expanded: node.getAttribute("aria-expanded"),
+        hasExpandedData: node.hasAttribute("data-expanded"),
+      }))
+      assert.deepEqual(pointerOpenState, { expanded: "true", hasExpandedData: true })
+      await page.keyboard.press("Escape")
+      await page.waitForFunction(() => document.querySelector('[data-menu-trigger="workspace"]')?.getAttribute("aria-expanded") !== "true")
+      const titlebarAnchorWrites = await page.evaluate(() => {
+        const target = window as typeof window & {
+          __titlebarAnchorWrites: string[]
+          __restoreTitlebarAnchorProbe: () => void
+        }
+        const writes = [...target.__titlebarAnchorWrites]
+        target.__restoreTitlebarAnchorProbe()
+        return writes
+      })
+      assert.deepEqual(titlebarAnchorWrites, [])
+
       await page.keyboard.down("Alt")
       await page.keyboard.up("Alt")
       await page.waitForFunction(
