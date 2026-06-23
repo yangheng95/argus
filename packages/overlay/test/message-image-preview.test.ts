@@ -229,9 +229,11 @@ describe("message image preview", () => {
     expect(component).toContain("calculateImagePreviewFitScale")
     expect(component).toContain("onPointerDown={startPan}")
     expect(component).toContain("onWheel={handleWheel}")
-    expect(form).toContain("width: min(calc(1040px * var(--ui-scale)), calc(100vw - calc(72px * var(--ui-scale))));")
+    expect(form).toContain("width: min(calc(1040px * var(--ui-scale)), calc(100cqw - calc(72px * var(--ui-scale))));")
+    expect(form).toContain("max-width: calc(100cqw - calc(32px * var(--ui-scale)));")
     expect(form).toContain("height: min(calc(760px * var(--ui-scale)), calc(78vh));")
     expect(form).toContain("max-height: calc(100vh - calc(72px * var(--ui-scale)));")
+    expect(form).not.toContain("100vw")
     expect(form).not.toContain("width: calc(100vw - calc(16px * var(--ui-scale)));")
     expect(body).toContain("overflow: auto;")
     expect(body).toContain("cursor: grab;")
@@ -243,7 +245,8 @@ describe("message image preview", () => {
     expect(image).toContain("max-width: none;")
     expect(image).not.toContain("transform: scale")
     expect(copyStatus).toContain("overflow-wrap: anywhere;")
-    expect(copyStatus).toContain("max-width: min(calc(240px * var(--ui-scale)), 52vw);")
+    expect(copyStatus).toContain("max-width: min(calc(240px * var(--ui-scale)), 52cqw);")
+    expect(copyStatus).not.toContain("52vw")
   })
 
   test("modal preview dialog labels are localized from complete locale bundles", () => {
