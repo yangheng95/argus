@@ -397,6 +397,15 @@ Tests:
 
 ### Phase 4 - Source Viewport Authority And Geometry Normalization
 
+> 2026-06-24 supersession: this phase's scaled source bbox direction was not
+> implemented and must not be revived. The active contract is the true-size
+> comparison correction in
+> `specs/new-arch/2026-06-23-visual-skeleton-region-comparison-root-repair.md`:
+> source and local implementation crops are stitched from their real screenshot
+> dimensions without runner-side resizing, exact crop size matching is required
+> for pass, and size mismatch is a reference parity failure for the scalable
+> local component to repair.
+
 Do not silently accept mixed coordinate systems. Add explicit source viewport
 metadata to the comparison input or derive it from source image dimensions and
 persist it in each region result:
@@ -414,8 +423,10 @@ scale: {
   x: number
   y: number
 }
-normalized_source_bbox: BrowserPreviewRegionBox
 ```
+
+The old scaled-bbox field proposal above is superseded; do not add or persist a
+separate scaled source bbox field.
 
 Preferred behavior:
 

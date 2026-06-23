@@ -134,6 +134,8 @@ export const BrowserPreviewRegionComparisonResult = z.object({
   taskID: z.string(),
   targetID: z.string(),
   operation: z.literal("reference-comparison"),
+  comparison_mode: z.literal("true-size"),
+  artifact_note: z.string(),
   evidenceIDs: z.record(z.string(), z.string()),
   regions: z.array(
     z.object({
@@ -143,13 +145,13 @@ export const BrowserPreviewRegionComparisonResult = z.object({
       status: z.enum(["completed", "failed"]),
       reason: z.string().optional(),
       source_bbox: BrowserPreviewRegionBox.optional(),
-      normalized_source_bbox: BrowserPreviewRegionBox.optional(),
       implementation_bbox: BrowserPreviewRegionBox.optional(),
       source_image_size: BrowserPreviewImageSize.optional(),
       implementation_viewport: BrowserPreviewImageSize.optional(),
       implementation_fullpage_size: BrowserPreviewImageSize.optional(),
       implementation_screenshot_path: z.string().optional(),
       route_diagnostics: BrowserPreviewRouteDiagnostics.optional(),
+      artifact_note: z.string().optional(),
       visual: z
         .object({
           overall_score: z.number(),
@@ -167,12 +169,12 @@ export const BrowserPreviewRegionComparisonResult = z.object({
           implementation_width: z.number(),
           implementation_height: z.number(),
           implementation_covers_source: z.boolean(),
+          implementation_matches_source_size: z.boolean(),
         })
         .optional(),
       artifacts: z
         .object({
           source_crop: z.string(),
-          normalized_source_crop: z.string().optional(),
           implementation_crop: z.string(),
           side_by_side: z.string(),
           diff: z.string().optional(),
@@ -184,6 +186,21 @@ export const BrowserPreviewRegionComparisonResult = z.object({
   diagnostics: z.array(z.string()),
 })
 export type BrowserPreviewRegionComparisonResult = z.infer<typeof BrowserPreviewRegionComparisonResult>
+
+const TRUE_SIZE_COMPARISON_ARTIFACT_NOTE =
+  "True-size comparison: source and local implementation crops are stitched from their real screenshot dimensions without runner-side resizing; exact crop size matching is required, and crop size mismatch is evaluated as a parity failure."
+
+type TrueSizeRegionVisualReport = {
+  overallScore: number
+  ssimScore: number
+  pixelDiffPercent: number
+  dimensionsMatch: boolean
+  mismatchedPixels: number
+  totalPixels: number
+  diffImageDataUrl?: string
+  sourceSize: BrowserPreviewImageSizeValue
+  implementationSize: BrowserPreviewImageSizeValue
+}
 
 type BrowserPreviewRegionComparisonInput = {
   projectRoot: string
@@ -299,11 +316,6 @@ export async function compareBrowserPreviewRegions(
           status: "failed",
           reason,
           source_bbox: binding.source.bbox,
-          normalized_source_bbox: normalizeSourceBoxToImplementationViewport({
-            sourceBox: binding.source.bbox,
-            sourceImageSize: source.imageSize,
-            implementationViewport,
-          }),
           source_image_size: source.imageSize,
           implementation_viewport: implementationViewport,
           implementation_fullpage_size: region.fullpageSize,
@@ -341,11 +353,6 @@ export async function compareBrowserPreviewRegions(
           status: "failed",
           reason,
           source_bbox: binding.source.bbox,
-          normalized_source_bbox: normalizeSourceBoxToImplementationViewport({
-            sourceBox: binding.source.bbox,
-            sourceImageSize: source.imageSize,
-            implementationViewport,
-          }),
           implementation_bbox: region.bbox,
           source_image_size: source.imageSize,
           implementation_viewport: implementationViewport,
@@ -393,9 +400,11 @@ export async function compareBrowserPreviewRegions(
     taskID: input.taskID,
     targetID: input.targetID,
     operation: "reference-comparison",
+    comparison_mode: "true-size",
+    artifact_note: TRUE_SIZE_COMPARISON_ARTIFACT_NOTE,
     evidenceIDs,
     regions,
-    diagnostics,
+    diagnostics: [TRUE_SIZE_COMPARISON_ARTIFACT_NOTE, ...diagnostics],
   }
   const publicResult = normalizeRuntimePathRefs(input.projectRoot, result) as BrowserPreviewRegionComparisonResult
   await fs.writeFile(manifestPath, JSON.stringify(publicResult, null, 2), "utf8")
@@ -441,11 +450,6 @@ async function materializeRegionComparison(input: {
   includeSideBySide: boolean
   includeDiff: boolean
 }): Promise<BrowserPreviewRegionComparisonResult["regions"][number]> {
-  const normalizedSourceBox = normalizeSourceBoxToImplementationViewport({
-    sourceBox: input.sourceBox,
-    sourceImageSize: input.sourceImageSize,
-    implementationViewport: input.implementationViewport,
-  })
   const dir = path.join(
     input.outDir,
     "regions",
@@ -458,29 +462,23 @@ async function materializeRegionComparison(input: {
   const implementationCrop = path.join(dir, "implementation.png")
   await cropPng(input.sourceImagePath, sourceCrop, input.sourceBox, "source")
   await cropPng(input.implementationImagePath, implementationCrop, input.implementationBox, "implementation")
-  const normalizedSource = await normalizedVisualSourceCrop({
-    sourceCrop,
-    outputDir: dir,
-    implementationBox: input.implementationBox,
-  })
   const sideBySide = path.join(dir, "side-by-side.png")
   await makeSideBySide({
-    leftPath: normalizedSource.visualSourceCrop,
+    leftPath: sourceCrop,
     rightPath: implementationCrop,
     outputPath: sideBySide,
     title: `${input.binding.region_id} [${input.binding.state_id}] (${input.binding.viewport_id})`,
   })
   const artifacts: NonNullable<BrowserPreviewRegionComparisonResult["regions"][number]["artifacts"]> = {
     source_crop: sourceCrop,
-    normalized_source_crop: normalizedSource.normalizedSourceCrop,
     implementation_crop: implementationCrop,
     side_by_side: sideBySide,
   }
-  const visualReport = await evaluateVisual({
-    originalImage: normalizedSource.visualSourceCrop,
-    renderedImage: implementationCrop,
+  const visualReport = await evaluateTrueSizeRegionVisual({
+    sourceCrop,
+    implementationCrop,
   })
-  if (input.includeDiff) {
+  if (input.includeDiff && visualReport.diffImageDataUrl) {
     const diff = path.join(dir, "diff.png")
     await writeDataUrlPng(visualReport.diffImageDataUrl, diff)
     artifacts.diff = diff
@@ -494,21 +492,24 @@ async function materializeRegionComparison(input: {
     dimensions_match: visualReport.dimensionsMatch,
   }
   const coverage = {
-    source_width: Math.ceil(normalizedSourceBox.width),
-    source_height: Math.ceil(normalizedSourceBox.height),
-    implementation_width: Math.ceil(input.implementationBox.width),
-    implementation_height: Math.ceil(input.implementationBox.height),
+    source_width: visualReport.sourceSize.width,
+    source_height: visualReport.sourceSize.height,
+    implementation_width: visualReport.implementationSize.width,
+    implementation_height: visualReport.implementationSize.height,
     implementation_covers_source:
-      Math.ceil(input.implementationBox.width) >= Math.ceil(normalizedSourceBox.width) &&
-      Math.ceil(input.implementationBox.height) >= Math.ceil(normalizedSourceBox.height),
+      visualReport.implementationSize.width >= visualReport.sourceSize.width &&
+      visualReport.implementationSize.height >= visualReport.sourceSize.height,
+    implementation_matches_source_size:
+      visualReport.implementationSize.width === visualReport.sourceSize.width &&
+      visualReport.implementationSize.height === visualReport.sourceSize.height,
   }
   const visualPassed = visualReport.overallScore >= WEBPAGE_EVALUATE_PASS_SCORE
-  const completed = coverage.implementation_covers_source && visualPassed
-  const reason = coverage.implementation_covers_source
+  const completed = coverage.implementation_matches_source_size && visualPassed
+  const reason = coverage.implementation_matches_source_size
     ? visualPassed
       ? undefined
       : `Reference comparison visual score ${visualReport.overallScore}/100 is below required ${WEBPAGE_EVALUATE_PASS_SCORE}/100.`
-    : `Implementation crop is smaller than source region: source=${coverage.source_width}x${coverage.source_height} implementation=${coverage.implementation_width}x${coverage.implementation_height}.`
+    : `Implementation crop size does not match source region: source=${coverage.source_width}x${coverage.source_height} implementation=${coverage.implementation_width}x${coverage.implementation_height}.`
   return {
     region_id: input.binding.region_id,
     viewport_id: input.binding.viewport_id,
@@ -516,21 +517,61 @@ async function materializeRegionComparison(input: {
     status: completed ? "completed" : "failed",
     reason,
     source_bbox: input.sourceBox,
-    normalized_source_bbox: normalizedSourceBox,
     implementation_bbox: input.implementationBox,
     source_image_size: input.sourceImageSize,
     implementation_viewport: input.implementationViewport,
     implementation_fullpage_size: input.implementationFullpageSize,
     implementation_screenshot_path: input.implementationScreenshotPath,
     route_diagnostics: input.routeDiagnostics,
+    artifact_note: TRUE_SIZE_COMPARISON_ARTIFACT_NOTE,
     visual,
     coverage,
     artifacts,
     diagnostics: [
+      TRUE_SIZE_COMPARISON_ARTIFACT_NOTE,
       completed
-        ? `reference comparison completed for ${input.binding.region_id}: implementation crop covers normalized source region and visual score ${visualReport.overallScore}/100 meets ${WEBPAGE_EVALUATE_PASS_SCORE}/100`
+        ? `reference comparison completed for ${input.binding.region_id}: implementation crop size matches source region and visual score ${visualReport.overallScore}/100 meets ${WEBPAGE_EVALUATE_PASS_SCORE}/100`
         : `reference comparison failed for ${input.binding.region_id}: ${reason}`,
     ],
+  }
+}
+
+async function evaluateTrueSizeRegionVisual(input: {
+  sourceCrop: string
+  implementationCrop: string
+}): Promise<TrueSizeRegionVisualReport> {
+  const [sourceSize, implementationSize] = await Promise.all([
+    readPngSize(input.sourceCrop),
+    readPngSize(input.implementationCrop),
+  ])
+  if (sourceSize.width === implementationSize.width && sourceSize.height === implementationSize.height) {
+    const report = await evaluateVisual({
+      originalImage: input.sourceCrop,
+      renderedImage: input.implementationCrop,
+    })
+    return {
+      overallScore: report.overallScore,
+      ssimScore: report.ssimScore,
+      pixelDiffPercent: report.pixelDiffPercent,
+      dimensionsMatch: report.dimensionsMatch,
+      mismatchedPixels: report.mismatchedPixels,
+      totalPixels: report.totalPixels,
+      diffImageDataUrl: report.diffImageDataUrl,
+      sourceSize,
+      implementationSize,
+    }
+  }
+  const totalPixels =
+    Math.max(sourceSize.width, implementationSize.width) * Math.max(sourceSize.height, implementationSize.height)
+  return {
+    overallScore: 0,
+    ssimScore: 0,
+    pixelDiffPercent: 100,
+    dimensionsMatch: false,
+    mismatchedPixels: totalPixels,
+    totalPixels,
+    sourceSize,
+    implementationSize,
   }
 }
 
@@ -538,25 +579,6 @@ async function readPngSize(inputPath: string): Promise<BrowserPreviewImageSizeVa
   const metadata = await sharp(inputPath).metadata()
   if (!metadata.width || !metadata.height) throw new Error(`Cannot read PNG dimensions: ${inputPath}`)
   return { width: metadata.width, height: metadata.height }
-}
-
-async function normalizedVisualSourceCrop(input: {
-  sourceCrop: string
-  outputDir: string
-  implementationBox: BrowserPreviewRegionBox
-}): Promise<{ visualSourceCrop: string; normalizedSourceCrop?: string }> {
-  const sourceSize = await readPngSize(input.sourceCrop)
-  const implementationWidth = Math.ceil(input.implementationBox.width)
-  const implementationHeight = Math.ceil(input.implementationBox.height)
-  if (sourceSize.width === implementationWidth && sourceSize.height === implementationHeight) {
-    return { visualSourceCrop: input.sourceCrop }
-  }
-  const normalizedSourceCrop = path.join(input.outputDir, "source-normalized.png")
-  await sharp(input.sourceCrop)
-    .resize({ width: implementationWidth, height: implementationHeight, fit: "fill" })
-    .png()
-    .toFile(normalizedSourceCrop)
-  return { visualSourceCrop: normalizedSourceCrop, normalizedSourceCrop }
 }
 
 async function cropPng(
@@ -622,7 +644,7 @@ async function makeSideBySide(input: {
   if (!leftMeta.width || !leftMeta.height || !rightMeta.width || !rightMeta.height) {
     throw new Error("Cannot compose side-by-side comparison without image dimensions.")
   }
-  const titleHeight = 44
+  const titleHeight = 62
   const labelHeight = 32
   const gap = 16
   const width = leftMeta.width + rightMeta.width + gap
@@ -631,8 +653,9 @@ async function makeSideBySide(input: {
     <svg width="${width}" height="${titleHeight + labelHeight}" xmlns="http://www.w3.org/2000/svg">
       <rect width="100%" height="100%" fill="#f6f7f9"/>
       <text x="12" y="28" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#111827">${escapeXml(input.title)}</text>
-      <text x="12" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Source reference</text>
-      <text x="${leftMeta.width + gap + 12}" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Local implementation</text>
+      <text x="12" y="50" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#4b5563">TRUE-SIZE: no runner-side crop scaling; dimensions are part of parity.</text>
+      <text x="12" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Source reference (true size)</text>
+      <text x="${leftMeta.width + gap + 12}" y="${titleHeight + 22}" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#374151">Local implementation (true size)</text>
     </svg>
   `)
   await sharp({
@@ -686,20 +709,6 @@ function comparisonImplementationViewportByID(input: {
     out[viewportID] = { width: preset.width, height: preset.height }
   }
   return out
-}
-
-function normalizeSourceBoxToImplementationViewport(input: {
-  sourceBox: BrowserPreviewRegionBox
-  sourceImageSize: BrowserPreviewImageSizeValue
-  implementationViewport: BrowserPreviewImageSizeValue
-}): BrowserPreviewRegionBox {
-  const scale = input.implementationViewport.width / input.sourceImageSize.width
-  return {
-    x: input.sourceBox.x * scale,
-    y: input.sourceBox.y * scale,
-    width: input.sourceBox.width * scale,
-    height: input.sourceBox.height * scale,
-  }
 }
 
 function sanitizeSegment(value: string): string {

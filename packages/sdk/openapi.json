@@ -18481,6 +18481,13 @@
                       "type": "string",
                       "const": "reference-comparison"
                     },
+                    "comparison_mode": {
+                      "type": "string",
+                      "const": "true-size"
+                    },
+                    "artifact_note": {
+                      "type": "string"
+                    },
                     "evidenceIDs": {
                       "type": "object",
                       "propertyNames": {
@@ -18520,34 +18527,6 @@
                             "type": "string"
                           },
                           "source_bbox": {
-                            "type": "object",
-                            "properties": {
-                              "x": {
-                                "type": "number",
-                                "minimum": 0
-                              },
-                              "y": {
-                                "type": "number",
-                                "minimum": 0
-                              },
-                              "width": {
-                                "type": "number",
-                                "exclusiveMinimum": 0
-                              },
-                              "height": {
-                                "type": "number",
-                                "exclusiveMinimum": 0
-                              }
-                            },
-                            "required": [
-                              "x",
-                              "y",
-                              "width",
-                              "height"
-                            ],
-                            "additionalProperties": false
-                          },
-                          "normalized_source_bbox": {
                             "type": "object",
                             "properties": {
                               "x": {
@@ -18777,6 +18756,9 @@
                             ],
                             "additionalProperties": false
                           },
+                          "artifact_note": {
+                            "type": "string"
+                          },
                           "visual": {
                             "type": "object",
                             "properties": {
@@ -18825,6 +18807,9 @@
                               },
                               "implementation_covers_source": {
                                 "type": "boolean"
+                              },
+                              "implementation_matches_source_size": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
@@ -18832,16 +18817,14 @@
                               "source_height",
                               "implementation_width",
                               "implementation_height",
-                              "implementation_covers_source"
+                              "implementation_covers_source",
+                              "implementation_matches_source_size"
                             ]
                           },
                           "artifacts": {
                             "type": "object",
                             "properties": {
                               "source_crop": {
-                                "type": "string"
-                              },
-                              "normalized_source_crop": {
                                 "type": "string"
                               },
                               "implementation_crop": {
@@ -18889,6 +18872,8 @@
                     "taskID",
                     "targetID",
                     "operation",
+                    "comparison_mode",
+                    "artifact_note",
                     "evidenceIDs",
                     "regions",
                     "diagnostics"
