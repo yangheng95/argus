@@ -127,10 +127,15 @@ Then:
 - `SystemPrompt.skills()` renders only `surface.skills` where `enabled === true`.
 - The rendered Skill Policy must name the enabled mounted skills as the current
   agent's mounted skill surface and instruct the agent to inspect that list before
-  planning or tool use. It may include metadata and loading instructions, but it
-  must not inline full `SKILL.md` bodies; full skill content is loaded only through
-  the visible `skill` tool call.
+  planning or tool use. It must also tell the agent that the visible `skill` tool
+  can be called without a name to list mounted skills or with `query` to search
+  mounted skills. It may include metadata and loading instructions, but it must
+  not inline full `SKILL.md` bodies; full skill content is loaded only through the
+  visible `skill` tool call.
 - `SkillTool` searches and loads only the same enabled surface.
+- `SkillTool` search is fuzzy and indexes skill title/name, description,
+  required tool hints, compatible agent metadata, and `SKILL.md` content. Search
+  results expose metadata only; full content is returned only by exact-name load.
 - Tool-call metadata records agent, skill name, mount scope, and skill location.
 - Unknown mounted skill names, unknown agent ids, or invalid compatibility are hard
   errors surfaced before the model call, not silently ignored.

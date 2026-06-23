@@ -1,6 +1,7 @@
 import path from "path"
 import { pathToFileURL } from "url"
 import z from "zod"
+import fuzzysort from "fuzzysort"
 import { Tool } from "./tool"
 import { Skill } from "../skill"
 import { Ripgrep } from "../file/ripgrep"
@@ -32,7 +33,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           `Current agent: ${surface.agent}`,
           "Call without a name to search/list skill metadata. Call with an exact name to load the full skill instructions.",
           "",
-          "Use search before planning when the task may match a specialized workflow.",
+          "Use search before planning when the task may match a specialized workflow. Search is fuzzy across mounted skill titles and SKILL.md contents.",
           "",
           'Search output returns names, descriptions, required tool hints, and locations only. Loading by name returns a `<skill_content name="...">` block with the full SKILL.md body and sampled bundled files.',
           disabled.length > 0
@@ -47,7 +48,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
     query: z
       .string()
       .optional()
-      .describe("Search terms for skill name, description, or required_tools. Omit to list compatible skills."),
+      .describe("Fuzzy search terms for mounted skill title, description, required_tools, agents, or SKILL.md content. Omit to list compatible skills."),
     name: z
       .string()
       .optional()
@@ -147,14 +148,29 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
 })
 
 function searchSkills(skills: Skill.Info[], query: string | undefined): Skill.Info[] {
-  const needle = query?.trim().toLocaleLowerCase()
+  const needle = query?.trim()
   if (!needle) return skills
-  return skills.filter((skill) => {
-    const haystack = [skill.name, skill.description, ...(skill.required_tools ?? []), ...skill.agents]
-      .join("\n")
-      .toLocaleLowerCase()
-    return haystack.includes(needle)
-  })
+  const entries = skills.map((skill) => ({ skill, text: skillSearchText(skill) }))
+  return fuzzysort.go(needle, entries, { key: "text", threshold: -10000 }).map((match) => match.obj.skill)
+}
+
+function skillSearchTitle(skill: Skill.Info): string {
+  const heading = skill.content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => /^#{1,6}\s+\S/.test(line))
+  return heading?.replace(/^#{1,6}\s+/, "").trim() || skill.name
+}
+
+function skillSearchText(skill: Skill.Info): string {
+  return [
+    skill.name,
+    skillSearchTitle(skill),
+    skill.description,
+    ...(skill.required_tools ?? []),
+    ...skill.agents,
+    skill.content,
+  ].join("\n")
 }
 
 function renderSkillSearch(skills: Skill.Info[], total: number, query: string | undefined): string {
@@ -169,6 +185,7 @@ function renderSkillSearch(skills: Skill.Info[], total: number, query: string | 
   const rows = skills.flatMap((skill) => [
     "  <skill>",
     `    <name>${skill.name}</name>`,
+    `    <title>${skillSearchTitle(skill)}</title>`,
     `    <description>${skill.description}</description>`,
     `    <required_tools>${(skill.required_tools ?? []).join(",") || "none"}</required_tools>`,
     `    <agents>${skill.agents.join(",") || "all"}</agents>`,

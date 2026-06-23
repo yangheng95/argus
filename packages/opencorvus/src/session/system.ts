@@ -104,25 +104,31 @@ export namespace SystemPrompt {
   ): Promise<string | undefined> {
     const surface =
       input?.surface ?? (await SkillMount.resolve({ agent, availableToolNames: input?.availableToolNames }))
+    if (!surface.tool_available) return
     const compatible = surface.skills.filter((skill) => skill.enabled)
-    if (compatible.length === 0) return
+    const skillRows =
+      compatible.length === 0
+        ? ["- none: No enabled skills are currently mounted for this agent in this turn."]
+        : compatible.map((s) => `- ${s.name}: ${s.description}`)
 
     return [
       "## Skill Policy",
       "",
       "Skills are curated, tested workflows for recurring task shapes (webpage cloning, spec research, acceptance verification, etc.). Each skill bundles the task contract, evidence expectations, and resource files.",
+      "The `skill` tool can search mounted skills. Call it without a name to list them, or with `query` to fuzzy-search mounted skill titles and SKILL.md contents before loading an exact skill name.",
       "",
       "### Mounted Skills",
       "The entries below are already mounted for this agent in the current turn. Treat them as the agent's available skill surface, not as optional global suggestions.",
       "",
       "### Check First",
       "1. Before planning or tool use, inspect `<available_skills>` and decide whether the current task overlaps any mounted skill description.",
-      "2. When a mounted skill is relevant, call the `skill` tool with its exact name to load the full instructions into context **before** you start executing.",
-      "3. Follow the loaded skill's evidence and output contract rather than improvising. Do not repeat acquisition tools once the required evidence artifacts already exist.",
-      "4. If several mounted skills could apply, load the most specific one first; load additional skills only if the task spans their domains.",
+      "2. If the task wording is ambiguous, call the `skill` tool with `query` to fuzzy-search mounted skill titles and SKILL.md contents.",
+      "3. When a mounted skill is relevant, call the `skill` tool with its exact name to load the full instructions into context **before** you start executing.",
+      "4. Follow the loaded skill's evidence and output contract rather than improvising. Do not repeat acquisition tools once the required evidence artifacts already exist.",
+      "5. If several mounted skills could apply, load the most specific one first; load additional skills only if the task spans their domains.",
       "",
       "<available_skills>",
-      ...compatible.map((s) => `- ${s.name}: ${s.description}`),
+      ...skillRows,
       "</available_skills>",
     ].join("\n")
   }
