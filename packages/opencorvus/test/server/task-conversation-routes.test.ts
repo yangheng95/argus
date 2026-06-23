@@ -1323,6 +1323,119 @@ describe("task conversation routes", () => {
     })
   })
 
+  test("GET /task/:taskID/conversation applies a global agentView message budget across many sessions", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({
+          kind: "root",
+          title: "global bounded hydrate root",
+        })
+        const now = Date.now()
+        const sessionCount = 45
+        const messagesPerSession = 3
+        const messageIDs: string[] = []
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "global bounded hydrate task",
+              request: "global bounded hydrate task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const sessions = []
+        for (let sessionIndex = 0; sessionIndex < sessionCount; sessionIndex += 1) {
+          sessions.push(
+            await Session.create({
+              kind: "assistant",
+              parentID: root.id,
+              title: `global bounded assistant ${sessionIndex}`,
+            }),
+          )
+        }
+
+        Database.use((db) => {
+          let sequence = 0
+          for (let sessionIndex = 0; sessionIndex < sessions.length; sessionIndex += 1) {
+            const session = sessions[sessionIndex]
+            for (let messageIndex = 0; messageIndex < messagesPerSession; messageIndex += 1) {
+              const suffix = `${sessionIndex.toString().padStart(2, "0")}_${messageIndex}`
+              const id = `msg_global_bounded_${suffix}`
+              const created = now + sequence
+              sequence += 1
+              messageIDs.push(id)
+              db.insert(MessageTable)
+                .values({
+                  id,
+                  session_id: session.id,
+                  time_created: created,
+                  time_updated: created,
+                  data: {
+                    role: "assistant",
+                    time: { created },
+                  } as any,
+                })
+                .run()
+              db.insert(PartTable)
+                .values({
+                  id: `prt_global_bounded_${suffix}`,
+                  message_id: id,
+                  session_id: session.id,
+                  time_created: created,
+                  time_updated: created,
+                  data: {
+                    type: "text",
+                    text: `visible ${suffix}`,
+                  } as any,
+                })
+                .run()
+            }
+          }
+        })
+
+        const response = await app.request(`/task/${taskID}/conversation?tail_limit=2`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        if (response.status !== 200) {
+          throw new Error(await response.text())
+        }
+        const body = (await response.json()) as {
+          transcript?: Array<{ info?: { id?: string } }>
+          history?: { hasMore?: boolean; oldestMessageID?: string | null; limit?: number }
+          agentView?: { sessions?: Array<{ sessionID?: string; messageIDs?: string[] }> }
+        }
+        const hydratedAgentMessageCount =
+          body.agentView?.sessions?.reduce((total, session) => total + (session.messageIDs?.length ?? 0), 0) ?? 0
+
+        expect(body.transcript?.map((message) => message.info?.id)).toEqual(messageIDs.slice(-2))
+        expect(body.history).toMatchObject({
+          hasMore: true,
+          oldestMessageID: messageIDs.at(-2),
+          limit: 2,
+        })
+        expect(hydratedAgentMessageCount).toBeLessThanOrEqual(80)
+      },
+    })
+  })
+
   test("POST /task/:taskID/session/:sessionID/reply appends overlay direct user input to an agent session", async () => {
     await using tmp = await tmpdir({ git: true })
 
