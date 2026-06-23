@@ -1079,6 +1079,75 @@ button.s-row:focus-visible {
   white-space: nowrap;
 }
 
+.agent-skill-grid-skill__source {
+  --source-directory-color: var(--text-muted);
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  max-width: min(13ch, 100%);
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--source-directory-color) 52%, transparent);
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--source-directory-color) 14%, var(--surface-inset));
+  color: color-mix(in srgb, var(--source-directory-color) 82%, var(--text-strong));
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.agent-skill-grid-skill__source::before {
+  content: "";
+  flex: 0 0 auto;
+  width: calc(6px * var(--ui-scale));
+  height: calc(6px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--source-directory-color);
+  box-shadow: 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--source-directory-color) 34%, transparent);
+}
+
+.agent-skill-grid-skill__source[data-source-tone="builtin"] {
+  --source-directory-color: #6b7280;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="opencorvus"] {
+  --source-directory-color: #2563eb;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="claude"] {
+  --source-directory-color: #9333ea;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="agents"] {
+  --source-directory-color: #059669;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="codex"] {
+  --source-directory-color: #d97706;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="custom-0"] {
+  --source-directory-color: #dc2626;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="custom-1"] {
+  --source-directory-color: #0d9488;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="custom-2"] {
+  --source-directory-color: #4f46e5;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="custom-3"] {
+  --source-directory-color: #ca8a04;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="custom-4"] {
+  --source-directory-color: #db2777;
+}
+
+.agent-skill-grid-skill__source[data-source-tone="custom-5"] {
+  --source-directory-color: #64748b;
+}
+
 .agent-skill-grid-cell {
   appearance: none;
   -webkit-appearance: none;

@@ -311,6 +311,28 @@ function skillSourceRoot(item: SkillItem): string {
   return roots.find((root) => location.includes(`/${root}/`) || location.includes(`${root}/`)) || ""
 }
 
+function skillSourceDirectory(item: SkillItem): string {
+  const root = skillSourceRoot(item)
+  if (root) return root
+  const location = `${item.location || item.source || ""}`.replaceAll("\\", "/")
+  const parts = location.split("/").filter(Boolean)
+  const skillRootIndex = parts.findIndex((part) => part === "skill" || part === "skills")
+  if (skillRootIndex > 0) return parts[skillRootIndex - 1] || ""
+  if (parts.at(-1)?.toLowerCase() === "skill.md") return parts.at(-2) || ""
+  return parts.at(-1) || ""
+}
+
+function sourceDirectoryTone(directory: string): string {
+  if (directory === "builtin") return "builtin"
+  if (directory === ".opencorvus") return "opencorvus"
+  if (directory === ".claude") return "claude"
+  if (directory === ".agents") return "agents"
+  if (directory === ".codex") return "codex"
+  let hash = 0
+  for (const char of directory) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return `custom-${hash % 6}`
+}
+
 function matrixAgentTrack(agent: Pick<AgentSkillRow, "name">, compact: boolean): string {
   const minPx = compact ? 104 : 132
   const minCh = Math.max(compact ? 14 : 16, agent.name.length + (compact ? 4 : 6))
@@ -989,12 +1011,12 @@ function ExtensionSettingsPanel(props: {
                   <For each={poolSkills()}>
                     {(item) => {
                       const mountedAgents = () => mountedAgentsFor(item)
-                      const sourceRoot = () => skillSourceRoot(item)
+                      const sourceDirectory = () => skillSourceDirectory(item)
                       const skillTitle = () =>
                         [
                           item.name,
                           item.description,
-                          sourceRoot(),
+                          sourceDirectory(),
                           mountedAgents().join(", ") || t("skill.mount.unmounted"),
                           item.location,
                         ]
@@ -1015,8 +1037,14 @@ function ExtensionSettingsPanel(props: {
                           >
                             <span class="agent-skill-grid-skill__name">{item.name}</span>
                             <span class="agent-skill-grid-skill__meta">
-                              <Show when={sourceRoot()}>
-                                <span>{sourceRoot()}</span>
+                              <Show when={sourceDirectory()}>
+                                <span
+                                  class="agent-skill-grid-skill__source"
+                                  data-source-directory={sourceDirectory()}
+                                  data-source-tone={sourceDirectoryTone(sourceDirectory())}
+                                >
+                                  {sourceDirectory()}
+                                </span>
                               </Show>
                               <span>{mountedAgentLabel(mountedAgents().length)}</span>
                               <Show when={skillDuplicateLocations(item).length > 1}>

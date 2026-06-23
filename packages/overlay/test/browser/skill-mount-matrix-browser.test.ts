@@ -222,6 +222,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     },
     unmounted_count: 2,
   }
+  const expectedSourceDirectories = [".opencorvus", ".claude", ".agents", ".codex"]
   const requests: Array<{ method: string; path: string }> = []
 
   const server = await startBrowserFixture(async (req) => {
@@ -426,6 +427,17 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       const rowNames = Array.from(node.querySelectorAll(".agent-skill-grid-skill__name")).map((item) =>
         (item.textContent || "").trim(),
       )
+      const sourceBadges = Array.from(node.querySelectorAll(".agent-skill-grid-skill__source")).map((item) => {
+        const badge = item as HTMLElement
+        const style = getComputedStyle(badge)
+        return {
+          text: (badge.textContent || "").trim(),
+          directory: badge.dataset.sourceDirectory || "",
+          tone: badge.dataset.sourceTone || "",
+          backgroundColor: style.backgroundColor,
+          borderColor: style.borderColor,
+        }
+      })
       const corner = node.querySelector(".agent-skill-grid-corner") as HTMLElement | null
       const rowHeader = node.querySelector(".agent-skill-grid-skill") as HTMLElement | null
       const topHeader = node.querySelector(".agent-skill-grid-agent") as HTMLElement | null
@@ -441,6 +453,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         rowNames,
         skillRows: node.querySelectorAll(".agent-skill-grid-skill").length,
         agentHeaders: node.querySelectorAll(".agent-skill-grid-agent").length,
+        sourceBadges,
         mountedCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="mounted"]').length,
         conflictCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="conflict"]').length,
         unavailableCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="unavailable"]').length,
@@ -462,6 +475,17 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     assert.equal(layout.skillRows, 4, "each skill should render once as a matrix row")
     assert.equal(layout.agentHeaders, visibleAgents.length, "only skill-mountable agents should render as columns")
     assert.deepEqual(layout.rowNames, ["opencorvus-plan", "claude-debug", "agents-legacy", "codex-review"])
+    assert.deepEqual(
+      layout.sourceBadges.map((badge) => badge.directory),
+      expectedSourceDirectories,
+      "source directory badges should follow skill row order",
+    )
+    assert.equal(new Set(layout.sourceBadges.map((badge) => badge.tone)).size, expectedSourceDirectories.length)
+    assert.equal(
+      new Set(layout.sourceBadges.map((badge) => badge.backgroundColor)).size,
+      expectedSourceDirectories.length,
+      `source directories should have distinct badge colors: ${JSON.stringify(layout.sourceBadges)}`,
+    )
     assert.ok(layout.headers.includes("frontend-research"), "agent header should use the full agent name")
     assert.equal(layout.headers.includes("mission"), false, "agents without skill tool should not render as X columns")
     assert.equal(layout.headers.includes("orchestrator"), false, "orchestrator should not render as an unsettable column")
@@ -552,6 +576,17 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         const rowNames = Array.from(node.querySelectorAll(".agent-skill-grid-skill__name")).map((item) =>
           (item.textContent || "").trim(),
         )
+        const sourceBadges = Array.from(node.querySelectorAll(".agent-skill-grid-skill__source")).map((item) => {
+          const badge = item as HTMLElement
+          const style = getComputedStyle(badge)
+          return {
+            text: (badge.textContent || "").trim(),
+            directory: badge.dataset.sourceDirectory || "",
+            tone: badge.dataset.sourceTone || "",
+            backgroundColor: style.backgroundColor,
+            borderColor: style.borderColor,
+          }
+        })
         const firstCell = node.querySelector(".agent-skill-grid-cell") as HTMLElement
         const gridStyle = getComputedStyle(grid)
         const gridRect = grid.getBoundingClientRect()
@@ -565,6 +600,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
           headers,
           headerMetrics,
           rowNames,
+          sourceBadges,
           unavailableCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="unavailable"]').length,
           cornerBackground: getComputedStyle(corner).backgroundColor,
           rowHeaderBackground: getComputedStyle(rowHeader).backgroundColor,
@@ -590,6 +626,17 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     assert.equal(settingsLayout.text.includes("Unavailable"), false)
     assert.equal(settingsLayout.unavailableCells, 0)
     assert.deepEqual(settingsLayout.rowNames, ["opencorvus-plan", "claude-debug", "agents-legacy", "codex-review"])
+    assert.deepEqual(
+      settingsLayout.sourceBadges.map((badge) => badge.directory),
+      expectedSourceDirectories,
+      "settings source directory badges should follow skill row order",
+    )
+    assert.equal(new Set(settingsLayout.sourceBadges.map((badge) => badge.tone)).size, expectedSourceDirectories.length)
+    assert.equal(
+      new Set(settingsLayout.sourceBadges.map((badge) => badge.backgroundColor)).size,
+      expectedSourceDirectories.length,
+      `settings source directories should have distinct badge colors: ${JSON.stringify(settingsLayout.sourceBadges)}`,
+    )
     assert.equal(settingsLayout.cornerPosition, "sticky")
     assert.equal(settingsLayout.rowHeaderPosition, "sticky")
     assert.equal(settingsLayout.topHeaderPosition, "sticky")
