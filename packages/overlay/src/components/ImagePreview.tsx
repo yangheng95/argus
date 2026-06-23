@@ -37,6 +37,11 @@ type CopyFeedback = {
 
 type PreviewableImageAttributes = JSX.ImgHTMLAttributes<HTMLImageElement> &
   Partial<Record<`data-${string}`, string | undefined>>
+type ImagePreviewBodyGeometry = {
+  left: number
+  top: number
+  viewportSize: ImagePreviewSize
+}
 
 class ImageCopyError extends Error {
   constructor(readonly key: ImageCopyFeedbackKey) {
@@ -93,6 +98,7 @@ export function PreviewableImage(props: {
 export function ImagePreviewHost() {
   const [scale, setScale] = createSignal(1)
   const [imageSize, setImageSize] = createSignal<ImagePreviewSize>({ width: 0, height: 0 })
+  const [bodyGeometry, setBodyGeometry] = createSignal<ImagePreviewBodyGeometry | null>(null)
   const [copyInFlight, setCopyInFlight] = createSignal(false)
   const [copyFeedback, setCopyFeedback] = createSignal<CopyFeedback | null>(null)
   const [panStart, setPanStart] = createSignal<{
@@ -105,19 +111,38 @@ export function ImagePreviewHost() {
   let bodyRef: HTMLDivElement | undefined
   let imageRef: HTMLImageElement | undefined
   let resizeObserver: ResizeObserver | undefined
+  let pendingWheelScale: { clientX: number; clientY: number; delta: number } | null = null
   const applyOpenScaleOnFrame = createAnimationFrameScheduler(() => {
+    readBodyGeometry()
     const openScale = previewOpenScale()
     if (imagePreviewState().open && imageSize().width > 0 && scale() < openScale) setScale(openScale)
+  })
+  const applyWheelScaleOnFrame = createAnimationFrameScheduler(() => {
+    const pending = pendingWheelScale
+    if (!pending) return
+    pendingWheelScale = null
+    const geometry = readBodyGeometry()
+    if (!geometry) return
+    applyScale(scale() + pending.delta, {
+      x: pending.clientX - geometry.left,
+      y: pending.clientY - geometry.top,
+    })
   })
 
   createEffect(() => {
     const state = imagePreviewState()
-    if (!state.open) return
+    if (!state.open) {
+      pendingWheelScale = null
+      applyWheelScaleOnFrame.cancel()
+      return
+    }
     setScale(1)
     setImageSize({ width: 0, height: 0 })
+    setBodyGeometry(null)
     setCopyInFlight(false)
     setCopyFeedback(null)
     setPanStart(null)
+    applyOpenScaleOnFrame.schedule()
     queueMicrotask(() => {
       if (imageRef?.complete) measureLoadedImage(imageRef)
     })
@@ -129,11 +154,14 @@ export function ImagePreviewHost() {
     resizeObserver?.disconnect()
     resizeObserver = new ResizeObserver(applyOpenScaleOnFrame.schedule)
     resizeObserver.observe(body)
+    applyOpenScaleOnFrame.schedule()
   })
 
   onCleanup(() => {
+    bodyRef?.removeEventListener("wheel", handleWheel)
     resizeObserver?.disconnect()
     applyOpenScaleOnFrame.cancel()
+    applyWheelScaleOnFrame.cancel()
   })
 
   const renderedSize = createMemo(() => {
@@ -159,15 +187,36 @@ export function ImagePreviewHost() {
   }
 
   function viewportSize(): ImagePreviewSize {
+    return bodyGeometry()?.viewportSize ?? { width: 0, height: 0 }
+  }
+
+  function readBodyGeometry(): ImagePreviewBodyGeometry | null {
     const body = bodyRef
-    if (!body) return { width: 0, height: 0 }
+    if (!body) {
+      setBodyGeometry(null)
+      return null
+    }
+    const rect = body.getBoundingClientRect()
     const styles = window.getComputedStyle(body)
     const paddingX = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight)
     const paddingY = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom)
-    return {
-      width: Math.max(0, body.clientWidth - paddingX),
-      height: Math.max(0, body.clientHeight - paddingY),
+    const next: ImagePreviewBodyGeometry = {
+      left: rect.left,
+      top: rect.top,
+      viewportSize: {
+        width: Math.max(0, body.clientWidth - paddingX),
+        height: Math.max(0, body.clientHeight - paddingY),
+      },
     }
+    setBodyGeometry(next)
+    return next
+  }
+
+  function bindBody(element: HTMLDivElement): void {
+    if (bodyRef === element) return
+    bodyRef?.removeEventListener("wheel", handleWheel)
+    bodyRef = element
+    bodyRef.addEventListener("wheel", handleWheel, { passive: false })
   }
 
   function measureLoadedImage(image: HTMLImageElement): void {
@@ -176,7 +225,7 @@ export function ImagePreviewHost() {
       height: image.naturalHeight || image.height,
     }
     setImageSize(nextSize)
-    setScale(calculateImagePreviewOpenScale(nextSize, viewportSize()))
+    setScale(calculateImagePreviewOpenScale(nextSize, readBodyGeometry()?.viewportSize ?? viewportSize()))
     requestAnimationFrame(() => {
       if (!bodyRef) return
       bodyRef.scrollLeft = 0
@@ -296,16 +345,16 @@ export function ImagePreviewHost() {
   }
 
   function handleWheel(event: WheelEvent): void {
-    if (!event.ctrlKey) return
-    const body = bodyRef
-    if (!body) return
+    if (!event.ctrlKey && !event.metaKey) return
     event.preventDefault()
-    const rect = body.getBoundingClientRect()
+    event.stopPropagation()
     const direction = event.deltaY > 0 ? -1 : 1
-    applyScale(scale() + direction * SCALE_STEP, {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    })
+    pendingWheelScale = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      delta: (pendingWheelScale?.delta ?? 0) + direction * SCALE_STEP,
+    }
+    applyWheelScaleOnFrame.schedule()
   }
 
   function startPan(event: PointerEvent): void {
@@ -454,9 +503,8 @@ export function ImagePreviewHost() {
         class="image-preview-dialog__body"
         data-panning={panStart() ? "true" : "false"}
         ref={(element) => {
-          bodyRef = element
+          bindBody(element)
         }}
-        onWheel={handleWheel}
         onPointerDown={startPan}
         onPointerMove={movePan}
         onPointerUp={stopPan}
