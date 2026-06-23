@@ -248,7 +248,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
 
   // Reload when taskID changes (reactive)
   createEffect(() => {
-    if (!isActive() && !props.compact) return
+    if (!isActive()) return
     const taskID = currentTaskID()
     const directory = currentDirectory()
     void loadMemory(taskID, directory)

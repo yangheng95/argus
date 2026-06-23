@@ -30,7 +30,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
   assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
   assert.equal(typeof globalThis.Bun, "undefined")
 
-  const requestLog: Array<{ method: string; path: string; directory: string }> = []
+  const requestLog: Array<{ method: string; path: string; directory: string; taskID: string }> = []
   let memoryFiles = [
     {
       id: "mem_left_tool_panels",
@@ -56,7 +56,12 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
   const server = await startBrowserFixture(async (req) => {
     const url = new URL(req.url)
     const path = route(url)
-    requestLog.push({ method: req.method, path, directory: url.searchParams.get("directory") || "" })
+    requestLog.push({
+      method: req.method,
+      path,
+      directory: url.searchParams.get("directory") || "",
+      taskID: url.searchParams.get("taskID") || "",
+    })
     if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
@@ -187,6 +192,11 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded", timeout: 60_000 })
     await page.waitForSelector("#solidLeftActivityToolbar")
     await page.waitForFunction(() => (window as any).__overlayInitSettled === true)
+    assert.equal(
+      requestLog.some((item) => item.path === "/panel/knowledge/memory"),
+      false,
+      "inactive compact Memory panel must not request memory during initial overlay load",
+    )
     requestLog.length = 0
     assert.equal(requestLog.some((item) => item.path === "/skill/installed"), false)
     assert.equal(requestLog.some((item) => item.path === "/mcp"), false)
@@ -230,11 +240,19 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     })
     assert.ok(mcpListMetrics.height > 24)
     assert.match(mcpListMetrics.text, /docs/)
+    assert.equal(
+      requestLog.some((item) => item.path === "/panel/knowledge/memory"),
+      false,
+      "inactive compact Memory panel must not request memory when other left activities are selected",
+    )
 
     const memoryButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="memory"]'
     await page.waitForSelector(memoryButton, { visible: true })
     await page.click(memoryButton)
     await page.waitForSelector("#leftPanelMemory[data-active='true'] .knowledge-item")
+    const firstMemoryRequest = requestLog.find((item) => item.path === "/panel/knowledge/memory")
+    assert.equal(firstMemoryRequest?.directory, WORKSPACE_DIR)
+    assert.equal(firstMemoryRequest?.taskID, TASK_ID)
     const memoryName = await page.$eval("#leftPanelMemory .knowledge-item-title", (node) => node.textContent || "")
     assert.equal(memoryName, "Left panel memory loaded from selected task")
     const memoryStructure = await page.$eval("#leftPanelMemory .knowledge-item", (item) => {
@@ -327,6 +345,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     assert.equal(skillRequest?.directory, WORKSPACE_DIR)
     assert.equal(mcpRequest?.directory, WORKSPACE_DIR)
     assert.equal(memoryRequest?.directory, WORKSPACE_DIR)
+    assert.equal(memoryRequest?.taskID, TASK_ID)
   } finally {
     await browser.close()
     await server.close()

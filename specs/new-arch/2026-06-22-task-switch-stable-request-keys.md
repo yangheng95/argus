@@ -104,6 +104,75 @@ profile endpoint.
   `sessionConfigRefreshToken()` legitimately changes; this is not the same bug
   as the previous object-identity resource key churn.
 
+## Follow-up 2026-06-23: Inactive Compact Memory Request Owner
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| `AGENTS.md` | No fallback, no double source, recall before edit, test every code change, visual QA for UI changes, commit and push. |
+| This spec | Compact memory loading was deferred as a separate trigger root after stable request keys were fixed. |
+| `MemoryPanel.tsx` | `props.compact` currently bypasses the inactive guard before calling `loadMemory`. |
+| `main.tsx` | The left Memory panel is always mounted as `compact`, with `active={selectedLeftPanelActivity() === "memory"}`. |
+| `left-tool-panels-directory-browser.test.ts` | The real left activity flow already verifies Skill, MCP, and Memory panels against a task-scoped fixture. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| `MemoryPanel` automatic reload effect | `if (!isActive() && !props.compact) return` means compact panels load while hidden. | Make `active` the single owner of automatic memory loading; compact is only visual density. |
+| Left activity Memory mount | Always mounted, compact, inactive unless the activity button is selected. | Do not request memory until that activity is selected. |
+| Settings Memory tab | Uses the default active value when rendered in its selected tab. | Preserve default active behavior by keeping `props.active ?? true`. |
+| Manual refresh/search/detail/delete | User-triggered inside the visible panel. | Leave unchanged; these actions already require visible controls. |
+
+### Fix Plan
+
+1. Change the automatic memory reload effect so inactive panels do not call
+   `loadMemory`, regardless of compact density.
+2. Update static ownership tests to reject the old compact bypass.
+3. Extend the browser left-tool panel test to prove no Memory request is sent
+   before the Memory activity is selected, and that a request is sent after
+   selection.
+4. Rerun focused static tests, overlay typecheck, browser visual QA, and review
+   screenshots.
+
+### Acceptance
+
+- Hidden compact Memory surfaces do not request `panel/knowledge/memory`.
+- Selecting the Memory activity still loads the selected task directory.
+- No cache, fallback, route bypass, or alternate memory source is added.
+- Focused tests, overlay typecheck, browser visual screenshots, self-review,
+  commit, and push pass.
+
+### Implementation
+
+- `MemoryPanel` now treats `active` as the only automatic load owner. Compact
+  density no longer bypasses the inactive guard.
+- Static ownership tests reject the previous compact bypass.
+- The left-tool browser flow now asserts no Memory request is sent during
+  initial load or while Skill/MCP activities are selected, then verifies the
+  first Memory request after clicking the Memory activity carries the selected
+  task ID and workspace directory.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `bun test packages/overlay/test/memory-panel-detail-dialog.test.ts packages/overlay/test/project-directory-request-loop.test.ts --timeout 30000` | 14 pass |
+| `bun run --cwd packages/overlay typecheck` | Pass |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts` | 1 pass |
+| Visual QA | Reviewed `.scratch/left-skill-panel-primitive-row.png`, `.scratch/memory-row-sibling-controls.png`, and `.scratch/memory-panel-delete-empty-state.png`. |
+| `git diff --check -- packages/overlay/src/components/MemoryPanel.tsx packages/overlay/test/memory-panel-detail-dialog.test.ts packages/overlay/test/project-directory-request-loop.test.ts packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts specs/new-arch/2026-06-22-task-switch-stable-request-keys.md` | Pass |
+
+### Self Review
+
+- The change removes a trigger source; it does not introduce a stale cache,
+  fallback route, or alternate memory store.
+- Settings Memory keeps its default active behavior through `props.active ??
+  true`.
+- Manual refresh, search, detail, and delete paths stay unchanged and remain
+  user-triggered inside the visible panel.
+
 ## Self Review
 
 - The change does not add stale caches: terminal profile in-flight ownership is
