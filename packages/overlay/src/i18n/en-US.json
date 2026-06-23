@@ -687,7 +687,7 @@
   "memory.search_failed": "Memory search failed: {{error}}",
   "memory.load_failed": "Failed to load context",
   "memory.no_results": "No matching context found",
-  "memory.none": "No task context",
+  "memory.none": "No context entries",
   "memory.none_unselected": "Select a task to view its context",
   "memory.scope.cwd": "cwd",
   "memory.scope.global": "Global",

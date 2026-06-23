@@ -61,3 +61,50 @@ same DOM contract.
 - Mounted browser test verifies expand, keyboard focus to Delete, DELETE
   request, row removal, empty state, and screenshot evidence.
 - Existing source tests and architecture guards pass.
+
+## Follow-up 2026-06-23: Empty Task Memory Copy
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| This spec | The mounted left Memory browser test already verifies the post-delete empty state. |
+| `MemoryPanel.tsx` | Empty copy uses `memory.none` when a current task ID exists and `memory.none_unselected` only when no task is selected. |
+| Visual QA | `.scratch/memory-panel-delete-empty-state.png` showed "No task context" after deleting the only row while the task remained selected. |
+
+### Fix Plan
+
+1. Keep the existing `MemoryPanel` branch owner: selected task with zero rows
+   uses `memory.none`.
+2. Change `memory.none` locale copy to describe an empty list, not a missing
+   task.
+3. Make the mounted browser test assert the exact post-delete empty copy.
+
+### Acceptance
+
+- With a selected task and zero memory rows, the panel says there are no context
+  entries.
+- With no selected task, `memory.none_unselected` remains the task-selection
+  prompt.
+- Browser screenshot evidence for the post-delete state is reviewed again.
+
+### Implementation
+
+- Updated `memory.none` in both supported locales to describe an empty context
+  entry list instead of a missing task.
+- The mounted browser test now asserts the exact post-delete empty copy.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `bun run --cwd packages/overlay check:i18n` | Pass |
+| `bun run --cwd packages/overlay typecheck` | Pass |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts` | 1 pass |
+| Visual QA | Reviewed `.scratch/memory-panel-delete-empty-state.png`; empty state reads "No context entries" without layout overlap. |
+
+### Self Review
+
+- The selected-task and no-task branches remain separate; only the selected-task
+  empty copy changed.
+- No new locale key, fallback, or duplicate empty-state source was added.
