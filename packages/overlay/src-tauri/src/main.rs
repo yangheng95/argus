@@ -54,37 +54,77 @@ struct OverlayWindowSize {
     height: f64,
 }
 
-fn overlay_main_min_size(config: &tauri::utils::config::Config) -> OverlayWindowSize {
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct OverlayWindowConstraints {
+    min_size: OverlayWindowSize,
+    max_aspect_size: OverlayWindowSize,
+}
+
+fn overlay_main_size_constraints(
+    config: &tauri::utils::config::Config,
+) -> OverlayWindowConstraints {
     let main_window = config
         .app
         .windows
         .iter()
         .find(|window| window.label == "main")
         .expect("main window config must exist");
-    OverlayWindowSize {
+    let min_size = OverlayWindowSize {
         width: main_window
             .min_width
             .expect("main window config must set minWidth"),
         height: main_window
             .min_height
             .expect("main window config must set minHeight"),
+    };
+    let configured_size = OverlayWindowSize {
+        width: main_window.width,
+        height: main_window.height,
+    };
+    if configured_size.width < min_size.width {
+        panic!("main window config width must be greater than or equal to minWidth");
+    }
+    if configured_size.height < min_size.height {
+        panic!("main window config height must be greater than or equal to minHeight");
+    }
+    OverlayWindowConstraints {
+        min_size,
+        max_aspect_size: OverlayWindowSize {
+            width: configured_size.width,
+            height: min_size.height,
+        },
     }
 }
 
-fn overlay_min_aspect_ratio(min_size: OverlayWindowSize) -> f64 {
-    min_size.width / min_size.height
+fn overlay_min_aspect_ratio(constraints: OverlayWindowConstraints) -> f64 {
+    constraints.min_size.width / constraints.min_size.height
+}
+
+fn overlay_max_aspect_ratio(constraints: OverlayWindowConstraints) -> f64 {
+    let ratio = constraints.max_aspect_size.width / constraints.max_aspect_size.height;
+    if ratio < overlay_min_aspect_ratio(constraints) {
+        panic!(
+            "overlay maximum aspect ratio must be greater than or equal to minimum aspect ratio"
+        );
+    }
+    ratio
 }
 
 fn constrain_overlay_window_size(
     width: f64,
     height: f64,
-    min_size: OverlayWindowSize,
+    constraints: OverlayWindowConstraints,
 ) -> OverlayWindowSize {
-    let width = width.max(min_size.width);
+    let min_size = constraints.min_size;
+    let mut width = width.max(min_size.width);
     let mut height = height.max(min_size.height);
-    let max_height_for_width = width / overlay_min_aspect_ratio(min_size);
+    let max_height_for_width = width / overlay_min_aspect_ratio(constraints);
     if height > max_height_for_width {
         height = max_height_for_width;
+    }
+    let max_width_for_height = height * overlay_max_aspect_ratio(constraints);
+    if width > max_width_for_height {
+        width = max_width_for_height;
     }
     OverlayWindowSize { width, height }
 }
@@ -92,13 +132,14 @@ fn constrain_overlay_window_size(
 fn startup_overlay_window_size(
     logical_width: f64,
     logical_height: f64,
-    min_size: OverlayWindowSize,
+    constraints: OverlayWindowConstraints,
 ) -> OverlayWindowSize {
+    let min_size = constraints.min_size;
     let width = (logical_width * OVERLAY_WINDOW_WIDTH_FRACTION)
         .clamp(min_size.width, OVERLAY_WINDOW_MAX_WIDTH);
     let height = (logical_height * OVERLAY_WINDOW_HEIGHT_FRACTION)
         .clamp(min_size.height, OVERLAY_WINDOW_MAX_HEIGHT);
-    constrain_overlay_window_size(width, height, min_size)
+    constrain_overlay_window_size(width, height, constraints)
 }
 
 #[cfg(windows)]
@@ -171,12 +212,13 @@ fn overlay_resize_edge_from_wparam(value: usize) -> Option<OverlayResizeEdge> {
 }
 
 #[cfg(windows)]
-fn constrain_overlay_resize_rect_to_min_aspect(
+fn constrain_overlay_resize_rect_to_aspect_range(
     rect: OverlayResizeRect,
     edge: OverlayResizeEdge,
-    min_size: OverlayWindowSize,
+    constraints: OverlayWindowConstraints,
 ) -> OverlayResizeRect {
     let mut next = rect;
+    let min_size = constraints.min_size;
     let min_width = min_size.width.round() as i32;
     let min_height = min_size.height.round() as i32;
     if next.width() < min_width {
@@ -194,24 +236,45 @@ fn constrain_overlay_resize_rect_to_min_aspect(
         }
     }
 
-    let max_height = (next.width() as f64 / overlay_min_aspect_ratio(min_size))
+    let max_height = (next.width() as f64 / overlay_min_aspect_ratio(constraints))
         .round()
         .max(min_size.height) as i32;
-    if next.height() <= max_height {
-        return next;
+    if next.height() > max_height {
+        if overlay_resize_edge_moves_top(edge) {
+            next.top = next.bottom - max_height;
+        } else {
+            next.bottom = next.top + max_height;
+        }
     }
 
-    if overlay_resize_edge_moves_top(edge) {
-        next.top = next.bottom - max_height;
-    } else {
-        next.bottom = next.top + max_height;
+    let max_width = (next.height() as f64 * overlay_max_aspect_ratio(constraints))
+        .round()
+        .max(min_size.width) as i32;
+    if next.width() > max_width {
+        let min_height_for_width = (next.width() as f64 / overlay_max_aspect_ratio(constraints))
+            .round()
+            .max(min_size.height) as i32;
+        if overlay_resize_edge_moves_top(edge) {
+            next.top = next.bottom - min_height_for_width;
+        } else if matches!(
+            edge,
+            OverlayResizeEdge::Bottom
+                | OverlayResizeEdge::BottomLeft
+                | OverlayResizeEdge::BottomRight
+        ) {
+            next.bottom = next.top + min_height_for_width;
+        } else if overlay_resize_edge_moves_left(edge) {
+            next.left = next.right - max_width;
+        } else {
+            next.right = next.left + max_width;
+        }
     }
     next
 }
 
 #[cfg(windows)]
 struct OverlayResizeAspectState {
-    min_size: OverlayWindowSize,
+    constraints: OverlayWindowConstraints,
 }
 
 #[cfg(windows)]
@@ -241,7 +304,7 @@ unsafe extern "system" fn overlay_resize_aspect_subclass_proc(
         let state = &*(ref_data as *const OverlayResizeAspectState);
         if let Some(edge) = overlay_resize_edge_from_wparam(wparam) {
             let rect = &mut *(lparam as *mut RECT);
-            let constrained = constrain_overlay_resize_rect_to_min_aspect(
+            let constrained = constrain_overlay_resize_rect_to_aspect_range(
                 OverlayResizeRect {
                     left: rect.left,
                     top: rect.top,
@@ -249,7 +312,7 @@ unsafe extern "system" fn overlay_resize_aspect_subclass_proc(
                     bottom: rect.bottom,
                 },
                 edge,
-                state.min_size,
+                state.constraints,
             );
             rect.left = constrained.left;
             rect.top = constrained.top;
@@ -268,11 +331,12 @@ unsafe extern "system" fn overlay_resize_aspect_subclass_proc(
 #[cfg(windows)]
 fn install_overlay_resize_aspect_constraint<R: Runtime>(
     window: &tauri::WebviewWindow<R>,
-    min_size: OverlayWindowSize,
+    constraints: OverlayWindowConstraints,
 ) -> Result<(), String> {
     use windows_sys::Win32::UI::Shell::SetWindowSubclass;
 
-    let state = OVERLAY_RESIZE_ASPECT_STATE.get_or_init(|| OverlayResizeAspectState { min_size });
+    let state =
+        OVERLAY_RESIZE_ASPECT_STATE.get_or_init(|| OverlayResizeAspectState { constraints });
     let hwnd = window.hwnd().map_err(|err| err.to_string())?;
     let ok = unsafe {
         SetWindowSubclass(
@@ -1639,13 +1703,14 @@ fn main() {
 
             // Adapt window size & position to primary monitor.
             if let Some(window) = app.get_webview_window("main") {
-                let min_size = overlay_main_min_size(app.config());
+                let constraints = overlay_main_size_constraints(app.config());
+                let min_size = constraints.min_size;
                 let _ = window.set_min_size(Some(tauri::LogicalSize::new(
                     min_size.width,
                     min_size.height,
                 )));
                 #[cfg(windows)]
-                install_overlay_resize_aspect_constraint(&window, min_size)
+                install_overlay_resize_aspect_constraint(&window, constraints)
                     .map_err(std::io::Error::other)?;
                 if let Ok(Some(monitor)) = window.primary_monitor() {
                     let screen = monitor.size();
@@ -1653,7 +1718,7 @@ fn main() {
                     let logical_w = screen.width as f64 / scale;
                     let logical_h = screen.height as f64 / scale;
 
-                    let size = startup_overlay_window_size(logical_w, logical_h, min_size);
+                    let size = startup_overlay_window_size(logical_w, logical_h, constraints);
                     let x = (logical_w - size.width) / 2.0;
                     let y = (logical_h - size.height) / 2.0;
 
@@ -1927,39 +1992,52 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    fn test_overlay_constraints() -> OverlayWindowConstraints {
+        OverlayWindowConstraints {
+            min_size: OverlayWindowSize {
+                width: 1120.0,
+                height: 720.0,
+            },
+            max_aspect_size: OverlayWindowSize {
+                width: 1280.0,
+                height: 720.0,
+            },
+        }
+    }
+
     #[test]
     fn overlay_window_size_enforces_minimum_dimensions() {
-        let min_size = OverlayWindowSize {
-            width: 1120.0,
-            height: 720.0,
-        };
+        let constraints = test_overlay_constraints();
 
         assert_eq!(
-            constrain_overlay_window_size(640.0, 480.0, min_size),
-            min_size
+            constrain_overlay_window_size(640.0, 480.0, constraints),
+            constraints.min_size
         );
     }
 
     #[test]
     fn overlay_window_size_enforces_minimum_aspect_ratio() {
-        let min_size = OverlayWindowSize {
-            width: 1120.0,
-            height: 720.0,
-        };
-        let constrained = constrain_overlay_window_size(1120.0, 900.0, min_size);
+        let constraints = test_overlay_constraints();
+        let constrained = constrain_overlay_window_size(1120.0, 900.0, constraints);
 
         assert_eq!(constrained.width, 1120.0);
+        assert_eq!(constrained.height, 720.0);
+    }
+
+    #[test]
+    fn overlay_window_size_enforces_maximum_aspect_ratio() {
+        let constraints = test_overlay_constraints();
+        let constrained = constrain_overlay_window_size(1600.0, 720.0, constraints);
+
+        assert_eq!(constrained.width, 1280.0);
         assert_eq!(constrained.height, 720.0);
     }
 
     #[cfg(windows)]
     #[test]
     fn overlay_windows_sizing_rect_enforces_minimum_aspect_ratio() {
-        let min_size = OverlayWindowSize {
-            width: 1120.0,
-            height: 720.0,
-        };
-        let constrained = constrain_overlay_resize_rect_to_min_aspect(
+        let constraints = test_overlay_constraints();
+        let constrained = constrain_overlay_resize_rect_to_aspect_range(
             OverlayResizeRect {
                 left: 0,
                 top: 0,
@@ -1967,7 +2045,7 @@ mod tests {
                 bottom: 1000,
             },
             OverlayResizeEdge::Bottom,
-            min_size,
+            constraints,
         );
 
         assert_eq!(
@@ -1984,11 +2062,8 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn overlay_windows_sizing_rect_keeps_top_edge_anchor() {
-        let min_size = OverlayWindowSize {
-            width: 1120.0,
-            height: 720.0,
-        };
-        let constrained = constrain_overlay_resize_rect_to_min_aspect(
+        let constraints = test_overlay_constraints();
+        let constrained = constrain_overlay_resize_rect_to_aspect_range(
             OverlayResizeRect {
                 left: 0,
                 top: -280,
@@ -1996,7 +2071,7 @@ mod tests {
                 bottom: 720,
             },
             OverlayResizeEdge::Top,
-            min_size,
+            constraints,
         );
 
         assert_eq!(
@@ -2010,16 +2085,39 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
     #[test]
-    fn startup_overlay_window_size_uses_configured_minimum_floor() {
-        let min_size = OverlayWindowSize {
-            width: 1120.0,
-            height: 720.0,
-        };
+    fn overlay_windows_sizing_rect_enforces_maximum_aspect_ratio() {
+        let constraints = test_overlay_constraints();
+        let constrained = constrain_overlay_resize_rect_to_aspect_range(
+            OverlayResizeRect {
+                left: 0,
+                top: 0,
+                right: 1800,
+                bottom: 720,
+            },
+            OverlayResizeEdge::Right,
+            constraints,
+        );
 
         assert_eq!(
-            startup_overlay_window_size(1000.0, 700.0, min_size),
-            min_size
+            constrained,
+            OverlayResizeRect {
+                left: 0,
+                top: 0,
+                right: 1280,
+                bottom: 720,
+            }
+        );
+    }
+
+    #[test]
+    fn startup_overlay_window_size_uses_configured_minimum_floor() {
+        let constraints = test_overlay_constraints();
+
+        assert_eq!(
+            startup_overlay_window_size(1000.0, 700.0, constraints),
+            constraints.min_size
         );
     }
 

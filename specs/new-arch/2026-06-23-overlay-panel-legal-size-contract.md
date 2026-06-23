@@ -1605,3 +1605,110 @@ acceptance because it can hide a regression back to crushed panels.
   instead of accepting crushed panel widths.
 - Rechecked `mission-visual-loop.ts`: sub-minimum viewport evidence now uses
   legal-frame language and the generated summary key is `illegalNarrow`.
+
+## Follow-up 2026-06-23: Consumed Aspect Range Tokens
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User feedback 2026-06-23 | Limit aspect ratio and minimum panel width; illegal aspect ratios and too-small panels are not valid UI states. |
+| `2026-06-22-overlay-layout-aspect-frame.md` | The legal shell and native Windows sizing constrain the minimum aspect ratio derived from `1120x720`; do not restore a resize feedback loop. |
+| This contract, dead compact CSS follow-up | The old `--ui-overlay-min-aspect-ratio` token was removed because it was declared but not consumed. |
+| Live stale 7878 observation | A stale tab still exposed `--ui-overlay-min-aspect-ratio`, while current disk source rejected it in tests, showing the need to make the disk contract explicit and consumed. |
+| Mendel read-only audit | Current code constrains illegal tall layouts but does not constrain illegal wide aspect ratios. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Size contract generator | `renderOverlaySizeContractStyle()` already emits the numeric width and height units from Tauri config. | Derive min and max aspect tokens in the same generated block. |
+| Max aspect source | Tauri `main` window `width` is the authored normal desktop width, and `minHeight` is the legal height floor. | Use `width / minHeight` as the maximum aspect ratio so a minimum-height window cannot stretch wider than the configured desktop width. |
+| Browser legal shell | `base.css` computes shell height from width, min-height units, and min-width units inline. | Consume generated min and max aspect tokens so the legal shell rejects both too-tall and too-wide viewports. |
+| Design tokens | `design-language.css` no longer owns overlay min width/height. | Keep it free of overlay aspect tokens; generated Tauri config remains the source. |
+| TypeScript layout frame | `overlay-layout-frame.ts` derives the minimum ratio from token-resolved min width and height. | Add generated max-aspect token reads so zoom/layout math matches CSS. |
+| Rust native sizing | `main.rs` derives `overlay_min_aspect_ratio()` from the configured minimum size. | Add an `OverlayWindowConstraints` source that also carries max aspect from the configured window width and min height. |
+
+### Root Cause
+
+The previous cleanup correctly removed an unused aspect token, but the resulting
+contract made the aspect limit less visible: CSS encoded the ratio as an inline
+width/height calculation, while tests asserted that no named aspect token could
+exist. That made new feedback about aspect legality look like a second-source
+request even though the ratio is already derived from the native minimum
+dimensions. It also left the complementary wide-ratio side of the contract
+unimplemented: a `1600x720` surface was still accepted even though a
+minimum-height legal frame should not stretch wider than the configured desktop
+width.
+
+### Fix Plan
+
+1. Add `--ui-overlay-min-aspect-ratio` to the generated overlay size style,
+   derived only from `--ui-overlay-min-width-units` and
+   `--ui-overlay-min-height-units`.
+2. Add generated `--ui-overlay-max-aspect-*` units from the same Tauri window
+   contract: configured `width` over configured `minHeight`.
+3. Change `base.css` legal-shell width and height calculations to consume the
+   generated aspect range.
+4. Change `overlay-layout-frame.ts` and Rust native sizing to consume the same
+   aspect range.
+5. Update static and pure tests so illegal tall and illegal wide frames are
+   both rejected.
+
+### Acceptance
+
+- The browser shell names and consumes the legal aspect-ratio range.
+- Aspect tokens are generated from the same Tauri window contract and are not
+  declared in static design tokens.
+- A minimum-height frame cannot exceed the configured desktop width.
+- Center workbench panel minimum width remains `--ui-workbench-panel-min-width`.
+- No raw viewport compact branch, panel-local ratio rule, or resize feedback
+  loop is introduced.
+
+### Implementation
+
+- `renderOverlaySizeContractStyle()` now emits min width/height units plus
+  generated min/max aspect ratio tokens from the same Tauri main-window
+  contract.
+- `base.css` splits raw viewport width from legal shell width, clamps shell
+  height by min aspect, clamps shell width by max aspect, and centers the shell
+  in illegal-wide browser fixtures.
+- `overlay-layout-frame.ts` now accepts `OverlayLayoutFrameConstraints` and
+  rejects both illegal-tall and illegal-wide frames for zoom/layout consumers.
+- Native Rust startup sizing and the Windows `WM_SIZING` pre-commit hook now
+  use `OverlayWindowConstraints`, so live resize constrains the same aspect
+  range without restoring a resize-event `set_size` feedback loop.
+- The center workbench browser test now captures
+  `.scratch/center-workbench-illegal-wide-aspect-frame.png` and asserts the
+  shell width is max-aspect clamped at `1600x720`.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/overlay-layout-frame.test.ts packages/overlay/test/workspace-surface-consistency.test.ts --timeout 30000`.
+- PASS: `cargo test --manifest-path packages/overlay/src-tauri/Cargo.toml overlay_ -- --nocapture`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/side-activity-toolbar-browser.test.ts`.
+
+### Visual QA
+
+- Reviewed `.scratch/center-workbench-illegal-wide-aspect-frame.png`: the
+  legal shell is centered in the illegal-wide browser fixture and open center
+  panels are not compressed or overlapping.
+- Reviewed `.scratch/center-workbench-illegal-tall-aspect-frame.png`: shell
+  height remains min-aspect clamped.
+- Reviewed `.scratch/center-workbench-separator-restored-desktop-resize.png`:
+  restored desktop layout remains coherent after separator interactions.
+- Reviewed `.scratch/side-activity-toolbar-illegal-narrow-legal-frame.png`:
+  right toolbar remains vertical and panels keep legal shell sizing.
+
+### Self Review
+
+- Rechecked source ownership: Tauri config remains the numeric source; generated
+  CSS tokens, TS layout frame, and Rust native sizing consume that source.
+- Rechecked no fallback was added: there is no panel-local ratio rule, compact
+  raw viewport branch, alternate screenshot/toolbar layout, or resize feedback
+  loop.
+- Rechecked panel minimums: center workbench panels still use
+  `--ui-workbench-panel-min-width`, and pane layout still reserves left/right
+  toolbar chrome through `services/pane.ts`.
