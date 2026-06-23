@@ -277,12 +277,16 @@ import type {
   SessionUpdateErrors,
   SessionUpdateResponses,
   SkillDirectoriesResponses,
+  SkillImportAndMountResponses,
   SkillImportFileResponses,
   SkillInstalledResponses,
   SkillInstallResponses,
   SkillMarketResponses,
+  SkillMountResponses,
+  SkillMountsResponses,
   SkillPolicyResponses,
   SkillRemoveResponses,
+  SkillUnmountResponses,
   SubtaskPartInput,
   TaskBindingsResponses,
   TaskBoardErrors,
@@ -3484,6 +3488,164 @@ export class App extends HeyApiClient {
 }
 
 export class Skill extends HeyApiClient {
+  /**
+   * List agent skill mounts
+   *
+   * Get the skill pool, known agents, effective per-agent mounts, and unmounted warnings.
+   */
+  public mounts<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SkillMountsResponses, unknown, ThrowOnError>({
+      url: "/skill/mounts",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Mount a skill to an agent
+   *
+   * Persist an explicit agent-skill mount in project or session scope.
+   */
+  public mount<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      agent: string
+      skill: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "skill" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillMountResponses, unknown, ThrowOnError>({
+      url: "/skill/mount",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Unmount a skill from an agent
+   *
+   * Remove an explicit agent-skill mount in project or session scope.
+   */
+  public unmount<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      agent: string
+      skill: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "skill" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillUnmountResponses, unknown, ThrowOnError>({
+      url: "/skill/unmount",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Import a dropped skill and mount it to an agent
+   *
+   * Write a dropped skill source into the project skill pool and mount the resolved skill name.
+   */
+  public importAndMount<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      agent: string
+      sessionID?: string
+      import: {
+        filename?: string
+        content?: string
+        sourceName?: string
+        files?: Array<{
+          path: string
+          content?: string
+          contentBase64?: string
+        }>
+        archiveBase64?: string
+        policy?: PermissionAction
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "import" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillImportAndMountResponses, unknown, ThrowOnError>({
+      url: "/skill/import-and-mount",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
   /**
    * List installed skills
    *

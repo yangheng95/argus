@@ -5,7 +5,7 @@
 // Retired DOM-rendering functions are intentionally not ported here; Solid
 // components own rendering, while this service only updates store data.
 
-import { appStore, setSkills, setMcp, setSkillMarket } from "../store/app"
+import { appStore, setSkills, setMcp, setSkillMarket, setSkillMounts } from "../store/app"
 import { apiJson } from "./api"
 
 // ── Types ──
@@ -18,6 +18,31 @@ export interface SkillDescriptor {
   source_type?: string
   builtin?: boolean
   [key: string]: any
+}
+
+export interface AgentSkillMountMatrix {
+  scope: "project" | "session"
+  skills: Array<SkillDescriptor & { mounted_agents?: string[]; unmounted?: boolean; warning?: string }>
+  agents: Array<{
+    name: string
+    description?: string
+    mode: "subagent" | "primary" | "all"
+    native?: boolean
+    hidden?: boolean
+    skill_tool_available: boolean
+  }>
+  matrix: Array<{
+    agent: string
+    mounted: Array<{
+      name: string
+      description?: string
+      location?: string
+      enabled: boolean
+      reason?: string
+    }>
+  }>
+  unmounted_count: number
+  project_mounts?: unknown
 }
 
 // ── Helpers ──
@@ -55,7 +80,7 @@ function errorMessage(error: unknown): string {
  * react to store updates via Solid reactivity.
  */
 export async function loadExtensions(): Promise<{ skills: SkillDescriptor[]; mcp: Record<string, any> }> {
-  const [skills, mcp] = await Promise.all([loadInstalledSkills(), loadMcpStatus()])
+  const [skills, mcp] = await Promise.all([loadInstalledSkills(), loadMcpStatus(), loadSkillMountMatrix()])
   return { skills, mcp }
 }
 
@@ -66,6 +91,54 @@ export async function loadInstalledSkills(): Promise<SkillDescriptor[]> {
   }
   setSkills(skills)
   return skills
+}
+
+export async function loadSkillMountMatrix(sessionID?: string): Promise<AgentSkillMountMatrix> {
+  const path = sessionID ? `skill/mounts?sessionID=${encodeURIComponent(sessionID)}` : "skill/mounts"
+  const matrix = await apiJson(path)
+  if (!matrix || typeof matrix !== "object" || Array.isArray(matrix)) {
+    throw new Error("skill/mounts returned a non-object payload")
+  }
+  setSkillMounts(matrix)
+  if (Array.isArray((matrix as AgentSkillMountMatrix).skills)) setSkills((matrix as AgentSkillMountMatrix).skills)
+  return matrix as AgentSkillMountMatrix
+}
+
+export async function mountSkill(agent: string, skill: string, sessionID?: string): Promise<AgentSkillMountMatrix> {
+  const matrix = await apiJson("skill/mount", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent, skill, sessionID: sessionID || undefined }),
+  })
+  setSkillMounts(matrix)
+  if (Array.isArray((matrix as AgentSkillMountMatrix).skills)) setSkills((matrix as AgentSkillMountMatrix).skills)
+  return matrix as AgentSkillMountMatrix
+}
+
+export async function unmountSkill(agent: string, skill: string, sessionID?: string): Promise<AgentSkillMountMatrix> {
+  const matrix = await apiJson("skill/unmount", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent, skill, sessionID: sessionID || undefined }),
+  })
+  setSkillMounts(matrix)
+  if (Array.isArray((matrix as AgentSkillMountMatrix).skills)) setSkills((matrix as AgentSkillMountMatrix).skills)
+  return matrix as AgentSkillMountMatrix
+}
+
+export async function importAndMountSkill(
+  agent: string,
+  payload: Record<string, unknown>,
+  sessionID?: string,
+): Promise<AgentSkillMountMatrix> {
+  const matrix = await apiJson("skill/import-and-mount", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agent, sessionID: sessionID || undefined, import: payload }),
+  })
+  setSkillMounts(matrix)
+  if (Array.isArray((matrix as AgentSkillMountMatrix).skills)) setSkills((matrix as AgentSkillMountMatrix).skills)
+  return matrix as AgentSkillMountMatrix
 }
 
 export async function loadMcpStatus(): Promise<Record<string, any>> {

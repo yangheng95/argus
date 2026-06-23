@@ -43,7 +43,9 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { fn } from "@/util/fn"
 import { SessionProcessor } from "./processor"
 import { TaskTool } from "@/tool/task"
+import { SkillTool } from "@/tool/skill"
 import { Tool } from "@/tool/tool"
+import { SkillMount } from "@/skill/mounts"
 import { PermissionNext } from "@/permission/next"
 import { SessionStatus } from "./status"
 import { ensureTitle } from "./prompt/title"
@@ -95,9 +97,27 @@ export namespace SessionLoop {
   const { log, state, cancel, finish, flushCallbacks, start, resume } = SessionPromptState
 
   type StrictAITool = AITool & { strict?: boolean }
+  const resolvedToolSkillSurfaces = new WeakMap<Record<string, AITool>, SkillMount.ResolvedAgentSkillSurface>()
+  const resolvedToolSkillFinalizers = new WeakMap<
+    Record<string, AITool>,
+    (availableToolNames: Iterable<string>) => Promise<SkillMount.ResolvedAgentSkillSurface>
+  >()
 
   function strictTool(input: AITool): AITool {
     return { ...(input as StrictAITool), strict: true } as AITool
+  }
+
+  export async function finalizeResolvedToolSkillSurface(
+    tools: Record<string, AITool>,
+    availableToolNames: Iterable<string>,
+  ) {
+    const finalize = resolvedToolSkillFinalizers.get(tools)
+    if (!finalize) return resolvedToolSkillSurfaces.get(tools)
+    return await finalize(availableToolNames)
+  }
+
+  export function skillSurfaceForResolvedTools(tools: Record<string, AITool>) {
+    return resolvedToolSkillSurfaces.get(tools)
   }
 
   export type SessionRuntimeContractKind = "stage-attempt" | "orchestrator-wake"
@@ -1735,6 +1755,7 @@ export namespace SessionLoop {
     ) {
       applyTerminalToolExposure(tools, terminalToolContract)
     }
+    const skillSurface = await finalizeResolvedToolSkillSurface(tools, Object.keys(tools))
     if (input.step === 1) {
       SessionSummary.summarize({
         sessionID: input.sessionID,
@@ -1762,7 +1783,10 @@ export namespace SessionLoop {
 
     await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: input.msgs })
 
-    const skillsSection = await SystemPrompt.skills(agent, { availableToolNames: Object.keys(tools) })
+    const skillsSection = await SystemPrompt.skills(agent, {
+      availableToolNames: Object.keys(tools),
+      surface: skillSurface,
+    })
     const system = [
       ...(await SystemPrompt.environment(input.model)),
       ...(skillsSection ? [skillsSection] : []),
@@ -2697,6 +2721,7 @@ export namespace SessionLoop {
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
+    const toolSources = new Map<string, ProviderToolSource>()
 
     const context = (args: any, options: ToolExecutionOptions): Tool.Context => ({
       sessionID: input.session.id,
@@ -2733,6 +2758,68 @@ export namespace SessionLoop {
       },
     })
 
+    const bindRegistryTool = (item: {
+      id: string
+      description: string
+      parameters: z.ZodType
+      execute: Tool.Info["init"] extends (...args: any[]) => Promise<infer Result>
+        ? Result extends { execute: infer Execute }
+          ? Execute
+          : never
+        : never
+    }) => {
+      const registryTool = tool({
+        id: item.id as any,
+        description: item.description,
+        inputSchema: item.parameters as any,
+        async execute(args, options) {
+          const ctx = context(args, options)
+          await Plugin.trigger(
+            "tool.execute.before",
+            {
+              tool: item.id,
+              sessionID: ctx.sessionID,
+              callID: ctx.callID,
+            },
+            {
+              args,
+            },
+          )
+          const result = await item.execute(args, ctx)
+          const materializedAttachments = await materializeToolResultAttachments(result.attachments)
+          const output = {
+            ...result,
+            attachments: Array.isArray(materializedAttachments)
+              ? materializedAttachments.map((attachment) => ({
+                  ...attachment,
+                  id: Identifier.ascending("part"),
+                  sessionID: ctx.sessionID,
+                  messageID: input.processor.message.id,
+                }))
+              : undefined,
+          }
+          await Plugin.trigger(
+            "tool.execute.after",
+            {
+              tool: item.id,
+              sessionID: ctx.sessionID,
+              callID: ctx.callID,
+              args,
+            },
+            output,
+          )
+          return output
+        },
+      })
+      tools[item.id] = prepareProviderTool({
+        name: item.id,
+        source: "registry",
+        model: input.model,
+        tool: registryTool,
+      })
+      toolSources.set(item.id, "registry")
+    }
+
     const runtimeContract = getSessionRuntimeContract(input.session.id)
     const extras = runtimeContract?.tools ?? {}
     const exactRuntimeContractTools = usesExactRuntimeContractTools(input.agent.name, runtimeContract)
@@ -2748,55 +2835,7 @@ export namespace SessionLoop {
           const rule = PermissionNext.evaluate(item.id, "*", input.session.permission)
           if (rule.action === "deny") continue
         }
-        const registryTool = tool({
-          id: item.id as any,
-          description: item.description,
-          inputSchema: item.parameters as any,
-          async execute(args, options) {
-            const ctx = context(args, options)
-            await Plugin.trigger(
-              "tool.execute.before",
-              {
-                tool: item.id,
-                sessionID: ctx.sessionID,
-                callID: ctx.callID,
-              },
-              {
-                args,
-              },
-            )
-            const result = await item.execute(args, ctx)
-            const materializedAttachments = await materializeToolResultAttachments(result.attachments)
-            const output = {
-              ...result,
-              attachments: Array.isArray(materializedAttachments)
-                ? materializedAttachments.map((attachment) => ({
-                    ...attachment,
-                    id: Identifier.ascending("part"),
-                    sessionID: ctx.sessionID,
-                    messageID: input.processor.message.id,
-                  }))
-                : undefined,
-            }
-            await Plugin.trigger(
-              "tool.execute.after",
-              {
-                tool: item.id,
-                sessionID: ctx.sessionID,
-                callID: ctx.callID,
-                args,
-              },
-              output,
-            )
-            return output
-          },
-        })
-        tools[item.id] = prepareProviderTool({
-          name: item.id,
-          source: "registry",
-          model: input.model,
-          tool: registryTool,
-        })
+        bindRegistryTool(item)
       }
     }
 
@@ -2895,6 +2934,7 @@ export namespace SessionLoop {
         model: input.model,
         tool: mcpTool,
       })
+      toolSources.set(key, "mcp")
     }
 
     // Merge per-session runtime-contract tools last so stage agents can
@@ -2922,9 +2962,36 @@ export namespace SessionLoop {
         model: input.model,
         tool: wrapped,
       })
+      toolSources.set(name, "extra")
     }
 
     applyToolSwitches(tools, input.tools)
+    const finalizeSkillSurface = async (availableToolNames: Iterable<string>) => {
+      const surface = await SkillMount.resolve({
+        agent: input.agent,
+        config: input.config,
+        sessionID: input.session.id,
+        availableToolNames,
+      })
+      resolvedToolSkillSurfaces.set(tools, surface)
+      if (toolSources.get(SkillTool.id) === "registry" && tools[SkillTool.id]) {
+        const skillTool = await SkillTool.init({ agent: input.agent, config: input.config, skillSurface: surface })
+        const output = {
+          description: skillTool.description,
+          parameters: skillTool.parameters,
+        }
+        await Plugin.trigger("tool.definition", { toolID: SkillTool.id }, output)
+        bindRegistryTool({
+          id: SkillTool.id,
+          ...skillTool,
+          description: output.description,
+          parameters: output.parameters,
+        })
+      }
+      return surface
+    }
+    resolvedToolSkillFinalizers.set(tools, finalizeSkillSurface)
+    await finalizeSkillSurface(Object.keys(tools))
 
     return tools
   }

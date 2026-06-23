@@ -3,6 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Skill } from "@/skill/skill"
 import { SkillManager } from "@/skill/manager"
+import { SkillMount } from "@/skill/mounts"
 
 export function SkillRoutes() {
   return new Hono()
@@ -25,6 +26,99 @@ export function SkillRoutes() {
       }),
       async (c) => {
         return c.json(await Skill.all())
+      },
+    )
+    .get(
+      "/mounts",
+      describeRoute({
+        summary: "List agent skill mounts",
+        description: "Get the skill pool, known agents, effective per-agent mounts, and unmounted warnings.",
+        operationId: "skill.mounts",
+        responses: {
+          200: {
+            description: "Agent skill mount matrix",
+            content: {
+              "application/json": {
+                schema: resolver(SkillMount.Matrix),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          sessionID: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        return c.json(await SkillMount.matrix(c.req.valid("query")))
+      },
+    )
+    .post(
+      "/mount",
+      describeRoute({
+        summary: "Mount a skill to an agent",
+        description: "Persist an explicit agent-skill mount in project or session scope.",
+        operationId: "skill.mount",
+        responses: {
+          200: {
+            description: "Updated agent skill mount matrix",
+            content: {
+              "application/json": {
+                schema: resolver(SkillMount.Matrix),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", SkillMount.MountInput),
+      async (c) => {
+        return c.json(await SkillMount.mount(c.req.valid("json")))
+      },
+    )
+    .post(
+      "/unmount",
+      describeRoute({
+        summary: "Unmount a skill from an agent",
+        description: "Remove an explicit agent-skill mount in project or session scope.",
+        operationId: "skill.unmount",
+        responses: {
+          200: {
+            description: "Updated agent skill mount matrix",
+            content: {
+              "application/json": {
+                schema: resolver(SkillMount.Matrix),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", SkillMount.MountInput),
+      async (c) => {
+        return c.json(await SkillMount.unmount(c.req.valid("json")))
+      },
+    )
+    .post(
+      "/import-and-mount",
+      describeRoute({
+        summary: "Import a dropped skill and mount it to an agent",
+        description: "Write a dropped skill source into the project skill pool and mount the resolved skill name.",
+        operationId: "skill.importAndMount",
+        responses: {
+          200: {
+            description: "Updated agent skill mount matrix",
+            content: {
+              "application/json": {
+                schema: resolver(SkillMount.Matrix),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", SkillMount.ImportAndMountInput),
+      async (c) => {
+        return c.json(await SkillMount.importAndMount(c.req.valid("json")))
       },
     )
     .get(

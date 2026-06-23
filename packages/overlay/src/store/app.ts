@@ -88,6 +88,8 @@ export interface AppState {
   channels: any[]
   /** Installed skills list */
   skills: any[]
+  /** Agent skill mount matrix returned by /skill/mounts */
+  skillMounts: any | null
   /** Skill marketplace catalogue */
   skillMarket: any[]
   /** MCP (Model Control Protocol) config/status map keyed by name */
@@ -137,6 +139,7 @@ const DEFAULT_APP_STATE: AppState = {
   providerTest: null,
   channels: [],
   skills: [],
+  skillMounts: null,
   skillMarket: [],
   mcp: {},
   ndjsonEvents: [],
@@ -266,6 +269,10 @@ export function setChannels(list: any[]): void {
 
 export function setSkills(list: any[]): void {
   setAppStore("skills", Array.isArray(list) ? list : [])
+}
+
+export function setSkillMounts(value: any): void {
+  setAppStore("skillMounts", value && typeof value === "object" && !Array.isArray(value) ? value : null)
 }
 
 export function setSkillMarket(list: any[]): void {

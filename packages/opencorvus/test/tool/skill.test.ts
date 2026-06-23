@@ -5,6 +5,8 @@ import type { PermissionNext } from "../../src/permission/next"
 import type { Tool } from "../../src/tool/tool"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
+import { SkillMount } from "../../src/skill/mounts"
+import { SystemPrompt } from "../../src/session/system"
 import { SkillTool } from "../../src/tool/skill"
 import { tmpdir } from "../fixture/fixture"
 
@@ -19,6 +21,48 @@ const baseCtx: Omit<Tool.Context, "ask"> = {
 }
 
 describe("tool.skill", () => {
+  test("unmounted skill is absent from search and cannot be loaded", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".opencorvus", "skill", "unmounted-skill")
+        await Bun.write(
+          path.join(skillDir, "SKILL.md"),
+          `---
+name: unmounted-skill
+description: Skill that must stay unavailable until mounted.
+---
+
+# Unmounted Skill
+`,
+        )
+      },
+    })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const build = await Agent.get("build")
+          expect(build).toBeDefined()
+          const tool = await SkillTool.init({ agent: build })
+          const ctx: Tool.Context = { ...baseCtx, ask: async () => {} }
+
+          const result = await tool.execute({ query: "unmounted" }, ctx)
+          expect(result.output).not.toContain("<name>unmounted-skill</name>")
+          await expect(tool.execute({ name: "unmounted-skill" }, ctx)).rejects.toThrow(
+            'Skill "unmounted-skill" not found or not allowed',
+          )
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
   test("execute without name searches compatible skill metadata", async () => {
     await using tmp = await tmpdir({
       git: true,
@@ -29,6 +73,8 @@ describe("tool.skill", () => {
           `---
 name: tool-skill
 description: Skill for tool tests.
+mounted_agents:
+  - build
 ---
 
 # Tool Skill
@@ -44,7 +90,9 @@ description: Skill for tool tests.
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const tool = await SkillTool.init()
+          const build = await Agent.get("build")
+          expect(build).toBeDefined()
+          const tool = await SkillTool.init({ agent: build })
           const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
           const ctx: Tool.Context = {
             ...baseCtx,
@@ -74,6 +122,57 @@ description: Skill for tool tests.
     }
   })
 
+  test("uses the turn-scoped resolved surface for prompt and tool search", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".opencorvus", "skill", "needs-websearch")
+        await Bun.write(
+          path.join(skillDir, "SKILL.md"),
+          `---
+name: needs-websearch
+description: Skill requiring a tool removed from the current turn.
+required_tools:
+  - websearch
+mounted_agents:
+  - build
+---
+
+# Needs Websearch
+`,
+        )
+      },
+    })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const build = await Agent.get("build")
+          expect(build).toBeDefined()
+          const surface = await SkillMount.resolve({ agent: build!, availableToolNames: ["skill"] })
+          expect(surface.skills.find((skill) => skill.name === "needs-websearch")?.reason).toBe(
+            "missing_required_tool",
+          )
+          const prompt = await SystemPrompt.skills(build!, { surface })
+          expect(prompt ?? "").not.toContain("needs-websearch")
+
+          const tool = await SkillTool.init({ agent: build, skillSurface: surface })
+          const result = await tool.execute({ query: "websearch" }, { ...baseCtx, ask: async () => {} })
+          expect(result.output).not.toContain("<name>needs-websearch</name>")
+          await expect(
+            tool.execute({ name: "needs-websearch" }, { ...baseCtx, ask: async () => {} }),
+          ).rejects.toThrow('Skill "needs-websearch" not found or not allowed')
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
   test("execute returns skill content block with files", async () => {
     await using tmp = await tmpdir({
       git: true,
@@ -84,6 +183,8 @@ description: Skill for tool tests.
           `---
 name: tool-skill
 description: Skill for tool tests.
+mounted_agents:
+  - build
 ---
 
 # Tool Skill
@@ -102,7 +203,9 @@ Use this skill.
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const tool = await SkillTool.init()
+          const build = await Agent.get("build")
+          expect(build).toBeDefined()
+          const tool = await SkillTool.init({ agent: build })
           const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
           const ctx: Tool.Context = {
             ...baseCtx,
@@ -185,6 +288,10 @@ required_tools:
   - browser_preview_bind_local_module
 agents:
   - visual-qa
+mounted_agents:
+  - visual-qa
+  - frontend-design
+  - build
 ---
 
 # Visual Acceptance
@@ -201,6 +308,10 @@ name: visual-retired
 description: Retired visual gate workflow.
 required_tools:
   - webpage_render
+mounted_agents:
+  - visual-qa
+  - frontend-design
+  - build
 ---
 
 # Retired Visual Gate
@@ -217,6 +328,10 @@ name: visual-extraction
 description: Frontend design extraction workflow.
 required_tools:
   - webpage_extract
+mounted_agents:
+  - visual-qa
+  - frontend-design
+  - build
 ---
 
 # Visual Extraction

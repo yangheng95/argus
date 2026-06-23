@@ -290,7 +290,16 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "tasks", icon: "tasks", labelKey: "task.ledger.title", tooltipKey: "activity.tooltip.tasks" },
   { id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant" },
   { id: "memory", icon: "config-memory", labelKey: "memory.title", tooltipKey: "activity.tooltip.memory" },
-  { id: "skill", icon: "config-skill", labelKey: "skill.title", tooltipKey: "activity.tooltip.skill" },
+  {
+    id: "skill",
+    icon: "config-skill",
+    labelKey: "skill.title",
+    tooltipKey: "activity.tooltip.skill",
+    badge: () =>
+      appStore.skillMounts?.unmounted_count > 0 ? (
+        <span data-tone="warn">{appStore.skillMounts.unmounted_count}</span>
+      ) : undefined,
+  },
   { id: "mcp", icon: "config-mcp", labelKey: "mcp.title", tooltipKey: "activity.tooltip.mcp" },
 ]
 

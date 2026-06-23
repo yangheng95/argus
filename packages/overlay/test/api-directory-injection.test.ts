@@ -146,6 +146,10 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("skill/installed", () => expectInjects("skill/installed"))
     test("skill/market", () => expectInjects("skill/market"))
     test("skill/directories", () => expectInjects("skill/directories"))
+    test("skill mounts matrix", () => expectInjects("skill/mounts"))
+    test("skill mount", () => expectInjects("skill/mount"))
+    test("skill unmount", () => expectInjects("skill/unmount"))
+    test("skill import and mount", () => expectInjects("skill/import-and-mount"))
     test("mcp", () => expectInjects("mcp"))
     test("browser preview target", () => expectInjects("task/tsk_browserpreview0001/browser-preview"))
     test("browser preview capture", () => expectInjects("task/tsk_browserpreview0001/browser-preview/capture"))
@@ -200,6 +204,10 @@ describe("apiUrl directory injection (W2-V31)", () => {
       "config",
       "config/proxy/test",
       "config/prompt-profile",
+      "skill/mounts",
+      "skill/mount",
+      "skill/unmount",
+      "skill/import-and-mount",
       "provider/hexin/budget",
       "project/current",
       "project/current/worktrees",

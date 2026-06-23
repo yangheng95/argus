@@ -3,8 +3,7 @@ import { Instance } from "../project/instance"
 import { Project } from "../project/project"
 import { Shell } from "@/shell/shell"
 import { EffectiveConfig } from "@/config/effective"
-import { Skill } from "@/skill"
-import { PermissionNext } from "@/permission/next"
+import { SkillMount } from "@/skill/mounts"
 
 import PROMPT_SYSTEM from "./prompt/system.txt"
 import type { Provider } from "@/provider/provider"
@@ -101,21 +100,10 @@ export namespace SystemPrompt {
 
   export async function skills(
     agent: Agent.Info,
-    input?: { availableToolNames?: Iterable<string> },
+    input?: { availableToolNames?: Iterable<string>; surface?: SkillMount.ResolvedAgentSkillSurface },
   ): Promise<string | undefined> {
-    if (!agentCanUseSkillTool(agent, input?.availableToolNames)) return
-
-    const all = await Skill.all()
-    const accessible = all.filter((skill) => {
-      const rule = PermissionNext.evaluate("skill", skill.name, agent.permission)
-      return rule.action !== "deny"
-    })
-    if (accessible.length === 0) return
-
-    const platform = process.platform
-    const compatible = accessible.filter(
-      (s) => s.platforms.length === 0 || s.platforms.includes(platform as "win32" | "darwin" | "linux"),
-    )
+    const surface = input?.surface ?? (await SkillMount.resolve({ agent, availableToolNames: input?.availableToolNames }))
+    const compatible = surface.skills.filter((skill) => skill.enabled)
     if (compatible.length === 0) return
 
     return [
@@ -133,13 +121,5 @@ export namespace SystemPrompt {
       ...compatible.map((s) => `- ${s.name}: ${s.description}`),
       "</available_skills>",
     ].join("\n")
-  }
-
-  function agentCanUseSkillTool(agent: Agent.Info, availableToolNames?: Iterable<string>): boolean {
-    if (availableToolNames && !new Set(availableToolNames).has("skill")) return false
-    const include = agent.tools?.include
-    if (include) return include.includes("skill")
-    if (agent.tools?.exclude?.includes("skill")) return false
-    return !PermissionNext.disabled(["skill"], agent.permission).has("skill")
   }
 }

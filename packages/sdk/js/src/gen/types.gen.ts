@@ -856,6 +856,9 @@ export type Config = {
     ignore?: Array<string>
   }
   plugin?: Array<string>
+  /**
+   * Enable file snapshot capture for /undo and patch evidence. Default false.
+   */
   snapshot?: boolean
   /**
    * Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing
@@ -7280,12 +7283,413 @@ export type AppSkillsResponses = {
     priority?: number
     required_tools?: Array<string>
     agents?: Array<string>
+    mounted_agents?: Array<string>
     expires_at?: string
     duplicate_locations?: Array<string>
   }>
 }
 
 export type AppSkillsResponse = AppSkillsResponses[keyof AppSkillsResponses]
+
+export type SkillMountsData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    sessionID?: string
+  }
+  url: "/skill/mounts"
+}
+
+export type SkillMountsResponses = {
+  /**
+   * Agent skill mount matrix
+   */
+  200: {
+    scope: "project" | "session"
+    skills: Array<{
+      name: string
+      description: string
+      platforms?: Array<"win32" | "darwin" | "linux">
+      builtin?: boolean
+      location: string
+      content: string
+      auto_detect?: {
+        files?: Array<string>
+        deps?: Array<string>
+        task_signals?: {
+          has_attachment_image?: boolean
+          request_contains_url?: boolean
+          request_contains_figma_url?: boolean
+          package_has_script?: Array<string>
+          request_text_any?: Array<string>
+        }
+      }
+      priority?: number
+      required_tools?: Array<string>
+      agents?: Array<string>
+      mounted_agents: Array<string>
+      expires_at?: string
+      duplicate_locations?: Array<string>
+      dir?: string
+      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+      source?: string
+      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+      risk: {
+        level: "low" | "medium" | "high"
+        has_scripts: boolean
+        has_agents: boolean
+        has_references: boolean
+        has_templates: boolean
+      }
+      recommended_policy: PermissionAction
+      policy: PermissionAction
+      managed: boolean
+      writable: boolean
+      unmounted: boolean
+      warning?: "unmounted"
+    }>
+    agents: Array<{
+      name: string
+      description?: string
+      mode: "subagent" | "primary" | "all"
+      native?: boolean
+      hidden?: boolean
+      skill_tool_available: boolean
+    }>
+    matrix: Array<{
+      agent: string
+      mounted: Array<{
+        name: string
+        description: string
+        location: string
+        enabled: boolean
+        reason?:
+          | "skill_tool_unavailable"
+          | "permission_denied"
+          | "platform_incompatible"
+          | "agent_incompatible"
+          | "missing_required_tool"
+      }>
+    }>
+    project_mounts: {
+      agents?: {
+        [key: string]: Array<string>
+      }
+    }
+    unmounted_count: number
+  }
+}
+
+export type SkillMountsResponse = SkillMountsResponses[keyof SkillMountsResponses]
+
+export type SkillMountData = {
+  body: {
+    agent: string
+    skill: string
+    sessionID?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/mount"
+}
+
+export type SkillMountResponses = {
+  /**
+   * Updated agent skill mount matrix
+   */
+  200: {
+    scope: "project" | "session"
+    skills: Array<{
+      name: string
+      description: string
+      platforms?: Array<"win32" | "darwin" | "linux">
+      builtin?: boolean
+      location: string
+      content: string
+      auto_detect?: {
+        files?: Array<string>
+        deps?: Array<string>
+        task_signals?: {
+          has_attachment_image?: boolean
+          request_contains_url?: boolean
+          request_contains_figma_url?: boolean
+          package_has_script?: Array<string>
+          request_text_any?: Array<string>
+        }
+      }
+      priority?: number
+      required_tools?: Array<string>
+      agents?: Array<string>
+      mounted_agents: Array<string>
+      expires_at?: string
+      duplicate_locations?: Array<string>
+      dir?: string
+      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+      source?: string
+      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+      risk: {
+        level: "low" | "medium" | "high"
+        has_scripts: boolean
+        has_agents: boolean
+        has_references: boolean
+        has_templates: boolean
+      }
+      recommended_policy: PermissionAction
+      policy: PermissionAction
+      managed: boolean
+      writable: boolean
+      unmounted: boolean
+      warning?: "unmounted"
+    }>
+    agents: Array<{
+      name: string
+      description?: string
+      mode: "subagent" | "primary" | "all"
+      native?: boolean
+      hidden?: boolean
+      skill_tool_available: boolean
+    }>
+    matrix: Array<{
+      agent: string
+      mounted: Array<{
+        name: string
+        description: string
+        location: string
+        enabled: boolean
+        reason?:
+          | "skill_tool_unavailable"
+          | "permission_denied"
+          | "platform_incompatible"
+          | "agent_incompatible"
+          | "missing_required_tool"
+      }>
+    }>
+    project_mounts: {
+      agents?: {
+        [key: string]: Array<string>
+      }
+    }
+    unmounted_count: number
+  }
+}
+
+export type SkillMountResponse = SkillMountResponses[keyof SkillMountResponses]
+
+export type SkillUnmountData = {
+  body: {
+    agent: string
+    skill: string
+    sessionID?: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/unmount"
+}
+
+export type SkillUnmountResponses = {
+  /**
+   * Updated agent skill mount matrix
+   */
+  200: {
+    scope: "project" | "session"
+    skills: Array<{
+      name: string
+      description: string
+      platforms?: Array<"win32" | "darwin" | "linux">
+      builtin?: boolean
+      location: string
+      content: string
+      auto_detect?: {
+        files?: Array<string>
+        deps?: Array<string>
+        task_signals?: {
+          has_attachment_image?: boolean
+          request_contains_url?: boolean
+          request_contains_figma_url?: boolean
+          package_has_script?: Array<string>
+          request_text_any?: Array<string>
+        }
+      }
+      priority?: number
+      required_tools?: Array<string>
+      agents?: Array<string>
+      mounted_agents: Array<string>
+      expires_at?: string
+      duplicate_locations?: Array<string>
+      dir?: string
+      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+      source?: string
+      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+      risk: {
+        level: "low" | "medium" | "high"
+        has_scripts: boolean
+        has_agents: boolean
+        has_references: boolean
+        has_templates: boolean
+      }
+      recommended_policy: PermissionAction
+      policy: PermissionAction
+      managed: boolean
+      writable: boolean
+      unmounted: boolean
+      warning?: "unmounted"
+    }>
+    agents: Array<{
+      name: string
+      description?: string
+      mode: "subagent" | "primary" | "all"
+      native?: boolean
+      hidden?: boolean
+      skill_tool_available: boolean
+    }>
+    matrix: Array<{
+      agent: string
+      mounted: Array<{
+        name: string
+        description: string
+        location: string
+        enabled: boolean
+        reason?:
+          | "skill_tool_unavailable"
+          | "permission_denied"
+          | "platform_incompatible"
+          | "agent_incompatible"
+          | "missing_required_tool"
+      }>
+    }>
+    project_mounts: {
+      agents?: {
+        [key: string]: Array<string>
+      }
+    }
+    unmounted_count: number
+  }
+}
+
+export type SkillUnmountResponse = SkillUnmountResponses[keyof SkillUnmountResponses]
+
+export type SkillImportAndMountData = {
+  body: {
+    agent: string
+    sessionID?: string
+    import: {
+      filename?: string
+      content?: string
+      sourceName?: string
+      files?: Array<{
+        path: string
+        content?: string
+        contentBase64?: string
+      }>
+      archiveBase64?: string
+      policy?: PermissionAction
+    }
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/skill/import-and-mount"
+}
+
+export type SkillImportAndMountResponses = {
+  /**
+   * Updated agent skill mount matrix
+   */
+  200: {
+    scope: "project" | "session"
+    skills: Array<{
+      name: string
+      description: string
+      platforms?: Array<"win32" | "darwin" | "linux">
+      builtin?: boolean
+      location: string
+      content: string
+      auto_detect?: {
+        files?: Array<string>
+        deps?: Array<string>
+        task_signals?: {
+          has_attachment_image?: boolean
+          request_contains_url?: boolean
+          request_contains_figma_url?: boolean
+          package_has_script?: Array<string>
+          request_text_any?: Array<string>
+        }
+      }
+      priority?: number
+      required_tools?: Array<string>
+      agents?: Array<string>
+      mounted_agents: Array<string>
+      expires_at?: string
+      duplicate_locations?: Array<string>
+      dir?: string
+      source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+      source?: string
+      trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+      risk: {
+        level: "low" | "medium" | "high"
+        has_scripts: boolean
+        has_agents: boolean
+        has_references: boolean
+        has_templates: boolean
+      }
+      recommended_policy: PermissionAction
+      policy: PermissionAction
+      managed: boolean
+      writable: boolean
+      unmounted: boolean
+      warning?: "unmounted"
+    }>
+    agents: Array<{
+      name: string
+      description?: string
+      mode: "subagent" | "primary" | "all"
+      native?: boolean
+      hidden?: boolean
+      skill_tool_available: boolean
+    }>
+    matrix: Array<{
+      agent: string
+      mounted: Array<{
+        name: string
+        description: string
+        location: string
+        enabled: boolean
+        reason?:
+          | "skill_tool_unavailable"
+          | "permission_denied"
+          | "platform_incompatible"
+          | "agent_incompatible"
+          | "missing_required_tool"
+      }>
+    }>
+    project_mounts: {
+      agents?: {
+        [key: string]: Array<string>
+      }
+    }
+    unmounted_count: number
+  }
+}
+
+export type SkillImportAndMountResponse = SkillImportAndMountResponses[keyof SkillImportAndMountResponses]
 
 export type SkillInstalledData = {
   body?: never
@@ -7324,6 +7728,7 @@ export type SkillInstalledResponses = {
     priority?: number
     required_tools?: Array<string>
     agents?: Array<string>
+    mounted_agents?: Array<string>
     expires_at?: string
     duplicate_locations?: Array<string>
     dir?: string

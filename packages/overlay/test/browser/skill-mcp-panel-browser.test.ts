@@ -25,9 +25,19 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
+const emptySkillMountMatrix = {
+  scope: "project",
+  skills: [],
+  agents: [],
+  matrix: [],
+  project_mounts: {},
+  unmounted_count: 0,
+}
+
 function mergePatch(target: unknown, patch: unknown): unknown {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) return patch
-  const base = target && typeof target === "object" && !Array.isArray(target) ? { ...(target as Record<string, unknown>) } : {}
+  const base =
+    target && typeof target === "object" && !Array.isArray(target) ? { ...(target as Record<string, unknown>) } : {}
   for (const [key, value] of Object.entries(patch)) {
     if (value === null) {
       delete base[key]
@@ -103,7 +113,14 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile") {
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     }
     if (path === "/config" && req.method === "GET") return send(config)
     if (path === "/config" && req.method === "PATCH") {
@@ -123,8 +140,10 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     }
     if (path === "/agent") return send([])
     if (path === "/channel") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
+    if (path === "/skill/mounts") return send(emptySkillMountMatrix)
     if (path === "/skill/directories") {
       return send({
         global_config: "D:/overlay/global/.opencorvus",
@@ -197,7 +216,8 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]')
     await page.waitForSelector("#leftPanelSkills[data-active='true']")
-    const openSkillDirButton = '#leftPanelSkills[data-active="true"] [data-ui="tool-panel-action"][aria-label="Open Dir"]'
+    const openSkillDirButton =
+      '#leftPanelSkills[data-active="true"] [data-ui="tool-panel-action"][aria-label="Open Dir"]'
     await page.waitForSelector(openSkillDirButton, { visible: true })
     await page.click(openSkillDirButton)
     await page.waitForFunction(() => (window as any).__openedPaths?.length === 1)
@@ -251,7 +271,9 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     const deleteAllButton = '#leftPanelMcp[data-active="true"] [data-ui="tool-panel-action"][aria-label="Delete All"]'
     await page.waitForSelector(deleteAllButton, { visible: true })
     await page.click(deleteAllButton)
-    await page.waitForFunction(() => document.querySelector("#appDialogBody")?.textContent?.includes("Delete all 3 MCP"))
+    await page.waitForFunction(() =>
+      document.querySelector("#appDialogBody")?.textContent?.includes("Delete all 3 MCP"),
+    )
     const confirmScreenshot = await saveElementScreenshot(page, "#appDialog", "skill-mcp-delete-confirm.png")
 
     await page.click("#btnAppDialogOk")
@@ -285,7 +307,10 @@ test("compact MCP panel surfaces delete-all failure without removing config", as
     )
     assert.ok(config.mcp, "MCP config should remain after failed delete-all")
     assert.match(failureNotice.text, /mcp auth removal unavailable/)
-    assert.ok(failureNotice.width > 180 && failureNotice.height > 40, "failure notice should have visible box dimensions")
+    assert.ok(
+      failureNotice.width > 180 && failureNotice.height > 40,
+      "failure notice should have visible box dimensions",
+    )
     assert.notEqual(failureNotice.background, "rgba(0, 0, 0, 0)")
     assert.equal(failureNotice.border, "1px")
     assert.equal(failureNotice.buttonInside, true)

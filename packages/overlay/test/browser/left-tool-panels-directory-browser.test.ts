@@ -141,16 +141,46 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     if (path === "/executor") return send([])
     if (path === "/session") return send([])
     if (path === "/coding/sessions") return send({ sessions: [] })
-    if (path === "/skill/installed" || path === "/skill")
-      return send([
-        {
-          name: "project-review",
-          description: "Project skill loaded from the active workspace directory.",
-          location: `${WORKSPACE_DIR}/.opencorvus/skills/project-review/SKILL.md`,
-          builtin: false,
-          duplicate_locations: [],
-        },
-      ])
+    const projectReviewSkill = {
+      name: "project-review",
+      description: "Project skill loaded from the active workspace directory.",
+      location: `${WORKSPACE_DIR}/.opencorvus/skills/project-review/SKILL.md`,
+      builtin: false,
+      duplicate_locations: [],
+      mounted_agents: ["requirements"],
+      unmounted: false,
+    }
+    if (path === "/skill/installed" || path === "/skill") return send([projectReviewSkill])
+    if (path === "/skill/mounts")
+      return send({
+        scope: "project",
+        skills: [projectReviewSkill],
+        agents: [
+          {
+            name: "requirements",
+            description: "Requirements agent",
+            mode: "primary",
+            hidden: false,
+            native: true,
+            skill_tool_available: true,
+          },
+        ],
+        matrix: [
+          {
+            agent: "requirements",
+            mounted: [
+              {
+                name: "project-review",
+                description: "Project skill loaded from the active workspace directory.",
+                location: `${WORKSPACE_DIR}/.opencorvus/skills/project-review/SKILL.md`,
+                enabled: true,
+              },
+            ],
+          },
+        ],
+        project_mounts: { agents: { requirements: ["project-review"] } },
+        unmounted_count: 0,
+      })
     if (path === "/mcp") return send({ docs: { status: "connected" } })
     if (path === "/panel/knowledge/memory") {
       if (url.searchParams.get("directory") !== WORKSPACE_DIR || url.searchParams.get("taskID") !== TASK_ID) {
@@ -198,26 +228,45 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
       "inactive compact Memory panel must not request memory during initial overlay load",
     )
     requestLog.length = 0
-    assert.equal(requestLog.some((item) => item.path === "/skill/installed"), false)
-    assert.equal(requestLog.some((item) => item.path === "/mcp"), false)
+    assert.equal(
+      requestLog.some((item) => item.path === "/skill/installed"),
+      false,
+    )
+    assert.equal(
+      requestLog.some((item) => item.path === "/mcp"),
+      false,
+    )
 
     const skillButton = '[data-ui="side-activity-button"][data-side="left"][data-activity="skill"]'
     await page.waitForSelector(skillButton, { visible: true })
     await page.click(skillButton)
-    await page.waitForSelector("#leftPanelSkills[data-active='true'] .extension-settings-row")
-    assert.equal(requestLog.some((item) => item.path === "/skill/installed"), true)
-    assert.equal(requestLog.some((item) => item.path === "/mcp"), false)
+    await page.waitForSelector("#leftPanelSkills[data-active='true'] .agent-skill-grid-skill")
+    assert.equal(
+      requestLog.some((item) => item.path === "/skill/mounts"),
+      true,
+    )
+    assert.equal(
+      requestLog.some((item) => item.path === "/mcp"),
+      false,
+    )
     const skillName = await page.$eval(
-      "#leftPanelSkills .extension-settings-row .s-row-title",
+      "#leftPanelSkills .agent-skill-grid-skill__name",
       (node) => node.textContent || "",
     )
     assert.equal(skillName, "project-review")
-    const skillListMetrics = await page.$eval("#leftPanelSkills .extension-list", (node) => {
+    const skillMatrixMetrics = await page.$eval("#leftPanelSkills .agent-skill-matrix-grid", (node) => {
       const rect = node.getBoundingClientRect()
-      return { height: rect.height, text: node.textContent || "" }
+      return {
+        height: rect.height,
+        text: node.textContent || "",
+        mountedCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="mounted"]').length,
+        sourceListVisible: !!document.querySelector("#leftPanelSkills .extension-list"),
+      }
     })
-    assert.ok(skillListMetrics.height > 24)
-    assert.match(skillListMetrics.text, /project-review/)
+    assert.ok(skillMatrixMetrics.height > 24)
+    assert.match(skillMatrixMetrics.text, /project-review/)
+    assert.equal(skillMatrixMetrics.mountedCells, 1)
+    assert.equal(skillMatrixMetrics.sourceListVisible, false)
     const skillPanel = await page.$("#leftPanelSkills")
     assert.ok(skillPanel, "skill panel should exist before screenshot")
     const skillScreenshotPath = resolve(".scratch", "left-skill-panel-primitive-row.png")
@@ -228,7 +277,10 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     await page.waitForSelector(mcpButton, { visible: true })
     await page.click(mcpButton)
     await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-settings-row")
-    assert.equal(requestLog.some((item) => item.path === "/mcp"), true)
+    assert.equal(
+      requestLog.some((item) => item.path === "/mcp"),
+      true,
+    )
     const mcpName = await page.$eval(
       "#leftPanelMcp .extension-settings-row .s-row-title",
       (node) => node.textContent || "",
@@ -339,7 +391,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
     mkdirSync(dirname(deletedScreenshotPath), { recursive: true })
     writeFileSync(deletedScreenshotPath, await memoryPanel.screenshot({}))
 
-    const skillRequest = requestLog.find((item) => item.path === "/skill/installed")
+    const skillRequest = requestLog.find((item) => item.path === "/skill/mounts")
     const mcpRequest = requestLog.find((item) => item.path === "/mcp")
     const memoryRequest = requestLog.find((item) => item.path === "/panel/knowledge/memory")
     assert.equal(skillRequest?.directory, WORKSPACE_DIR)

@@ -3,71 +3,43 @@ import { pathToFileURL } from "url"
 import z from "zod"
 import { Tool } from "./tool"
 import { Skill } from "../skill"
-import { PermissionNext } from "../permission/next"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
-import {
-  isWebpageEvidenceAcceptanceToolId,
-  isWebpageEvidenceAnalysisToolId,
-  isWebpageEvidenceRetiredVisualToolId,
-} from "@/frontend-design/tools/ids"
+import { SkillMount } from "@/skill/mounts"
 
 export const SkillTool = Tool.define("skill", async (ctx) => {
-  const skills = await Skill.all()
-  const platform = process.platform
-
-  // Filter skills by agent permissions if agent provided
   const agent = ctx?.agent
-  const accessibleSkills = agent
-    ? skills.filter((skill) => {
-        const rule = PermissionNext.evaluate("skill", skill.name, agent.permission)
-        if (rule.action === "deny") return false
-        if (
-          agent.name !== "frontend-design" &&
-          (skill.required_tools ?? []).some((toolID) => isWebpageEvidenceAnalysisToolId(toolID))
-        ) {
-          return false
-        }
-        if (
-          agent.name !== "frontend-design" &&
-          agent.name !== "visual-qa" &&
-          (skill.required_tools ?? []).some((toolID) => isWebpageEvidenceAcceptanceToolId(toolID))
-        ) {
-          return false
-        }
-        if ((skill.required_tools ?? []).some((toolID) => isWebpageEvidenceRetiredVisualToolId(toolID))) {
-          return false
-        }
-        if (skill.agents.length > 0 && !skill.agents.includes(agent.name)) {
-          return false
-        }
-        if ((skill.required_tools ?? []).some((toolID) => !agentCanUseRequiredTool(agent, toolID))) {
-          return false
-        }
-        return true
-      })
-    : skills
-
-  const compatible = accessibleSkills.filter(
-    (skill) => skill.platforms.length === 0 || skill.platforms.includes(platform as "win32" | "darwin" | "linux"),
-  )
-  const incompatible = accessibleSkills.filter(
-    (skill) => skill.platforms.length > 0 && !skill.platforms.includes(platform as "win32" | "darwin" | "linux"),
-  )
+  const surface = ctx?.skillSurface
+    ? ctx.skillSurface
+    : agent
+      ? await SkillMount.resolve({ agent, config: ctx?.config })
+      : ({
+          agent: "unbound",
+          scope: "project" as const,
+          tool_available: false,
+          unmounted_pool_count: 0,
+          skills: [],
+        } satisfies SkillMount.ResolvedAgentSkillSurface)
+  const mounted = surface.skills
+  const compatible = mounted.filter((skill) => skill.enabled).map((skill) => skill.skill)
+  const disabled = mounted.filter((skill) => !skill.enabled)
 
   const description =
-    accessibleSkills.length === 0
+    compatible.length === 0
       ? "Search for or load a specialized skill that provides domain-specific instructions and workflows. No skills are currently available."
       : [
           "Search for or load a specialized skill that provides domain-specific instructions and workflows.",
-          `Current platform: ${platform}`,
+          `Current agent: ${surface.agent}`,
           "Call without a name to search/list skill metadata. Call with an exact name to load the full skill instructions.",
           "",
           "Use search before planning when the task may match a specialized workflow.",
           "",
           'Search output returns names, descriptions, required tool hints, and locations only. Loading by name returns a `<skill_content name="...">` block with the full SKILL.md body and sampled bundled files.',
-          incompatible.length > 0
-            ? `${incompatible.length} skill(s) are incompatible with the current platform and will not appear in search results.`
+          disabled.length > 0
+            ? `${disabled.length} mounted skill(s) are disabled and will not appear in search results.`
+            : "",
+          surface.unmounted_pool_count > 0
+            ? `${surface.unmounted_pool_count} pool skill(s) are unmounted and unavailable to this agent.`
             : "",
         ].join("\n")
 
@@ -99,22 +71,17 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
             names: matches.map((skill) => skill.name),
             name: "",
             dir: "",
+            agent: surface.agent,
+            scope: surface.scope,
           },
         }
       }
 
-      const skill = accessibleSkills.find((item) => item.name === params.name)
+      const skill = compatible.find((item) => item.name === params.name)
 
       if (!skill) {
         const available = compatible.map((x) => x.name).join(", ")
         throw new Error(`Skill "${params.name}" not found or not allowed. Compatible skills: ${available || "none"}`)
-      }
-
-      if (skill.platforms.length > 0 && !skill.platforms.includes(platform as "win32" | "darwin" | "linux")) {
-        const names = compatible.map((x) => x.name).join(", ")
-        throw new Error(
-          `Skill "${skill.name}" is not compatible with current platform (${platform}). Compatible skills: ${names || "none"}`,
-        )
       }
 
       await ctx.ask({
@@ -171,6 +138,8 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           names: [skill.name],
           name: skill.name,
           dir,
+          agent: surface.agent,
+          scope: surface.scope,
         },
       }
     },
@@ -186,24 +155,6 @@ function searchSkills(skills: Skill.Info[], query: string | undefined): Skill.In
       .toLocaleLowerCase()
     return haystack.includes(needle)
   })
-}
-
-type SkillToolAgentSurface = {
-  name: string
-  tools?: {
-    include?: string[]
-    exclude?: string[]
-  }
-  permission?: PermissionNext.Ruleset
-}
-
-function agentCanUseRequiredTool(agent: SkillToolAgentSurface, toolID: string): boolean {
-  const include = agent.tools?.include
-  if (include && include.length > 0 && !include.includes(toolID)) return false
-  if (agent.tools?.exclude?.includes(toolID)) return false
-
-  const rule = PermissionNext.evaluate(toolID, "*", agent.permission)
-  return rule.action !== "deny"
 }
 
 function renderSkillSearch(skills: Skill.Info[], total: number, query: string | undefined): string {
