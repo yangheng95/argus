@@ -10,7 +10,10 @@ import {
   BrowserPreviewBindLocalModuleTool,
   BrowserPreviewBindLocalModuleToolParameters,
 } from "../../src/tool/browser-preview-bind-local-module"
-import { BrowserPreviewCompareRegionsTool } from "../../src/tool/browser-preview-compare-regions"
+import {
+  browserPreviewRegionComparisonAttachmentImages,
+  BrowserPreviewCompareRegionsTool,
+} from "../../src/tool/browser-preview-compare-regions"
 import { ToolRegistry } from "../../src/tool/registry"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Instance } from "../../src/project/instance"
@@ -24,12 +27,9 @@ import {
   persistBrowserPreviewEvidence,
   resolveRuntimeRelativePath,
 } from "../../src/browser-preview/persist"
-import {
-  persistTestBrowserPreviewTarget as persistBrowserPreviewTarget,
-  TEST_BROWSER_PREVIEW_VIEWPORTS,
-} from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget, TEST_BROWSER_PREVIEW_VIEWPORTS } from "../fixture/browser-preview"
 
 const baseCtx = {
   sessionID: "ses_browser_preview_tool",
@@ -54,6 +54,55 @@ function browserPreviewToolInput<T extends { viewports?: typeof TEST_BROWSER_PRE
 
 afterEach(async () => {
   await resetDatabase()
+})
+
+test("browser_preview_compare_regions exposes failed comparison images for model repair", () => {
+  const projectRoot = "C:/repo"
+  const result = {
+    status: "failed",
+    manifestPath: ".opencorvus/r/t/tsk/bp/job/manifest.json",
+    jobID: "job",
+    taskID: "tsk",
+    targetID: "target",
+    operation: "reference-comparison",
+    evidenceIDs: {},
+    diagnostics: [],
+    regions: [
+      {
+        region_id: "good-region",
+        viewport_id: "desktop",
+        status: "completed",
+        artifacts: {
+          source_crop: ".opencorvus/r/t/tsk/bp/job/good/source.png",
+          implementation_crop: ".opencorvus/r/t/tsk/bp/job/good/implementation.png",
+          side_by_side: ".opencorvus/r/t/tsk/bp/job/good/side-by-side.png",
+        },
+        diagnostics: [],
+      },
+      {
+        region_id: "bad-region",
+        viewport_id: "desktop",
+        status: "failed",
+        reason: "Visual mismatch",
+        artifacts: {
+          source_crop: ".opencorvus/r/t/tsk/bp/job/bad/source.png",
+          implementation_crop: ".opencorvus/r/t/tsk/bp/job/bad/implementation.png",
+          side_by_side: ".opencorvus/r/t/tsk/bp/job/bad/side-by-side.png",
+          diff: ".opencorvus/r/t/tsk/bp/job/bad/diff.png",
+        },
+        diagnostics: ["Visual mismatch"],
+      },
+    ],
+  } as any
+
+  const images = browserPreviewRegionComparisonAttachmentImages({ projectRoot, result })
+
+  expect(images.map((image) => image.filename)).toEqual([
+    "desktop-failed-bad-region-side-by-side.png",
+    "desktop-failed-bad-region-diff.png",
+    "desktop-completed-good-region-side-by-side.png",
+  ])
+  expect(images[0].path).toBe(path.resolve(projectRoot, ".opencorvus/r/t/tsk/bp/job/bad/side-by-side.png"))
 })
 
 async function startReachablePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
@@ -172,6 +221,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: "npm run dev",
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   timeout: 20,
                   leaseTimeout: 200,
                 }),
@@ -185,7 +235,9 @@ describe("tool.browser_preview", () => {
               expect(payload.diagnostics.join("\n")).toContain("browser_preview_target")
               expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe(preview.url)
               const events = ProtocolStore.listTaskEvents(taskID)
-              const event = events.find((item) => item.type === "task.updated" && item.source === "browser-preview.target")
+              const event = events.find(
+                (item) => item.type === "task.updated" && item.source === "browser-preview.target",
+              )
               expect(event?.payload?.summary).toBe("Browser preview target updated")
               expect(event?.payload?.taskID).toBe(taskID)
             } finally {
@@ -231,6 +283,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: "npm run dev",
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   timeout: 1_500,
                   leaseTimeout: 2_000,
                 }),
@@ -279,6 +332,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: "npm run dev",
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   url: preview.url,
                   timeout: 2_500,
                   leaseTimeout: 3_000,
@@ -335,6 +389,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: "npm run dev",
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   url: preview.url,
                   timeout: 20,
                   leaseTimeout: 200,
@@ -396,6 +451,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: "npm run dev",
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   timeout: 7_000,
                   leaseTimeout: 8_000,
                 }),
@@ -450,6 +506,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: "npm run dev",
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   timeout: 1_000,
                   leaseTimeout: 4_000,
                 }),
@@ -504,6 +561,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: "npm run dev",
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   url: "http://127.0.0.1:9/",
                   timeout: 500,
                   leaseTimeout: 1_500,
@@ -558,6 +616,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: `npx vite --host 127.0.0.1 --port ${url.port}`,
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   timeout: 20,
                   leaseTimeout: 200,
                 }),
@@ -601,7 +660,7 @@ describe("tool.browser_preview", () => {
         await Instance.provide({
           directory: tmp.path,
           fn: async () => {
-            await persistBrowserPreviewTarget({ taskID, url: stalePreview.url })
+            await persistTestBrowserPreviewTarget({ taskID, url: stalePreview.url })
             const commandUrl = new URL(commandPreview.url)
             const restore = ProcessSupervisor.setFactoryForTest(async () => ({
               pid: 9104,
@@ -618,6 +677,7 @@ describe("tool.browser_preview", () => {
               const result = await tool.execute(
                 browserPreviewToolInput({
                   command: `npx vite --host 127.0.0.1 --port ${commandUrl.port}`,
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   timeout: 20,
                   leaseTimeout: 200,
                 }),
@@ -683,6 +743,7 @@ describe("tool.browser_preview", () => {
               tool.execute(
                 browserPreviewToolInput({
                   command: "npm run dev",
+                  viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                   url: "file:///tmp/index.html",
                   timeout: 20,
                   leaseTimeout: 200,
@@ -712,6 +773,7 @@ describe("tool.browser_preview", () => {
             tool.execute(
               browserPreviewToolInput({
                 command: "npm run dev",
+                viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
                 timeout: 20,
                 leaseTimeout: 200,
               }),
@@ -828,7 +890,7 @@ describe("tool.browser_preview", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
+          const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
           expect(() =>
             persistBrowserPreviewEvidence({
               projectRoot: tmp.path,
@@ -860,7 +922,7 @@ describe("tool.browser_preview", () => {
           await fs.mkdir(artifactDir, { recursive: true })
           const sideBySidePath = path.join(artifactDir, "side-by-side.png")
           await fs.writeFile(sideBySidePath, "side-by-side")
-          const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
+          const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
           expect(() =>
             persistBrowserPreviewEvidence({
               projectRoot: tmp.path,
@@ -908,7 +970,8 @@ describe("tool.browser_preview", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
+          fn: () =>
+            persistTestBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
         })
         await Instance.provide({
           directory: tmp.path,
@@ -965,10 +1028,12 @@ describe("tool.browser_preview", () => {
             })
 
             expect(comparison.title).toBe("Region comparison completed")
-            expect(comparison.attachments).toHaveLength(1)
+            expect(comparison.attachments).toHaveLength(2)
             expect(comparison.metadata.status).toBe("passed")
             expect(comparisonPayload.operation).toBe("reference-comparison")
             const comparedRegion = comparisonPayload.regions[0]
+            expect(comparedRegion.status).toBe("completed")
+            expect(comparedRegion.reason).toBeUndefined()
             const artifacts = comparedRegion.artifacts
             expect(artifacts.source_crop).toEndWith("source.png")
             expect(artifacts.implementation_crop).toEndWith("implementation.png")
@@ -976,6 +1041,7 @@ describe("tool.browser_preview", () => {
             expect(artifacts.diff).toEndWith("diff.png")
             expect(evidence?.operationKind).toBe("reference-comparison")
             expect(evidence?.regionID).toBe("tool-local-module")
+            expect(evidence?.status).toBe("passed")
             expect(evidence?.artifactPaths?.source_crop).toBe(artifacts.source_crop)
             expect(evidence?.artifactPaths?.implementation_crop).toBe(artifacts.implementation_crop)
             expect(evidence?.artifactPaths?.side_by_side).toBe(artifacts.side_by_side)
@@ -1023,16 +1089,17 @@ describe("tool.browser_preview", () => {
       await using tmp = await tmpdir({ git: true })
       const taskID = await seedTask(tmp.path)
       const linkedWorktree = `${tmp.path}-goal-worktree`
-      await $`git worktree add ${linkedWorktree} -b ${`opencorvus/test-browser-preview-${Date.now()}`}`.cwd(
-        tmp.path,
-      ).quiet()
+      await $`git worktree add ${linkedWorktree} -b ${`opencorvus/test-browser-preview-${Date.now()}`}`
+        .cwd(tmp.path)
+        .quiet()
       const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
       await writeBindingToolReference(paths.sourcePackageAbsolute)
       const server = await startBindingToolPreviewServer()
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
+          fn: () =>
+            persistTestBrowserPreviewTarget({ taskID, url: server.url, viewports: BINDING_TOOL_TEST_VIEWPORTS }),
         })
         await Instance.provide({
           directory: linkedWorktree,
@@ -1077,6 +1144,7 @@ describe("tool.browser_preview", () => {
             })
 
             expect(comparison.metadata.status).toBe("passed")
+            expect(comparison.attachments).toHaveLength(2)
             expect(evidence?.status).toBe("passed")
             expect(await fileExists(resolveRuntimeRelativePath(tmp.path, region.artifacts.side_by_side))).toBe(true)
             expect(await fileExists(resolveRuntimeRelativePath(linkedWorktree, region.artifacts.side_by_side))).toBe(
@@ -1086,7 +1154,10 @@ describe("tool.browser_preview", () => {
         })
       } finally {
         await server.close()
-        await $`git worktree remove --force ${linkedWorktree}`.cwd(tmp.path).quiet().catch(() => {})
+        await $`git worktree remove --force ${linkedWorktree}`
+          .cwd(tmp.path)
+          .quiet()
+          .catch(() => {})
       }
     },
     { timeout: 60_000 },

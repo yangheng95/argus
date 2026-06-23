@@ -6,10 +6,10 @@ import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Database } from "../../src/storage/db"
 import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
-import { persistTestBrowserPreviewTarget as persistBrowserPreviewTarget } from "../fixture/browser-preview"
 import { tmpdir } from "../fixture/fixture"
 import { resetDatabase } from "../fixture/db"
 import type { VisualEvidenceBundle } from "../../src/acceptance/visual-evidence"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 function visualBundle(taskID: string, projectDirectory: string, evidenceRefs: string[]): VisualEvidenceBundle {
   return {
@@ -98,7 +98,7 @@ async function seedTaskWithReferenceComparison(input: {
   for (const file of artifactNames) {
     await fs.writeFile(path.join(artifactDir, file), `png:${file}`)
   }
-  const target = await persistBrowserPreviewTarget({
+  const target = await persistTestBrowserPreviewTarget({
     taskID: input.taskID,
     url: "http://127.0.0.1:4173/",
   })
@@ -116,7 +116,9 @@ async function seedTaskWithReferenceComparison(input: {
       ...(artifactNames.includes("implementation.png")
         ? { implementation_crop: path.join(artifactDir, "implementation.png") }
         : {}),
-      ...(artifactNames.includes("side-by-side.png") ? { side_by_side: path.join(artifactDir, "side-by-side.png") } : {}),
+      ...(artifactNames.includes("side-by-side.png")
+        ? { side_by_side: path.join(artifactDir, "side-by-side.png") }
+        : {}),
     },
     diagnostics: [],
   })
@@ -211,16 +213,12 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
         frontendDesign:
           "## visual_consistency_contract\nMatch web-clone-source/reference.png with measured overlay evidence.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md",
         visualEvidence: [
-          visualBundle(
-            "tsk_integrity_tools",
-            dir.path,
-            [
-              await seedTaskWithReferenceComparison({
-                taskID: "tsk_integrity_tools",
-                projectDirectory: dir.path,
-              }),
-            ],
-          ),
+          visualBundle("tsk_integrity_tools", dir.path, [
+            await seedTaskWithReferenceComparison({
+              taskID: "tsk_integrity_tools",
+              projectDirectory: dir.path,
+            }),
+          ]),
         ],
         attachments: [],
       })
@@ -456,7 +454,7 @@ test("integrity visual evidence rejects incomplete reference-comparison artifact
       const artifactDir = ProjectRuntimePaths.taskAbsolute(dir.path, taskID, "bp", "integrity-incomplete")
       await fs.mkdir(artifactDir, { recursive: true })
       await fs.writeFile(path.join(artifactDir, "side-by-side.png"), "side-by-side")
-      const target = await persistBrowserPreviewTarget({
+      const target = await persistTestBrowserPreviewTarget({
         taskID,
         url: "http://127.0.0.1:4173/",
       })

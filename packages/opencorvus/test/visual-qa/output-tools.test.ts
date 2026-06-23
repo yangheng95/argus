@@ -6,11 +6,11 @@ import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
-import { persistTestBrowserPreviewTarget as persistBrowserPreviewTarget } from "../fixture/browser-preview"
 import { createVisualQaOutputTools } from "../../src/visual-qa/output-tools"
 import type { VisualQaReport } from "../../src/visual-qa/schema"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 function callTool(tools: Record<string, any>, name: string, input: unknown): Promise<string> {
   return tools[name].execute!(input as any, {} as any)
@@ -91,12 +91,17 @@ async function seedReferenceComparisonEvidence(input: {
       })
       .run(),
   )
-  const artifactDir = ProjectRuntimePaths.taskAbsolute(input.projectDirectory, input.taskID, "bp", "visual-qa-reference")
+  const artifactDir = ProjectRuntimePaths.taskAbsolute(
+    input.projectDirectory,
+    input.taskID,
+    "bp",
+    "visual-qa-reference",
+  )
   await fs.mkdir(artifactDir, { recursive: true })
   for (const file of ["source.png", "implementation.png", "side-by-side.png"]) {
     await fs.writeFile(path.join(artifactDir, file), `png:${file}`)
   }
-  const target = await persistBrowserPreviewTarget({ taskID: input.taskID, url: "http://127.0.0.1:4173/" })
+  const target = await persistTestBrowserPreviewTarget({ taskID: input.taskID, url: "http://127.0.0.1:4173/" })
   return persistBrowserPreviewEvidence({
     projectRoot: input.projectDirectory,
     taskID: input.taskID,
@@ -288,7 +293,7 @@ describe("visual-qa output tools", () => {
         for (const file of ["source.png", "implementation.png", "side-by-side.png"]) {
           await fs.writeFile(path.join(artifactDir, file), `png:${file}`)
         }
-        const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
+        const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:4173/" })
         return persistBrowserPreviewEvidence({
           projectRoot: tmp.path,
           taskID,
