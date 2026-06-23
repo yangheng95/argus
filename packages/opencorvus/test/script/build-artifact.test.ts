@@ -277,6 +277,7 @@ describe("build-artifact", () => {
       resolve(import.meta.dir, "../../src/frontend-design/visual-region-binding-tool.ts"),
       "utf8",
     )
+    const attachmentStoreSource = readFileSync(resolve(import.meta.dir, "../../src/storage/attachment-store.ts"), "utf8")
 
     expect(watcherSource).not.toContain('from "@parcel/watcher/wrapper"')
     expect(watcherSource).not.toContain("@parcel/watcher-${process.platform}")
@@ -291,6 +292,8 @@ describe("build-artifact", () => {
     expect(regionComparisonSource).toContain('requireRuntimePackage<typeof import("sharp")>("sharp")')
     expect(visualRegionBindingToolSource).not.toContain('from "sharp"')
     expect(visualRegionBindingToolSource).toContain('requireRuntimePackage<typeof import("sharp")>("sharp")')
+    expect(attachmentStoreSource).not.toContain('from "sharp"')
+    expect(attachmentStoreSource).toContain('requireRuntimePackage<typeof import("sharp")>("sharp")')
   })
 
   test("runtime node module set includes win32 x64 native packages only for win32 x64", () => {
