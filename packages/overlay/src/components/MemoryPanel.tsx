@@ -357,9 +357,13 @@ export function MemoryPanel(props: MemoryPanelProps) {
                   data-expanded={expanded() ? "true" : "false"}
                 >
                   <div class="knowledge-item-row">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
+                      tone="neutral"
                       class="knowledge-item-main"
+                      data-ui="memory-row-main"
                       aria-expanded={expanded()}
                       aria-controls={expanded() ? detailElementId() : undefined}
                       onClick={() => toggleMemoryDetail(f.id)}
@@ -374,7 +378,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
                       <Show when={!!f.snippet}>
                         <span class="knowledge-item-meta">{f.snippet}</span>
                       </Show>
-                    </button>
+                    </Button>
                     <Button
                       type="button"
                       variant="ghost"

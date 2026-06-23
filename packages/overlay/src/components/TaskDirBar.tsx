@@ -286,9 +286,13 @@ export function TaskDirContent() {
                       const isActive = () => !!dir() && project.directory.toLowerCase() === dir().toLowerCase()
                       return (
                         <div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="sm"
+                            tone="neutral"
                             class="recent-dir-item"
+                            data-ui="recent-dir-item"
                             title={project.directory}
                             aria-current={isActive() ? "location" : undefined}
                             onClick={() => void chooseRecentDirectory(project.directory)}
@@ -302,7 +306,7 @@ export function TaskDirContent() {
                                 •
                               </span>
                             </Show>
-                          </button>
+                          </Button>
                         </div>
                       )
                     }}
@@ -317,9 +321,13 @@ export function TaskDirContent() {
                     const isActive = () => !!dir() && recent.toLowerCase() === dir().toLowerCase()
                     return (
                       <div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="sm"
+                          tone="neutral"
                           class="recent-dir-item"
+                          data-ui="recent-dir-item"
                           title={recent}
                           aria-current={isActive() ? "location" : undefined}
                           onClick={() => void chooseRecentDirectory(recent)}
@@ -333,7 +341,7 @@ export function TaskDirContent() {
                               •
                             </span>
                           </Show>
-                        </button>
+                        </Button>
                         <Button
                           type="button"
                           variant="ghost"

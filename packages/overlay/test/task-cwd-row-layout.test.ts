@@ -267,6 +267,10 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).toContain("loadWorkspaceOnboardingDiscovery")
     expect(TASK_DIR_BAR).toContain('class="recent-dir-edit-form"')
     expect(TASK_DIR_BAR).toMatch(/<input[\s\S]*class="field-input"[\s\S]*data-ui="cwd-path-input"/)
+    expect(TASK_DIR_BAR.match(/class="recent-dir-item"/g)?.length).toBe(2)
+    expect(TASK_DIR_BAR.match(/data-ui="recent-dir-item"/g)?.length).toBe(2)
+    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*class="recent-dir-item"[\s\S]*data-ui="recent-dir-item"/)
+    expect(TASK_DIR_BAR).not.toMatch(/<button[\s\S]*class="recent-dir-item"/)
     expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="recent-dir-edit-submit"/)
     expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="recent-dir-remove"/)
     expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
@@ -291,6 +295,10 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const submit = soloRuleBody('.recent-dir-edit-form .oc-button[data-ui="recent-dir-edit-submit"]')
     expect(submit).toMatch(/--oc-button-height:\s*calc\(30px \* var\(--ui-scale\)\)/)
     expect(submit).toMatch(/min-width:\s*calc\(30px \* var\(--ui-scale\)\)/)
+    const rowMain = soloRuleBody('.recent-dir-row > .oc-button[data-ui="recent-dir-item"].recent-dir-item')
+    expect(rowMain).toMatch(/--oc-button-height:\s*auto/)
+    expect(rowMain).toMatch(/--oc-button-padding-y:\s*calc\(8px \* var\(--ui-scale\)\)/)
+    expect(rowMain).toMatch(/--oc-button-color:\s*var\(--text-soft\)/)
     const disabledSubmit = soloRuleBody(
       '.recent-dir-edit-form .oc-button[data-size="icon"][data-variant="ghost"][data-chrome="icon-action"][data-ui="recent-dir-edit-submit"]:disabled',
     )
@@ -307,7 +315,7 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     const focusSlot = selectorRuleBody('.recent-dir-row:has(.oc-button[data-ui="recent-dir-remove"]):focus-within')
     expect(focusSlot).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--recent-dir-remove-slot-width\)/)
     const focusItem = selectorRuleBody(".recent-dir-row:focus-within .recent-dir-item")
-    expect(focusItem).toMatch(/color:\s*var\(--text-strong\)/)
+    expect(focusItem).toMatch(/--oc-button-color:\s*var\(--text-strong\)/)
     const focusRemove = selectorRuleBody('.recent-dir-row:focus-within .oc-button[data-ui="recent-dir-remove"]')
     expect(focusRemove).toMatch(/opacity:\s*var\(--ui-opacity-full\)/)
     expect(focusRemove).toMatch(/pointer-events:\s*auto/)
@@ -337,6 +345,7 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
   test("cwd popup mirrors current location state onto focusable row buttons", () => {
     expect(TASK_DIR_BAR.match(/aria-current=\{isActive\(\) \? "location" : undefined\}/g)?.length).toBe(2)
     expect(TASK_DIR_BAR).toContain('<div class="recent-dir-row" data-active={isActive() ? "true" : "false"} role="listitem">')
+    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="recent-dir-item"[\s\S]*aria-current=\{isActive\(\) \? "location" : undefined\}/)
     expect(TASK_DIR_BAR).not.toContain('aria-selected={isActive()')
     expect(TASK_DIR_BAR).not.toContain('aria-pressed={isActive()')
   })

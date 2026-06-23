@@ -69,7 +69,7 @@ test(
             </div>
 
             <div class="recent-dir-row">
-              <button type="button" class="recent-dir-item">
+              <button type="button" class="oc-button recent-dir-item" data-variant="ghost" data-size="sm" data-tone="neutral" data-ui="recent-dir-item">
                 <span class="recent-dir-copy">
                   <span class="recent-dir-label">superchart</span>
                   <span class="recent-dir-path">D:/myhexin-local/demos/superchart/very/long/path</span>

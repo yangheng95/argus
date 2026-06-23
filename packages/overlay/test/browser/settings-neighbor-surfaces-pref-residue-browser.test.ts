@@ -68,7 +68,7 @@ test("live settings neighbor surfaces render without retired preference row sele
                   <div class="knowledge-list">
                     <article class="knowledge-item" data-mode="browse">
                       <div class="knowledge-item-row">
-                        <button class="knowledge-item-main" type="button" aria-expanded="false">
+                        <button class="oc-button knowledge-item-main" data-variant="ghost" data-size="sm" data-tone="neutral" data-ui="memory-row-main" type="button" aria-expanded="false">
                           <span class="knowledge-item-title">Market notes</span>
                           <span class="knowledge-item-meta-row">
                             <span class="knowledge-item-meta">Global memory</span>
@@ -127,10 +127,24 @@ test("live settings neighbor surfaces render without retired preference row sele
           text: element.textContent?.trim() ?? "",
         }
       })
-      return { retired, surfaces }
+      const memoryTitle = root.querySelector<HTMLElement>(".knowledge-item-title")
+      if (!memoryTitle) throw new Error("Missing .knowledge-item-title")
+      const titleRect = memoryTitle.getBoundingClientRect()
+      return {
+        retired,
+        surfaces,
+        memoryTitle: {
+          text: memoryTitle.textContent?.trim() ?? "",
+          height: titleRect.height,
+          width: titleRect.width,
+        },
+      }
     })
 
     assert.equal(state.retired, 0)
+    assert.equal(state.memoryTitle.text, "Market notes")
+    assert.ok(state.memoryTitle.height > 12, `.knowledge-item-title visible height ${state.memoryTitle.height}`)
+    assert.ok(state.memoryTitle.width > 40, `.knowledge-item-title visible width ${state.memoryTitle.width}`)
     for (const surface of state.surfaces) {
       assert.ok(surface.width > 240, `${surface.selector} width`)
       assert.ok(surface.height > 24, `${surface.selector} height`)
