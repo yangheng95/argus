@@ -89,7 +89,7 @@
 }
 
 .oc-select-listbox {
-  max-height: min(calc(260px * var(--ui-scale)), calc(100vh - 32px));
+  max-height: min(calc(260px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - 32px));
   overflow: auto;
   padding: calc(4px * var(--ui-scale));
 }

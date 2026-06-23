@@ -2891,11 +2891,19 @@ describe("overlay architecture guards", () => {
     expect(narrowStart).toBeGreaterThan(-1)
     const narrow = workspace.slice(narrowStart)
 
-    expect(narrow).toMatch(/\.sidebar\s*\{[\s\S]*flex:\s*0 0 min\(26vh, calc\(240px \* var\(--ui-scale\)\)\)/)
-    expect(narrow).toMatch(/\.sidebar\s*\{[\s\S]*min-height:\s*min\(18vh, calc\(160px \* var\(--ui-scale\)\)\)/)
+    expect(narrow).toMatch(
+      /\.sidebar\s*\{[\s\S]*flex:\s*0 0 min\(calc\(var\(--ui-overlay-shell-height\) \* 0\.26\), calc\(240px \* var\(--ui-scale\)\)\)/,
+    )
+    expect(narrow).toMatch(
+      /\.sidebar\s*\{[\s\S]*min-height:\s*min\(calc\(var\(--ui-overlay-shell-height\) \* 0\.18\), calc\(160px \* var\(--ui-scale\)\)\)/,
+    )
     expect(narrow).toMatch(/\.chat\s*\{[\s\S]*flex:\s*1 1 auto/)
-    expect(narrow).toMatch(/\.sections\s*\{[\s\S]*flex:\s*0 0 min\(34vh, calc\(360px \* var\(--ui-scale\)\)\)/)
-    expect(narrow).toMatch(/\.sections\s*\{[\s\S]*min-height:\s*min\(28vh, calc\(260px \* var\(--ui-scale\)\)\)/)
+    expect(narrow).toMatch(
+      /\.sections\s*\{[\s\S]*flex:\s*0 0 min\(calc\(var\(--ui-overlay-shell-height\) \* 0\.34\), calc\(360px \* var\(--ui-scale\)\)\)/,
+    )
+    expect(narrow).toMatch(
+      /\.sections\s*\{[\s\S]*min-height:\s*min\(calc\(var\(--ui-overlay-shell-height\) \* 0\.28\), calc\(260px \* var\(--ui-scale\)\)\)/,
+    )
   })
 
   test("right panel card radius and body padding are canonical, not theme scoped", () => {

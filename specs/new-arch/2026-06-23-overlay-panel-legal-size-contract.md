@@ -395,3 +395,105 @@ though ARIA claimed the pane was legal.
   `--ui-rail-width`; no JS copy of the CSS clamp was introduced.
 - Rechecked resize ownership: existing window resize RAF scheduling remains the
   only path that re-renders pane layout after viewport changes.
+
+## Follow-up 2026-06-23: Legal Shell Height and Pane Bounds Budget
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Lovelace read-only audit | Runtime child surfaces still use raw `vh` / `window.innerHeight`, and pane bounds repeatedly re-read the same fixed chrome widths inside one RAF. |
+| `2026-06-22-overlay-viewport-size-contract.md` | The body shell is the browser-side mirror of the native `1120x720` minimum and aspect frame. |
+| `2026-06-23-overlay-compact-legal-frame-query.md` | Descendant width clamps already read the legal shell instead of raw viewport width. Height must follow the same owner. |
+| `2026-06-22-pane-semantics-layout-frame.md` | Pane layout stays owned by `services/pane.ts`; frame-split semantics must not add another geometry writer. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Legal shell height | `base.css` directly computes body height from `100vh` and aspect tokens. | Add `--ui-overlay-shell-height` in `base.css` as the only raw viewport-height owner and make `body` consume it. |
+| Floating child surfaces | `dialog.css`, `cmdk.css`, `titlebar.css`, `settings.css`, `messages.css`, `workspace.css`, `field.css`, `changes.css`, `composer.css`, and `conversation.css` still use raw `vh`. | Replace child-surface `vh` with `var(--ui-overlay-shell-height)` arithmetic. |
+| Dialog drag clamp | `Dialog.tsx` clamps against `window.innerWidth/innerHeight`. | Clamp against `document.body.getBoundingClientRect()`, the legal shell. |
+| Pane bounds | `paneResizeBounds()` loops through `paneResolvedSidebarWidth()`, which re-reads panel body, handle, and fixed toolbar widths. | Compute one DOM measurement snapshot and derive `{ min, max, now }` from that snapshot. |
+| Static tests | `overlay-window-size-contract.test.ts` already rejects descendant raw `vw`. | Add the matching descendant raw `vh` guard and Dialog legal-shell clamp guard. |
+| Browser tests | Existing left-pane and titlebar/dialog image-preview tests produce screenshots. | Re-run focused browser visual tests and inspect screenshots. |
+
+### Root Cause
+
+The legal frame had been applied to width-triggered responsive behavior, but
+height-bound child surfaces still used the raw browser viewport. In illegal
+tall fixtures, body remains the legal aspect frame while fixed dialogs and
+menus can size or clamp against the taller raw viewport. Pane bounds had a
+separate performance issue: max-width solving re-entered the same DOM width
+reader several times in one scheduled frame even though the max value is a
+closed-form expression once fixed chrome widths are known.
+
+### Fix Plan
+
+1. Add `--ui-overlay-shell-height` to `base.css` and use it for body height.
+2. Replace production child-surface `vh` height clamps with shell-height
+   arithmetic; keep development error overlay CSS out of this runtime contract.
+3. Change the shared Dialog primitive's drag clamp to use the legal shell rect.
+4. Refactor pane bounds to read panel body, handle, fixed left chrome, fixed
+   remaining chrome, and remaining minimum once per frame.
+5. Extend static tests for child-surface raw `vh`, Dialog clamp, and pane bounds
+   read budget.
+6. Run focused tests, overlay typecheck, browser visual QA, self-review,
+   commit, and push.
+
+### Acceptance
+
+- Production overlay child surfaces do not use raw `vh`; `base.css` is the only
+  raw viewport-height owner for the legal shell.
+- Dialog drag bounds use the legal shell rect, not raw `window.innerHeight`.
+- Pane resize bounds have one geometry snapshot and no fixed-point loop.
+- No fallback height, duplicate size constant, resize gate, or second pane
+  writer is introduced.
+
+### Implementation
+
+- `base.css` now defines `--ui-overlay-shell-height` from the existing legal
+  aspect-frame expression and uses that variable for `body` height.
+- Runtime surface CSS now uses `--ui-overlay-shell-height` for dialog, command
+  palette, titlebar menu, settings, message preview, field, composer,
+  conversation, changes, and compact workspace height clamps.
+- The shared Dialog primitive clamps dragging against
+  `document.body.getBoundingClientRect()` instead of raw window dimensions.
+- `services/pane.ts` now reads one `PaneGeometrySnapshot` per pane bounds pass
+  and computes sidebar max from that snapshot without the old fixed-point loop.
+- High-confidence dead CSS from the retired Markdown class renderer was
+  removed, and the Files heading icon selector now uses an explicit
+  `file-changes-view__heading-icon` class instead of the non-existent `.oc-icon`
+  convention.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/pane-config.test.ts packages/overlay/test/message-image-preview.test.ts packages/overlay/test/browser-preview-panel.test.ts packages/overlay/test/overlay-architecture-guards.test.ts packages/overlay/test/markdown-safety.test.ts packages/overlay/test/agent-file-changes.test.ts packages/overlay/test/css-structural-validity.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS after one implementation correction: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/titlebar-menubar.test.ts`.
+- PASS cumulative browser coverage before that correction except for the
+  corrected titlebar click path: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts packages/overlay/test/browser/titlebar-menubar.test.ts packages/overlay/test/browser/command-palette.test.ts packages/overlay/test/browser/image-preview-accessible-name.test.ts packages/overlay/test/browser/image-preview-copy.test.ts packages/overlay/test/browser/markdown-syntax-contrast-browser.test.ts packages/overlay/test/browser/toolbar-diff-navigation.test.ts`.
+- Visual QA reviewed:
+  `.scratch/left-pane-resizer-illegal-narrow-legal-frame.png`,
+  `.scratch/titlebar-run-checkbox-menuitem-focus.png`,
+  `.scratch/titlebar-view-radio-focus.png`,
+  `.scratch/command-palette-dialog-primitive.png`,
+  `.scratch/image-preview-mounted-markdown-dialog.png`,
+  `.scratch/markdown-syntax-contrast-light.png`,
+  `.scratch/file-changes-light-contrast.png`, and
+  `.scratch/file-changes-keyboard-row-focus.png`.
+
+### Self Review
+
+- Rechecked raw viewport-height usage: production surface CSS no longer has raw
+  `vh`; only `base.css` owns the raw viewport height for legal shell
+  construction.
+- Rechecked Dialog: an intermediate `width: 100cqw` change made the titlebar log
+  dialog close button unclickable in an illegal narrow browser fixture, so the
+  final implementation keeps dialog width viewport-clickable and only moves
+  height and drag bounds to the legal shell.
+- Rechecked pane bounds: pointer, keyboard, and ARIA paths still share the
+  pane service owner, but max width no longer re-enters DOM geometry reads in a
+  fixed-point loop.
+- Rechecked dead CSS: Markdown retired class selectors and the `.oc-icon`
+  heading selector now have negative tests so they cannot silently return.

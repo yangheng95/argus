@@ -556,7 +556,7 @@ body[data-resizing="true"] .pane-resizer::after {
 
   .center-workbench,
   .center-workbench[data-open="true"] {
-    flex: 0 0 min(34vh, calc(340px * var(--ui-scale)));
+    flex: 0 0 min(calc(var(--ui-overlay-shell-height) * 0.34), calc(340px * var(--ui-scale)));
     width: 100%;
     min-width: 0;
     max-width: none;
@@ -580,9 +580,9 @@ body[data-resizing="true"] .pane-resizer::after {
 
   .left-activity-shell,
   .sidebar {
-    flex: 0 0 min(26vh, calc(240px * var(--ui-scale)));
-    min-height: min(18vh, calc(160px * var(--ui-scale)));
-    max-height: min(36vh, calc(320px * var(--ui-scale)));
+    flex: 0 0 min(calc(var(--ui-overlay-shell-height) * 0.26), calc(240px * var(--ui-scale)));
+    min-height: min(calc(var(--ui-overlay-shell-height) * 0.18), calc(160px * var(--ui-scale)));
+    max-height: min(calc(var(--ui-overlay-shell-height) * 0.36), calc(320px * var(--ui-scale)));
   }
 
   .left-activity-shell .sidebar,
@@ -600,9 +600,9 @@ body[data-resizing="true"] .pane-resizer::after {
   }
 
   .sections {
-    flex: 0 0 min(34vh, calc(360px * var(--ui-scale)));
-    min-height: min(28vh, calc(260px * var(--ui-scale)));
-    max-height: min(42vh, calc(420px * var(--ui-scale)));
+    flex: 0 0 min(calc(var(--ui-overlay-shell-height) * 0.34), calc(360px * var(--ui-scale)));
+    min-height: min(calc(var(--ui-overlay-shell-height) * 0.28), calc(260px * var(--ui-scale)));
+    max-height: min(calc(var(--ui-overlay-shell-height) * 0.42), calc(420px * var(--ui-scale)));
   }
 
   .sidebar[data-collapsed="true"],
@@ -623,7 +623,7 @@ body[data-resizing="true"] .pane-resizer::after {
 @container overlay-shell (width < 520px) {
   .center-workbench,
   .center-workbench[data-open="true"] {
-    flex: 0 0 min(60vh, calc(480px * var(--ui-scale)));
+    flex: 0 0 min(calc(var(--ui-overlay-shell-height) * 0.6), calc(480px * var(--ui-scale)));
   }
 
   .center-workbench-view[data-open="true"] {

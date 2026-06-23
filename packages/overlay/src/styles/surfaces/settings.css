@@ -927,7 +927,7 @@ button.s-row:focus-visible {
 .log-viewer {
   height: clamp(
     calc(220px * var(--ui-scale)),
-    calc(100vh - calc(160px * var(--ui-scale))),
+    calc(var(--ui-overlay-shell-height) - calc(160px * var(--ui-scale))),
     calc(520px * var(--ui-scale))
   );
   max-height: calc(520px * var(--ui-scale));
@@ -1072,7 +1072,7 @@ button.s-row:focus-visible {
   --settings-surface-hover: color-mix(in srgb, var(--surface-hover) 72%, var(--surface));
   --settings-surface-muted: color-mix(in srgb, var(--surface) 82%, var(--surface-inset));
   --settings-surface-emphasis: color-mix(in srgb, var(--surface-strong) 74%, var(--surface));
-  min-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(80px * var(--ui-scale))));
+  min-height: min(calc(620px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - calc(80px * var(--ui-scale))));
 }
 
 .dialog-header-actions .oc-button[data-ui="config-dialog-close"] {
@@ -1100,7 +1100,8 @@ button.s-row:focus-visible {
    * the modal. The 120px reservation covers the header + close button
    * row plus the dialog's own padding. */
   max-height: calc(
-    min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale))) - calc(120px * var(--ui-scale))
+    min(calc(var(--ui-overlay-shell-height) - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale))) -
+      calc(120px * var(--ui-scale))
   );
 }
 

@@ -21,8 +21,9 @@ function clampOffset(value: number, min: number, max: number): number {
 
 function clampDialogOffset(form: HTMLElement, x: number, y: number): { x: number; y: number } {
   const rect = form.getBoundingClientRect()
-  const availableX = Math.max(0, (window.innerWidth - rect.width) / 2 - DIALOG_VIEWPORT_MARGIN)
-  const availableY = Math.max(0, (window.innerHeight - rect.height) / 2 - DIALOG_VIEWPORT_MARGIN)
+  const shellRect = document.body.getBoundingClientRect()
+  const availableX = Math.max(0, (shellRect.width - rect.width) / 2 - DIALOG_VIEWPORT_MARGIN)
+  const availableY = Math.max(0, (shellRect.height - rect.height) / 2 - DIALOG_VIEWPORT_MARGIN)
   return {
     x: clampOffset(x, -availableX, availableX),
     y: clampOffset(y, -availableY, availableY),

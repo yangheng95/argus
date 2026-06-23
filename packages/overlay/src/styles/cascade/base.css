@@ -83,6 +83,11 @@
 }
 
 body {
+  --ui-overlay-shell-height: min(
+    100vh,
+    calc(100vw * var(--ui-overlay-min-height-units) / var(--ui-overlay-min-width-units))
+  );
+
   font-family: var(--font);
   font-size: var(--ui-font-body);
   line-height: 1.5;
@@ -97,7 +102,7 @@ body {
   width: 100vw;
   min-width: var(--ui-overlay-min-width);
   min-height: var(--ui-overlay-min-height);
-  height: min(100vh, calc(100vw * var(--ui-overlay-min-height-units) / var(--ui-overlay-min-width-units)));
+  height: var(--ui-overlay-shell-height);
   display: flex;
   flex-direction: column;
   transition: background var(--ui-duration-base) var(--ui-timing-standard);

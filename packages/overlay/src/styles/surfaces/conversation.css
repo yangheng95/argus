@@ -1022,7 +1022,7 @@
 .project-worktree-list {
   display: grid;
   gap: calc(3px * var(--ui-scale));
-  max-height: min(calc(320px * var(--ui-scale)), calc(100vh - 120px));
+  max-height: min(calc(320px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - 120px));
   overflow: auto;
 }
 

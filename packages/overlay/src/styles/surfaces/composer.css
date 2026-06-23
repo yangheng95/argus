@@ -378,7 +378,7 @@
 }
 
 .prompt-profile-select-listbox {
-  max-height: min(calc(240px * var(--ui-scale)), calc(100vh - 32px));
+  max-height: min(calc(240px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - 32px));
 }
 
 .prompt-profile-select-option-copy {
