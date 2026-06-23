@@ -76,6 +76,11 @@ export type ResearchDraft = z.infer<typeof ResearchBriefDraftSchema>
 
 export type ResearchSubmit = z.infer<typeof ResearchFinalizeSchema>
 
+export interface ResearchToolCallReplay {
+  toolName: string
+  input: unknown
+}
+
 export interface ResearchCollector {
   scope?: ResearchScope
   summary?: string
@@ -342,6 +347,10 @@ function rejectFinalized(collector: ResearchCollector): string | undefined {
   return collector.finalized ? "Error: research brief already finalized; collector is closed." : undefined
 }
 
+function markCollectorMutated(collector: ResearchCollector): void {
+  collector.semantic_error = undefined
+}
+
 function upsertByID<T extends { id: string }>(items: T[], item: T): "registered" | "overwritten" {
   const idx = items.findIndex((existing) => existing.id === item.id)
   if (idx >= 0) {
@@ -429,7 +438,9 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       execute: async (input) => {
         const closed = rejectFinalized(collector)
         if (closed) return closed
-        collector.scope = ResearchScopeSchema.parse(input)
+        const parsed = ResearchScopeSchema.parse(input)
+        markCollectorMutated(collector)
+        collector.scope = parsed
         return "OK: research scope set"
       },
     }),
@@ -440,6 +451,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       execute: async ({ summary }) => {
         const closed = rejectFinalized(collector)
         if (closed) return closed
+        markCollectorMutated(collector)
         collector.summary = summary
         return "OK: research summary set"
       },
@@ -452,6 +464,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchEvidenceRefSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.evidence_index, parsed)
         return `OK: evidence "${parsed.id}" ${mode} (${collector.evidence_index.length} total)`
       },
@@ -464,6 +477,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchFactSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.facts, parsed)
         return `OK: fact "${parsed.id}" ${mode} (${collector.facts.length} total)`
       },
@@ -478,6 +492,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const parsed = ResearchInferenceSchema.parse(input)
         const factErr = unknownFactIDError(collector, `inference "${parsed.id}".based_on_fact_ids`, parsed.based_on_fact_ids)
         if (factErr) return factErr
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.inferences, parsed)
         return `OK: inference "${parsed.id}" ${mode} (${collector.inferences.length} total)`
       },
@@ -492,6 +507,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const parsed = ResearchProblemStatementSchema.parse(input)
         const factErr = unknownFactIDError(collector, `problem "${parsed.id}".fact_ids`, parsed.fact_ids)
         if (factErr) return factErr
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.problem_statements, parsed)
         return `OK: problem "${parsed.id}" ${mode} (${collector.problem_statements.length} total)`
       },
@@ -506,6 +522,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const parsed = ResearchUserNeedSchema.parse(input)
         const factErr = unknownFactIDError(collector, `need "${parsed.id}".fact_ids`, parsed.fact_ids)
         if (factErr) return factErr
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.user_needs, parsed)
         return `OK: need "${parsed.id}" ${mode} (${collector.user_needs.length} total)`
       },
@@ -520,6 +537,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const parsed = ResearchConstraintSchema.parse(input)
         const factErr = unknownFactIDError(collector, `constraint "${parsed.id}".fact_ids`, parsed.fact_ids)
         if (factErr) return factErr
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.constraints, parsed)
         return `OK: constraint "${parsed.id}" ${mode} (${collector.constraints.length} total)`
       },
@@ -532,6 +550,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchDocumentSectionSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.document_outline, parsed)
         return `OK: document section "${parsed.id}" ${mode} (${collector.document_outline.length} total)`
       },
@@ -550,6 +569,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
             `${options.expectedWebpageSourceUrl}; received ${parsed.source_url}.`
           )
         }
+        markCollectorMutated(collector)
         collector.webpage_contract_source = parsed
         return "OK: webpage contract source set"
       },
@@ -562,6 +582,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageFunctionalSurfaceSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_functional_surfaces, parsed)
         return `OK: webpage functional surface "${parsed.id}" ${mode}`
       },
@@ -574,6 +595,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageVisualLayoutSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_visual_layout, parsed)
         return `OK: webpage visual layout "${parsed.id}" ${mode}`
       },
@@ -586,6 +608,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageStyleRequirementSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_style_requirements, parsed)
         return `OK: webpage style requirement "${parsed.id}" ${mode}`
       },
@@ -598,6 +621,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageInteractionStateSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_interaction_states, parsed)
         return `OK: webpage interaction state "${parsed.id}" ${mode}`
       },
@@ -610,6 +634,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageDataInventorySchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_data_content_inventory, parsed)
         return `OK: webpage data inventory "${parsed.id}" ${mode}`
       },
@@ -622,6 +647,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageAcceptanceCriterionSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_fidelity_acceptance, parsed)
         return `OK: webpage fidelity acceptance "${parsed.id}" ${mode}`
       },
@@ -634,6 +660,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchWebpageFidelityRiskSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.webpage_fidelity_risks, parsed)
         return `OK: webpage fidelity risk "${parsed.id}" ${mode}`
       },
@@ -646,6 +673,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchSubpageTaskSchema.parse(input)
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.subpage_research_tasks, parsed)
         return `OK: subpage research task "${parsed.id}" ${mode}`
       },
@@ -660,6 +688,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const parsed = ResearchOpenQuestionSchema.parse(input)
         const factErr = unknownFactIDError(collector, `open_question "${parsed.id}".related_fact_ids`, parsed.related_fact_ids)
         if (factErr) return factErr
+        markCollectorMutated(collector)
         const mode = upsertByID(collector.open_questions, parsed)
         return `OK: open question "${parsed.id}" ${mode} (${collector.open_questions.length} total)`
       },
@@ -671,7 +700,9 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       execute: async (input) => {
         const closed = rejectFinalized(collector)
         if (closed) return closed
-        return upsertBundleSection(collector, ResearchBundleMarkdownSectionSchema.parse(input))
+        const parsed = ResearchBundleMarkdownSectionSchema.parse(input)
+        markCollectorMutated(collector)
+        return upsertBundleSection(collector, parsed)
       },
     }),
 
@@ -682,6 +713,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchBundleEvidenceNoteSchema.parse(input)
+        markCollectorMutated(collector)
         const idx = collector.bundle.evidence_notes.findIndex((existing) => existing.evidence_id === parsed.evidence_id)
         if (idx >= 0) {
           collector.bundle.evidence_notes[idx] = parsed
@@ -699,6 +731,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchBundleCitationEntrySchema.parse(input)
+        markCollectorMutated(collector)
         const idx = collector.bundle.citation_map.findIndex((existing) => existing.claim_id === parsed.claim_id)
         if (idx >= 0) {
           collector.bundle.citation_map[idx] = parsed
@@ -766,10 +799,28 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
   }
+  const nonReplayableToolNames = new Set(["inspect_research_result_status", "submit_research_brief"])
+  function isResearchOutputMutationToolName(toolName: string): toolName is keyof typeof tools {
+    return Object.prototype.hasOwnProperty.call(tools, toolName) && !nonReplayableToolNames.has(toolName)
+  }
   return {
     tools,
     getCollector: () => collector,
     buildReport: () => buildResearchReport(collector),
+    isReadyToSubmit: () =>
+      !collector.finalized && !collector.semantic_error && researchMissingActions(collector, options).length === 0,
+    async replayUpdateToolCalls(calls: Iterable<ResearchToolCallReplay>) {
+      let replayed = 0
+      for (const call of calls) {
+        if (!isResearchOutputMutationToolName(call.toolName)) continue
+        const outputTool = tools[call.toolName]
+        const execute = outputTool.execute
+        if (!execute) throw new Error(`research output tool ${call.toolName} has no execute handler`)
+        await execute(call.input as never, {} as never)
+        replayed++
+      }
+      return replayed
+    },
     reset() {
       collector = emptyCollector()
       return collector

@@ -977,7 +977,12 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
             }
             throw err
           }
-          finalMessage = (await SessionPrompt.loop({ sessionID: session.id })) as Message.WithParts
+          finalMessage = (await SessionContext.provide(session, () =>
+            Instance.provide({
+              directory: session.directory,
+              fn: () => SessionPrompt.loop({ sessionID: session.id }),
+            }),
+          )) as Message.WithParts
           return
         }
         finalMessage = (await SessionPrompt.prompt(promptArgs)) as Message.WithParts
