@@ -27,7 +27,7 @@ toolbar/panel operations feel stuck.
 | `2026-06-22-pane-semantics-layout-frame.md` | Pane layout and ARIA semantics remain owned by `services/pane.ts`. |
 | Live 7878 visual evidence | `700x720` viewport shows titlebar wordmark/menu overlap and crowded project chrome. |
 | Archimedes read-only audit | `.titlebar-brand` is forced to `32px` at `max-width: 760px`, while `.brand-guide-copyblock` stays visible until `520px`. |
-| Zeno read-only audit | `900px` is below the existing `--ui-breakpoint-xl: 1120px` desktop layout boundary; native overlay should reject that geometry instead of treating it as a valid full workbench. |
+| Zeno read-only audit | `900px` is below the generated `1120px` desktop layout boundary from `tauri.conf.json`; native overlay should reject that geometry instead of treating it as a valid full workbench. |
 
 ## Call Point Inventory
 
@@ -113,8 +113,8 @@ brand slot to icon width while leaving the wordmark visible.
 
 ## Self Review
 
-- The `1120x720` native minimum follows the existing `--ui-breakpoint-xl`
-  boundary and removes the old `900x480`/`760x480` illegal native geometry.
+- The `1120x720` native minimum follows the generated Tauri config legal
+  frame and removes the old `900x480`/`760x480` illegal native geometry.
 - Pane and center workbench minimums now resolve from layout tokens, removing
   `120 * scale`, `300 * scale`, `128`, and `80 * scale` independent width
   sources.

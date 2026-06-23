@@ -96,11 +96,16 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   const main = readFileSync(join(repoRoot, "packages/overlay/src/main.tsx"), "utf8")
   const windowResizeStart = main.indexOf("function applyWindowResize(): void")
   const windowResizeEnd = main.indexOf("const applyWindowResizeOnFrame", windowResizeStart)
+  const centerPointerDownStart = main.indexOf("function startCenterWorkbenchPanelResize")
+  const centerPointerDownEnd = main.indexOf("function centerWorkbenchPanelResizeBaseline", centerPointerDownStart)
 
   expect(windowResizeStart).toBeGreaterThan(0)
   expect(windowResizeEnd).toBeGreaterThan(windowResizeStart)
+  expect(centerPointerDownStart).toBeGreaterThan(0)
+  expect(centerPointerDownEnd).toBeGreaterThan(centerPointerDownStart)
 
   const windowResizeFunction = main.slice(windowResizeStart, windowResizeEnd)
+  const centerPointerDownFunction = main.slice(centerPointerDownStart, centerPointerDownEnd)
 
   expect(main).toContain('import { createAnimationFrameScheduler } from "./utils/animation-frame"')
   expect(main).toContain("const applyWindowResizeOnFrame = createAnimationFrameScheduler(applyWindowResize)")
@@ -125,6 +130,11 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.schedule()")
   expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.cancel()")
   expect(main).toContain("applyPendingCenterWorkbenchPanelResize()")
+  expect(main).toContain("function centerWorkbenchPanelResizeBaseline(")
+  expect(main).toContain("const baseline = centerWorkbenchPanelResizeBaseline(drag)")
+  expect(centerPointerDownFunction).toContain("baseline: null")
+  expect(centerPointerDownFunction).toContain("document.body.dataset.centerWorkbenchPanelResizing")
+  expect(centerPointerDownFunction).not.toContain("centerWorkbenchPanelResizeMetrics(")
   expect(main).not.toContain("updateCenterWorkbenchPanelWeights(drag, event.clientX")
 })
 
@@ -234,7 +244,8 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   expect(settingsWeightEffect).not.toContain("renderCenterWorkbenchPanelWeights()")
   expect(settingsWeightEffect).not.toContain("renderCenterWorkbenchPanelSeparators()")
   expect(settingsWeightEffect).not.toContain("untrack(renderCenterWorkbenchPanelLayout)")
-  expect(dragApplyFunction).toContain("updateCenterWorkbenchPanelWeights(drag, clientX - drag.leftRect.left)")
+  expect(dragApplyFunction).toContain("const baseline = centerWorkbenchPanelResizeBaseline(drag)")
+  expect(dragApplyFunction).toContain("updateCenterWorkbenchPanelWeights(baseline, clientX - baseline.leftRect.left)")
   expect(dragApplyFunction).not.toContain("renderCenterWorkbenchPanelWeights()")
   expect(dragApplyFunction).not.toContain("renderCenterWorkbenchPanelSeparators()")
   expect(keyboardResizeFunction).toContain("updateCenterWorkbenchPanelWeights(metrics, leftWidth)")

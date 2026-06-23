@@ -47,9 +47,9 @@ import {
   applyTheme,
   applyZoom,
   applyOpacity,
-  sanitizeZoom,
   handleZoomHotkey,
   installSystemThemeListener,
+  stepZoom,
   toggleDevtools,
 } from "./services/theme"
 import { bumpWorkspaceEpoch, settingsStore, setSettingsStore, saveSettings } from "./store/settings"
@@ -937,9 +937,8 @@ function installGlobalBridges(): void {
     saveSettings()
   }
   ;(window as any).stepZoom = (delta: number) => {
-    const next = sanitizeZoom((settingsStore.zoom || 1) + delta)
+    const next = stepZoom(delta)
     setSettingsStore("zoom", next)
-    applyZoom(next)
     saveSettings()
   }
   // Test hook: snapshot the current card tree as a flat JSON shape. Used by
@@ -1865,6 +1864,11 @@ interface CenterWorkbenchPanelResizeMetrics {
   range: CenterWorkbenchResizeRange
 }
 
+type CenterWorkbenchPanelResizeBaseline = Pick<
+  CenterWorkbenchPanelResizeMetrics,
+  "leftPanel" | "rightPanel" | "leftRect" | "totalWidth" | "totalWeight" | "range"
+>
+
 interface CenterWorkbenchPanelGeometrySnapshot {
   views: Record<CenterWorkbenchPanel, HTMLElement | null>
   rects: Partial<Record<CenterWorkbenchPanel, DOMRect>>
@@ -1872,20 +1876,29 @@ interface CenterWorkbenchPanelGeometrySnapshot {
 
 interface CenterWorkbenchPanelResize {
   leftPanel: CenterWorkbenchPanel
-  rightPanel: CenterWorkbenchPanel
-  leftRect: DOMRect
-  totalWidth: number
-  totalWeight: number
-  range: CenterWorkbenchResizeRange
+  baseline: CenterWorkbenchPanelResizeBaseline | null
 }
 
 let centerWorkbenchPanelResize: CenterWorkbenchPanelResize | null = null
 let pendingCenterWorkbenchPanelResizeClientX: number | null = null
 
 function startCenterWorkbenchPanelResize(event: PointerEvent, leftPanel: CenterWorkbenchPanel): void {
-  const metrics = centerWorkbenchPanelResizeMetrics(leftPanel)
-  if (!metrics) return
+  if (!centerWorkbenchRightPanel(leftPanel)) return
   centerWorkbenchPanelResize = {
+    leftPanel,
+    baseline: null,
+  }
+  document.body.dataset.centerWorkbenchPanelResizing = "true"
+  event.preventDefault()
+}
+
+function centerWorkbenchPanelResizeBaseline(
+  drag: CenterWorkbenchPanelResize,
+): CenterWorkbenchPanelResizeBaseline | null {
+  if (drag.baseline) return drag.baseline
+  const metrics = centerWorkbenchPanelResizeMetrics(drag.leftPanel)
+  if (!metrics) return null
+  const baseline: CenterWorkbenchPanelResizeBaseline = {
     leftPanel: metrics.leftPanel,
     rightPanel: metrics.rightPanel,
     leftRect: metrics.leftRect,
@@ -1893,8 +1906,8 @@ function startCenterWorkbenchPanelResize(event: PointerEvent, leftPanel: CenterW
     totalWeight: metrics.totalWeight,
     range: metrics.range,
   }
-  document.body.dataset.centerWorkbenchPanelResizing = "true"
-  event.preventDefault()
+  drag.baseline = baseline
+  return baseline
 }
 
 function applyPendingCenterWorkbenchPanelResize(): void {
@@ -1902,7 +1915,9 @@ function applyPendingCenterWorkbenchPanelResize(): void {
   const clientX = pendingCenterWorkbenchPanelResizeClientX
   pendingCenterWorkbenchPanelResizeClientX = null
   if (!drag || clientX == null) return
-  updateCenterWorkbenchPanelWeights(drag, clientX - drag.leftRect.left)
+  const baseline = centerWorkbenchPanelResizeBaseline(drag)
+  if (!baseline) return
+  updateCenterWorkbenchPanelWeights(baseline, clientX - baseline.leftRect.left)
 }
 
 const applyCenterWorkbenchPanelResizeOnFrame = createAnimationFrameScheduler(applyPendingCenterWorkbenchPanelResize)
@@ -1912,7 +1927,7 @@ disposers.push(() => {
 })
 
 function updateCenterWorkbenchPanelWeights(
-  metrics: Pick<CenterWorkbenchPanelResize, "leftPanel" | "rightPanel" | "totalWidth" | "totalWeight" | "range">,
+  metrics: CenterWorkbenchPanelResizeBaseline,
   rawLeftWidth: number,
 ): void {
   const leftWidth = clampCenterWorkbenchResizeWidth(metrics.range, rawLeftWidth)

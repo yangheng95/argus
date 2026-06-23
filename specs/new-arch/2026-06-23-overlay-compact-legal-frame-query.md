@@ -1,7 +1,7 @@
 # Overlay Compact Legal Frame Query
 
 Date: 2026-06-23
-Status: Verified
+Status: Superseded 2026-06-23 by `2026-06-23-overlay-panel-legal-size-contract.md`
 
 ## Acronyms
 
@@ -12,10 +12,12 @@ Status: Verified
 
 ## Task Definition
 
-Illegal raw browser viewports must not trigger small-panel overlay layouts. The
-overlay shell already has a token-owned legal minimum size and aspect frame; the
-responsive compact rules must read that legal shell size instead of
-`window.innerWidth` through viewport media queries.
+Historical intermediate step. Illegal raw browser viewports must not trigger
+small-panel overlay layouts. This note originally moved compact rules from raw
+viewport media queries to the legal overlay shell; the later legal-size
+contract proved those overlay-shell compact branches unreachable and removed
+them as dead CSS. Current runtime code must follow
+`2026-06-23-overlay-panel-legal-size-contract.md`.
 
 ## Recall
 
@@ -32,8 +34,8 @@ responsive compact rules must read that legal shell size instead of
 | Surface | Evidence | Decision |
 | --- | --- | --- |
 | Legal shell size | `base.css` sets body `min-width`, `min-height`, and aspect-clamped height from overlay tokens. | Keep body as the legal shell and make it the named CSS query container for overlay descendants. |
-| Compact workspace CSS | `workspace.css` still uses `@media (width < 1120px)`, so a 900px browser fixture enters compact layout even though body is clamped to 1120px. | Replace raw viewport media query with a named shell container query. |
-| Compact right toolbar CSS | `activity.css` has the same raw viewport `@media (width < 1120px)`. | Replace with the same named shell container query. |
+| Compact workspace CSS | `workspace.css` used `@media (width < 1120px)`, so a 900px browser fixture entered compact layout even though body was clamped to 1120px. | Superseded: later delete overlay-shell compact branches instead of preserving unreachable small-panel layouts. |
+| Compact right toolbar CSS | `activity.css` had the same raw viewport `@media (width < 1120px)`. | Superseded: later delete overlay-shell compact branches instead of preserving unreachable small-panel layouts. |
 | Other compact CSS | `titlebar.css`, `dialog.css`, `messages.css`, `settings.css`, `workspace-onboarding.css`, `conversation.css`, `composer.css`, and `inspector.css` still had width-based viewport media queries. | Move overlay-wide rules to `overlay-shell` and component-local rules to their existing component containers. |
 | Descendant panel width clamps | Floating panels and inline clamps in `card.css`, `cmdk.css`, `composer.css`, `conn-banner.css`, `conversation.css`, `dialog.css`, `field.css`, `inspector.css`, `messages.css`, `notifications.css`, `titlebar.css`, `workspace-onboarding.css`, and `design-language.css` still used raw `vw`. | Keep `base.css` as the only raw viewport width reader for the legal shell; all descendant width clamps use `cqw`. |
 | Static contract tests | `overlay-window-size-contract.test.ts`, `workspace-surface-consistency.test.ts`, and `overlay-architecture-guards.test.ts` assert raw media query text. | Update them to require shell container query ownership and reject raw viewport width queries. |
@@ -52,8 +54,9 @@ toolbar placement.
 ## Fix Plan
 
 1. Add a named inline-size query container to the legal body shell.
-2. Replace the workspace and right-toolbar compact `@media (width < 1120px)`
-   rules with `@container overlay-shell (width < 1120px)`.
+2. Superseded: the later legal-size cleanup deleted the workspace and
+   right-toolbar compact branches instead of replacing them with a sub-1120
+   overlay-shell container query.
 3. Replace remaining width-based responsive rules with legal shell or
    component container queries.
 4. Replace descendant panel `vw` width clamps with `cqw`, leaving `base.css`
