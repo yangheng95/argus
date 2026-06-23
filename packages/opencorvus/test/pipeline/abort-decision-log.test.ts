@@ -185,4 +185,34 @@ describe("P4 abort decision-log writers — read/write contract", () => {
       },
     })
   })
+
+  test("intent_clarified_user_request is projected as a first-class TaskContext section", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const log = createDecisionLog(taskID)
+        log.append({
+          phase: "intent_analysis",
+          key: "intent_clarified_user_request",
+          value: [
+            "# Original user request",
+            "",
+            "Pixel-copy TradingView while strictly using AInvest design system.",
+            "",
+            "# Clarifying answers",
+            "",
+            "1. Which visual policy governs this clone?",
+            "   answer: AInvest system (Recommended), Preserve layout parity, not brand colors.",
+          ].join("\n"),
+          reason: "Clarified user request for downstream stages.",
+        })
+
+        const snapshot = TaskContext.snapshot(taskID)
+        expect(snapshot).toContain("### Clarified Request")
+        expect(snapshot).toContain("Use this clarified request for downstream scope decisions")
+        expect(snapshot).toContain("AInvest system (Recommended)")
+        expect(snapshot).toContain("Pixel-copy TradingView")
+      },
+    })
+  })
 })

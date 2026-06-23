@@ -50,7 +50,11 @@ export namespace TaskContext {
     )
 
     const decisionLog = createDecisionLog(taskID)
-    const recentDecisions = decisionLog.read().slice(-RECENT_DECISION_LIMIT)
+    const decisions = decisionLog.read()
+    const recentDecisions = decisions.slice(-RECENT_DECISION_LIMIT)
+    const clarifiedRequest = [...decisions]
+      .reverse()
+      .find((entry) => entry.phase === "intent_analysis" && entry.key === "intent_clarified_user_request")
 
     const sections: string[] = []
 
@@ -59,6 +63,16 @@ export namespace TaskContext {
     sections.push(`**Title**: ${task.title}`)
     if (task.request) {
       sections.push(renderUserRequestSection({ heading: "### Request", request: String(task.request), taskID }))
+    }
+    if (clarifiedRequest?.value.trim()) {
+      sections.push("")
+      sections.push("### Clarified Request")
+      sections.push("")
+      sections.push(
+        "Use this clarified request for downstream scope decisions. The original request above remains the audit source.",
+      )
+      sections.push("")
+      sections.push(clarifiedRequest.value)
     }
 
     const designSpecs = Array.isArray(task.design_specs) ? task.design_specs : []

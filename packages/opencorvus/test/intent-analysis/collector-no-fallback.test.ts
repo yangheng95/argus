@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { collectorToResult } from "../../src/intent-analysis/output-tools"
+import { collectorToResult, IntentClarificationInputSchema } from "../../src/intent-analysis/output-tools"
 import type { IntentFinal } from "../../src/intent-analysis/output-tools"
 
 /**
@@ -75,5 +75,45 @@ describe("collectorToResult — no fallback contract", () => {
       final: IntentFinal,
     ) => ReturnType<typeof collectorToResult>
     expect(fn.length).toBe(2)
+  })
+})
+
+describe("intent-analysis clarification schema", () => {
+  test("accepts choice options plus custom free-form answers", () => {
+    const parsed = IntentClarificationInputSchema.parse({
+      header: "Visual Policy",
+      question: "Which visual policy governs this clone?",
+      options: [
+        {
+          label: "AInvest system (Recommended)",
+          description: "Keep the reference structure while using AInvest visual primitives.",
+        },
+        {
+          label: "TradingView pixels",
+          description: "Copy the source brand visuals and relax the AInvest design-system constraint.",
+        },
+      ],
+      multiple: false,
+      custom: true,
+      why_needed: "The prompt gives two incompatible visual authorities.",
+      priority: "blocker",
+    })
+
+    expect(parsed.options).toHaveLength(2)
+    expect(parsed.custom).toBe(true)
+  })
+
+  test("rejects a free-form-only question that disables custom input", () => {
+    expect(() =>
+      IntentClarificationInputSchema.parse({
+        header: "Scope",
+        question: "What should be built?",
+        options: [],
+        multiple: false,
+        custom: false,
+        why_needed: "No selectable answer exists.",
+        priority: "blocker",
+      }),
+    ).toThrow(/Free-form-only clarification questions must set custom=true/)
   })
 })

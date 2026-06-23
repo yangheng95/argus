@@ -88,6 +88,8 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   })
 
   test("analyze_intent schema rejects unknown continuation-like fields", () => {
+    expect(tools.analyze_intent.description).toContain("clarified_user_request")
+    expect(tools.analyze_intent.description).toContain("Do not ask the same blocker again")
     expect(Object.keys(tools.analyze_intent.inputSchema!.shape)).toEqual(["reason"])
     expect(
       tools.analyze_intent.inputSchema!.safeParse({

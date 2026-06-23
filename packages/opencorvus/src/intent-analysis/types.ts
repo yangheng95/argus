@@ -8,9 +8,9 @@
  * and any clarification questions the downstream agents would need
  * answered before they can proceed safely.
  *
- * Not wired into the workflow yet — this module defines the public
- * surface area so callers can invoke `IntentAnalysisAgent.analyze(...)`
- * directly when ready.
+ * Wired into the workflow through the orchestrator `analyze_intent` tool.
+ * The agent itself is still read-only: it records rich clarification requests,
+ * and the orchestrator tool owns surfacing blocker follow-ups to the user.
  */
 
 export type IntentClass = "question" | "bug_fix" | "feature" | "refactor" | "exploration" | "chore" | "unclear"
@@ -28,9 +28,24 @@ export interface IntentSlot {
   confidence: number
 }
 
+export interface IntentClarificationOption {
+  /** Short selectable answer label shown to the operator. */
+  label: string
+  /** One-sentence explanation of when this option should be selected. */
+  description: string
+}
+
 export interface IntentClarification {
+  /** Short label shown as the question header. */
+  header: string
   /** The clarifying question to ask the user. */
   question: string
+  /** Concrete selectable answers. Empty means this is free-form only. */
+  options: IntentClarificationOption[]
+  /** Whether multiple options may be selected. */
+  multiple: boolean
+  /** Whether the user may type a custom free-form answer. */
+  custom: boolean
   /** Why answering this is needed before downstream agents can proceed. */
   why_needed: string
   /** blocker = downstream cannot start without this; nice = helpful but skippable. */
