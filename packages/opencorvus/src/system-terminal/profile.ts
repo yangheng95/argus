@@ -215,7 +215,7 @@ export namespace TerminalProfile {
     {
       id: "bash",
       label: "Bash",
-      scope: "all",
+      scope: "non-win32",
       commandNames: ["bash.exe", "bash"],
       commands: ["bash"],
       args: [],
@@ -255,12 +255,6 @@ export namespace TerminalProfile {
         return {
           ...definition,
           commands: uniqueStrings([options.env.ComSpec, ...definition.commands]),
-        }
-      }
-      if (definition.id === "bash" && options.platform === "win32") {
-        return {
-          ...definition,
-          commands: ["bash.exe", "bash"],
         }
       }
       if (definition.id === "bash") {
@@ -372,12 +366,21 @@ export namespace TerminalProfile {
   export function shouldRegenerateGeneratedProfilesForTest(
     terminal: Config.Terminal,
     resolveCommandForHost: (command: string) => string | undefined,
+    platform: NodeJS.Platform = process.platform,
   ): boolean {
     const profiles = terminal.profiles ?? {}
     const entries = Object.entries(profiles)
     if (entries.length === 0) return false
     const generatedEntries = entries.filter(([id, profile]) => isGeneratedSystemProfile(id, profile))
     if (generatedEntries.length === 0) return false
+    if (
+      generatedEntries.some(([id]) => {
+        const definition = generatedDefinitionForID(id)
+        return definition ? !definitionAppliesToPlatform(definition.scope, platform) : false
+      })
+    ) {
+      return true
+    }
     if (!terminal.default_profile_id || !profiles[terminal.default_profile_id]) {
       return generatedEntries.length === entries.length
     }

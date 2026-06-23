@@ -62,22 +62,29 @@ This is generated-profile host drift, not an invitation to add a fallback shell.
 
 Generated terminal profiles are persisted in project config, but the generated profile shape can be host-specific. A project that carries a generated Linux Bash profile into the Windows host keeps a stale generated config. The current `ensureProjectDefaultProfile()` only replaces missing terminal config or an older single `default` profile. It does not recognize the newer generated Bash profile as replaceable, so every profile list/open request fails before either terminal button can launch.
 
+Follow-up evidence after the first repair: Windows can resolve a `bash.exe`, so the generator wrote a valid generated `bash` profile alongside `powershell`/`pwsh`/`cmd`. The running overlay had already stored `bash` as the selected terminal id when it was the old default, and `reloadTerminalProfileSelection()` preserved that id because it still existed. That made the Claude/Codex launcher keep opening Bash instead of the Windows default terminal profile.
+
 ## Fix Plan
 
 1. Add a generated-profile recognizer inside `TerminalProfile` that classifies only profiles matching OpenCorvus-generated shape: known generated id/label/icon/args/env, and command basenames from the generated definition set.
 2. Replace stale generated profiles when any generated-looking profile command is not resolvable on the current host.
-3. Preserve explicit/custom terminal profiles and their selected default profile when they are valid; do not overwrite custom profiles whose ids collide with generated ids.
-4. Keep explicit/custom invalid terminal profiles fail-loud: rewriting stale generated entries must not mask a separate invalid custom profile.
-5. Keep `setupDefaultProfile()` as the only writer for replacement generated profiles.
-6. Add backend tests for generated Linux Bash drift on Windows-shaped data, custom invalid profile preservation, and mixed custom/generated profile preservation.
-7. Add overlay/browser coverage that terminal and Coding CLI primary buttons become enabled and POST their canonical routes when profile reload succeeds.
-8. Run focused tests, typecheck/build as needed, visual screenshot review, and self-review.
+3. Treat generated profiles that are no longer in the current platform's generated set as drift even when their command resolves.
+4. Generate only native Windows terminal profiles on Windows (`powershell`, `pwsh`, `cmd`). Bash on Windows remains possible only as an explicit custom terminal profile.
+5. Preserve explicit/custom terminal profiles and their selected default profile when they are valid; do not overwrite custom profiles whose ids collide with generated ids.
+6. Keep explicit/custom invalid terminal profiles fail-loud: rewriting stale generated entries must not mask a separate invalid custom profile.
+7. Keep `setupDefaultProfile()` as the only writer for replacement generated profiles.
+8. Keep frontend terminal selection as an explicit override only; a default profile loaded from the server must not be copied into `selectedTerminalProfileID()`.
+9. Add backend tests for generated Linux Bash drift on Windows-shaped data, unsupported generated Bash removal on Windows, custom invalid profile preservation, and mixed custom/generated profile preservation.
+10. Add overlay/browser coverage that terminal and Coding CLI primary buttons become enabled and POST their canonical routes when profile reload succeeds.
+11. Run focused tests, typecheck/build as needed, visual screenshot review, and self-review.
 
 ## Acceptance
 
 - A generated Linux `/bin/bash` terminal config on Windows is rewritten to current-host generated terminal profiles during project bootstrap.
+- A generated Windows `bash.exe` profile is removed from generated Windows terminal config; Windows generated profiles are native Windows shells.
 - Valid custom terminal profiles survive a generated-profile rewrite, including a custom default profile.
 - Custom invalid terminal profiles still fail loudly and are not masked by generated-profile repair.
+- Frontend terminal selection does not persist the server default as an explicit selection; if the server default changes, the launcher follows the new default unless the user explicitly selected a valid custom profile.
 - `/terminal/profiles`, `/terminal/open`, `/coding/cli/profiles`, and `/coding/cli/open` remain the only launcher route surfaces.
 - Claude Code/Codex launch still requires a concrete terminal profile; no fallback terminal is invented at click time.
 - Focused backend tests, overlay tests, browser screenshot evidence, and self-review pass.
