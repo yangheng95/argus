@@ -159,6 +159,13 @@ Agent.run()                                     agent 发起 LLM 调用
 | `session/llm.ts`                                    | Session LLM — 复用 ProviderLLM helpers + plugin/trace/permission                   |
 | `config/config.ts`                                  | Agent model 配置 + Provider 配置                                                   |
 
+## 刷新语义
+
+- 启动和普通模型解析仍然严格离线优先，不隐式访问 models.dev 或 Hexin `/v1/models`。
+- 显式刷新入口统一为 `Provider.refreshCatalog()`，由设置面板 `/provider/refresh` 和 CLI `models --refresh` 共同调用。
+- `ModelsDev.refresh()` 写入远端 registry 时必须保留统一缓存中的本地 provider 槽位（Hexin / OpenCorvus / Kilo），禁止远端 registry 缺少这些 provider 时把本地 live catalog 覆盖回内置最小列表。
+- 当当前配置可解析出 Hexin API key 时，`Provider.refreshCatalog()` 必须在同一显式刷新中拉取 Hexin `/v1/models`，写回统一 `models.json`，并 reset provider/agent 缓存，使设置面板和 agent 模型下拉立即看到 live 模型数。
+
 ## 新增 Provider 三条路径
 
 ### Path 1 — OpenAI 兼容（零代码）

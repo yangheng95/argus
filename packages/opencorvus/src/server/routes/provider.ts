@@ -155,9 +155,9 @@ export const ProviderRoutes = lazy(() =>
     .post(
       "/refresh",
       describeRoute({
-        summary: "Refresh the models.dev registry snapshot",
+        summary: "Refresh the provider model registry",
         description:
-          "Pulls api.json from the configured registry URL and persists it to the per-instance cache; subsequent provider/model lookups use the new data. The CLI runtime never refreshes implicitly — UI button, `opencorvus models --refresh`, and this route are the three explicit entry points.",
+          "Pulls api.json from the configured registry URL, refreshes configured live provider catalogs such as Hexin, and persists the result to the per-instance cache; subsequent provider/model lookups use the new data. The CLI runtime never refreshes implicitly — UI button, `opencorvus models --refresh`, and this route are the three explicit entry points.",
         operationId: "provider.refresh",
         responses: {
           200: {
@@ -168,6 +168,12 @@ export const ProviderRoutes = lazy(() =>
                   z.object({
                     ok: z.boolean(),
                     fetchedAt: z.number().optional(),
+                    hexin: z
+                      .object({
+                        count: z.number(),
+                        ids: z.array(z.string()),
+                      })
+                      .optional(),
                     error: z.string().optional(),
                   }),
                 ),
@@ -177,8 +183,8 @@ export const ProviderRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const result = await ModelsDev.refresh()
-        if (result.ok) {
+        const result = await Provider.refreshCatalog()
+        if (result.ok || result.fetchedAt) {
           // Provider/Agent caches captured the old catalog; reset so the
           // refreshed list is visible to downstream callers immediately.
           Provider.reset()

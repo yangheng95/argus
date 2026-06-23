@@ -241,6 +241,19 @@ export namespace ModelsDev {
     return Flag.OPENCORVUS_MODELS_URL || "https://models.dev"
   }
 
+  const LOCAL_PROVIDER_IDS = ["hexin", "opencorvus", "kilo"] as const
+
+  function localProviderOverlay(
+    current: Record<string, Provider> | undefined,
+    next: Record<string, Provider>,
+  ): Record<string, Provider> {
+    const overlay = { ...next }
+    for (const id of LOCAL_PROVIDER_IDS) {
+      if (current?.[id]) overlay[id] = current[id]
+    }
+    return withLocalProviders(overlay)
+  }
+
   // Catalog resolution is strictly offline-first:
   //   1. the per-instance cache (./models.json) populated by the most recent
   //      explicit refresh,
@@ -297,7 +310,12 @@ export namespace ModelsDev {
         log.error("registry refresh non-2xx", { error })
         return { ok: false, error }
       }
-      await Filesystem.write(filepath, await result.text())
+      const body = (await result.json()) as unknown
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return { ok: false, error: "registry response must be a provider object" }
+      }
+      const current = await Filesystem.readJson<Record<string, Provider>>(filepath).catch(() => undefined)
+      await Filesystem.writeJson(filepath, localProviderOverlay(current, body as Record<string, Provider>), 0o600)
       ModelsDev.Data.reset()
       const fetchedAt = Date.now()
       log.info("registry refreshed", { fetchedAt })

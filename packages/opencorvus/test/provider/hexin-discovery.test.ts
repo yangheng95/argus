@@ -10,6 +10,7 @@ import { ModelsDev } from "../../src/provider/models"
 import { Provider } from "../../src/provider/provider"
 import { discoverHexinModels, refreshHexinCache } from "../../src/provider/hexin-discovery"
 import { GLM_EVALUATION_TEMPERATURE, THINKING_MODEL_TOP_P } from "../../src/provider/sampling"
+import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
 
 const legacyHexinCacheFile = path.join(Global.Path.cache, "hexin-models.json")
@@ -17,6 +18,40 @@ const modelsCacheFile = path.join(Global.Path.cache, "models.json")
 const originalFetch = globalThis.fetch
 const originalKey = process.env.HEXIN_API_KEY
 let originalModelsCache: string | undefined
+
+function registryProvider(id: string): ModelsDev.Provider {
+  return {
+    id,
+    name: id,
+    env: [],
+    npm: "@ai-sdk/openai-compatible",
+    api: `https://${id}.example/v1`,
+    models: {
+      [`${id}-model`]: {
+        id: `${id}-model`,
+        name: `${id} model`,
+        release_date: "",
+        attachment: false,
+        reasoning: false,
+        temperature: true,
+        tool_call: true,
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        limit: {
+          context: 128_000,
+          output: 32_000,
+        },
+        cost: {
+          input: 0,
+          output: 0,
+        },
+        options: {},
+      },
+    },
+  }
+}
 
 beforeEach(async () => {
   originalModelsCache = await fs.readFile(modelsCacheFile, "utf8").catch(() => undefined)
@@ -75,6 +110,121 @@ describe("hexin model discovery", () => {
     expect(Object.keys(models)).toEqual(["hexin-test-model"])
     expect(Object.keys(cached.hexin.models)).toEqual(["hexin-test-model"])
     expect(Object.keys(catalog.hexin.models)).toEqual(["hexin-test-model"])
+  })
+
+  test("models.dev refresh preserves the unified Hexin provider cache", async () => {
+    await ModelsDev.refreshHexinProvider(["live-a", "live-b"])
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ remote: registryProvider("remote") }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof fetch
+
+    const result = await ModelsDev.refresh()
+    ModelsDev.Data.reset()
+    const catalog = await ModelsDev.get()
+    const cached = JSON.parse(await Bun.file(modelsCacheFile).text()) as Record<string, ModelsDev.Provider>
+
+    expect(result.ok).toBe(true)
+    expect(Object.keys(catalog.hexin.models)).toEqual(["live-a", "live-b"])
+    expect(Object.keys(cached.hexin.models)).toEqual(["live-a", "live-b"])
+    expect(catalog.remote.models["remote-model"]).toBeDefined()
+  })
+
+  test("provider catalog refresh fetches Hexin live models when a Hexin key is configured", async () => {
+    const requests: Array<{ url: string; authorization: string | null }> = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      requests.push({ url, authorization: new Headers(init?.headers).get("authorization") })
+      if (url === "https://models.dev/api.json") {
+        return new Response(JSON.stringify({ remote: registryProvider("remote") }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      if (url === "https://aimemodeldev.myhexin.com/litellm/v1/models") {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: "ths-auto-v2" }, { id: "deepseek-v4-pro" }],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        )
+      }
+      throw new Error(`unexpected fetch ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await Provider.refreshCatalog()
+        const providers = await Provider.list()
+
+        expect(result).toMatchObject({ ok: true, hexin: { count: 2 } })
+        expect(Object.keys(providers.hexin.models).sort()).toEqual(["deepseek-v4-pro", "ths-auto-v2"])
+        expect(requests).toEqual([
+          { url: "https://models.dev/api.json", authorization: null },
+          {
+            url: "https://aimemodeldev.myhexin.com/litellm/v1/models",
+            authorization: "Bearer test-hexin-key",
+          },
+        ])
+      },
+    })
+  })
+
+  test("POST /provider/refresh refreshes Hexin models for settings and agent model lists", async () => {
+    const requests: Array<{ url: string; authorization: string | null }> = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      requests.push({ url, authorization: new Headers(init?.headers).get("authorization") })
+      if (url === "https://models.dev/api.json") {
+        return new Response(JSON.stringify({ remote: registryProvider("remote") }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      if (url === "https://aimemodeldev.myhexin.com/litellm/v1/models") {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: "ths-auto-v2" }, { id: "deepseek-v4-pro" }],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        )
+      }
+      throw new Error(`unexpected fetch ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({ git: true })
+
+    const response = await Server.App().request("/provider/refresh", {
+      method: "POST",
+      headers: { "x-opencorvus-directory": tmp.path },
+    })
+    const body = (await response.json()) as { ok: boolean; hexin?: { count: number; ids: string[] }; error?: string }
+
+    expect(response.status).toBe(200)
+    expect(body).toMatchObject({ ok: true, hexin: { count: 2 } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(Object.keys(providers.hexin.models).sort()).toEqual(["deepseek-v4-pro", "ths-auto-v2"])
+      },
+    })
+    expect(requests).toEqual([
+      { url: "https://models.dev/api.json", authorization: null },
+      {
+        url: "https://aimemodeldev.myhexin.com/litellm/v1/models",
+        authorization: "Bearer test-hexin-key",
+      },
+    ])
   })
 
   test("explicit refresh surfaces live fetch failure and preserves the catalog", async () => {
