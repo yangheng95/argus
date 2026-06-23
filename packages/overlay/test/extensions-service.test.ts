@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
-import { deleteAllSkills } from "../src/services/extensions"
+import { deleteAllSkills, loadExtensions } from "../src/services/extensions"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
-import { appStore, setSkills } from "../src/store/app"
+import { appStore, setSkillMounts, setSkills } from "../src/store/app"
 
 const PROJECT_DIR = "C:/Users/example/project"
 
@@ -48,11 +48,73 @@ function fakeSkillDeleteAllTransport(requests: TransportRequest[]): HostTranspor
   }
 }
 
+function fakeExtensionLoadTransport(requests: TransportRequest[]): HostTransport {
+  return {
+    kind: "tauri",
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      requests.push(req)
+      if (req.path === "skill/mounts") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            scope: "project",
+            skills: [
+              {
+                name: "mounted-skill",
+                source: "D:/skills/mounted-skill",
+                source_type: "config_path",
+                mounted_agents: ["build"],
+                unmounted: false,
+              },
+            ],
+            agents: [],
+            matrix: [],
+            project_mounts: { agents: { build: ["mounted-skill"] } },
+            unmounted_count: 0,
+          } as T,
+        }
+      }
+      if (req.path === "mcp") {
+        return { status: 200, ok: true, headers: {}, body: { docs: { status: "connected" } } as T }
+      }
+      throw new Error(`unexpected request ${req.method ?? "GET"} ${req.path}`)
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  }
+}
+
 describe("Extension overlay service", () => {
   afterEach(() => {
     __setHostTransportForTest(undefined)
     configure({ directory: "" })
     setSkills([])
+    setSkillMounts(null)
+  })
+
+  test("loadExtensions uses skill mount matrix as the single skill projection", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest(fakeExtensionLoadTransport(requests))
+    configure({ directory: PROJECT_DIR })
+    setSkills([{ name: "stale-installed-skill" }])
+
+    const result = await loadExtensions()
+
+    expect(requests.map((item) => `${item.method ?? "GET"} ${item.path}`)).toEqual(["GET skill/mounts", "GET mcp"])
+    expect(requests.every((item) => item.query?.directory === PROJECT_DIR)).toBe(true)
+    expect(result.skills.map((item) => item.name)).toEqual(["mounted-skill"])
+    expect(appStore.skills.map((item) => item.name)).toEqual(["mounted-skill"])
+    expect(appStore.skillMounts?.project_mounts).toEqual({ agents: { build: ["mounted-skill"] } })
+    expect(appStore.mcp.docs).toEqual({ status: "connected" })
   })
 
   test("deleteAllSkills refreshes installed projection after partial removal failure", async () => {

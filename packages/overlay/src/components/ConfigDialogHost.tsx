@@ -16,6 +16,7 @@ import { appStore } from "../store/app"
 import { boardStore, activeTaskID } from "../store/board"
 import { settingsStore } from "../store/settings"
 import { closeConfigDialog, setConfigSidebarWidth, switchConfigTab } from "../services/dialog"
+import { activeProjectDirectory } from "../services/project-directory"
 import { dialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog"
 import { getHostTransport } from "../services/host-transport"
 import { t } from "../utils/i18n"
@@ -234,11 +235,11 @@ export function ConfigDialogHost() {
       case "channel":
         return <ChannelsPanel />
       case "skill":
-        return <SkillsPanel />
+        return <SkillsPanel directory={activeProjectDirectory} />
       case "skill-market":
-        return <SkillMarketPanel active={true} />
+        return <SkillMarketPanel active={true} directory={activeProjectDirectory} />
       case "mcp":
-        return <McpPanel />
+        return <McpPanel directory={activeProjectDirectory} />
       case "memory":
         return <MemoryPanel taskID={() => activeTaskID() || undefined} />
       case "network":

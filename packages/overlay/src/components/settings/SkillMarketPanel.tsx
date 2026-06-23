@@ -18,7 +18,6 @@ import { getHostTransport } from "../../services/host-transport"
 import { nativeConfirm, nativeOpen } from "../../utils/native"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
 import {
-  loadInstalledSkills,
   loadSkillMountMatrix,
   loadMcpStatus,
   loadSkillMarket,
@@ -482,10 +481,6 @@ function ExtensionSettingsPanel(props: {
   const builtinCount = createMemo(() => poolSkills().length - customSkills().length)
   const mcpEntries = createMemo(() => Object.entries(mcp()))
 
-  async function refreshInstalledSkills() {
-    return (await loadInstalledSkills()) as SkillItem[]
-  }
-
   async function refreshSkillMounts() {
     if (!currentDirectory()) return undefined
     return await loadSkillMountMatrix()
@@ -495,12 +490,18 @@ function ExtensionSettingsPanel(props: {
     return (await loadMcpStatus()) as Record<string, McpItem>
   }
 
-  async function reloadAll() {
+  async function reloadCurrentPanel() {
     if (!requireActiveDirectory()) return
     setLoading(true)
     setNotice("")
     try {
-      await Promise.all([refreshInstalledSkills(), refreshSkillMounts(), refreshMcpStatus(), loadSkillMarket()])
+      if (props.mode === "mcp") {
+        await refreshMcpStatus()
+      } else if (props.mode === "skill-market") {
+        await Promise.all([refreshSkillMounts(), loadSkillMarket()])
+      } else {
+        await refreshSkillMounts()
+      }
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
@@ -516,7 +517,7 @@ function ExtensionSettingsPanel(props: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source, kind }),
       })
-      await reloadAll()
+      await reloadCurrentPanel()
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
@@ -545,7 +546,7 @@ function ExtensionSettingsPanel(props: {
     if (!(await nativeConfirm(message))) return
     try {
       await deleteAllSkills()
-      await reloadAll()
+      await reloadCurrentPanel()
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
@@ -560,7 +561,7 @@ function ExtensionSettingsPanel(props: {
       await updateConfig((current: any) => {
         delete current.mcp
       })
-      await reloadAll()
+      await reloadCurrentPanel()
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
@@ -578,7 +579,7 @@ function ExtensionSettingsPanel(props: {
           policy: item.recommended_policy || undefined,
         }),
       })
-      await reloadAll()
+      await reloadCurrentPanel()
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
@@ -645,7 +646,7 @@ function ExtensionSettingsPanel(props: {
       })
       setSkillForm({ type: "path", value: "", policy: "ask" })
       setShowAddSkill(false)
-      await reloadAll()
+      await reloadCurrentPanel()
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
@@ -672,7 +673,7 @@ function ExtensionSettingsPanel(props: {
       if (!imported) return
       const installedNames = imported.names?.length ? imported.names.join(", ") : imported.name
       setPanelNotice(t("skill.drop_success", { name: installedNames }), "active")
-      await reloadAll()
+      await reloadCurrentPanel()
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
@@ -749,7 +750,7 @@ function ExtensionSettingsPanel(props: {
   }
 
   async function handleReloadSkills() {
-    await reloadAll()
+    await reloadCurrentPanel()
   }
 
   // Ensure market data is loaded once per active project directory.
@@ -863,7 +864,7 @@ function ExtensionSettingsPanel(props: {
       })
       setMcpForm({ name: "", type: "remote", url: "", command: "", args: "" })
       setShowAddMcp(false)
-      await reloadAll()
+      await reloadCurrentPanel()
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
