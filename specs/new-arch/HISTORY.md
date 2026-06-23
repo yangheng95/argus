@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File | Title |
 | --- | --- |
+| [2026-06-23-task-list-row-directory-selection.md](2026-06-23-task-list-row-directory-selection.md) | Task List Row Directory Selection |
 | [2026-06-23-center-workbench-frame-phase-split.md](2026-06-23-center-workbench-frame-phase-split.md) | Center Workbench Frame Phase Split |
 | [2026-06-23-overlay-row-main-button-primitive.md](2026-06-23-overlay-row-main-button-primitive.md) | Overlay Row Main Button Primitive |
 | [2026-06-23-browser-preview-live-snapshot-scope-owner.md](2026-06-23-browser-preview-live-snapshot-scope-owner.md) | Browser Preview Live Snapshot Scope Owner |
