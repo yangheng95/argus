@@ -1733,12 +1733,6 @@ button.s-row:focus-visible {
   min-height: calc(160px * var(--ui-scale));
 }
 
-@container overlay-shell (width < 900px) {
-  .prompt-profile-layout,
-  .prompt-profile-form {
-    grid-template-columns: 1fr;
-  }
-}
 
 .agent-models-info {
   margin: var(--ui-gap-xs) 0 var(--ui-gap-lg) 0;
@@ -2130,38 +2124,7 @@ button.s-row:focus-visible {
 .provider-catalog-row {
   align-items: start;
 }
-@container overlay-shell (width < 900px) {
-  /* breakpoint: --ui-breakpoint-lg */
-  .provider-command,
-  .provider-settings-row {
-    grid-template-columns: 1fr;
-  }
-  .provider-settings-row {
-    grid-template-areas:
-      "main"
-      "summary"
-      "actions"
-      "key"
-      "result"
-      "models";
-  }
-  .provider-head-actions,
-  .provider-row-actions,
-  .provider-row-summary {
-    justify-content: flex-start;
-    align-items: flex-start;
-  }
-  .provider-api-key-row {
-    grid-template-columns: 1fr;
-  }
-  .provider-section-head {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .provider-catalog-hint {
-    text-align: left;
-  }
-}
+
 
 .agent-models-loading {
   display: flex;

@@ -831,3 +831,93 @@ toolbar panel open and window resize.
 - Rechecked live 7878 only as stale runtime evidence: it still lacks the latest
   shell CSS variables and shows the old bottom-toolbar behavior at 900x900, so
   it was not used as latest-code acceptance evidence and was not refreshed.
+
+## Follow-up 2026-06-23: Remove Dead Overlay-Shell Compact CSS
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User feedback 2026-06-23 | Aspect ratio and minimum panel width are hard legality constraints; illegal small panels must not be preserved as alternate layouts. |
+| Pascal read-only audit | `body` is the only `overlay-shell` container and has `min-width: var(--ui-overlay-min-width)`, so all `@container overlay-shell (width < 1120px)` and smaller branches are unreachable dead CSS. |
+| `2026-06-23-overlay-compact-legal-frame-query.md` | Raw viewport compact media queries were replaced with legal-shell queries to stop illegal browser fixtures from activating compact panel layouts. |
+| `2026-06-23-css-shell-height-minimum-floor` | The legal shell width/height now mirrors the native minimum frame; descendant layout must not reintroduce compact behavior below that frame. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| `base.css` | `body` declares `container: overlay-shell / inline-size` and `min-width: var(--ui-overlay-min-width)`. | Keep the legal container owner. |
+| `workspace.css` | Contains `@container overlay-shell (width < 1120px)` and `< 520px` compact branches that shrink panels and hide non-selected workbench views. | Delete as unreachable and harmful to the legal panel-width contract. |
+| `activity.css` | Contains `@container overlay-shell (width < 1120px)` that turns the right toolbar horizontal. | Delete as the direct stale compact-toolbar branch. |
+| `titlebar.css` | Contains `< 760px` and `< 520px` overlay-shell branches for compact titlebar/menu/brand behavior. | Delete; legal shell never reaches these widths. |
+| `dialog.css`, `messages.css`, `settings.css`, `workspace-onboarding.css` | Contain smaller overlay-shell branches for local component compaction. | Delete the unreachable overlay-shell owners; component-local behavior must use component containers if later required. |
+| `--ui-overlay-min-aspect-ratio` | Defined in tokens and asserted in tests, but not consumed by runtime CSS/TS/Rust. | Remove the duplicate token contract surface. |
+
+### Root Cause
+
+The previous raw viewport compact rules were correctly moved off viewport media
+queries, but they were moved to the legal shell container. Because that
+container is the `body` and the body is clamped to the native minimum width,
+these compact branches can no longer match in valid runtime CSS. Keeping them
+creates a dead second layout path that tests accidentally pin and makes illegal
+small-panel behavior easier to reintroduce.
+
+### Fix Plan
+
+1. Delete all `@container overlay-shell (width < ...px)` blocks under the
+   1120px legal shell minimum.
+2. Remove the unused `--ui-overlay-min-aspect-ratio` token and its test
+   expectation.
+3. Replace existing tests that require narrow overlay-shell branches with guards
+   rejecting them.
+4. Keep component-local container queries such as `chat-workbench`; only the
+   legal shell compact branches are dead.
+
+### Acceptance
+
+- No production CSS contains `@container overlay-shell (width < ...px)`.
+- No tests require or pin overlay-shell compact branches.
+- Runtime legal shell tokens still derive width/height from the same native
+  minimum width/height units.
+- Latest-build visual QA still shows legal right toolbar and center workbench
+  panels at normal and illegal browser fixture sizes.
+
+### Implementation
+
+- Deleted all production `@container overlay-shell (width < ...px)` branches
+  from `activity.css`, `dialog.css`, `messages.css`, `settings.css`,
+  `titlebar.css`, `workspace-onboarding.css`, and `workspace.css`.
+- Removed the unused `--ui-overlay-min-aspect-ratio` token from
+  `design-language.css`.
+- Updated static tests so the legal shell compact branches are rejected instead
+  of required.
+- Kept component-owned container queries, including `chat-workbench`, because
+  those containers can still be narrower than the legal overlay shell.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/overlay-architecture-guards.test.ts packages/overlay/test/workspace-surface-consistency.test.ts packages/overlay/test/provider-settings-layout.test.ts packages/overlay/test/titlebar-brand-guide-primitive.test.ts --timeout 30000`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/side-activity-toolbar-browser.test.ts`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/screenshot-browser-panel-browser.test.ts`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/titlebar-menubar.test.ts`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- Visual QA reviewed:
+  `.scratch/side-activity-toolbar-illegal-narrow-legal-frame.png`,
+  `.scratch/screenshot-browser-panel-browser.png`,
+  `.scratch/screenshot-browser-panel-browser-reopen.png`,
+  `.scratch/titlebar-illegal-narrow-legal-frame.png`,
+  `.scratch/titlebar-top-level-menus.png`, and
+  `.scratch/titlebar-view-range-focus.png`.
+
+### Self Review
+
+- Rechecked production CSS with grep: no `@container overlay-shell (width <`
+  branch remains under `packages/overlay/src`.
+- Rechecked the aspect ratio source: runtime CSS/TS/Rust continue deriving the
+  frame from `--ui-overlay-min-width-units` and
+  `--ui-overlay-min-height-units`; the removed aspect token was not consumed.
+- Rechecked latest-build browser evidence: illegal narrow fixtures render the
+  legal overlay shell instead of compacting the right toolbar or center panels.
+- Rechecked scope: this round did not change component-local container queries,
+  only unreachable overlay-shell compact branches.

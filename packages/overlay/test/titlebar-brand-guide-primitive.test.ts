@@ -49,20 +49,14 @@ describe("titlebar brand guide primitive", () => {
     )
   })
 
-  test("compact brand rules follow the base rules so the menu cannot cover the trigger", () => {
+  test("dead compact brand shell rules stay removed", () => {
     const copyBase = TITLEBAR_CSS.indexOf(".brand-guide-copyblock {")
     const cardBase = TITLEBAR_CSS.indexOf(".brand-guide-card {")
-    const compactCard = TITLEBAR_CSS.indexOf("@container overlay-shell (width < 760px)", cardBase)
     expect(copyBase).toBeGreaterThan(-1)
     expect(cardBase).toBeGreaterThan(-1)
-    expect(compactCard).toBeGreaterThan(cardBase)
+    expect(TITLEBAR_CSS).not.toContain("@container overlay-shell (width < 760px)")
     expect(TITLEBAR_CSS).not.toContain("@media (max-width: 760px)")
-    expect([...TITLEBAR_CSS.matchAll(/\.brand-guide-copyblock\s*\{/g)]).toHaveLength(2)
-    expect(TITLEBAR_CSS.slice(compactCard)).toMatch(/\.brand-guide-copyblock\s*\{\s*display:\s*none/)
-    expect(TITLEBAR_CSS.slice(compactCard)).toMatch(/\.brand-guide-card\s*\{[\s\S]*width:\s*min\(calc\(320px/)
-    expect(TITLEBAR_CSS.slice(compactCard)).toMatch(
-      /\.brand-guide-card\s*\{[\s\S]*transform:\s*translateY\(var\(--ui-titlebar-height\)\)/,
-    )
+    expect([...TITLEBAR_CSS.matchAll(/\.brand-guide-copyblock\s*\{/g)]).toHaveLength(1)
   })
 
   test("guide copy tracks the current titlebar menus without the retired Tools entry", () => {

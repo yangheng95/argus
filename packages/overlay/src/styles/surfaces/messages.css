@@ -157,12 +157,6 @@
   overflow-wrap: anywhere;
 }
 
-@container overlay-shell (width < 520px) {
-  /* breakpoint: --ui-breakpoint-sm */
-  .msg-browser-evidence {
-    grid-template-columns: 1fr;
-  }
-}
 
 .msg-tool-input {
   margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
@@ -837,12 +831,6 @@
   display: none;
 }
 
-@container overlay-shell (width < 520px) {
-  /* breakpoint: --ui-breakpoint-sm */
-  .msg-reasoning {
-    gap: calc(4px * var(--ui-scale));
-  }
-}
 
 .msg-patch {
   display: flex;

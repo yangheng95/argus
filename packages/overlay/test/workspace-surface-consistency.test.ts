@@ -58,9 +58,9 @@ test("center workbench scrolls open panels instead of crushing them", () => {
   const openView = bodyOf('.center-workbench-view[data-open="true"]')
   expect(openView).toContain("min-width: var(--ui-workbench-panel-min-width);")
 
-  expect(WORKSPACE_CSS).toContain("@container overlay-shell (width < 1120px)")
+  expect(WORKSPACE_CSS).not.toMatch(/@container\s+overlay-shell\s+\(width\s*</)
   expect(WORKSPACE_CSS).not.toContain("@media (width < 1120px)")
   expect(WORKSPACE_CSS).toContain('.center-workbench-view[data-open="true"]')
-  expect(WORKSPACE_CSS).toContain("max(var(--ui-workbench-panel-min-width), calc(50cqw))")
+  expect(WORKSPACE_CSS).not.toContain("max(var(--ui-workbench-panel-min-width), calc(50cqw))")
   expect(WORKSPACE_CSS).not.toContain("calc(50vw)")
 })

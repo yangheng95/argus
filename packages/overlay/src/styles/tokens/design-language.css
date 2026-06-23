@@ -108,7 +108,6 @@
   --ui-overlay-min-height-units: 720;
   --ui-overlay-min-width: calc(var(--ui-overlay-min-width-units) * 1px);
   --ui-overlay-min-height: calc(var(--ui-overlay-min-height-units) * 1px);
-  --ui-overlay-min-aspect-ratio: calc(var(--ui-overlay-min-width-units) / var(--ui-overlay-min-height-units));
   --oc-header-height: calc(40px * var(--ui-scale, 1));
   --oc-header-padding-x: calc(6px * var(--ui-scale, 1));
   --oc-header-padding-y: 0;
