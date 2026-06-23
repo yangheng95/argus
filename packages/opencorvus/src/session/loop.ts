@@ -1727,6 +1727,14 @@ export namespace SessionLoop {
         }),
       })
     }
+    if (
+      format.type !== "json_schema" &&
+      terminalToolContract &&
+      !terminalToolContract.isSatisfied() &&
+      terminalToolContract.shouldExposeOnlyTerminalTool()
+    ) {
+      applyTerminalToolExposure(tools, terminalToolContract)
+    }
     if (input.step === 1) {
       SessionSummary.summarize({
         sessionID: input.sessionID,
@@ -2253,6 +2261,17 @@ export namespace SessionLoop {
     if (model?.capabilities?.reasoning) return undefined
     if (contract.shouldExposeOnlyTerminalTool()) return { type: "tool", toolName: contract.toolName }
     return "required"
+  }
+
+  export function applyTerminalToolExposure(tools: Record<string, AITool>, contract: TerminalToolContract): void {
+    if (!contract.shouldExposeOnlyTerminalTool()) return
+    if (contract.isSatisfied()) return
+    const terminalTool = tools[contract.toolName]
+    if (!terminalTool) return
+    for (const name of Object.keys(tools)) {
+      if (name !== contract.toolName) delete tools[name]
+    }
+    tools[contract.toolName] = terminalTool
   }
 
   export type PromptFinalMessageSelection =

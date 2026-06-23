@@ -863,6 +863,140 @@ test("runAgentSession writes child agent report while called from parent session
   })
 }, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
 
+test("runAgentSession continuation loop runs under child session context", async () => {
+  mock.module("@/agent/model", () => ({
+    resolveAgentModel: async () => ({
+      providerID: "test",
+      api: { id: "mock" },
+    }),
+  }))
+  const { runAgentSession } = await import("../../src/agent/runner")
+  const { Session } = await import("../../src/session")
+  const { SessionContext } = await import("../../src/session/context")
+
+  await using tmp = await tmpdir({ git: true })
+
+  let loopAmbientSessionID: string | undefined
+  spyOn(SessionPrompt, "loop").mockImplementation(async (input) => {
+    loopAmbientSessionID = SessionContext.tryUse()?.id
+    return {
+      info: {
+        id: `msg_continuation_loop_${input.sessionID}`,
+        sessionID: input.sessionID,
+        role: "assistant",
+        parentID: undefined,
+        time: { created: Date.now() },
+        agent: "build",
+        providerID: "test",
+        modelID: "mock",
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        path: { cwd: tmp.path, root: tmp.path },
+      },
+      parts: [
+        {
+          id: `prt_continuation_loop_${input.sessionID}`,
+          sessionID: input.sessionID,
+          messageID: `msg_continuation_loop_${input.sessionID}`,
+          type: "text",
+          text: "continued",
+        },
+      ],
+    } as Awaited<ReturnType<typeof SessionPrompt.loop>>
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const parent = await Session.createNext({
+        kind: "orchestrator",
+        title: "Parent orchestrator",
+        directory: tmp.path,
+      })
+      const child = await Session.createNext({
+        kind: "build",
+        parentID: parent.id,
+        title: "Continuation child build",
+        directory: tmp.path,
+      })
+      const now = Date.now()
+      Database.use((db) =>
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: "tsk_runner_continuation_context",
+            project_id: Instance.project.id,
+            session_id: parent.id,
+            source: "test",
+            title: "runner continuation context",
+            request: "exercise continuation session context",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          })
+          .run(),
+      )
+      const continuation = createStageContinuationRequest({
+        taskID: "tsk_runner_continuation_context",
+        stage: "build",
+        sessionID: child.id,
+        parentSessionID: parent.id,
+        normalizedStageInput: { task: "same child continuation" },
+        inputDigest: "digest-continuation-context",
+        failureName: "TerminalToolMissingError",
+        failureMessage: "missing report_build_result",
+        finalizerName: "report_build_result",
+      })
+      const collector = { finalized: true }
+      const toolKit: AgentToolKit<typeof collector> = {
+        tools: {
+          report_build_result: tool({
+            description: "terminal build result",
+            inputSchema: z.object({}),
+            execute: () => {
+              collector.finalized = true
+              return "ok"
+            },
+          }),
+        },
+        getCollector: () => collector,
+        buildReport: () => ({ summary: "ok", detail: "ok" }),
+      }
+
+      await SessionContext.provide(parent, async () => {
+        await runAgentSession({
+          kind: "build",
+          core: BUILD_CORE,
+          sessionTitle: "Continuation child build",
+          parentSessionID: parent.id,
+          taskID: "tsk_runner_continuation_context",
+          continuation: {
+            sessionID: child.id,
+            artifactID: continuation.artifactID,
+            reason: "continue same child",
+            kind: "protocol-finalizer-miss",
+            finalizerName: "report_build_result",
+          },
+          toolKit,
+          terminalTool: {
+            toolName: "report_build_result",
+            isSatisfied: (value) => value.finalized,
+            shouldExposeOnlyTerminalTool: () => false,
+          },
+          buildUserPrompt: () => "unused for continuation",
+        })
+      })
+
+      expect(loopAmbientSessionID).toBe(child.id)
+      expect(findStageContinuationRequest({
+        taskID: "tsk_runner_continuation_context",
+        artifactID: continuation.artifactID,
+      })?.payload.consumed_at).toBeNumber()
+    },
+  })
+}, { timeout: RUNNER_PROMPT_TEST_TIMEOUT_MILLISECONDS })
+
 test("runAgentSessionWithRetry writes exhausted retry report under child session context", async () => {
   mock.module("@/agent/model", () => ({
     resolveAgentModel: async () => ({

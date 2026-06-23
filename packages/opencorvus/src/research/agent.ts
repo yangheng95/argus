@@ -25,6 +25,7 @@ import {
   createResearchOutputTools,
   researchBundleFromDraft,
   type ResearchCollector,
+  type ResearchToolCallReplay,
 } from "./output-tools"
 import {
   prepareWebpagePrdEvidence,
@@ -136,6 +137,13 @@ export async function runResearchSession(
   })
   const expectedWebpageSourceUrl = config.kind === "frontend-research" ? input.sourceUrls?.find(isHttpWebpageUrl) : undefined
   const outputToolKit = createResearchOutputTools({ expectedWebpageSourceUrl })
+  if (input.continuation) {
+    const replayed = await outputToolKit.replayUpdateToolCalls(await completedResearchOutputToolCalls(session.id))
+    log.info(`${config.kind} continuation collector hydrated`, {
+      sessionID: session.id,
+      replayedToolCalls: replayed,
+    })
+  }
 
   log.info(`${config.kind} starting`, {
     title: input.title,
@@ -163,7 +171,7 @@ export async function runResearchSession(
     terminalTool: {
       toolName: "submit_research_brief",
       isSatisfied: (collector) => collector.finalized,
-      shouldExposeOnlyTerminalTool: () => false,
+      shouldExposeOnlyTerminalTool: () => outputToolKit.isReadyToSubmit(),
     },
   })
 
@@ -208,6 +216,20 @@ export async function runResearchSession(
   })
 
   return { brief, bundle, factCheckItems, sessionID: out.session.id }
+}
+
+async function completedResearchOutputToolCalls(sessionID: string): Promise<ResearchToolCallReplay[]> {
+  const messages = await Session.messages({ sessionID })
+  const calls: ResearchToolCallReplay[] = []
+  for (const message of messages) {
+    if (message.info.role !== "assistant") continue
+    for (const part of message.parts) {
+      if (part.type !== "tool") continue
+      if (part.state.status !== "completed") continue
+      calls.push({ toolName: part.tool, input: part.state.input })
+    }
+  }
+  return calls
 }
 
 async function createResearchUtilityTools(

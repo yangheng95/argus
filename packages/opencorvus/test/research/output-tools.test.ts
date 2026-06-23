@@ -3,7 +3,9 @@ import {
   buildResearchBriefFromDraft,
   createResearchOutputTools,
   materializeResearchBundle,
+  type ResearchCollector,
   ResearchFinalizeSchema,
+  type ResearchToolCallReplay,
   researchBundleFromDraft,
 } from "../../src/research/output-tools"
 import { researchRequestHash, validateResearchBriefIntegrity } from "../../src/research/schema"
@@ -133,6 +135,47 @@ async function registerWebpageContract(kit: ReturnType<typeof createResearchOutp
   })
 }
 
+function replayCallsFromCollector(collector: ResearchCollector): ResearchToolCallReplay[] {
+  const calls: ResearchToolCallReplay[] = []
+  if (collector.scope) calls.push({ toolName: "update_research_scope", input: collector.scope })
+  if (collector.summary) calls.push({ toolName: "update_research_summary", input: { summary: collector.summary } })
+  for (const input of collector.evidence_index) calls.push({ toolName: "update_research_evidence", input })
+  for (const input of collector.facts) calls.push({ toolName: "update_research_fact", input })
+  for (const input of collector.inferences) calls.push({ toolName: "update_research_inference", input })
+  for (const input of collector.problem_statements) calls.push({ toolName: "update_research_problem", input })
+  for (const input of collector.user_needs) calls.push({ toolName: "update_research_need", input })
+  for (const input of collector.constraints) calls.push({ toolName: "update_research_constraint", input })
+  for (const input of collector.document_outline) calls.push({ toolName: "update_research_document_section", input })
+  if (collector.webpage_contract_source) {
+    calls.push({ toolName: "update_webpage_contract_source", input: collector.webpage_contract_source })
+  }
+  for (const input of collector.webpage_functional_surfaces) {
+    calls.push({ toolName: "update_webpage_functional_surface", input })
+  }
+  for (const input of collector.webpage_visual_layout) calls.push({ toolName: "update_webpage_visual_layout", input })
+  for (const input of collector.webpage_style_requirements) {
+    calls.push({ toolName: "update_webpage_style_requirement", input })
+  }
+  for (const input of collector.webpage_interaction_states) {
+    calls.push({ toolName: "update_webpage_interaction_state", input })
+  }
+  for (const input of collector.webpage_data_content_inventory) {
+    calls.push({ toolName: "update_webpage_data_inventory", input })
+  }
+  for (const input of collector.webpage_fidelity_acceptance) {
+    calls.push({ toolName: "update_webpage_fidelity_acceptance", input })
+  }
+  for (const input of collector.webpage_fidelity_risks) calls.push({ toolName: "update_webpage_fidelity_risk", input })
+  for (const input of collector.subpage_research_tasks) calls.push({ toolName: "update_subpage_research_task", input })
+  for (const input of collector.open_questions) calls.push({ toolName: "update_research_open_question", input })
+  for (const input of collector.bundle.full_markdown_sections) {
+    calls.push({ toolName: "update_research_bundle_section", input })
+  }
+  for (const input of collector.bundle.evidence_notes) calls.push({ toolName: "update_research_evidence_note", input })
+  for (const input of collector.bundle.citation_map) calls.push({ toolName: "update_research_citation", input })
+  return calls
+}
+
 describe("research output tools", () => {
   test("chunked registration finalizes a valid brief and preserves fact-check items", async () => {
     const kit = await registerMinimalBrief()
@@ -187,6 +230,61 @@ describe("research output tools", () => {
     expect(status).toContain("update_research_scope")
     expect(status).toContain("update_webpage_contract_source")
     expect(kit.getCollector().finalized).toBe(false)
+  })
+
+  test("isReadyToSubmit follows required chunk coverage and semantic validation state", async () => {
+    const kit = createResearchOutputTools({ expectedWebpageSourceUrl: "https://example.com/markets/world-economy/" })
+    expect(kit.isReadyToSubmit()).toBe(false)
+
+    await registerMinimalBrief(kit)
+    expect(kit.isReadyToSubmit()).toBe(false)
+
+    await registerWebpageContract(kit)
+    expect(kit.isReadyToSubmit()).toBe(true)
+
+    await callTool(kit.tools, "update_research_bundle_section", {
+      title: "Evidence Index",
+      evidence_ids: ["ev_missing"],
+      points: ['Quoted label: "Economy overview".'],
+    })
+    expect(kit.isReadyToSubmit()).toBe(true)
+
+    const invalidSubmit = await callTool(kit.tools, "submit_research_brief", { final: true })
+    expect(invalidSubmit).toContain("failed semantic validation")
+    expect(kit.isReadyToSubmit()).toBe(false)
+
+    await callTool(kit.tools, "update_research_bundle_section", {
+      title: "Evidence Index",
+      evidence_ids: ["ev_1"],
+      points: ['Quoted label: "Economy overview".'],
+    })
+    expect(kit.isReadyToSubmit()).toBe(true)
+  })
+
+  test("replayUpdateToolCalls hydrates a fresh continuation collector from completed update tool inputs", async () => {
+    const original = await registerMinimalBrief(
+      createResearchOutputTools({ expectedWebpageSourceUrl: "https://example.com/markets/world-economy/" }),
+    )
+    await registerWebpageContract(original)
+    expect(original.isReadyToSubmit()).toBe(true)
+
+    const fresh = createResearchOutputTools({ expectedWebpageSourceUrl: "https://example.com/markets/world-economy/" })
+    expect(fresh.isReadyToSubmit()).toBe(false)
+
+    const replayed = await fresh.replayUpdateToolCalls([
+      ...replayCallsFromCollector(original.getCollector()),
+      { toolName: "inspect_research_result_status", input: {} },
+      { toolName: "submit_research_brief", input: { final: true } },
+      { toolName: "skill", input: { command: "irrelevant utility tool" } },
+    ])
+
+    expect(replayed).toBe(replayCallsFromCollector(original.getCollector()).length)
+    expect(fresh.getCollector().webpage_contract_source?.source_url).toBe(
+      "https://example.com/markets/world-economy/",
+    )
+    expect(fresh.getCollector().webpage_visual_layout[0]?.id).toBe("layout_desktop_economic_trends")
+    expect(fresh.getCollector().finalized).toBe(false)
+    expect(fresh.isReadyToSubmit()).toBe(true)
   })
 
   test("fact-reference update tools reject unknown fact ids before final submit", async () => {

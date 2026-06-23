@@ -56,6 +56,8 @@ describe("frontend-research agent", () => {
     const source = await Bun.file(new URL("../../src/research/agent.ts", import.meta.url)).text()
     const runAgentSessionCall = source.slice(source.indexOf("const out = await runAgentSession"))
 
+    expect(source).toContain("await outputToolKit.replayUpdateToolCalls")
     expect(runAgentSessionCall).toContain("continuation: input.continuation")
+    expect(runAgentSessionCall).toContain("shouldExposeOnlyTerminalTool: () => outputToolKit.isReadyToSubmit()")
   })
 })

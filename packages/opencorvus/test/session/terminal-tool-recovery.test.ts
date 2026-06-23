@@ -53,6 +53,40 @@ describe("SessionLoop terminal tool recovery", () => {
     })
   })
 
+  test("removes work tools when terminal-only exposure is requested", () => {
+    const contract = {
+      toolName: "submit_research_brief",
+      isSatisfied: () => false,
+      shouldExposeOnlyTerminalTool: () => true,
+    }
+    const tools = {
+      submit_research_brief: {} as any,
+      update_research_fact: {} as any,
+      inspect_research_result_status: {} as any,
+    }
+
+    SessionLoop.applyTerminalToolExposure(tools, contract)
+
+    expect(Object.keys(tools)).toEqual(["submit_research_brief"])
+  })
+
+  test("reasoning models still see only the terminal tool without hard tool_choice", () => {
+    const contract = {
+      toolName: "submit_research_brief",
+      isSatisfied: () => false,
+      shouldExposeOnlyTerminalTool: () => true,
+    }
+    const tools = {
+      submit_research_brief: {} as any,
+      update_research_fact: {} as any,
+    }
+
+    SessionLoop.applyTerminalToolExposure(tools, contract)
+
+    expect(Object.keys(tools)).toEqual(["submit_research_brief"])
+    expect(SessionLoop.terminalToolChoice(contract, tools, { capabilities: { reasoning: true } })).toBeUndefined()
+  })
+
   test("keeps work tools available until collector facts are ready to finalize", () => {
     const contract = {
       toolName: "report_build_result",

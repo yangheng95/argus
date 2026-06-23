@@ -6,6 +6,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
+import { Session } from "../../src/session"
 import { Filesystem } from "../../src/util/filesystem"
 import { Worktree } from "../../src/worktree"
 import { resetDatabase } from "../fixture/db"
@@ -109,6 +110,73 @@ test(
   { timeout: 30_000 },
 )
 
+test(
+  "research continuation hydrates completed update tool calls before terminal readiness is evaluated",
+  async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_research_continuation_hydration"
+    const updateCalls = minimalResearchUpdateCalls()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        seedResearchTask(taskID)
+        const session = await Session.createNext({
+          kind: "deep-research",
+          title: "Deep Research continuation hydration",
+          directory: tmp.path,
+        })
+        await persistCompletedResearchToolCalls(session.id, tmp.path, updateCalls)
+
+        let observedReady = false
+        let observedSummary: string | undefined
+        runnerImpl = async (input) => {
+          observedReady = input.terminalTool.shouldExposeOnlyTerminalTool()
+          observedSummary = input.toolKit.getCollector().summary
+          return {
+            collector: {
+              finalized: true,
+              draft: validResearchDraft(),
+              fact_check_items: [],
+            },
+            session: { id: session.id },
+            finalMessage: { info: { id: "msg_research_continuation_final" } },
+          }
+        }
+
+        const { runResearchSession } = await import("../../src/research/agent")
+        await runResearchSession(
+          {
+            title: "Continuation hydration",
+            request: "Continue the same research session.",
+            taskID,
+            continuation: {
+              sessionID: session.id,
+              artifactID: "art_research_continuation_hydration",
+              reason: "terminal finalizer miss",
+              kind: "protocol-finalizer-miss",
+              finalizerName: "submit_research_brief",
+            },
+          },
+          {
+            kind: "deep-research",
+            core: "Research core",
+            sessionTitlePrefix: "Deep Research",
+            prepareWebpageEvidence: "none",
+            bundlePathKind: "deep-research",
+            retrievalTools: "none",
+            delegation: "Prepare research evidence.",
+          },
+        )
+
+        expect(observedSummary).toBe("Research summary.")
+        expect(observedReady).toBe(true)
+      },
+    })
+  },
+  { timeout: 30_000 },
+)
+
 function seedResearchTask(taskID: string): void {
   const now = Date.now()
   Database.use((db) =>
@@ -126,6 +194,125 @@ function seedResearchTask(taskID: string): void {
       })
       .run(),
   )
+}
+
+function minimalResearchUpdateCalls(): Array<{ toolName: string; input: unknown }> {
+  return [
+    {
+      toolName: "update_research_scope",
+      input: {
+        user_goal: "Prepare PRD input",
+        deliverable_type: "prd",
+        audience: "product",
+        explicit_non_goals: [],
+        assumed_non_goals: [],
+      },
+    },
+    { toolName: "update_research_summary", input: { summary: "Research summary." } },
+    {
+      toolName: "update_research_evidence",
+      input: {
+        id: "ev_1",
+        kind: "web",
+        pointer: "https://example.com",
+        title: "Example",
+        retrieved_at: "2026-05-31T00:00:00.000Z",
+        reliability: "primary",
+        excerpt: "A compact excerpt.",
+        volatile: false,
+      },
+    },
+    { toolName: "update_research_fact", input: { id: "fact_1", statement: "A fact.", evidence_ids: ["ev_1"] } },
+    {
+      toolName: "update_research_inference",
+      input: {
+        id: "inf_1",
+        inference: "An inference.",
+        based_on_fact_ids: ["fact_1"],
+        confidence: "medium",
+      },
+    },
+    { toolName: "update_research_problem", input: { id: "prob_1", statement: "A problem.", fact_ids: ["fact_1"] } },
+    { toolName: "update_research_need", input: { id: "need_1", need: "A need.", fact_ids: ["fact_1"] } },
+    {
+      toolName: "update_research_constraint",
+      input: { id: "con_1", constraint: "A constraint.", fact_ids: ["fact_1"] },
+    },
+    {
+      toolName: "update_research_document_section",
+      input: { id: "sec_1", title: "Section", purpose: "Purpose", evidence_ids: ["ev_1"] },
+    },
+    {
+      toolName: "update_research_open_question",
+      input: { id: "oq_1", question: "A question?", blocking: false, related_fact_ids: ["fact_1"] },
+    },
+    {
+      toolName: "update_research_bundle_section",
+      input: {
+        title: "Evidence Index",
+        evidence_ids: ["ev_1"],
+        points: ['Quoted label: "Economy overview".'],
+      },
+    },
+    {
+      toolName: "update_research_evidence_note",
+      input: {
+        evidence_id: "ev_1",
+        observations: ['The source says "GDP growth".'],
+        artifact_refs: ["source-ir/content-model.json"],
+      },
+    },
+    {
+      toolName: "update_research_citation",
+      input: {
+        claim_id: "fact_1",
+        evidence_ids: ["ev_1"],
+        pointer: "research-bundle.md#evidence-index",
+        usage: "Supports fact_1.",
+      },
+    },
+  ]
+}
+
+async function persistCompletedResearchToolCalls(
+  sessionID: string,
+  directory: string,
+  calls: Array<{ toolName: string; input: unknown }>,
+): Promise<void> {
+  const now = Date.now()
+  const messageID = "msg_research_completed_updates"
+  await Session.persistMessage({
+    info: {
+      id: messageID,
+      sessionID,
+      role: "assistant",
+      parentID: "msg_research_user",
+      time: { created: now, completed: now },
+      agent: "deep-research",
+      providerID: "test",
+      modelID: "mock",
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, total: 0, cache: { read: 0, write: 0 } },
+      path: { cwd: directory, root: directory },
+    },
+    parts: calls.map((call, index) => ({
+      id: `prt_research_completed_update_${index}`,
+      sessionID,
+      messageID,
+      type: "tool",
+      callID: `call_research_completed_update_${index}`,
+      tool: call.toolName,
+      state: {
+        status: "completed",
+        input: call.input,
+        output: "OK",
+        title: call.toolName,
+        metadata: {},
+        time: { start: now + index, end: now + index + 1 },
+      },
+    })),
+    touchSessionID: sessionID,
+  })
 }
 
 function validResearchDraft() {
