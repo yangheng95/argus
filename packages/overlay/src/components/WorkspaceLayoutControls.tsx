@@ -1,6 +1,7 @@
 import { For, createEffect, createMemo, createSignal } from "solid-js"
 import {
   clearTerminalProfileSelection,
+  currentTerminalProfileID,
   defaultTerminalProfileID,
   reloadTerminalProfileSelection,
   selectTerminalProfileID,
@@ -70,16 +71,42 @@ export function WorkspaceLayoutControls() {
     setOpen(false)
   }
 
-  async function openProfile(profileID: string) {
+  async function reloadSelection(cwd: string) {
+    await reloadTerminalProfileSelection({
+      directory: cwd,
+      defaultProfileMissingMessage: t("terminal.default_profile_missing"),
+    })
+  }
+
+  async function openCurrentProfile() {
+    await openProfile({ explicitProfileID: "" })
+  }
+
+  async function openMenuProfile(profileID: string) {
+    await openProfile({ explicitProfileID: profileID })
+  }
+
+  async function openProfile(input: { explicitProfileID: string }) {
     const cwd = activeDirectory().trim()
     if (!cwd) throw new Error("Workspace directory is required")
-    selectTerminalProfileID(profileID)
     close()
+    setLoading(true)
     setError("")
     try {
+      await reloadSelection(cwd)
+      const profileID = input.explicitProfileID || currentTerminalProfileID()
+      if (!profileID) throw new Error("Terminal profile is required")
+      if (!terminalProfiles().some((profile) => profile.id === profileID)) {
+        throw new Error(`Terminal profile is no longer available: ${profileID}`)
+      }
+      if (input.explicitProfileID) {
+        selectTerminalProfileID(profileID)
+      }
       await openSystemTerminal({ cwd, profileID })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -103,7 +130,7 @@ export function WorkspaceLayoutControls() {
       menuAriaLabel={t("terminal.open_menu")}
       primaryDataUI="workspace-terminal-open"
       menuDataUI="workspace-terminal-menu"
-      onPrimaryClick={() => openProfile(selectedProfile()?.id ?? "")}
+      onPrimaryClick={openCurrentProfile}
       onOpenChange={setOpen}
       primaryChildren={
         <span
@@ -125,7 +152,7 @@ export function WorkspaceLayoutControls() {
           <WorkspaceSplitLauncherItem
             class="workspace-terminal-option"
             dataAttributes={{ "data-terminal-profile": profile.id }}
-            onSelect={() => openProfile(profile.id)}
+            onSelect={() => openMenuProfile(profile.id)}
           >
             <span class="workspace-terminal-option-icon" data-terminal-icon={profile.icon} aria-hidden="true">
               <Icon name={terminalIconName(profile.icon)} size={18} />

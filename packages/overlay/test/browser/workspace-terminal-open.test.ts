@@ -187,3 +187,120 @@ test(
   },
   { timeout: 60_000 },
 )
+
+test(
+  "workspace command dock revalidates stale terminal selection before opening",
+  async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
+    const terminalResponses = [
+      {
+        defaultProfileID: "bash",
+        profiles: [
+          { id: "bash", label: "Bash", icon: "bash" },
+          { id: "powershell", label: "Windows PowerShell", icon: "powershell" },
+        ],
+      },
+      {
+        defaultProfileID: "powershell",
+        profiles: [
+          { id: "powershell", label: "Windows PowerShell", icon: "powershell" },
+          { id: "cmd", label: "Command Prompt", icon: "command-prompt" },
+        ],
+      },
+      {
+        defaultProfileID: "powershell",
+        profiles: [
+          { id: "powershell", label: "Windows PowerShell", icon: "powershell" },
+          { id: "cmd", label: "Command Prompt", icon: "command-prompt" },
+        ],
+      },
+    ]
+    const openBodies: Record<string, unknown>[] = []
+    const codingOpenBodies: Record<string, unknown>[] = []
+
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs")
+        return send({
+          branch: "dev",
+          clean: true,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [] })
+      if (path === "/config") return send({ model: "" })
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/coding/cli/profiles") {
+        return send({ profiles: [{ id: "claude-code", label: "Claude Code", icon: "claude-code" }] })
+      }
+      if (path === "/terminal/profiles") {
+        const body = terminalResponses.shift()
+        if (!body) throw new Error("unexpected terminal profile reload")
+        return send(body)
+      }
+      if (path === "/terminal/open" && req.method === "POST") {
+        openBodies.push((await req.json()) as Record<string, unknown>)
+        return send({ ok: true })
+      }
+      if (path === "/coding/cli/open" && req.method === "POST") {
+        codingOpenBodies.push((await req.json()) as Record<string, unknown>)
+        return send({ ok: true })
+      }
+      return send({})
+    })
+
+    const browser = await launchBrowser()
+    try {
+      const page = await browser.newPage()
+      await page.setViewport({ width: 1440, height: 900 })
+      await page.evaluateOnNewDocument((serverUrl) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_server_url", serverUrl)
+      }, server.origin)
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await page.waitForFunction(() => {
+        const button = document.querySelector<HTMLButtonElement>('[data-ui="workspace-terminal-open"]')
+        return !!button && !button.disabled
+      })
+      await page.waitForFunction(() => {
+        const button = document.querySelector<HTMLButtonElement>('[data-ui="workspace-coding-cli-open-default"]')
+        return !!button && !button.disabled
+      })
+
+      await page.click('[data-ui="workspace-coding-cli-open-default"]')
+      const codingBody = await waitFor(() => codingOpenBodies[0] ?? null, "coding CLI open request")
+
+      assert.equal(codingBody.terminalProfileID, "powershell")
+
+      await page.click('[data-ui="workspace-terminal-open"]')
+      const terminalBody = await waitFor(() => openBodies[0] ?? null, "terminal open request")
+
+      assert.equal(terminalBody.profileID, "powershell")
+      assert.equal(terminalResponses.length, 0)
+    } finally {
+      await browser.close()
+      await server.close()
+    }
+  },
+  { timeout: 60_000 },
+)

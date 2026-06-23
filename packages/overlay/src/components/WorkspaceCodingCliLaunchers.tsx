@@ -69,12 +69,17 @@ export function WorkspaceCodingCliLaunchers() {
   async function launch(profile: CodingCliProfile) {
     const directory = activeDirectory().trim()
     if (!directory) throw new Error("Workspace directory is required")
-    const terminalProfileID = currentTerminalProfileID()
-    if (!terminalProfileID) throw new Error("Terminal profile is required")
     close()
     setSelectedCliID(profile.id)
+    setLoading(true)
     setError("")
     try {
+      await reloadTerminalProfileSelection({
+        directory,
+        defaultProfileMissingMessage: t("terminal.default_profile_missing"),
+      })
+      const terminalProfileID = currentTerminalProfileID()
+      if (!terminalProfileID) throw new Error("Terminal profile is required")
       await openCodingCli({
         cliID: profile.id,
         terminalProfileID,
@@ -82,6 +87,8 @@ export function WorkspaceCodingCliLaunchers() {
       })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setLoading(false)
     }
   }
 
