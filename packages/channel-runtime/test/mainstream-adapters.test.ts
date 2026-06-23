@@ -103,8 +103,7 @@ function whatsappSignedRequest(body: unknown, appSecret: string, signature?: str
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-hub-signature-256":
-        signature ?? `sha256=${createHmac("sha256", appSecret).update(raw).digest("hex")}`,
+      "x-hub-signature-256": signature ?? `sha256=${createHmac("sha256", appSecret).update(raw).digest("hex")}`,
     },
     body: raw,
   })
@@ -210,7 +209,13 @@ function msTeamsAuthFixture(appId: string, serviceUrl = "https://smba.trafficman
   publicJwk.endorsements = ["msteams"]
 
   const auth = (
-    overrides: { audience?: string; serviceUrl?: string; issuer?: string; expiresIn?: number; privateKey?: KeyObject } = {},
+    overrides: {
+      audience?: string
+      serviceUrl?: string
+      issuer?: string
+      expiresIn?: number
+      privateKey?: KeyObject
+    } = {},
   ) => {
     const now = Math.floor(Date.now() / 1000)
     const header = jwtSegment({ alg: "RS256", typ: "JWT", kid })
@@ -272,7 +277,13 @@ function googleChatAuthFixture(audience: string) {
   publicJwk.alg = "RS256"
 
   const auth = (
-    overrides: { audience?: string; email?: string; emailVerified?: boolean; expiresIn?: number; privateKey?: KeyObject } = {},
+    overrides: {
+      audience?: string
+      email?: string
+      emailVerified?: boolean
+      expiresIn?: number
+      privateKey?: KeyObject
+    } = {},
   ) => {
     const now = Math.floor(Date.now() / 1000)
     const header = jwtSegment({ alg: "RS256", typ: "JWT", kid })
@@ -1191,7 +1202,9 @@ describe("mainstream adapters", () => {
   <Content><![CDATA[hello]]></Content>
   <MsgId>999</MsgId>
 </xml>`
-    await s.route()(encryptedCallbackXml("http://127.0.0.1:19999/wecom", xml, { receiveId: corpId, token: callbackToken }))
+    await s.route()(
+      encryptedCallbackXml("http://127.0.0.1:19999/wecom", xml, { receiveId: corpId, token: callbackToken }),
+    )
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({
       platform: "wecom",

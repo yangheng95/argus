@@ -44,7 +44,10 @@ export const PromptProfileDefinitionSchema = z
     agents: z
       .record(
         z.string(),
-        z.string().trim().min(1, "prompt profile target overlay cannot be blank; omit the target when no overlay is needed."),
+        z
+          .string()
+          .trim()
+          .min(1, "prompt profile target overlay cannot be blank; omit the target when no overlay is needed."),
       )
       .default({}),
   })
@@ -429,7 +432,9 @@ export namespace PromptProfile {
           throw new Error(`Unknown prompt profile target ${JSON.stringify(target)}.`)
         }
         if (!userTargetSet.has(target) || builtInOnlyTargetSet.has(target)) {
-          throw new Error(`prompt profile target ${target} is built-in-only and cannot be configured by project profiles.`)
+          throw new Error(
+            `prompt profile target ${target} is built-in-only and cannot be configured by project profiles.`,
+          )
         }
       }
     }

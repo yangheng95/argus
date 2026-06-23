@@ -14,14 +14,14 @@ theme changes can drift from the rest of the overlay.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `packages/overlay/src/components/ui/Button.tsx` | `Button` owns the canonical `.oc-button` class and `data-variant`, `data-size`, `data-tone` attributes. |
-| `packages/overlay/src/styles/primitives/button.css` | `.oc-button:focus-visible` owns the shared keyboard focus ring and base hover policy. |
-| `2026-06-18-retire-conversation-goal-strip-residue.md` | `TaskProgressBar` is the single live conversation goal progress surface; retired `goal-chip`/`chatGoalsStrip` selectors must not return. |
-| `2026-06-18-task-progress-pill-focus.md` | Goal pill keyboard focus must stay visible and pill click must keep the existing card-scroll request path. |
-| `packages/overlay/test/browser/task-progress-pill-focus-browser.test.ts` | Existing browser evidence fixture checks real focus styling and Enter activation for a progress pill. |
-| `rg -n "task-progress__fold|task-progress__pill|task-progress__toggle" packages/overlay/src packages/overlay/test specs/new-arch` | The old private selectors are owned by `TaskProgressBar`, `card.css`, and tests. |
+| Source                                                                   | Constraint                                                                                                                               |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/ui/Button.tsx`                          | `Button` owns the canonical `.oc-button` class and `data-variant`, `data-size`, `data-tone` attributes.                                  |
+| `packages/overlay/src/styles/primitives/button.css`                      | `.oc-button:focus-visible` owns the shared keyboard focus ring and base hover policy.                                                    |
+| `2026-06-18-retire-conversation-goal-strip-residue.md`                   | `TaskProgressBar` is the single live conversation goal progress surface; retired `goal-chip`/`chatGoalsStrip` selectors must not return. |
+| `2026-06-18-task-progress-pill-focus.md`                                 | Goal pill keyboard focus must stay visible and pill click must keep the existing card-scroll request path.                               |
+| `packages/overlay/test/browser/task-progress-pill-focus-browser.test.ts` | Existing browser evidence fixture checks real focus styling and Enter activation for a progress pill.                                    |
+| `rg -n "task-progress\_\_fold                                            | task-progress\_\_pill                                                                                                                    | task-progress\_\_toggle" packages/overlay/src packages/overlay/test specs/new-arch` | The old private selectors are owned by `TaskProgressBar`, `card.css`, and tests. |
 
 ## Fix
 

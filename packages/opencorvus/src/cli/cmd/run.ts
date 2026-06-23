@@ -191,9 +191,13 @@ function task(info: ToolProps<typeof TaskTool>) {
 }
 
 function skill(info: ToolProps<typeof SkillTool>) {
+  const rawInput = info.part.state.input
+  const input: Record<string, unknown> =
+    rawInput && typeof rawInput === "object" && !Array.isArray(rawInput) ? (rawInput as Record<string, unknown>) : {}
+  const name = typeof input.name === "string" && input.name.trim().length > 0 ? input.name : "unknown"
   inline({
     icon: "→",
-    title: `Skill "${info.input.name}"`,
+    title: `Skill "${name}"`,
   })
 }
 

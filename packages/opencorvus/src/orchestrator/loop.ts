@@ -143,7 +143,10 @@ export async function runTaskLoop(input: { taskID: string; event?: OrchestratorE
       if (taskLoopChain.get(input.taskID) === next) taskLoopChain.delete(input.taskID)
     })
     .catch((error) => {
-      log.warn("task loop cleanup failed", { taskID: input.taskID, error: error instanceof Error ? error.message : String(error) })
+      log.warn("task loop cleanup failed", {
+        taskID: input.taskID,
+        error: error instanceof Error ? error.message : String(error),
+      })
     })
   return next
 }

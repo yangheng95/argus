@@ -19,23 +19,23 @@ the lanes, and release cleanly without breaking a plain click on the avatar.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate owner, test every code change, visually verify UI work, and commit/push every round. |
-| `2026-05-13-conversation-agent-workflow-rail.md` | ConversationAgentRail is an independent bottom strip, not part of the message scroll flow. |
-| `2026-06-18-conversation-agent-rail-button-primitive.md` | Avatar locate controls must stay on the shared `Button` primitive with explicit `aria-label`. |
-| `2026-06-20-agent-rail-drag-scroll-regression.md` | `attachRailDragScroll` is the single rail drag-scroll implementation; browser coverage must assert real drag, click-not-drag, and screenshot evidence. |
-| Read-only independent audit 2026-06-23 | `setPointerCapture` currently happens only after the movement threshold, so the first move can be lost if it leaves the rail before capture. |
+| Source                                                   | Constraint carried forward                                                                                                                             |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                              | No fallback logic, no duplicate owner, test every code change, visually verify UI work, and commit/push every round.                                   |
+| `2026-05-13-conversation-agent-workflow-rail.md`         | ConversationAgentRail is an independent bottom strip, not part of the message scroll flow.                                                             |
+| `2026-06-18-conversation-agent-rail-button-primitive.md` | Avatar locate controls must stay on the shared `Button` primitive with explicit `aria-label`.                                                          |
+| `2026-06-20-agent-rail-drag-scroll-regression.md`        | `attachRailDragScroll` is the single rail drag-scroll implementation; browser coverage must assert real drag, click-not-drag, and screenshot evidence. |
+| Read-only independent audit 2026-06-23                   | `setPointerCapture` currently happens only after the movement threshold, so the first move can be lost if it leaves the rail before capture.           |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Drag owner | `packages/overlay/src/components/ConversationAgentRail.tsx` `attachRailDragScroll` owns pointerdown/move/up/cancel and click suppression. | Capture the original pointer target on pointerdown in this function and release on pointerup/cancel. Do not add document listeners or a second scroll owner. |
-| Click navigation | `AgentRailRow` renders `.oc-button[data-ui="conversation-agent-rail-locate"]` and calls `locateRecord`. | Preserve click behavior by keeping the 4px drag threshold and click suppression only after threshold crossing. |
-| Browser guard | `packages/overlay/test/browser/conversation-agent-rail-scroll-browser.test.ts` currently moves inside the rail before asserting `data-dragging`. | Add an escape-drag path whose first move leaves the rail and must still scroll due pointer capture. |
-| Source guard | `packages/overlay/test/conversation-agent-rail.test.ts` checks structure and drag-to-scroll ownership. | Add a structural assertion that capture is established before threshold-driven dragging. |
-| CSS state | `conversation.css` styles `.conversation-agent-rail__lanes[data-dragging="true"]`. | Keep the same dataset state; no CSS owner change is needed. |
+| Surface          | Evidence                                                                                                                                         | Decision                                                                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Drag owner       | `packages/overlay/src/components/ConversationAgentRail.tsx` `attachRailDragScroll` owns pointerdown/move/up/cancel and click suppression.        | Capture the original pointer target on pointerdown in this function and release on pointerup/cancel. Do not add document listeners or a second scroll owner. |
+| Click navigation | `AgentRailRow` renders `.oc-button[data-ui="conversation-agent-rail-locate"]` and calls `locateRecord`.                                          | Preserve click behavior by keeping the 4px drag threshold and click suppression only after threshold crossing.                                               |
+| Browser guard    | `packages/overlay/test/browser/conversation-agent-rail-scroll-browser.test.ts` currently moves inside the rail before asserting `data-dragging`. | Add an escape-drag path whose first move leaves the rail and must still scroll due pointer capture.                                                          |
+| Source guard     | `packages/overlay/test/conversation-agent-rail.test.ts` checks structure and drag-to-scroll ownership.                                           | Add a structural assertion that capture is established before threshold-driven dragging.                                                                     |
+| CSS state        | `conversation.css` styles `.conversation-agent-rail__lanes[data-dragging="true"]`.                                                               | Keep the same dataset state; no CSS owner change is needed.                                                                                                  |
 
 ## Root Cause
 

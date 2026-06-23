@@ -22,19 +22,19 @@ keyboard-visible state was not independently visible.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-18-file-explorer-row-button-semantics.md` | File Explorer rows stay as dense row buttons, not an incomplete ARIA tree widget. Directory rows expose `aria-expanded`; the current file row exposes `aria-current`. |
-| `2026-06-18-file-editor-button-primitive.md` | The existing browser fixture opens the real File Explorer through the right toolbar and validates the center workbench, so row focus coverage belongs in that fixture. |
-| `2026-06-19-workspace-split-menu-focus-ring.md` | Hover/highlight styling must not replace a distinct `:focus-visible` ring. |
+| Source                                             | Relevant decision                                                                                                                                                      |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-file-explorer-row-button-semantics.md` | File Explorer rows stay as dense row buttons, not an incomplete ARIA tree widget. Directory rows expose `aria-expanded`; the current file row exposes `aria-current`.  |
+| `2026-06-18-file-editor-button-primitive.md`       | The existing browser fixture opens the real File Explorer through the right toolbar and validates the center workbench, so row focus coverage belongs in that fixture. |
+| `2026-06-19-workspace-split-menu-focus-ring.md`    | Hover/highlight styling must not replace a distinct `:focus-visible` ring.                                                                                             |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "file-explorer-row|file-explorer.*focus-visible|outline:\\s*0|openFile|data-path|file-explorer-accessibility" packages/overlay/src packages/overlay/test specs/new-arch` | Only `inspector.css` owned the File Explorer row visual state. Existing browser coverage clicked rows but did not Tab to rows or assert focus visuals. | Split hover and focus-visible rules and extend the real browser fixture. |
-| `git diff -- packages/overlay/src/styles/surfaces/inspector.css packages/overlay/test/browser/file-explorer-accessibility.test.ts packages/overlay/test/file-explorer-editor.test.ts` | Target files were clean before the fix. | Safe to edit these files without overwriting unrelated worktree changes. |
-| `2026-06-18-file-explorer-row-button-semantics.md` | The established row model is a command button list, not a tree primitive. | Do not introduce tree roles or custom roving-keyboard state. |
+| Sweep                                                                                                                                                                                 | Result                                                                    | Decision                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------- | --------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `rg -n "file-explorer-row                                                                                                                                                             | file-explorer.\*focus-visible                                             | outline:\\s\*0                                                           | openFile | data-path | file-explorer-accessibility" packages/overlay/src packages/overlay/test specs/new-arch` | Only `inspector.css` owned the File Explorer row visual state. Existing browser coverage clicked rows but did not Tab to rows or assert focus visuals. | Split hover and focus-visible rules and extend the real browser fixture. |
+| `git diff -- packages/overlay/src/styles/surfaces/inspector.css packages/overlay/test/browser/file-explorer-accessibility.test.ts packages/overlay/test/file-explorer-editor.test.ts` | Target files were clean before the fix.                                   | Safe to edit these files without overwriting unrelated worktree changes. |
+| `2026-06-18-file-explorer-row-button-semantics.md`                                                                                                                                    | The established row model is a command button list, not a tree primitive. | Do not introduce tree roles or custom roving-keyboard state.             |
 
 ## Fix
 

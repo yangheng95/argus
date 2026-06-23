@@ -308,7 +308,10 @@ describe("frontend-design VisualRegionBinding materializer", () => {
         expect(await Filesystem.exists(path.join(worktreeDir, result.manifestPath))).toBe(false)
         expect(
           await Filesystem.exists(
-            path.join(ProjectRuntimePaths.frontendDesignPaths(worktreeDir, taskID).absoluteDir, "visual-region-bindings"),
+            path.join(
+              ProjectRuntimePaths.frontendDesignPaths(worktreeDir, taskID).absoluteDir,
+              "visual-region-bindings",
+            ),
           ),
         ).toBe(false)
       },

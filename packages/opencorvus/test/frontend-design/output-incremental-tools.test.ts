@@ -48,7 +48,8 @@ async function registerMinimalFrontendResult(kit = createFrontendTemplateOutputT
     props_states: "cards render from fixture rows with normal and empty visual states",
     replacement_boundary: "overview card/list region",
     parity_guard: "Compare rendered desktop screenshot against web-clone-source/reference.png.",
-    project_specific_reason: "The visible surface is page-specific and no existing component evidence is available in this isolated test.",
+    project_specific_reason:
+      "The visible surface is page-specific and no existing component evidence is available in this isolated test.",
   })
   await callTool(tools, "update_frontend_material", {
     title: "Source visual materials",
@@ -92,7 +93,8 @@ async function registerMinimalFrontendResult(kit = createFrontendTemplateOutputT
 }
 
 test("submit_frontend_template exposes a small finalizer schema", () => {
-  const schema = asSchema(createFrontendTemplateOutputTools().tools.submit_frontend_template.inputSchema).jsonSchema as any
+  const schema = asSchema(createFrontendTemplateOutputTools().tools.submit_frontend_template.inputSchema)
+    .jsonSchema as any
 
   expect(Object.keys(schema.properties ?? {}).sort()).toEqual(["fact_check_items", "final"])
   expect(schema.properties).not.toHaveProperty("frontend_template")

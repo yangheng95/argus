@@ -161,9 +161,7 @@ export namespace Log {
         directory: dir,
         file: requestedFile ?? "",
         path: "",
-        message: requestedFile
-          ? `Log file does not exist: ${requestedFile}`
-          : "Current log file is not initialized",
+        message: requestedFile ? `Log file does not exist: ${requestedFile}` : "Current log file is not initialized",
       })
     }
     const lines = await readTailLines(pathname, input.lines).catch((error) => {

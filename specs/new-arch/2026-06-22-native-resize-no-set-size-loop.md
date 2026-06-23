@@ -18,25 +18,25 @@ minimum contract.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no blind patching, test every change, visually verify UI-related changes, and commit/push each round. |
-| `2026-06-22-overlay-viewport-size-contract.md` | Native minimum dimensions are `1120x720`; startup sizing reads the configured main window minimum. |
-| `2026-06-22-overlay-resize-frame-coalescing.md` | Browser resize work is already frame-coalesced; do not add debounce or alternate resize owners. |
-| `2026-06-22-window-resize-center-layout-frame.md` | Center workbench layout has one browser RAF owner after window resize. |
-| Locke read-only resize audit 2026-06-22 | `WindowEvent::Resized` calls `window.set_size(...)`, which can fight the OS during live dragging and cause resize jank. |
+| Source                                            | Constraint carried forward                                                                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                       | No fallback, no gate, no blind patching, test every change, visually verify UI-related changes, and commit/push each round. |
+| `2026-06-22-overlay-viewport-size-contract.md`    | Native minimum dimensions are `1120x720`; startup sizing reads the configured main window minimum.                          |
+| `2026-06-22-overlay-resize-frame-coalescing.md`   | Browser resize work is already frame-coalesced; do not add debounce or alternate resize owners.                             |
+| `2026-06-22-window-resize-center-layout-frame.md` | Center workbench layout has one browser RAF owner after window resize.                                                      |
+| Locke read-only resize audit 2026-06-22           | `WindowEvent::Resized` calls `window.set_size(...)`, which can fight the OS during live dragging and cause resize jank.     |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Native creation minimum | `tauri.conf.json` sets `minWidth: 1120` and `minHeight: 720`. | Keep this as the native live minimum size owner. |
-| Setup minimum | `main.rs` setup calls `window.set_min_size(...)` with `overlay_main_min_size(app.config())`. | Keep; this reinforces the config-owned minimum at runtime without per-resize feedback. |
-| Startup sizing | `startup_overlay_window_size(...)` uses `constrain_overlay_window_size(...)` before initial `window.set_size(...)`. | Keep startup sizing; it runs once, outside user live dragging. |
-| Live resize | `RunEvent::WindowEvent { event: WindowEvent::Resized(size) }` computes a constrained size and calls `window.set_size(...)`. | Remove this branch so OS live resize is not echoed back by the app. |
-| Dead helper | `overlay_window_needs_resize(...)` is only used by the live resize branch. | Delete with the branch. |
-| Static tests | `overlay-window-size-contract.test.ts` currently expects the live resize branch. | Change the contract to reject live resize `set_size` ownership. |
-| Rust tests | Existing Rust tests cover `constrain_overlay_window_size(...)` and startup minimum floor. | Keep them to prove the startup contract remains intact. |
+| Surface                 | Evidence                                                                                                                    | Decision                                                                               |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Native creation minimum | `tauri.conf.json` sets `minWidth: 1120` and `minHeight: 720`.                                                               | Keep this as the native live minimum size owner.                                       |
+| Setup minimum           | `main.rs` setup calls `window.set_min_size(...)` with `overlay_main_min_size(app.config())`.                                | Keep; this reinforces the config-owned minimum at runtime without per-resize feedback. |
+| Startup sizing          | `startup_overlay_window_size(...)` uses `constrain_overlay_window_size(...)` before initial `window.set_size(...)`.         | Keep startup sizing; it runs once, outside user live dragging.                         |
+| Live resize             | `RunEvent::WindowEvent { event: WindowEvent::Resized(size) }` computes a constrained size and calls `window.set_size(...)`. | Remove this branch so OS live resize is not echoed back by the app.                    |
+| Dead helper             | `overlay_window_needs_resize(...)` is only used by the live resize branch.                                                  | Delete with the branch.                                                                |
+| Static tests            | `overlay-window-size-contract.test.ts` currently expects the live resize branch.                                            | Change the contract to reject live resize `set_size` ownership.                        |
+| Rust tests              | Existing Rust tests cover `constrain_overlay_window_size(...)` and startup minimum floor.                                   | Keep them to prove the startup contract remains intact.                                |
 
 ## Root Cause
 

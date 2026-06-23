@@ -33,6 +33,7 @@ async function symlinkIfAvailable(target: string, link: string, type: "file" | "
 
 async function bootstrap() {
   return tmpdir({
+    config: { snapshot: true },
     init: async (dir) => {
       await $`git init`.cwd(dir).quiet()
       const unique = Math.random().toString(36).slice(2)
@@ -51,6 +52,7 @@ async function bootstrap() {
 async function bootstrapCommitted() {
   return tmpdir({
     git: true,
+    config: { snapshot: true },
     init: async (dir) => {
       const unique = Math.random().toString(36).slice(2)
       const aContent = `A${unique}`
@@ -132,6 +134,20 @@ test("track skips a concrete non-git project worktree", async () => {
       } finally {
         processRef.run = originalRun
       }
+    },
+  })
+})
+
+test("track is disabled by default and does not initialize the snapshot cache", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const gitDir = ProjectRuntimePaths.snapshotCacheRoot(Instance.project.worktree, Instance.project.id)
+      await fs.rm(gitDir, { recursive: true, force: true })
+
+      await expect(Snapshot.track()).resolves.toBeUndefined()
+      await expect(fs.access(gitDir)).rejects.toThrow()
     },
   })
 })

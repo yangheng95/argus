@@ -81,11 +81,7 @@ async function validateVisualQaReport(report: VisualQaReport, context: VisualQaO
     if (report.accepted && context.referenceParityRequired && !report.reference_parity.required) {
       issues.push("accepted=true for reference parity requires reference_parity.required=true.")
     }
-    if (
-      report.accepted &&
-      context.referenceParityRequired &&
-      (context.requiredReferenceRegions?.length ?? 0) === 0
-    ) {
+    if (report.accepted && context.referenceParityRequired && (context.requiredReferenceRegions?.length ?? 0) === 0) {
       issues.push(
         "accepted=true for reference parity requires authoritative requiredReferenceRegions from task evidence; self-reported regions are not enough.",
       )
@@ -102,7 +98,9 @@ async function validateVisualQaReport(report: VisualQaReport, context: VisualQaO
     }
     if (report.accepted && refs.size > 0) {
       if (!context.taskID || !context.projectRoot) {
-        issues.push("accepted=true for reference parity requires task-scoped project context to verify comparison evidence.")
+        issues.push(
+          "accepted=true for reference parity requires task-scoped project context to verify comparison evidence.",
+        )
       } else {
         const validEvidence: Array<{ id: string; regionID?: string; viewportID: string }> = []
         for (const evidenceID of refs) {

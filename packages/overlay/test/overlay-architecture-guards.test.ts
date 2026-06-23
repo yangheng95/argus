@@ -393,15 +393,7 @@ describe("overlay architecture guards", () => {
     // language.
     // Themes only swap palette behind those tokens; no `body[data-theme]`
     // selector touches the shell chrome.
-    for (const cls of [
-      "sidebar",
-      "chat",
-      "sections",
-      "section",
-      "gwg",
-      "chat-empty--task",
-      "agent-workflow-warning",
-    ]) {
+    for (const cls of ["sidebar", "chat", "sections", "section", "gwg", "chat-empty--task", "agent-workflow-warning"]) {
       // Negative lookahead `(?![\w-])` instead of `\b`: a dash is a
       // non-word char, so `\bsidebar\b` would falsely match `.sidebar-btn`.
       // The class boundary must reject both word chars and dashes to keep
@@ -478,13 +470,7 @@ describe("overlay architecture guards", () => {
     // chrome. (.llm-status / .llm-notice were retired 2026-05-04 — no
     // remaining call sites in TS/TSX/HTML.)
     expect(readText(join(OVERLAY_ROOT, "src/styles/surfaces/inline-pill.css"))).not.toContain(".extension-status")
-    for (const cls of [
-      "task-row-badge",
-      "section-badge",
-      "gwg-priority-badge",
-      "change-status",
-      "diff-dialog-stat",
-    ]) {
+    for (const cls of ["task-row-badge", "section-badge", "gwg-priority-badge", "change-status", "diff-dialog-stat"]) {
       const themeSelector = new RegExp(
         `body(?:\\[[^\\]]*data-theme[^\\]]*\\]|:is\\([^)]*data-theme[^)]*\\))[^{]*\\.${cls}\\b`,
       )
@@ -811,7 +797,9 @@ describe("overlay architecture guards", () => {
       expect(conversationSurface).toMatch(new RegExp(`\\.vcs-badge\\[data-tone="${tone}"\\]\\s*\\{`))
     }
     expect(conversationSurface).toMatch(/\.task-cwd-dropdown:hover,\s*\.task-cwd-dropdown:focus-within\s*\{/)
-    expect(conversationSurface).toContain('.task-cwd-dropdown:has(.oc-button[data-ui="cwd-recent-trigger"][data-expanded])')
+    expect(conversationSurface).toContain(
+      '.task-cwd-dropdown:has(.oc-button[data-ui="cwd-recent-trigger"][data-expanded])',
+    )
     expect(conversationSurface).toContain(
       '.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"][data-expanded] .task-cwd-caret',
     )
@@ -877,8 +865,12 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome^="workspace-split"]')
     expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-primary"]')
     expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"]')
-    expect(conversationSurface).toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded]')
-    expect(conversationSurface).not.toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"]')
+    expect(conversationSurface).toContain(
+      '.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded]',
+    )
+    expect(conversationSurface).not.toContain(
+      '.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"]',
+    )
     expect(conversationSurface).not.toMatch(/border-radius:\s*999px/)
     expect(conversationSurface).not.toMatch(/rgba\(116,\s*133,\s*184/)
     expect(conversationSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.62\)/)
@@ -892,9 +884,7 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).not.toMatch(
       /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))[\s\S]*?\.task-bar\b/,
     )
-    expect(conversationSurface).toMatch(
-      /\.recent-dir-row:hover,\s*\.recent-dir-row:focus-within\s*\{/,
-    )
+    expect(conversationSurface).toMatch(/\.recent-dir-row:hover,\s*\.recent-dir-row:focus-within\s*\{/)
     expect(conversationSurface).toMatch(/\.recent-dir-row\[data-active="true"\]\s*\{/)
   })
 
@@ -941,7 +931,9 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toMatch(
       /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover,\s*\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:focus-visible\s*\{/,
     )
-    expect(composerSurface).toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\[data-expanded\]\s*\{/)
+    expect(composerSurface).toMatch(
+      /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\[data-expanded\]\s*\{/,
+    )
     expect(composerSurface).not.toContain('.executor-chip-slot[data-open="true"] .oc-button[data-ui^="executor-chip-"]')
     expect(composerSurface).toMatch(/\.executor-chip-value\[data-empty="true"\]/)
   })
@@ -1200,7 +1192,7 @@ describe("overlay architecture guards", () => {
     expect(configDialog).toContain('href: "https://github.com/yangheng95/opencorvus/issues"')
     expect(configDialog).toContain('{t("about.links")}')
     expect(configDialog).toContain('label: () => t("about.issues")')
-    expect(configDialog).toContain('<For each={ABOUT_LINKS}>')
+    expect(configDialog).toContain("<For each={ABOUT_LINKS}>")
     expect(configDialog).not.toContain('href="https://github.com/yangheng95"')
   })
 
@@ -1414,7 +1406,9 @@ describe("overlay architecture guards", () => {
     }
 
     expect(settingsSurface).toMatch(/\.extension-head:hover,\s*\.extension-head:focus-within\s*\{/)
-    expect(settingsSurface).toMatch(/\.extension-settings-row \.s-row-desc,\s*\.extension-settings-row \.s-row-meta\s*\{/)
+    expect(settingsSurface).toMatch(
+      /\.extension-settings-row \.s-row-desc,\s*\.extension-settings-row \.s-row-meta\s*\{/,
+    )
     const titleBody = soloRuleBody(settingsSurface, ".extension-settings-row .s-row-title")
     expect(titleBody).toContain("display: inline-flex")
     expect(titleBody).toContain("gap: calc(6px * var(--ui-scale))")
@@ -2311,11 +2305,7 @@ describe("overlay architecture guards", () => {
 
   test("migrated titlebar chrome is not controlled by legacy theme selectors", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const migratedTitlebarClasses = [
-      "titlebar",
-      "titlebar-menubar-trigger",
-      "brand-guide",
-    ]
+    const migratedTitlebarClasses = ["titlebar", "titlebar-menubar-trigger", "brand-guide"]
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
@@ -2688,9 +2678,7 @@ describe("overlay architecture guards", () => {
     )
     expect(
       soloRuleBody(conversationSurface, '.task-dir-menu-actions .oc-button[data-ui="cwd-recent-trigger"]'),
-    ).toContain(
-      "width: calc(22px * var(--ui-scale))",
-    )
+    ).toContain("width: calc(22px * var(--ui-scale))")
     const sidebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")))
     expect(sidebarSurface).not.toContain("sidebar-toolset")
     expect(sidebarSurface).not.toContain('data-ui="sidebar-refresh-button"')
@@ -3303,11 +3291,7 @@ describe("overlay architecture guards", () => {
 
     const generalPanel = readText(join(OVERLAY_ROOT, "src/components/settings/GeneralPanel.tsx"))
     expect(count(/<SettingsGroup/g, generalPanel)).toBe(3)
-    for (const key of [
-      "settings.section.connection",
-      "settings.section.database",
-      "settings.section.behaviour",
-    ]) {
+    for (const key of ["settings.section.connection", "settings.section.database", "settings.section.behaviour"]) {
       expect(generalPanel).toContain(`title={t("${key}")}`)
     }
     expect(generalPanel).not.toContain("<SurfaceHeader")

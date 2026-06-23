@@ -19,11 +19,11 @@ That creates a visible no-op for mouse and keyboard users.
 
 ## Sources Of Truth
 
-| Domain | Source |
-| --- | --- |
-| Mission action concurrency | `packages/overlay/src/components/Mission.tsx` `actionBusy` / `withBusy()` |
-| Mission row actions | `packages/overlay/src/components/MissionList.tsx` `MissionAbortButton`, `MissionDownloadButton`, `MissionRenameButton`, `MissionDeleteButton` |
-| Button disabled visuals | `packages/overlay/src/styles/primitives/button.css` and `packages/overlay/src/styles/surfaces/sidebar.css` |
+| Domain                     | Source                                                                                                                                        |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mission action concurrency | `packages/overlay/src/components/Mission.tsx` `actionBusy` / `withBusy()`                                                                     |
+| Mission row actions        | `packages/overlay/src/components/MissionList.tsx` `MissionAbortButton`, `MissionDownloadButton`, `MissionRenameButton`, `MissionDeleteButton` |
+| Button disabled visuals    | `packages/overlay/src/styles/primitives/button.css` and `packages/overlay/src/styles/surfaces/sidebar.css`                                    |
 
 `withBusy()` remains the program-level single source for active mission action.
 The row must not invent per-button local busy state.
@@ -32,17 +32,17 @@ The row must not invent per-button local busy state.
 
 `rg -n "actionBusy|withBusy|onAbortMission|onDownloadMission|onDeleteMission|onRenameMission|task-row-(cancel|download|rename|delete)" packages/overlay/src/components packages/overlay/test packages/overlay/src/services`
 
-| Call site | Decision |
-| --- | --- |
-| `Mission.tsx` `withBusy()` | Keep the guard. It protects programmatic concurrency and reports action errors. |
-| `Mission.tsx` `<MissionList actionBusy={actionBusy()} />` | Keep as the only UI busy source. |
-| `MissionList.tsx` `MissionAbortButton` | Add `disabled` and current-action `busy` props. |
-| `MissionList.tsx` `MissionDownloadButton` | Use global disabled for every active action; keep `data-busy=true` only for the current download. |
-| `MissionList.tsx` `MissionRenameButton` | Add `disabled` and current-action `busy` props. |
-| `MissionList.tsx` rename editor | Disable the input from the same action source and do not commit while an action is busy. |
-| `MissionList.tsx` `MissionDeleteButton` | Add `disabled` and current-action `busy` props. |
-| `mission-launcher-component.test.ts` | Add source guards that every action button consumes the shared disabled signal. |
-| `side-activity-toolbar-browser.test.ts` | Hold mission archive download open, assert all row action buttons are disabled, and screenshot the busy row. |
+| Call site                                                 | Decision                                                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `Mission.tsx` `withBusy()`                                | Keep the guard. It protects programmatic concurrency and reports action errors.                              |
+| `Mission.tsx` `<MissionList actionBusy={actionBusy()} />` | Keep as the only UI busy source.                                                                             |
+| `MissionList.tsx` `MissionAbortButton`                    | Add `disabled` and current-action `busy` props.                                                              |
+| `MissionList.tsx` `MissionDownloadButton`                 | Use global disabled for every active action; keep `data-busy=true` only for the current download.            |
+| `MissionList.tsx` `MissionRenameButton`                   | Add `disabled` and current-action `busy` props.                                                              |
+| `MissionList.tsx` rename editor                           | Disable the input from the same action source and do not commit while an action is busy.                     |
+| `MissionList.tsx` `MissionDeleteButton`                   | Add `disabled` and current-action `busy` props.                                                              |
+| `mission-launcher-component.test.ts`                      | Add source guards that every action button consumes the shared disabled signal.                              |
+| `side-activity-toolbar-browser.test.ts`                   | Hold mission archive download open, assert all row action buttons are disabled, and screenshot the busy row. |
 
 ## Design
 

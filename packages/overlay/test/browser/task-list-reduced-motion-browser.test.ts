@@ -74,7 +74,8 @@ test(
       const url = new URL(req.url)
       const path = route(url)
       if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "reduced-motion-test" })
@@ -91,7 +92,14 @@ test(
       if (path === "/config/providers") return send({ providers: [], default: {} })
       if (path === "/config") return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "" })
       if (path === "/config/prompt" || path === "/config/prompt-profile") {
-        return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+        return send({
+          active: "general",
+          project_active: "general",
+          session_active: null,
+          default: "general",
+          targets: [],
+          profiles: [],
+        })
       }
       if (path === "/channel") return send([])
       if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
@@ -132,10 +140,13 @@ test(
       await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
       await page.waitForFunction(() => {
         const rows = Array.from(document.querySelectorAll<HTMLElement>(".task-list-skeleton-row"))
-        return rows.length === 3 && rows.every((row) => {
-          const rect = row.getBoundingClientRect()
-          return rect.width > 0 && rect.height > 0
-        })
+        return (
+          rows.length === 3 &&
+          rows.every((row) => {
+            const rect = row.getBoundingClientRect()
+            return rect.width > 0 && rect.height > 0
+          })
+        )
       })
 
       const metrics = await page.$eval(".task-list-skeleton-row", (node: HTMLElement) => {

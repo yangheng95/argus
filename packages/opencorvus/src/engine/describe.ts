@@ -365,9 +365,7 @@ function describeFrontendDesignHandoff(taskID: string): FrontendDesignHandoffDes
   for (const entry of entries) latestByKey.set(entry.key, entry)
 
   const missingCompletionKeys = FRONTEND_DESIGN_COMPLETION_KEYS.filter((key) => !latestByKey.has(key))
-  const latestEntry = entries.reduce((latest, entry) =>
-    entry.timeCreated >= latest.timeCreated ? entry : latest,
-  )
+  const latestEntry = entries.reduce((latest, entry) => (entry.timeCreated >= latest.timeCreated ? entry : latest))
   const paths = frontendDesignArtifactPaths("", taskID)
   const hasPublicReport = latestByKey.has("public_report")
   const hasEvidenceSourceManifest = latestByKey.has("evidence_source_manifest")
@@ -608,9 +606,7 @@ function describeTerminalGoalRefillNotifications(taskID: string): TerminalGoalRe
   return listGoalRefillNotificationArtifacts(taskID, TERMINAL_GOAL_REFILL_PROMPT_CAP).map((row) => {
     const payload = TerminalGoalRefillNotificationPayloadSchema.parse(row.payload)
     if (payload.task_id !== taskID) {
-      throw new Error(
-        `goal_refill_notification ${row.id} task_id mismatch: payload=${payload.task_id} query=${taskID}`,
-      )
+      throw new Error(`goal_refill_notification ${row.id} task_id mismatch: payload=${payload.task_id} query=${taskID}`)
     }
     return {
       artifact_id: row.id,

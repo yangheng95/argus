@@ -18,7 +18,7 @@ describe("overlay-ui-bundle-assertions", () => {
     )
     fs.writeFileSync(
       path.join(mediaUi, "assets", "app.js"),
-      'const assetBase = window.__OPENCORVUS_ASSET_BASE__; console.log(assetBase);',
+      "const assetBase = window.__OPENCORVUS_ASSET_BASE__; console.log(assetBase);",
     )
     fs.writeFileSync(path.join(mediaUi, "assets", "style.css"), ".prompt-profile-select-trigger{display:flex}")
     fs.cpSync(mediaUi, distVite, { recursive: true })

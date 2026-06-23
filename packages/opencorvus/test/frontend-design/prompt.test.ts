@@ -91,7 +91,9 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("sourceDomIterationState.ts")
     expect(prompt).toContain("nextSourceDomReplacement")
     expect(prompt).toContain("Visual skeleton drafting is screenshot-first")
-    expect(prompt).toContain("inspect desktop `web-clone-source/reference.png` and the current rendered skeleton screenshot")
+    expect(prompt).toContain(
+      "inspect desktop `web-clone-source/reference.png` and the current rendered skeleton screenshot",
+    )
     expect(prompt).toContain("read only the direct source code/CSS/data evidence needed")
     expect(prompt).toContain("Do not spend turns reading broad source-IR inventories")
     expect(prompt).toContain("screenshot-derived visible page-region outline")
@@ -99,7 +101,9 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("page information-architecture input")
     expect(prompt).toContain("must record those conflicts instead of inventing, reordering, or demoting major sections")
     expect(prompt).toContain("preserve its visible-flow order/count")
-    expect(prompt).toContain("Establish the page skeleton from `Frontend Research Page Skeleton Blueprint` when present")
+    expect(prompt).toContain(
+      "Establish the page skeleton from `Frontend Research Page Skeleton Blueprint` when present",
+    )
     expect(prompt).toContain("major content-section order/count")
     expect(prompt).toContain("not the page skeleton order")
     expect(prompt).toContain("The queue must not reorder the page")
@@ -167,7 +171,9 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Preserve the source data object shape")
     expect(prompt).toContain("AssetPath`/asset resolver usage")
     expect(prompt).toContain("replace `AssetPath` with inline guessed SVG paths")
-    expect(prompt).toContain("For render evidence, use task-scoped preview or screenshot evidence for the HTML skeleton")
+    expect(prompt).toContain(
+      "For render evidence, use task-scoped preview or screenshot evidence for the HTML skeleton",
+    )
     expect(prompt).toContain(
       "do not use `skill`, research reports, shell listing, build success, legacy webpage visual tool output, or external judge verdicts as a substitute",
     )
@@ -270,8 +276,12 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "frontend_design's first workflow deliverable is a source-editable static HTML/CSS visual skeleton",
     )
-    expect(prompt).toContain('Report visual-only work through `update_frontend_project({ role: "visual_baseline_input", ... })`')
-    expect(prompt).toContain("For production/component-system tasks, set `final_acceptance_mode=maintainable_replacement_required`")
+    expect(prompt).toContain(
+      'Report visual-only work through `update_frontend_project({ role: "visual_baseline_input", ... })`',
+    )
+    expect(prompt).toContain(
+      "For production/component-system tasks, set `final_acceptance_mode=maintainable_replacement_required`",
+    )
     expect(prompt).toContain("submit `implementation_phase_outcomes`")
     expect(prompt).toContain("package.json or source imports prove it")
     expect(prompt).toContain("not the implementation target or acceptance app root")
@@ -318,7 +328,9 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("capture/source replay")
     expect(prompt).toContain("`SourceDomPage`/`src/components/source-dom/*` dumps")
     expect(prompt).toContain("Render that HTML skeleton through a real static harness or browser path")
-    expect(prompt).toContain("For high-fidelity acceptance, render the current skeleton and inspect the rendered screenshot")
+    expect(prompt).toContain(
+      "For high-fidelity acceptance, render the current skeleton and inspect the rendered screenshot",
+    )
     expect(prompt).toContain("Do not use a fixed numeric score or external judge verdict as the completion condition")
     expect(prompt).toContain("If the task requires VisualRegionBinding or per-region source bbox bindings")
     expect(prompt).toContain("first call `create_visual_region_coordinate_atlas`")
@@ -340,14 +352,16 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "copy/transcribe observed labels, numeric data, source IDs, class responsibilities, SVG paths/assets",
     )
-    expect(prompt).toContain("Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence")
     expect(prompt).toContain(
-      "Inspect task-scoped preview or screenshot evidence against the reference evidence",
+      "Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence",
     )
+    expect(prompt).toContain("Inspect task-scoped preview or screenshot evidence against the reference evidence")
     expect(prompt).toContain(
       "repair the same region before selecting another region when screenshot review names mismatches",
     )
-    expect(prompt).toContain("Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence")
+    expect(prompt).toContain(
+      "Do not use shell listings, build success, or legacy `webpage_*` visual tools as visual evidence",
+    )
     expect(prompt).toContain(
       "A visual baseline must explicitly say it is source-editable static HTML/CSS, not compiled output, not raw source DOM replay",
     )
@@ -372,7 +386,11 @@ describe("frontend-design prompt assembly", () => {
         directory: tmp.path,
         fn: async () => {
           seedFrontendPromptTask(taskID)
-          const frontendResearchPaths = ProjectRuntimePaths.frontendResearchPaths("", taskID, "ses_frontend_design_blueprint")
+          const frontendResearchPaths = ProjectRuntimePaths.frontendResearchPaths(
+            "",
+            taskID,
+            "ses_frontend_design_blueprint",
+          )
           const artifactID = persistTaskFrontendResearchBrief({
             taskID,
             brief: validResearchBrief(request, {
@@ -561,13 +579,7 @@ describe("frontend-design prompt assembly", () => {
       fn: async () => {
         const tools = await FrontendDesignTestHooks.createFrontendImplementationTools({})
         expect(Object.keys(tools)).toEqual(
-          expect.arrayContaining([
-            "bash",
-            "edit",
-            "write",
-            "apply_patch",
-            "web_clone_source_audit",
-          ]),
+          expect.arrayContaining(["bash", "edit", "write", "apply_patch", "web_clone_source_audit"]),
         )
         expect(Object.keys(tools)).not.toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_evaluate")
@@ -734,10 +746,7 @@ describe("frontend-design prompt assembly", () => {
         const persisted = JSON.parse(await fs.readFile(artifact!, "utf8"))
         expect(persisted.purpose).toBe("frontend-design-process-trace")
         expect(persisted.events[0].name).toBe("frontend_design_static_tool_surface")
-        const iterationArtifact = await FrontendDesignTestHooks.writeFrontendIterationStateArtifact(
-          taskID,
-          trace,
-        )
+        const iterationArtifact = await FrontendDesignTestHooks.writeFrontendIterationStateArtifact(taskID, trace)
         expect(iterationArtifact).toContain("frontend-design-iteration-state.json")
         const iterationState = JSON.parse(await fs.readFile(iterationArtifact!, "utf8"))
         expect(iterationState.purpose).toBe("frontend-design-rawproject-iteration-state")

@@ -15,12 +15,12 @@ The current sweep confirms it has no owner.
 
 ## Recall
 
-| Source | Evidence | Decision |
-| --- | --- | --- |
-| `FileEditorPane.tsx` | Save and close controls render as `<Button>` with `data-ui` hooks. | Keep current component code. |
-| `workspace.css` | `.file-editor-nav` defines raw button color, layout, hover, and cursor rules. | Delete the orphan selector family. |
-| `file-explorer-editor.test.ts` | Already rejects `.file-editor-save` and `.file-editor-close` raw classes. | Extend the guard to reject `.file-editor-nav`. |
-| `rg -n "file-editor-nav" packages/overlay/src --glob "!**/*.css"` | No production owner outside CSS. | Treat as dead CSS residue. |
+| Source                                                            | Evidence                                                                      | Decision                                       |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| `FileEditorPane.tsx`                                              | Save and close controls render as `<Button>` with `data-ui` hooks.            | Keep current component code.                   |
+| `workspace.css`                                                   | `.file-editor-nav` defines raw button color, layout, hover, and cursor rules. | Delete the orphan selector family.             |
+| `file-explorer-editor.test.ts`                                    | Already rejects `.file-editor-save` and `.file-editor-close` raw classes.     | Extend the guard to reject `.file-editor-nav`. |
+| `rg -n "file-editor-nav" packages/overlay/src --glob "!**/*.css"` | No production owner outside CSS.                                              | Treat as dead CSS residue.                     |
 
 ## Fix
 

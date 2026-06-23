@@ -19,27 +19,27 @@ listener to connect to.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no hiding process crashes behind UI retry logic. |
-| `specs/event-log-task-project-directory-2026-06-16.md` | Global task event subscribers must resolve runtime paths from task/project rows, not ambient `Instance.directory`. |
-| `specs/new-arch/2026-06-12-deleted-project-task-record-routes.md` | `DELETE /task/:taskID` is a record-level route and must work without `?directory=`. |
-| `specs/new-arch/2026-06-19-task-mission-agent-cancellation-scope.md` | Task cancellation must terminate real live execution handles; timeout/failure must be visible, not marked as success. |
-| `specs/new-arch/2026-06-20-runtime-isolation-second-repair.md` | Task-owned artifacts and runtime paths should derive from the task primary project, not whichever project is active in the caller. |
+| Source                                                               | Constraint                                                                                                                         |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                          | No fallback, no gate, no hiding process crashes behind UI retry logic.                                                             |
+| `specs/event-log-task-project-directory-2026-06-16.md`               | Global task event subscribers must resolve runtime paths from task/project rows, not ambient `Instance.directory`.                 |
+| `specs/new-arch/2026-06-12-deleted-project-task-record-routes.md`    | `DELETE /task/:taskID` is a record-level route and must work without `?directory=`.                                                |
+| `specs/new-arch/2026-06-19-task-mission-agent-cancellation-scope.md` | Task cancellation must terminate real live execution handles; timeout/failure must be visible, not marked as success.              |
+| `specs/new-arch/2026-06-20-runtime-isolation-second-repair.md`       | Task-owned artifacts and runtime paths should derive from the task primary project, not whichever project is active in the caller. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Overlay delete action | `packages/overlay/src/services/task.ts::deleteTask` calls `DELETE /task/:taskID`, then reloads `global/tasks`. | Keep. The UI should not mask a backend crash. |
-| Server route | `packages/opencorvus/src/server/routes/orchestrator.ts` maps `DELETE /task/:taskID` to `EngineService.deleteTask`. | Keep route shape and method-aware no-directory contract. |
-| Delete service | `packages/opencorvus/src/task-api/index.ts::deleteTask` loads the task row, cancels active tasks, removes the root session tree, then deletes the task row. | Audit active-task cancellation under no ambient `Instance`. |
-| Cancel service | `packages/opencorvus/src/task-api/index.ts::cancelTask` cancels orchestrator/pipeline/session prompts, goal runs, live execution, active run, and finally updates the task to cancelled. | Add a live deletion regression that drives this full branch without `Instance.current()`. |
-| Live writer helpers | `packages/opencorvus/src/engine/writer.ts` already has `provideTaskRootSessionDirectory()` for some process-recovery flows. `abortLiveExecutionForTask()` does not wrap its own task scope. | If the regression proves this path needs context, wrap from task row/session directory instead of reading caller context. |
-| Live ownership writer | `packages/opencorvus/src/engine/writer.ts::abortLiveOrchestratorToolOwnership` updates orchestrator tool parts through `Session.updatePart`, which publishes `Bus` events requiring an ambient task `Instance`. | `cancelTask` now closes live ownership inside the task root session `Instance` before marking the task cancelled. |
-| Shutdown writer | `packages/opencorvus/src/engine/writer.ts::terminateTaskOwnedSessionsAndFail` is process lifecycle cleanup, not user cancel. | Use shutdown-specific session termination so a missing prompt handle does not leave active zombie tasks during process exit. |
-| Terminal task update | `packages/opencorvus/src/engine/state.ts::finalizeLiveRunForTerminalTask` writes decision-log projection and finalizes live run. | Preserve task-primary-project root as source; do not use caller active directory. |
-| Event subscribers | `EngineEventLog`, protocol bridge, scheduler/list projections react to terminal task/run/session events. | Any subscriber that handles task events must use task/project rows or receive an explicit project context. |
+| Surface               | Evidence                                                                                                                                                                                                        | Decision                                                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Overlay delete action | `packages/overlay/src/services/task.ts::deleteTask` calls `DELETE /task/:taskID`, then reloads `global/tasks`.                                                                                                  | Keep. The UI should not mask a backend crash.                                                                                |
+| Server route          | `packages/opencorvus/src/server/routes/orchestrator.ts` maps `DELETE /task/:taskID` to `EngineService.deleteTask`.                                                                                              | Keep route shape and method-aware no-directory contract.                                                                     |
+| Delete service        | `packages/opencorvus/src/task-api/index.ts::deleteTask` loads the task row, cancels active tasks, removes the root session tree, then deletes the task row.                                                     | Audit active-task cancellation under no ambient `Instance`.                                                                  |
+| Cancel service        | `packages/opencorvus/src/task-api/index.ts::cancelTask` cancels orchestrator/pipeline/session prompts, goal runs, live execution, active run, and finally updates the task to cancelled.                        | Add a live deletion regression that drives this full branch without `Instance.current()`.                                    |
+| Live writer helpers   | `packages/opencorvus/src/engine/writer.ts` already has `provideTaskRootSessionDirectory()` for some process-recovery flows. `abortLiveExecutionForTask()` does not wrap its own task scope.                     | If the regression proves this path needs context, wrap from task row/session directory instead of reading caller context.    |
+| Live ownership writer | `packages/opencorvus/src/engine/writer.ts::abortLiveOrchestratorToolOwnership` updates orchestrator tool parts through `Session.updatePart`, which publishes `Bus` events requiring an ambient task `Instance`. | `cancelTask` now closes live ownership inside the task root session `Instance` before marking the task cancelled.            |
+| Shutdown writer       | `packages/opencorvus/src/engine/writer.ts::terminateTaskOwnedSessionsAndFail` is process lifecycle cleanup, not user cancel.                                                                                    | Use shutdown-specific session termination so a missing prompt handle does not leave active zombie tasks during process exit. |
+| Terminal task update  | `packages/opencorvus/src/engine/state.ts::finalizeLiveRunForTerminalTask` writes decision-log projection and finalizes live run.                                                                                | Preserve task-primary-project root as source; do not use caller active directory.                                            |
+| Event subscribers     | `EngineEventLog`, protocol bridge, scheduler/list projections react to terminal task/run/session events.                                                                                                        | Any subscriber that handles task events must use task/project rows or receive an explicit project context.                   |
 
 ## Implemented Design
 

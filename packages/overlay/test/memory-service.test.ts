@@ -1,7 +1,13 @@
 import { afterEach, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
 import { __setHostTransportForTest, HOST_CAPABILITIES } from "../src/services/host-transport"
-import type { HostTransport, StreamHandlers, StreamOpenRequest, TransportRequest, TransportResponse } from "../src/services/host-transport"
+import type {
+  HostTransport,
+  StreamHandlers,
+  StreamOpenRequest,
+  TransportRequest,
+  TransportResponse,
+} from "../src/services/host-transport"
 import { deleteMemory, fetchMemoryDetail, loadMemory, searchMemory } from "../src/services/memory"
 import { installRealOverlayI18n } from "./fixtures/i18n"
 
@@ -16,12 +22,11 @@ function recordingTransport(requests: TransportRequest[]): HostTransport {
     capabilities: HOST_CAPABILITIES.tauri,
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       requests.push(req)
-      const body =
-        req.path.endsWith("/memory/search")
-          ? [{ fileId: "mem_search", fileTitle: "Search", content: "found", timeCreated: 1 }]
-          : req.path.endsWith("/memory/mem_detail")
-            ? { file: { id: "mem_detail" }, content: "detail" }
-            : []
+      const body = req.path.endsWith("/memory/search")
+        ? [{ fileId: "mem_search", fileTitle: "Search", content: "found", timeCreated: 1 }]
+        : req.path.endsWith("/memory/mem_detail")
+          ? { file: { id: "mem_detail" }, content: "detail" }
+          : []
       return { status: 200, ok: true, headers: {}, body: body as T }
     },
     openStream(_input: StreamOpenRequest, _handlers: StreamHandlers) {

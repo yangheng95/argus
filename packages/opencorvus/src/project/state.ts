@@ -34,7 +34,9 @@ export namespace State {
   }
 
   async function disposeTargets(targets: EntryTarget[]) {
-    const results = await Promise.allSettled(targets.map((target) => disposeEntry(target.key, target.init, target.entry)))
+    const results = await Promise.allSettled(
+      targets.map((target) => disposeEntry(target.key, target.init, target.entry)),
+    )
     const errors: unknown[] = []
     for (const [index, result] of results.entries()) {
       const target = targets[index]

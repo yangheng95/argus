@@ -158,15 +158,16 @@ async function waitForFixtureActivity(predicate: () => boolean, label: string, d
   }
 }
 
-async function openBrowserPreviewFromTask(
-  page: OverlayPage,
-  taskID: string,
-  diagnostics: () => unknown,
-) {
-  await page.waitForSelector('#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
-    visible: true,
-  })
-  await page.click('#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
+async function openBrowserPreviewFromTask(page: OverlayPage, taskID: string, diagnostics: () => unknown) {
+  await page.waitForSelector(
+    '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+    {
+      visible: true,
+    },
+  )
+  await page.click(
+    '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
+  )
   await waitForPageState(
     page,
     () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
@@ -196,7 +197,8 @@ const rightActivityOpenPredicates: Record<"browser" | "explorer" | "inspector" |
   browser: () => document.querySelector<HTMLElement>('[data-workbench-view="browser"]')?.dataset.open === "true",
   explorer: () => document.querySelector<HTMLElement>('[data-workbench-view="explorer"]')?.dataset.open === "true",
   inspector: () => document.querySelector<HTMLElement>('[data-workbench-view="inspector"]')?.dataset.open === "true",
-  screenshots: () => document.querySelector<HTMLElement>('[data-workbench-view="screenshots"]')?.dataset.open === "true",
+  screenshots: () =>
+    document.querySelector<HTMLElement>('[data-workbench-view="screenshots"]')?.dataset.open === "true",
 }
 
 async function openRightActivity(
@@ -339,11 +341,7 @@ async function dispatchLiveClickAtVisualCenter(page: OverlayPage) {
   })
 }
 
-function assertCenteredLiveClickInput(
-  body: unknown,
-  viewport: { width: number; height: number },
-  label: string,
-) {
+function assertCenteredLiveClickInput(body: unknown, viewport: { width: number; height: number }, label: string) {
   const inputs = (body as { inputs?: Array<{ kind?: string; x?: number; y?: number }> }).inputs ?? []
   const click = inputs.find((input) => input.kind === "click")
   assert.ok(click, `${label}: expected click input in ${JSON.stringify(body)}`)
@@ -516,8 +514,7 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     if (path === "/project/current/worktrees") return json([])
     if (path === "/coding/cli/profiles" || path === "/terminal/profiles") return json({ profiles: [] })
     if (path === `/task/${taskID}/operator-model-context`) return json({ selected: null, candidates: [] })
-    if (path === "/global/tasks" || path === "/tasks")
-      return json({ tasks: [{ task, updated_at: now - 1_000 }] })
+    if (path === "/global/tasks" || path === "/tasks") return json({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/path") return json({ directory: projectRoot })
     if (path === "/vcs")
       return json({
@@ -681,9 +678,8 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     )
     assert.equal(captureBodies.length, 0, "opening live preview must not auto-capture evidence")
     assert.equal(
-      liveSnapshotBodies.filter(
-        (body) => (body as { targetID?: unknown; viewportID?: unknown }).targetID === targetID,
-      ).length,
+      liveSnapshotBodies.filter((body) => (body as { targetID?: unknown; viewportID?: unknown }).targetID === targetID)
+        .length,
       1,
       `initial live scope should request exactly one snapshot: ${JSON.stringify(liveSnapshotBodies)}`,
     )
@@ -699,7 +695,10 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     )
     const firstBody = liveInputBodies[0] as { input?: unknown; inputs?: Array<{ kind?: string; deltaY?: number }> }
     assert.equal(firstBody.input, undefined)
-    assert.deepEqual(firstBody.inputs?.map((input) => input.kind), ["click", "wheel", "key"])
+    assert.deepEqual(
+      firstBody.inputs?.map((input) => input.kind),
+      ["click", "wheel", "key"],
+    )
 
     const beforeBurstCount = liveInputBodies.length
     const wheelEventCount = 20
@@ -710,7 +709,9 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
       "wheel burst live input batch",
       () => ({ requestLog, liveInputBodies }),
     )
-    const burstBodies = liveInputBodies.slice(beforeBurstCount) as Array<{ inputs?: Array<{ kind?: string; deltaY?: number }> }>
+    const burstBodies = liveInputBodies.slice(beforeBurstCount) as Array<{
+      inputs?: Array<{ kind?: string; deltaY?: number }>
+    }>
     assert.ok(
       burstBodies.length < wheelEventCount,
       `wheel burst should create fewer live input requests than events\n${JSON.stringify(burstBodies, null, 2)}`,
@@ -726,7 +727,10 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
       liveSnapshotBodies,
       requestLog,
     }))
-    assert.ok(scrollMetrics.visible, `browser preview live image should remain visible after scroll: ${JSON.stringify(scrollMetrics)}`)
+    assert.ok(
+      scrollMetrics.visible,
+      `browser preview live image should remain visible after scroll: ${JSON.stringify(scrollMetrics)}`,
+    )
     assert.ok(
       Math.abs(scrollMetrics.deltaLeft) > 40,
       `browser preview scroll should move the live image viewport rect: ${JSON.stringify(scrollMetrics)}`,

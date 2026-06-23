@@ -12,9 +12,9 @@ contains user-visible and accessible English literals:
 
 - `CardParts.tsx` renders the subtask chip label as `Subtask`.
 - `InlineToolPart.tsx` renders the read-reminder label as `Loaded
-  instructions`.
+instructions`.
 - `InlineToolPart.tsx` passes browser evidence screenshot alt text as `Browser
-  observation`.
+observation`.
 - `ConversationAgentRail.tsx` exposes the rail landmark as
   `aria-label="Agent workflow"`.
 - `ConversationAgentRail.tsx` generates notification titles/messages/details
@@ -32,20 +32,20 @@ English labels in visible text and screen-reader output.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | User-visible strings must follow the project i18n state; no fake locale plumbing. |
-| `2026-06-20-conversation-render-error-i18n.md` | Conversation render-path messages should use locale keys instead of hardcoded English. |
-| `inline-tool-output-summary.test.ts` | Existing test pins the browser evidence alt literal, so tests currently preserve the i18n bug. |
+| Source                                         | Relevant constraint                                                                            |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                    | User-visible strings must follow the project i18n state; no fake locale plumbing.              |
+| `2026-06-20-conversation-render-error-i18n.md` | Conversation render-path messages should use locale keys instead of hardcoded English.         |
+| `inline-tool-output-summary.test.ts`           | Existing test pins the browser evidence alt literal, so tests currently preserve the i18n bug. |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "Subtask|Loaded instructions|Browser observation|Agent workflow" packages/overlay/src/components packages/overlay/test` | The first literals are owned by `CardParts.tsx`, `InlineToolPart.tsx`, `ConversationAgentRail.tsx`, and one source test. | Replace them with `t()` keys and update the test to reject the literals. |
+| Sweep                         | Result                                                                                                                                            | Decision                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `rg -n "Subtask               | Loaded instructions                                                                                                                               | Browser observation                                                | Agent workflow" packages/overlay/src/components packages/overlay/test` | The first literals are owned by `CardParts.tsx`, `InlineToolPart.tsx`, `ConversationAgentRail.tsx`, and one source test. | Replace them with `t()` keys and update the test to reject the literals.                                    |
 | Heisenberg independent review | Found the same render path still leaks notification copy, raw rail statuses, `file/files`, `Todos/Plan`, and generic browser screenshot alt text. | Expand this same fix instead of committing a partial i18n cleanup. |
-| `rg -n "browser_preview|card\\.|common.loaded|activity.left" packages/overlay/src/i18n` | Locale files already define nearby namespaces for card labels, browser-preview strings, and activity landmarks. | Add focused keys to the existing locale files; do not create a parallel locale file or dynamic key builder. |
-| `check-panel-i18n.ts` review | The i18n checker extracts literal `t("...")` calls and validates locale parity. | Use literal keys so the existing checker protects them. |
+| `rg -n "browser_preview       | card\\.                                                                                                                                           | common.loaded                                                      | activity.left" packages/overlay/src/i18n`                              | Locale files already define nearby namespaces for card labels, browser-preview strings, and activity landmarks.          | Add focused keys to the existing locale files; do not create a parallel locale file or dynamic key builder. |
+| `check-panel-i18n.ts` review  | The i18n checker extracts literal `t("...")` calls and validates locale parity.                                                                   | Use literal keys so the existing checker protects them.            |
 
 ## Fix Plan
 

@@ -49,7 +49,7 @@ describe("tool.web_clone_prepare_context", () => {
         expect(result.metadata.sourcePackageDir).toBe(sourcePackageDir)
         expect(result.metadata.sourceReadmePath).toBe(path.join(sourcePackageDir, "README.md"))
         expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "implementation-blueprint.md"))
-        expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "reference-mobile.png"))
+        expect(result.metadata.materializedFiles).not.toContain(path.join(sourcePackageDir, "reference-mobile.png"))
         expect(result.metadata.materializedFiles).not.toContain(path.join(sourcePackageDir, "singlefile.html"))
         expect(result.metadata.contextPath).toBe(path.join(sourcePackageDir, "web-clone-context.md"))
         expect(result.metadata.contractPath).toBe(path.join(sourcePackageDir, "web-clone-implementation-contract.json"))
@@ -93,13 +93,8 @@ describe("tool.web_clone_prepare_context", () => {
           await Bun.file(path.join(sourcePackageDir, "web-clone-source-manifest.json")).text(),
         )
         expect(sourceManifest.provenance.captureViewport).toEqual({ width: 1366, height: 768 })
-        expect(sourceManifest.provenance.mobileReference).toMatchObject({
-          path: "reference-mobile.png",
-          width: 1,
-          height: 1,
-          viewport: { width: 390, height: 844 },
-        })
-        expect(sourceManifest.files.map((row: { path: string }) => row.path)).toContain("reference-mobile.png")
+        expect(sourceManifest.provenance.mobileReference).toBeUndefined()
+        expect(sourceManifest.files.map((row: { path: string }) => row.path)).not.toContain("reference-mobile.png")
       },
     })
   })
@@ -182,7 +177,6 @@ describe("tool.web_clone_prepare_context", () => {
 async function writeFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "capture.html"), "<!doctype html><main>Economic calendar</main>")
   await Bun.write(
     path.join(webpageEvidenceDir, "extracted-page.json"),

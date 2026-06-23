@@ -28,12 +28,12 @@ Mission list.
 
 ## Call Sites
 
-| Surface | Current behavior | Decision |
-| --- | --- | --- |
+| Surface                                                       | Current behavior                                                            | Decision                                                          |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | `packages/overlay/src/components/Mission.tsx` resource source | Runs when the Mission activity is active, independent of server connection. | Add `appStore.connected` as a hard precondition for list loading. |
-| Mission ledger error prop | Shows request errors only. | Show an explicit offline error while disconnected. |
-| `packages/overlay/src/i18n/{en-US,zh-CN}.json` | No Mission-specific offline ledger text. | Add a localized Mission ledger offline error. |
-| `packages/overlay/test/mission-launcher-component.test.ts` | Locks active/search/refresh list loading. | Lock the connection precondition and offline error wiring. |
+| Mission ledger error prop                                     | Shows request errors only.                                                  | Show an explicit offline error while disconnected.                |
+| `packages/overlay/src/i18n/{en-US,zh-CN}.json`                | No Mission-specific offline ledger text.                                    | Add a localized Mission ledger offline error.                     |
+| `packages/overlay/test/mission-launcher-component.test.ts`    | Locks active/search/refresh list loading.                                   | Lock the connection precondition and offline error wiring.        |
 
 ## Acceptance
 

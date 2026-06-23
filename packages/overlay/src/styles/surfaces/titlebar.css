@@ -148,7 +148,6 @@
   text-transform: none;
 }
 
-
 .titlebar-theme-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -460,7 +459,6 @@
   width: min(calc(520px * var(--ui-scale)), calc(100cqw - calc(24px * var(--ui-scale))));
 }
 
-
 .titlebar-menubar-group {
   display: grid;
   gap: calc(4px * var(--ui-scale));
@@ -677,7 +675,6 @@
   padding: calc(4px * var(--ui-scale));
 }
 
-
 .status-icon {
   width: var(--oc-titlebar-status-icon);
   height: var(--oc-titlebar-status-icon);
@@ -724,7 +721,6 @@
 .status-icon[data-status="cancelled"] {
   color: var(--text-muted);
 }
-
 
 /* ─────────────────────────────────────────────────────────────
    Titlebar responsive collapse (extracted 2026-05-04). At

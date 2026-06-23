@@ -23,13 +23,13 @@ to keep scroll support while user-visible drag/scroll interaction is broken.
 
 ## Call Points
 
-| Surface | File / symbol | Decision |
-| --- | --- | --- |
-| Rail drag owner | `packages/overlay/src/components/ConversationAgentRail.tsx` `attachRailDragScroll` | Keep this as the single drag-scroll implementation. Fix event capture here if needed. |
-| Rail scroll layout | `packages/overlay/src/styles/surfaces/conversation.css` `.conversation-agent-rail__lanes` | Keep one horizontal scroll container; no alternate scrollbar host. |
-| Chat rail parent | `packages/overlay/src/styles/surfaces/workspace.css` `.chat-content-frame`, `.chat-message-pane` | Constrain the parent flex column so rail content cannot expand the workbench instead of overflowing inside lanes. |
-| Source guard | `packages/overlay/test/conversation-agent-rail.test.ts` | Keep lightweight structure checks, but do not rely on them for behavior. |
-| Browser guard | new `packages/overlay/test/browser/conversation-agent-rail-scroll-browser.test.ts` | Add real fixture, screenshot, overflow assertion, drag assertion, and click-not-drag assertion. |
+| Surface            | File / symbol                                                                                    | Decision                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Rail drag owner    | `packages/overlay/src/components/ConversationAgentRail.tsx` `attachRailDragScroll`               | Keep this as the single drag-scroll implementation. Fix event capture here if needed.                             |
+| Rail scroll layout | `packages/overlay/src/styles/surfaces/conversation.css` `.conversation-agent-rail__lanes`        | Keep one horizontal scroll container; no alternate scrollbar host.                                                |
+| Chat rail parent   | `packages/overlay/src/styles/surfaces/workspace.css` `.chat-content-frame`, `.chat-message-pane` | Constrain the parent flex column so rail content cannot expand the workbench instead of overflowing inside lanes. |
+| Source guard       | `packages/overlay/test/conversation-agent-rail.test.ts`                                          | Keep lightweight structure checks, but do not rely on them for behavior.                                          |
+| Browser guard      | new `packages/overlay/test/browser/conversation-agent-rail-scroll-browser.test.ts`               | Add real fixture, screenshot, overflow assertion, drag assertion, and click-not-drag assertion.                   |
 
 ## Acceptance
 

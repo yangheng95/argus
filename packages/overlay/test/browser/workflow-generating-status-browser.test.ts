@@ -98,10 +98,12 @@ test("workflow generating panels expose live busy status regions", async () => {
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "workflow-generating-status" })
-    if (path === "/global/projects/discover") return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
+    if (path === "/global/projects/discover")
+      return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
     if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: projectRoot })
@@ -123,7 +125,14 @@ test("workflow generating panels expose live busy status regions", async () => {
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
@@ -150,7 +159,8 @@ test("workflow generating panels expose live busy status regions", async () => {
     if (path === `/task/${taskID}/operator-model-context`)
       return send({ taskID, sessionID: "session-workflow-generating-status", agent: "orchestrator", model: null })
     if (path === `/task/${taskID}/browser-preview`) return send({ target: null, verification: null })
-    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+    if (path === `/task/${taskID}/conversation/events`)
+      return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send([])
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
@@ -171,15 +181,18 @@ test("workflow generating panels expose live busy status regions", async () => {
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 860 })
-    await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", seed.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      localStorage.setItem("oc_directory", seed.projectRoot)
-      localStorage.setItem("oc_workspace_directory", seed.projectRoot)
-      localStorage.setItem("oc_workspace_task", seed.taskID)
-    }, { serverUrl: server.origin, taskID, projectRoot })
+    await page.evaluateOnNewDocument(
+      (seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", seed.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_directory", seed.projectRoot)
+        localStorage.setItem("oc_workspace_directory", seed.projectRoot)
+        localStorage.setItem("oc_workspace_task", seed.taskID)
+      },
+      { serverUrl: server.origin, taskID, projectRoot },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
@@ -265,7 +278,11 @@ test("workflow generating panels expose live busy status regions", async () => {
     assert.notEqual(statuses.taskRowBadge.text, "active")
     assert.deepEqual(errors, [])
 
-    const screenshot = await saveElementScreenshot(page, ".workflow-section-stack", "workflow-generating-status-live.png")
+    const screenshot = await saveElementScreenshot(
+      page,
+      ".workflow-section-stack",
+      "workflow-generating-status-live.png",
+    )
     assert.ok(screenshot.endsWith("workflow-generating-status-live.png"))
     const workflowBadgeScreenshot = await saveElementScreenshot(
       page,
@@ -279,7 +296,11 @@ test("workflow generating panels expose live busy status regions", async () => {
       "workflow-task-row-active-label.png",
     )
     assert.ok(taskRowScreenshot.endsWith("workflow-task-row-active-label.png"))
-    const taskHeaderScreenshot = await saveElementScreenshot(page, "#taskStatus", "workflow-task-header-active-label.png")
+    const taskHeaderScreenshot = await saveElementScreenshot(
+      page,
+      "#taskStatus",
+      "workflow-task-header-active-label.png",
+    )
     assert.ok(taskHeaderScreenshot.endsWith("workflow-task-header-active-label.png"))
   } finally {
     await browser.close()

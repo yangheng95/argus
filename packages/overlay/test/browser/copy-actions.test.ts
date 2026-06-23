@@ -328,7 +328,9 @@ test(
           logPathResidueCount: document.querySelectorAll(".log-path").length,
           serverLogsButtonCount: document.querySelectorAll("#btnLogServerLogs").length,
           refreshButtonCount: document.querySelectorAll("#btnLogRefresh").length,
-          refreshActionLabels: headerActions.filter((button) => button.id === "btnLogRefresh").map((button) => button.text),
+          refreshActionLabels: headerActions
+            .filter((button) => button.id === "btnLogRefresh")
+            .map((button) => button.text),
           commandActionIds: headerActions.filter((button) => button.id.startsWith("btn")).map((button) => button.id),
           lineCount: document.querySelectorAll(".log-line").length,
           dialogWidth: Math.round(dialogBox?.width ?? 0),

@@ -227,9 +227,12 @@ export function chatAbortTarget(seed?: ChatAbortTarget): ChatAbortTarget | null 
 async function abortChatTargetRemote(target: ChatAbortTarget): Promise<boolean> {
   if (!target) return false
   if (target.kind === "run" && target.runID) {
-    await apiJson(directoryScopedPath(`run/${encodeURIComponent(target.runID)}/abort`, target.directory || "", "abort run"), {
-      method: "POST",
-    })
+    await apiJson(
+      directoryScopedPath(`run/${encodeURIComponent(target.runID)}/abort`, target.directory || "", "abort run"),
+      {
+        method: "POST",
+      },
+    )
     return true
   }
   if (target.kind === "task" && target.taskID) {
@@ -240,7 +243,11 @@ async function abortChatTargetRemote(target: ChatAbortTarget): Promise<boolean> 
   }
   if (target.kind === "session" && target.sessionID) {
     await apiJson(
-      directoryScopedPath(`session/${encodeURIComponent(target.sessionID)}/abort`, target.directory || "", "abort session"),
+      directoryScopedPath(
+        `session/${encodeURIComponent(target.sessionID)}/abort`,
+        target.directory || "",
+        "abort session",
+      ),
       {
         method: "POST",
       },
@@ -450,14 +457,17 @@ export async function panelMessage(
           diff: { prompt_profile: { active: promptProfile } },
         })
       }
-      const result = await apiJson(directoryScopedPath(`session/${encodeURIComponent(sessionID)}/prompt_async`, directory, "session prompt"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parts: sessionPromptParts(text, attachments, requestMetadata),
-        }),
-        signal: controller.signal,
-      })
+      const result = await apiJson(
+        directoryScopedPath(`session/${encodeURIComponent(sessionID)}/prompt_async`, directory, "session prompt"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            parts: sessionPromptParts(text, attachments, requestMetadata),
+          }),
+          signal: controller.signal,
+        },
+      )
       ingestPersistedConversationMessage(result.user_message)
       return result
     }

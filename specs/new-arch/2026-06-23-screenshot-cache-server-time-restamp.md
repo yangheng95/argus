@@ -18,21 +18,21 @@ screenshot items used by the screenshots toolbar.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, no blind patching, test every change, visually verify UI work when relevant, and commit/push every round. |
-| `2026-06-22-screenshot-browser-card-tree-cache.md` | Screenshot browser reads writer-maintained `subtreeScreenshotItems`; opening the toolbar must not walk the whole card tree. |
-| `2026-06-13-overlay-part-first-regroup-stale-card.md` | `message.part.updated` can legitimately arrive before `message.updated`; `ensureMessageTurnProjection` owns deterministic card identity. |
+| Source                                                 | Constraint carried forward                                                                                                                                        |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                            | No fallback, no duplicate source, no blind patching, test every change, visually verify UI work when relevant, and commit/push every round.                       |
+| `2026-06-22-screenshot-browser-card-tree-cache.md`     | Screenshot browser reads writer-maintained `subtreeScreenshotItems`; opening the toolbar must not walk the whole card tree.                                       |
+| `2026-06-13-overlay-part-first-regroup-stale-card.md`  | `message.part.updated` can legitimately arrive before `message.updated`; `ensureMessageTurnProjection` owns deterministic card identity.                          |
 | `2026-06-04-overlay-tool-agent-timer-single-source.md` | Normal repeated `message.updated` events must preserve the first authoritative message-created time; only part-first observation time is replaced by server time. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Part-first projection | `ensurePartProjection()` creates the deterministic message card at observation time when no message metadata exists. | Keep this path; it is the single durable reconstruction owner. |
-| Server-time restamp | `ensureMessageTurnProjection()` sets `cards[cardID].time = opts.time` when the later `message.updated` arrives for an existing part-first card. | Mark the card stats dirty only when that time actually changes. |
-| Screenshot cache | `collectScreenshotBrowserItemsFromCard(card)` reads `CardNode.time` into every screenshot item. | Recompute `subtreeScreenshotItems` through the existing stats kernel; do not add a panel-local cache. |
-| Tests | `tree-writer-stats-cache.test.ts` already verifies screenshot cache invariants after writer mutations. | Add a part-before-message ordering regression. |
+| Surface               | Evidence                                                                                                                                        | Decision                                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Part-first projection | `ensurePartProjection()` creates the deterministic message card at observation time when no message metadata exists.                            | Keep this path; it is the single durable reconstruction owner.                                        |
+| Server-time restamp   | `ensureMessageTurnProjection()` sets `cards[cardID].time = opts.time` when the later `message.updated` arrives for an existing part-first card. | Mark the card stats dirty only when that time actually changes.                                       |
+| Screenshot cache      | `collectScreenshotBrowserItemsFromCard(card)` reads `CardNode.time` into every screenshot item.                                                 | Recompute `subtreeScreenshotItems` through the existing stats kernel; do not add a panel-local cache. |
+| Tests                 | `tree-writer-stats-cache.test.ts` already verifies screenshot cache invariants after writer mutations.                                          | Add a part-before-message ordering regression.                                                        |
 
 ## Root Cause
 

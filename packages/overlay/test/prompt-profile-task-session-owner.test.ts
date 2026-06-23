@@ -15,11 +15,9 @@ const { HOST_CAPABILITIES, __setHostTransportForTest } = await import("../src/se
 const { setAppStore } = await import("../src/store/app")
 const { setBoardStore } = await import("../src/store/board")
 const { setSettingsStore } = await import("../src/store/settings")
-const {
-  promptProfileCatalogDirectory,
-  promptProfileCatalogRequestKey,
-  promptProfileCatalogScope,
-} = await import("../src/services/prompt-profile-scope")
+const { promptProfileCatalogDirectory, promptProfileCatalogRequestKey, promptProfileCatalogScope } = await import(
+  "../src/services/prompt-profile-scope"
+)
 
 function resetStores(): void {
   setAppStore({
@@ -158,7 +156,11 @@ describe("prompt profile task session owner", () => {
     setBoardStore("selectedSource", { kind: "session", id: "ses_direct" })
 
     expect(projectKey).toMatch(/^prompt-profile:catalog:D:\/repo\/project:project:\d+$/)
-    expect(promptProfileCatalogScope()).toEqual({ kind: "session", sessionID: "ses_direct", directory: "D:/repo/project" })
+    expect(promptProfileCatalogScope()).toEqual({
+      kind: "session",
+      sessionID: "ses_direct",
+      directory: "D:/repo/project",
+    })
     expect(promptProfileCatalogRequestKey()).toMatch(
       /^prompt-profile:catalog:D:\/repo\/project:session:ses_direct:\d+$/,
     )

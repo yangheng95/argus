@@ -72,7 +72,8 @@ async function withTaskDecisionFixture(
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "app-dialog-task-decision" })
-    if (path === "/global/projects/discover") return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
+    if (path === "/global/projects/discover")
+      return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
     if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
     if (path === "/mission" || path === "/session") return send([])
     if (path === "/path") return send({ directory: projectRoot, exists: true, git: true })
@@ -97,7 +98,8 @@ async function withTaskDecisionFixture(
     if (path === "/terminal/profiles") return send({ defaultProfileID: "powershell", profiles: [] })
     if (path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/agent" || path === "/channel") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
     if (path === "/mcp") return send({})
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
@@ -106,8 +108,10 @@ async function withTaskDecisionFixture(
       taskBodies.push(await req.json())
       return send({ task_id: taskID })
     }
-    if (path === `/task/${taskID}/board`) return send({ cards: [], status: "queued" }, { headers: { etag: `"${taskID}"` } })
-    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+    if (path === `/task/${taskID}/board`)
+      return send({ cards: [], status: "queued" }, { headers: { etag: `"${taskID}"` } })
+    if (path === `/task/${taskID}/conversation/events`)
+      return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send([])
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
     if (path === `/task/${taskID}/followup`) return send({ followup: null })
@@ -128,45 +132,48 @@ async function withTaskDecisionFixture(
       pageErrors.push(`${error.message}\n${error.stack ?? ""}`)
     })
     await page.setViewport({ width: 720, height: 560 })
-    await page.evaluateOnNewDocument(({ serverUrl, directory }) => {
-      ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_directory", directory)
-      localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      ;(window as any).__TAURI__ = {
-        core: {
-          invoke: async (command: string) => {
-            if (command === "overlay_settings_load") {
-              return {
-                serverUrl,
-                autoServer: false,
-                locale: "en-US",
-                theme: "light",
-                directory,
+    await page.evaluateOnNewDocument(
+      ({ serverUrl, directory }) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_directory", directory)
+        localStorage.setItem("oc_server_url", serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        ;(window as any).__TAURI__ = {
+          core: {
+            invoke: async (command: string) => {
+              if (command === "overlay_settings_load") {
+                return {
+                  serverUrl,
+                  autoServer: false,
+                  locale: "en-US",
+                  theme: "light",
+                  directory,
+                }
               }
-            }
-            if (command === "overlay_settings_save") return true
-            return null
+              if (command === "overlay_settings_save") return true
+              return null
+            },
           },
-        },
-        window: {
-          getCurrentWindow() {
-            return {
-              close: async () => undefined,
-              hide: async () => undefined,
-              minimize: async () => undefined,
-              startDragging: async () => undefined,
-              isMaximized: async () => false,
-              onResized: async () => ({ unlisten: async () => undefined }),
-              onMoved: async () => ({ unlisten: async () => undefined }),
-              listen: async () => ({ unlisten: async () => undefined }),
-            }
+          window: {
+            getCurrentWindow() {
+              return {
+                close: async () => undefined,
+                hide: async () => undefined,
+                minimize: async () => undefined,
+                startDragging: async () => undefined,
+                isMaximized: async () => false,
+                onResized: async () => ({ unlisten: async () => undefined }),
+                onMoved: async () => ({ unlisten: async () => undefined }),
+                listen: async () => ({ unlisten: async () => undefined }),
+              }
+            },
           },
-        },
-      }
-    }, { serverUrl: server.origin, directory: projectRoot })
+        }
+      },
+      { serverUrl: server.origin, directory: projectRoot },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
@@ -230,9 +237,7 @@ test("app dialog task decision uses the real host and segmented control", async 
       const startStyle = start ? getComputedStyle(start) : null
       const queueStyle = queue ? getComputedStyle(queue) : null
       const badge = document.querySelector<HTMLElement>('[data-ui="app-dialog-recommended-badge"]')
-      const badgeStyle = badge
-        ? getComputedStyle(badge)
-        : null
+      const badgeStyle = badge ? getComputedStyle(badge) : null
       const bodyStyle = document.querySelector<HTMLElement>(".app-dialog-decision__choice-body")
         ? getComputedStyle(document.querySelector<HTMLElement>(".app-dialog-decision__choice-body")!)
         : null
@@ -349,9 +354,7 @@ test("app dialog task decision settles queue with keyboard and pointer activatio
 
   await withTaskDecisionFixture("space-queue", async ({ page, taskBodies }) => {
     await page.keyboard.press("ArrowRight")
-    await page.waitForFunction(
-      () => (document.activeElement as HTMLElement | null)?.dataset?.value === "queue",
-    )
+    await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset?.value === "queue")
     const queueFocus = await page.$eval('.app-dialog-decision__choice[data-value="queue"]', (node) => {
       const element = node as HTMLElement
       const styles = getComputedStyle(element)

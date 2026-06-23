@@ -16,21 +16,21 @@ contract without adding a second dialog header slot.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | Delete high-confidence dead CSS, avoid double-source UI contracts, and test the deletion. |
-| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Dialog semantics should live behind the shared Dialog primitive boundary. |
-| `2026-06-19-retire-dialog-head-residue.md` | Dialog header/title DOM should stay primitive-owned rather than feature-owned. |
-| `2026-06-19-retire-session-dialog-diff-residue.md` | Session dialogs should use the canonical `.dialog-title` path, not nested dialog title elements. |
+| Source                                                | Constraint carried forward                                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                           | Delete high-confidence dead CSS, avoid double-source UI contracts, and test the deletion.        |
+| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Dialog semantics should live behind the shared Dialog primitive boundary.                        |
+| `2026-06-19-retire-dialog-head-residue.md`            | Dialog header/title DOM should stay primitive-owned rather than feature-owned.                   |
+| `2026-06-19-retire-session-dialog-diff-residue.md`    | Session dialogs should use the canonical `.dialog-title` path, not nested dialog title elements. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Runtime dialog primitive | `Dialog.tsx` renders `.dialog-header`, `.dialog-title`, and optional header actions; it has no subtitle prop. | Keep the primitive unchanged. |
-| Feature dialog hosts | `AppDialogHost`, `ConfigDialogHost`, `GoalDialogHost`, `InteractionDialogHost`, `SessionDialogHost`, and `WorkspaceOnboardingDialog` do not render `.dialog-subtitle`. | Do not add a subtitle slot just to justify stale CSS. |
-| CSS | `.dialog-subtitle` appears only in `styles/cascade/typography.css`. | Delete the selector. |
-| Tests | `content-tier2-typography.test.ts` only asserted the stale selector avoided uppercase. | Convert it to an absence guard while preserving the live pill uppercase negative control. |
+| Surface                  | Evidence                                                                                                                                                               | Decision                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Runtime dialog primitive | `Dialog.tsx` renders `.dialog-header`, `.dialog-title`, and optional header actions; it has no subtitle prop.                                                          | Keep the primitive unchanged.                                                             |
+| Feature dialog hosts     | `AppDialogHost`, `ConfigDialogHost`, `GoalDialogHost`, `InteractionDialogHost`, `SessionDialogHost`, and `WorkspaceOnboardingDialog` do not render `.dialog-subtitle`. | Do not add a subtitle slot just to justify stale CSS.                                     |
+| CSS                      | `.dialog-subtitle` appears only in `styles/cascade/typography.css`.                                                                                                    | Delete the selector.                                                                      |
+| Tests                    | `content-tier2-typography.test.ts` only asserted the stale selector avoided uppercase.                                                                                 | Convert it to an absence guard while preserving the live pill uppercase negative control. |
 
 ## Root Cause
 

@@ -60,10 +60,12 @@ export const ResearchFinalizeSchema = z
   })
   .strict()
 
-const WebpageContractSourceInputSchema = z.object({
-  source_url: z.string().min(1).refine(isHttpWebpageUrl, "source_url must be an HTTP(S) webpage URL"),
-  reference_image_evidence_ids: z.array(z.string().min(1)).default([]),
-}).strict()
+const WebpageContractSourceInputSchema = z
+  .object({
+    source_url: z.string().min(1).refine(isHttpWebpageUrl, "source_url must be an HTTP(S) webpage URL"),
+    reference_image_evidence_ids: z.array(z.string().min(1)).default([]),
+  })
+  .strict()
 
 const ResearchBriefDraftSchema = ResearchBriefSchema.omit({
   metadata: true,
@@ -293,7 +295,10 @@ function researchMissingActions(
   options: { expectedWebpageSourceUrl?: string } = {},
 ): string[] {
   const actions: string[] = []
-  if (!collector.scope) actions.push("update_research_scope({ user_goal, deliverable_type, audience, explicit_non_goals, assumed_non_goals })")
+  if (!collector.scope)
+    actions.push(
+      "update_research_scope({ user_goal, deliverable_type, audience, explicit_non_goals, assumed_non_goals })",
+    )
   if (!collector.summary) actions.push("update_research_summary({ summary })")
   if (collector.bundle.full_markdown_sections.length === 0) {
     actions.push("update_research_bundle_section({ title, evidence_ids, points })")
@@ -305,14 +310,20 @@ function researchMissingActions(
     actions.push("update_research_citation({ claim_id, evidence_ids, pointer, usage })")
   }
   if (options.expectedWebpageSourceUrl && !collector.webpage_contract_source) {
-    actions.push(`update_webpage_contract_source({ source_url: "${options.expectedWebpageSourceUrl}", reference_image_evidence_ids })`)
+    actions.push(
+      `update_webpage_contract_source({ source_url: "${options.expectedWebpageSourceUrl}", reference_image_evidence_ids })`,
+    )
   }
   if (collector.webpage_contract_source || options.expectedWebpageSourceUrl) {
     if (collector.webpage_functional_surfaces.length === 0) {
-      actions.push("update_webpage_functional_surface({ id, title, user_visible_behavior, component_kind_hypothesis, required_interactions, evidence_ids })")
+      actions.push(
+        "update_webpage_functional_surface({ id, title, user_visible_behavior, component_kind_hypothesis, required_interactions, evidence_ids })",
+      )
     }
     if (collector.webpage_visual_layout.length === 0) {
-      actions.push("update_webpage_visual_layout({ id, viewport, region, layout_contract, spacing_and_alignment, evidence_ids })")
+      actions.push(
+        "update_webpage_visual_layout({ id, viewport, region, layout_contract, spacing_and_alignment, evidence_ids })",
+      )
     }
     if (collector.webpage_style_requirements.length === 0) {
       actions.push("update_webpage_style_requirement({ id, token_or_selector, requirement, evidence_ids })")
@@ -327,7 +338,10 @@ function researchMissingActions(
   return actions
 }
 
-function researchResultStatus(collector: ResearchCollector, options: { expectedWebpageSourceUrl?: string } = {}): string {
+function researchResultStatus(
+  collector: ResearchCollector,
+  options: { expectedWebpageSourceUrl?: string } = {},
+): string {
   if (collector.finalized) return "RESEARCH_RESULT_STATUS: finalized"
   const missing = researchMissingActions(collector, options)
   const lines = [
@@ -490,7 +504,11 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchInferenceSchema.parse(input)
-        const factErr = unknownFactIDError(collector, `inference "${parsed.id}".based_on_fact_ids`, parsed.based_on_fact_ids)
+        const factErr = unknownFactIDError(
+          collector,
+          `inference "${parsed.id}".based_on_fact_ids`,
+          parsed.based_on_fact_ids,
+        )
         if (factErr) return factErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.inferences, parsed)
@@ -686,7 +704,11 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
         const closed = rejectFinalized(collector)
         if (closed) return closed
         const parsed = ResearchOpenQuestionSchema.parse(input)
-        const factErr = unknownFactIDError(collector, `open_question "${parsed.id}".related_fact_ids`, parsed.related_fact_ids)
+        const factErr = unknownFactIDError(
+          collector,
+          `open_question "${parsed.id}".related_fact_ids`,
+          parsed.related_fact_ids,
+        )
         if (factErr) return factErr
         markCollectorMutated(collector)
         const mode = upsertByID(collector.open_questions, parsed)

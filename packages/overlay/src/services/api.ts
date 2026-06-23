@@ -527,10 +527,7 @@ export function peekResourceObjectUrl(raw: string): string | undefined {
  * traffic. Throws on network / HTTP errors — no fallback to the raw URL,
  * since that would silently mask origin / auth mistakes.
  */
-export async function fetchResourceAsObjectUrl(
-  raw: string,
-  options: { signal?: AbortSignal } = {},
-): Promise<string> {
+export async function fetchResourceAsObjectUrl(raw: string, options: { signal?: AbortSignal } = {}): Promise<string> {
   const signal = options.signal
   if (signal?.aborted) throw resourceAbortReason(signal)
   const cached = blobCache.get(raw)
@@ -615,10 +612,7 @@ function createBlobInFlightEntry(raw: string): BlobInFlightEntry {
   return entry
 }
 
-function consumeBlobInFlightEntry(
-  entry: BlobInFlightEntry,
-  signal: AbortSignal | undefined,
-): Promise<string> {
+function consumeBlobInFlightEntry(entry: BlobInFlightEntry, signal: AbortSignal | undefined): Promise<string> {
   if (signal?.aborted) return Promise.reject(resourceAbortReason(signal))
   entry.consumers += 1
   let released = false

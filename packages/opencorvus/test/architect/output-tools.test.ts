@@ -807,7 +807,8 @@ test("register_visual_evidence_acceptance attaches canonical final visual judge 
     {
       id: "goal_visual_verify",
       title: "Visual verification",
-      objective: "Verify the completed page against authoritative desktop and mobile reference evidence using rendered visual evidence.",
+      objective:
+        "Verify the completed page against authoritative desktop and mobile reference evidence using rendered visual evidence.",
       acceptance_specs: [acceptance("goal_visual_verify", [], "REQ-1")],
       owned_paths: ["tests/visual.spec.ts"],
       depends_on: ["goal_page_impl"],
@@ -835,11 +836,7 @@ test("register_visual_evidence_acceptance attaches canonical final visual judge 
       title: "Final TradingView reference visual parity",
       criteria:
         "Judge whether the implementation's current rendered page matches the authoritative TradingView reference screenshots, DOM evidence, spacing, density, typography, and interaction-state captures.",
-      reference_tokens: [
-        "ref-world-economy-desktop",
-        "world-economy full page desktop",
-        "vis-world-economy-page",
-      ],
+      reference_tokens: ["ref-world-economy-desktop", "world-economy full page desktop", "vis-world-economy-page"],
     },
     {} as any,
   )
@@ -866,7 +863,8 @@ test("register_visual_evidence_acceptance rejects non-final goal kinds without m
     {
       id: "goal_feature_visual",
       title: "Feature visual implementation",
-      objective: "Implement the visual regions but leave final reference evidence verification to a final verification goal.",
+      objective:
+        "Implement the visual regions but leave final reference evidence verification to a final verification goal.",
       acceptance_specs: [acceptance("goal_feature_visual", [], "REQ-1")],
       owned_paths: ["src/page.tsx"],
       depends_on: [],

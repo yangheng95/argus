@@ -7,13 +7,13 @@ Document Object Model.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | Mature primitives must own repeated UI chrome; frontend changes require real browser screenshots. |
-| `2026-06-20-app-dialog-task-decision-keyboard.md` | AppDialog task decisions must keep the real `AppDialogHost` and shared Kobalte `SegmentedControl` chain. |
-| `2026-06-09-overlay-ui-tech-debt-consensus.md` | Overlay controls should converge on mature/shared primitives, and tests should stop preserving debt shapes. |
-| Settings primitives review | `SettingsPill` is settings-surface owned and should not become a general overlay badge by import leakage. |
-| Inline pill review | `gwg-priority-badge` is a dotted advisory status, not a generic compact label. |
+| Source                                            | Relevant constraint                                                                                         |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                       | Mature primitives must own repeated UI chrome; frontend changes require real browser screenshots.           |
+| `2026-06-20-app-dialog-task-decision-keyboard.md` | AppDialog task decisions must keep the real `AppDialogHost` and shared Kobalte `SegmentedControl` chain.    |
+| `2026-06-09-overlay-ui-tech-debt-consensus.md`    | Overlay controls should converge on mature/shared primitives, and tests should stop preserving debt shapes. |
+| Settings primitives review                        | `SettingsPill` is settings-surface owned and should not become a general overlay badge by import leakage.   |
+| Inline pill review                                | `gwg-priority-badge` is a dotted advisory status, not a generic compact label.                              |
 
 ## Problem
 
@@ -33,12 +33,12 @@ would continue the tag/chip drift.
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "app-dialog-decision__badge|recommended|AppDialogHost|SegmentedControl" packages/overlay/src packages/overlay/test specs/new-arch -S` | AppDialog recommended badge is isolated to `AppDialogHost`, `dialog.css`, static tests, and the real browser test. | Migrate AppDialog only in this slice. |
-| `Get-ChildItem packages/overlay/src/components/ui` | No shared read-only Tag/Pill/Badge primitive exists. | Add a minimal `Badge` primitive under `components/ui`. |
-| `rg -n -e "inline-pill" -e "s-pill" -e "gwg-priority-badge" packages/overlay/src packages/overlay/test specs/new-arch -S` | Existing pill classes are surface-specific: settings or GWG. | Do not import them into AppDialog. |
-| AppDialog browser test review | The test already opens the real overlay, screenshots focus/hover, and checks badge color through the private selector. | Keep the visual test but query the shared `oc-badge` contract. |
+| Sweep                                                                                                                     | Result                                                                                                                 | Decision                                                       |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `rg -n "app-dialog-decision\_\_badge                                                                                      | recommended                                                                                                            | AppDialogHost                                                  | SegmentedControl" packages/overlay/src packages/overlay/test specs/new-arch -S` | AppDialog recommended badge is isolated to `AppDialogHost`, `dialog.css`, static tests, and the real browser test. | Migrate AppDialog only in this slice. |
+| `Get-ChildItem packages/overlay/src/components/ui`                                                                        | No shared read-only Tag/Pill/Badge primitive exists.                                                                   | Add a minimal `Badge` primitive under `components/ui`.         |
+| `rg -n -e "inline-pill" -e "s-pill" -e "gwg-priority-badge" packages/overlay/src packages/overlay/test specs/new-arch -S` | Existing pill classes are surface-specific: settings or GWG.                                                           | Do not import them into AppDialog.                             |
+| AppDialog browser test review                                                                                             | The test already opens the real overlay, screenshots focus/hover, and checks badge color through the private selector. | Keep the visual test but query the shared `oc-badge` contract. |
 
 ## Fix Plan
 

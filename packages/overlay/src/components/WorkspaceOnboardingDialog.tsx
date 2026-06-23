@@ -4,12 +4,7 @@ import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
 import { settingsStore } from "../store/settings"
 import { useAsyncAction } from "../solid/async-action"
-import {
-  browseDirectory,
-  loadRecentDirectories,
-  setDirectory,
-  type DiscoveredProject,
-} from "../services/workspace"
+import { browseDirectory, loadRecentDirectories, setDirectory, type DiscoveredProject } from "../services/workspace"
 import { getHostTransport } from "../services/host-transport"
 import { loadWorkspaceOnboardingDiscovery } from "../services/workspace-onboarding-discovery"
 import { t } from "../utils/i18n"

@@ -134,7 +134,9 @@ describe("flat-redesign Rule C — state changes use bg/stripe, not border-color
     const body = ruleBody(titlebar, '.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-expanded]')
     expect(body).not.toMatch(/border-color\s*:/)
     expect(body).toMatch(/--oc-button-bg\s*:/)
-    expect(titlebar).not.toContain('.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"]')
+    expect(titlebar).not.toContain(
+      '.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"]',
+    )
   })
 
   test('.oc-section[data-phase-state="active"] uses bg-tint only, not border-color or rails', () => {

@@ -60,7 +60,11 @@ function documentedQuickNoteImports(markdown: string): string[] {
   const pattern = /import\s+\{([\s\S]*?)\}\s+from\s+["']@\/quicknote["']/g
   for (const match of markdown.matchAll(pattern)) {
     for (const item of match[1].split(",")) {
-      const name = item.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]?.trim()
+      const name = item
+        .trim()
+        .replace(/^type\s+/, "")
+        .split(/\s+as\s+/)[0]
+        ?.trim()
       if (name) imports.add(name)
     }
   }

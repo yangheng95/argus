@@ -34,12 +34,12 @@ future audits do not treat the rejected strip as a live surface.
 
 ## Call Points
 
-| Surface | Evidence | Required action |
-| --- | --- | --- |
-| `ExecutorSelector.tsx` | `hexinBudgetKey` currently returns only `parts.name`; `HexinBudgetRow` renders after `.executor-dualbar`. | Restore a composite key containing directory, model, session refresh, task id, and timer tick. Render the budget as chip meta. |
-| `composer.css` | `.executor-budget-row` currently styles a full-width strip. | Restore inline chip label-row styling and low-balance state, then rename the live selector to `.executor-budget-inline`. |
-| `executor-selector-dualbar.test.ts` | Static assertions no longer require refresh timer, directory key, low-balance state, or inline meta. | Restore contract assertions. |
-| `executor-selector-redesign.test.ts` | Browser test no longer validates one-row layout, status semantics, low-balance color, or compact popover bounds. | Restore visual/DOM checks and keep real hit-tested clicks. |
+| Surface                              | Evidence                                                                                                         | Required action                                                                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ExecutorSelector.tsx`               | `hexinBudgetKey` currently returns only `parts.name`; `HexinBudgetRow` renders after `.executor-dualbar`.        | Restore a composite key containing directory, model, session refresh, task id, and timer tick. Render the budget as chip meta. |
+| `composer.css`                       | `.executor-budget-row` currently styles a full-width strip.                                                      | Restore inline chip label-row styling and low-balance state, then rename the live selector to `.executor-budget-inline`.       |
+| `executor-selector-dualbar.test.ts`  | Static assertions no longer require refresh timer, directory key, low-balance state, or inline meta.             | Restore contract assertions.                                                                                                   |
+| `executor-selector-redesign.test.ts` | Browser test no longer validates one-row layout, status semantics, low-balance color, or compact popover bounds. | Restore visual/DOM checks and keep real hit-tested clicks.                                                                     |
 
 ## Fix
 

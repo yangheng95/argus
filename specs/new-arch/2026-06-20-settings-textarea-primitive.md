@@ -5,11 +5,11 @@
 Settings owns three long-text editors that bypass the shared
 `AutoGrowTextarea` primitive:
 
-| Surface | Evidence | Current owner |
-| --- | --- | --- |
-| Prompt profile description | `packages/overlay/src/components/settings/PromptCatalog.tsx` | raw `<textarea class="field-input prompt-profile-description">` |
-| Prompt profile agent prompt | `packages/overlay/src/components/settings/PromptCatalog.tsx` | raw `<textarea class="field-input prompt-profile-textarea">` |
-| Provider model list | `packages/overlay/src/components/settings/ProvidersPanel.tsx` | raw `<textarea class="field-input provider-models-textarea">` |
+| Surface                     | Evidence                                                      | Current owner                                                   |
+| --------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------- |
+| Prompt profile description  | `packages/overlay/src/components/settings/PromptCatalog.tsx`  | raw `<textarea class="field-input prompt-profile-description">` |
+| Prompt profile agent prompt | `packages/overlay/src/components/settings/PromptCatalog.tsx`  | raw `<textarea class="field-input prompt-profile-textarea">`    |
+| Provider model list         | `packages/overlay/src/components/settings/ProvidersPanel.tsx` | raw `<textarea class="field-input provider-models-textarea">`   |
 
 `packages/overlay/src/components/primitives/AutoGrowTextarea.tsx` is the
 single behavior source for auto-growing textareas, and
@@ -20,11 +20,11 @@ duplicates the scrollbar/focus contract.
 
 ## Recall
 
-| Search | Result |
-| --- | --- |
-| `rg "<textarea|AutoGrowTextarea|composer-textarea" packages/overlay/src/components packages/overlay/test` | Production raw textarea users are isolated to `PromptCatalog.tsx` and `ProvidersPanel.tsx`; existing primitive users include `ChatComposer`, `GoalDialogHost`, `InteractionCard`, and `AgentSessionReplyBox`. |
-| `rg "prompt-profile-textarea|provider-models-textarea" packages/overlay/src packages/overlay/test` | Static tests currently pin the old `field-input` class, and browser prompt-profile coverage already screenshots the editable prompt profile surface. |
-| `rg "provider-discover-models|provider-search-input" packages/overlay/test/browser` | Provider settings browser coverage can open the real settings dialog and inspect the add-provider models textarea. |
+| Search                        | Result                                                                |
+| ----------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg "<textarea                | AutoGrowTextarea                                                      | composer-textarea" packages/overlay/src/components packages/overlay/test`                                                                            | Production raw textarea users are isolated to `PromptCatalog.tsx` and `ProvidersPanel.tsx`; existing primitive users include `ChatComposer`, `GoalDialogHost`, `InteractionCard`, and `AgentSessionReplyBox`. |
+| `rg "prompt-profile-textarea  | provider-models-textarea" packages/overlay/src packages/overlay/test` | Static tests currently pin the old `field-input` class, and browser prompt-profile coverage already screenshots the editable prompt profile surface. |
+| `rg "provider-discover-models | provider-search-input" packages/overlay/test/browser`                 | Provider settings browser coverage can open the real settings dialog and inspect the add-provider models textarea.                                   |
 
 ## Fix Plan
 

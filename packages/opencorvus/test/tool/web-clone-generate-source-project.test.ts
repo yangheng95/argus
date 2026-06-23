@@ -61,7 +61,7 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(await Bun.file(path.join(outputDir, "src", "styles", "source-critical.css")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "src", "vite-env.d.ts")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "reference.png")).exists()).toBe(true)
-        expect(await Bun.file(path.join(outputDir, "reference-mobile.png")).exists()).toBe(true)
+        expect(await Bun.file(path.join(outputDir, "reference-mobile.png")).exists()).toBe(false)
         expect(await Bun.file(path.join(outputDir, "tsconfig.json")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "vite.config.ts")).exists()).toBe(true)
 
@@ -111,8 +111,8 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"width": 1366')
         expect(sourceDomIterationState).toContain('"height": 768')
         expect(sourceDomIterationState).toContain('"evidenceSource": "capture_viewport"')
-        expect(sourceDomIterationState).toContain('"mobile-review"')
-        expect(sourceDomIterationState).toContain('"referenceImage": "web-clone-source/reference-mobile.png"')
+        expect(sourceDomIterationState).not.toContain('"mobile-review"')
+        expect(sourceDomIterationState).not.toContain('"referenceImage": "web-clone-source/reference-mobile.png"')
         expect(sourceDomIterationState).toContain('"wide-review"')
         expect(sourceProjectManifest.visualIteration.evidenceMethod).toBe("task_scoped_preview_screenshots")
         expect(sourceProjectManifest.generatedFrom).toContain("source-ir/style-profile.json")
@@ -123,18 +123,17 @@ describe("tool.web_clone_generate_source_project", () => {
           evidenceSource: "capture_viewport",
         })
         expect(sourceProjectManifest.visualIteration.viewportMatrix.map((item: { name: string }) => item.name)).toEqual(
-          ["desktop-reference", "mobile-review", "wide-review"],
+          ["desktop-reference", "wide-review"],
         )
         expect(sourceProjectManifest.visualIteration.viewportMatrix[1]).toMatchObject({
-          name: "mobile-review",
-          width: 390,
-          height: 844,
-          evidenceSource: "matching_reference",
-          referenceImage: "web-clone-source/reference-mobile.png",
+          name: "wide-review",
+          width: 1920,
+          height: 1080,
+          evidenceSource: "default",
         })
         expect(readme).toContain("Visual iteration viewport matrix")
         expect(readme).toContain("desktop-reference 1366x768")
-        expect(readme).toContain("web-clone-source/reference-mobile.png")
+        expect(readme).not.toContain("web-clone-source/reference-mobile.png")
         expect(readme).toContain("source-ir/style-profile.json")
         expect(sourceSvgAssetGroups).toContain("sourceSvgAssetGroups")
         expect(sourceFaqGroups).toContain("sourceFaqGroups")
@@ -190,19 +189,19 @@ describe("tool.web_clone_generate_source_project", () => {
     })
   }, 30_000)
 
-  test("rejects source project generation when the mobile reference image is missing", async () => {
+  test("does not require a mobile reference image for source project generation", async () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
-    await fs.rm(path.join(webpageEvidenceDir, "reference-mobile.png"))
     const outputDir = path.join(tmp.path, "generated-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await expect(generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)).rejects.toThrow(
-          "webpage evidence is missing required mobile reference image",
-        )
+        const generated = await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
+        expect(generated.title).toBe("Web clone source project generated")
+        expect(await Bun.file(path.join(outputDir, "reference.png")).exists()).toBe(true)
+        expect(await Bun.file(path.join(outputDir, "reference-mobile.png")).exists()).toBe(false)
       },
     })
   }, 30_000)
@@ -1118,7 +1117,6 @@ async function generatedSourceFiles(dir: string): Promise<string[]> {
 async function writeFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(
     path.join(webpageEvidenceDir, "extracted-page.json"),
     JSON.stringify(
@@ -1327,7 +1325,6 @@ async function writeFixtureEvidence(root: string): Promise<string> {
 async function writeRegionizedFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-regionized")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 36 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="map-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" id="land-${index + 1}" class="positive-s"></path>`
@@ -1468,7 +1465,6 @@ async function writeRegionizedFixtureEvidence(root: string): Promise<string> {
 async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShell?: boolean } = {}): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-news")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const cards = [
     ["Dow Jones Newswires", "Factory Activity Expands in May", "https://example.com/news/1"],
     ["dpa-AFX", "U.S. Construction Spending Increases", "https://example.com/news/2"],
@@ -1578,7 +1574,6 @@ async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShe
 async function writeBbcPromoFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-bbc-promo")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const rows = [
     [
       "Massive Russian attack on cities across Ukraine kills at least 13 people",
@@ -1721,7 +1716,6 @@ async function writeBbcPromoFixtureEvidence(root: string): Promise<string> {
 async function writeSemanticTableFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-table")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -1834,7 +1828,6 @@ async function writeSemanticTableFixtureEvidence(root: string): Promise<string> 
 async function writeSemanticEventFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-events")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const cards = [
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "3-Month Bill Auction", "18:59", "—", "3.595", "%"],
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "6-Month Bill Auction", "18:59", "—", "3.65", "%"],
@@ -1956,7 +1949,6 @@ async function writeSemanticEventFixtureEvidence(root: string): Promise<string> 
 async function writeSemanticIdeaCardsFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-ideas")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -2177,7 +2169,6 @@ function renderFixtureIdeaCard(input: {
 async function writeCompositeWidgetFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-composite")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -2298,7 +2289,6 @@ function renderCompositeFixtureEvents(): string {
 async function writeSemanticFooterFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-footer")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -2408,7 +2398,6 @@ async function writeSemanticFooterFixtureEvidence(root: string): Promise<string>
 async function writeSemanticMapFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-map")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 24 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     const colorClass = index % 2 === 0 ? "country-positive" : "country-neutral"
@@ -2532,7 +2521,6 @@ async function writeSemanticMapFixtureEvidence(root: string): Promise<string> {
 async function writeSemanticMetricRankingFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-ranking")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const rows = [
     ["India", "india", "7.80%", "3.91 T", "USD", "asset_000449.svg.txt"],
     ["Indonesia", "indonesia", "5.61%", "1.40 T", "USD", "asset_000450.svg.txt"],
@@ -2638,7 +2626,6 @@ async function writeSemanticMetricRankingFixtureEvidence(root: string): Promise<
 async function writeMixedEconomicTrendsFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-mixed-economic-trends")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 20 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="map-path-${index}" data-asset-d="../assets/svg/${assetId}.path.txt" id="country-${index}" class="positive-s" fill="currentColor"></path>`
@@ -2734,7 +2721,6 @@ async function writeMixedEconomicTrendsFixtureEvidence(root: string): Promise<st
 async function writeSemanticLinkGridFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-link-grid")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const countries = [
     ["Argentina", "argentina"],
     ["Australia", "australia"],
@@ -2831,7 +2817,6 @@ async function writeSemanticLinkGridFixtureEvidence(root: string): Promise<strin
 async function writeSemanticHeaderFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-header")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const iconPaths = Array.from({ length: 8 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="header-icon-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" fill="currentColor"></path>`
@@ -2961,7 +2946,6 @@ async function writeSemanticHeaderFixtureEvidence(root: string): Promise<string>
 async function writeSemanticSectionShellFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-section-shell")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   const chartPaths = Array.from({ length: 18 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="idea-path-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" id="series-${index + 1}" class="series-path" fill="currentColor"></path>`
@@ -3085,7 +3069,6 @@ function renderFixtureFaqItems(startOrder: number, questions: string[]): string 
 async function writeGenericStructureFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-generic-structure")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `

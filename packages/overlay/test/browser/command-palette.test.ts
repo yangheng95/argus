@@ -223,7 +223,9 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
       await page.keyboard.type(query)
       await page.waitForFunction(
         (targetPanelID) => {
-          const activeID = document.querySelector<HTMLInputElement>(".cmdk-input")?.getAttribute("aria-activedescendant")
+          const activeID = document
+            .querySelector<HTMLInputElement>(".cmdk-input")
+            ?.getAttribute("aria-activedescendant")
           const active = activeID ? document.getElementById(activeID) : null
           return (
             active instanceof HTMLElement &&
@@ -294,8 +296,14 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
     assert.match(String(openState.dialogClass), /cmdk-dialog/)
     assert.match(String(openState.panelClass), /dialog-form/)
     assert.match(String(openState.panelClass), /cmdk-panel/)
-    assert.ok(openState.headerWidth <= 1, `expected command palette title header to be visually hidden: ${JSON.stringify(openState)}`)
-    assert.ok(openState.panelTop > 48 && openState.panelTop < 160, `unexpected command palette top offset: ${JSON.stringify(openState)}`)
+    assert.ok(
+      openState.headerWidth <= 1,
+      `expected command palette title header to be visually hidden: ${JSON.stringify(openState)}`,
+    )
+    assert.ok(
+      openState.panelTop > 48 && openState.panelTop < 160,
+      `unexpected command palette top offset: ${JSON.stringify(openState)}`,
+    )
     assert.ok(
       openState.viewportWidth - openState.panelWidth >= 64,
       `expected command palette side breathing room: ${JSON.stringify(openState)}`,
@@ -379,9 +387,11 @@ test("command palette uses the shared Dialog primitive while preserving hotkey f
     assert.notEqual(afterArrow.activeCommandID, activeRelation.activeCommandID)
     assert.match(afterArrow.activeClass, /cmdk-item/)
     const visibleErrors = await page.evaluate(() =>
-      Array.from(document.querySelectorAll<HTMLElement>('.app-notification[data-tone="error"], .app-notification[data-tone="warning"]')).map(
-        (item) => item.textContent?.replace(/\s+/g, " ").trim() || "",
-      ),
+      Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '.app-notification[data-tone="error"], .app-notification[data-tone="warning"]',
+        ),
+      ).map((item) => item.textContent?.replace(/\s+/g, " ").trim() || ""),
     )
     assert.deepEqual(visibleErrors, [])
 

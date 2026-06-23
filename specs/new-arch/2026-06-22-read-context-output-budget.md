@@ -47,14 +47,14 @@ a source-rendering bug, not a scheduler routing problem.
 
 ## Call Point Inventory
 
-| Surface | Current role | Required change |
-| --- | --- | --- |
-| `packages/opencorvus/src/orchestrator/tools.ts::read_context` | Builds all state sections and returns the joined string. | Add a single source budget for the renderer and make every large section consume it explicitly. |
-| `packages/opencorvus/src/engine/describe.ts::renderGoal` | Authoritative goal fact renderer. | Reuse it, then trim each rendered goal block with a pointer to `read_context scope=goals`. |
-| `packages/opencorvus/src/integrity/root-history.ts::renderIntegrityRootHistoryBlock` | Shared integrity history renderer with a 48,000 character cap. | Keep it authoritative, but give `read_context` a smaller section budget when embedding it. |
-| `packages/opencorvus/src/orchestrator/tools.ts::appendResearchBriefContext` | Adds compact research metadata to `read_context scope=all`. | Bound stale reasons, subpage refs, bundle path line, and summary text per artifact. |
-| `packages/opencorvus/test/orchestrator/tools.test.ts` | Existing read_context fact coverage. | Add regressions proving large integrity/research inputs stay under budget while preserving pointers and key IDs. |
-| `specs/new-arch/HISTORY.md` | Indexes dated design records. | Add this note. |
+| Surface                                                                              | Current role                                                   | Required change                                                                                                  |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/orchestrator/tools.ts::read_context`                        | Builds all state sections and returns the joined string.       | Add a single source budget for the renderer and make every large section consume it explicitly.                  |
+| `packages/opencorvus/src/engine/describe.ts::renderGoal`                             | Authoritative goal fact renderer.                              | Reuse it, then trim each rendered goal block with a pointer to `read_context scope=goals`.                       |
+| `packages/opencorvus/src/integrity/root-history.ts::renderIntegrityRootHistoryBlock` | Shared integrity history renderer with a 48,000 character cap. | Keep it authoritative, but give `read_context` a smaller section budget when embedding it.                       |
+| `packages/opencorvus/src/orchestrator/tools.ts::appendResearchBriefContext`          | Adds compact research metadata to `read_context scope=all`.    | Bound stale reasons, subpage refs, bundle path line, and summary text per artifact.                              |
+| `packages/opencorvus/test/orchestrator/tools.test.ts`                                | Existing read_context fact coverage.                           | Add regressions proving large integrity/research inputs stay under budget while preserving pointers and key IDs. |
+| `specs/new-arch/HISTORY.md`                                                          | Indexes dated design records.                                  | Add this note.                                                                                                   |
 
 ## Decision
 

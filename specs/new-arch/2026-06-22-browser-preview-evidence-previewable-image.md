@@ -17,24 +17,24 @@ contract.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No dual sources, no local UI primitive fork, test every change, and visually verify UI changes. |
-| `2026-06-20-image-preview-trigger-contract-single-source.md` | `PreviewableImage` and markdown share one trigger contract and delegated image preview host. |
-| `2026-06-20-image-preview-trigger-i18n-button.md` | Solid image thumbnails should use the shared `Button` primitive through `PreviewableImage`. |
-| `2026-06-11-browser-preview-evidence-image-display.md` | Browser preview evidence remains PNG-backed and must not reintroduce iframe rendering. |
-| `2026-06-17-browser-preview-evidence-test-open-path.md` | Browser preview evidence browser tests must use the real open path and screenshot the evidence surface. |
+| Source                                                       | Constraint carried forward                                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                  | No dual sources, no local UI primitive fork, test every change, and visually verify UI changes.         |
+| `2026-06-20-image-preview-trigger-contract-single-source.md` | `PreviewableImage` and markdown share one trigger contract and delegated image preview host.            |
+| `2026-06-20-image-preview-trigger-i18n-button.md`            | Solid image thumbnails should use the shared `Button` primitive through `PreviewableImage`.             |
+| `2026-06-11-browser-preview-evidence-image-display.md`       | Browser preview evidence remains PNG-backed and must not reintroduce iframe rendering.                  |
+| `2026-06-17-browser-preview-evidence-test-open-path.md`      | Browser preview evidence browser tests must use the real open path and screenshot the evidence surface. |
 
 ## Call Point Inventory
 
-| Surface | Current evidence | Decision |
-| --- | --- | --- |
-| Evidence image | `BrowserPreviewPanel.tsx` renders `<img data-ui="browser-preview-screenshot">` inside `.browser-preview-evidence-shot`. | Replace direct evidence image markup with `PreviewableImage`. |
-| Shared preview | `ImagePreview.tsx` only allows trigger/image classes. | Add narrow image metadata props so browser preview can preserve `data-ui` and evidence ID without overriding src/alt. |
-| Delegated host | `main.tsx` opens previews through `[data-image-preview-trigger]`. | Preserve this single delegated path. |
-| Live preview | `browser-preview-live-screenshot` is interactive page input, not a passive evidence thumbnail. | Leave live image direct because it handles click/wheel/key input and should not open the image preview host. |
-| CSS owner | `inspector.css` owns `.browser-preview-evidence-shot`. | Retarget evidence shot styles to the `PreviewableImage` button host and override `md-img` sizing locally. |
-| Tests | Static panel test and browser evidence/visual-stress tests query `data-ui="browser-preview-screenshot"`. | Keep that data attribute on the image element and update static tests to require `PreviewableImage`. |
+| Surface        | Current evidence                                                                                                        | Decision                                                                                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Evidence image | `BrowserPreviewPanel.tsx` renders `<img data-ui="browser-preview-screenshot">` inside `.browser-preview-evidence-shot`. | Replace direct evidence image markup with `PreviewableImage`.                                                         |
+| Shared preview | `ImagePreview.tsx` only allows trigger/image classes.                                                                   | Add narrow image metadata props so browser preview can preserve `data-ui` and evidence ID without overriding src/alt. |
+| Delegated host | `main.tsx` opens previews through `[data-image-preview-trigger]`.                                                       | Preserve this single delegated path.                                                                                  |
+| Live preview   | `browser-preview-live-screenshot` is interactive page input, not a passive evidence thumbnail.                          | Leave live image direct because it handles click/wheel/key input and should not open the image preview host.          |
+| CSS owner      | `inspector.css` owns `.browser-preview-evidence-shot`.                                                                  | Retarget evidence shot styles to the `PreviewableImage` button host and override `md-img` sizing locally.             |
+| Tests          | Static panel test and browser evidence/visual-stress tests query `data-ui="browser-preview-screenshot"`.                | Keep that data attribute on the image element and update static tests to require `PreviewableImage`.                  |
 
 ## Root Cause
 

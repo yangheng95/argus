@@ -32,7 +32,6 @@ export const WEB_CLONE_SOURCE_PACKAGE_FORBIDDEN_ARTIFACTS = [
 
 export const WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS = [
   "reference.png",
-  "reference-mobile.png",
   "capture.html",
   "extracted-page.json",
   "page.ir.json",
@@ -154,10 +153,6 @@ export async function inspectWebCloneSourceManifest(
   if (!referenceEvidence.valid) {
     findings.push(`reference.png is not a valid PNG (${referenceEvidence.error ?? "invalid PNG"}).`)
   }
-  const mobileReferenceEvidence = await readPngEvidence(path.join(sourcePackageDir, "reference-mobile.png"))
-  if (!mobileReferenceEvidence.valid) {
-    findings.push(`reference-mobile.png is not a valid PNG (${mobileReferenceEvidence.error ?? "invalid PNG"}).`)
-  }
   const manifestReference = asRecord(provenance.reference)
   if (referenceEvidence.valid) {
     if (manifestReference.sha256 !== referenceEvidence.sha256) {
@@ -167,27 +162,11 @@ export async function inspectWebCloneSourceManifest(
       findings.push("Manifest reference dimensions do not match web-clone-source/reference.png.")
     }
   }
-  const manifestMobileReference = asRecord(provenance.mobileReference)
-  if (mobileReferenceEvidence.valid) {
-    if (manifestMobileReference.sha256 !== mobileReferenceEvidence.sha256) {
-      findings.push("Manifest mobileReference sha256 does not match web-clone-source/reference-mobile.png.")
-    }
-    if (
-      manifestMobileReference.width !== mobileReferenceEvidence.width ||
-      manifestMobileReference.height !== mobileReferenceEvidence.height
-    ) {
-      findings.push("Manifest mobileReference dimensions do not match web-clone-source/reference-mobile.png.")
-    }
-  }
-
   const files = Array.isArray(manifest.files) ? manifest.files : []
   if (files.length === 0) findings.push("web-clone-source-manifest.json must include hashed files[].")
   const fileRows = files.map(asRecord)
   if (!fileRows.some((row) => row.path === "reference.png")) {
     findings.push("web-clone-source-manifest.json files[] must include reference.png.")
-  }
-  if (!fileRows.some((row) => row.path === "reference-mobile.png")) {
-    findings.push("web-clone-source-manifest.json files[] must include reference-mobile.png.")
   }
   for (const row of fileRows) {
     const relative = typeof row.path === "string" ? row.path : undefined

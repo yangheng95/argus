@@ -134,7 +134,10 @@ describe("orchestrator analyze_intent dynamic follow-up questions", () => {
           agentSessionID: "ses_orchestrator_intent_followup",
         })
 
-        const result = await tools.analyze_intent.execute({ reason: "prompt has conflicting visual authorities" }, {} as any)
+        const result = await tools.analyze_intent.execute(
+          { reason: "prompt has conflicting visual authorities" },
+          {} as any,
+        )
         const text = toolText(result)
 
         expect(askSpy).toHaveBeenCalledTimes(1)

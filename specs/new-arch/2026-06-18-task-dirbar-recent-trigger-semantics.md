@@ -15,22 +15,22 @@ Glossary:
 
 Existing directory-context specs require project directory controls to stay single-source and project-scoped:
 
-| Source | Relevant constraint |
-| --- | --- |
-| `specs/new-arch/2026-06-15-overlay-action-directory-context.md` | Directory-scoped actions must use the active project directory rather than drifting into parallel context sources. |
-| `specs/new-arch/2026-06-12-mission-row-directory-action-fix.md` | Row and action identity must use the same directory context. |
-| `packages/overlay/test/task-cwd-row-layout.test.ts` | The Current Working Directory row is the single Solid mount for breadcrumb, worktree dropdown, init-git action, and Version Control System badge. |
+| Source                                                          | Relevant constraint                                                                                                                               |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `specs/new-arch/2026-06-15-overlay-action-directory-context.md` | Directory-scoped actions must use the active project directory rather than drifting into parallel context sources.                                |
+| `specs/new-arch/2026-06-12-mission-row-directory-action-fix.md` | Row and action identity must use the same directory context.                                                                                      |
+| `packages/overlay/test/task-cwd-row-layout.test.ts`             | The Current Working Directory row is the single Solid mount for breadcrumb, worktree dropdown, init-git action, and Version Control System badge. |
 
 ## Impact Sweep
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/overlay/src/components/TaskDirBar.tsx` | Recent directory `DropdownMenu.Trigger` wrapped `innerHTML={breadcrumbHtml()}`. | Keep one Current Working Directory shell, move the Kobalte trigger to a dedicated button, and pass the shell rect through `getAnchorRect` so popup positioning does not drift to the caret. |
-| `packages/overlay/src/utils/dom-utils.ts::pathBreadcrumb` | Generates native `button` elements for browse, open, and level selection. | Keep this single breadcrumb source; do not convert it into menu markup. |
-| `packages/overlay/src/styles/surfaces/conversation.css` | `.task-cwd-dropdown` styled both shell and trigger semantics. | Keep `.task-cwd-dropdown` as the shell and add `.task-dir-recent-trigger` for the actual trigger. |
-| `packages/overlay/test/task-cwd-row-layout.test.ts` | Only asserted Kobalte existed. | Add a structural regression that forbids `DropdownMenu.Trigger` from wrapping `breadcrumbHtml`. |
-| `packages/overlay/test/overlay-architecture-guards.test.ts` | Class ownership did not know the dedicated trigger. | Add the new classes to canonical CSS ownership and theme-scope guards. |
-| Browser end-to-end test | No focused keyboard check for Current Working Directory breadcrumb versus recent menu trigger. | Add a Node Playwright browser test that focuses both surfaces and saves a screenshot. |
+| Surface                                                     | Evidence                                                                                       | Decision                                                                                                                                                                                    |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/TaskDirBar.tsx`            | Recent directory `DropdownMenu.Trigger` wrapped `innerHTML={breadcrumbHtml()}`.                | Keep one Current Working Directory shell, move the Kobalte trigger to a dedicated button, and pass the shell rect through `getAnchorRect` so popup positioning does not drift to the caret. |
+| `packages/overlay/src/utils/dom-utils.ts::pathBreadcrumb`   | Generates native `button` elements for browse, open, and level selection.                      | Keep this single breadcrumb source; do not convert it into menu markup.                                                                                                                     |
+| `packages/overlay/src/styles/surfaces/conversation.css`     | `.task-cwd-dropdown` styled both shell and trigger semantics.                                  | Keep `.task-cwd-dropdown` as the shell and add `.task-dir-recent-trigger` for the actual trigger.                                                                                           |
+| `packages/overlay/test/task-cwd-row-layout.test.ts`         | Only asserted Kobalte existed.                                                                 | Add a structural regression that forbids `DropdownMenu.Trigger` from wrapping `breadcrumbHtml`.                                                                                             |
+| `packages/overlay/test/overlay-architecture-guards.test.ts` | Class ownership did not know the dedicated trigger.                                            | Add the new classes to canonical CSS ownership and theme-scope guards.                                                                                                                      |
+| Browser end-to-end test                                     | No focused keyboard check for Current Working Directory breadcrumb versus recent menu trigger. | Add a Node Playwright browser test that focuses both surfaces and saves a screenshot.                                                                                                       |
 
 ## Root Cause
 

@@ -219,7 +219,9 @@ describe("overlay window and pane size contract", () => {
     const chatComposer = readOverlay("src/components/ChatComposer.tsx")
     const screenshotBrowser = readOverlay("src/components/ScreenshotBrowserPanel.tsx")
 
-    expect(pane).toContain('import { createLayoutTokenResolver, currentUIScale, type LayoutTokenResolver } from "../utils/layout-tokens"')
+    expect(pane).toContain(
+      'import { createLayoutTokenResolver, currentUIScale, type LayoutTokenResolver } from "../utils/layout-tokens"',
+    )
     expect(pane).toContain("const layoutTokens = createLayoutTokenResolver()")
     expect(pane).toContain("const remainingContentMin = config.remainingMinWidth(layoutTokens)")
     expect(pane).toContain('layoutTokens.tokenPx("--ui-rail-min-width")')

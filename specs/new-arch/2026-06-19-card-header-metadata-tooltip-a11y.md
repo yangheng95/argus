@@ -19,20 +19,20 @@ one visual owner but inconsistent semantics:
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-19-card-header-chrome-single-source.md` | `CardHeaderChrome.tsx` is the sole TSX owner for metadata and action rail chrome. |
-| `2026-06-18-card-header-nested-interactions.md` | Header disclosure and action controls are siblings; metadata fixes must not reintroduce nested interactive controls. |
-| `AGENTS.md` rule 8 | Metadata semantics must not split into separate model/context/usage implementations. |
-| `AGENTS.md` rule 36 | Accessibility behavior changes require tests. |
+| Source                                           | Relevant constraint                                                                                                  |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-19-card-header-chrome-single-source.md` | `CardHeaderChrome.tsx` is the sole TSX owner for metadata and action rail chrome.                                    |
+| `2026-06-18-card-header-nested-interactions.md`  | Header disclosure and action controls are siblings; metadata fixes must not reintroduce nested interactive controls. |
+| `AGENTS.md` rule 8                               | Metadata semantics must not split into separate model/context/usage implementations.                                 |
+| `AGENTS.md` rule 36                              | Accessibility behavior changes require tests.                                                                        |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "card__model-hint|card__token-hint|card__usage-hint|usageTip|usage_tooltip" packages/overlay/src packages/overlay/test specs/new-arch` | Production metadata owner is only `CardHeaderChrome.tsx`; CSS owner is `card.css`. | Add one shared `CardMetaHint` inside `CardHeaderChrome.tsx`. |
-| `rg -n "Tooltip|Popover|@kobalte/core" packages/overlay/src packages/overlay/node_modules/@kobalte/core/dist/tooltip` | The project already uses Kobalte primitives, and Kobalte Tooltip is installed though not yet wrapped locally. | Use Kobalte Tooltip rather than hand-writing hover/focus behavior. |
-| `rg -n "\{value\}|\{\{value\}\}|card.context_tokens_tooltip" packages/overlay/src/i18n packages/overlay/test` | Only `card.context_tokens_tooltip*` still used single-brace placeholders. | Convert these keys to `{{value}}` and pin them in tests. |
+| Sweep                      | Result             | Decision                                                                                      |
+| -------------------------- | ------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `rg -n "card\_\_model-hint | card\_\_token-hint | card\_\_usage-hint                                                                            | usageTip                                                                                                      | usage_tooltip" packages/overlay/src packages/overlay/test specs/new-arch` | Production metadata owner is only `CardHeaderChrome.tsx`; CSS owner is `card.css`. | Add one shared `CardMetaHint` inside `CardHeaderChrome.tsx`. |
+| `rg -n "Tooltip            | Popover            | @kobalte/core" packages/overlay/src packages/overlay/node_modules/@kobalte/core/dist/tooltip` | The project already uses Kobalte primitives, and Kobalte Tooltip is installed though not yet wrapped locally. | Use Kobalte Tooltip rather than hand-writing hover/focus behavior.        |
+| `rg -n "\{value\}          | \{\{value\}\}      | card.context_tokens_tooltip" packages/overlay/src/i18n packages/overlay/test`                 | Only `card.context_tokens_tooltip*` still used single-brace placeholders.                                     | Convert these keys to `{{value}}` and pin them in tests.                  |
 
 ## Fix Plan
 

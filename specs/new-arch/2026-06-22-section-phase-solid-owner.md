@@ -17,20 +17,20 @@ by the Solid Board tree through store-derived props.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, recall disk plans before edits, test every change, and visually inspect UI changes. |
-| `2026-06-18-retire-eval-shell-residue.md` | `syncSectionPhases` still had non-evaluation callers in that round, so only evaluation branches were retired then. |
-| `2026-06-22-retire-solid-changes-panel-empty-state.md` | Do not delete `FilesSection` or `#changesSection` in this round; it remains a separate component path. |
-| `Board.tsx` current source | Board comments and implementation derive section phase state from Solid workflow data through `phaseFor(...)`. |
+| Source                                                 | Constraint carried forward                                                                                            |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                            | No fallback, no duplicate source, recall disk plans before edits, test every change, and visually inspect UI changes. |
+| `2026-06-18-retire-eval-shell-residue.md`              | `syncSectionPhases` still had non-evaluation callers in that round, so only evaluation branches were retired then.    |
+| `2026-06-22-retire-solid-changes-panel-empty-state.md` | Do not delete `FilesSection` or `#changesSection` in this round; it remains a separate component path.                |
+| `Board.tsx` current source                             | Board comments and implementation derive section phase state from Solid workflow data through `phaseFor(...)`.        |
 
 ## Call Point Inventory
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "syncSectionPhases" packages/overlay/src packages/overlay/test specs` | The only production caller is `packages/overlay/src/store/messages.ts`; `packages/overlay/src/utils/section.ts` owns the old imperative DOM implementation. | Remove the `messages.ts` import and call. |
-| `rg -n "data-phase-state|phaseFor" packages/overlay/src/components packages/overlay/test` | `Board.tsx` passes `phaseState={phaseFor(...)}` into section primitives and tests already pin that shape. | Keep Board as the live owner. |
-| `rg -n "acceptanceSection|specSection|planSection|goalsSection|executorSection|changesSection" packages/overlay/src packages/overlay/test specs` | `utils/section.ts` still depends on legacy DOM refs; `FilesSection/#changesSection` has an explicit do-not-delete record for the current round. | Do not delete old DOM registry fields in this scoped fix. |
+| Sweep                                                                        | Result                                                                                                                                                      | Decision                                                                                                  |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------- | --------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `rg -n "syncSectionPhases" packages/overlay/src packages/overlay/test specs` | The only production caller is `packages/overlay/src/store/messages.ts`; `packages/overlay/src/utils/section.ts` owns the old imperative DOM implementation. | Remove the `messages.ts` import and call.                                                                 |
+| `rg -n "data-phase-state                                                     | phaseFor" packages/overlay/src/components packages/overlay/test`                                                                                            | `Board.tsx` passes `phaseState={phaseFor(...)}` into section primitives and tests already pin that shape. | Keep Board as the live owner. |
+| `rg -n "acceptanceSection                                                    | specSection                                                                                                                                                 | planSection                                                                                               | goalsSection                  | executorSection | changesSection" packages/overlay/src packages/overlay/test specs` | `utils/section.ts` still depends on legacy DOM refs; `FilesSection/#changesSection` has an explicit do-not-delete record for the current round. | Do not delete old DOM registry fields in this scoped fix. |
 
 ## Root Cause
 

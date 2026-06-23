@@ -141,55 +141,51 @@ test(
   { timeout: 20_000 },
 )
 
-test(
-  "task trace writes to the primary project runtime when ambient directory is a build worktree",
-  async () => {
-    delete process.env.OPENCORVUS_AGENT_TRACE_DIR
-    await using tmp = await tmpdir({ git: true })
-    const { AgentTrace } = await import("../../src/trace")
-    const sessionID = Identifier.create("session", false)
-    const taskID = Identifier.create("task", false)
+test("task trace writes to the primary project runtime when ambient directory is a build worktree", async () => {
+  delete process.env.OPENCORVUS_AGENT_TRACE_DIR
+  await using tmp = await tmpdir({ git: true })
+  const { AgentTrace } = await import("../../src/trace")
+  const sessionID = Identifier.create("session", false)
+  const taskID = Identifier.create("task", false)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        seedTraceTask({ projectID: Instance.project.id, taskID })
-        const worktree = await Worktree.create({
-          name: "trace-primary-runtime",
-          taskID,
-          sessionID,
-        })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      seedTraceTask({ projectID: Instance.project.id, taskID })
+      const worktree = await Worktree.create({
+        name: "trace-primary-runtime",
+        taskID,
+        sessionID,
+      })
 
-        await Instance.provide({
-          directory: worktree.directory,
-          fn: async () => {
-            AgentTrace.recordLLMRequest({
-              sessionID,
-              taskID,
-              agentName: "build",
-              model: { providerID: "test", modelID: "model" },
-              system: ["system"],
-              messages: [{ role: "user", content: "hi" }],
-              tools: [],
-            })
-          },
-        })
+      await Instance.provide({
+        directory: worktree.directory,
+        fn: async () => {
+          AgentTrace.recordLLMRequest({
+            sessionID,
+            taskID,
+            agentName: "build",
+            model: { providerID: "test", modelID: "model" },
+            system: ["system"],
+            messages: [{ role: "user", content: "hi" }],
+            tools: [],
+          })
+        },
+      })
 
-        const primaryTrace = ProjectRuntimePaths.tracePath(tmp.path, taskID, sessionID)
-        const worktreeTrace = ProjectRuntimePaths.tracePath(worktree.directory, taskID, sessionID)
-        expect(fs.existsSync(primaryTrace)).toBe(true)
-        expect(fs.existsSync(worktreeTrace)).toBe(false)
-        expect(AgentTrace.readSessionEvents(sessionID, taskID)[0]).toMatchObject({
-          domain: "session",
-          sessionID,
-          taskID,
-          kind: "llm_request",
-        })
-      },
-    })
-  },
-  30_000,
-)
+      const primaryTrace = ProjectRuntimePaths.tracePath(tmp.path, taskID, sessionID)
+      const worktreeTrace = ProjectRuntimePaths.tracePath(worktree.directory, taskID, sessionID)
+      expect(fs.existsSync(primaryTrace)).toBe(true)
+      expect(fs.existsSync(worktreeTrace)).toBe(false)
+      expect(AgentTrace.readSessionEvents(sessionID, taskID)[0]).toMatchObject({
+        domain: "session",
+        sessionID,
+        taskID,
+        kind: "llm_request",
+      })
+    },
+  })
+}, 30_000)
 
 test("helper trace writes explicit non-session domain instead of fake session bucket", async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-domain-"))

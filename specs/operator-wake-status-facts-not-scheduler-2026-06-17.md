@@ -125,13 +125,13 @@ liveness signal itself. The required behavior is:
 
 This is not the old executor queue polling path. The corrected boundary is:
 
-| Surface | Decision |
-| --- | --- |
-| `EngineService.init` | Register a narrow `engine.liveness` scheduler tick. Do not restore the old `engine.poll` name or broad runtime poll semantics. |
-| `EngineRuntime.monitorRuns` | Observe live active runs and call `syncRun`; `syncRun` remains limited to no-live-goal liveness. |
-| `syncRun` | Must not call executor status, auto-reject stale interactions, write run lifecycle status, or fail inactive runs. |
-| `syncNoLiveGoalRuns` | If a live parent run has zero live goal runs and no pending interaction exists, call `dispatchTaskLoop({ taskID })`. Record a liveness fact only after the dispatch starts so the same no-live-goal snapshot is not woken repeatedly. |
-| `TaskQueueService` | Keep the A2A prompt queue on explicit enqueue/completion drains only. Do not restore `task-queue-service.poll` or `retrying`. |
+| Surface                     | Decision                                                                                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EngineService.init`        | Register a narrow `engine.liveness` scheduler tick. Do not restore the old `engine.poll` name or broad runtime poll semantics.                                                                                                        |
+| `EngineRuntime.monitorRuns` | Observe live active runs and call `syncRun`; `syncRun` remains limited to no-live-goal liveness.                                                                                                                                      |
+| `syncRun`                   | Must not call executor status, auto-reject stale interactions, write run lifecycle status, or fail inactive runs.                                                                                                                     |
+| `syncNoLiveGoalRuns`        | If a live parent run has zero live goal runs and no pending interaction exists, call `dispatchTaskLoop({ taskID })`. Record a liveness fact only after the dispatch starts so the same no-live-goal snapshot is not woken repeatedly. |
+| `TaskQueueService`          | Keep the A2A prompt queue on explicit enqueue/completion drains only. Do not restore `task-queue-service.poll` or `retrying`.                                                                                                         |
 
 Revised acceptance:
 

@@ -6,12 +6,12 @@ The current working directory breadcrumb renders real command buttons for
 browse, open path, and choose parent directory, but the breadcrumb CSS only
 styles hover states:
 
-| Source | Evidence |
-| --- | --- |
-| `packages/overlay/src/utils/dom-utils.ts` | `pathBreadcrumb()` emits `.task-dir-tool`, `.task-dir-node`, and `.task-dir-step` buttons. |
-| `packages/overlay/src/components/TaskDirBar.tsx` | `TaskDirContent` mounts the breadcrumb through `innerHTML={breadcrumbHtml()}` as the single runtime source. |
-| `packages/overlay/src/styles/surfaces/conversation.css` | `.task-dir-tool:hover`, `.task-dir-node:hover`, and `.task-dir-step:hover` have visible chrome; no matching `:focus-visible` exists. |
-| `packages/overlay/test/browser/task-dirbar-keyboard.test.ts` | The browser test focuses `.task-dir-step` and proves behavior, but does not assert focus chrome. |
+| Source                                                       | Evidence                                                                                                                             |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/overlay/src/utils/dom-utils.ts`                    | `pathBreadcrumb()` emits `.task-dir-tool`, `.task-dir-node`, and `.task-dir-step` buttons.                                           |
+| `packages/overlay/src/components/TaskDirBar.tsx`             | `TaskDirContent` mounts the breadcrumb through `innerHTML={breadcrumbHtml()}` as the single runtime source.                          |
+| `packages/overlay/src/styles/surfaces/conversation.css`      | `.task-dir-tool:hover`, `.task-dir-node:hover`, and `.task-dir-step:hover` have visible chrome; no matching `:focus-visible` exists. |
+| `packages/overlay/test/browser/task-dirbar-keyboard.test.ts` | The browser test focuses `.task-dir-step` and proves behavior, but does not assert focus chrome.                                     |
 
 Keyboard users can tab to the breadcrumb commands, but the focused segment,
 slash step, or browse button does not get the same tokenized visual feedback as
@@ -19,12 +19,12 @@ mouse hover or shared button primitives.
 
 ## Recall
 
-| Search | Result |
-| --- | --- |
-| `rg "task-dir-tool|task-dir-node|task-dir-step|pathBreadcrumb" packages/overlay/src packages/overlay/test specs/new-arch` | `pathBreadcrumb()` is the single breadcrumb markup source; `TaskDirBar.tsx` only injects it and handles delegated actions. |
-| `rg "task-dir-tool:focus|task-dir-node:focus|task-dir-step:focus|task-dir.*focus-visible" packages/overlay/src/styles packages/overlay/test` | No breadcrumb focus-visible selector exists before this repair. |
-| `specs/new-arch/2026-06-19-task-dirbar-recent-popover-semantics.md` | Recent directory popup controls use normal button/focus semantics; breadcrumb path buttons remain separate from the recent trigger. |
-| `packages/overlay/src/styles/primitives/button.css` / `packages/overlay/src/styles/primitives/tabs.css` | Shared primitives use tokenized `:focus-visible` outlines; breadcrumb needs the same visible keyboard contract. |
+| Search                                                                                                  | Result                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `rg "task-dir-tool                                                                                      | task-dir-node                                                                                                                       | task-dir-step       | pathBreadcrumb" packages/overlay/src packages/overlay/test specs/new-arch`   | `pathBreadcrumb()` is the single breadcrumb markup source; `TaskDirBar.tsx` only injects it and handles delegated actions. |
+| `rg "task-dir-tool:focus                                                                                | task-dir-node:focus                                                                                                                 | task-dir-step:focus | task-dir.\*focus-visible" packages/overlay/src/styles packages/overlay/test` | No breadcrumb focus-visible selector exists before this repair.                                                            |
+| `specs/new-arch/2026-06-19-task-dirbar-recent-popover-semantics.md`                                     | Recent directory popup controls use normal button/focus semantics; breadcrumb path buttons remain separate from the recent trigger. |
+| `packages/overlay/src/styles/primitives/button.css` / `packages/overlay/src/styles/primitives/tabs.css` | Shared primitives use tokenized `:focus-visible` outlines; breadcrumb needs the same visible keyboard contract.                     |
 
 ## Fix Plan
 

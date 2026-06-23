@@ -72,7 +72,7 @@ export namespace Snapshot {
     const project = Instance.project
     if (!Project.isGitRepo(project.worktree) || Flag.OPENCORVUS_CLIENT === "acp") return
     const cfg = await Config.get()
-    if (cfg.snapshot === false) return
+    if (cfg.snapshot !== true) return
     const git = gitdir()
     // Use per-call temporary index to prevent race conditions when multiple
     // worktrees call track() concurrently against the same snapshot git repo.

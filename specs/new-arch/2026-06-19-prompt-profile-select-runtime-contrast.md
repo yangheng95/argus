@@ -16,21 +16,21 @@ attributes are present on the real Expert Squad options.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-17-expert-squad-select-readability-impact.md` | Expert Squad readability belongs to the shared Kobalte Select popup source. |
+| Source                                                        | Relevant decision                                                           |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `2026-06-17-expert-squad-select-readability-impact.md`        | Expert Squad readability belongs to the shared Kobalte Select popup source. |
 | `2026-06-18-expert-squad-unselected-option-contrast-guard.md` | Light popup unselected option contrast must be guarded by browser evidence. |
-| `2026-06-19-dropdown-menu-highlighted-contrast-source.md` | Active popup states must use Kobalte runtime attributes, not local mirrors. |
-| `2026-06-19-kobalte-selected-state-single-source.md` | Selected and highlighted visual state must come from Kobalte attributes. |
-| `packages/overlay/src/components/ChatComposer.tsx` | Expert Squad renders through `SelectControl<PromptProfileOption>`. |
-| `packages/overlay/src/components/ui/SelectControl.tsx` | Shared Select shell emits Kobalte Select items with `.oc-select-option`. |
+| `2026-06-19-dropdown-menu-highlighted-contrast-source.md`     | Active popup states must use Kobalte runtime attributes, not local mirrors. |
+| `2026-06-19-kobalte-selected-state-single-source.md`          | Selected and highlighted visual state must come from Kobalte attributes.    |
+| `packages/overlay/src/components/ChatComposer.tsx`            | Expert Squad renders through `SelectControl<PromptProfileOption>`.          |
+| `packages/overlay/src/components/ui/SelectControl.tsx`        | Shared Select shell emits Kobalte Select items with `.oc-select-option`.    |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "expert-squad|Expert|专家|prompt-profile-select" packages/overlay/src packages/overlay/test` | The user-facing Expert Squad selector is the Chat Composer prompt profile picker. | Strengthen its existing real browser test instead of adding local CSS. |
-| `rg -n "oc-select-option|data-highlighted|data-selected" packages/overlay/src packages/overlay/test` | Shared Select CSS already styles default, selected, and highlighted rows. | Keep `field.css` unchanged. |
+| Sweep                                                         | Result                                                                         | Decision                                                                                     |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `rg -n "expert-squad                                          | Expert                                                                         | 专家                                                                                         | prompt-profile-select" packages/overlay/src packages/overlay/test`        | The user-facing Expert Squad selector is the Chat Composer prompt profile picker. | Strengthen its existing real browser test instead of adding local CSS. |
+| `rg -n "oc-select-option                                      | data-highlighted                                                               | data-selected" packages/overlay/src packages/overlay/test`                                   | Shared Select CSS already styles default, selected, and highlighted rows. | Keep `field.css` unchanged.                                                       |
 | Real browser run of `prompt-profile-selector-browser.test.ts` | Current screenshot shows unselected options readable on a light popup surface. | Add keyboard-highlighted runtime assertions so the test proves Kobalte state attributes too. |
 
 ## Fix Plan

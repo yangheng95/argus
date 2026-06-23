@@ -67,11 +67,7 @@ function screenshotPngBytes(index: number, width = SCREENSHOT_IMAGE_WIDTH, heigh
       raw[offset + 2] = ((x >> 2) + (y >> 1) + index * 41) & 255
     }
   }
-  const ihdr = Buffer.concat([
-    u32(width),
-    u32(height),
-    Buffer.from([8, 2, 0, 0, 0]),
-  ])
+  const ihdr = Buffer.concat([u32(width), u32(height), Buffer.from([8, 2, 0, 0, 0])])
   const png = Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     pngChunk("IHDR", ihdr),
@@ -101,16 +97,27 @@ function json(value: unknown, init?: ResponseInit) {
   })
 }
 
-async function waitForVisibleScreenshotThumbnails(page: any, label: string, attachmentRequests: readonly string[]): Promise<void> {
+async function waitForVisibleScreenshotThumbnails(
+  page: any,
+  label: string,
+  attachmentRequests: readonly string[],
+): Promise<void> {
   try {
     await page.waitForFunction(() => {
-      const root = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+      const root = document.querySelector<HTMLElement>('.screenshot-browser-groups[data-virtualized="true"]')
       if (!root) return false
       const rootRect = root.getBoundingClientRect()
-      const visibleCards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card")).filter((card) => {
-        const rect = card.getBoundingClientRect()
-        return rect.bottom > rootRect.top && rect.top < rootRect.bottom && rect.right > rootRect.left && rect.left < rootRect.right
-      })
+      const visibleCards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card")).filter(
+        (card) => {
+          const rect = card.getBoundingClientRect()
+          return (
+            rect.bottom > rootRect.top &&
+            rect.top < rootRect.bottom &&
+            rect.right > rootRect.left &&
+            rect.left < rootRect.right
+          )
+        },
+      )
       return (
         visibleCards.length > 1 &&
         visibleCards.every((card) => {
@@ -121,7 +128,7 @@ async function waitForVisibleScreenshotThumbnails(page: any, label: string, atta
     })
   } catch (error) {
     const state = await page.evaluate((attachmentRequests) => {
-      const root = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+      const root = document.querySelector<HTMLElement>('.screenshot-browser-groups[data-virtualized="true"]')
       const rootRect = root?.getBoundingClientRect()
       const cards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card"))
       const visibleCards = rootRect
@@ -150,9 +157,10 @@ async function waitForVisibleScreenshotThumbnails(page: any, label: string, atta
             attrSrc: img?.getAttribute("src") ?? "",
             src: img?.src ?? "",
             outerHTML: img?.outerHTML ?? "",
-            triggerSrc: card
-              .querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
-              ?.getAttribute("data-image-preview-src") ?? "",
+            triggerSrc:
+              card
+                .querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
+                ?.getAttribute("data-image-preview-src") ?? "",
             hasPlaceholder: Boolean(card.querySelector(".screenshot-browser__thumb-placeholder")),
             errorText: card.querySelector<HTMLElement>(".screenshot-browser__thumb-error")?.textContent?.trim() ?? "",
           }
@@ -262,10 +270,7 @@ test(
         attachmentRequests.push(requestPath)
         const queryKeys = Array.from(url.searchParams.keys())
         if (url.search) {
-          if (
-            queryKeys.length === 1 &&
-            url.searchParams.get("variant") === SCREENSHOT_BROWSER_THUMBNAIL_VARIANT
-          ) {
+          if (queryKeys.length === 1 && url.searchParams.get("variant") === SCREENSHOT_BROWSER_THUMBNAIL_VARIANT) {
             return new Response(
               screenshotPngBytes(
                 requestedScreenshotIndex,
@@ -286,7 +291,8 @@ test(
       if (path === "/task/tsk_screenshot_browser/board") {
         return json(conversationPayload().board, { headers: { etag: '"board-screenshot-browser"' } })
       }
-      if (path === "/task/tsk_screenshot_browser/operator-model-context") return json({ selected: null, candidates: [] })
+      if (path === "/task/tsk_screenshot_browser/operator-model-context")
+        return json({ selected: null, candidates: [] })
       if (path === "/task/tsk_screenshot_browser/conversation") return json(conversationPayload())
       if (path === "/task/tsk_screenshot_browser/transcript") return json(conversationPayload().transcript)
       if (path === "/control/timeline") return json([])
@@ -380,10 +386,9 @@ test(
         const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window)
         const originalCancelAnimationFrame = window.cancelAnimationFrame.bind(window)
         const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect
-        const clientWidthOwner =
-          Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth")?.get
-            ? HTMLElement.prototype
-            : Element.prototype
+        const clientWidthOwner = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth")?.get
+          ? HTMLElement.prototype
+          : Element.prototype
         const clientWidthDescriptor = Object.getOwnPropertyDescriptor(clientWidthOwner, "clientWidth")
         if (!clientWidthDescriptor?.get) throw new Error("clientWidth getter was not found")
         let activeFrameID = 0
@@ -527,7 +532,11 @@ test(
             event.type === "center-workbench-rect-read") &&
           !event.inRaf,
       )
-      assert.deepEqual(synchronousEvents, [], `screenshot open did layout work outside RAF: ${JSON.stringify(layoutEvents)}`)
+      assert.deepEqual(
+        synchronousEvents,
+        [],
+        `screenshot open did layout work outside RAF: ${JSON.stringify(layoutEvents)}`,
+      )
       const revealState = layoutEvents.filter((event: any) => event.type === "screenshots-scroll-into-view").at(-1)
       assert.ok(revealState, `screenshot open did not reveal the panel on RAF: ${JSON.stringify(layoutEvents)}`)
       assert.equal(typeof revealState.sequence, "number")
@@ -560,7 +569,11 @@ test(
         workbenchOpen: "true",
       })
       const widthReads = layoutEvents.filter((event: any) => event.type === "screenshot-list-client-width")
-      assert.deepEqual(widthReads, [], `screenshot open should use ResizeObserver entries: ${JSON.stringify(layoutEvents)}`)
+      assert.deepEqual(
+        widthReads,
+        [],
+        `screenshot open should use ResizeObserver entries: ${JSON.stringify(layoutEvents)}`,
+      )
       await page.waitForSelector(".screenshot-browser-card")
       const firstCardVisibleElapsed = Date.now() - openStart
       assert.ok(firstCardVisibleElapsed < 1_500, `screenshot browser first card took ${firstCardVisibleElapsed}ms`)
@@ -569,12 +582,17 @@ test(
       const openPerf = await page.evaluate(() => (window as any).__screenshotBrowserStopOpenPerf())
       await page.evaluate(() => (window as any).__screenshotBrowserRestoreInstrumentation())
       const maxRafGap = Math.max(0, ...((openPerf?.rafGaps ?? []) as number[]))
-      const longTaskDurations = ((openPerf?.longTasks ?? []) as Array<{ duration: number }>).map((entry) => entry.duration)
+      const longTaskDurations = ((openPerf?.longTasks ?? []) as Array<{ duration: number }>).map(
+        (entry) => entry.duration,
+      )
       const maxLongTask = Math.max(0, ...longTaskDurations)
       assert.equal(openPerf?.supportedLongTasks, true, `longtask observer unavailable: ${JSON.stringify(openPerf)}`)
       assert.ok(decodedElapsed < 5_000, `screenshot browser visible image decode took ${decodedElapsed}ms`)
       assert.ok(maxRafGap < 180, `screenshot browser open RAF gap was ${maxRafGap}ms: ${JSON.stringify(openPerf)}`)
-      assert.ok(maxLongTask < 180, `screenshot browser open long task was ${maxLongTask}ms: ${JSON.stringify(openPerf)}`)
+      assert.ok(
+        maxLongTask < 180,
+        `screenshot browser open long task was ${maxLongTask}ms: ${JSON.stringify(openPerf)}`,
+      )
 
       const state = await page.evaluate(() => ({
         screenshotsOpen: document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open,
@@ -659,7 +677,10 @@ test(
       const previewAttachmentRequests = attachmentRequests.slice(requestsBeforePreview)
       assert.equal(previewAttachmentRequests.length, 1, JSON.stringify(previewAttachmentRequests))
       assert.ok(!previewAttachmentRequests[0].includes("?variant="), JSON.stringify(previewAttachmentRequests))
-      writeFileSync(resolve(".scratch/screenshot-browser-panel-browser-preview.png"), await page.screenshot({ fullPage: false }))
+      writeFileSync(
+        resolve(".scratch/screenshot-browser-panel-browser-preview.png"),
+        await page.screenshot({ fullPage: false }),
+      )
       await page.click('#imagePreviewDialog [aria-label="Close"]')
       await page.waitForFunction(() => document.querySelector("#imagePreviewDialog") === null)
 
@@ -678,7 +699,7 @@ test(
       const highZoomScreenshotPath = resolve(".scratch/screenshot-browser-panel-browser-high-zoom.png")
       writeFileSync(highZoomScreenshotPath, screenshot)
 
-      await page.$eval(".screenshot-browser-groups[data-virtualized=\"true\"]", (node) => {
+      await page.$eval('.screenshot-browser-groups[data-virtualized="true"]', (node) => {
         const scroll = node as HTMLElement
         scroll.scrollTo({ top: Math.max(0, scroll.scrollHeight - scroll.clientHeight), behavior: "auto" })
       })
@@ -696,7 +717,7 @@ test(
         )
       } catch (error) {
         const scrollState = await page.evaluate(() => {
-          const scroll = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+          const scroll = document.querySelector<HTMLElement>('.screenshot-browser-groups[data-virtualized="true"]')
           return {
             scrollTop: scroll?.scrollTop ?? 0,
             scrollHeight: scroll?.scrollHeight ?? 0,
@@ -714,7 +735,7 @@ test(
       )
 
       const requestsBeforeCancellationStress = attachmentRequests.length
-      await page.$eval(".screenshot-browser-groups[data-virtualized=\"true\"]", (node) => {
+      await page.$eval('.screenshot-browser-groups[data-virtualized="true"]', (node) => {
         const scroll = node as HTMLElement
         const maxTop = Math.max(0, scroll.scrollHeight - scroll.clientHeight)
         for (const ratio of [0, 0.15, 0.35, 0.55, 0.8, 1, 0.45, 0]) {
@@ -801,15 +822,15 @@ test(
         return counts
       }, {})
       const maxInsertionsPerFrame = Math.max(0, ...Object.values(insertionsPerFrame))
-      assert.ok(insertions.length > 1, `warm-cache reopen did not insert multiple images: ${JSON.stringify(insertions)}`)
+      assert.ok(
+        insertions.length > 1,
+        `warm-cache reopen did not insert multiple images: ${JSON.stringify(insertions)}`,
+      )
       assert.ok(
         [...insertionFrames].every((frameID) => frameID > 0),
         `warm-cache images bypassed RAF scheduling: ${JSON.stringify(insertions)}`,
       )
-      assert.ok(
-        insertionFrames.size > 1,
-        `warm-cache images were inserted in one frame: ${JSON.stringify(insertions)}`,
-      )
+      assert.ok(insertionFrames.size > 1, `warm-cache images were inserted in one frame: ${JSON.stringify(insertions)}`)
       assert.ok(
         maxInsertionsPerFrame <= 1,
         `warm-cache image insertion exceeded one per frame: ${JSON.stringify(insertionsPerFrame)}`,
@@ -930,7 +951,10 @@ test(
           narrowLayout.panel.right <= narrowLayout.viewportWidth,
         JSON.stringify(narrowLayout),
       )
-      assert.ok((narrowLayout.grid?.scrollWidth ?? 0) <= (narrowLayout.grid?.clientWidth ?? 0) + 1, JSON.stringify(narrowLayout))
+      assert.ok(
+        (narrowLayout.grid?.scrollWidth ?? 0) <= (narrowLayout.grid?.clientWidth ?? 0) + 1,
+        JSON.stringify(narrowLayout),
+      )
       assert.equal(narrowLayout.cardEscaped, false, JSON.stringify(narrowLayout))
       assert.equal(narrowLayout.thumbEscaped, false, JSON.stringify(narrowLayout))
       assert.ok(narrowLayout.bodyOverflowX <= narrowLayout.allowedBodyOverflowX + 1, JSON.stringify(narrowLayout))

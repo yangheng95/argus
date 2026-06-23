@@ -272,38 +272,41 @@ export namespace EngineEventLog {
 
   export function init() {
     if (stopProtocolSubscription) return
-    stopProtocolSubscription = ProtocolStore.subscribeEvents((event) => {
-      const type = event?.type as string | undefined
-      if (!type || !LOGGED_TYPES.has(type)) return
-      const p = event.payload ?? {}
-      const taskID = String(p.taskID ?? p.task_id ?? "")
-      if (!taskID) return
+    stopProtocolSubscription = ProtocolStore.subscribeEvents(
+      (event) => {
+        const type = event?.type as string | undefined
+        if (!type || !LOGGED_TYPES.has(type)) return
+        const p = event.payload ?? {}
+        const taskID = String(p.taskID ?? p.task_id ?? "")
+        if (!taskID) return
 
-      if (!tasks.has(taskID)) {
-        try {
-          const paths = eventLogPathsForTask(taskID)
-          mkdirSync(dirname(paths.ndjson), { recursive: true })
-          tasks.set(taskID, {
-            ndjson: paths.ndjson,
-            timeline: paths.timeline,
-            t0: Date.now(),
-            stage: null,
-            turn: null,
-            turnSeq: 0,
-          })
-          log.info("task log started", { taskID })
-        } catch (e) {
-          log.warn("failed to init task log", { error: String(e) })
-          return
+        if (!tasks.has(taskID)) {
+          try {
+            const paths = eventLogPathsForTask(taskID)
+            mkdirSync(dirname(paths.ndjson), { recursive: true })
+            tasks.set(taskID, {
+              ndjson: paths.ndjson,
+              timeline: paths.timeline,
+              t0: Date.now(),
+              stage: null,
+              turn: null,
+              turnSeq: 0,
+            })
+            log.info("task log started", { taskID })
+          } catch (e) {
+            log.warn("failed to init task log", { error: String(e) })
+            return
+          }
         }
-      }
 
-      const ctx = tasks.get(taskID)!
+        const ctx = tasks.get(taskID)!
 
-      if (type === "run.progress") return handleRunProgress(ctx, p)
-      if (type === "run.output") return // text deltas — skip
-      handleMilestone(ctx, type, p)
-    }, { aggregate: "task" })
+        if (type === "run.progress") return handleRunProgress(ctx, p)
+        if (type === "run.output") return // text deltas — skip
+        handleMilestone(ctx, type, p)
+      },
+      { aggregate: "task" },
+    )
   }
 
   export function disposeForTest() {

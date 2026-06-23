@@ -17,23 +17,23 @@ bounded screenshot derivation into the existing card-tree stats kernel.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate screenshot source, test every change, visually verify UI changes, and commit/push every round. |
-| `2026-06-22-screenshot-browser-open-jank.md` | Screenshot browser already virtualizes rows and lazy-loads thumbnails; do not change rendering or attachment fetch ownership. |
-| `2026-06-22-screenshot-browser-bounded-card-collector.md` | Screenshot item derivation is capped at 120, but the previous fix did not prove traversal itself was bounded. |
-| `2026-06-22-screenshot-browser-defer-initial-measure.md` | Panel open layout reads are already deferred through RAF; keep the same measurement path. |
-| `tree-writer-stats-cache.test.ts` | Existing subtree aggregates are maintained by `markCardStatsDirty` and `flushCardStats` inside writer batches. |
+| Source                                                    | Constraint carried forward                                                                                                    |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                               | No fallback, no duplicate screenshot source, test every change, visually verify UI changes, and commit/push every round.      |
+| `2026-06-22-screenshot-browser-open-jank.md`              | Screenshot browser already virtualizes rows and lazy-loads thumbnails; do not change rendering or attachment fetch ownership. |
+| `2026-06-22-screenshot-browser-bounded-card-collector.md` | Screenshot item derivation is capped at 120, but the previous fix did not prove traversal itself was bounded.                 |
+| `2026-06-22-screenshot-browser-defer-initial-measure.md`  | Panel open layout reads are already deferred through RAF; keep the same measurement path.                                     |
+| `tree-writer-stats-cache.test.ts`                         | Existing subtree aggregates are maintained by `markCardStatsDirty` and `flushCardStats` inside writer batches.                |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Panel source | `ScreenshotBrowserPanel.tsx` calls `collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)` only when active. | Keep the panel call and active gate unchanged. |
-| Current collector | `utils/screenshot-browser.ts` recursively calls `collectCardTreeScreenshots(childIDs, ...)`. | Replace recursion with cached top-level subtree screenshot aggregates. |
-| Existing cache owner | `store/card-tree-stats.ts` owns `subtreeCounts`, `subtreeLatestHit`, and `subtreeTodoHit` updates. | Add `subtreeScreenshotItems` to the same kernel. |
-| Card creation/update | `tree-writer.ts` dirty-marks parts, part deltas, part removals, phase reorder, timeline regroup, interaction cards, task context, and board rebuilds. | Reuse those dirty marks; no screenshot-specific writer path. |
-| Browser test | `screenshot-browser-panel-browser.test.ts` uses real transcript ingestion, virtual rows, request budgets, scroll, resize, and screenshots. | Keep as real integration coverage after cache change. |
+| Surface              | Evidence                                                                                                                                              | Decision                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Panel source         | `ScreenshotBrowserPanel.tsx` calls `collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)` only when active.            | Keep the panel call and active gate unchanged.                         |
+| Current collector    | `utils/screenshot-browser.ts` recursively calls `collectCardTreeScreenshots(childIDs, ...)`.                                                          | Replace recursion with cached top-level subtree screenshot aggregates. |
+| Existing cache owner | `store/card-tree-stats.ts` owns `subtreeCounts`, `subtreeLatestHit`, and `subtreeTodoHit` updates.                                                    | Add `subtreeScreenshotItems` to the same kernel.                       |
+| Card creation/update | `tree-writer.ts` dirty-marks parts, part deltas, part removals, phase reorder, timeline regroup, interaction cards, task context, and board rebuilds. | Reuse those dirty marks; no screenshot-specific writer path.           |
+| Browser test         | `screenshot-browser-panel-browser.test.ts` uses real transcript ingestion, virtual rows, request budgets, scroll, resize, and screenshots.            | Keep as real integration coverage after cache change.                  |
 
 ## Root Cause
 

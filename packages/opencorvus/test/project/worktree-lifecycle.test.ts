@@ -139,32 +139,28 @@ describe("Worktree lifecycle", () => {
     expect((await Filesystem.readText(startupFile)).trim()).toBe("ready")
   }, 30_000)
 
-  test(
-    "withGitLock uses the primary project runtime when called from a managed worktree",
-    async () => {
-      await using tmp = await tmpdir({ git: true })
-      const taskID = "tsk_worktree_lock_primary"
-      const sessionID = "ses_worktree_lock_primary"
-      const info = await Instance.provide({
-        directory: tmp.path,
-        fn: () => Worktree.create({ name: "lock-root", taskID, sessionID }),
-      })
+  test("withGitLock uses the primary project runtime when called from a managed worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_worktree_lock_primary"
+    const sessionID = "ses_worktree_lock_primary"
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: "lock-root", taskID, sessionID }),
+    })
 
-      await Instance.provide({
-        directory: info.directory,
-        fn: async () => {
-          const primaryLock = ProjectRuntimePaths.projectGitLock(tmp.path)
-          const worktreeLock = ProjectRuntimePaths.projectGitLock(info.directory)
+    await Instance.provide({
+      directory: info.directory,
+      fn: async () => {
+        const primaryLock = ProjectRuntimePaths.projectGitLock(tmp.path)
+        const worktreeLock = ProjectRuntimePaths.projectGitLock(info.directory)
 
-          await Worktree.withGitLock(async () => {
-            expect(await Filesystem.exists(primaryLock)).toBe(true)
-            expect(await Filesystem.exists(worktreeLock)).toBe(false)
-          })
-        },
-      })
-    },
-    30_000,
-  )
+        await Worktree.withGitLock(async () => {
+          expect(await Filesystem.exists(primaryLock)).toBe(true)
+          expect(await Filesystem.exists(worktreeLock)).toBe(false)
+        })
+      },
+    })
+  }, 30_000)
 
   test("create fails loud and cleans up when startup scripts fail", async () => {
     await using tmp = await tmpdir({ git: true })

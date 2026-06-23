@@ -72,8 +72,8 @@ export function ChangesPanel(props: ChangesPanelProps) {
     !panelActive()
       ? []
       : props.changes === undefined
-      ? mergeChangeGroups([...agentGroups(), ...(resolvedGroups() || sourceGroups())])
-      : sourceGroups().filter((group) => group.changes.length > 0),
+        ? mergeChangeGroups([...agentGroups(), ...(resolvedGroups() || sourceGroups())])
+        : sourceGroups().filter((group) => group.changes.length > 0),
   )
 
   async function handleRowClick(group: ChangeGroup, item: FileChange) {

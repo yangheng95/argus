@@ -697,9 +697,9 @@ test("history paging replays lifecycle-only frontend agent events without blank 
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(
-    8,
-  )
+  await expect(
+    hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1, directory: TEST_DIRECTORY }),
+  ).resolves.toBe(8)
   expect(conversationAgentStore.records.map((record) => record.sessionID)).not.toContain("ses_frontend_lifecycle")
   expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
@@ -942,7 +942,9 @@ test("history paging continues when a goal phase card exists but its target mess
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_phase_history", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(7)
+  await expect(hydrateTaskConversation("tsk_phase_history", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(
+    7,
+  )
   expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
   expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(false)
 
@@ -1174,7 +1176,9 @@ test("goal phase history can hydrate a build session directly by session id", as
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_phase_session", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(8)
+  await expect(hydrateTaskConversation("tsk_phase_session", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(
+    8,
+  )
   expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe("ses_build_session")
   expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(false)
 
@@ -1361,9 +1365,9 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
     }),
   )
 
-  await expect(hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1, directory: TEST_DIRECTORY })).resolves.toBe(
-    7,
-  )
+  await expect(
+    hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1, directory: TEST_DIRECTORY }),
+  ).resolves.toBe(7)
   expect(conversationAgentStore.records.map((record) => record.sessionID)).not.toContain("ses_frontend_session")
   expect(cardTreeStore.cards[cardID]).toBeUndefined()
 

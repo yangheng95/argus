@@ -22,21 +22,21 @@ name. Its focus-visible style also clears the outline, bypassing the shared
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-task-dirbar-recent-trigger-semantics.md` | Breadcrumb buttons, the recent trigger, editable path entry, detected projects, and recent rows are all owned by `TaskDirBar`; do not split the popup into a second source. |
-| `2026-06-18-popup-disabled-effective-contrast.md` | Recent-directory submit disabled contrast is part of the light popup matrix; disabled text must stay readable without whole-element opacity drift. |
-| `2026-06-18-project-worktree-remove-button-primitive.md` | `TaskDirBar` destructive row actions should route through `Button` and style through `.oc-button[data-ui="..."]`. |
-| `packages/overlay/src/components/ui/Button.tsx` | The shared primitive owns `.oc-button`, `variant`, `size`, `tone`, disabled state, and focus-visible ring. |
+| Source                                                   | Relevant constraint                                                                                                                                                         |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-task-dirbar-recent-trigger-semantics.md`     | Breadcrumb buttons, the recent trigger, editable path entry, detected projects, and recent rows are all owned by `TaskDirBar`; do not split the popup into a second source. |
+| `2026-06-18-popup-disabled-effective-contrast.md`        | Recent-directory submit disabled contrast is part of the light popup matrix; disabled text must stay readable without whole-element opacity drift.                          |
+| `2026-06-18-project-worktree-remove-button-primitive.md` | `TaskDirBar` destructive row actions should route through `Button` and style through `.oc-button[data-ui="..."]`.                                                           |
+| `packages/overlay/src/components/ui/Button.tsx`          | The shared primitive owns `.oc-button`, `variant`, `size`, `tone`, disabled state, and focus-visible ring.                                                                  |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -e "recent-dir-edit-submit" -e "recent-dir-remove" packages/overlay/src packages/overlay/test specs/new-arch` | Production owners are `TaskDirBar.tsx` and `conversation.css`; tests are `recent-dir-remove-hover-layout.test.ts`, `hover-action-geometry.test.ts`, and `popup-contrast-matrix.test.ts`. | Migrate both action controls in one slice so the recent-directory popup has one button source. |
-| `TaskDirBar.tsx` import review | `Button` is already imported and used for nearby worktree and init-git actions. | Reuse the existing primitive import. |
-| `conversation.css` review | `.recent-dir-edit-submit` and `.recent-dir-remove` define private button shell, hover, disabled, opacity, and focus rules. | Delete private shells and keep only scoped geometry/visibility variables on `.oc-button[data-ui="..."]`. |
-| Browser tests review | `task-dirbar-keyboard.test.ts` already opens the real recent-directory popup and saves a screenshot. | Extend that real browser flow to verify accessible names, disabled/enabled states, focus-visible, and remove sibling geometry. |
+| Sweep                                                                                                                | Result                                                                                                                                                                                   | Decision                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `rg -n -e "recent-dir-edit-submit" -e "recent-dir-remove" packages/overlay/src packages/overlay/test specs/new-arch` | Production owners are `TaskDirBar.tsx` and `conversation.css`; tests are `recent-dir-remove-hover-layout.test.ts`, `hover-action-geometry.test.ts`, and `popup-contrast-matrix.test.ts`. | Migrate both action controls in one slice so the recent-directory popup has one button source.                                 |
+| `TaskDirBar.tsx` import review                                                                                       | `Button` is already imported and used for nearby worktree and init-git actions.                                                                                                          | Reuse the existing primitive import.                                                                                           |
+| `conversation.css` review                                                                                            | `.recent-dir-edit-submit` and `.recent-dir-remove` define private button shell, hover, disabled, opacity, and focus rules.                                                               | Delete private shells and keep only scoped geometry/visibility variables on `.oc-button[data-ui="..."]`.                       |
+| Browser tests review                                                                                                 | `task-dirbar-keyboard.test.ts` already opens the real recent-directory popup and saves a screenshot.                                                                                     | Extend that real browser flow to verify accessible names, disabled/enabled states, focus-visible, and remove sibling geometry. |
 
 ## Fix Plan
 

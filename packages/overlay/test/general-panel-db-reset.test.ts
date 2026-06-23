@@ -9,7 +9,9 @@ const EN = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json
 const ZH = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8"))
 
 test("GeneralPanel database reset is exposed through the config service with explicit confirmation", () => {
-  expect(GENERAL_PANEL).toContain('import { reloadProjectScope, patchConfig, resetDatabase } from "../../services/config"')
+  expect(GENERAL_PANEL).toContain(
+    'import { reloadProjectScope, patchConfig, resetDatabase } from "../../services/config"',
+  )
   expect(GENERAL_PANEL).toContain('import { activeProjectDirectory } from "../../services/project-directory"')
   expect(GENERAL_PANEL).toContain('window.confirm(t("settings.db_reset_confirm"')
   expect(GENERAL_PANEL).toContain("await resetDatabase(directory)")

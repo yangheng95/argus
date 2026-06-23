@@ -608,11 +608,9 @@ body {
 .card__head:hover .card__control-actions .oc-button[data-ui="card-trace"],
 .card__head:hover .card__control-actions .oc-button[data-ui="card-agent-model-settings"],
 .card__head:hover .card__control-actions .oc-button[data-ui="card-agent-cancel"],
-.card__head:hover .card__control-actions .oc-button[data-ui="card-rewind"],
 .card__control-actions .oc-button[data-ui="card-trace"]:focus-visible,
 .card__control-actions .oc-button[data-ui="card-agent-model-settings"]:focus-visible,
 .card__control-actions .oc-button[data-ui="card-agent-cancel"]:focus-visible,
-.card__control-actions .oc-button[data-ui="card-rewind"]:focus-visible,
 .card__control-actions .oc-button[data-ui="card-trace"][data-state="open"] {
   opacity: var(--ui-opacity-full);
 }
@@ -627,11 +625,6 @@ body {
 .card__control-actions .oc-button[data-ui="card-agent-cancel"]:hover {
   --oc-button-color: var(--bad);
   --oc-button-bg: color-mix(in srgb, var(--bad) 14%, transparent);
-}
-
-.card__control-actions .oc-button[data-ui="card-rewind"]:hover {
-  --oc-button-color: var(--warn);
-  --oc-button-bg: var(--surface-hover);
 }
 
 .card__control-actions .oc-button[data-state="pending"] {

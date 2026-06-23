@@ -230,7 +230,9 @@ function createScreenshotBrowserCollector(): ScreenshotBrowserCollector {
   return { seen: new Set<string>(), items: [] }
 }
 
-export function mergeScreenshotBrowserItemSets(itemSets: Iterable<readonly ScreenshotBrowserItem[]>): ScreenshotBrowserItem[] {
+export function mergeScreenshotBrowserItemSets(
+  itemSets: Iterable<readonly ScreenshotBrowserItem[]>,
+): ScreenshotBrowserItem[] {
   const collector = createScreenshotBrowserCollector()
   for (const items of itemSets) {
     for (const item of items) pushUnique(collector, item)

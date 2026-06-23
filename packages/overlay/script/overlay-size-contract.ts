@@ -17,7 +17,9 @@ function positiveInteger(name: string, value: unknown): number {
 export function overlaySizeContractFromTauriConfig(config: unknown): OverlaySizeContract {
   const windows = (
     config as {
-      app?: { windows?: Array<{ label?: string; width?: unknown; height?: unknown; minWidth?: unknown; minHeight?: unknown }> }
+      app?: {
+        windows?: Array<{ label?: string; width?: unknown; height?: unknown; minWidth?: unknown; minHeight?: unknown }>
+      }
     }
   ).app?.windows
   if (!Array.isArray(windows)) throw new Error("Tauri config must define app.windows.")

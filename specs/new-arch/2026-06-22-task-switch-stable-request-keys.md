@@ -19,24 +19,24 @@ same directory and task context: `terminal/profiles`, `coding/cli/profiles`,
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, recall plans before edits, test every change, visually verify UI work, commit and push each round. |
-| `2026-06-19-deep-performance-investigation.md` | Always-mounted panels can amplify task selection pressure; fix trigger-level causes instead of broad stale caches. |
-| `2026-06-22-task-switch-directory-source.md` | Selected task directory ownership is now fail-loud and uses `taskOwningDirectory()` as the owner. |
-| `ExecutorSelector.tsx` | Task operator model context is loaded via Solid `createResource` keyed by task ID, active directory, and session config refresh token. |
-| `WorkspaceLayoutControls.tsx` / `WorkspaceCodingCliLaunchers.tsx` | Both always-mounted TaskDirBar controls load terminal profile data. |
+| Source                                                            | Constraint carried forward                                                                                                             |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                       | No fallback, no duplicate source, recall plans before edits, test every change, visually verify UI work, commit and push each round.   |
+| `2026-06-19-deep-performance-investigation.md`                    | Always-mounted panels can amplify task selection pressure; fix trigger-level causes instead of broad stale caches.                     |
+| `2026-06-22-task-switch-directory-source.md`                      | Selected task directory ownership is now fail-loud and uses `taskOwningDirectory()` as the owner.                                      |
+| `ExecutorSelector.tsx`                                            | Task operator model context is loaded via Solid `createResource` keyed by task ID, active directory, and session config refresh token. |
+| `WorkspaceLayoutControls.tsx` / `WorkspaceCodingCliLaunchers.tsx` | Both always-mounted TaskDirBar controls load terminal profile data.                                                                    |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `ExecutorSelector` task context resource | `taskOperatorContextKey` returns a new object for the same task/directory/refresh values whenever dependencies re-run. | Encode the key as a stable string and parse it in the fetcher. |
-| `ExecutorSelector` Hexin budget resource | `hexinBudgetBaseKey` and `hexinBudgetKey` return fresh objects. | Use stable string keys so identical budget inputs do not refetch. |
-| `WorkspaceLayoutControls` | A `createEffect` calls `activeDirectory()` and reloads terminal profiles on every dependency invalidation. | Track a normalized directory memo and reload only when that string changes. |
-| `WorkspaceCodingCliLaunchers` | A separate `createEffect` reloads coding CLI profiles and calls `reloadTerminalProfileSelection()` for the same directory. | Track the same normalized directory key and rely on the terminal selection service to coalesce same-directory in-flight loads. |
-| `terminal-selection` | `reloadTerminalProfileSelection()` directly calls `listTerminalProfiles()` for every caller. | Add one in-flight owner per directory; duplicate concurrent callers await the same request and share the same failure. |
-| Ampere read-only agent | Prompt-profile still falls through to project catalog while selected task root session is unresolved; compact memory also loads while inactive. | Defer these separate trigger roots to follow-up rounds instead of mixing them into the stable-key change. |
+| Surface                                  | Evidence                                                                                                                                        | Decision                                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `ExecutorSelector` task context resource | `taskOperatorContextKey` returns a new object for the same task/directory/refresh values whenever dependencies re-run.                          | Encode the key as a stable string and parse it in the fetcher.                                                                 |
+| `ExecutorSelector` Hexin budget resource | `hexinBudgetBaseKey` and `hexinBudgetKey` return fresh objects.                                                                                 | Use stable string keys so identical budget inputs do not refetch.                                                              |
+| `WorkspaceLayoutControls`                | A `createEffect` calls `activeDirectory()` and reloads terminal profiles on every dependency invalidation.                                      | Track a normalized directory memo and reload only when that string changes.                                                    |
+| `WorkspaceCodingCliLaunchers`            | A separate `createEffect` reloads coding CLI profiles and calls `reloadTerminalProfileSelection()` for the same directory.                      | Track the same normalized directory key and rely on the terminal selection service to coalesce same-directory in-flight loads. |
+| `terminal-selection`                     | `reloadTerminalProfileSelection()` directly calls `listTerminalProfiles()` for every caller.                                                    | Add one in-flight owner per directory; duplicate concurrent callers await the same request and share the same failure.         |
+| Ampere read-only agent                   | Prompt-profile still falls through to project catalog while selected task root session is unresolved; compact memory also loads while inactive. | Defer these separate trigger roots to follow-up rounds instead of mixing them into the stable-key change.                      |
 
 ## Root Cause
 
@@ -83,14 +83,14 @@ profile endpoint.
 
 ## Verification
 
-| Check | Result |
-| --- | --- |
-| `bun test packages/overlay/test/executor-selector-dualbar.test.ts --timeout 30000` | 59 pass |
-| `bun test packages/overlay/test/terminal.test.ts --timeout 30000` | 4 pass |
-| `bun run --cwd packages/overlay typecheck` | Pass |
-| `bun run --cwd packages/overlay build:vite` | Pass |
-| `OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER=1 node --test --test-concurrency=1 packages/overlay/test/browser/executor-selector-task-model-context.test.ts` | 2 pass |
-| `node packages/overlay/.scratch/task-select-directory-window.mjs` | Request count 38, stale previous-directory requests 0, visible cards 31; `terminal/profiles=1`, `coding/cli/profiles=1`; screenshot `.scratch/task-select-directory-window-tsk_edc1eeb470011vW1ZfiEsw7ijo.png` reviewed. |
+| Check                                                                                                                                                       | Result                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bun test packages/overlay/test/executor-selector-dualbar.test.ts --timeout 30000`                                                                          | 59 pass                                                                                                                                                                                                                  |
+| `bun test packages/overlay/test/terminal.test.ts --timeout 30000`                                                                                           | 4 pass                                                                                                                                                                                                                   |
+| `bun run --cwd packages/overlay typecheck`                                                                                                                  | Pass                                                                                                                                                                                                                     |
+| `bun run --cwd packages/overlay build:vite`                                                                                                                 | Pass                                                                                                                                                                                                                     |
+| `OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER=1 node --test --test-concurrency=1 packages/overlay/test/browser/executor-selector-task-model-context.test.ts` | 2 pass                                                                                                                                                                                                                   |
+| `node packages/overlay/.scratch/task-select-directory-window.mjs`                                                                                           | Request count 38, stale previous-directory requests 0, visible cards 31; `terminal/profiles=1`, `coding/cli/profiles=1`; screenshot `.scratch/task-select-directory-window-tsk_edc1eeb470011vW1ZfiEsw7ijo.png` reviewed. |
 
 ## Deferred Findings
 
@@ -108,22 +108,22 @@ profile endpoint.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no double source, recall before edit, test every code change, visual QA for UI changes, commit and push. |
-| This spec | Compact memory loading was deferred as a separate trigger root after stable request keys were fixed. |
-| `MemoryPanel.tsx` | `props.compact` currently bypasses the inactive guard before calling `loadMemory`. |
-| `main.tsx` | The left Memory panel is always mounted as `compact`, with `active={selectedLeftPanelActivity() === "memory"}`. |
-| `left-tool-panels-directory-browser.test.ts` | The real left activity flow already verifies Skill, MCP, and Memory panels against a task-scoped fixture. |
+| Source                                       | Constraint carried forward                                                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                  | No fallback, no double source, recall before edit, test every code change, visual QA for UI changes, commit and push. |
+| This spec                                    | Compact memory loading was deferred as a separate trigger root after stable request keys were fixed.                  |
+| `MemoryPanel.tsx`                            | `props.compact` currently bypasses the inactive guard before calling `loadMemory`.                                    |
+| `main.tsx`                                   | The left Memory panel is always mounted as `compact`, with `active={selectedLeftPanelActivity() === "memory"}`.       |
+| `left-tool-panels-directory-browser.test.ts` | The real left activity flow already verifies Skill, MCP, and Memory panels against a task-scoped fixture.             |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
+| Surface                               | Evidence                                                                            | Decision                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `MemoryPanel` automatic reload effect | `if (!isActive() && !props.compact) return` means compact panels load while hidden. | Make `active` the single owner of automatic memory loading; compact is only visual density. |
-| Left activity Memory mount | Always mounted, compact, inactive unless the activity button is selected. | Do not request memory until that activity is selected. |
-| Settings Memory tab | Uses the default active value when rendered in its selected tab. | Preserve default active behavior by keeping `props.active ?? true`. |
-| Manual refresh/search/detail/delete | User-triggered inside the visible panel. | Leave unchanged; these actions already require visible controls. |
+| Left activity Memory mount            | Always mounted, compact, inactive unless the activity button is selected.           | Do not request memory until that activity is selected.                                      |
+| Settings Memory tab                   | Uses the default active value when rendered in its selected tab.                    | Preserve default active behavior by keeping `props.active ?? true`.                         |
+| Manual refresh/search/detail/delete   | User-triggered inside the visible panel.                                            | Leave unchanged; these actions already require visible controls.                            |
 
 ### Fix Plan
 
@@ -156,20 +156,20 @@ profile endpoint.
 
 ### Verification
 
-| Check | Result |
-| --- | --- |
-| `bun test packages/overlay/test/memory-panel-detail-dialog.test.ts packages/overlay/test/project-directory-request-loop.test.ts --timeout 30000` | 14 pass |
-| `bun run --cwd packages/overlay typecheck` | Pass |
-| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts` | 1 pass |
-| Visual QA | Reviewed `.scratch/left-skill-panel-primitive-row.png`, `.scratch/memory-row-sibling-controls.png`, and `.scratch/memory-panel-delete-empty-state.png`. |
-| `git diff --check -- packages/overlay/src/components/MemoryPanel.tsx packages/overlay/test/memory-panel-detail-dialog.test.ts packages/overlay/test/project-directory-request-loop.test.ts packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts specs/new-arch/2026-06-22-task-switch-stable-request-keys.md` | Pass |
+| Check                                                                                                                                                                                                                                                                                                                             | Result                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun test packages/overlay/test/memory-panel-detail-dialog.test.ts packages/overlay/test/project-directory-request-loop.test.ts --timeout 30000`                                                                                                                                                                                  | 14 pass                                                                                                                                                 |
+| `bun run --cwd packages/overlay typecheck`                                                                                                                                                                                                                                                                                        | Pass                                                                                                                                                    |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts`                                                                                                                                                                                                          | 1 pass                                                                                                                                                  |
+| Visual QA                                                                                                                                                                                                                                                                                                                         | Reviewed `.scratch/left-skill-panel-primitive-row.png`, `.scratch/memory-row-sibling-controls.png`, and `.scratch/memory-panel-delete-empty-state.png`. |
+| `git diff --check -- packages/overlay/src/components/MemoryPanel.tsx packages/overlay/test/memory-panel-detail-dialog.test.ts packages/overlay/test/project-directory-request-loop.test.ts packages/overlay/test/browser/left-tool-panels-directory-browser.test.ts specs/new-arch/2026-06-22-task-switch-stable-request-keys.md` | Pass                                                                                                                                                    |
 
 ### Self Review
 
 - The change removes a trigger source; it does not introduce a stale cache,
   fallback route, or alternate memory store.
 - Settings Memory keeps its default active behavior through `props.active ??
-  true`.
+true`.
 - Manual refresh, search, detail, and delete paths stay unchanged and remain
   user-triggered inside the visible panel.
 

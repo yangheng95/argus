@@ -103,7 +103,7 @@ async function tabToSelector(page: any, selector: string) {
       const target = document.querySelector(targetSelector)
       const active = document.activeElement
       return {
-        dataUi: active instanceof HTMLElement ? active.dataset.ui ?? "" : "",
+        dataUi: active instanceof HTMLElement ? (active.dataset.ui ?? "") : "",
         focused: active === target,
         focusVisible: active instanceof HTMLElement ? active.matches(":focus-visible") : false,
         tagName: active?.tagName ?? "",
@@ -687,7 +687,10 @@ test(
         nodes.map((node) => (node as HTMLElement).innerText.trim()),
       )
       assert.deepEqual(visibleErrorNotifications, [])
-      assert.ok(budgetRequests.every((item) => item.directory), JSON.stringify(budgetRequests))
+      assert.ok(
+        budgetRequests.every((item) => item.directory),
+        JSON.stringify(budgetRequests),
+      )
       await page.click('[data-ui="executor-chip-mirror"]')
       await page.waitForSelector('[data-section="mirror"]')
       // The external popover should NOT be open while the mirror popover is.

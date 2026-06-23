@@ -39,9 +39,7 @@ export const BrowserPreviewScrollSliceComparisonRequest = z
     sliceHeight: z.number().int().positive(),
   })
   .strict()
-export type BrowserPreviewScrollSliceComparisonRequest = z.infer<
-  typeof BrowserPreviewScrollSliceComparisonRequest
->
+export type BrowserPreviewScrollSliceComparisonRequest = z.infer<typeof BrowserPreviewScrollSliceComparisonRequest>
 
 export const BrowserPreviewScrollSliceComparisonResult = z
   .object({
@@ -83,9 +81,7 @@ export const BrowserPreviewScrollSliceComparisonResult = z
     diagnostics: z.array(z.string()),
   })
   .strict()
-export type BrowserPreviewScrollSliceComparisonResult = z.infer<
-  typeof BrowserPreviewScrollSliceComparisonResult
->
+export type BrowserPreviewScrollSliceComparisonResult = z.infer<typeof BrowserPreviewScrollSliceComparisonResult>
 
 type CompareScrollSliceInput = BrowserPreviewScrollSliceComparisonRequest & {
   projectRoot: string
@@ -254,9 +250,7 @@ async function captureImplementationSlice(input: {
   }
   if (sidecar.exitCode !== 0) {
     throw new Error(
-      `Browser preview scroll-slice comparison runner exited with ${sidecar.signal ?? sidecar.exitCode}. ${
-        sidecar.stderr.trim()
-      }`,
+      `Browser preview scroll-slice comparison runner exited with ${sidecar.signal ?? sidecar.exitCode}. ${sidecar.stderr.trim()}`,
     )
   }
   return {

@@ -19,26 +19,26 @@ system.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
+| Source                                                | Relevant constraint                                                                                               |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Interactive overlay controls should route through mature/shared primitives instead of local hand-rolled controls. |
-| `packages/overlay/src/components/ui/Button.tsx` | `Button` is the overlay's single JSX button primitive and owns `variant`, `size`, and `tone` data attributes. |
-| `packages/overlay/src/styles/primitives/button.css` | `.oc-button` owns padding, height, hover, focus-visible, border, and disabled semantics. |
-| `packages/overlay/src/components/App.tsx` | `ConnectionBanner` is mounted globally once; no second surface needs a compatibility branch. |
+| `packages/overlay/src/components/ui/Button.tsx`       | `Button` is the overlay's single JSX button primitive and owns `variant`, `size`, and `tone` data attributes.     |
+| `packages/overlay/src/styles/primitives/button.css`   | `.oc-button` owns padding, height, hover, focus-visible, border, and disabled semantics.                          |
+| `packages/overlay/src/components/App.tsx`             | `ConnectionBanner` is mounted globally once; no second surface needs a compatibility branch.                      |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "ConnectionBanner" packages/overlay/src packages/overlay/test specs specs/new-arch` | Only `App.tsx` mounts the component; `app-shell.test.ts` pins that ownership. | Keep the same component and mount point. |
-| `rg -n "conn-banner" packages/overlay/src packages/overlay/test specs specs/new-arch` | `ConnectionBanner.tsx`, `conn-banner.css`, `controls.test.ts`, `titlebar-menubar.test.ts`, and `overlay-architecture-guards.test.ts` reference the local action class. | Remove the local action class and update tests to target stable `data-ui` button hooks. |
-| `rg -n "connection-banner" packages/overlay/src packages/overlay/test specs specs/new-arch` | Only `data-testid="connection-banner-setup"` exists. | Add semantic `data-ui="connection-banner-setup"` and `data-ui="connection-banner-reload"` while keeping the existing test id for setup. |
+| Sweep                                                                                       | Result                                                                                                                                                                 | Decision                                                                                                                                |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "ConnectionBanner" packages/overlay/src packages/overlay/test specs specs/new-arch`  | Only `App.tsx` mounts the component; `app-shell.test.ts` pins that ownership.                                                                                          | Keep the same component and mount point.                                                                                                |
+| `rg -n "conn-banner" packages/overlay/src packages/overlay/test specs specs/new-arch`       | `ConnectionBanner.tsx`, `conn-banner.css`, `controls.test.ts`, `titlebar-menubar.test.ts`, and `overlay-architecture-guards.test.ts` reference the local action class. | Remove the local action class and update tests to target stable `data-ui` button hooks.                                                 |
+| `rg -n "connection-banner" packages/overlay/src packages/overlay/test specs specs/new-arch` | Only `data-testid="connection-banner-setup"` exists.                                                                                                                   | Add semantic `data-ui="connection-banner-setup"` and `data-ui="connection-banner-reload"` while keeping the existing test id for setup. |
 
 ## Fix Plan
 
 - Import `Button` in `ConnectionBanner.tsx`.
 - Replace both raw action buttons with `Button variant="ghost" size="sm"
-  tone="neutral"`.
+tone="neutral"`.
 - Add stable `data-ui` hooks for setup and reload.
 - Delete `.conn-banner__action` CSS rules; the banner CSS keeps only surface,
   dot, and text layout.

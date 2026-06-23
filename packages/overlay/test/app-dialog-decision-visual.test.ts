@@ -62,9 +62,11 @@ describe("app dialog decision visual treatment", () => {
     expect(badgeCss).toContain(".oc-badge")
     expect(badgeCss).toContain('.oc-badge[data-tone="accent"]')
     expect(badgeCss).toContain('.oc-badge[data-size="sm"]')
-    expect(indexHtml.indexOf('styles/primitives/button.css')).toBeLessThan(
-      indexHtml.indexOf('styles/primitives/badge.css'),
+    expect(indexHtml.indexOf("styles/primitives/button.css")).toBeLessThan(
+      indexHtml.indexOf("styles/primitives/badge.css"),
     )
-    expect(indexHtml.indexOf('styles/primitives/badge.css')).toBeLessThan(indexHtml.indexOf('styles/primitives/tabs.css'))
+    expect(indexHtml.indexOf("styles/primitives/badge.css")).toBeLessThan(
+      indexHtml.indexOf("styles/primitives/tabs.css"),
+    )
   })
 })

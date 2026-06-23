@@ -40,7 +40,10 @@ test("titlebar controls stay on the surface family", () => {
   expect(TITLEBAR_CSS).not.toContain("var(--guide-card-")
   expect(TITLEBAR_CSS).not.toContain("var(--hover-accent-shadow)")
   expect(
-    bodyOf(TITLEBAR_CSS, ".titlebar-theme-option:hover, .titlebar-theme-option[data-highlighted], .titlebar-theme-option:focus-visible"),
+    bodyOf(
+      TITLEBAR_CSS,
+      ".titlebar-theme-option:hover, .titlebar-theme-option[data-highlighted], .titlebar-theme-option:focus-visible",
+    ),
   ).toMatch(/background:\s*var\(--surface-hover\)/)
   expect(
     bodyOf(
@@ -49,12 +52,11 @@ test("titlebar controls stay on the surface family", () => {
     ),
   ).toMatch(/background:\s*var\(--surface-hover\)/)
   expect(
-    bodyOf(
-      TITLEBAR_CSS,
-      '.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-expanded]',
-    ),
+    bodyOf(TITLEBAR_CSS, '.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-expanded]'),
   ).toMatch(/--oc-button-bg:\s*var\(--subtle-3\)/)
-  expect(TITLEBAR_CSS).not.toContain('.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"]')
+  expect(TITLEBAR_CSS).not.toContain(
+    '.titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"][data-active="true"]',
+  )
   expect(bodyOf(TITLEBAR_CSS, ".brand-guide:hover, .brand-guide:focus-visible, .brand-guide[data-expanded]")).toMatch(
     /background:\s*var\(--surface-hover\)/,
   )
@@ -163,9 +165,7 @@ test("conversation agent rail and conversation owner surfaces stay flat", () => 
       CONVERSATION_CSS,
       '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:hover, .conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]:focus-visible',
     ),
-  ).toMatch(
-    /--oc-button-bg:\s*var\(--subtle-2\)/,
-  )
+  ).toMatch(/--oc-button-bg:\s*var\(--subtle-2\)/)
   expect(bodyOf(CARD_CSS, '.task-progress .oc-button[data-ui="task-progress-pill"]')).toMatch(
     /--oc-button-border:\s*var\(--oc-border-width\) solid var\(--card-border\)/,
   )

@@ -4,7 +4,10 @@ import {
   bindLocalModuleToSourceRegion,
   type LocalModuleSourceBindingResult,
 } from "@/browser-preview/local-module-source-binding"
-import { BrowserPreviewRegionLocator, BrowserPreviewSourceReferenceArtifactID } from "@/browser-preview/region-comparison"
+import {
+  BrowserPreviewRegionLocator,
+  BrowserPreviewSourceReferenceArtifactID,
+} from "@/browser-preview/region-comparison"
 import { browserPreviewTaskEvidenceRoot } from "@/browser-preview/task-evidence-root"
 import { BrowserPreviewViewportID } from "@/browser-preview/viewport"
 import { Instance } from "@/project/instance"

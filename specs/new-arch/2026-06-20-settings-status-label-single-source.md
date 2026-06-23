@@ -17,10 +17,10 @@ as neutral.
 
 ## Sources Of Truth
 
-| Domain | Authoritative source | Allowed display statuses |
-| --- | --- | --- |
-| Channel configuration status | `packages/opencorvus/src/channel/registry.ts` `ChannelRegistry.Info.status` | `disabled`, `configured`, `partial`, `missing` |
-| MCP connection status | `packages/opencorvus/src/mcp/index.ts` `MCP.Status` and `packages/opencorvus/src/server/routes/mcp.ts` response schema | `connected`, `disabled`, `disconnected`, `connecting`, `failed`, `needs_auth`, `needs_client_registration` |
+| Domain                       | Authoritative source                                                                                                   | Allowed display statuses                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Channel configuration status | `packages/opencorvus/src/channel/registry.ts` `ChannelRegistry.Info.status`                                            | `disabled`, `configured`, `partial`, `missing`                                                             |
+| MCP connection status        | `packages/opencorvus/src/mcp/index.ts` `MCP.Status` and `packages/opencorvus/src/server/routes/mcp.ts` response schema | `connected`, `disabled`, `disconnected`, `connecting`, `failed`, `needs_auth`, `needs_client_registration` |
 
 `ChannelRegistry.Info.runtime_status` is a different domain and must not be
 merged into the channel configuration pill. The current channel panel only
@@ -30,15 +30,15 @@ renders `status`, not `runtime_status`.
 
 `rg -n "channelStatusLabel\\(|channelStatusTone\\(|mcpStatusLabel\\(|mcpStatusTone\\(|return map\\[status\\] \\|\\| status|translated === key \\?" packages/overlay/src packages/overlay/test`
 
-| Call site | Decision |
-| --- | --- |
-| `ChannelsPanel.tsx` local `channelStatusLabel` | Replace with strict shared helper. Unknown non-empty status must throw. |
-| `ChannelsPanel.tsx` local `channelStatusTone` | Replace with strict shared tone helper so label and tone use the same status domain. |
-| `SkillMarketPanel.tsx` local `mcpStatusLabel` | Replace with strict shared helper. Unknown non-empty status must throw. |
-| `SkillMarketPanel.tsx` local `mcpStatusTone` | Replace with strict shared tone helper. |
-| `SkillMarketPanel.tsx` `item?.status || "disabled"` | Keep an explicit optional-status projection helper because `McpItem.status` is optional in the overlay shape. Empty/missing status maps to the configured disabled display state; unknown non-empty status throws. |
-| `project-directory-request-loop.test.ts` string guard for local MCP map | Update the guard to require helper imports and reject local maps. |
-| Existing i18n keys | Reuse the existing `channel.status.*` and `mcp.status.*` keys. Do not edit translation files in this round. |
+| Call site                                                               | Decision                                                                                                    |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ChannelsPanel.tsx` local `channelStatusLabel`                          | Replace with strict shared helper. Unknown non-empty status must throw.                                     |
+| `ChannelsPanel.tsx` local `channelStatusTone`                           | Replace with strict shared tone helper so label and tone use the same status domain.                        |
+| `SkillMarketPanel.tsx` local `mcpStatusLabel`                           | Replace with strict shared helper. Unknown non-empty status must throw.                                     |
+| `SkillMarketPanel.tsx` local `mcpStatusTone`                            | Replace with strict shared tone helper.                                                                     |
+| `SkillMarketPanel.tsx` `item?.status                                    |                                                                                                             | "disabled"` | Keep an explicit optional-status projection helper because `McpItem.status` is optional in the overlay shape. Empty/missing status maps to the configured disabled display state; unknown non-empty status throws. |
+| `project-directory-request-loop.test.ts` string guard for local MCP map | Update the guard to require helper imports and reject local maps.                                           |
+| Existing i18n keys                                                      | Reuse the existing `channel.status.*` and `mcp.status.*` keys. Do not edit translation files in this round. |
 
 ## Design
 

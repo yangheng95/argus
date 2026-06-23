@@ -101,9 +101,9 @@ test(
         expect(await Filesystem.exists(primaryPaths.evidenceJsonAbsolute)).toBe(true)
         expect(await Filesystem.exists(primaryPaths.citationMapAbsolute)).toBe(true)
         expect(await Filesystem.exists(worktreePaths.absoluteDir)).toBe(false)
-        expect(JSON.parse(await fs.readFile(primaryPaths.evidenceJsonAbsolute, "utf8")).evidence_notes[0].evidence_id).toBe(
-          "ev_1",
-        )
+        expect(
+          JSON.parse(await fs.readFile(primaryPaths.evidenceJsonAbsolute, "utf8")).evidence_notes[0].evidence_id,
+        ).toBe("ev_1")
       },
     })
   },

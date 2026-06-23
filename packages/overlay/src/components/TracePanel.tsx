@@ -180,7 +180,9 @@ function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
         </span>
       </Button>
       <Show when={open()}>
-        <pre id={bodyElementID()} class="trace-event-body">{payloadJson(props.event)}</pre>
+        <pre id={bodyElementID()} class="trace-event-body">
+          {payloadJson(props.event)}
+        </pre>
       </Show>
     </div>
   )
@@ -194,7 +196,10 @@ export function TracePanel(props: TracePanelProps) {
     () => ({ key: cacheKey(), tick: refreshTick() }),
     async () => {
       if ("sessionID" in props && props.sessionID) {
-        return fetchSessionTrace({ sessionID: props.sessionID, directory: props.directory }, { force: refreshTick() > 0 })
+        return fetchSessionTrace(
+          { sessionID: props.sessionID, directory: props.directory },
+          { force: refreshTick() > 0 },
+        )
       }
       if ("taskID" in props && props.taskID) {
         return fetchTaskTrace({ taskID: props.taskID, directory: props.directory }, { force: refreshTick() > 0 })

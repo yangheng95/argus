@@ -71,7 +71,12 @@ function fakeTransport(requests: TransportRequest[]): HostTransport {
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       requests.push(req)
       if (req.method === "POST" && req.path === "task") return ok({ task_id: CREATED_TASK_ID }) as TransportResponse<T>
-      return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.method || "GET"} ${req.path}` } } as TransportResponse<T>
+      return {
+        status: 404,
+        ok: false,
+        headers: {},
+        body: { error: `unhandled ${req.method || "GET"} ${req.path}` },
+      } as TransportResponse<T>
     },
     openStream() {
       throw new Error("openStream not used")

@@ -15,7 +15,13 @@ export interface LedgerListProps<T> {
 export function LedgerLoadingStatus(props: { label: string; class?: string; dataUi?: string }) {
   const className = () => (props.class ? `ledger-skeleton ${props.class}` : "ledger-skeleton")
   return (
-    <div class={className()} role="status" aria-live="polite" aria-busy="true" data-ui={props.dataUi ?? "ledger-loading"}>
+    <div
+      class={className()}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      data-ui={props.dataUi ?? "ledger-loading"}
+    >
       <span class="ledger-loading-label">{props.label}</span>
       <div class="ledger-skeleton-rows" aria-hidden="true">
         <div class="ledger-skeleton-row task-list-skeleton-row" />

@@ -10,7 +10,8 @@ const RETIRED_PROMPT_PROFILE_NATIVE_SELECT_PATTERNS = [
   },
   {
     description: "prompt-profile native select element",
-    pattern: /<select\b[^>]*\bclass=(?:"[^"]*\bprompt-profile-select\b[^"]*"|'[^']*\bprompt-profile-select\b[^']*'|prompt-profile-select(?:[\s>]))/i,
+    pattern:
+      /<select\b[^>]*\bclass=(?:"[^"]*\bprompt-profile-select\b[^"]*"|'[^']*\bprompt-profile-select\b[^']*'|prompt-profile-select(?:[\s>]))/i,
   },
   {
     description: "prompt-profile exact native select stylesheet selector",
@@ -37,7 +38,9 @@ export function assertOverlayUiBundleDir(target) {
 
   for (const { description, pattern } of RETIRED_PROMPT_PROFILE_NATIVE_SELECT_PATTERNS) {
     if (pattern.test(combinedTextAssets)) {
-      throw new Error(`[build] overlay UI bundle contains retired prompt-profile native select implementation: ${description}`)
+      throw new Error(
+        `[build] overlay UI bundle contains retired prompt-profile native select implementation: ${description}`,
+      )
     }
   }
 }

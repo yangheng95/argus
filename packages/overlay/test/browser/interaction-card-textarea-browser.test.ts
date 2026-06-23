@@ -130,10 +130,12 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "interaction-textarea" })
-    if (path === "/global/projects/discover") return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
+    if (path === "/global/projects/discover")
+      return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
     if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: projectRoot })
@@ -155,7 +157,14 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
@@ -182,7 +191,8 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     if (path === `/task/${taskID}/operator-model-context`)
       return send({ taskID, sessionID: "session-interaction-textarea", agent: "orchestrator", model: null })
     if (path === `/task/${taskID}/browser-preview`) return send({ target: null, verification: null })
-    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+    if (path === `/task/${taskID}/conversation/events`)
+      return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send([])
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
@@ -208,19 +218,23 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
       if (message.type() === "error" && !expectedReplyFailure) errors.push(`console: ${message.text()}`)
     })
     page.on("response", (response: any) => {
-      const expectedReplyFailure = response.status() === 400 && response.url().includes("/interaction/question-autogrow/reply")
+      const expectedReplyFailure =
+        response.status() === 400 && response.url().includes("/interaction/question-autogrow/reply")
       if (response.status() >= 400 && !expectedReplyFailure) errors.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 860 })
-    await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", seed.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      localStorage.setItem("oc_directory", seed.projectRoot)
-      localStorage.setItem("oc_workspace_directory", seed.projectRoot)
-      localStorage.setItem("oc_workspace_task", seed.taskID)
-    }, { serverUrl: server.origin, taskID, projectRoot })
+    await page.evaluateOnNewDocument(
+      (seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", seed.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_directory", seed.projectRoot)
+        localStorage.setItem("oc_workspace_directory", seed.projectRoot)
+        localStorage.setItem("oc_workspace_task", seed.taskID)
+      },
+      { serverUrl: server.origin, taskID, projectRoot },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"]')
@@ -230,11 +244,14 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
         typeof (window as any).loadTasks === "function" &&
         typeof (window as any).selectTask === "function",
     )
-    await page.evaluate(async (seed: { taskID: string; projectRoot: string }) => {
-      await (window as any).applyDirectory(seed.projectRoot, { persist: false, restoreWorkspace: false, save: false })
-      await (window as any).loadTasks()
-      await (window as any).selectTask(seed.taskID, { directory: seed.projectRoot })
-    }, { taskID, projectRoot })
+    await page.evaluate(
+      async (seed: { taskID: string; projectRoot: string }) => {
+        await (window as any).applyDirectory(seed.projectRoot, { persist: false, restoreWorkspace: false, save: false })
+        await (window as any).loadTasks()
+        await (window as any).selectTask(seed.taskID, { directory: seed.projectRoot })
+      },
+      { taskID, projectRoot },
+    )
 
     await page
       .waitForFunction(
@@ -254,8 +271,12 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
       })
 
     const before = await page.evaluate(() => {
-      const inline = document.querySelector<HTMLTextAreaElement>('.chat-scroll .interaction-card[data-id="question-autogrow"] textarea')
-      const dialog = document.querySelector<HTMLTextAreaElement>('#interactionDialog .interaction-card[data-id="question-autogrow"] textarea')
+      const inline = document.querySelector<HTMLTextAreaElement>(
+        '.chat-scroll .interaction-card[data-id="question-autogrow"] textarea',
+      )
+      const dialog = document.querySelector<HTMLTextAreaElement>(
+        '#interactionDialog .interaction-card[data-id="question-autogrow"] textarea',
+      )
       if (!inline || !dialog) throw new Error("missing interaction textareas")
       return {
         inlineClass: inline.className,
@@ -284,16 +305,18 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
               return {
                 placeholder: textarea.getAttribute("placeholder") ?? "",
                 labelledBy: labelID,
-                label: labelID ? document.getElementById(labelID)?.textContent?.trim() ?? "" : "",
+                label: labelID ? (document.getElementById(labelID)?.textContent?.trim() ?? "") : "",
               }
             }),
-            describedOptions: Array.from(card.querySelectorAll<HTMLInputElement>("input[aria-describedby]")).map((input) => {
-              const descID = input.getAttribute("aria-describedby") ?? ""
-              return {
-                descID,
-                description: document.getElementById(descID)?.textContent?.trim() ?? "",
-              }
-            }),
+            describedOptions: Array.from(card.querySelectorAll<HTMLInputElement>("input[aria-describedby]")).map(
+              (input) => {
+                const descID = input.getAttribute("aria-describedby") ?? ""
+                return {
+                  descID,
+                  description: document.getElementById(descID)?.textContent?.trim() ?? "",
+                }
+              },
+            ),
             buttons: Array.from(card.querySelectorAll<HTMLButtonElement>("button[data-action]")).map((button) => ({
               text: button.textContent?.trim() ?? "",
               ariaLabel: button.getAttribute("aria-label"),
@@ -325,10 +348,7 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
       }
       assert.deepEqual(
         surface.textareas.map((item) => item.label),
-        [
-          "Deployment notes: What extra context should the agent include?",
-          "Freeform detail: Add any other details.",
-        ],
+        ["Deployment notes: What extra context should the agent include?", "Freeform detail: Add any other details."],
       )
       for (const textarea of surface.textareas) {
         assert.equal(textarea.placeholder, "Or type a custom answer…")
@@ -360,11 +380,17 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
       "Line four: include the rollback plan.",
       "Line five: include the owner and timestamp.",
     ].join("\n")
-    await page.$eval('.chat-scroll .interaction-card[data-id="question-autogrow"] textarea', (node, value) => {
-      const textarea = node as HTMLTextAreaElement
-      textarea.value = value as string
-      textarea.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value as string }))
-    }, longReply)
+    await page.$eval(
+      '.chat-scroll .interaction-card[data-id="question-autogrow"] textarea',
+      (node, value) => {
+        const textarea = node as HTMLTextAreaElement
+        textarea.value = value as string
+        textarea.dispatchEvent(
+          new InputEvent("input", { bubbles: true, inputType: "insertText", data: value as string }),
+        )
+      },
+      longReply,
+    )
 
     const after = await page.$eval(
       '.chat-scroll .interaction-card[data-id="question-autogrow"] textarea',
@@ -372,17 +398,30 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
     )
     assert.ok(after > before.inlineHeight, `inline textarea should auto-grow: ${before.inlineHeight} -> ${after}`)
 
-    const dialogScreenshot = await saveElementScreenshot(page, "#interactionDialog", "interaction-card-textarea-dialog.png")
+    const dialogScreenshot = await saveElementScreenshot(
+      page,
+      "#interactionDialog",
+      "interaction-card-textarea-dialog.png",
+    )
     await page.click('#interactionDialog .interaction-card[data-id="question-autogrow"] [data-action="answer"]')
     await replyStarted.promise
     const busyState = await page.evaluate(() => {
-      const card = document.querySelector<HTMLElement>('#interactionDialog .interaction-card[data-id="question-autogrow"]')
+      const card = document.querySelector<HTMLElement>(
+        '#interactionDialog .interaction-card[data-id="question-autogrow"]',
+      )
       if (!card) throw new Error("missing dialog card")
       return {
         busy: card.getAttribute("aria-busy"),
-        statusText: card.querySelector<HTMLElement>('[role="status"][aria-live="polite"][aria-busy="true"]')?.textContent?.trim() ?? "",
-        disabledButtons: Array.from(card.querySelectorAll<HTMLButtonElement>("button[data-action]")).map((button) => button.disabled),
-        disabledInputs: Array.from(card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")).map((control) => control.disabled),
+        statusText:
+          card
+            .querySelector<HTMLElement>('[role="status"][aria-live="polite"][aria-busy="true"]')
+            ?.textContent?.trim() ?? "",
+        disabledButtons: Array.from(card.querySelectorAll<HTMLButtonElement>("button[data-action]")).map(
+          (button) => button.disabled,
+        ),
+        disabledInputs: Array.from(
+          card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea"),
+        ).map((control) => control.disabled),
         focusInside: card.contains(document.activeElement),
       }
     })
@@ -398,7 +437,9 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
       { timeout: 10_000 },
     )
     const failureState = await page.evaluate(() => {
-      const card = document.querySelector<HTMLElement>('#interactionDialog .interaction-card[data-id="question-autogrow"]')
+      const card = document.querySelector<HTMLElement>(
+        '#interactionDialog .interaction-card[data-id="question-autogrow"]',
+      )
       const alert = card?.querySelector<HTMLElement>('[role="alert"][aria-live="assertive"]')
       if (!card || !alert) throw new Error("missing failure alert")
       return {
@@ -421,7 +462,9 @@ test("interaction custom replies reuse the auto-growing textarea primitive in in
       "interaction-card-error-dialog.png",
     )
     await page.keyboard.press("Escape")
-    await page.waitForFunction(() => !document.querySelector('#interactionDialog .interaction-card[data-id="question-autogrow"]'))
+    await page.waitForFunction(
+      () => !document.querySelector('#interactionDialog .interaction-card[data-id="question-autogrow"]'),
+    )
     const inlineScreenshot = await saveElementScreenshot(
       page,
       '.chat-scroll .interaction-card[data-id="question-autogrow"]',

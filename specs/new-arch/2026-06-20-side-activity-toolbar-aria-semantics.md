@@ -17,21 +17,21 @@ current destination.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-05-vscode-style-activity-toolbars.md` | Left and right rails share `SideActivityToolbar`; missing ARIA semantics should be fixed in that single primitive. |
-| `2026-06-18-file-explorer-row-button-semantics.md` | Plain command/navigation buttons use `aria-current`, not `aria-pressed`. |
-| `2026-06-18-prompt-profile-list-current-aria.md` | Current command rows expose `aria-current` and avoid selected/toggle semantics. |
-| `2026-06-18-task-dirbar-current-location-aria.md` | Current location commands use `aria-current` and explicitly reject `aria-pressed`. |
-| `2026-06-09-browser-preview-ready-open.md` | Right activity toolbar clicks remain a toggle/open entry point. |
+| Source                                             | Existing decision                                                                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `2026-06-05-vscode-style-activity-toolbars.md`     | Left and right rails share `SideActivityToolbar`; missing ARIA semantics should be fixed in that single primitive. |
+| `2026-06-18-file-explorer-row-button-semantics.md` | Plain command/navigation buttons use `aria-current`, not `aria-pressed`.                                           |
+| `2026-06-18-prompt-profile-list-current-aria.md`   | Current command rows expose `aria-current` and avoid selected/toggle semantics.                                    |
+| `2026-06-18-task-dirbar-current-location-aria.md`  | Current location commands use `aria-current` and explicitly reject `aria-pressed`.                                 |
+| `2026-06-09-browser-preview-ready-open.md`         | Right activity toolbar clicks remain a toggle/open entry point.                                                    |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "SideActivityToolbar|selectLeftActivity|selectRightActivity|side-activity-button|aria-pressed|aria-current" packages/overlay/src packages/overlay/test specs/new-arch` | `SideActivityToolbar` is the single production source for both rails. Right-side browser tests inspect `aria-pressed`; left-side tests do not guard ARIA. | Add explicit per-call semantics instead of deleting `aria-pressed` globally. |
-| `TaskList.tsx`, `MissionList.tsx`, `CodingAssistantSessionList.tsx` | Current ledger rows use `aria-current="page"`. | Left activity rail should match current-page navigation semantics. |
-| `side-activity-toolbar-browser.test.ts` | Existing real browser flow clicks left Mission/Tasks/Skill/MCP/Memory and right Workflow/Inspector. | Extend the existing flow with left `aria-current`, left no `aria-pressed`, right `aria-pressed`, and a left rail screenshot. |
+| Sweep                                                               | Result                                                                                              | Decision                                                                                                                     |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `rg -n "SideActivityToolbar                                         | selectLeftActivity                                                                                  | selectRightActivity                                                                                                          | side-activity-button | aria-pressed | aria-current" packages/overlay/src packages/overlay/test specs/new-arch` | `SideActivityToolbar` is the single production source for both rails. Right-side browser tests inspect `aria-pressed`; left-side tests do not guard ARIA. | Add explicit per-call semantics instead of deleting `aria-pressed` globally. |
+| `TaskList.tsx`, `MissionList.tsx`, `CodingAssistantSessionList.tsx` | Current ledger rows use `aria-current="page"`.                                                      | Left activity rail should match current-page navigation semantics.                                                           |
+| `side-activity-toolbar-browser.test.ts`                             | Existing real browser flow clicks left Mission/Tasks/Skill/MCP/Memory and right Workflow/Inspector. | Extend the existing flow with left `aria-current`, left no `aria-pressed`, right `aria-pressed`, and a left rail screenshot. |
 
 ## Fix
 

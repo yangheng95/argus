@@ -37,13 +37,7 @@ export function FileChangesPanel(props: FileChangesPanelProps) {
           title={t("section.files")}
           actions={
             <TabList size="sm" tone="neutral" data-ui="file-changes-view-tabs">
-              <Tab
-                value="changes"
-                size="sm"
-                tone="neutral"
-                data-ui="file-changes-view-tab"
-                data-value="changes"
-              >
+              <Tab value="changes" size="sm" tone="neutral" data-ui="file-changes-view-tab" data-value="changes">
                 <Icon name="file-document" size={13} />
                 <span>{t("files.changes")}</span>
               </Tab>

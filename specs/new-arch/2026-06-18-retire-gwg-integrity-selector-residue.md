@@ -18,21 +18,21 @@ dimension selectors were still styled and tested as if components created them.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-17-agent-card-css-retirement.md` | Dead runtime CSS should be removed when no component or HTML creates the class contract. |
-| `2026-06-18-retire-eval-shell-residue.md` | Tests must reject retired evaluation shell selectors while preserving live payload selectors. |
-| `GoalWorkflowGroup.tsx` current source | Step-by-step executor detail belongs in the conversation timeline, not duplicated in the right-side goal panel. |
-| `IntegrityCard.tsx` current source | Current integrity surface renders reviewers, findings, required repairs, disagreements, and manifest metadata. |
+| Source                                    | Existing decision                                                                                               |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `2026-06-17-agent-card-css-retirement.md` | Dead runtime CSS should be removed when no component or HTML creates the class contract.                        |
+| `2026-06-18-retire-eval-shell-residue.md` | Tests must reject retired evaluation shell selectors while preserving live payload selectors.                   |
+| `GoalWorkflowGroup.tsx` current source    | Step-by-step executor detail belongs in the conversation timeline, not duplicated in the right-side goal panel. |
+| `IntegrityCard.tsx` current source        | Current integrity surface renders reviewers, findings, required repairs, disagreements, and manifest metadata.  |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "gwg-step|gwg-action|gwg-changed|gwg-diff|gwg-open-session" packages/overlay/src/components packages/overlay/test` | No production component creates those selectors; `inspector.css` and tests were the remaining owners. |
-| `rg -n "gwg-plan|gwg-check|gwg-verdict|gwg-eval-summary" packages/overlay/src/components` | `StepPayloadBody.tsx` still creates plan/eval/check payload selectors; keep them. |
-| `rg -n "integrity__dimension|integrity__goal-id|integrity__diff|integrity__missing-objective|integrity__chips|integrity__chip" packages/overlay/src/components packages/overlay/test` | No production component creates those retired integrity selectors. |
-| `rg -n "integrity__reviewer|integrity__issue|integrity__correction|integrity__missing|integrity__manifest-meta" packages/overlay/src/components` | Current integrity card still creates those selectors; keep them. |
+| Sweep                          | Result               |
+| ------------------------------ | -------------------- | ----------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `rg -n "gwg-step               | gwg-action           | gwg-changed             | gwg-diff                                           | gwg-open-session" packages/overlay/src/components packages/overlay/test`          | No production component creates those selectors; `inspector.css` and tests were the remaining owners. |
+| `rg -n "gwg-plan               | gwg-check            | gwg-verdict             | gwg-eval-summary" packages/overlay/src/components` | `StepPayloadBody.tsx` still creates plan/eval/check payload selectors; keep them. |
+| `rg -n "integrity\_\_dimension | integrity\_\_goal-id | integrity\_\_diff       | integrity\_\_missing-objective                     | integrity\_\_chips                                                                | integrity\_\_chip" packages/overlay/src/components packages/overlay/test`                             | No production component creates those retired integrity selectors. |
+| `rg -n "integrity\_\_reviewer  | integrity\_\_issue   | integrity\_\_correction | integrity\_\_missing                               | integrity\_\_manifest-meta" packages/overlay/src/components`                      | Current integrity card still creates those selectors; keep them.                                      |
 
 ## Fix
 

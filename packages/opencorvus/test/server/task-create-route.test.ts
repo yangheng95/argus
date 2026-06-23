@@ -115,22 +115,19 @@ describe("task creation route", () => {
 
     spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
     const app = Server.App()
-    const response = await app.request(
-      `/task?directory=${encodeURIComponent(directory)}&init-git=false`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          request: "do not initialize git",
-          executor: "opencorvus",
-          model: "test/model",
-          requestID: "route-create-missing-init-git-false",
-          source: "api",
-        }),
+    const response = await app.request(`/task?directory=${encodeURIComponent(directory)}&init-git=false`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
       },
-    )
+      body: JSON.stringify({
+        request: "do not initialize git",
+        executor: "opencorvus",
+        model: "test/model",
+        requestID: "route-create-missing-init-git-false",
+        source: "api",
+      }),
+    })
 
     expect(response.status).toBe(412)
     const body = (await response.json()) as { name: string }

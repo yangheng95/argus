@@ -19,24 +19,24 @@ refresh failures.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no blind patching, test every change, visually verify UI work, and commit/push every round. |
-| `2026-06-09-task-list-timeout-index-fix.md` | `global/tasks` timeout was previously traced to backend query/index cost; do not raise request timeouts. |
-| `2026-06-15-task-list-lean-projection.md` | Task-list refreshes must stay lean and first-page sized; do not move full selected-task payloads into the list path. |
-| `2026-06-23-overlay-panel-legal-size-contract.md` | Resize and toolbar-open work must respect legal panel sizes and remain frame-owned. |
-| Live 7878 evidence | Clicking the right `inspector` toolbar while the screenshots panel was open timed out through CDP after 3 seconds; console showed `[task-list-sse] periodic task refresh failed TimeoutError: signal timed out`, and the visible toast read `Error / signal timed out`. |
+| Source                                            | Constraint carried forward                                                                                                                                                                                                                                              |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                       | No fallback logic, no blind patching, test every change, visually verify UI work, and commit/push every round.                                                                                                                                                          |
+| `2026-06-09-task-list-timeout-index-fix.md`       | `global/tasks` timeout was previously traced to backend query/index cost; do not raise request timeouts.                                                                                                                                                                |
+| `2026-06-15-task-list-lean-projection.md`         | Task-list refreshes must stay lean and first-page sized; do not move full selected-task payloads into the list path.                                                                                                                                                    |
+| `2026-06-23-overlay-panel-legal-size-contract.md` | Resize and toolbar-open work must respect legal panel sizes and remain frame-owned.                                                                                                                                                                                     |
+| Live 7878 evidence                                | Clicking the right `inspector` toolbar while the screenshots panel was open timed out through CDP after 3 seconds; console showed `[task-list-sse] periodic task refresh failed TimeoutError: signal timed out`, and the visible toast read `Error / signal timed out`. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Global runtime error reporting | `main.tsx` listens for `window.unhandledrejection` and reports it as a persistent error toast. | Keep; it is the correct owner for true unhandled failures. |
-| Periodic task-list refresh | `services/sse.ts::startTaskListRefreshTimer()` already calls `loadTasks().catch(...)`. | Keep; this path handles refresh failures and leaves `boardStore.tasksError` as the inline task-list surface. |
-| SSE task-list notification refresh | `services/events.ts::scheduleTasksCompat()` does `void loadTasks()` with no rejection handler. | Fix this single scheduler so task-list refresh failures are handled at the task-list refresh owner instead of escaping as runtime errors. |
-| Task-list store error state | `store/board.ts::loadTasksOnce()` sets `boardStore.tasksError` and rethrows. | Keep; the retryable task-list error UI remains the explicit surface. |
-| Toolbar layout | Right toolbar buttons open center workbench panels and schedule layout frame owners. | Do not add a toolbar gate or timeout workaround; remove the unrelated unhandled rejection noise first. |
-| Tests | `events-refresh.test.ts` already covers task-list notification reloads and single-flight behavior. | Extend it with a rejecting transport to assert the scheduled refresh is caught and recorded, not promoted to an unhandled rejection. |
+| Surface                            | Evidence                                                                                           | Decision                                                                                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Global runtime error reporting     | `main.tsx` listens for `window.unhandledrejection` and reports it as a persistent error toast.     | Keep; it is the correct owner for true unhandled failures.                                                                                |
+| Periodic task-list refresh         | `services/sse.ts::startTaskListRefreshTimer()` already calls `loadTasks().catch(...)`.             | Keep; this path handles refresh failures and leaves `boardStore.tasksError` as the inline task-list surface.                              |
+| SSE task-list notification refresh | `services/events.ts::scheduleTasksCompat()` does `void loadTasks()` with no rejection handler.     | Fix this single scheduler so task-list refresh failures are handled at the task-list refresh owner instead of escaping as runtime errors. |
+| Task-list store error state        | `store/board.ts::loadTasksOnce()` sets `boardStore.tasksError` and rethrows.                       | Keep; the retryable task-list error UI remains the explicit surface.                                                                      |
+| Toolbar layout                     | Right toolbar buttons open center workbench panels and schedule layout frame owners.               | Do not add a toolbar gate or timeout workaround; remove the unrelated unhandled rejection noise first.                                    |
+| Tests                              | `events-refresh.test.ts` already covers task-list notification reloads and single-flight behavior. | Extend it with a rejecting transport to assert the scheduled refresh is caught and recorded, not promoted to an unhandled rejection.      |
 
 ## Root Cause
 
@@ -102,11 +102,11 @@ the task list; the background scheduler must own its rejection.
 
 ## Independent Agent Findings
 
-| Agent | Finding | Disposition |
-| --- | --- | --- |
-| Gibbs | Screenshot thumbnail fetches cannot abort after starting, even though HostTransport supports `AbortSignal`. | Next performance fix candidate; requires API and browser regression coverage. |
-| Gibbs | Screenshot thumbnails still fetch/decode original large images. | Follow-up after abort support; needs a thumbnail resource source, not a UI fallback. |
-| Gibbs | Existing browser resize tests do not prove the native Windows `WM_SIZING` path. | Follow-up benchmark coverage gap. |
-| Beauvoir | `TaskDirBar` breadcrumb still injects raw HTML buttons instead of a Solid component primitive. | Next UI component reuse candidate. |
-| Beauvoir | TODO/tool activity policy is copied across card-tree helpers, stats, inline renderer, and title projection. | Next double-source cleanup candidate. |
-| Beauvoir | `TracePanel` taskID mode is high-confidence dead code. | Deletion requires user confirmation under `AGENTS.md` rule 17. |
+| Agent    | Finding                                                                                                     | Disposition                                                                          |
+| -------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Gibbs    | Screenshot thumbnail fetches cannot abort after starting, even though HostTransport supports `AbortSignal`. | Next performance fix candidate; requires API and browser regression coverage.        |
+| Gibbs    | Screenshot thumbnails still fetch/decode original large images.                                             | Follow-up after abort support; needs a thumbnail resource source, not a UI fallback. |
+| Gibbs    | Existing browser resize tests do not prove the native Windows `WM_SIZING` path.                             | Follow-up benchmark coverage gap.                                                    |
+| Beauvoir | `TaskDirBar` breadcrumb still injects raw HTML buttons instead of a Solid component primitive.              | Next UI component reuse candidate.                                                   |
+| Beauvoir | TODO/tool activity policy is copied across card-tree helpers, stats, inline renderer, and title projection. | Next double-source cleanup candidate.                                                |
+| Beauvoir | `TracePanel` taskID mode is high-confidence dead code.                                                      | Deletion requires user confirmation under `AGENTS.md` rule 17.                       |

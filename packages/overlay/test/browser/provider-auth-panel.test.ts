@@ -56,7 +56,10 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
-async function saveElementScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+async function saveElementScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
   const screenshotPath = resolve(REPO_ROOT, ".scratch", name)
   mkdirSync(dirname(screenshotPath), { recursive: true })
   writeFileSync(screenshotPath, await element.screenshot({}))
@@ -495,23 +498,20 @@ test(
 
         await tab.click('.provider-head-actions .oc-button[data-variant="solid"]')
         await tab.waitForSelector(".provider-models-textarea")
-        const modelsTextareaInitial = await tab.$eval(
-          ".provider-models-textarea",
-          (textarea: HTMLTextAreaElement) => {
-            textarea.focus()
-            const style = getComputedStyle(textarea)
-            return {
-              active: document.activeElement === textarea,
-              height: textarea.getBoundingClientRect().height,
-              usesComposerTextarea: textarea.classList.contains("composer-textarea"),
-              usesFieldInput: textarea.classList.contains("field-input"),
-              overflowY: style.overflowY,
-              scrollbarWidth: style.scrollbarWidth,
-              resize: style.resize,
-              boxShadow: style.boxShadow,
-            }
-          },
-        )
+        const modelsTextareaInitial = await tab.$eval(".provider-models-textarea", (textarea: HTMLTextAreaElement) => {
+          textarea.focus()
+          const style = getComputedStyle(textarea)
+          return {
+            active: document.activeElement === textarea,
+            height: textarea.getBoundingClientRect().height,
+            usesComposerTextarea: textarea.classList.contains("composer-textarea"),
+            usesFieldInput: textarea.classList.contains("field-input"),
+            overflowY: style.overflowY,
+            scrollbarWidth: style.scrollbarWidth,
+            resize: style.resize,
+            boxShadow: style.boxShadow,
+          }
+        })
         assert.equal(modelsTextareaInitial.active, true)
         assert.equal(modelsTextareaInitial.usesComposerTextarea, true)
         assert.equal(modelsTextareaInitial.usesFieldInput, false)
@@ -562,7 +562,10 @@ test(
         assert.ok(typedSearchState.inputRight <= typedSearchState.clearRight)
         const typedSearchField = await tab.$(".provider-search-field")
         assert.ok(typedSearchField)
-        const typedSearchScreenshotPath = await saveElementScreenshot(typedSearchField, "provider-search-field-typed.png")
+        const typedSearchScreenshotPath = await saveElementScreenshot(
+          typedSearchField,
+          "provider-search-field-typed.png",
+        )
         assert.ok(typedSearchScreenshotPath.endsWith("provider-search-field-typed.png"))
 
         await tab.waitForFunction(

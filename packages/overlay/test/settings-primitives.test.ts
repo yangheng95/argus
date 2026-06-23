@@ -84,9 +84,7 @@ describe("settings primitives — CSS contract", () => {
 
   test("segmented active states wire through good/warn/bad/accent/neutral", () => {
     for (const tone of ["ok", "warn", "bad", "accent", "neutral"]) {
-      expect(SETTINGS_CSS).toMatch(
-        new RegExp(`\\.s-segmented-btn\\[data-pressed\\]\\[data-tone="${tone}"\\]\\s*\\{`),
-      )
+      expect(SETTINGS_CSS).toMatch(new RegExp(`\\.s-segmented-btn\\[data-pressed\\]\\[data-tone="${tone}"\\]\\s*\\{`))
     }
   })
 
@@ -98,7 +96,7 @@ describe("settings primitives — CSS contract", () => {
 
   test("button rows keep keyboard focus chrome in the row primitive", () => {
     expect(PRIMITIVES_SRC).toContain('as?: "div" | "button"')
-    expect(PRIMITIVES_SRC).toContain('component={merged.as}')
+    expect(PRIMITIVES_SRC).toContain("component={merged.as}")
     expect(PRIMITIVES_SRC).toContain('type={merged.as === "button" ? "button" : undefined}')
     expect(SETTINGS_CSS).toMatch(/button\.s-row\s*\{[^}]*appearance:\s*none;/s)
     expect(SETTINGS_CSS).toMatch(
@@ -150,7 +148,17 @@ describe("settings primitives — Solid exports", () => {
   })
 
   test("Row exposes the documented slots and complex-row escape hatch", () => {
-    for (const slot of ["as", "leading", "title", "desc", "meta", "actions", "children", "customContent", "nativeTitle"]) {
+    for (const slot of [
+      "as",
+      "leading",
+      "title",
+      "desc",
+      "meta",
+      "actions",
+      "children",
+      "customContent",
+      "nativeTitle",
+    ]) {
       expect(PRIMITIVES_SRC).toMatch(new RegExp(`${slot}\\?:`))
     }
     expect(PRIMITIVES_SRC).toContain("title={merged.nativeTitle}")
@@ -190,7 +198,7 @@ describe("settings primitives — Solid exports", () => {
   })
 
   test("Segmented delegates toggle semantics to the shared Kobalte primitive", () => {
-    expect(PRIMITIVES_SRC).toContain('import { SegmentedControl')
+    expect(PRIMITIVES_SRC).toContain("import { SegmentedControl")
     expect(PRIMITIVES_SRC).toContain("<SegmentedControl")
     expect(PRIMITIVES_SRC).not.toContain("@kobalte/core/toggle-group")
     expect(SEGMENTED_SRC).toContain(

@@ -112,7 +112,9 @@ describe("config panel sizing", () => {
     expect(CONFIG_DIALOG_TSX).toContain("if (width != null) return width")
     expect(CONFIG_DIALOG_TSX).toContain("return resizeBounds().min")
     expect(CONFIG_DIALOG_TSX).not.toContain("220 * currentUIScale()")
-    expect(CONFIG_DIALOG_TSX).not.toContain('const width = dialogStore.config.sidebarWidth\n    if (typeof width === "number"')
+    expect(CONFIG_DIALOG_TSX).not.toContain(
+      'const width = dialogStore.config.sidebarWidth\n    if (typeof width === "number"',
+    )
   })
 
   test("config sidebar pointer drag is frame coalesced", () => {
@@ -215,7 +217,9 @@ describe("config panel sizing", () => {
     expect(PROVIDERS_TSX).not.toContain("provider-refresh-btn")
     expect(SETTINGS_CSS).not.toContain(".provider-refresh-btn")
     expect(
-      bodyOf('.provider-head-actions .oc-button[data-ui="provider-refresh-button"][data-spinning="true"] .provider-refresh-icon'),
+      bodyOf(
+        '.provider-head-actions .oc-button[data-ui="provider-refresh-button"][data-spinning="true"] .provider-refresh-icon',
+      ),
     ).toMatch(/transform:\s*rotate\(90deg\)/)
   })
 

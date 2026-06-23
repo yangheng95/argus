@@ -1247,7 +1247,10 @@ export namespace Config {
         })
         .optional(),
       plugin: z.string().array().optional(),
-      snapshot: z.boolean().optional(),
+      snapshot: z
+        .boolean()
+        .optional()
+        .describe("Enable file snapshot capture for /undo and patch evidence. Default false."),
       share: z
         .enum(["manual", "auto", "disabled"])
         .optional()

@@ -18,25 +18,25 @@ data-source and request-budget fixes.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no duplicate source, recall before edits, test every change, visually verify UI changes, commit and push every round. |
-| `2026-06-14-right-toolbar-screenshot-browser.md` | Screenshot browser must derive from task card/message data and reuse `PreviewableImage`; no second screenshot source, local storage, iframe, or direct object URL path. |
-| `2026-06-22-screenshot-browser-open-jank.md` | Rendering is virtualized, thumbnails lazy-load, and attachment requests stay bounded. |
-| `2026-06-22-screenshot-browser-defer-initial-measure.md` | Screenshot list width measurement is already RAF-scheduled; do not add synchronous layout reads. |
-| `2026-06-22-screenshot-browser-top-level-index.md` | `ScreenshotBrowserPanel` must read `cardTreeStore.screenshotItems`, not `order` or `cards`. |
-| `2026-06-22-window-resize-center-layout-frame.md` | Window resize and center workbench layout already have single RAF owners; do not add a second resize owner. |
+| Source                                                   | Constraint carried forward                                                                                                                                              |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | No fallback, no gate, no duplicate source, recall before edits, test every change, visually verify UI changes, commit and push every round.                             |
+| `2026-06-14-right-toolbar-screenshot-browser.md`         | Screenshot browser must derive from task card/message data and reuse `PreviewableImage`; no second screenshot source, local storage, iframe, or direct object URL path. |
+| `2026-06-22-screenshot-browser-open-jank.md`             | Rendering is virtualized, thumbnails lazy-load, and attachment requests stay bounded.                                                                                   |
+| `2026-06-22-screenshot-browser-defer-initial-measure.md` | Screenshot list width measurement is already RAF-scheduled; do not add synchronous layout reads.                                                                        |
+| `2026-06-22-screenshot-browser-top-level-index.md`       | `ScreenshotBrowserPanel` must read `cardTreeStore.screenshotItems`, not `order` or `cards`.                                                                             |
+| `2026-06-22-window-resize-center-layout-frame.md`        | Window resize and center workbench layout already have single RAF owners; do not add a second resize owner.                                                             |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `ScreenshotBrowserPanel.tsx` | Defines `ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT = 152` and passes it as `itemSize` to `Virtualizer`. | Remove the fixed hint so the mature `virtua` measurement engine estimates from actual measured rows. |
-| `activity.css` | Card, thumbnail, body, group header, virtual item padding, and gaps all scale through `--ui-scale` and content. | Keep CSS as the visual geometry owner; do not duplicate row height arithmetic in TypeScript. |
-| `virtua/solid` | Local type docs state `itemSize` is optional, and omitting it is recommended for most cases because initial item sizes are automatically estimated from measured sizes. | Use the library's measurement path instead of a stale fixed number. |
-| `buildScreenshotBrowserRows()` | Produces group rows and item rows with different heights. | Keep row model and grouping unchanged; only remove the bad initial estimate. |
-| Browser benchmark | `screenshot-browser-panel-browser.test.ts` already opens 120 screenshots, instruments RAF layout reads, resizes viewport, scrolls to oldest row, and captures screenshots. | Extend it to cover high UI scale before/after resize and prove row virtualization still reaches oldest rows without full request materialization. |
-| Static tests | `screenshot-browser-panel.test.ts` pins source ownership, virtualization, RAF measurement, CSS layout, and forbidden direct fetch/storage paths. | Add guards that no fixed screenshot row-height `itemSize` remains and that CSS remains the geometry source. |
+| Surface                        | Evidence                                                                                                                                                                   | Decision                                                                                                                                          |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ScreenshotBrowserPanel.tsx`   | Defines `ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT = 152` and passes it as `itemSize` to `Virtualizer`.                                                                      | Remove the fixed hint so the mature `virtua` measurement engine estimates from actual measured rows.                                              |
+| `activity.css`                 | Card, thumbnail, body, group header, virtual item padding, and gaps all scale through `--ui-scale` and content.                                                            | Keep CSS as the visual geometry owner; do not duplicate row height arithmetic in TypeScript.                                                      |
+| `virtua/solid`                 | Local type docs state `itemSize` is optional, and omitting it is recommended for most cases because initial item sizes are automatically estimated from measured sizes.    | Use the library's measurement path instead of a stale fixed number.                                                                               |
+| `buildScreenshotBrowserRows()` | Produces group rows and item rows with different heights.                                                                                                                  | Keep row model and grouping unchanged; only remove the bad initial estimate.                                                                      |
+| Browser benchmark              | `screenshot-browser-panel-browser.test.ts` already opens 120 screenshots, instruments RAF layout reads, resizes viewport, scrolls to oldest row, and captures screenshots. | Extend it to cover high UI scale before/after resize and prove row virtualization still reaches oldest rows without full request materialization. |
+| Static tests                   | `screenshot-browser-panel.test.ts` pins source ownership, virtualization, RAF measurement, CSS layout, and forbidden direct fetch/storage paths.                           | Add guards that no fixed screenshot row-height `itemSize` remains and that CSS remains the geometry source.                                       |
 
 ## Root Cause
 
@@ -83,24 +83,24 @@ performance bug can be fixed independently by removing the wrong row-size hint.
 
 ## Implementation
 
-| Change | Reason |
-| --- | --- |
-| Removed `ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT` from `ScreenshotBrowserPanel`. | Eliminates the stale TypeScript row-height source. |
-| Removed the screenshot `Virtualizer` `itemSize` prop. | Lets `virtua/solid` estimate from measured rows, matching its documented recommended path. |
-| Kept CSS card, thumbnail, group, gap, and padding geometry unchanged. | CSS remains the visual geometry owner. |
-| Strengthened static tests against fixed screenshot row-size hints. | Prevents reintroducing the double-source row height. |
-| Strengthened browser test with `oc_zoom=1.6`, high-scale screenshot artifact, and valid panel crop evidence. | Verifies the fix under the scale where a fixed unscaled estimate is most harmful. |
+| Change                                                                                                       | Reason                                                                                     |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Removed `ESTIMATED_SCREENSHOT_BROWSER_ROW_HEIGHT` from `ScreenshotBrowserPanel`.                             | Eliminates the stale TypeScript row-height source.                                         |
+| Removed the screenshot `Virtualizer` `itemSize` prop.                                                        | Lets `virtua/solid` estimate from measured rows, matching its documented recommended path. |
+| Kept CSS card, thumbnail, group, gap, and padding geometry unchanged.                                        | CSS remains the visual geometry owner.                                                     |
+| Strengthened static tests against fixed screenshot row-size hints.                                           | Prevents reintroducing the double-source row height.                                       |
+| Strengthened browser test with `oc_zoom=1.6`, high-scale screenshot artifact, and valid panel crop evidence. | Verifies the fix under the scale where a fixed unscaled estimate is most harmful.          |
 
 ## Verification
 
-| Check | Result |
-| --- | --- |
-| `bun test packages/overlay/test/screenshot-browser-panel.test.ts --timeout 30000` | Passed: 9 tests, 94 assertions. |
-| `bun run --cwd packages/overlay typecheck` | Passed. |
-| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/screenshot-browser-panel-browser.test.ts` | Passed; runner rebuilt overlay `dist-vite` with the existing Vite warnings only. |
-| Visual: `.scratch/screenshot-browser-panel-browser-high-zoom.png` | Passed: high-scale screenshot panel opens with title, count, grouped thumbnails, bottom toolbar, and no visible overlap. |
-| Visual: `.scratch/screenshot-browser-panel-browser-narrow.png` | Passed: high-scale 320px screenshot column stays in the shell without horizontal overflow. |
-| Visual: `.scratch/screenshot-browser-panel-browser-narrow-panel.png` | Passed: crop contains screenshot title/count and visible screenshot cards. |
+| Check                                                                                                                  | Result                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `bun test packages/overlay/test/screenshot-browser-panel.test.ts --timeout 30000`                                      | Passed: 9 tests, 94 assertions.                                                                                          |
+| `bun run --cwd packages/overlay typecheck`                                                                             | Passed.                                                                                                                  |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/screenshot-browser-panel-browser.test.ts` | Passed; runner rebuilt overlay `dist-vite` with the existing Vite warnings only.                                         |
+| Visual: `.scratch/screenshot-browser-panel-browser-high-zoom.png`                                                      | Passed: high-scale screenshot panel opens with title, count, grouped thumbnails, bottom toolbar, and no visible overlap. |
+| Visual: `.scratch/screenshot-browser-panel-browser-narrow.png`                                                         | Passed: high-scale 320px screenshot column stays in the shell without horizontal overflow.                               |
+| Visual: `.scratch/screenshot-browser-panel-browser-narrow-panel.png`                                                   | Passed: crop contains screenshot title/count and visible screenshot cards.                                               |
 
 ## Self Review
 

@@ -16,21 +16,21 @@ agent overrides, unavailable override labels, and per-agent saving status.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `packages/overlay/src/store/dialog.ts` | `CONFIG_SECTIONS` is the single source for settings section ids, order, and label keys. |
-| `2026-06-18-command-palette-config-sections-single-source.md` | Settings sections should use existing `CONFIG_SECTIONS` i18n labels directly; no local label fallback logic. |
-| `2026-06-18-settings-primitives-single-source-completion.md` | Settings panels must compose shared `SettingsPanel` / `SettingsGroup` primitives without reintroducing local header chrome. |
-| `packages/overlay/src/i18n/en-US.json` / `zh-CN.json` | Agent Models strings already live in the locale catalog. |
+| Source                                                        | Relevant constraint                                                                                                         |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/store/dialog.ts`                        | `CONFIG_SECTIONS` is the single source for settings section ids, order, and label keys.                                     |
+| `2026-06-18-command-palette-config-sections-single-source.md` | Settings sections should use existing `CONFIG_SECTIONS` i18n labels directly; no local label fallback logic.                |
+| `2026-06-18-settings-primitives-single-source-completion.md`  | Settings panels must compose shared `SettingsPanel` / `SettingsGroup` primitives without reintroducing local header chrome. |
+| `packages/overlay/src/i18n/en-US.json` / `zh-CN.json`         | Agent Models strings already live in the locale catalog.                                                                    |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "agent_models|Agent Models|SettingsGroup title|cmdk.settings" packages/overlay/src packages/overlay/test specs/new-arch` | `cmdk.settings.agent_models` exists in both locale files and `CONFIG_SECTIONS`; `AgentModelsPanel.tsx` hard-coded the group title; the static guard expected that literal. | Replace the literal with `t("cmdk.settings.agent_models")` and update the guard. |
-| `rg -n "Core —|Lightweight —|Internal —|inherit project default|saving…" packages/overlay/src/components/settings/AgentModelsPanel.tsx` | Additional Agent Models strings were still English literals inside the same visible panel. | Add scoped `agent_models.*` keys and use `t()`. |
-| Real browser Agent Models run under `zh-CN` | The per-agent empty override trigger rendered blank while the listbox option had the inherited-default label. | Fix the shared Select trigger display source so empty-string options still show the controlled label. |
-| Real browser prompt-profile selector test | Expert Squad Select popup is readable in current source; the report points at runtime bundle drift, not a local Select color bug. | Do not add `.prompt-profile-select-*` color overrides. |
+| Sweep                                       | Result                                                                                                                            | Decision                                                                                              |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| `rg -n "agent_models                        | Agent Models                                                                                                                      | SettingsGroup title                                                                                   | cmdk.settings" packages/overlay/src packages/overlay/test specs/new-arch` | `cmdk.settings.agent_models` exists in both locale files and `CONFIG_SECTIONS`; `AgentModelsPanel.tsx` hard-coded the group title; the static guard expected that literal. | Replace the literal with `t("cmdk.settings.agent_models")` and update the guard.           |
+| `rg -n "Core —                              | Lightweight —                                                                                                                     | Internal —                                                                                            | inherit project default                                                   | saving…" packages/overlay/src/components/settings/AgentModelsPanel.tsx`                                                                                                    | Additional Agent Models strings were still English literals inside the same visible panel. | Add scoped `agent_models.*` keys and use `t()`. |
+| Real browser Agent Models run under `zh-CN` | The per-agent empty override trigger rendered blank while the listbox option had the inherited-default label.                     | Fix the shared Select trigger display source so empty-string options still show the controlled label. |
+| Real browser prompt-profile selector test   | Expert Squad Select popup is readable in current source; the report points at runtime bundle drift, not a local Select color bug. | Do not add `.prompt-profile-select-*` color overrides.                                                |
 
 ## Fix
 

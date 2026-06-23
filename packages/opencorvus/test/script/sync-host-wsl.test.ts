@@ -62,8 +62,7 @@ function localWslHarnessSource() {
   return (
     text.slice(0, functionStart) +
     localInvokeWsl +
-    text
-      .slice(nextFunction, hashFunctionStart) +
+    text.slice(nextFunction, hashFunctionStart) +
     localContentHash +
     text
       .slice(afterHashFunction)
@@ -191,7 +190,7 @@ describe("sync-host-wsl backups", () => {
     const text = source()
     const dryRunIndex = text.indexOf("if (-not $Apply) {")
     const backupIndex = text.indexOf("foreach ($relative in $mutatingActionPaths)")
-    const finalActionLoopIndex = text.indexOf('foreach ($entry in $actions) {', backupIndex)
+    const finalActionLoopIndex = text.indexOf("foreach ($entry in $actions) {", backupIndex)
     const backupBlock = text.slice(backupIndex, finalActionLoopIndex)
 
     expect(dryRunIndex).toBeGreaterThanOrEqual(0)

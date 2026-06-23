@@ -129,7 +129,7 @@ describe("ExecutorSelector dual chip bar", () => {
     expect(SRC).toContain("<Listbox.Root<ExecutorModelOption>")
     expect(SRC).toContain('class="executor-model-listbox"')
     expect(SRC).toContain('class="executor-model-option"')
-    expect(SRC).toContain('data-model-value={option.id}')
+    expect(SRC).toContain("data-model-value={option.id}")
     expect(SRC).not.toContain("<ComboboxControl<ExecutorModelOption>")
     expect(SRC).not.toContain('class="executor-model-combobox"')
     expect(SRC).not.toContain('class="executor-popover-model"')
@@ -148,7 +148,9 @@ describe("ExecutorSelector dual chip bar", () => {
       /const taskOperatorContextKey = createMemo\([\s\S]*?if \(!appStore\.connected\) return null[\s\S]*?const directory = activeDirectory\(\)\.trim\(\)[\s\S]*?return encodeTaskOperatorContextKey\(\{ taskID: id, directory, refresh: sessionConfigRefreshToken\(\) \}\)/,
     )
     expect(SRC).toMatch(/const input = parseTaskOperatorContextKey\(key\)/)
-    expect(SRC).toMatch(/return await getTaskOperatorModelContext\(\{ taskID: input\.taskID, directory: input\.directory \}\)/)
+    expect(SRC).toMatch(
+      /return await getTaskOperatorModelContext\(\{ taskID: input\.taskID, directory: input\.directory \}\)/,
+    )
     expect(SRC).toMatch(
       /await patchSessionConfig\(\{[\s\S]*?sessionID: ctx\.sessionID,[\s\S]*?directory,[\s\S]*?diff: \{[\s\S]*?agent: \{[\s\S]*?\[ctx\.agent\]: \{[\s\S]*?model: value \? value : null/,
     )

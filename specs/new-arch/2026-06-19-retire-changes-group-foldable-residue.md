@@ -13,11 +13,11 @@ CSS means Cascading Style Sheets. DOM means Document Object Model.
 
 ## Evidence
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "changes-group--foldable|changes-list-group|changes-group-header|changes-list-chunk|changes-list" packages/overlay/src packages/overlay/test specs/new-arch -g "*.tsx" -g "*.ts" -g "*.css" -g "*.md"` | `.changes-group--foldable` exists only in `changes.css`; live DOM class names are `.changes-list-group`, `.changes-group-header`, and `.changes-list-chunk`. | Delete the orphan selector instead of keeping compatibility styling for a retired DOM shape. |
-| `packages/overlay/src/components/FileChangesView.tsx` | Non-virtualized grouped rows render `<div class="changes-list-group">`, optional `<div class="changes-group-header">`, and `<div class="changes-list-chunk">`. | Current structure stays unchanged. |
-| `packages/overlay/src/styles/surfaces/changes.css` | `.changes-list` already owns `padding: 0`; the orphan `.changes-group--foldable > .changes-list` repeats that declaration for a class no live component emits. | Remove the duplicate dead selector and guard against its return. |
+| Sweep                                                 | Result                                                                                                                                                         | Decision                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `rg -n "changes-group--foldable                       | changes-list-group                                                                                                                                             | changes-group-header                                             | changes-list-chunk | changes-list" packages/overlay/src packages/overlay/test specs/new-arch -g "_.tsx" -g "_.ts" -g "_.css" -g "_.md"` | `.changes-group--foldable` exists only in `changes.css`; live DOM class names are `.changes-list-group`, `.changes-group-header`, and `.changes-list-chunk`. | Delete the orphan selector instead of keeping compatibility styling for a retired DOM shape. |
+| `packages/overlay/src/components/FileChangesView.tsx` | Non-virtualized grouped rows render `<div class="changes-list-group">`, optional `<div class="changes-group-header">`, and `<div class="changes-list-chunk">`. | Current structure stays unchanged.                               |
+| `packages/overlay/src/styles/surfaces/changes.css`    | `.changes-list` already owns `padding: 0`; the orphan `.changes-group--foldable > .changes-list` repeats that declaration for a class no live component emits. | Remove the duplicate dead selector and guard against its return. |
 
 ## Root Cause
 

@@ -4,12 +4,12 @@
 
 Mission ledger rename mode uses a private input class and CSS rule:
 
-| Source | Evidence |
-| --- | --- |
-| `packages/overlay/src/components/MissionList.tsx` | Rename editor renders `class="mission-row-rename-input"` with `data-ui="mission-row-rename-input"`. |
-| `packages/overlay/src/styles/surfaces/mission.css` | `.mission-row-rename-input` duplicates width, border, background, padding, and font styling. |
-| `packages/overlay/src/styles/surfaces/sidebar.css` | `.task-row-rename-input` is already the shared ledger row rename input style and owns `:focus-visible`. |
-| `packages/overlay/src/components/TaskList.tsx` / `CodingAssistantSessionList.tsx` | Task and Coding Assistant rename editors already use `class="task-row-rename-input"`. |
+| Source                                                                            | Evidence                                                                                                |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/MissionList.tsx`                                 | Rename editor renders `class="mission-row-rename-input"` with `data-ui="mission-row-rename-input"`.     |
+| `packages/overlay/src/styles/surfaces/mission.css`                                | `.mission-row-rename-input` duplicates width, border, background, padding, and font styling.            |
+| `packages/overlay/src/styles/surfaces/sidebar.css`                                | `.task-row-rename-input` is already the shared ledger row rename input style and owns `:focus-visible`. |
+| `packages/overlay/src/components/TaskList.tsx` / `CodingAssistantSessionList.tsx` | Task and Coding Assistant rename editors already use `class="task-row-rename-input"`.                   |
 
 The Mission editor is the same ledger-row rename surface, so keeping its
 private class leaves focus, contrast, and density fixes split across two CSS
@@ -17,12 +17,12 @@ owners.
 
 ## Recall
 
-| Search | Result |
-| --- | --- |
-| `rg "mission-row-rename-input|task-row-rename-input|rename-input" packages/overlay/src packages/overlay/test specs/new-arch` | Mission private selector appears only in `MissionList.tsx` and `mission.css`; shared selector appears in Task/Coding Assistant rows and browser token-closure coverage. |
-| `MissionList.tsx` worktree diff | File currently has unrelated Mission download work in progress; this fix must only change the rename input class. |
-| `mission-launcher-component.test.ts` | Existing Mission ledger static coverage checks task-row action parity, but not rename input parity. |
-| `ledger-row-interactions.test.ts` | Existing browser fixture can be extended with an editing Mission row and screenshot evidence. |
+| Search                               | Result                                                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg "mission-row-rename-input        | task-row-rename-input                                                                                             | rename-input" packages/overlay/src packages/overlay/test specs/new-arch` | Mission private selector appears only in `MissionList.tsx` and `mission.css`; shared selector appears in Task/Coding Assistant rows and browser token-closure coverage. |
+| `MissionList.tsx` worktree diff      | File currently has unrelated Mission download work in progress; this fix must only change the rename input class. |
+| `mission-launcher-component.test.ts` | Existing Mission ledger static coverage checks task-row action parity, but not rename input parity.               |
+| `ledger-row-interactions.test.ts`    | Existing browser fixture can be extended with an editing Mission row and screenshot evidence.                     |
 
 ## Fix Plan
 

@@ -248,10 +248,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
           data-status={props.node.status || "none"}
           classList={{ "chat-bubble--collapsed": !expanded() }}
         >
-          <div
-            class="chat-bubble__head"
-            data-align={align()}
-          >
+          <div class="chat-bubble__head" data-align={align()}>
             <div class="chat-bubble__title-row">
               <Button
                 type="button"
@@ -280,9 +277,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                     </span>
                   </span>
                 </Show>
-                <Show when={todoSummary()}>
-                  {(summary) => <CardTodoSummary summary={summary()} />}
-                </Show>
+                <Show when={todoSummary()}>{(summary) => <CardTodoSummary summary={summary()} />}</Show>
               </Button>
               <CardHeaderChrome
                 node={props.node}

@@ -20,30 +20,30 @@ layout in the same frame where it writes panel grow styles.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no double source, no blind patching, test every change, visually verify UI work, commit and push each round. |
-| `2026-06-22-overlay-layout-aspect-frame.md` | Legal overlay size is derived from the `1120x720` minimum tokens; do not restore native live resize feedback loops. |
-| `2026-06-22-center-workbench-panel-min-size-contract.md` | `--ui-workbench-panel-min-width` remains the only center panel minimum width source; constrained layouts scroll instead of compressing panels. |
-| `2026-06-23-overlay-panel-legal-size-contract.md` | Separator range writes must refuse impossible adjacent widths; no emergency smaller minimum is allowed. |
-| `2026-06-23-overlay-ui-asset-fingerprint.md` | Live 7878 may serve stale UI assets; verify runtime asset fingerprints before trusting GUI performance observations. |
-| Live 7878 read-only check | `/ui/index.html` serves `assets/index-CO3SwO-J.js` and `assets/index-DlM3OgGm.css`, lacks fingerprint headers, while disk `dist-vite` serves `assets/index-wUOtBkqV.js` and `assets/index-CUXXiPYE.css`. |
-| Read-only agent audits | Current source still writes `--center-workbench-panel-grow`, then reads separator rects and calls `scrollIntoView()` in the same RAF callback. |
+| Source                                                   | Constraint carried forward                                                                                                                                                                               |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | No fallback, no double source, no blind patching, test every change, visually verify UI work, commit and push each round.                                                                                |
+| `2026-06-22-overlay-layout-aspect-frame.md`              | Legal overlay size is derived from the `1120x720` minimum tokens; do not restore native live resize feedback loops.                                                                                      |
+| `2026-06-22-center-workbench-panel-min-size-contract.md` | `--ui-workbench-panel-min-width` remains the only center panel minimum width source; constrained layouts scroll instead of compressing panels.                                                           |
+| `2026-06-23-overlay-panel-legal-size-contract.md`        | Separator range writes must refuse impossible adjacent widths; no emergency smaller minimum is allowed.                                                                                                  |
+| `2026-06-23-overlay-ui-asset-fingerprint.md`             | Live 7878 may serve stale UI assets; verify runtime asset fingerprints before trusting GUI performance observations.                                                                                     |
+| Live 7878 read-only check                                | `/ui/index.html` serves `assets/index-CO3SwO-J.js` and `assets/index-DlM3OgGm.css`, lacks fingerprint headers, while disk `dist-vite` serves `assets/index-wUOtBkqV.js` and `assets/index-CUXXiPYE.css`. |
+| Read-only agent audits                                   | Current source still writes `--center-workbench-panel-grow`, then reads separator rects and calls `scrollIntoView()` in the same RAF callback.                                                           |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Panel open/reset | `resetCenterWorkbenchToFocusedPanel()` and `openCenterWorkbenchPanel()` call `scheduleCenterWorkbenchPanelReveal()`. | Keep one reveal request path. It should schedule the write frame, not call `scrollIntoView()` directly. |
-| Panel DOM state effect | The `centerWorkbenchPanels()` effect writes `data-open`, `data-active`, and `data-selected`, then schedules layout. | Keep DOM state writes synchronous and defer layout work to RAF. |
-| Panel grow writes | `renderCenterWorkbenchPanelWeights()` writes/removes `--center-workbench-panel-grow`. | Keep this as the only panel grow style owner, but isolate it in a write frame. |
-| Separator geometry reads | `renderCenterWorkbenchPanelSeparators()` calls `centerWorkbenchPanelResizeMetrics()`, which reads `getBoundingClientRect()`. | Move separator reads to a following RAF frame after grow writes have committed. |
-| Reveal scrolling | `revealPendingCenterWorkbenchPanel()` calls `scrollIntoView()`. | Run reveal with the separator read phase, not in the grow write phase. |
-| Settings weight changes | The settings effect currently calls `untrack(renderCenterWorkbenchPanelLayout)`. | Replace direct layout execution with the same staged scheduler. |
-| Window resize | `applyWindowResize()` schedules pane layout and center workbench layout. | Keep frame coalescing; center workbench writes and reads must not share a frame. |
-| Pointer/keyboard separator resizing | `updateCenterWorkbenchPanelWeights()` is the single weight mutation path. | Keep it; layout updates still flow through settings and the staged scheduler. |
-| Browser test instrumentation | `center-workbench-separator-browser.test.ts` tracks `--ui-scale` and `--ui-sidebar-width` writes, but not `--center-workbench-panel-grow`. | Extend instrumentation so the old same-frame grow-write/rect-read path fails. |
-| Static tests | `resize-observer-frame-scheduler.test.ts`, `acceptance-panel-mount.test.ts`, and `browser-preview-panel.test.ts` assert current scheduler names. | Update tests to assert the split write/read scheduler contract. |
+| Surface                             | Evidence                                                                                                                                         | Decision                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Panel open/reset                    | `resetCenterWorkbenchToFocusedPanel()` and `openCenterWorkbenchPanel()` call `scheduleCenterWorkbenchPanelReveal()`.                             | Keep one reveal request path. It should schedule the write frame, not call `scrollIntoView()` directly. |
+| Panel DOM state effect              | The `centerWorkbenchPanels()` effect writes `data-open`, `data-active`, and `data-selected`, then schedules layout.                              | Keep DOM state writes synchronous and defer layout work to RAF.                                         |
+| Panel grow writes                   | `renderCenterWorkbenchPanelWeights()` writes/removes `--center-workbench-panel-grow`.                                                            | Keep this as the only panel grow style owner, but isolate it in a write frame.                          |
+| Separator geometry reads            | `renderCenterWorkbenchPanelSeparators()` calls `centerWorkbenchPanelResizeMetrics()`, which reads `getBoundingClientRect()`.                     | Move separator reads to a following RAF frame after grow writes have committed.                         |
+| Reveal scrolling                    | `revealPendingCenterWorkbenchPanel()` calls `scrollIntoView()`.                                                                                  | Run reveal with the separator read phase, not in the grow write phase.                                  |
+| Settings weight changes             | The settings effect currently calls `untrack(renderCenterWorkbenchPanelLayout)`.                                                                 | Replace direct layout execution with the same staged scheduler.                                         |
+| Window resize                       | `applyWindowResize()` schedules pane layout and center workbench layout.                                                                         | Keep frame coalescing; center workbench writes and reads must not share a frame.                        |
+| Pointer/keyboard separator resizing | `updateCenterWorkbenchPanelWeights()` is the single weight mutation path.                                                                        | Keep it; layout updates still flow through settings and the staged scheduler.                           |
+| Browser test instrumentation        | `center-workbench-separator-browser.test.ts` tracks `--ui-scale` and `--ui-sidebar-width` writes, but not `--center-workbench-panel-grow`.       | Extend instrumentation so the old same-frame grow-write/rect-read path fails.                           |
+| Static tests                        | `resize-observer-frame-scheduler.test.ts`, `acceptance-panel-mount.test.ts`, and `browser-preview-panel.test.ts` assert current scheduler names. | Update tests to assert the split write/read scheduler contract.                                         |
 
 ## Root Cause
 

@@ -5,12 +5,12 @@
 The Run menu is otherwise owned by Kobalte Menubar, but its boolean settings
 still use handwritten label/input checkbox rows:
 
-| Source | Evidence |
-| --- | --- |
-| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx` | `titlebar.auto_question` and `titlebar.confirm_proposed_tasks` render `<label class="titlebar-menubar-toggle"><input type="checkbox">`. |
-| `packages/overlay/src/styles/surfaces/titlebar.css` | `.titlebar-menubar-toggle` duplicates menu item layout and focus-within highlight styling outside Kobalte state. |
-| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx` | Ordinary actions already use `Menubar.Item`; theme choices already use `Menubar.RadioItem`. |
-| `packages/overlay/node_modules/@kobalte/core/src/menu/menu-checkbox-item.tsx` | `Menubar.CheckboxItem` is available, defaults `closeOnSelect=false`, and owns `role="menuitemcheckbox"`, `aria-checked`, and `data-checked`. |
+| Source                                                                        | Evidence                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx`                | Historical note: `titlebar.auto_question` and the proposed-task policy checkbox rendered `<label class="titlebar-menubar-toggle"><input type="checkbox">`. The proposed-task label is now `titlebar.auto_confirm_proposed_tasks`. |
+| `packages/overlay/src/styles/surfaces/titlebar.css`                           | `.titlebar-menubar-toggle` duplicates menu item layout and focus-within highlight styling outside Kobalte state.                                                                                                                  |
+| `packages/overlay/src/components/titlebar/TitlebarMenubar.tsx`                | Ordinary actions already use `Menubar.Item`; theme choices already use `Menubar.RadioItem`.                                                                                                                                       |
+| `packages/overlay/node_modules/@kobalte/core/src/menu/menu-checkbox-item.tsx` | `Menubar.CheckboxItem` is available, defaults `closeOnSelect=false`, and owns `role="menuitemcheckbox"`, `aria-checked`, and `data-checked`.                                                                                      |
 
 The native checkbox rows do not participate in the same menuitem checkbox
 semantics, roving focus behavior, or highlighted/checked state selectors as the
@@ -18,12 +18,12 @@ rest of the titlebar menu.
 
 ## Recall
 
-| Search | Result |
-| --- | --- |
-| `rg "titlebar-menubar-toggle|type=\"checkbox\"|Menubar\\.CheckboxItem|menuitemcheckbox" packages/overlay/src packages/overlay/test specs/new-arch` | Only the two Run menu rows use `.titlebar-menubar-toggle`; no production `Menubar.CheckboxItem` exists yet. |
-| `rg "Menubar\\.Item|Menubar\\.RadioItem|data-highlighted|data-checked" packages/overlay/src/components/titlebar packages/overlay/src/styles/surfaces/titlebar.css packages/overlay/test` | Titlebar already styles Kobalte ordinary and radio menu item states through shared item selectors and `[data-highlighted]` / `[data-checked]`. |
+| Search                                                     | Result                                                                                                                                 |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg "titlebar-menubar-toggle                               | type=\"checkbox\"                                                                                                                      | Menubar\\.CheckboxItem | menuitemcheckbox" packages/overlay/src packages/overlay/test specs/new-arch`                                                    | Only the two Run menu rows use `.titlebar-menubar-toggle`; no production `Menubar.CheckboxItem` exists yet.                                    |
+| `rg "Menubar\\.Item                                        | Menubar\\.RadioItem                                                                                                                    | data-highlighted       | data-checked" packages/overlay/src/components/titlebar packages/overlay/src/styles/surfaces/titlebar.css packages/overlay/test` | Titlebar already styles Kobalte ordinary and radio menu item states through shared item selectors and `[data-highlighted]` / `[data-checked]`. |
 | `specs/new-arch/2026-06-19-titlebar-menubar-form-focus.md` | Prior repair added `:focus-within` to handwritten form rows. This follow-up must remove the checkbox form row instead of extending it. |
-| `packages/overlay/test/browser/titlebar-menubar.test.ts` | Existing browser test opens Run and View menus and can verify real roles plus screenshots with the required Node runner. |
+| `packages/overlay/test/browser/titlebar-menubar.test.ts`   | Existing browser test opens Run and View menus and can verify real roles plus screenshots with the required Node runner.               |
 
 ## Fix Plan
 

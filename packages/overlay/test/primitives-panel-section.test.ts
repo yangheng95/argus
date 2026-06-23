@@ -329,7 +329,7 @@ describe("TracePanel.tsx — Panel primitive adoption", () => {
     expect(tsx).toContain('data-ui="trace-event-head"')
     expect(tsx).toContain("aria-expanded={open()}")
     expect(tsx).toContain("aria-controls={open() ? bodyElementID() : undefined}")
-    expect(tsx).toContain('id={bodyElementID()}')
+    expect(tsx).toContain("id={bodyElementID()}")
     expect(tsx).not.toMatch(/<button[\s\S]*class="trace-event-head"/)
     expect(cardCss).toMatch(/\.trace-event-head\s*\{[^}]*--oc-button-height:\s*auto;/s)
     expect(cardCss).toMatch(/\.trace-event-head\s*\{[^}]*--oc-button-gap:\s*calc\(8px \* var\(--ui-scale\)\);/s)

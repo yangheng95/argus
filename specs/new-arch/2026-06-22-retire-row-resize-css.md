@@ -16,21 +16,21 @@ only the resize state that runtime code can actually emit.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | Remove high-confidence dead CSS only with evidence, test every change, avoid fallback and duplicate state. |
-| `2026-06-17-left-pane-resizer-accessibility.md` | Pane pointer/keyboard resize is owned by `services/pane.ts`; `renderPaneLayout()` remains the single pane layout renderer. |
-| `2026-06-22-window-resize-center-layout-frame.md` | Pane resize work is already frame-owned; do not add another resize state owner. |
-| Independent GUI audit 2026-06-22 | `body[data-resizing="row"]` exists only in CSS; runtime writes `document.body.dataset.resizing = "true"` and deletes it. |
+| Source                                            | Constraint carried forward                                                                                                 |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                       | Remove high-confidence dead CSS only with evidence, test every change, avoid fallback and duplicate state.                 |
+| `2026-06-17-left-pane-resizer-accessibility.md`   | Pane pointer/keyboard resize is owned by `services/pane.ts`; `renderPaneLayout()` remains the single pane layout renderer. |
+| `2026-06-22-window-resize-center-layout-frame.md` | Pane resize work is already frame-owned; do not add another resize state owner.                                            |
+| Independent GUI audit 2026-06-22                  | `body[data-resizing="row"]` exists only in CSS; runtime writes `document.body.dataset.resizing = "true"` and deletes it.   |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Pane resize runtime | `services/pane.ts` writes `document.body.dataset.resizing = "true"` and deletes it. | Keep this as the only pane drag body state. |
-| Config dialog resize runtime | `ConfigDialogHost.tsx` writes `document.body.dataset.resizing = "true"` and deletes it. | Keep this shared column-resize cursor state. |
-| Workspace CSS | `workspace.css` defines both `body[data-resizing="row"]` and `body[data-resizing="true"]`. | Delete the unreachable row state. |
-| Tests | `pane-config.test.ts` already reads pane service and workspace CSS. | Add absence guards for row state and presence guard for the live true state. |
+| Surface                      | Evidence                                                                                   | Decision                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Pane resize runtime          | `services/pane.ts` writes `document.body.dataset.resizing = "true"` and deletes it.        | Keep this as the only pane drag body state.                                  |
+| Config dialog resize runtime | `ConfigDialogHost.tsx` writes `document.body.dataset.resizing = "true"` and deletes it.    | Keep this shared column-resize cursor state.                                 |
+| Workspace CSS                | `workspace.css` defines both `body[data-resizing="row"]` and `body[data-resizing="true"]`. | Delete the unreachable row state.                                            |
+| Tests                        | `pane-config.test.ts` already reads pane service and workspace CSS.                        | Add absence guards for row state and presence guard for the live true state. |
 
 ## Root Cause
 

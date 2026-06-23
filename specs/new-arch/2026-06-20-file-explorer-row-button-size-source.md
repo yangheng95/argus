@@ -22,20 +22,20 @@ in large directories.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-file-explorer-row-button-semantics.md` | File Explorer rows intentionally stay command buttons, not an incomplete ARIA tree widget. |
-| `2026-06-20-file-explorer-row-focus-visible.md` | Row focus must remain visibly independent from hover and support keyboard activation. |
-| `2026-06-18-file-explorer-retry-button-primitive.md` | Non-row File Explorer actions already use the shared `Button` primitive. |
-| `FileExplorerPanel.tsx` | Virtualizer and row rendering are in the same component, so geometry constants can be centralized there and exported to CSS variables. |
+| Source                                               | Relevant constraint                                                                                                                    |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-file-explorer-row-button-semantics.md`   | File Explorer rows intentionally stay command buttons, not an incomplete ARIA tree widget.                                             |
+| `2026-06-20-file-explorer-row-focus-visible.md`      | Row focus must remain visibly independent from hover and support keyboard activation.                                                  |
+| `2026-06-18-file-explorer-retry-button-primitive.md` | Non-row File Explorer actions already use the shared `Button` primitive.                                                               |
+| `FileExplorerPanel.tsx`                              | Virtualizer and row rendering are in the same component, so geometry constants can be centralized there and exported to CSS variables. |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'EXPLORER_ROW_HEIGHT|row.depth \\* 14|file-explorer-row' packages/overlay/src packages/overlay/test specs/new-arch` | Production hits are isolated to `FileExplorerPanel.tsx` and `inspector.css`; tests pin native row button semantics and focus-visible CSS. | Update the single live owner and its existing tests. |
-| `file-explorer-accessibility.test.ts` | Real browser fixture opens the actual Explorer panel and screenshots row focus. Root fixture currently has too few rows to exercise Virtualizer. | Expand the fixture above the virtualization threshold and set `--ui-scale` to prove geometry alignment. |
-| `Button.tsx` / `button.css` | `Button` supports class pass-through and variant data attrs, while allowing surface-specific layout overrides. | Render rows as `<Button variant="ghost" size="sm" tone="neutral">` with row CSS variables for dense layout. |
+| Sweep                                 | Result                                                                                                                                           | Decision                                                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `rg -n 'EXPLORER_ROW_HEIGHT           | row.depth \\\* 14                                                                                                                                | file-explorer-row' packages/overlay/src packages/overlay/test specs/new-arch`                               | Production hits are isolated to `FileExplorerPanel.tsx` and `inspector.css`; tests pin native row button semantics and focus-visible CSS. | Update the single live owner and its existing tests. |
+| `file-explorer-accessibility.test.ts` | Real browser fixture opens the actual Explorer panel and screenshots row focus. Root fixture currently has too few rows to exercise Virtualizer. | Expand the fixture above the virtualization threshold and set `--ui-scale` to prove geometry alignment.     |
+| `Button.tsx` / `button.css`           | `Button` supports class pass-through and variant data attrs, while allowing surface-specific layout overrides.                                   | Render rows as `<Button variant="ghost" size="sm" tone="neutral">` with row CSS variables for dense layout. |
 
 ## Fix Plan
 

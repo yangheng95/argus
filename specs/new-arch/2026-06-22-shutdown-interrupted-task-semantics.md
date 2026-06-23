@@ -9,23 +9,23 @@ run was aborted with `Server shutdown: SIGINT`. The run row was `aborted`, goal
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `specs/task-execution-terminalization-2026-06-16.md` | Shutdown must terminate process-owned live task/session/goal state so restarted servers do not show zombie active tasks. |
-| `specs/event-log-task-project-directory-2026-06-16.md` | Shutdown/event-log code must resolve task project context from task/project rows, not ambient `Instance`. |
-| `specs/new-arch/2026-06-22-delete-active-task-record-context.md` | Process-lifecycle terminalization is distinct from user cancellation and may mark task-owned sessions aborted while the process exits. |
-| `specs/new-arch/2026-06-21-world-economy-stuck-adversarial-goal-review.md` | Runtime must not hide failures with automatic resume/retry. Recovery must remain explicit operator action. |
+| Source                                                                     | Constraint                                                                                                                             |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `specs/task-execution-terminalization-2026-06-16.md`                       | Shutdown must terminate process-owned live task/session/goal state so restarted servers do not show zombie active tasks.               |
+| `specs/event-log-task-project-directory-2026-06-16.md`                     | Shutdown/event-log code must resolve task project context from task/project rows, not ambient `Instance`.                              |
+| `specs/new-arch/2026-06-22-delete-active-task-record-context.md`           | Process-lifecycle terminalization is distinct from user cancellation and may mark task-owned sessions aborted while the process exits. |
+| `specs/new-arch/2026-06-21-world-economy-stuck-adversarial-goal-review.md` | Runtime must not hide failures with automatic resume/retry. Recovery must remain explicit operator action.                             |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Shutdown entry | `packages/opencorvus/src/cli/cmd/serve.ts` calls `abortCurrentProcessLiveExecution({ reason: "Server shutdown: <trigger>" })`. | Keep process-owned shutdown convergence. |
-| Task terminalization | `packages/opencorvus/src/engine/writer.ts::terminateTaskOwnedSessionsAndFail` marks active tasks as failed after session/tool cleanup. | Preserve terminal fact, but stamp `metadata.interrupted=true` for process lifecycle interruption. |
-| Task status projection | `packages/opencorvus/src/engine/task-status.ts` derives only `queued/active/completed/failed/cancelled`. | Do not introduce a sixth `status`; add a separate terminal-reason projection. |
-| Board overview | `packages/opencorvus/src/workbench/board.ts` maps any failed task to `Current attempt failed acceptance`. | Render interrupted tasks as interrupted, with retry-oriented next step. |
-| Goal-scope workflow | `deriveGoalScopeStatusFromProjection` treats terminal failed task as failed even when the goal run was only interrupted. | Exclude interrupted terminal tasks from acceptance/build failure projection. |
-| Debug clipboard | `packages/overlay/src/utils/debug-info.ts` prints only `task.status`. | Include `task.terminalReason` so diagnostics can distinguish failed vs interrupted. |
+| Surface                | Evidence                                                                                                                               | Decision                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Shutdown entry         | `packages/opencorvus/src/cli/cmd/serve.ts` calls `abortCurrentProcessLiveExecution({ reason: "Server shutdown: <trigger>" })`.         | Keep process-owned shutdown convergence.                                                          |
+| Task terminalization   | `packages/opencorvus/src/engine/writer.ts::terminateTaskOwnedSessionsAndFail` marks active tasks as failed after session/tool cleanup. | Preserve terminal fact, but stamp `metadata.interrupted=true` for process lifecycle interruption. |
+| Task status projection | `packages/opencorvus/src/engine/task-status.ts` derives only `queued/active/completed/failed/cancelled`.                               | Do not introduce a sixth `status`; add a separate terminal-reason projection.                     |
+| Board overview         | `packages/opencorvus/src/workbench/board.ts` maps any failed task to `Current attempt failed acceptance`.                              | Render interrupted tasks as interrupted, with retry-oriented next step.                           |
+| Goal-scope workflow    | `deriveGoalScopeStatusFromProjection` treats terminal failed task as failed even when the goal run was only interrupted.               | Exclude interrupted terminal tasks from acceptance/build failure projection.                      |
+| Debug clipboard        | `packages/overlay/src/utils/debug-info.ts` prints only `task.status`.                                                                  | Include `task.terminalReason` so diagnostics can distinguish failed vs interrupted.               |
 
 ## Acceptance
 

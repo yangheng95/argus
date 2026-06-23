@@ -135,9 +135,7 @@ describe("run command agent selection", () => {
   test("rejects explicit subagents", async () => {
     const { resolveRunAgent } = await runModule()
     await withProject(async () => {
-      await expect(resolveRunAgent("explore")).rejects.toThrow(
-        'agent "explore" is a subagent, not a primary agent',
-      )
+      await expect(resolveRunAgent("explore")).rejects.toThrow('agent "explore" is a subagent, not a primary agent')
     })
   })
 

@@ -449,7 +449,11 @@ export async function submitMessage(
     const directory = conversationSourceDirectory(selectedSource)
     try {
       const result = await apiJson(
-        directoryScopedPath(`session/${encodeURIComponent(selectedSource.id)}/prompt_async`, directory, "submitMessage"),
+        directoryScopedPath(
+          `session/${encodeURIComponent(selectedSource.id)}/prompt_async`,
+          directory,
+          "submitMessage",
+        ),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

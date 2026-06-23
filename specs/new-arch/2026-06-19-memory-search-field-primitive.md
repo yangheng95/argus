@@ -18,21 +18,21 @@ The old test contract in `overlay-architecture-guards.test.ts` also pins
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-memory-row-nested-interactions.md` | Live memory row contracts are `.knowledge-item*` and `data-action="delete-memory"`; `MemoryPanel` is shared by Settings and the left activity panel. |
-| `2026-06-18-retire-settings-extension-memory-residue.md` | Retired memory/settings selectors should be removed once no production creation point remains. |
-| `packages/overlay/src/styles/surfaces/field.css` | `.search-field`, `.search-field-input`, `.search-field-icon`, and `.oc-button[data-ui$="-search-clear"]` are the shared compact search primitive. |
-| `search-field-unification.test.ts` | TaskList and FileExplorer already assert search-field usage; MemoryPanel is the missing caller. |
+| Source                                                   | Relevant constraint                                                                                                                                  |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-memory-row-nested-interactions.md`           | Live memory row contracts are `.knowledge-item*` and `data-action="delete-memory"`; `MemoryPanel` is shared by Settings and the left activity panel. |
+| `2026-06-18-retire-settings-extension-memory-residue.md` | Retired memory/settings selectors should be removed once no production creation point remains.                                                       |
+| `packages/overlay/src/styles/surfaces/field.css`         | `.search-field`, `.search-field-input`, `.search-field-icon`, and `.oc-button[data-ui$="-search-clear"]` are the shared compact search primitive.    |
+| `search-field-unification.test.ts`                       | TaskList and FileExplorer already assert search-field usage; MemoryPanel is the missing caller.                                                      |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -e "knowledge-search" -e "search-field" -e "memory-search" packages/overlay/src packages/overlay/test specs specs/new-arch` | `knowledge-search` only appears in `MemoryPanel.tsx`, `settings.css`, and tests. Shared search-field callers already exist in TaskList, FileExplorer, MissionList, and CodingAssistantSessionList. | Retire `knowledge-search` instead of adapting it. |
-| `MemoryPanel.tsx` inspection | The component already imports `Button` and `Icon`; Enter and Search button both call `doSearch(searchQuery())`; Refresh clears and reloads. | Reuse existing imports and handlers; add a small clear handler that clears submitted searches through `loadMemory()`. |
-| `settings.css` inspection | `.knowledge-search` defines search chrome and `outline: none`; `.knowledge-toolbar` is only layout. | Keep `.knowledge-toolbar` as layout; delete `.knowledge-search` rules. |
-| `overlay-architecture-guards.test.ts` inspection | The guard currently requires `.knowledge-search`, `.knowledge-search:focus`, and placeholder styles. | Update it to require the shared search-field contract and reject the retired selector. |
+| Sweep                                                                                                                              | Result                                                                                                                                                                                             | Decision                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `rg -n -e "knowledge-search" -e "search-field" -e "memory-search" packages/overlay/src packages/overlay/test specs specs/new-arch` | `knowledge-search` only appears in `MemoryPanel.tsx`, `settings.css`, and tests. Shared search-field callers already exist in TaskList, FileExplorer, MissionList, and CodingAssistantSessionList. | Retire `knowledge-search` instead of adapting it.                                                                     |
+| `MemoryPanel.tsx` inspection                                                                                                       | The component already imports `Button` and `Icon`; Enter and Search button both call `doSearch(searchQuery())`; Refresh clears and reloads.                                                        | Reuse existing imports and handlers; add a small clear handler that clears submitted searches through `loadMemory()`. |
+| `settings.css` inspection                                                                                                          | `.knowledge-search` defines search chrome and `outline: none`; `.knowledge-toolbar` is only layout.                                                                                                | Keep `.knowledge-toolbar` as layout; delete `.knowledge-search` rules.                                                |
+| `overlay-architecture-guards.test.ts` inspection                                                                                   | The guard currently requires `.knowledge-search`, `.knowledge-search:focus`, and placeholder styles.                                                                                               | Update it to require the shared search-field contract and reject the retired selector.                                |
 
 ## Fix Plan
 

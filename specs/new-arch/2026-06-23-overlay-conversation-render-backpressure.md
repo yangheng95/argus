@@ -20,26 +20,26 @@ process.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no blind patching, recall disk plans before edits, test every change, visually verify overlay work, do not restart/refresh live overlay without explicit confirmation. |
-| `2026-06-23-conversation-hydrate-global-message-budget.md` | Server hydrate payload is globally bounded; remaining freeze is a front-end render/projection problem, not an excuse to add frontend gates. |
-| `2026-06-22-file-changes-hidden-projection-boundary.md` | ConversationAgentRail workflow projection is a known remaining pressure source that needs its own benchmark/fix round. |
-| `2026-05-13-conversation-agent-workflow-rail.md` | Agent rail must keep one workflow projection owner and must not infer a second agent-state source inside the component. |
-| This round | The old `buildAgentWorkflow()` component-source wording is superseded for the live rail. The single rail source is now the server-hydrated `agentView` projected by `conversation-agents.ts`; `buildAgentWorkflow()` remains a pure historical/test utility. |
-| `card-tree-stats.ts` parentID contract | Tree writer already maintains `CardNode.parentID` when `childIDs` edges change; render-side parent lookup must consume that source instead of scanning all cards. |
+| Source                                                     | Constraint carried forward                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                                | No fallback, no gate, no blind patching, recall disk plans before edits, test every change, visually verify overlay work, do not restart/refresh live overlay without explicit confirmation.                                                                 |
+| `2026-06-23-conversation-hydrate-global-message-budget.md` | Server hydrate payload is globally bounded; remaining freeze is a front-end render/projection problem, not an excuse to add frontend gates.                                                                                                                  |
+| `2026-06-22-file-changes-hidden-projection-boundary.md`    | ConversationAgentRail workflow projection is a known remaining pressure source that needs its own benchmark/fix round.                                                                                                                                       |
+| `2026-05-13-conversation-agent-workflow-rail.md`           | Agent rail must keep one workflow projection owner and must not infer a second agent-state source inside the component.                                                                                                                                      |
+| This round                                                 | The old `buildAgentWorkflow()` component-source wording is superseded for the live rail. The single rail source is now the server-hydrated `agentView` projected by `conversation-agents.ts`; `buildAgentWorkflow()` remains a pure historical/test utility. |
+| `card-tree-stats.ts` parentID contract                     | Tree writer already maintains `CardNode.parentID` when `childIDs` edges change; render-side parent lookup must consume that source instead of scanning all cards.                                                                                            |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `Conversation.tsx::topLevelIDForCard` | Scans `Object.values(cardTreeStore.cards).find(card.childIDs.includes(current))` for every parent step. | Replace with a shared parentID-chain helper. |
-| `ConversationAgentRail.tsx::parentIDsForCard` | Duplicates the same full-card scan. | Replace with the same shared parentID-chain helper. |
-| `card-tree-stats.ts` | `linkChildToParent()` / `unlinkChildFromParent()` keep `parentID` current during writer hierarchy rebuilds. | Keep this as the single parent source; do not add a second reverse index. |
-| `ConversationAgentRail.tsx::projection` | Always runs `buildAgentWorkflow({ cards, order: orderedReachableCardIDs() })` and merges hydrated records. | Use hydrated `conversationAgentStore.records` as the task/session rail source; fall back scanning is not allowed. |
-| `conversation-agents.ts` | Server hydrate already projects agent records from `agentView.sessions/messages`. | Make this the rail's primary source; live updates continue through `hydrateConversationAgentView()` during tail merges. |
-| `agent-workflow.ts` tests | `buildAgentWorkflow()` remains covered as a pure projection utility. | Keep the utility for explicit callers/tests, but remove always-mounted rail dependency. |
-| Browser visual tests | Existing rail browser test covers drag/visibility, but not this performance path. | Add static and perf tests; run existing rail browser visual check in an isolated runner. |
+| Surface                                       | Evidence                                                                                                    | Decision                                                                                                                |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `Conversation.tsx::topLevelIDForCard`         | Scans `Object.values(cardTreeStore.cards).find(card.childIDs.includes(current))` for every parent step.     | Replace with a shared parentID-chain helper.                                                                            |
+| `ConversationAgentRail.tsx::parentIDsForCard` | Duplicates the same full-card scan.                                                                         | Replace with the same shared parentID-chain helper.                                                                     |
+| `card-tree-stats.ts`                          | `linkChildToParent()` / `unlinkChildFromParent()` keep `parentID` current during writer hierarchy rebuilds. | Keep this as the single parent source; do not add a second reverse index.                                               |
+| `ConversationAgentRail.tsx::projection`       | Always runs `buildAgentWorkflow({ cards, order: orderedReachableCardIDs() })` and merges hydrated records.  | Use hydrated `conversationAgentStore.records` as the task/session rail source; fall back scanning is not allowed.       |
+| `conversation-agents.ts`                      | Server hydrate already projects agent records from `agentView.sessions/messages`.                           | Make this the rail's primary source; live updates continue through `hydrateConversationAgentView()` during tail merges. |
+| `agent-workflow.ts` tests                     | `buildAgentWorkflow()` remains covered as a pure projection utility.                                        | Keep the utility for explicit callers/tests, but remove always-mounted rail dependency.                                 |
+| Browser visual tests                          | Existing rail browser test covers drag/visibility, but not this performance path.                           | Add static and perf tests; run existing rail browser visual check in an isolated runner.                                |
 
 ## Root Cause
 

@@ -166,20 +166,20 @@ The investigation below is based on the current worktree snapshot, not only `HEA
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| This spec | Right horizontal tabs were replaced by side activity toolbar controls; old right-tab meanings must not be kept as compatibility mappings. |
-| Sagan read-only audit | Active DOM/CSS still uses `.sections-tab-body`, preserving the old tab vocabulary after `RightPanelTabs` was deleted. |
-| `AGENTS.md` | No fallback/compat classes; replace old sources directly and test the absence of stale contracts. |
+| Source                | Constraint carried forward                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| This spec             | Right horizontal tabs were replaced by side activity toolbar controls; old right-tab meanings must not be kept as compatibility mappings. |
+| Sagan read-only audit | Active DOM/CSS still uses `.sections-tab-body`, preserving the old tab vocabulary after `RightPanelTabs` was deleted.                     |
+| `AGENTS.md`           | No fallback/compat classes; replace old sources directly and test the absence of stale contracts.                                         |
 
 ### Call Point Inventory
 
-| Call point | Current evidence | Decision |
-| --- | --- | --- |
-| `src/index.html` | `#rightPanelInspector` and `#rightPanelNotifications` use `class="sections-tab-body"`. | Rename both to `right-activity-body`. |
-| `src/styles/surfaces/inspector.css` | Four selectors target `.sections-tab-body[...]`. | Rename selectors to `.right-activity-body[...]`; do not keep an alias. |
-| `overlay-architecture-guards.test.ts` | Guards old class ownership and old tab selector absence. | Update ownership to the activity body class and assert the old class is absent from HTML/CSS. |
-| `right-panel-tabs-flat.test.ts` | Guards removed horizontal tab mount/selectors. | Add a no-`sections-tab-body` assertion so the stale tab vocabulary cannot return. |
+| Call point                            | Current evidence                                                                       | Decision                                                                                      |
+| ------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `src/index.html`                      | `#rightPanelInspector` and `#rightPanelNotifications` use `class="sections-tab-body"`. | Rename both to `right-activity-body`.                                                         |
+| `src/styles/surfaces/inspector.css`   | Four selectors target `.sections-tab-body[...]`.                                       | Rename selectors to `.right-activity-body[...]`; do not keep an alias.                        |
+| `overlay-architecture-guards.test.ts` | Guards old class ownership and old tab selector absence.                               | Update ownership to the activity body class and assert the old class is absent from HTML/CSS. |
+| `right-panel-tabs-flat.test.ts`       | Guards removed horizontal tab mount/selectors.                                         | Add a no-`sections-tab-body` assertion so the stale tab vocabulary cannot return.             |
 
 ### Root Cause
 

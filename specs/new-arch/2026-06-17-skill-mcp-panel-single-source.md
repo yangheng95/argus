@@ -24,7 +24,7 @@ the UI and delete the client-side configuration source.
 | Skill convenience actions     | `packages/overlay/src/components/settings/SkillMarketPanel.tsx` | Open/browse/directory actions must surface host/API failures as panel notices; user cancel may return an empty picker result.                |
 | Skill directory contract      | `packages/opencorvus/src/skill/manager.ts`                      | `skill/directories` returns `{ global_config, managed_skills, remote_cache }`; the Skill panel opens `managed_skills` only.                  |
 | Skill market load cache       | `packages/overlay/src/components/settings/SkillMarketPanel.tsx` | Cache the loaded directory only after `loadSkillMarket()` succeeds so a failed first request can retry on the same directory.                |
-| MCP panel transaction guard   | `packages/overlay/test/browser/skill-mcp-panel-browser.test.ts` | Confirm MCP delete-all, fail auth removal, assert the panel shows the error and does not send `PATCH /config`.                              |
+| MCP panel transaction guard   | `packages/overlay/test/browser/skill-mcp-panel-browser.test.ts` | Confirm MCP delete-all, fail auth removal, assert the panel shows the error and does not send `PATCH /config`.                               |
 
 ## Implementation
 

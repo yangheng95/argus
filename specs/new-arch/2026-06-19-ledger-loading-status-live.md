@@ -15,20 +15,20 @@ decorative-only semantics.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-19-browser-preview-loading-status-live.md` | Loading surfaces that own loading text use `role="status"` and `aria-live="polite"`. |
-| `2026-06-19-workflow-generating-status-live.md` | Generating/loading indicators use `role="status" aria-live="polite" aria-busy="true"`. |
-| `2026-06-19-ledger-row-main-button-primitive.md` | Task, Mission, and Coding Assistant ledgers should share row primitives instead of drifting per surface. |
-| `packages/overlay/src/components/LedgerList.tsx` | Mission and Coding Assistant already share a ledger list primitive. |
-| `packages/overlay/src/components/TaskList.tsx` | Task loading kept a separate skeleton implementation. |
+| Source                                              | Relevant constraint                                                                                      |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `2026-06-19-browser-preview-loading-status-live.md` | Loading surfaces that own loading text use `role="status"` and `aria-live="polite"`.                     |
+| `2026-06-19-workflow-generating-status-live.md`     | Generating/loading indicators use `role="status" aria-live="polite" aria-busy="true"`.                   |
+| `2026-06-19-ledger-row-main-button-primitive.md`    | Task, Mission, and Coding Assistant ledgers should share row primitives instead of drifting per surface. |
+| `packages/overlay/src/components/LedgerList.tsx`    | Mission and Coding Assistant already share a ledger list primitive.                                      |
+| `packages/overlay/src/components/TaskList.tsx`      | Task loading kept a separate skeleton implementation.                                                    |
 
 ## Evidence Sweep
 
-| Sweep | Finding | Decision |
-| --- | --- | --- |
-| `rg -n '<LedgerList|LedgerList\\b|ledger-skeleton|task-list-skeleton' packages/overlay/src packages/overlay/test` | `LedgerList` serves Mission and Coding Assistant; TaskList has a separate skeleton. | Fix the shared primitive and route TaskList through it. |
-| `rg -n 'role="status"|aria-live="polite"|aria-busy="true"' packages/overlay/src/components packages/overlay/test specs/new-arch` | Browser Preview, workflow generating panels, Trace, connection, and provider surfaces already use live status contracts. | Reuse the established `role="status" aria-live="polite" aria-busy="true"` contract. |
+| Sweep                         | Finding                                                                           | Decision                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `rg -n '<LedgerList           | LedgerList\\b                                                                     | ledger-skeleton                                                                            | task-list-skeleton' packages/overlay/src packages/overlay/test`                                                          | `LedgerList` serves Mission and Coding Assistant; TaskList has a separate skeleton. | Fix the shared primitive and route TaskList through it. |
+| `rg -n 'role="status"         | aria-live="polite"                                                                | aria-busy="true"' packages/overlay/src/components packages/overlay/test specs/new-arch`    | Browser Preview, workflow generating panels, Trace, connection, and provider surfaces already use live status contracts. | Reuse the established `role="status" aria-live="polite" aria-busy="true"` contract. |
 | `git diff -- MissionList.tsx` | MissionList already has unrelated mission-download edits in the current worktree. | Work with the current file, but commit only the loading-label delta via a temporary index. |
 
 ## Fix

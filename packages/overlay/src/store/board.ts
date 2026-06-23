@@ -307,10 +307,14 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
       if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag
       const directory = selectedTaskOwningDirectory(taskID)
       const res = await apiRequest<any>(
-        directoryScopedPath(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`, directory, "loadBoard"),
+        directoryScopedPath(
+          `task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`,
+          directory,
+          "loadBoard",
+        ),
         {
-        headers,
-        signal: AbortSignal.timeout(10000),
+          headers,
+          signal: AbortSignal.timeout(10000),
         },
       )
       if (taskID !== activeTaskID()) return

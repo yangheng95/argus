@@ -17,24 +17,24 @@ open and make center workbench weight changes render from a single owner.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate layout source, test every change, and visually verify UI work. |
-| `2026-06-22-overlay-resize-frame-coalescing.md` | High-frequency and layout-affecting work must run through the shared RAF scheduler. |
+| Source                                             | Constraint carried forward                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                        | No fallback, no duplicate layout source, test every change, and visually verify UI work.   |
+| `2026-06-22-overlay-resize-frame-coalescing.md`    | High-frequency and layout-affecting work must run through the shared RAF scheduler.        |
 | `2026-06-22-center-workbench-open-layout-frame.md` | Panel open writes DOM state immediately but schedules layout reads after DOM state writes. |
-| `2026-06-07-overlay-workbench-resizable-panels.md` | `centerWorkbenchPanelWeights` remains the only persisted width source. |
-| Independent GUI audit 2026-06-22 | `scrollIntoView` and tracked helper calls still leave layout work on the panel-open path. |
+| `2026-06-07-overlay-workbench-resizable-panels.md` | `centerWorkbenchPanelWeights` remains the only persisted width source.                     |
+| Independent GUI audit 2026-06-22                   | `scrollIntoView` and tracked helper calls still leave layout work on the panel-open path.  |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Panel reveal | `openCenterWorkbenchPanel()` and `resetCenterWorkbenchToFocusedPanel()` queue `scrollIntoView()` in a microtask. | Replace both with one RAF-scheduled reveal helper. |
-| Panel open effect | The panel-open effect already schedules `renderCenterWorkbenchPanelLayoutOnFrame.schedule()`. | Keep this as the only open-state layout render path. |
-| Settings weight effect | The effect reads `settingsStore.centerWorkbenchPanelWeights` and then calls helpers that read `centerWorkbenchPanels()`. | Track only weights, then render layout inside `untrack(...)`. |
-| Drag resize | `applyPendingCenterWorkbenchPanelResize()` updates weights and directly renders separators. | Let the settings-weight effect own post-weight layout. |
-| Keyboard resize | `resizeCenterWorkbenchPanelByKeyboard()` updates weights and directly renders weights/separators. | Let the settings-weight effect own post-weight layout while preserving immediate save behavior. |
-| Tests | Existing static tests preserve direct `scrollIntoView()` and only check literal panel-count tracking. | Replace those checks with RAF reveal and untracked single-owner guards. |
+| Surface                | Evidence                                                                                                                 | Decision                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Panel reveal           | `openCenterWorkbenchPanel()` and `resetCenterWorkbenchToFocusedPanel()` queue `scrollIntoView()` in a microtask.         | Replace both with one RAF-scheduled reveal helper.                                              |
+| Panel open effect      | The panel-open effect already schedules `renderCenterWorkbenchPanelLayoutOnFrame.schedule()`.                            | Keep this as the only open-state layout render path.                                            |
+| Settings weight effect | The effect reads `settingsStore.centerWorkbenchPanelWeights` and then calls helpers that read `centerWorkbenchPanels()`. | Track only weights, then render layout inside `untrack(...)`.                                   |
+| Drag resize            | `applyPendingCenterWorkbenchPanelResize()` updates weights and directly renders separators.                              | Let the settings-weight effect own post-weight layout.                                          |
+| Keyboard resize        | `resizeCenterWorkbenchPanelByKeyboard()` updates weights and directly renders weights/separators.                        | Let the settings-weight effect own post-weight layout while preserving immediate save behavior. |
+| Tests                  | Existing static tests preserve direct `scrollIntoView()` and only check literal panel-count tracking.                    | Replace those checks with RAF reveal and untracked single-owner guards.                         |
 
 ## Root Cause
 

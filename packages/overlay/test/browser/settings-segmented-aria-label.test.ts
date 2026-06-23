@@ -55,8 +55,7 @@ test("settings segmented controls expose per-row accessible names", async () => 
     const url = new URL(req.url)
     const path = route(url)
     if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-    if (path === "/" || path === "/ui" || path === "/ui/")
-      return Response.redirect(`${url.origin}/ui/index.html`, 302)
+    if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "1.2.3" })
@@ -223,18 +222,28 @@ test("settings segmented controls expose per-row accessible names", async () => 
     assert.equal(focusedAboutTab.focusVisible, true)
     assert.notEqual(focusedAboutTab.outlineStyle, "none")
     assert.notEqual(focusedAboutTab.outlineWidth, "0px")
-    const tabFocusScreenshot = await saveElementScreenshot(page, "#configDialog .dialog-form", "settings-tabs-focus-visible.png")
+    const tabFocusScreenshot = await saveElementScreenshot(
+      page,
+      "#configDialog .dialog-form",
+      "settings-tabs-focus-visible.png",
+    )
     assert.ok(tabFocusScreenshot.endsWith("settings-tabs-focus-visible.png"))
     await page.keyboard.press("Enter")
     await page.waitForSelector('[data-config-panel="about"] #aboutBody')
-    await page.waitForFunction(() => !!document.querySelector('[data-config-tab="about"]')?.getAttribute("aria-controls"))
+    await page.waitForFunction(
+      () => !!document.querySelector('[data-config-tab="about"]')?.getAttribute("aria-controls"),
+    )
     const aboutTabState = await page.$eval('[data-config-tab="about"]', (node: HTMLElement) => ({
       selected: node.getAttribute("aria-selected") ?? "",
       controls: node.getAttribute("aria-controls") ?? "",
     }))
     assert.equal(aboutTabState.selected, "true")
     assert.ok(aboutTabState.controls)
-    const aboutScreenshot = await saveElementScreenshot(page, "#configDialog .dialog-form", "settings-tabs-about-panel.png")
+    const aboutScreenshot = await saveElementScreenshot(
+      page,
+      "#configDialog .dialog-form",
+      "settings-tabs-about-panel.png",
+    )
     assert.ok(aboutScreenshot.endsWith("settings-tabs-about-panel.png"))
 
     await page.click('[data-config-tab="permissions"]')

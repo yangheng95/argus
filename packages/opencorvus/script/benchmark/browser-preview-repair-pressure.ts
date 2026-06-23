@@ -25,9 +25,7 @@ const PRESSURE_TEST_FILES = [
   "test/orchestrator/orchestrator-tool-descriptions.test.ts",
 ]
 
-const ISOLATED_PRESSURE_TEST_FILES = [
-  "test/integrity/team-agent.test.ts",
-]
+const ISOLATED_PRESSURE_TEST_FILES = ["test/integrity/team-agent.test.ts"]
 
 const KNOWN_FLAGS = new Set(["--idle-timeout-ms", "--per-test-timeout-ms"])
 

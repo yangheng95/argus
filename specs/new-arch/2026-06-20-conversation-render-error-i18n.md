@@ -21,20 +21,20 @@ screen-reader text contract.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `AGENTS.md` | User-visible UI strings must follow the project's i18n state; UI work needs visual verification. |
-| `Conversation.tsx` | The normal empty states already use `t("chat.empty")`; render-error fallback must use the same text source. |
+| Source                                                  | Constraint                                                                                                                                          |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                             | User-visible UI strings must follow the project's i18n state; UI work needs visual verification.                                                    |
+| `Conversation.tsx`                                      | The normal empty states already use `t("chat.empty")`; render-error fallback must use the same text source.                                         |
 | `packages/overlay/src/i18n/en-US.json` and `zh-CN.json` | Locale bundles are the single source for user-visible overlay strings. Existing Mission keys are dirty in the worktree and must not be overwritten. |
-| `card-tree-reachability.test.ts` | The ErrorBoundary fallback is intentional; do not remove the boundary or hide failures. |
+| `card-tree-reachability.test.ts`                        | The ErrorBoundary fallback is intentional; do not remove the boundary or hide failures.                                                             |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "ConversationCardRenderFailure|Card render failed|Unknown render error|conversation-card-render-failure|ErrorBoundary"` | Only `Conversation.tsx` owns this render-error card. | Fix the shared fallback once. |
-| `git diff -- packages/overlay/src/i18n/en-US.json packages/overlay/src/i18n/zh-CN.json` | Both locale files already contain unrelated Mission key edits. | Add only `chat.render_error_*` keys and commit them through a temporary index blob that preserves unrelated worktree changes. |
-| Browser test scan | Existing browser tests hydrate conversations but do not force a render-error fallback. | Add a focused browser visual test for the localized render-error card surface using real overlay CSS. |
+| Sweep                                                                                   | Result                                                                                 | Decision                                                                                                                      |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | --------------- | ---------------------------------------------------- | ----------------------------- |
+| `rg -n "ConversationCardRenderFailure                                                   | Card render failed                                                                     | Unknown render error                                                                                                          | conversation-card-render-failure | ErrorBoundary"` | Only `Conversation.tsx` owns this render-error card. | Fix the shared fallback once. |
+| `git diff -- packages/overlay/src/i18n/en-US.json packages/overlay/src/i18n/zh-CN.json` | Both locale files already contain unrelated Mission key edits.                         | Add only `chat.render_error_*` keys and commit them through a temporary index blob that preserves unrelated worktree changes. |
+| Browser test scan                                                                       | Existing browser tests hydrate conversations but do not force a render-error fallback. | Add a focused browser visual test for the localized render-error card surface using real overlay CSS.                         |
 
 ## Fix Plan
 

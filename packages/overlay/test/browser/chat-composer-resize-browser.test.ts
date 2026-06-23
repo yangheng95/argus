@@ -35,7 +35,10 @@ function eventStream() {
   })
 }
 
-async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+async function saveScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
   const target = join(SCRATCH_ROOT, name)
   mkdirSync(dirname(target), { recursive: true })
   await writeFile(target, await element.screenshot({}))

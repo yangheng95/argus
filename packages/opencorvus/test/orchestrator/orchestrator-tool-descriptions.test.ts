@@ -50,7 +50,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   test("build description distinguishes async goal start from direct terminal report", () => {
     expect(tools.build.description).toContain("returns after the child build session and goal_run have started")
     expect(tools.build.description).toContain("terminal refill wake")
-    expect(tools.build.description).toContain("For task-level direct builds, the tool returns the terminal build report")
+    expect(tools.build.description).toContain(
+      "For task-level direct builds, the tool returns the terminal build report",
+    )
     expect(tools.build.description).not.toContain("After build returns, read the build report")
   })
 
@@ -142,7 +144,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.deep_research.description).not.toContain("use `frontend_research` instead")
     expect(tools.frontend_research.description).toContain("webpage/UI investigation publisher")
     expect(tools.frontend_research.description).toContain("exactly one source page URL per fresh call")
-    expect(tools.frontend_research.description).toContain("call frontend_research separately only for additional page URLs")
+    expect(tools.frontend_research.description).toContain(
+      "call frontend_research separately only for additional page URLs",
+    )
     expect(tools.frontend_research.description).toContain(
       "Same URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
     )
@@ -152,7 +156,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.frontend_research.description).toContain("Page Skeleton Blueprint")
     expect(tools.frontend_research.description).toContain("frontend_design consumes as page information architecture")
     expect(tools.frontend_research.description).toContain("small update_* result tools")
-    expect(tools.frontend_research.description).not.toContain("dispatch once for the relevant webpage investigation scope")
+    expect(tools.frontend_research.description).not.toContain(
+      "dispatch once for the relevant webpage investigation scope",
+    )
     expect(tools.frontend_research.description).not.toContain("does not acquire webpage evidence itself")
     expect(tools.frontend_research.description).not.toContain("dispatch `frontend_design` first")
     expect(tools.frontend_research.description).toContain("frontend_research_brief/webpage_contract")
@@ -204,9 +210,7 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(frontendResearchJsonSchema.properties?.source_urls?.description).toContain(
       "Same URL plus a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
     )
-    expect(frontendResearchJsonSchema.properties?.focus?.description).toContain(
-      "Focus narrows the first brief only",
-    )
+    expect(frontendResearchJsonSchema.properties?.focus?.description).toContain("Focus narrows the first brief only")
 
     expect(Object.keys(tools.frontend_design.inputSchema!.shape)).toEqual([
       "reason",

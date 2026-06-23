@@ -59,6 +59,8 @@ test("TaskProgressBar goal pills expose visible keyboard focus", () => {
   expect(css).toMatch(
     /\.task-progress \.oc-button\[data-ui="task-progress-pill"\]:hover,\s*\.task-progress \.oc-button\[data-ui="task-progress-pill"\]:focus-visible\s*\{[^}]*--oc-button-bg:\s*var\(--card-bg-hover\);[^}]*--oc-button-border:\s*var\(--oc-border-width\) solid var\(--card-border-strong\);[^}]*--oc-button-color:\s*var\(--text-strong\);/s,
   )
-  expect(buttonCss).toMatch(/\.oc-button:focus-visible\s*\{[^}]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/s)
+  expect(buttonCss).toMatch(
+    /\.oc-button:focus-visible\s*\{[^}]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/s,
+  )
   expect(css).not.toMatch(/\.task-progress__(?:fold|pill|toggle)(?:\s|:|\[|\{)/)
 })

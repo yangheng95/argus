@@ -13,20 +13,20 @@ surface.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
+| Source                                                | Relevant constraint                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Overlay UI is converging on mature primitives and shared style contracts, not component-local behavior and styling. |
-| `2026-06-09-overlay-ui-tech-debt-consensus.md` | CSS debt should converge on tokenized surface ownership; do not grow local style exceptions. |
-| `flat-redesign-font-weight-coverage.test.ts` | Non-token CSS `font-weight` declarations outside `design-language.css` are rejected. |
-| `InlineToolPart.tsx` | Browser evidence cards render `.msg-browser-evidence__title` for completed tool output with browser metadata. |
+| `2026-06-09-overlay-ui-tech-debt-consensus.md`        | CSS debt should converge on tokenized surface ownership; do not grow local style exceptions.                        |
+| `flat-redesign-font-weight-coverage.test.ts`          | Non-token CSS `font-weight` declarations outside `design-language.css` are rejected.                                |
+| `InlineToolPart.tsx`                                  | Browser evidence cards render `.msg-browser-evidence__title` for completed tool output with browser metadata.       |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'font-weight:\s*[0-9]+|msg-browser-evidence|ui-font-weight' packages/overlay/src/styles/surfaces/messages.css packages/overlay/src/components/InlineToolPart.tsx packages/overlay/src/components/Card.tsx packages/overlay/test specs/new-arch -g '*.css' -g '*.tsx' -g '*.ts' -g '*.md'` | The only live literal in the scanned message surface was `.msg-browser-evidence__title { font-weight: 600; }`; `InlineToolPart.tsx` renders it. | Replace the literal with the existing strong weight token. |
-| `bun test packages/overlay/test/flat-redesign-font-weight-coverage.test.ts` | Failed on `messages.css:151: 600`. | Keep the strict token coverage test and make the production CSS comply. |
-| `message-image-preview.test.ts` inspection | The test already owns browser evidence image CSS coverage. | Add a browser evidence title typography assertion there rather than creating a parallel test owner. |
+| Command                                                                     | Result                                                     | Decision                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `rg -n 'font-weight:\s\*[0-9]+                                              | msg-browser-evidence                                       | ui-font-weight' packages/overlay/src/styles/surfaces/messages.css packages/overlay/src/components/InlineToolPart.tsx packages/overlay/src/components/Card.tsx packages/overlay/test specs/new-arch -g '_.css' -g '_.tsx' -g '_.ts' -g '_.md'` | The only live literal in the scanned message surface was `.msg-browser-evidence__title { font-weight: 600; }`; `InlineToolPart.tsx` renders it. | Replace the literal with the existing strong weight token. |
+| `bun test packages/overlay/test/flat-redesign-font-weight-coverage.test.ts` | Failed on `messages.css:151: 600`.                         | Keep the strict token coverage test and make the production CSS comply.                                                                                                                                                                       |
+| `message-image-preview.test.ts` inspection                                  | The test already owns browser evidence image CSS coverage. | Add a browser evidence title typography assertion there rather than creating a parallel test owner.                                                                                                                                           |
 
 ## Fix
 

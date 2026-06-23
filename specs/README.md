@@ -4,13 +4,13 @@ This directory stores implementation notes, product requirements, and investigat
 
 ## Current Sources
 
-| Surface | Current source |
-| --- | --- |
-| Public product docs | `packages/web/src/content/docs/**` |
-| Architecture map | `specs/new-arch/README.md`; historical new-arch notes are indexed in `specs/new-arch/HISTORY.md` |
-| API reference | `packages/web/src/content/docs/{reference/api,zh-cn/reference/api}.mdx`, generated from the OpenAPI generation script |
-| Package-local OpenCorvus notes | `packages/opencorvus/specs/README.md` |
-| Retired missing historical references | `specs/retired-reference-ledger.md` |
+| Surface                               | Current source                                                                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Public product docs                   | `packages/web/src/content/docs/**`                                                                                    |
+| Architecture map                      | `specs/new-arch/README.md`; historical new-arch notes are indexed in `specs/new-arch/HISTORY.md`                      |
+| API reference                         | `packages/web/src/content/docs/{reference/api,zh-cn/reference/api}.mdx`, generated from the OpenAPI generation script |
+| Package-local OpenCorvus notes        | `packages/opencorvus/specs/README.md`                                                                                 |
+| Retired missing historical references | `specs/retired-reference-ledger.md`                                                                                   |
 
 Do not recreate `docs/product/**`. It was removed on 2026-06-15 because it duplicated the Starlight docs source.
 
@@ -22,7 +22,7 @@ Do not recreate `docs/product/**`. It was removed on 2026-06-15 because it dupli
 | `2026-06-10-cancelled-task-message-input.md`                         | Historical implementation note | Cancelled-task composer behavior.                                                                       |
 | `2026-06-10-tradingview-world-economy-clone.md`                      | Historical implementation note | TradingView clone task record.                                                                          |
 | `bug-hunt-2026-06-17.md`                                             | Current bug-hunt log           | Unattended independent-agent bug hunt findings and verification status.                                 |
-| `bug-hunt-repair-plan-2026-06-17.md`                                  | Historical implementation note | Bug hunt repair plan.                                                                                   |
+| `bug-hunt-repair-plan-2026-06-17.md`                                 | Historical implementation note | Bug hunt repair plan.                                                                                   |
 | `cli-entrypoint-lifecycle-2026-06-17.md`                             | Current lifecycle repair note  | CLI and overlay entrypoint lifecycle ownership.                                                         |
 | `db-schema-drift-reset-2026-06-03.md`                                | Historical implementation note | Database reset/drift handling.                                                                          |
 | `event-log-task-project-directory-2026-06-16.md`                     | Historical implementation note | Event log project-directory correction evidence.                                                        |
@@ -31,7 +31,7 @@ Do not recreate `docs/product/**`. It was removed on 2026-06-15 because it dupli
 | `goal-batch-wake-natural-message-2026-06-04.md`                      | Historical implementation note | Goal-batch wake copy.                                                                                   |
 | `instance-stale-global-worktree-refresh-2026-06-16.md`               | Superseded                     | Symptom repair note superseded by `remove-global-project-sentinel-2026-06-16.md`.                       |
 | `mission-panel-parity-2026-05-29.md`                                 | Historical implementation note | Mission panel parity.                                                                                   |
-| `mission-project-archive-export-2026-06-18.md`                        | Historical implementation note | Mission archive export.                                                                                 |
+| `mission-project-archive-export-2026-06-18.md`                       | Historical implementation note | Mission archive export.                                                                                 |
 | `notification-log-schema-stress-2026-06-17.md`                       | Current benchmark note         | Notification and log schema stress benchmark hardening.                                                 |
 | `notification-center-history-contract-2026-06-09.md`                 | Historical implementation note | Notification center history.                                                                            |
 | `orchestrator-no-decision-stop-2026-06-18.md`                        | Historical implementation note | Orchestrator no-decision stop root cause.                                                               |

@@ -9,12 +9,12 @@ creates that class anymore. Search inputs now route through the shared
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `2026-06-19-memory-search-field-primitive.md` | Memory search retired private search chrome and made `.search-field*` the shared compact search source. |
-| `packages/overlay/src/components/settings/primitives.tsx` | `SettingsToolbar` renders only `.s-toolbar`; it does not create `s-toolbar-search`. |
-| `packages/overlay/src/styles/surfaces/field.css` | Search field focus, icon, input, and clear-button styling lives in the shared primitive. |
-| `rg -n -F "s-toolbar-search" packages/overlay/src packages/overlay/test specs/new-arch docs packages/web` | The only live hit was `settings.css`. |
+| Source                                                                                                    | Constraint                                                                                              |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `2026-06-19-memory-search-field-primitive.md`                                                             | Memory search retired private search chrome and made `.search-field*` the shared compact search source. |
+| `packages/overlay/src/components/settings/primitives.tsx`                                                 | `SettingsToolbar` renders only `.s-toolbar`; it does not create `s-toolbar-search`.                     |
+| `packages/overlay/src/styles/surfaces/field.css`                                                          | Search field focus, icon, input, and clear-button styling lives in the shared primitive.                |
+| `rg -n -F "s-toolbar-search" packages/overlay/src packages/overlay/test specs/new-arch docs packages/web` | The only live hit was `settings.css`.                                                                   |
 
 ## Fix
 

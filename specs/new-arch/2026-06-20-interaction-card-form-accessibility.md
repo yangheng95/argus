@@ -6,22 +6,22 @@ CSS means Cascading Style Sheets. DOM means Document Object Model.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | Shared UI surfaces must use one component path, avoid fallback behavior, and verify frontend changes with a real rendered screenshot. |
-| `2026-06-04-mission-question-rendering.md` | Raw mission questions and engine interactions intentionally render through the same `InteractionCard` path. |
+| Source                                              | Relevant constraint                                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                         | Shared UI surfaces must use one component path, avoid fallback behavior, and verify frontend changes with a real rendered screenshot.      |
+| `2026-06-04-mission-question-rendering.md`          | Raw mission questions and engine interactions intentionally render through the same `InteractionCard` path.                                |
 | `2026-06-19-interaction-card-textarea-primitive.md` | Inline and dialog question custom replies already share `AutoGrowTextarea` plus `.composer-textarea`; do not add a second input primitive. |
-| `InteractionDialogHost.tsx` | The dialog body reuses `InteractionCard`, so semantic fixes in the card cover the popup and inline timeline surfaces together. |
+| `InteractionDialogHost.tsx`                         | The dialog body reuses `InteractionCard`, so semantic fixes in the card cover the popup and inline timeline surfaces together.             |
 
 ## Evidence Sweep
 
-| Target | Result | Decision |
-| --- | --- | --- |
-| `rg "<InteractionCard|InteractionCard\\b|interaction-card__question|interaction-card__error|interaction-card__custom-input" packages/overlay/src packages/overlay/test specs/new-arch` | `InteractionCard` renders only from `CardParts` and `InteractionDialogHost`; tests already cover the shared textarea path. | Fix the shared component directly; do not add a parallel question form. |
-| `InteractionCard.tsx` | Question groups are plain `div` containers, the custom textarea relies on placeholder text, and the error is a plain `div`. | Use `fieldset`/`legend`, `aria-labelledby`, `aria-describedby`, and an assertive alert region. |
-| Huygens independent review | Text buttons override visible labels with explanatory `aria-label`s, and slow submissions expose only `disabled` controls without a card-level busy status. | Remove text-button `aria-label` overrides, keep visible text as the accessible name, and add a localized polite busy status. |
-| `card.css` | Existing question styles are class-based and can be kept while resetting native fieldset/legend chrome. | Preserve visual density with a small fieldset reset instead of hand-writing a new form surface. |
-| `interaction-card-textarea-browser.test.ts` | The fixture renders both inline and dialog cards and already captures screenshots. | Extend this real browser fixture to verify labels, descriptions, focus, error live region, and screenshots in both surfaces. |
+| Target                                      | Result                                                                                                                                                      | Decision                                                                                                                     |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `rg "<InteractionCard                       | InteractionCard\\b                                                                                                                                          | interaction-card\_\_question                                                                                                 | interaction-card\_\_error | interaction-card\_\_custom-input" packages/overlay/src packages/overlay/test specs/new-arch` | `InteractionCard` renders only from `CardParts` and `InteractionDialogHost`; tests already cover the shared textarea path. | Fix the shared component directly; do not add a parallel question form. |
+| `InteractionCard.tsx`                       | Question groups are plain `div` containers, the custom textarea relies on placeholder text, and the error is a plain `div`.                                 | Use `fieldset`/`legend`, `aria-labelledby`, `aria-describedby`, and an assertive alert region.                               |
+| Huygens independent review                  | Text buttons override visible labels with explanatory `aria-label`s, and slow submissions expose only `disabled` controls without a card-level busy status. | Remove text-button `aria-label` overrides, keep visible text as the accessible name, and add a localized polite busy status. |
+| `card.css`                                  | Existing question styles are class-based and can be kept while resetting native fieldset/legend chrome.                                                     | Preserve visual density with a small fieldset reset instead of hand-writing a new form surface.                              |
+| `interaction-card-textarea-browser.test.ts` | The fixture renders both inline and dialog cards and already captures screenshots.                                                                          | Extend this real browser fixture to verify labels, descriptions, focus, error live region, and screenshots in both surfaces. |
 
 ## Fix
 

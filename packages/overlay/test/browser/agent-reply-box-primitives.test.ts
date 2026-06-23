@@ -14,7 +14,10 @@ function readCss(rel: string): string {
   return readFileSync(join(OVERLAY_ROOT, "src/styles", rel), "utf8")
 }
 
-async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+async function saveScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
   const target = join(SCRATCH_ROOT, name)
   mkdirSync(dirname(target), { recursive: true })
   await writeFile(target, await element.screenshot({}))
@@ -114,9 +117,9 @@ Report the exact terminal state.</textarea>
         const activeForm = document.querySelector('.card__agent-reply[data-case="active"]') as HTMLElement
         const activeInput = activeForm.querySelector(".card__agent-reply-input") as HTMLTextAreaElement
         const activeSend = activeForm.querySelector('[data-ui="agent-reply-send"]') as HTMLElement
-        const disabledSend = document.querySelector('.card__agent-reply[data-case="disabled"] [data-ui="agent-reply-send"]') as
-          | HTMLButtonElement
-          | null
+        const disabledSend = document.querySelector(
+          '.card__agent-reply[data-case="disabled"] [data-ui="agent-reply-send"]',
+        ) as HTMLButtonElement | null
         const errorForm = document.querySelector('.card__agent-reply[data-case="error"]') as HTMLElement
         const error = errorForm.querySelector(".card__agent-reply-error") as HTMLElement
         const dismiss = error.querySelector('[data-ui="agent-reply-error-dismiss"]') as HTMLElement

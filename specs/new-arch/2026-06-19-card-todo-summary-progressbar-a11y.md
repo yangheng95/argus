@@ -16,20 +16,20 @@ leave a visual and accessibility double source.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
+| Source                                          | Relevant constraint                                                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `2026-06-18-card-header-nested-interactions.md` | `CardHeader` and `ChatBubble` share the collapsed preview / TODO rows and must keep header actions outside the disclosure button. |
-| `12-overlay-card-system.md` | Structured card header behavior should have a single owner instead of ad hoc renderer forks. |
-| `AGENTS.md` rule 8 | No double-source design. Shared TODO summary markup must not remain copied in two components. |
-| `AGENTS.md` rule 36 | UI contract changes require tests. |
+| `12-overlay-card-system.md`                     | Structured card header behavior should have a single owner instead of ad hoc renderer forks.                                      |
+| `AGENTS.md` rule 8                              | No double-source design. Shared TODO summary markup must not remain copied in two components.                                     |
+| `AGENTS.md` rule 36                             | UI contract changes require tests.                                                                                                |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "card__todo-progress|role=\"progressbar\"|collectTodoSummary" packages/overlay/src packages/overlay/test` | Live collapsed TODO progressbar markup exists only in `CardHeader.tsx` and `ChatBubble.tsx`; `TaskProgressBar.tsx` is a separate goals strip. | Extract a card-specific TODO summary component rather than reusing goal progress semantics. |
-| `rg -n "progress.heading|todo" packages/overlay/src/i18n packages/overlay/src/components` | `progress.heading` translates to Goals/目标, which is not the checklist meaning. | Add card TODO-specific i18n keys for accessible label and value text. |
-| `rg -n "class=\"card__todo-summary\"|card__todo-progress" packages/overlay/test` | `chat-bubble.test.ts` pins the duplicated source shape. | Update tests to pin the new single owner and accessibility attributes. |
+| Sweep                                  | Result                                                           | Decision                                                                         |
+| -------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `rg -n "card\_\_todo-progress          | role=\"progressbar\"                                             | collectTodoSummary" packages/overlay/src packages/overlay/test`                  | Live collapsed TODO progressbar markup exists only in `CardHeader.tsx` and `ChatBubble.tsx`; `TaskProgressBar.tsx` is a separate goals strip. | Extract a card-specific TODO summary component rather than reusing goal progress semantics. |
+| `rg -n "progress.heading               | todo" packages/overlay/src/i18n packages/overlay/src/components` | `progress.heading` translates to Goals/目标, which is not the checklist meaning. | Add card TODO-specific i18n keys for accessible label and value text.                                                                         |
+| `rg -n "class=\"card\_\_todo-summary\" | card\_\_todo-progress" packages/overlay/test`                    | `chat-bubble.test.ts` pins the duplicated source shape.                          | Update tests to pin the new single owner and accessibility attributes.                                                                        |
 
 ## Fix Plan
 

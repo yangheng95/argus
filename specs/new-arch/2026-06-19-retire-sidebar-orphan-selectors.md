@@ -18,21 +18,21 @@ required the dead CSS rule to exist.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-project-ledger-group-primitive.md` | `ProjectLedgerGroup` is the shared project grouping primitive and owns `project-group-*` JSX. |
-| `TaskList.tsx` | Renders `ProjectLedgerGroup`; task rows render `task-row-head`, `task-row-stamp`, and action controls, not `task-row-meta`. |
-| `ProjectLedgerGroup.tsx` | The live group toggle is `Button[data-ui="project-group-toggle"]`; no `.sidebar-list-heading` owner exists. |
-| `index.html` | The sidebar header has `.sidebar-title` and `.sidebar-header-actions`; no `.sidebar-subtitle` markup exists. |
+| Source                                         | Relevant constraint                                                                                                         |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-project-ledger-group-primitive.md` | `ProjectLedgerGroup` is the shared project grouping primitive and owns `project-group-*` JSX.                               |
+| `TaskList.tsx`                                 | Renders `ProjectLedgerGroup`; task rows render `task-row-head`, `task-row-stamp`, and action controls, not `task-row-meta`. |
+| `ProjectLedgerGroup.tsx`                       | The live group toggle is `Button[data-ui="project-group-toggle"]`; no `.sidebar-list-heading` owner exists.                 |
+| `index.html`                                   | The sidebar header has `.sidebar-title` and `.sidebar-header-actions`; no `.sidebar-subtitle` markup exists.                |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n -F "sidebar-list-heading" packages/overlay/src packages/overlay/test specs/new-arch docs` | Production hit was only `sidebar.css`; tests still protected the selector. | Delete the CSS and convert the single-source test to a retirement guard. |
-| `rg -n -F "task-row-meta" packages/overlay/src packages/overlay/test specs/new-arch docs` | Production hit was only `sidebar.css`; `task-list-buttons-primitive.test.ts` already asserts `TaskList.tsx` does not render `class="task-row-meta"`. | Delete the CSS and add CSS absence coverage. |
-| `rg -n -F "sidebar-subtitle" packages/overlay/src packages/overlay/test specs/new-arch docs` | Production hit was only `sidebar.css`; `index.html` renders `sidebar-title` and header actions only. | Delete the CSS and convert architecture coverage to negative. |
-| `rg -n "project-group|ProjectLedgerGroup|sidebar-list-heading|task-row-meta|sidebar-subtitle" packages/overlay/src packages/overlay/test specs/new-arch --glob "*.*"` | Live project grouping is `ProjectLedgerGroup` + `Button[data-ui="project-group-toggle"]` + `.project-group*` content classes; Mission and Coding Assistant ledgers also use that primitive. | Preserve the shared toggle, `.project-group*` content classes, and ledger row styles. |
+| Command                                                                                          | Result                                                                                                                                               | Decision                                                                 |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `rg -n -F "sidebar-list-heading" packages/overlay/src packages/overlay/test specs/new-arch docs` | Production hit was only `sidebar.css`; tests still protected the selector.                                                                           | Delete the CSS and convert the single-source test to a retirement guard. |
+| `rg -n -F "task-row-meta" packages/overlay/src packages/overlay/test specs/new-arch docs`        | Production hit was only `sidebar.css`; `task-list-buttons-primitive.test.ts` already asserts `TaskList.tsx` does not render `class="task-row-meta"`. | Delete the CSS and add CSS absence coverage.                             |
+| `rg -n -F "sidebar-subtitle" packages/overlay/src packages/overlay/test specs/new-arch docs`     | Production hit was only `sidebar.css`; `index.html` renders `sidebar-title` and header actions only.                                                 | Delete the CSS and convert architecture coverage to negative.            |
+| `rg -n "project-group                                                                            | ProjectLedgerGroup                                                                                                                                   | sidebar-list-heading                                                     | task-row-meta | sidebar-subtitle" packages/overlay/src packages/overlay/test specs/new-arch --glob "_._"` | Live project grouping is `ProjectLedgerGroup` + `Button[data-ui="project-group-toggle"]` + `.project-group*` content classes; Mission and Coding Assistant ledgers also use that primitive. | Preserve the shared toggle, `.project-group*` content classes, and ledger row styles. |
 
 ## Fix
 

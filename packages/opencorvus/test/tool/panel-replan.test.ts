@@ -96,9 +96,11 @@ describe("panel replan action", () => {
           message: "Replan queued.",
         })
         await waitForMockCalls(runTaskLoop, 1)
-        const event = (runTaskLoop.mock.calls[0]?.[0] as
-          | { event?: { note?: string; operatorIntent?: { kind?: string } } }
-          | undefined)?.event
+        const event = (
+          runTaskLoop.mock.calls[0]?.[0] as
+            | { event?: { note?: string; operatorIntent?: { kind?: string } } }
+            | undefined
+        )?.event
         expect(event?.operatorIntent).toEqual({ kind: "replan" })
         expect(event?.note).toContain("User requested replan")
         expect(event?.note).not.toContain("User requested retry")

@@ -17,20 +17,20 @@ value can disagree.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-17-app-dialog-select-trigger-single-source.md` | AppDialog select already uses the shared Kobalte Select shell; do not create another UI path. |
-| `2026-06-18-app-dialog-segmented-control.md` | Task queue decisions reuse AppDialog `selectValue/selectOptions` state through SegmentedControl. |
-| `AGENTS.md` | No fallback logic; fail at the invalid input source instead of silently normalizing. |
+| Source                                                  | Relevant constraint                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `2026-06-17-app-dialog-select-trigger-single-source.md` | AppDialog select already uses the shared Kobalte Select shell; do not create another UI path.    |
+| `2026-06-18-app-dialog-segmented-control.md`            | Task queue decisions reuse AppDialog `selectValue/selectOptions` state through SegmentedControl. |
+| `AGENTS.md`                                             | No fallback logic; fail at the invalid input source instead of silently normalizing.             |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "showAppDialog\\(|select:\\s*true|selectOptions|selectValue" packages/overlay/src packages/overlay/test specs/new-arch` | Direct select callers already pass explicit values: rewind uses `view`, task queue uses `start`; `nativeSelect` is the only wrapper that defaults to the first option. | Keep direct callers; repair `nativeSelect` so it passes an explicit valid selected value or fails before opening. |
-| `AppDialogHost.tsx` | `selectedOption()` falls back to `selectOptions()[0]`, hiding invalid store state. | Remove host fallback; service validation is the single source. |
-| `app-dialog.ts::settleAppDialog` | Settlement returns `dialogStore.app.selectValue` for both select dialogs and task-card decisions. | Preserve settlement behavior after enforcing valid state before open. |
-| Independent review feedback | `providerAuthInputs()` moved the fallback to `prompt.options[0]`, and `authenticateSelectedProvider()` moved it to `methods[0]?.index`. Backend `ProviderAuthPrompt` exposed only `options`, so the protocol had no source for the initial value. | Add `selectValue` to the provider auth select prompt protocol and require a unique `preferred` method for multi-method auth selection. |
+| Sweep                            | Result                                                                                                                                                                                                                                            | Decision                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `rg -n "showAppDialog\\(         | select:\\s\*true                                                                                                                                                                                                                                  | selectOptions                                                                                                                          | selectValue" packages/overlay/src packages/overlay/test specs/new-arch` | Direct select callers already pass explicit values: rewind uses `view`, task queue uses `start`; `nativeSelect` is the only wrapper that defaults to the first option. | Keep direct callers; repair `nativeSelect` so it passes an explicit valid selected value or fails before opening. |
+| `AppDialogHost.tsx`              | `selectedOption()` falls back to `selectOptions()[0]`, hiding invalid store state.                                                                                                                                                                | Remove host fallback; service validation is the single source.                                                                         |
+| `app-dialog.ts::settleAppDialog` | Settlement returns `dialogStore.app.selectValue` for both select dialogs and task-card decisions.                                                                                                                                                 | Preserve settlement behavior after enforcing valid state before open.                                                                  |
+| Independent review feedback      | `providerAuthInputs()` moved the fallback to `prompt.options[0]`, and `authenticateSelectedProvider()` moved it to `methods[0]?.index`. Backend `ProviderAuthPrompt` exposed only `options`, so the protocol had no source for the initial value. | Add `selectValue` to the provider auth select prompt protocol and require a unique `preferred` method for multi-method auth selection. |
 
 ## Fix Plan
 

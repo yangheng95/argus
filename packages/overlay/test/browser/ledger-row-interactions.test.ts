@@ -14,7 +14,10 @@ function readCss(rel: string): string {
   return readFileSync(join(OVERLAY_ROOT, "src/styles", rel), "utf8")
 }
 
-async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+async function saveScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
   const target = join(SCRATCH_ROOT, name)
   mkdirSync(dirname(target), { recursive: true })
   await writeFile(target, await element.screenshot({}))
@@ -175,10 +178,12 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
         assistantTabindex: assistantRow.getAttribute("tabindex"),
         missionCurrent: missionRow.querySelector(".mission-row-main")?.getAttribute("aria-current"),
         assistantCurrent: assistantRow.querySelector(".coding-assistant-row-main")?.getAttribute("aria-current"),
-        missionPrimitive: missionRow.querySelector(".mission-row-main")?.matches('.oc-button[data-ui="ledger-row-main"]'),
-        assistantPrimitive: assistantRow.querySelector(".coding-assistant-row-main")?.matches(
-          '.oc-button[data-ui="ledger-row-main"]',
-        ),
+        missionPrimitive: missionRow
+          .querySelector(".mission-row-main")
+          ?.matches('.oc-button[data-ui="ledger-row-main"]'),
+        assistantPrimitive: assistantRow
+          .querySelector(".coding-assistant-row-main")
+          ?.matches('.oc-button[data-ui="ledger-row-main"]'),
         missionButtons: missionRow.querySelectorAll("button").length,
         assistantButtons: assistantRow.querySelectorAll("button").length,
         missionShortcut: missionRow.querySelector(".mission-row-main")?.getAttribute("aria-keyshortcuts"),
@@ -200,22 +205,29 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
     assert.equal(structure.assistantShortcut, "ArrowRight")
 
     const closedActions = await page.evaluate(() =>
-      Array.from(document.querySelectorAll<HTMLElement>('[data-ui="mission-row"], [data-ui="coding-assistant-row"]')).map(
-        (row) => {
-          const actions = Array.from(row.querySelectorAll<HTMLElement>(".task-row-actions .oc-button"))
-          return {
-            ui: row.dataset.ui ?? "",
-            open: row.getAttribute("data-actions-keyboard-open"),
-            tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
-            opacities: actions.map((action) => getComputedStyle(action).opacity),
-          }
-        },
-      ),
+      Array.from(
+        document.querySelectorAll<HTMLElement>('[data-ui="mission-row"], [data-ui="coding-assistant-row"]'),
+      ).map((row) => {
+        const actions = Array.from(row.querySelectorAll<HTMLElement>(".task-row-actions .oc-button"))
+        return {
+          ui: row.dataset.ui ?? "",
+          open: row.getAttribute("data-actions-keyboard-open"),
+          tabIndexes: actions.map((action) => action.getAttribute("tabindex")),
+          opacities: actions.map((action) => getComputedStyle(action).opacity),
+        }
+      }),
     )
     for (const row of closedActions) {
       assert.equal(row.open, null, JSON.stringify(row))
-      assert.deepEqual(row.tabIndexes, row.tabIndexes.map(() => "-1"))
-      assert.equal(row.opacities.every((value) => value === "0"), true, JSON.stringify(row))
+      assert.deepEqual(
+        row.tabIndexes,
+        row.tabIndexes.map(() => "-1"),
+      )
+      assert.equal(
+        row.opacities.every((value) => value === "0"),
+        true,
+        JSON.stringify(row),
+      )
     }
 
     const focused: string[] = []
@@ -283,8 +295,16 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
     assert.equal(missionOpen.open, "true", JSON.stringify(missionOpen))
     assert.equal(missionOpen.activeAction, "mission-stop")
     assert.equal(missionOpen.activeInActions, true)
-    assert.equal(missionOpen.tabIndexes.every((value) => value === null), true, JSON.stringify(missionOpen))
-    assert.equal(missionOpen.opacities.every((value) => Number.parseFloat(value) > 0.95), true, JSON.stringify(missionOpen))
+    assert.equal(
+      missionOpen.tabIndexes.every((value) => value === null),
+      true,
+      JSON.stringify(missionOpen),
+    )
+    assert.equal(
+      missionOpen.opacities.every((value) => Number.parseFloat(value) > 0.95),
+      true,
+      JSON.stringify(missionOpen),
+    )
     await saveScreenshot(fixture, "ledger-row-actions-keyboard-open.png")
 
     await page.keyboard.press("Escape")
@@ -302,12 +322,17 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
     assert.equal(missionClosed.open, null)
     assert.equal(missionClosed.activeAction, "mission-select")
     assert.equal(missionClosed.activeInActions, false)
-    assert.deepEqual(missionClosed.tabIndexes, missionClosed.tabIndexes.map(() => "-1"))
+    assert.deepEqual(
+      missionClosed.tabIndexes,
+      missionClosed.tabIndexes.map(() => "-1"),
+    )
 
     await page.focus('[data-action="assistant-select"]')
     await page.keyboard.press("ArrowRight")
     await page.waitForFunction(
-      () => document.querySelector('[data-ui="coding-assistant-row"]')?.getAttribute("data-actions-keyboard-open") === "true",
+      () =>
+        document.querySelector('[data-ui="coding-assistant-row"]')?.getAttribute("data-actions-keyboard-open") ===
+        "true",
     )
     await page.keyboard.press("ArrowLeft")
     const assistantClosed = await page.evaluate(() => {
@@ -322,17 +347,21 @@ test("Mission and Coding Assistant ledger rows expose one keyboard selection con
     })
     assert.equal(assistantClosed.open, null)
     assert.equal(assistantClosed.activeAction, "assistant-select")
-    assert.deepEqual(assistantClosed.tabIndexes, assistantClosed.tabIndexes.map(() => "-1"))
+    assert.deepEqual(
+      assistantClosed.tabIndexes,
+      assistantClosed.tabIndexes.map(() => "-1"),
+    )
 
     await page.hover('[data-ui="mission-row"]')
     await page.click('[data-action="mission-stop"]')
     await page.hover('[data-ui="coding-assistant-row"]')
     await page.click('[data-action="assistant-delete"]')
     await page.click('[data-action="assistant-select"]')
-    assert.deepEqual(
-      await page.evaluate(() => (window as unknown as { __ledgerEvents: string[] }).__ledgerEvents),
-      ["mission-stop", "assistant-delete", "assistant-select"],
-    )
+    assert.deepEqual(await page.evaluate(() => (window as unknown as { __ledgerEvents: string[] }).__ledgerEvents), [
+      "mission-stop",
+      "assistant-delete",
+      "assistant-select",
+    ])
   } finally {
     await browser.close()
   }

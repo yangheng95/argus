@@ -26,7 +26,10 @@ export default function GeneralPanel() {
 
   function summarizeResetTargets(targets: DatabaseResetTarget[]): string {
     return targets
-      .map((target) => `${target.ok ? "OK" : "FAILED"} ${target.label}: ${target.path}${target.error ? ` (${target.error})` : ""}`)
+      .map(
+        (target) =>
+          `${target.ok ? "OK" : "FAILED"} ${target.label}: ${target.path}${target.error ? ` (${target.error})` : ""}`,
+      )
       .join("; ")
   }
 
@@ -124,8 +127,8 @@ export default function GeneralPanel() {
         await reloadProjectScope()
       } catch (reloadError) {
         setDbResetNoticeStatus("warn")
-        setDbResetNotice((current) =>
-          `${current} ${t("settings.db_reset_reload_failed", { error: describeError(reloadError) })}`,
+        setDbResetNotice(
+          (current) => `${current} ${t("settings.db_reset_reload_failed", { error: describeError(reloadError) })}`,
         )
       }
     } catch (resetError) {
@@ -236,9 +239,7 @@ export default function GeneralPanel() {
 
         <SettingsRow
           title={
-            <label for="settings-fail-on-information-missing">
-              {t("settings.fail_on_information_missing_label")}
-            </label>
+            <label for="settings-fail-on-information-missing">{t("settings.fail_on_information_missing_label")}</label>
           }
           desc={t("settings.fail_on_information_missing_hint")}
           align="center"

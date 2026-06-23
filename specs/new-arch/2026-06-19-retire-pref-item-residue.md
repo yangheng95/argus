@@ -17,20 +17,20 @@ such as `pref-1`; those are test data ids, not DOM class contracts.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
+| Source                                                       | Relevant constraint                                                                                                            |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | `2026-06-18-settings-primitives-single-source-completion.md` | Settings rows should be owned by the `.s-*` primitive layer, with domain classes only where live components still render them. |
-| `2026-06-18-retire-settings-extension-memory-residue.md` | Retired settings CSS selectors should be deleted once no production owner remains; live memory rows are `.knowledge-item*`. |
-| `2026-06-18-memory-row-nested-interactions.md` | `MemoryPanel` owns the live `.knowledge-item*` row contract across settings and left activity panels. |
-| `2026-06-19-retire-detail-card-residue.md` | Keep live `.channel-doc-card`; retire selector families without component owners instead of preserving sibling-style residue. |
+| `2026-06-18-retire-settings-extension-memory-residue.md`     | Retired settings CSS selectors should be deleted once no production owner remains; live memory rows are `.knowledge-item*`.    |
+| `2026-06-18-memory-row-nested-interactions.md`               | `MemoryPanel` owns the live `.knowledge-item*` row contract across settings and left activity panels.                          |
+| `2026-06-19-retire-detail-card-residue.md`                   | Keep live `.channel-doc-card`; retire selector families without component owners instead of preserving sibling-style residue.  |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n "pref-item|pref-" packages/overlay/src packages/overlay/test specs/new-arch docs --glob "*.*"` | Production hits were CSS-only: `settings.css`, `field.css`, and `inspector.css`. Browser test `pref-*` hits are fixture ids, not classes. | Delete the CSS selector family and add production-source absence guards. |
-| `rg -n "pref-item|pref-" packages/overlay/src -g "*.tsx" -g "*.ts" -g "*.html" -g "*.json"` | No production TS/TSX/HTML/JSON owner exists. | Do not keep compatibility styling for an unowned DOM contract. |
-| `rg -n "knowledge-item|market-card|channel-doc-card|MemoryPanel|SkillMarketPanel|ChannelsPanel" packages/overlay/src packages/overlay/test specs/new-arch docs --glob "*.*"` | `.knowledge-item`, `.market-card`, and `.channel-doc-card` have live component owners. | Preserve those selectors and only remove `.pref-item*` entries from shared lists. |
+| Command                | Result                                                                              | Decision                                                                                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `rg -n "pref-item      | pref-" packages/overlay/src packages/overlay/test specs/new-arch docs --glob "_._"` | Production hits were CSS-only: `settings.css`, `field.css`, and `inspector.css`. Browser test `pref-*` hits are fixture ids, not classes. | Delete the CSS selector family and add production-source absence guards. |
+| `rg -n "pref-item      | pref-" packages/overlay/src -g "_.tsx" -g "_.ts" -g "_.html" -g "_.json"`           | No production TS/TSX/HTML/JSON owner exists.                                                                                              | Do not keep compatibility styling for an unowned DOM contract.           |
+| `rg -n "knowledge-item | market-card                                                                         | channel-doc-card                                                                                                                          | MemoryPanel                                                              | SkillMarketPanel | ChannelsPanel" packages/overlay/src packages/overlay/test specs/new-arch docs --glob "_._"` | `.knowledge-item`, `.market-card`, and `.channel-doc-card` have live component owners. | Preserve those selectors and only remove `.pref-item*` entries from shared lists. |
 
 ## Fix
 

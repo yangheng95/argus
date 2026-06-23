@@ -110,7 +110,8 @@ test(
       const url = new URL(req.url)
       const path = route(url)
       if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-      if (path === "/" || path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      if (path === "/" || path === "/ui" || path === "/ui/")
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "runtime-icon-visual-test" })
@@ -137,7 +138,14 @@ test(
         })
       }
       if (path === "/config/prompt" || path === "/config/prompt-profile") {
-        return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+        return send({
+          active: "general",
+          project_active: "general",
+          session_active: null,
+          default: "general",
+          targets: [],
+          profiles: [],
+        })
       }
       if (path === "/channel") return send([])
       if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
@@ -277,7 +285,10 @@ test(
         }),
       )
       assert.equal(aboutLinkStates.length, 2)
-      assert.equal(aboutLinkStates.every((link) => link.authorLinkCount === 0), true)
+      assert.equal(
+        aboutLinkStates.every((link) => link.authorLinkCount === 0),
+        true,
+      )
       assert.deepEqual(
         aboutLinkStates.map((link) => link.text),
         ["GitHub", "Issues"],
@@ -287,7 +298,10 @@ test(
         ["https://github.com/yangheng95", "https://github.com/yangheng95/opencorvus/issues"],
       )
       assert.notEqual(aboutLinkStates[0].href, aboutLinkStates[1].href)
-      assert.equal(aboutLinkStates.every((link) => link.color !== "rgba(0, 0, 0, 0)"), true)
+      assert.equal(
+        aboutLinkStates.every((link) => link.color !== "rgba(0, 0, 0, 0)"),
+        true,
+      )
       await saveElementScreenshot(taskPage, ".about-links", "runtime-icon-about-links.png")
       await taskPage.hover(".about-link")
       const hoveredAboutLinkState = await taskPage.$eval(".about-link", (node: HTMLAnchorElement) => {

@@ -7,14 +7,14 @@ Object Model.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | UI work must use mature primitives, avoid double sources, and include visual verification. |
+| Source                                              | Relevant constraint                                                                                                                                             |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                         | UI work must use mature primitives, avoid double sources, and include visual verification.                                                                      |
 | `2026-06-18-file-changes-filter-primitive-owner.md` | `FileChangesView` already moved clear-filter and status filter controls to `Button` and `SegmentedControl`; this fix must not revisit row/list/status behavior. |
-| `2026-06-19-memory-search-field-primitive.md` | Search rows should use `.search-field`, `.search-field-input`, `.search-field-icon`, and Button clear actions. |
-| `2026-06-19-retire-toolbar-search-residue.md` | `.search-field*` is the single search-input primitive surface. |
-| `2026-06-20-provider-search-field-single-source.md` | Provider search retired private search chrome and joined the shared `search-field` contract. |
-| `packages/overlay/src/styles/surfaces/field.css` | Shared search chrome, input reset, focus ring, icon tint, and clear affordance live in `.search-field*`. |
+| `2026-06-19-memory-search-field-primitive.md`       | Search rows should use `.search-field`, `.search-field-input`, `.search-field-icon`, and Button clear actions.                                                  |
+| `2026-06-19-retire-toolbar-search-residue.md`       | `.search-field*` is the single search-input primitive surface.                                                                                                  |
+| `2026-06-20-provider-search-field-single-source.md` | Provider search retired private search chrome and joined the shared `search-field` contract.                                                                    |
+| `packages/overlay/src/styles/surfaces/field.css`    | Shared search chrome, input reset, focus ring, icon tint, and clear affordance live in `.search-field*`.                                                        |
 
 ## Problem
 
@@ -35,13 +35,13 @@ the shared clear selector `.search-field .oc-button[data-ui$="-search-clear"]`.
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "changes-filter-field|changes-filter-input|file-changes-filter-clear|changes-toolbar" packages/overlay/src packages/overlay/test specs/new-arch -S` | Live hits are isolated to `FileChangesView.tsx`, `changes.css`, `agent-file-changes.test.ts`, and `toolbar-diff-navigation.test.ts`. | Migrate this one search surface and its tests. |
-| `2026-06-18-file-changes-filter-primitive-owner.md` review | The old fix scoped to clear Button and status `SegmentedControl`; it did not establish a private search shell as permanent. | Treat this as a later search-field unification follow-up. |
-| `search-field-unification.test.ts` review | Task, File Explorer, Memory, and Provider search are covered; File Changes search is missing. | Add File Changes to the shared contract test. |
-| `toolbar-diff-navigation.test.ts` review | Existing Node browser flow types in the filter, clicks clear, and screenshots the real File Changes panel. | Extend the same flow for focused/typed search-field evidence. |
-| Independent explorer audit | Confirmed high confidence and found no evidence requiring old selectors. | Proceed with a narrow search-field migration. |
+| Sweep                                                      | Result                                                                                                                      | Decision                                                      |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| `rg -n "changes-filter-field                               | changes-filter-input                                                                                                        | file-changes-filter-clear                                     | changes-toolbar" packages/overlay/src packages/overlay/test specs/new-arch -S` | Live hits are isolated to `FileChangesView.tsx`, `changes.css`, `agent-file-changes.test.ts`, and `toolbar-diff-navigation.test.ts`. | Migrate this one search surface and its tests. |
+| `2026-06-18-file-changes-filter-primitive-owner.md` review | The old fix scoped to clear Button and status `SegmentedControl`; it did not establish a private search shell as permanent. | Treat this as a later search-field unification follow-up.     |
+| `search-field-unification.test.ts` review                  | Task, File Explorer, Memory, and Provider search are covered; File Changes search is missing.                               | Add File Changes to the shared contract test.                 |
+| `toolbar-diff-navigation.test.ts` review                   | Existing Node browser flow types in the filter, clicks clear, and screenshots the real File Changes panel.                  | Extend the same flow for focused/typed search-field evidence. |
+| Independent explorer audit                                 | Confirmed high confidence and found no evidence requiring old selectors.                                                    | Proceed with a narrow search-field migration.                 |
 
 ## Fix Plan
 

@@ -50,8 +50,12 @@ describe("WorkspaceSplitLauncher primitive", () => {
       expect(body).toMatch(/background:\s*var\(--subtle-3\)/)
       expect(body).toMatch(/color:\s*var\(--text-strong\)/)
     }
-    const openButton = selectorRuleBody('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded]')
+    const openButton = selectorRuleBody(
+      '.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-expanded]',
+    )
     expect(openButton).toMatch(/--oc-button-bg:\s*var\(--oc-control-bg-hover\)/)
-    expect(CONVERSATION_CSS).not.toContain('.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"]')
+    expect(CONVERSATION_CSS).not.toContain(
+      '.workspace-command-dock .oc-button[data-chrome="workspace-split-menu"][data-open="true"]',
+    )
   })
 })

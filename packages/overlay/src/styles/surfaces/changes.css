@@ -117,7 +117,9 @@
 }
 
 .changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"][data-pressed] .changes-status-option-count,
-.changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"][data-highlighted] .changes-status-option-count,
+.changes-status-strip
+  .oc-tab[data-ui="file-changes-status-filter-option"][data-highlighted]
+  .changes-status-option-count,
 .changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"]:hover .changes-status-option-count,
 .changes-status-strip .oc-tab[data-ui="file-changes-status-filter-option"]:focus-visible .changes-status-option-count {
   color: var(--text-soft);

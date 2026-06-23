@@ -22,24 +22,24 @@ assets or rendering a broken titlebar brand logo.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate UI source, test every change, and do not hide generated-file tool failures. |
-| `2026-06-22-overlay-ui-serving-source.md` | Runtime source selection must remain one source: physical bundle first, embedded only when no physical bundle exists. |
-| `2026-06-22-screenshot-browser-defer-initial-measure.md` | Live 7878 was still serving old embedded assets while current `dist-vite` used newer filenames. |
-| `2026-06-21-dispatch-algorithm-agent-audit.md` HOUSEKEEPING-001 | `overlay-ui-embedded.generated.ts` must return to the empty source form after build tooling runs. |
-| `2026-06-18-titlebar-brand-guide-popover-primitive.md` | The brand logo must be resolved through the Vite asset graph and must not fall out of `dist-vite` at runtime. |
+| Source                                                          | Constraint carried forward                                                                                            |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                     | No fallback, no duplicate UI source, test every change, and do not hide generated-file tool failures.                 |
+| `2026-06-22-overlay-ui-serving-source.md`                       | Runtime source selection must remain one source: physical bundle first, embedded only when no physical bundle exists. |
+| `2026-06-22-screenshot-browser-defer-initial-measure.md`        | Live 7878 was still serving old embedded assets while current `dist-vite` used newer filenames.                       |
+| `2026-06-21-dispatch-algorithm-agent-audit.md` HOUSEKEEPING-001 | `overlay-ui-embedded.generated.ts` must return to the empty source form after build tooling runs.                     |
+| `2026-06-18-titlebar-brand-guide-popover-primitive.md`          | The brand logo must be resolved through the Vite asset graph and must not fall out of `dist-vite` at runtime.         |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Overlay Vite build | `packaged-overlay-server-health.test.ts` runs `bun run build:vite` before compiling the overlay-server artifact. | Treat that freshly built `dist-vite/index.html` as the expected packaged UI asset reference. |
-| Overlay-server compile | `packages/opencorvus/script/build.ts` temporarily writes `overlay-ui-embedded.generated.ts`, compiles, then resets it in `finally`. | Keep this single compile-time embedding path; do not add runtime workspace fallback. |
-| Packaged health test | Existing test only asserted that packaged `/ui/index.html` contained `./assets/`. | Parse current JS/CSS asset names and assert the compiled server serves those exact names. |
-| Asset fetches | A stale or missing asset can otherwise be masked by SPA fallback HTML. | Request each expected JS/CSS URL and assert MIME type is JS/CSS, not HTML. |
-| Vite base | `vite.config.ts` used Vite's default `/` base, so JS-imported SVG assets compiled to root `/assets/...`. | Set `base: "./"` so imported assets resolve relative to the `/ui/assets/` script URL. |
-| Titlebar brand logo | Visual QA of the compiled server showed a broken image icon at the titlebar brand position. | Assert the packaged JS does not contain the root absolute brand logo URL and that `/ui/assets/<logo>.svg` is served as SVG. |
+| Surface                | Evidence                                                                                                                            | Decision                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Overlay Vite build     | `packaged-overlay-server-health.test.ts` runs `bun run build:vite` before compiling the overlay-server artifact.                    | Treat that freshly built `dist-vite/index.html` as the expected packaged UI asset reference.                                |
+| Overlay-server compile | `packages/opencorvus/script/build.ts` temporarily writes `overlay-ui-embedded.generated.ts`, compiles, then resets it in `finally`. | Keep this single compile-time embedding path; do not add runtime workspace fallback.                                        |
+| Packaged health test   | Existing test only asserted that packaged `/ui/index.html` contained `./assets/`.                                                   | Parse current JS/CSS asset names and assert the compiled server serves those exact names.                                   |
+| Asset fetches          | A stale or missing asset can otherwise be masked by SPA fallback HTML.                                                              | Request each expected JS/CSS URL and assert MIME type is JS/CSS, not HTML.                                                  |
+| Vite base              | `vite.config.ts` used Vite's default `/` base, so JS-imported SVG assets compiled to root `/assets/...`.                            | Set `base: "./"` so imported assets resolve relative to the `/ui/assets/` script URL.                                       |
+| Titlebar brand logo    | Visual QA of the compiled server showed a broken image icon at the titlebar brand position.                                         | Assert the packaged JS does not contain the root absolute brand logo URL and that `/ui/assets/<logo>.svg` is served as SVG. |
 
 ## Root Cause
 

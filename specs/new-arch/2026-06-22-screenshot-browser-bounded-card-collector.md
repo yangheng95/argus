@@ -17,22 +17,22 @@ attachment rules.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no second screenshot source, test every change, and visually verify UI work. |
-| `2026-06-14-right-toolbar-screenshot-browser.md` | Screenshot history derives from task card/message data and only accepts stored `/attachment/<project>/<name>` URLs. |
-| `2026-06-22-screenshot-browser-open-jank.md` | The panel already virtualizes visible rows and lazy-loads thumbnails; the remaining hotspot is data derivation. |
-| `2026-06-18-right-activity-toolbar-responsive-rail.md` | Right toolbar remains the single `SideActivityToolbar` source. |
+| Source                                                 | Constraint carried forward                                                                                          |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                            | No fallback, no second screenshot source, test every change, and visually verify UI work.                           |
+| `2026-06-14-right-toolbar-screenshot-browser.md`       | Screenshot history derives from task card/message data and only accepts stored `/attachment/<project>/<name>` URLs. |
+| `2026-06-22-screenshot-browser-open-jank.md`           | The panel already virtualizes visible rows and lazy-loads thumbnails; the remaining hotspot is data derivation.     |
+| `2026-06-18-right-activity-toolbar-responsive-rail.md` | Right toolbar remains the single `SideActivityToolbar` source.                                                      |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Panel source | `ScreenshotBrowserPanel.tsx` calls `collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)` only while active. | Keep the panel call and active gate unchanged. |
-| Card tree collector | `collectScreenshotBrowserItemsFromCardTree()` builds a full `messages` array and then calls `collectScreenshotBrowserItems()`. | Replace full message materialization with direct bounded traversal. |
-| Message collector | `collectScreenshotBrowserItems()` pushes all items, then sorts and slices to `SCREENSHOT_BROWSER_ITEM_LIMIT`. | Replace with bounded newest-first insertion so retained data never exceeds the cap. |
-| Dedupe | `pushUnique()` deduplicates by role/source/message/part/source URL. | Keep the same key and seen-set semantics. |
-| Rendering | `ScreenshotBrowserPanel` already uses `virtua/solid`, `IntersectionObserver`, and `PreviewableImage`. | Leave rendering unchanged in this round. |
+| Surface             | Evidence                                                                                                                                    | Decision                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Panel source        | `ScreenshotBrowserPanel.tsx` calls `collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)` only while active. | Keep the panel call and active gate unchanged.                                      |
+| Card tree collector | `collectScreenshotBrowserItemsFromCardTree()` builds a full `messages` array and then calls `collectScreenshotBrowserItems()`.              | Replace full message materialization with direct bounded traversal.                 |
+| Message collector   | `collectScreenshotBrowserItems()` pushes all items, then sorts and slices to `SCREENSHOT_BROWSER_ITEM_LIMIT`.                               | Replace with bounded newest-first insertion so retained data never exceeds the cap. |
+| Dedupe              | `pushUnique()` deduplicates by role/source/message/part/source URL.                                                                         | Keep the same key and seen-set semantics.                                           |
+| Rendering           | `ScreenshotBrowserPanel` already uses `virtua/solid`, `IntersectionObserver`, and `PreviewableImage`.                                       | Leave rendering unchanged in this round.                                            |
 
 ## Root Cause
 

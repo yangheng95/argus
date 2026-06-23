@@ -139,9 +139,7 @@ function ToolDiffList(props: { items: ToolFileChange[] }) {
   return (
     <section class="msg-tool-diffs">
       <div class="msg-tool-diffs__summary">
-        <span class="msg-tool-diffs__count">
-          {tc("files.changed", props.items.length)}
-        </span>
+        <span class="msg-tool-diffs__count">{tc("files.changed", props.items.length)}</span>
         <span class="msg-tool-diffs__meta">
           <span class="diff-dialog-stat" data-tone="add">
             +{totals().additions}

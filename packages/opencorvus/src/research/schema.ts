@@ -287,17 +287,53 @@ export function validateResearchBriefSemantics(brief: ResearchBrief): string | u
   const factIDs = new Set(brief.facts.map((item) => item.id))
   const errors: string[] = []
 
-  collectUniqueError(errors, brief.evidence_index.map((item) => item.id), "evidence")
-  collectUniqueError(errors, brief.facts.map((item) => item.id), "fact")
-  collectUniqueError(errors, brief.inferences.map((item) => item.id), "inference")
-  collectUniqueError(errors, brief.problem_statements.map((item) => item.id), "problem_statement")
-  collectUniqueError(errors, brief.user_needs.map((item) => item.id), "user_need")
-  collectUniqueError(errors, brief.constraints.map((item) => item.id), "constraint")
-  collectUniqueError(errors, brief.document_outline.map((item) => item.id), "document_outline")
+  collectUniqueError(
+    errors,
+    brief.evidence_index.map((item) => item.id),
+    "evidence",
+  )
+  collectUniqueError(
+    errors,
+    brief.facts.map((item) => item.id),
+    "fact",
+  )
+  collectUniqueError(
+    errors,
+    brief.inferences.map((item) => item.id),
+    "inference",
+  )
+  collectUniqueError(
+    errors,
+    brief.problem_statements.map((item) => item.id),
+    "problem_statement",
+  )
+  collectUniqueError(
+    errors,
+    brief.user_needs.map((item) => item.id),
+    "user_need",
+  )
+  collectUniqueError(
+    errors,
+    brief.constraints.map((item) => item.id),
+    "constraint",
+  )
+  collectUniqueError(
+    errors,
+    brief.document_outline.map((item) => item.id),
+    "document_outline",
+  )
   const webpageUniqueError = ensureWebpageContractUniqueIDs(brief.webpage_contract)
   if (webpageUniqueError) errors.push(webpageUniqueError)
-  collectUniqueError(errors, brief.subpage_research_tasks.map((item) => item.id), "subpage_research_task")
-  collectUniqueError(errors, brief.open_questions.map((item) => item.id), "open_question")
+  collectUniqueError(
+    errors,
+    brief.subpage_research_tasks.map((item) => item.id),
+    "subpage_research_task",
+  )
+  collectUniqueError(
+    errors,
+    brief.open_questions.map((item) => item.id),
+    "open_question",
+  )
 
   for (const fact of brief.facts) {
     collectRefError(errors, fact.evidence_ids, evidenceIDs, `fact ${fact.id}.evidence_ids`)
@@ -386,10 +422,20 @@ function ensureWebpageContractRefs(
     collectRefError(errors, item.evidence_ids, evidenceIDs, `webpage_contract.visual_layout ${item.id}.evidence_ids`)
   }
   for (const item of contract.style_requirements) {
-    collectRefError(errors, item.evidence_ids, evidenceIDs, `webpage_contract.style_requirement ${item.id}.evidence_ids`)
+    collectRefError(
+      errors,
+      item.evidence_ids,
+      evidenceIDs,
+      `webpage_contract.style_requirement ${item.id}.evidence_ids`,
+    )
   }
   for (const item of contract.interaction_states) {
-    collectRefError(errors, item.evidence_ids, evidenceIDs, `webpage_contract.interaction_state ${item.id}.evidence_ids`)
+    collectRefError(
+      errors,
+      item.evidence_ids,
+      evidenceIDs,
+      `webpage_contract.interaction_state ${item.id}.evidence_ids`,
+    )
   }
   for (const item of contract.data_content_inventory) {
     collectRefError(

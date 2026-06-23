@@ -23,22 +23,22 @@ land in only one shell.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `12-overlay-card-system.md` | `CardHeader.tsx` is the default structured card header source; new card shells must not define a second title bar. |
-| `2026-06-17-card-header-action-rhythm.md` | Metadata and icon controls are separate groups: `.card__meta-actions` and `.card__control-actions`. |
-| `2026-06-18-card-trace-action-button-owner.md` | Card operation controls route through `Button` plus stable `data-ui` selectors. |
-| `card-duration-single-source.test.ts` | Duration rendering uses shared `formatDuration` and `useNowTick`, not private timers. |
-| `rewind-visual-stress.test.ts` | Browser evidence already checks card and chat-bubble action rails for overlap and button semantics. |
+| Source                                         | Relevant constraint                                                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `12-overlay-card-system.md`                    | `CardHeader.tsx` is the default structured card header source; new card shells must not define a second title bar. |
+| `2026-06-17-card-header-action-rhythm.md`      | Metadata and icon controls are separate groups: `.card__meta-actions` and `.card__control-actions`.                |
+| `2026-06-18-card-trace-action-button-owner.md` | Card operation controls route through `Button` plus stable `data-ui` selectors.                                    |
+| `card-duration-single-source.test.ts`          | Duration rendering uses shared `formatDuration` and `useNowTick`, not private timers.                              |
+| `rewind-visual-stress.test.ts`                 | Browser evidence already checks card and chat-bubble action rails for overlap and button semantics.                |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "useCardHeadActions|formatCostUSD|formatTokenCount|useNowTick|card__meta-actions|card__control-actions|card-error-reason|card-agent-cancel|card-rewind|card-trace" packages/overlay/src packages/overlay/test specs/new-arch` | Live duplicated TSX owners are `CardHeader.tsx` and `ChatBubble.tsx`; shared CSS and tests reference the resulting classes. | Move chrome logic to one component module and leave CSS selectors unchanged. |
-| `rg -n "CardHeader\\.tsx|新增卡片不得再定义第二套标题栏|card__meta-actions|card__control-actions" specs/new-arch/12-overlay-card-system.md specs/new-arch packages/overlay/src packages/overlay/test` | History explicitly warns against a second title bar while later specs split metadata/control rails in both shells. | Keep `CardHeader` as the structured-card layout, but extract cross-shell chrome into `CardHeaderChrome`. |
-| `rg -n "Session model settings|card-open-session-agent-models|agent_models" packages/overlay/src packages/overlay/test` | The per-session model settings button currently exists only in `CardHeader`; no i18n key exists for that exact label. | Preserve the existing label while moving ownership; do not edit dirty locale files in this round. |
-| `packages/overlay/test/browser/rewind-visual-stress.test.ts` | Browser fixture queries both `.card__actions` and `.chat-bubble__actions`. | Reuse this as visual and DOM evidence after migration. |
+| Sweep                                                        | Result                                                                     | Decision                                                  |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ----------------- | ----------------- | ----------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `rg -n "useCardHeadActions                                   | formatCostUSD                                                              | formatTokenCount                                          | useNowTick                                                                                                                   | card\_\_meta-actions                                                                                               | card\_\_control-actions                                                                                  | card-error-reason | card-agent-cancel | card-rewind | card-trace" packages/overlay/src packages/overlay/test specs/new-arch` | Live duplicated TSX owners are `CardHeader.tsx` and `ChatBubble.tsx`; shared CSS and tests reference the resulting classes. | Move chrome logic to one component module and leave CSS selectors unchanged. |
+| `rg -n "CardHeader\\.tsx                                     | 新增卡片不得再定义第二套标题栏                                             | card\_\_meta-actions                                      | card\_\_control-actions" specs/new-arch/12-overlay-card-system.md specs/new-arch packages/overlay/src packages/overlay/test` | History explicitly warns against a second title bar while later specs split metadata/control rails in both shells. | Keep `CardHeader` as the structured-card layout, but extract cross-shell chrome into `CardHeaderChrome`. |
+| `rg -n "Session model settings                               | card-open-session-agent-models                                             | agent_models" packages/overlay/src packages/overlay/test` | The per-session model settings button currently exists only in `CardHeader`; no i18n key exists for that exact label.        | Preserve the existing label while moving ownership; do not edit dirty locale files in this round.                  |
+| `packages/overlay/test/browser/rewind-visual-stress.test.ts` | Browser fixture queries both `.card__actions` and `.chat-bubble__actions`. | Reuse this as visual and DOM evidence after migration.    |
 
 ## Fix Plan
 

@@ -131,7 +131,6 @@ describe("web-clone source skeleton", () => {
     expect(readme).not.toContain("bun run dev")
 
     await Bun.write(path.join(sourcePackageDir, "reference.png"), minimalPngBytes())
-    await Bun.write(path.join(sourcePackageDir, "reference-mobile.png"), minimalPngBytes())
     await writeMinimalSourceManifest(sourcePackageDir)
     const evidence = await inspectWebCloneSourceSkeletonEvidence({
       projectDir: tmp.path,
@@ -469,7 +468,6 @@ function fakePngWithoutIhdr(): Uint8Array {
 
 async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<void> {
   const referenceSha256 = createHash("sha256").update(Buffer.from(minimalPngBytes())).digest("hex")
-  const mobileReferenceSha256 = createHash("sha256").update(Buffer.from(minimalPngBytes())).digest("hex")
   await Bun.write(
     path.join(sourcePackageDir, "web-clone-source-manifest.json"),
     JSON.stringify(
@@ -486,14 +484,6 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             height: 1,
             bytes: minimalPngBytes().length,
           },
-          mobileReference: {
-            path: "reference-mobile.png",
-            sha256: mobileReferenceSha256,
-            width: 1,
-            height: 1,
-            bytes: minimalPngBytes().length,
-            viewport: { width: 390, height: 844 },
-          },
         },
         files: [
           {
@@ -501,12 +491,6 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             sha256: referenceSha256,
             bytes: minimalPngBytes().length,
             source: "webpage-evidence/reference.png",
-          },
-          {
-            path: "reference-mobile.png",
-            sha256: mobileReferenceSha256,
-            bytes: minimalPngBytes().length,
-            source: "webpage-evidence/reference-mobile.png",
           },
         ],
       },

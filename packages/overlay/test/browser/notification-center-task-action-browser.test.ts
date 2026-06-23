@@ -394,10 +394,7 @@ test("notification task action is an explicit button on toast and panel surfaces
       true,
     )
     await page.keyboard.press("Tab")
-    assert.equal(
-      await page.evaluate(() => document.activeElement?.matches('[data-ui="app-notification-close"]')),
-      true,
-    )
+    assert.equal(await page.evaluate(() => document.activeElement?.matches('[data-ui="app-notification-close"]')), true)
 
     await page.focus(`${toastRoot} [data-ui="app-notification-details-toggle"]`)
     await page.keyboard.press("Enter")
@@ -415,7 +412,9 @@ test("notification task action is an explicit button on toast and panel surfaces
 
     await page.focus(`${toastRoot} [data-ui="app-notification-close"]`)
     await page.keyboard.press("Enter")
-    await page.waitForFunction(() => !document.querySelector('.app-notifications[data-surface="toast"] .app-notification'))
+    await page.waitForFunction(
+      () => !document.querySelector('.app-notifications[data-surface="toast"] .app-notification'),
+    )
     assert.equal(await selectedTaskID(page), "")
 
     await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')

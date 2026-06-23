@@ -107,16 +107,19 @@ test("loaded messages with explicit ids do not compute content signatures", () =
     },
   })
 
-  const messages = mergeLoadedConversationMessages([], [
-    {
-      info: {
-        id: "msg-explicit",
-        sessionID: "session-explicit",
-        role: "assistant",
+  const messages = mergeLoadedConversationMessages(
+    [],
+    [
+      {
+        info: {
+          id: "msg-explicit",
+          sessionID: "session-explicit",
+          role: "assistant",
+        },
+        parts: [part],
       },
-      parts: [part],
-    },
-  ])
+    ],
+  )
 
   expect(messages).toHaveLength(1)
   expect(messages[0].info.id).toBe("msg-explicit")

@@ -21,9 +21,7 @@ test("orchestrator core prompt leaves frontend evidence tool selection to orches
   expect(prompt).toContain(
     "Same source URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
   )
-  expect(prompt).toContain(
-    "Different focus text for the same URL does not create a new page scope",
-  )
+  expect(prompt).toContain("Different focus text for the same URL does not create a new page scope")
   expect(prompt).toContain("not a hard-coded pair")
   expect(prompt).toContain("not fixed lifecycle gates")
   expect(prompt).toContain("Do not apply the UI-replication rule to document/research requests")

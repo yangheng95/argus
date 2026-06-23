@@ -7,11 +7,11 @@ Document Object Model. ARIA means Accessible Rich Internet Applications.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | UI work must avoid double sources and include visual/browser evidence. |
-| `2026-06-18-titlebar-brand-guide-popover-primitive.md` | Brand Guide is a Kobalte Popover, not a CSS-only hover card. |
-| `2026-06-18-popup-contrast-light-palette.md` | Non-Select popup readability belongs in `popup-contrast-matrix`. |
+| Source                                                   | Relevant constraint                                                                                           |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | UI work must avoid double sources and include visual/browser evidence.                                        |
+| `2026-06-18-titlebar-brand-guide-popover-primitive.md`   | Brand Guide is a Kobalte Popover, not a CSS-only hover card.                                                  |
+| `2026-06-18-popup-contrast-light-palette.md`             | Non-Select popup readability belongs in `popup-contrast-matrix`.                                              |
 | `2026-06-20-kobalte-trigger-open-state-single-source.md` | Kobalte triggers must use emitted `[data-expanded]` for open-state chrome while keeping ARIA semantic checks. |
 
 ## Problem
@@ -36,12 +36,12 @@ guard.
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -e 'brand-guide' -e '\[aria-expanded="true"\]' -e 'data-expanded' packages/overlay/src packages/overlay/test specs/new-arch -S` | The remaining Brand Guide open selector is isolated to `titlebar.css` and tests. Other Kobalte triggers already use `[data-expanded]`. | Migrate only Brand Guide open chrome. |
-| `TitlebarBrandGuide.tsx` review | Popover Trigger is a Kobalte trigger and already receives Kobalte runtime attributes. | Do not add local `data-open` or `data-active`; rely on `[data-expanded]`. |
-| `popup-contrast-matrix.test.ts` review | Existing matrix samples executor, worktree, recent directory, workspace launcher, titlebar menu, and command palette. | Add a Brand Guide card sample. |
-| Independent explorer audit | Confirmed the 6/20 open-state sweep missed Brand Guide. | Proceed with targeted CSS/test coverage. |
+| Sweep                                                                                                                                  | Result                                                                                                                                 | Decision                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `rg -n -e 'brand-guide' -e '\[aria-expanded="true"\]' -e 'data-expanded' packages/overlay/src packages/overlay/test specs/new-arch -S` | The remaining Brand Guide open selector is isolated to `titlebar.css` and tests. Other Kobalte triggers already use `[data-expanded]`. | Migrate only Brand Guide open chrome.                                     |
+| `TitlebarBrandGuide.tsx` review                                                                                                        | Popover Trigger is a Kobalte trigger and already receives Kobalte runtime attributes.                                                  | Do not add local `data-open` or `data-active`; rely on `[data-expanded]`. |
+| `popup-contrast-matrix.test.ts` review                                                                                                 | Existing matrix samples executor, worktree, recent directory, workspace launcher, titlebar menu, and command palette.                  | Add a Brand Guide card sample.                                            |
+| Independent explorer audit                                                                                                             | Confirmed the 6/20 open-state sweep missed Brand Guide.                                                                                | Proceed with targeted CSS/test coverage.                                  |
 
 ## Fix Plan
 

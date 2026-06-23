@@ -25,21 +25,21 @@ cards.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-05-16-overlay-message-turn-agent-cards.md` §13 | Correct display target is one card for a contiguous visible run, not one card per whole session/stage. |
-| `2026-06-15-orchestrator-workflow-alignment.md` | Root/orchestrator turns remain one complete session card across child/phase interruptions, and `session.status` terminal updates that complete card. |
-| `2026-06-05-mission-card-explore-agent.md` | Shared standalone sessions must split semantic speakers, but this does not permit merging non-contiguous turns. |
-| `2026-06-02-overlay-card-projection-fragility-audit.md` | Tree writer projection must preserve durable message identity and stay loud on malformed inputs. |
+| Source                                                  | Relevant constraint                                                                                                                                  |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-05-16-overlay-message-turn-agent-cards.md` §13    | Correct display target is one card for a contiguous visible run, not one card per whole session/stage.                                               |
+| `2026-06-15-orchestrator-workflow-alignment.md`         | Root/orchestrator turns remain one complete session card across child/phase interruptions, and `session.status` terminal updates that complete card. |
+| `2026-06-05-mission-card-explore-agent.md`              | Shared standalone sessions must split semantic speakers, but this does not permit merging non-contiguous turns.                                      |
+| `2026-06-02-overlay-card-projection-fragility-audit.md` | Tree writer projection must preserve durable message identity and stay loud on malformed inputs.                                                     |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "regroupTimelineSegments|hydrateConversationView|message.updated|cardTreeStore.order" packages/overlay/src packages/overlay/test specs/new-arch` | `regroupTimelineSegments` is the shared live/hydrate regroup owner. `hydrateConversationView` calls it after replay. | Fix the owner once; do not add a hydrate-only path. |
-| `packages/overlay/test/tree-writer-message-tokens.test.ts` | Existing live and hydrate tests already assert alternating user/assistant turns stay on the real timeline. | Keep those tests and add a narrower contiguous-run regression. |
-| `2026-06-05-mission-card-explore-agent.md` | Mission needed split by semantic speaker in a shared session. | Preserve split by stage inside that runtime session. |
-| `2026-06-15-orchestrator-workflow-alignment.md` | Child agents are separate runtime sessions and must not split the parent/root card. | Track the current segment per `sessionID`, not as one process-global adjacent segment. |
+| Sweep                                                      | Result                                                                                                     | Decision                                                                               |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `rg -n "regroupTimelineSegments                            | hydrateConversationView                                                                                    | message.updated                                                                        | cardTreeStore.order" packages/overlay/src packages/overlay/test specs/new-arch` | `regroupTimelineSegments` is the shared live/hydrate regroup owner. `hydrateConversationView` calls it after replay. | Fix the owner once; do not add a hydrate-only path. |
+| `packages/overlay/test/tree-writer-message-tokens.test.ts` | Existing live and hydrate tests already assert alternating user/assistant turns stay on the real timeline. | Keep those tests and add a narrower contiguous-run regression.                         |
+| `2026-06-05-mission-card-explore-agent.md`                 | Mission needed split by semantic speaker in a shared session.                                              | Preserve split by stage inside that runtime session.                                   |
+| `2026-06-15-orchestrator-workflow-alignment.md`            | Child agents are separate runtime sessions and must not split the parent/root card.                        | Track the current segment per `sessionID`, not as one process-global adjacent segment. |
 
 ## Fix Plan
 

@@ -1,4 +1,15 @@
-import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch, untrack } from "solid-js"
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+  untrack,
+} from "solid-js"
 import type { JSX } from "solid-js"
 import { ApiError } from "../services/api"
 import {
@@ -111,8 +122,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (loadError?.taskID === taskID) return loadError.message
     return targetSelectionError() || target.error
   })
-  const targetTransitionPending = createMemo(
-    () => Boolean(pendingSelectedTargetID() && !currentTarget() && !currentTargetError()),
+  const targetTransitionPending = createMemo(() =>
+    Boolean(pendingSelectedTargetID() && !currentTarget() && !currentTargetError()),
   )
   const latestEvidenceScope = createMemo(() => {
     const taskID = props.taskID()
@@ -149,7 +160,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const directory = props.directory()
     const resolved = currentTarget()
     if (!request || !taskID || !directory || resolved?.status !== "ready" || !resolved.id) return undefined
-    if (request.taskID !== taskID || request.directory !== directory || request.targetID !== resolved.id) return undefined
+    if (request.taskID !== taskID || request.directory !== directory || request.targetID !== resolved.id)
+      return undefined
     return request
   })
   const currentVerification = createMemo(() => (currentVerificationRequest() ? verification() : undefined))
@@ -437,7 +449,10 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     return key
   })
 
-  const loadLiveFrame = async (scope: NonNullable<ReturnType<typeof liveScope>>, inputs?: BrowserPreviewLiveInput[]) => {
+  const loadLiveFrame = async (
+    scope: NonNullable<ReturnType<typeof liveScope>>,
+    inputs?: BrowserPreviewLiveInput[],
+  ) => {
     const sequence = ++liveFrameRequestSequence
     setLiveLoading(true)
     setLiveError("")
@@ -618,18 +633,18 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         />
 
         <div class="browser-preview-controls">
-            <div
-              class="browser-preview-status"
-              data-status={
-                targetSelectionError() || currentTargetError()
-                  ? "failed"
-                  : targetTransitionPending()
-                    ? "loading"
-                    : (currentTarget()?.status ?? "loading")
-              }
-              role={target.loading || targetTransitionPending() ? "status" : undefined}
-              aria-live={target.loading || targetTransitionPending() ? "polite" : undefined}
-            >
+          <div
+            class="browser-preview-status"
+            data-status={
+              targetSelectionError() || currentTargetError()
+                ? "failed"
+                : targetTransitionPending()
+                  ? "loading"
+                  : (currentTarget()?.status ?? "loading")
+            }
+            role={target.loading || targetTransitionPending() ? "status" : undefined}
+            aria-live={target.loading || targetTransitionPending() ? "polite" : undefined}
+          >
             <Switch
               fallback={
                 <>
@@ -700,7 +715,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
           </Show>
 
           <Show when={readyTarget() && viewports().length > 0}>
-            <div class="browser-preview-viewport-controls" data-ui="browser-preview-viewports" data-orientation="horizontal">
+            <div
+              class="browser-preview-viewport-controls"
+              data-ui="browser-preview-viewports"
+              data-orientation="horizontal"
+            >
               <SegmentedControl<BrowserPreviewViewportID>
                 options={viewportOptions()}
                 value={viewportID()}
@@ -731,7 +750,11 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             <span>{t("browser_preview.capture")}</span>
           </Button>
 
-          <Show when={currentVerificationError() || currentVerificationLoading() || currentVerification() || renderedEvidence()}>
+          <Show
+            when={
+              currentVerificationError() || currentVerificationLoading() || currentVerification() || renderedEvidence()
+            }
+          >
             <div
               class="browser-preview-evidence-status"
               data-status={

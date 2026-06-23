@@ -781,15 +781,15 @@ function boardOverview(input: {
         ? "Accepted acceptance is ready"
         : terminalReason === "interrupted"
           ? "Task was interrupted"
-        : derivedStatus === "failed"
-          ? "Current attempt failed acceptance"
-          : derivedStatus === "cancelled"
-            ? "Task was cancelled"
-            : derivedStatus === "active"
-              ? input.run?.blocking_reason
-                ? "Task is blocked"
-                : "Task is actively progressing"
-              : "Task is queued"
+          : derivedStatus === "failed"
+            ? "Current attempt failed acceptance"
+            : derivedStatus === "cancelled"
+              ? "Task was cancelled"
+              : derivedStatus === "active"
+                ? input.run?.blocking_reason
+                  ? "Task is blocked"
+                  : "Task is actively progressing"
+                : "Task is queued"
   const summary =
     input.pendingInteractions.length > 0
       ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`

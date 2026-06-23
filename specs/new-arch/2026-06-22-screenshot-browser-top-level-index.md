@@ -16,23 +16,23 @@ Remove the remaining screenshot toolbar open cost that scales with
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, test every change, visually verify UI changes, and commit/push each round. |
-| `2026-06-22-screenshot-browser-open-jank.md` | Rendering is already virtualized and thumbnails lazy-load through `PreviewableImage`; do not change attachment ownership. |
-| `2026-06-22-screenshot-browser-bounded-card-collector.md` | Screenshot data remains capped at 120 newest items. |
-| `2026-06-22-screenshot-browser-card-tree-cache.md` | Per-card `subtreeScreenshotItems` is writer-maintained by `card-tree-stats.ts`; keep it as the single subtree source. |
-| Faraday GUI audit | The current collector still loops every top-level id from `cardTreeStore.order` on toolbar activation. |
+| Source                                                    | Constraint carried forward                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                               | No fallback, no duplicate source, test every change, visually verify UI changes, and commit/push each round.              |
+| `2026-06-22-screenshot-browser-open-jank.md`              | Rendering is already virtualized and thumbnails lazy-load through `PreviewableImage`; do not change attachment ownership. |
+| `2026-06-22-screenshot-browser-bounded-card-collector.md` | Screenshot data remains capped at 120 newest items.                                                                       |
+| `2026-06-22-screenshot-browser-card-tree-cache.md`        | Per-card `subtreeScreenshotItems` is writer-maintained by `card-tree-stats.ts`; keep it as the single subtree source.     |
+| Faraday GUI audit                                         | The current collector still loops every top-level id from `cardTreeStore.order` on toolbar activation.                    |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Panel read | `ScreenshotBrowserPanel.tsx` calls `collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)` when active. | Replace with a store-level stats cache read. |
-| Card tree order writes | `resetWriter`, `removeCardReferences`, `rebuildTopLevelOrder`, and `pruneCardsAfterCursor` rewrite `cardTreeStore.order`. | Route these writes through one order helper so the stats kernel can reconcile top-level roots. |
-| Per-card cache writes | `card-tree-stats.ts` recomputes `subtreeScreenshotItems` inside `flushCardStats()`. | When a top-level card cache changes, sync that root into the top-level screenshot index in the same kernel. |
-| Current collector | `collectScreenshotBrowserItemsFromCardTree()` merges every top-level cached subtree on demand. | Replace production usage with `cardTreeStore.screenshotItems`; keep utility behavior only for explicit cache construction tests if needed. |
-| Tests | `screenshot-browser-panel.test.ts`, `tree-writer-stats-cache.test.ts`, and `store-card-tree-prune.test.ts` pin screenshot cache behavior. | Add regression coverage proving panel open does not read `order`/`cards`, and store cache updates across append, removal, reset, and prune. |
+| Surface                | Evidence                                                                                                                                  | Decision                                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel read             | `ScreenshotBrowserPanel.tsx` calls `collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)` when active.     | Replace with a store-level stats cache read.                                                                                                |
+| Card tree order writes | `resetWriter`, `removeCardReferences`, `rebuildTopLevelOrder`, and `pruneCardsAfterCursor` rewrite `cardTreeStore.order`.                 | Route these writes through one order helper so the stats kernel can reconcile top-level roots.                                              |
+| Per-card cache writes  | `card-tree-stats.ts` recomputes `subtreeScreenshotItems` inside `flushCardStats()`.                                                       | When a top-level card cache changes, sync that root into the top-level screenshot index in the same kernel.                                 |
+| Current collector      | `collectScreenshotBrowserItemsFromCardTree()` merges every top-level cached subtree on demand.                                            | Replace production usage with `cardTreeStore.screenshotItems`; keep utility behavior only for explicit cache construction tests if needed.  |
+| Tests                  | `screenshot-browser-panel.test.ts`, `tree-writer-stats-cache.test.ts`, and `store-card-tree-prune.test.ts` pin screenshot cache behavior. | Add regression coverage proving panel open does not read `order`/`cards`, and store cache updates across append, removal, reset, and prune. |
 
 ## Root Cause
 

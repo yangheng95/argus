@@ -136,7 +136,7 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain('imageDataUI="browser-preview-screenshot"')
   expect(component).toContain('"data-evidence-id": image().evidenceID')
   expect(component).not.toContain('<figure class="browser-preview-evidence-shot">')
-  expect(component).not.toContain('<img\n                        src={image().url}')
+  expect(component).not.toContain("<img\n                        src={image().url}")
   expect(component).toContain("verificationRequest()")
   expect(component).toContain("latestEvidenceIDs")
   expect(component).toContain("latestEvidenceIDs?.[viewportID()]")
@@ -222,7 +222,10 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(clearLiveImageUrlSource).toContain("untrack(liveImage)")
   expect(clearLiveImageUrlSource).not.toContain("liveImage()")
   const targetStatusSourceStart = component.indexOf('class="browser-preview-status"')
-  const targetStatusSource = component.slice(targetStatusSourceStart, component.indexOf("<Switch", targetStatusSourceStart))
+  const targetStatusSource = component.slice(
+    targetStatusSourceStart,
+    component.indexOf("<Switch", targetStatusSourceStart),
+  )
   expect(targetStatusSource).toContain('role={target.loading || targetTransitionPending() ? "status" : undefined}')
   expect(targetStatusSource).toContain('aria-live={target.loading || targetTransitionPending() ? "polite" : undefined}')
   const evidenceStatusSourceStart = component.indexOf('class="browser-preview-evidence-status"')
@@ -232,7 +235,9 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   )
   expect(evidenceStatusSource).toContain('role={currentVerificationLoading() ? "status" : undefined}')
   expect(evidenceStatusSource).toContain('aria-live={currentVerificationLoading() ? "polite" : undefined}')
-  expect(component).toContain('<div class="browser-preview-empty" data-status="loading" role="status" aria-live="polite">')
+  expect(component).toContain(
+    '<div class="browser-preview-empty" data-status="loading" role="status" aria-live="polite">',
+  )
   const liveLoadingSourceStart = component.indexOf('data-ui="browser-preview-live-loading"')
   const liveLoadingSource = component.slice(liveLoadingSourceStart, component.indexOf("<span", liveLoadingSourceStart))
   expect(liveLoadingSource).toContain('role="status"')

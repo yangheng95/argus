@@ -9,9 +9,7 @@ function source(path: string): string {
 }
 
 function expectStatusContract(tsx: string, className: string): void {
-  const pattern = new RegExp(
-    `<div class="${className}"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-busy="true"`,
-  )
+  const pattern = new RegExp(`<div class="${className}"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-busy="true"`)
   expect(tsx).toMatch(pattern)
 }
 

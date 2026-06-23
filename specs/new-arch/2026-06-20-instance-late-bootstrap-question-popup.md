@@ -22,16 +22,16 @@ rg -n "Instance\.provide\(\{[^\n]*init|init:\s*InstanceBootstrap|init:\s*\(\)|pr
 
 Relevant call points:
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/server/server.ts` | Server project routes pass the canonical `InstanceBootstrap`. This must work even when the instance cache already exists. |
-| `packages/opencorvus/src/cli/bootstrap.ts` | Command-line bootstrap uses the same `InstanceBootstrap`; keep the same semantics. |
-| `packages/opencorvus/src/channel/slack.ts` | Slack project execution also uses `InstanceBootstrap`; late init must not double-register services. |
-| `packages/opencorvus/src/server/routes/pty.ts` | Bare project provide can still create a cached context without service bootstrap. This is valid, but must not permanently prevent later bootstrap. |
-| `packages/opencorvus/src/engine/runtime.ts` | Existing BH-028 acceptance says pending interactions block active runs and resolved interaction rows clear their own blocker. Keep this central runtime projection working while verifying the question bridge. |
-| `packages/opencorvus/test/project/instance-cache.test.ts` | Existing cached instance refresh tests are adjacent and must remain valid. |
-| `packages/opencorvus/test/server/orchestrator-bridge-init.test.ts` | Add the regression for late bootstrap installing the question interaction bridge. |
-| `packages/opencorvus/test/engine/interaction-permission.test.ts` | Existing interaction regression must keep passing; failure here indicates the central runtime projection drifted. |
+| Surface                                                            | Decision                                                                                                                                                                                                        |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/server/server.ts`                         | Server project routes pass the canonical `InstanceBootstrap`. This must work even when the instance cache already exists.                                                                                       |
+| `packages/opencorvus/src/cli/bootstrap.ts`                         | Command-line bootstrap uses the same `InstanceBootstrap`; keep the same semantics.                                                                                                                              |
+| `packages/opencorvus/src/channel/slack.ts`                         | Slack project execution also uses `InstanceBootstrap`; late init must not double-register services.                                                                                                             |
+| `packages/opencorvus/src/server/routes/pty.ts`                     | Bare project provide can still create a cached context without service bootstrap. This is valid, but must not permanently prevent later bootstrap.                                                              |
+| `packages/opencorvus/src/engine/runtime.ts`                        | Existing BH-028 acceptance says pending interactions block active runs and resolved interaction rows clear their own blocker. Keep this central runtime projection working while verifying the question bridge. |
+| `packages/opencorvus/test/project/instance-cache.test.ts`          | Existing cached instance refresh tests are adjacent and must remain valid.                                                                                                                                      |
+| `packages/opencorvus/test/server/orchestrator-bridge-init.test.ts` | Add the regression for late bootstrap installing the question interaction bridge.                                                                                                                               |
+| `packages/opencorvus/test/engine/interaction-permission.test.ts`   | Existing interaction regression must keep passing; failure here indicates the central runtime projection drifted.                                                                                               |
 
 ## Design
 

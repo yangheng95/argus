@@ -175,7 +175,6 @@ async function writePassingProject(projectDir: string): Promise<void> {
 async function writeFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "web-clone-source")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "reference-mobile.png"), minimalPngBytes())
   await Bun.write(
     path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
     `
@@ -251,14 +250,6 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             height: 1,
             bytes: minimalPngBytes().length,
           },
-          mobileReference: {
-            path: "reference-mobile.png",
-            sha256: referenceSha256,
-            width: 1,
-            height: 1,
-            bytes: minimalPngBytes().length,
-            viewport: { width: 390, height: 844 },
-          },
         },
         files: [
           {
@@ -266,12 +257,6 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             sha256: referenceSha256,
             bytes: minimalPngBytes().length,
             source: "webpage-evidence/reference.png",
-          },
-          {
-            path: "reference-mobile.png",
-            sha256: referenceSha256,
-            bytes: minimalPngBytes().length,
-            source: "webpage-evidence/reference-mobile.png",
           },
         ],
       },

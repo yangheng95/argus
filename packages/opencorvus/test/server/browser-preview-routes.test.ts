@@ -19,6 +19,7 @@ import { Log } from "../../src/util/log"
 import { persistTestBrowserPreviewTarget as persistBrowserPreviewTarget } from "../fixture/browser-preview"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 Log.init({ print: false })
 
@@ -114,8 +115,8 @@ describe("browser preview routes", () => {
         const app = Server.App()
         const liveUrl = "https://preview.example/task"
 
-        await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead" })
-        await persistBrowserPreviewTarget({ taskID, url: liveUrl })
+        await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead" })
+        await persistTestBrowserPreviewTarget({ taskID, url: liveUrl })
 
         const response = await app.request(`/task/${taskID}/browser-preview`, {
           headers: {
@@ -163,7 +164,7 @@ describe("browser preview routes", () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
       const app = Server.App()
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead" })
 
       const response = await app.request(`/task/${taskID}/browser-preview`, {
         headers: {
@@ -200,8 +201,8 @@ describe("browser preview routes", () => {
       const taskID = await seedTask(tmp.path)
       const app = Server.App()
       try {
-        const reachable = await persistBrowserPreviewTarget({ taskID, url: preview.url.href, now: 100 })
-        const unreachable = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead", now: 200 })
+        const reachable = await persistTestBrowserPreviewTarget({ taskID, url: preview.url.href, now: 100 })
+        const unreachable = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/dead", now: 200 })
 
         const response = await app.request(`/task/${taskID}/browser-preview`, {
           headers: {
@@ -274,7 +275,7 @@ describe("browser preview routes", () => {
       const preview = servePreview()
       const taskID = await seedTask(tmp.path)
       try {
-        const target = await persistBrowserPreviewTarget({ taskID, url: preview.url.href })
+        const target = await persistTestBrowserPreviewTarget({ taskID, url: preview.url.href })
         const desktopPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop.png")
         const mobilePath = await browserPreviewArtifactPath(tmp.path, taskID, "mobile.png")
         await fs.writeFile(desktopPath, "desktop-evidence")
@@ -348,7 +349,7 @@ describe("browser preview routes", () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
       const app = Server.App()
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
 
       const response = await app.request(`/task/${taskID}/browser-preview/target`, {
         method: "PUT",
@@ -404,7 +405,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const screenshotPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop.png")
       await fs.writeFile(screenshotPath, "browser-preview-screenshot")
       const sha = sha16("browser-preview-screenshot")
@@ -464,7 +465,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const sideBySidePath = await browserPreviewArtifactPath(tmp.path, taskID, "incomplete-side-by-side.png")
       await fs.writeFile(sideBySidePath, "side-by-side-only")
       Database.use((db) =>
@@ -531,7 +532,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const screenshotPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop.png")
       const bytes = Buffer.from("browser-preview-png-bytes")
       await fs.writeFile(screenshotPath, bytes)
@@ -574,7 +575,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const sourcePath = await browserPreviewArtifactPath(tmp.path, taskID, "capture-source.png")
       const implementationPath = await browserPreviewArtifactPath(tmp.path, taskID, "capture-implementation.png")
       const sideBySidePath = await browserPreviewArtifactPath(tmp.path, taskID, "capture-side-by-side.png")
@@ -609,11 +610,14 @@ describe("browser preview routes", () => {
         diagnostics: ["reference comparison completed"],
       })
 
-      const response = await Server.App().request(`/task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`, {
-        headers: {
-          "x-opencorvus-directory": tmp.path,
+      const response = await Server.App().request(
+        `/task/${taskID}/browser-preview/evidence/${evidenceID}/capture.png`,
+        {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
         },
-      })
+      )
 
       expect(response.status).toBe(404)
     },
@@ -625,7 +629,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const legacyPath = ProjectRuntimePaths.taskAbsolute(tmp.path, taskID, "browser-preview", "legacy", "desktop.png")
       await fs.mkdir(path.dirname(legacyPath), { recursive: true })
       await fs.writeFile(legacyPath, "legacy-browser-preview-screenshot")
@@ -691,7 +695,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const sourcePath = await browserPreviewArtifactPath(tmp.path, taskID, "source.png")
       const implementationPath = await browserPreviewArtifactPath(tmp.path, taskID, "implementation.png")
       const artifactPath = await browserPreviewArtifactPath(tmp.path, taskID, "side-by-side.png")
@@ -746,7 +750,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const sideBySidePath = await browserPreviewArtifactPath(tmp.path, taskID, "source-binding-side-by-side.png")
       await fs.writeFile(sideBySidePath, "source-binding-puzzle")
       const evidenceID = persistBrowserPreviewEvidence({
@@ -783,8 +787,12 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
-      const missingPath = ProjectRuntimePaths.browserPreviewJobRelative(taskID, ROUTE_BROWSER_PREVIEW_JOB_ID, "missing.png")
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const missingPath = ProjectRuntimePaths.browserPreviewJobRelative(
+        taskID,
+        ROUTE_BROWSER_PREVIEW_JOB_ID,
+        "missing.png",
+      )
       const missingEvidenceID = persistBrowserPreviewEvidence({
         projectRoot: tmp.path,
         taskID,
@@ -833,7 +841,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
 
       expect(() =>
         persistBrowserPreviewEvidence({
@@ -883,7 +891,7 @@ describe("browser preview routes", () => {
     await using first = await tmpdir()
     await using second = await tmpdir()
     const taskID = await seedTask(second.path)
-    await persistBrowserPreviewTarget({ taskID, url: "https://preview.example/foreign-task" })
+    await persistTestBrowserPreviewTarget({ taskID, url: "https://preview.example/foreign-task" })
     const app = Server.App()
 
     const response = await app.request(`/task/${taskID}/browser-preview`, {
@@ -900,7 +908,7 @@ describe("browser preview routes", () => {
     await using first = await tmpdir()
     await using second = await tmpdir()
     const taskID = await seedTask(second.path)
-    const target = await persistBrowserPreviewTarget({ taskID, url: "https://preview.example/foreign-task" })
+    const target = await persistTestBrowserPreviewTarget({ taskID, url: "https://preview.example/foreign-task" })
     const screenshotPath = await browserPreviewArtifactPath(second.path, taskID, "foreign-desktop.png")
     await fs.writeFile(screenshotPath, "foreign-browser-preview-screenshot")
     const evidenceID = persistBrowserPreviewEvidence({
@@ -977,7 +985,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const app = Server.App()
       const cases = [
         {
@@ -1092,7 +1100,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      const target = await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
       const screenshotPath = await browserPreviewArtifactPath(tmp.path, taskID, "desktop.png")
       const sourcePath = await browserPreviewArtifactPath(tmp.path, taskID, "source.png")
       const implementationPath = await browserPreviewArtifactPath(tmp.path, taskID, "implementation.png")
@@ -1131,9 +1139,9 @@ describe("browser preview routes", () => {
         now: 2000,
       })
 
-      expect((await latestBrowserPreviewEvidenceIDs({ projectRoot: tmp.path, taskID, targetID: target.id })).desktop).toBe(
-        captureID,
-      )
+      expect(
+        (await latestBrowserPreviewEvidenceIDs({ projectRoot: tmp.path, taskID, targetID: target.id })).desktop,
+      ).toBe(captureID)
     },
     { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS },
   )
@@ -1143,7 +1151,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({
+      const target = await persistTestBrowserPreviewTarget({
         taskID,
         url: `data:text/html,${encodeURIComponent(`<!doctype html><html><body><button>Live</button><main>${"Preview ".repeat(80)}</main></body></html>`)}`,
       })
@@ -1190,7 +1198,7 @@ describe("browser preview routes", () => {
       })
       try {
         const taskID = await seedTask(tmp.path)
-        const target = await persistBrowserPreviewTarget({
+        const target = await persistTestBrowserPreviewTarget({
           taskID,
           url: `http://127.0.0.1:${preview.port}/live`,
         })
@@ -1217,8 +1225,14 @@ describe("browser preview routes", () => {
         expect(first.status).toBe(200)
         expect(second.status).toBe(200)
         expect(hitCount).toBe(1)
-        const firstHash = crypto.createHash("sha256").update(Buffer.from(await first.arrayBuffer())).digest("hex")
-        const secondHash = crypto.createHash("sha256").update(Buffer.from(await second.arrayBuffer())).digest("hex")
+        const firstHash = crypto
+          .createHash("sha256")
+          .update(Buffer.from(await first.arrayBuffer()))
+          .digest("hex")
+        const secondHash = crypto
+          .createHash("sha256")
+          .update(Buffer.from(await second.arrayBuffer()))
+          .digest("hex")
         expect(secondHash).toBe(firstHash)
       } finally {
         preview.stop(true)
@@ -1251,7 +1265,7 @@ describe("browser preview routes", () => {
       })
       try {
         const taskID = await seedTask(tmp.path)
-        const target = await persistBrowserPreviewTarget({
+        const target = await persistTestBrowserPreviewTarget({
           taskID,
           url: `http://127.0.0.1:${preview.port}/live-input`,
         })
@@ -1289,8 +1303,14 @@ describe("browser preview routes", () => {
         expect(firstInput.status).toBe(200)
         expect(secondInput.status).toBe(200)
         expect(pageHitCount).toBe(1)
-        const firstHash = crypto.createHash("sha256").update(Buffer.from(await firstInput.arrayBuffer())).digest("hex")
-        const secondHash = crypto.createHash("sha256").update(Buffer.from(await secondInput.arrayBuffer())).digest("hex")
+        const firstHash = crypto
+          .createHash("sha256")
+          .update(Buffer.from(await firstInput.arrayBuffer()))
+          .digest("hex")
+        const secondHash = crypto
+          .createHash("sha256")
+          .update(Buffer.from(await secondInput.arrayBuffer()))
+          .digest("hex")
         expect(secondHash).not.toBe(firstHash)
       } finally {
         preview.stop(true)
@@ -1304,7 +1324,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({
+      const target = await persistTestBrowserPreviewTarget({
         taskID,
         url: `data:text/html,${encodeURIComponent(`<!doctype html>
           <html>
@@ -1371,7 +1391,7 @@ describe("browser preview routes", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const target = await persistBrowserPreviewTarget({
+      const target = await persistTestBrowserPreviewTarget({
         taskID,
         url: `data:text/html,${encodeURIComponent(`<!doctype html>
           <html>
@@ -1505,7 +1525,7 @@ describe("browser preview routes", () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
       const app = Server.App()
-      await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+      await persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
 
       const response = await app.request(`/task/${taskID}/browser-preview/capture`, {
         method: "POST",
@@ -1528,7 +1548,10 @@ function sha16(value: string | Uint8Array): string {
 }
 
 async function browserPreviewArtifactPath(projectRoot: string, taskID: string, filename: string): Promise<string> {
-  const output = path.join(ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, taskID, "artifact_route_test"), filename)
+  const output = path.join(
+    ProjectRuntimePaths.browserPreviewJobRoot(projectRoot, taskID, "artifact_route_test"),
+    filename,
+  )
   await fs.mkdir(path.dirname(output), { recursive: true })
   return output
 }

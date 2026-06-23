@@ -14,19 +14,19 @@ without settling the task decision.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-18-app-dialog-segmented-control.md` | Task decisions must use the shared Kobalte ToggleGroup-backed `SegmentedControl`; do not restore raw buttons or a local group. |
-| `2026-06-19-kobalte-selected-state-single-source.md` | Kobalte `data-pressed` and `aria-pressed` are the single selected-state source for segmented controls. |
-| `2026-06-19-app-dialog-select-value-single-source.md` | AppDialog choice values are validated by the service before the dialog opens; host code must not invent a fallback value. |
+| Source                                                | Relevant decision                                                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `2026-06-18-app-dialog-segmented-control.md`          | Task decisions must use the shared Kobalte ToggleGroup-backed `SegmentedControl`; do not restore raw buttons or a local group. |
+| `2026-06-19-kobalte-selected-state-single-source.md`  | Kobalte `data-pressed` and `aria-pressed` are the single selected-state source for segmented controls.                         |
+| `2026-06-19-app-dialog-select-value-single-source.md` | AppDialog choice values are validated by the service before the dialog opens; host code must not invent a fallback value.      |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "AppDialogHost|task-queue-decision|app-dialog-decision|SegmentedControl|settle|decision|app-dialog-segmented" packages/overlay/src packages/overlay/test specs/new-arch` | `app-dialog-segmented-control.test.ts` used `page.setContent()` and hand-written dialog markup. `AppDialogHost` used `SegmentedControl` with `onActivate`, and task creation opens that dialog through `createTask()`. | Replace the browser test with a real overlay fixture and keep production dialog ownership unchanged. |
-| `packages/overlay/node_modules/@kobalte/core/src/toggle-group/toggle-group-item.tsx` | Kobalte prevents Enter/Space native click synthesis and routes keyboard selection through its own `onKeyDown`. | Add keyboard `onActivate` in the shared wrapper without replacing Kobalte selection. |
-| `packages/overlay/src/components/AppDialogHost.tsx` | Initial focus picked the first decision item, not the current `selectValue`. | Focus the already validated selected item so visual and keyboard starting points share one source. |
+| Sweep                                                                                | Result                                                                                                         | Decision                                                                                           |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------- | ------ | -------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `rg -n "AppDialogHost                                                                | task-queue-decision                                                                                            | app-dialog-decision                                                                                | SegmentedControl | settle | decision | app-dialog-segmented" packages/overlay/src packages/overlay/test specs/new-arch` | `app-dialog-segmented-control.test.ts` used `page.setContent()` and hand-written dialog markup. `AppDialogHost` used `SegmentedControl` with `onActivate`, and task creation opens that dialog through `createTask()`. | Replace the browser test with a real overlay fixture and keep production dialog ownership unchanged. |
+| `packages/overlay/node_modules/@kobalte/core/src/toggle-group/toggle-group-item.tsx` | Kobalte prevents Enter/Space native click synthesis and routes keyboard selection through its own `onKeyDown`. | Add keyboard `onActivate` in the shared wrapper without replacing Kobalte selection.               |
+| `packages/overlay/src/components/AppDialogHost.tsx`                                  | Initial focus picked the first decision item, not the current `selectValue`.                                   | Focus the already validated selected item so visual and keyboard starting points share one source. |
 
 ## Fix
 

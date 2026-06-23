@@ -12,7 +12,9 @@ describe("visual-qa final blocker-based acceptance", () => {
 
     expect(normalized).toContain("final visual GUI and functional product-review agent")
     expect(normalized).toContain("Run once near task completion")
-    expect(normalized).toContain("Reference parity is in scope only when the task, goal, or acceptance evidence explicitly requires it")
+    expect(normalized).toContain(
+      "Reference parity is in scope only when the task, goal, or acceptance evidence explicitly requires it",
+    )
     expect(normalized).toContain("When explicit reference fidelity is in scope")
     expect(normalized).not.toContain("strict reference-image fidelity mode")
   })
@@ -22,7 +24,9 @@ describe("visual-qa final blocker-based acceptance", () => {
 
     expect(normalized).toContain("professional product designer and design QA reviewer")
     expect(normalized).toContain("production blockers")
-    expect(normalized).toContain("Numeric similarity scores, legacy visual metrics, and external judge verdicts are not Visual QA completion signals")
+    expect(normalized).toContain(
+      "Numeric similarity scores, legacy visual metrics, and external judge verdicts are not Visual QA completion signals",
+    )
     expect(normalized).toContain("Do not chase, cite, or optimize for a score threshold")
     expect(normalized).toContain("low-fidelity charts/maps/tables")
   })
@@ -45,7 +49,10 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(normalized).toContain("cannot be cited as final Reference vs Implementation proof")
     expect(normalized).toContain("fresh `browser_preview_compare_regions` `reference-comparison` evidence")
     expect(normalized).toContain("repair the preview target or route first")
-    expect(normalized).toContain("do not hand-normalize source bounding boxes")
+    expect(normalized).toContain("Inspect the returned side-by-side and diff image attachments yourself")
+    expect(normalized).toContain("the useful evidence is the visible mismatch, not the status flag alone")
+    expect(normalized).toContain("Viewport width differences are runner-normalized")
+    expect(normalized).toContain("visible side-by-side/diff differences")
     expect(normalized).toContain("request only `desktop` viewport region comparison evidence")
     expect(normalized).toContain("do not block on mobile or tablet reference evidence")
     expect(normalized).toContain("Do not substitute standalone screenshots as the final region-parity evidence")
@@ -71,7 +78,9 @@ describe("visual-qa final blocker-based acceptance", () => {
     expect(prompt).toContain("request only `desktop` viewport region comparison evidence")
     expect(prompt).toContain("do not block on mobile or tablet reference evidence")
     expect(prompt).toContain("task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`")
-    expect(prompt).toContain("requires task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`")
+    expect(prompt).toContain(
+      "requires task-scoped `reference-comparison` evidence from `browser_preview_compare_regions`",
+    )
     expect(prompt).toContain("no production_blockers")
     expect(prompt).toContain("Product Design QA Principles")
     expect(prompt).toContain("component-truth")

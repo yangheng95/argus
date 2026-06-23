@@ -15,12 +15,12 @@ caller supplied one.
 
 ## Evidence Sweep
 
-| Search | Result | Decision |
-| --- | --- | --- |
-| `rg -n "SettingsSegmented|SegmentedControl|ariaLabel|aria-label" packages/overlay/src/components/settings packages/overlay/src/components/ui packages/overlay/test specs/new-arch` | `SettingsSegmented` is the only settings segmented wrapper; `SegmentedControl` owns Kobalte ToggleGroup semantics and expects `ariaLabel`. | Fix the wrapper prop forwarding, not the shared primitive or individual callers. |
-| `packages/overlay/src/components/settings/PermissionsPanel.tsx` | `PermissionsPanel` already passes `ariaLabel={row.label()}`. | Leave caller behavior unchanged. |
+| Search                                                                | Result                                                                                                                                | Decision                                                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `rg -n "SettingsSegmented                                             | SegmentedControl                                                                                                                      | ariaLabel                                                                   | aria-label" packages/overlay/src/components/settings packages/overlay/src/components/ui packages/overlay/test specs/new-arch` | `SettingsSegmented` is the only settings segmented wrapper; `SegmentedControl` owns Kobalte ToggleGroup semantics and expects `ariaLabel`. | Fix the wrapper prop forwarding, not the shared primitive or individual callers. |
+| `packages/overlay/src/components/settings/PermissionsPanel.tsx`       | `PermissionsPanel` already passes `ariaLabel={row.label()}`.                                                                          | Leave caller behavior unchanged.                                            |
 | `packages/overlay/test/browser/settings-segmented-aria-label.test.ts` | Focused browser coverage can open the real Settings menu and Permissions panel without depending on unrelated dialog drag assertions. | Assert every `.s-segmented` label matches its visible permission row title. |
-| `specs/new-arch/2026-06-18-app-dialog-segmented-control.md` | `SegmentedControl` was extracted as the generic Kobalte-backed ToggleGroup wrapper. | Do not add another settings-only ToggleGroup implementation. |
+| `specs/new-arch/2026-06-18-app-dialog-segmented-control.md`           | `SegmentedControl` was extracted as the generic Kobalte-backed ToggleGroup wrapper.                                                   | Do not add another settings-only ToggleGroup implementation.                |
 
 ## Fix
 

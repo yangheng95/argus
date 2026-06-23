@@ -12,19 +12,19 @@ session from the control itself.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
+| Source                                         | Existing decision                                                                                                                                           |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `2026-06-18-ledger-row-nested-interactions.md` | The outer Mission/Assistant row is a non-semantic container; `.mission-row-main` and `.coding-assistant-row-main` are the only keyboard selection controls. |
-| `TaskList.tsx::TaskRow` | The canonical task row keeps outer `data-active` for visual styling and puts `aria-current="page"` on `.task-row-main`. |
-| `2026-06-01-mission-panel-mission-list.md` | Mission row selection opens the selected session history and the selected row remains a first-class ledger affordance. |
+| `TaskList.tsx::TaskRow`                        | The canonical task row keeps outer `data-active` for visual styling and puts `aria-current="page"` on `.task-row-main`.                                     |
+| `2026-06-01-mission-panel-mission-list.md`     | Mission row selection opens the selected session history and the selected row remains a first-class ledger affordance.                                      |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n 'data-active=\\{|aria-current=|task-row-main|mission-row-main|coding-assistant-row-main' packages/overlay/src/components packages/overlay/test specs/new-arch/2026-06-18-ledger-row-nested-interactions.md -S` | `TaskList` already mirrors active state to `aria-current`; Mission and Coding Assistant only had outer `data-active`. | Mirror `props.selected` to the focusable main buttons. |
-| `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` | Real overlay flow already clicks Mission and Coding Assistant rows. | Extend this path with selected-row `aria-current` checks. |
-| `packages/overlay/test/browser/ledger-row-interactions.test.ts` | Browser fixture validates row actions and screenshot for the shared row grammar. | Add current-state assertions while preserving the non-nested-button contract. |
+| Sweep                                                                 | Result                                                                           | Decision                                                                      |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `rg -n 'data-active=\\{                                               | aria-current=                                                                    | task-row-main                                                                 | mission-row-main | coding-assistant-row-main' packages/overlay/src/components packages/overlay/test specs/new-arch/2026-06-18-ledger-row-nested-interactions.md -S` | `TaskList` already mirrors active state to `aria-current`; Mission and Coding Assistant only had outer `data-active`. | Mirror `props.selected` to the focusable main buttons. |
+| `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` | Real overlay flow already clicks Mission and Coding Assistant rows.              | Extend this path with selected-row `aria-current` checks.                     |
+| `packages/overlay/test/browser/ledger-row-interactions.test.ts`       | Browser fixture validates row actions and screenshot for the shared row grammar. | Add current-state assertions while preserving the non-nested-button contract. |
 
 ## Fix
 

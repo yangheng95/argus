@@ -110,10 +110,12 @@ test("mounted markdown image triggers use the shared preview contract", async ()
     const staticResponse = await overlayStaticResponse(path)
     if (staticResponse) return staticResponse
     if (path === "/global/health") return send({ version: "markdown-image-preview" })
-    if (path === "/global/projects/discover") return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
+    if (path === "/global/projects/discover")
+      return send({ root: "D:/overlay", defaultDirectory: projectRoot, projects: [] })
     if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: projectRoot })
@@ -135,7 +137,14 @@ test("mounted markdown image triggers use the shared preview contract", async ()
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
@@ -172,7 +181,8 @@ test("mounted markdown image triggers use the shared preview contract", async ()
     if (path === `/task/${taskID}/operator-model-context`)
       return send({ taskID, sessionID: "session-markdown-image-preview", agent: "orchestrator", model: null })
     if (path === `/task/${taskID}/browser-preview`) return send({ target: null, verification: null })
-    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+    if (path === `/task/${taskID}/conversation/events`)
+      return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send(transcript)
     if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: `${projectRoot}/.opencorvus/trace` })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
@@ -193,21 +203,26 @@ test("mounted markdown image triggers use the shared preview contract", async ()
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 960, height: 720 })
-    await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
-      ;(window as any).__visibleMarkdownImageTriggers = () =>
-        Array.from(document.querySelectorAll<HTMLElement>(".msg-text [data-image-preview-trigger]")).filter((trigger) => {
-          const style = getComputedStyle(trigger)
-          const rect = trigger.getBoundingClientRect()
-          return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0
-        })
-      localStorage.setItem("oc_locale", "zh-CN")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", seed.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      localStorage.setItem("oc_directory", seed.projectRoot)
-      localStorage.setItem("oc_workspace_directory", seed.projectRoot)
-      localStorage.setItem("oc_workspace_task", seed.taskID)
-    }, { serverUrl: server.origin, taskID, projectRoot })
+    await page.evaluateOnNewDocument(
+      (seed: { serverUrl: string; taskID: string; projectRoot: string }) => {
+        ;(window as any).__visibleMarkdownImageTriggers = () =>
+          Array.from(document.querySelectorAll<HTMLElement>(".msg-text [data-image-preview-trigger]")).filter(
+            (trigger) => {
+              const style = getComputedStyle(trigger)
+              const rect = trigger.getBoundingClientRect()
+              return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0
+            },
+          )
+        localStorage.setItem("oc_locale", "zh-CN")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", seed.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_directory", seed.projectRoot)
+        localStorage.setItem("oc_workspace_directory", seed.projectRoot)
+        localStorage.setItem("oc_workspace_task", seed.taskID)
+      },
+      { serverUrl: server.origin, taskID, projectRoot },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForFunction(
@@ -216,11 +231,14 @@ test("mounted markdown image triggers use the shared preview contract", async ()
         typeof (window as any).loadTasks === "function" &&
         typeof (window as any).selectTask === "function",
     )
-    await page.evaluate(async (seed: { taskID: string; projectRoot: string }) => {
-      await (window as any).applyDirectory(seed.projectRoot, { persist: false, restoreWorkspace: false, save: false })
-      await (window as any).loadTasks()
-      await (window as any).selectTask(seed.taskID, { directory: seed.projectRoot })
-    }, { taskID, projectRoot })
+    await page.evaluate(
+      async (seed: { taskID: string; projectRoot: string }) => {
+        await (window as any).applyDirectory(seed.projectRoot, { persist: false, restoreWorkspace: false, save: false })
+        await (window as any).loadTasks()
+        await (window as any).selectTask(seed.taskID, { directory: seed.projectRoot })
+      },
+      { taskID, projectRoot },
+    )
 
     await page
       .waitForFunction(() => (window as any).__visibleMarkdownImageTriggers().length === 2, {
@@ -301,7 +319,11 @@ test("mounted markdown image triggers use the shared preview contract", async ()
         outerHTML: trigger.outerHTML.slice(0, 240),
       }
     })
-    assert.equal(focusAttempt.active, true, `expected markdown trigger to accept focus: ${JSON.stringify(focusAttempt)}`)
+    assert.equal(
+      focusAttempt.active,
+      true,
+      `expected markdown trigger to accept focus: ${JSON.stringify(focusAttempt)}`,
+    )
     const focusState = await page.evaluate(() => {
       const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
       if (!trigger?.matches(".msg-text [data-image-preview-trigger]")) return { active: false }
@@ -318,7 +340,11 @@ test("mounted markdown image triggers use the shared preview contract", async ()
     assert.ok(focusState.outlineWidth >= 1, `expected visible focus outline: ${JSON.stringify(focusState)}`)
     assert.notEqual(focusState.outlineColor, "rgba(0, 0, 0, 0)")
 
-    const focusScreenshot = await saveElementScreenshot(page, ".chat-scroll", "image-preview-mounted-markdown-focus.png")
+    const focusScreenshot = await saveElementScreenshot(
+      page,
+      ".chat-scroll",
+      "image-preview-mounted-markdown-focus.png",
+    )
     await page.evaluate(() => {
       const trigger = ((window as any).__visibleMarkdownImageTriggers() as HTMLElement[])[0]
       if (!trigger) throw new Error("missing visible markdown image trigger")
@@ -339,7 +365,11 @@ test("mounted markdown image triggers use the shared preview contract", async ()
     assert.equal(dialogState.title, "Revenue chart")
     assert.equal(dialogState.imageAlt, "Revenue chart")
     assert.equal(dialogState.imageSrc, "/attachment/project/chart.svg")
-    const dialogScreenshot = await saveElementScreenshot(page, "#imagePreviewDialog", "image-preview-mounted-markdown-dialog.png")
+    const dialogScreenshot = await saveElementScreenshot(
+      page,
+      "#imagePreviewDialog",
+      "image-preview-mounted-markdown-dialog.png",
+    )
 
     assert.ok(focusScreenshot.endsWith("image-preview-mounted-markdown-focus.png"))
     assert.ok(dialogScreenshot.endsWith("image-preview-mounted-markdown-dialog.png"))

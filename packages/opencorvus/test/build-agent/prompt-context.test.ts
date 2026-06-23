@@ -661,9 +661,15 @@ describe("build agent prompt context", () => {
     )
 
     const paths = ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
-    expect(prompt).toContain(`web-clone-source/reference.png\` means \`${paths.absoluteDir}/web-clone-source/reference.png\``)
-    expect(prompt).toContain(`Resolve \`web-clone-source/...\` refs under \`${paths.absoluteDir}/web-clone-source/...\``)
-    expect(prompt).toContain(`\`frontend-design-skeleton/...\` refs under \`${paths.absoluteDir}/frontend-design-skeleton/...\``)
+    expect(prompt).toContain(
+      `web-clone-source/reference.png\` means \`${paths.absoluteDir}/web-clone-source/reference.png\``,
+    )
+    expect(prompt).toContain(
+      `Resolve \`web-clone-source/...\` refs under \`${paths.absoluteDir}/web-clone-source/...\``,
+    )
+    expect(prompt).toContain(
+      `\`frontend-design-skeleton/...\` refs under \`${paths.absoluteDir}/frontend-design-skeleton/...\``,
+    )
     expect(prompt).toContain(`Treat \`${paths.absoluteDir}/\` as read-only input`)
     expect(prompt).toContain("not `./web-clone-source/reference.png` in the acceptance root")
   })

@@ -37,20 +37,20 @@ forensics showed:
 
 ## Current Call Point Inventory
 
-| Surface | Current behavior | Required repair |
-| --- | --- | --- |
-| `packages/opencorvus/src/tool/browser-preview.ts` | Starts the service through `BashTool`, then probes explicit/process-output URLs once through `waitForBrowserPreviewUrlReachable`. A slow dev server can miss the window and return `target.status="missing"`. | Keep `browser_preview` as sole owner, but make its own startup observation and reachability wait robust enough for slow URL output and slow page readiness. |
-| `packages/opencorvus/src/browser-preview/liveness.ts` | Uses a fixed short reachability window and HTTP status only. | Add configurable readiness waiting that can be reused by the explicit tool tests without relying on browser-session fallback. |
-| `packages/opencorvus/src/browser-preview/extract.ts` | Exposes output URL extraction and generic `persistBrowserPreviewUrls`. | Do not reintroduce generic automatic materialization. Any helper used for this repair must be called only by `browser_preview` or direct tests. |
-| `packages/opencorvus/src/tool/browser-preview-compare-regions.ts` | Correctly requires a persisted `browser_preview_target` ID. | Preserve this strict target ID requirement. |
-| `packages/opencorvus/src/acceptance/visual-evidence.ts` | `VisualRegionEvidence.evidenceRefs` is `string[]`; `visualEvidenceBundlePasses` does not resolve refs to `browser_preview_evidence` rows or require `reference-comparison`. | Add a resolver/validator contract for required reference regions. Passing visual bundles must include readable `browser_preview_evidence` rows with `operationKind="reference-comparison"`. |
-| `packages/opencorvus/src/visual-qa/schema.ts` | Evidence type still allows generic `screenshot`; refs are free-form strings. | Add a first-class `reference_comparison` evidence type or structured equivalent. Keep screenshots as context only. |
-| `packages/opencorvus/src/visual-qa/output-tools.ts` | `accepted=true` only requires some evidence and coverage, so screenshot-only reports pass. | When a report claims or covers reference parity, `accepted=true` must require reference comparison evidence or reject with a blocker message. |
-| `packages/opencorvus/src/integrity/acceptance-tools.ts` | `inspect_visual_evidence` summarizes bundle pass/fail using bundle-local status only. | Surface invalid/missing reference-comparison refs as not passing so Integrity cannot pass from prose alone. |
-| `packages/opencorvus/src/engine/workflow.ts` | Visual QA projection treats `accepted=true` and zero blockers as completed. | Projection may remain simple only if the Visual QA submit tool enforces the evidence contract before accepting. |
-| `packages/opencorvus/test/tool/browser-preview.test.ts` | Covers registration, printed URL, explicit URL, command-derived diagnostic-only, no stale target reuse, and bind->compare. | Add slow explicit/process-output readiness regressions. |
-| `packages/opencorvus/test/visual-qa/output-tools.test.ts` | A screenshot-only accepted report is currently the default valid fixture. | Add negative screenshot-only reference parity test and positive reference-comparison fixture. |
-| `packages/opencorvus/test/integrity/acceptance-tools.test.ts` | Visual bundle fixture uses screenshot/report refs, not persisted comparison evidence. | Add invalid-ref and valid `browser_preview_evidence` comparison tests. |
+| Surface                                                           | Current behavior                                                                                                                                                                                              | Required repair                                                                                                                                                                             |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/tool/browser-preview.ts`                 | Starts the service through `BashTool`, then probes explicit/process-output URLs once through `waitForBrowserPreviewUrlReachable`. A slow dev server can miss the window and return `target.status="missing"`. | Keep `browser_preview` as sole owner, but make its own startup observation and reachability wait robust enough for slow URL output and slow page readiness.                                 |
+| `packages/opencorvus/src/browser-preview/liveness.ts`             | Uses a fixed short reachability window and HTTP status only.                                                                                                                                                  | Add configurable readiness waiting that can be reused by the explicit tool tests without relying on browser-session fallback.                                                               |
+| `packages/opencorvus/src/browser-preview/extract.ts`              | Exposes output URL extraction and generic `persistBrowserPreviewUrls`.                                                                                                                                        | Do not reintroduce generic automatic materialization. Any helper used for this repair must be called only by `browser_preview` or direct tests.                                             |
+| `packages/opencorvus/src/tool/browser-preview-compare-regions.ts` | Correctly requires a persisted `browser_preview_target` ID.                                                                                                                                                   | Preserve this strict target ID requirement.                                                                                                                                                 |
+| `packages/opencorvus/src/acceptance/visual-evidence.ts`           | `VisualRegionEvidence.evidenceRefs` is `string[]`; `visualEvidenceBundlePasses` does not resolve refs to `browser_preview_evidence` rows or require `reference-comparison`.                                   | Add a resolver/validator contract for required reference regions. Passing visual bundles must include readable `browser_preview_evidence` rows with `operationKind="reference-comparison"`. |
+| `packages/opencorvus/src/visual-qa/schema.ts`                     | Evidence type still allows generic `screenshot`; refs are free-form strings.                                                                                                                                  | Add a first-class `reference_comparison` evidence type or structured equivalent. Keep screenshots as context only.                                                                          |
+| `packages/opencorvus/src/visual-qa/output-tools.ts`               | `accepted=true` only requires some evidence and coverage, so screenshot-only reports pass.                                                                                                                    | When a report claims or covers reference parity, `accepted=true` must require reference comparison evidence or reject with a blocker message.                                               |
+| `packages/opencorvus/src/integrity/acceptance-tools.ts`           | `inspect_visual_evidence` summarizes bundle pass/fail using bundle-local status only.                                                                                                                         | Surface invalid/missing reference-comparison refs as not passing so Integrity cannot pass from prose alone.                                                                                 |
+| `packages/opencorvus/src/engine/workflow.ts`                      | Visual QA projection treats `accepted=true` and zero blockers as completed.                                                                                                                                   | Projection may remain simple only if the Visual QA submit tool enforces the evidence contract before accepting.                                                                             |
+| `packages/opencorvus/test/tool/browser-preview.test.ts`           | Covers registration, printed URL, explicit URL, command-derived diagnostic-only, no stale target reuse, and bind->compare.                                                                                    | Add slow explicit/process-output readiness regressions.                                                                                                                                     |
+| `packages/opencorvus/test/visual-qa/output-tools.test.ts`         | A screenshot-only accepted report is currently the default valid fixture.                                                                                                                                     | Add negative screenshot-only reference parity test and positive reference-comparison fixture.                                                                                               |
+| `packages/opencorvus/test/integrity/acceptance-tools.test.ts`     | Visual bundle fixture uses screenshot/report refs, not persisted comparison evidence.                                                                                                                         | Add invalid-ref and valid `browser_preview_evidence` comparison tests.                                                                                                                      |
 
 ## Acceptance Criteria
 
@@ -171,14 +171,14 @@ and frontend expert review unless a severe common bug is proven. The following
 out-of-scope areas were changed because independent review found concrete
 systemic bypasses in the visual evidence chain:
 
-| Area | Files | Why this was in scope for the root repair |
-| --- | --- | --- |
-| Browser preview evidence persistence/API | `src/browser-preview/persist.ts`, `src/server/routes/browser-preview.ts`, browser-preview route/tool tests | The task could create or expose evidence rows without a strict `operationKind` contract, and reference-comparison/source-binding artifacts could be read through screenshot/comparison endpoints with the wrong semantics. |
-| Visual QA/workflow projection | `src/visual-qa/*`, `src/engine/workflow.ts`, workflow/visual-qa tests | Visual QA and workflow could accept or project screenshot-only/prose/self-reported reference parity without verified comparison evidence. |
-| Integrity final gate | `src/integrity/*`, integrity tests | The production `reviewIntegrity()` path did not forward required visual evidence gate inputs, so a pass verdict could bypass missing `VisualEvidenceBundle`. |
-| Build terminal report contract | `src/build/*`, build-agent tests | Independent review found Build still accepted standalone screenshot/prose self-reports for structured reference parity. Build had to consume the same evidence contract before accepting `report_build_result(status="passed")`. |
-| Orchestrator handoff into Build/Visual QA/Integrity | `src/orchestrator/tools.ts` | Orchestrator must pass structured task/goal-scoped visual evidence context into Build, Visual QA, and Integrity; otherwise agents receive incomplete evidence contracts. |
-| SDK/OpenAPI and benchmark | `packages/sdk/*`, pressure benchmark script/tests | The generated API contract had to encode `operationKind` as required, and the benchmark had to fail if that contract regresses. |
+| Area                                                | Files                                                                                                      | Why this was in scope for the root repair                                                                                                                                                                                        |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browser preview evidence persistence/API            | `src/browser-preview/persist.ts`, `src/server/routes/browser-preview.ts`, browser-preview route/tool tests | The task could create or expose evidence rows without a strict `operationKind` contract, and reference-comparison/source-binding artifacts could be read through screenshot/comparison endpoints with the wrong semantics.       |
+| Visual QA/workflow projection                       | `src/visual-qa/*`, `src/engine/workflow.ts`, workflow/visual-qa tests                                      | Visual QA and workflow could accept or project screenshot-only/prose/self-reported reference parity without verified comparison evidence.                                                                                        |
+| Integrity final gate                                | `src/integrity/*`, integrity tests                                                                         | The production `reviewIntegrity()` path did not forward required visual evidence gate inputs, so a pass verdict could bypass missing `VisualEvidenceBundle`.                                                                     |
+| Build terminal report contract                      | `src/build/*`, build-agent tests                                                                           | Independent review found Build still accepted standalone screenshot/prose self-reports for structured reference parity. Build had to consume the same evidence contract before accepting `report_build_result(status="passed")`. |
+| Orchestrator handoff into Build/Visual QA/Integrity | `src/orchestrator/tools.ts`                                                                                | Orchestrator must pass structured task/goal-scoped visual evidence context into Build, Visual QA, and Integrity; otherwise agents receive incomplete evidence contracts.                                                         |
+| SDK/OpenAPI and benchmark                           | `packages/sdk/*`, pressure benchmark script/tests                                                          | The generated API contract had to encode `operationKind` as required, and the benchmark had to fail if that contract regresses.                                                                                                  |
 
 ## Dirty Workspace Exclusions
 
@@ -198,21 +198,21 @@ Commands run from `packages/opencorvus`:
 
 - `bun run typecheck` passed.
 - Focused suite passed: `bun test test/visual-qa/output-tools.test.ts
-  test/integrity/acceptance-tools.test.ts
-  test/integrity/browser-preview-tool.test.ts
-  test/engine/workflow-integrity-step.test.ts test/tool/browser-preview.test.ts
-  test/benchmark/browser-preview-repair-pressure.test.ts`.
+test/integrity/acceptance-tools.test.ts
+test/integrity/browser-preview-tool.test.ts
+test/engine/workflow-integrity-step.test.ts test/tool/browser-preview.test.ts
+test/benchmark/browser-preview-repair-pressure.test.ts`.
 - After independent review found the bundle-only workflow projection gap,
   `bun test test/engine/workflow-integrity-step.test.ts` passed with the new
   regression `does not project visual_qa as completed when VisualEvidenceBundle
-  alone requires reference parity`.
+alone requires reference parity`.
 - `bun run typecheck` passed after the shared reader/workflow repair.
 - OpenAPI/SDK check confirmed browser-preview evidence `operationKind` has no
   default, is included in OpenAPI `required`, and is required in generated SDK
   types.
 - After the Build terminal repair, the focused Build suite passed:
   `bun test test/build-agent/reference-comparison-report.test.ts
-  test/build-agent/types.test.ts test/build-agent/prompt-context.test.ts`.
+test/build-agent/types.test.ts test/build-agent/prompt-context.test.ts`.
 - After independent review requested narrower Build negative coverage,
   `test/build-agent/reference-comparison-report.test.ts` also covers fake refs,
   `preview-capture`, `source-binding`, failed `reference-comparison`, and the
@@ -221,21 +221,21 @@ Commands run from `packages/opencorvus`:
 - Pressure benchmark passed after the final Build/Integrity/API/workflow
   repair:
   `bun script/benchmark/browser-preview-repair-pressure.ts --idle-timeout-ms
-  120000 --per-test-timeout-ms 30000`. It now runs a main group with 170 tests
+120000 --per-test-timeout-ms 30000`. It now runs a main group with 170 tests
   across 19 files plus isolated `team-agent` with 8 tests, covering 178 tests
   total across 20 files, including server browser-preview routes, SDK/OpenAPI
   contract checks, and Build terminal reference-comparison validation.
 - Focused suite passed:
   `bun test test/server/browser-preview-routes.test.ts
-  test/server/browser-preview-sdk-contract.test.ts
-  test/engine/workflow-integrity-step.test.ts test/integrity/team-agent.test.ts
-  test/integrity/browser-preview-tool.test.ts`.
+test/server/browser-preview-sdk-contract.test.ts
+test/engine/workflow-integrity-step.test.ts test/integrity/team-agent.test.ts
+test/integrity/browser-preview-tool.test.ts`.
 - `bun test test/tool/browser-preview.test.ts` and
   `bun test test/integrity/team-agent.test.ts` each pass in isolated processes;
   running them in one Bun process intentionally demonstrates mock contamination,
   which the pressure benchmark now avoids by process isolation.
 - `bun test packages/opencorvus/test/orchestrator/architect-fidelity-gate.test.ts
-  packages/opencorvus/test/build-agent/prompt-goal-discipline.test.ts` passed
+packages/opencorvus/test/build-agent/prompt-goal-discipline.test.ts` passed
   from the repository root. The architect-fidelity test intentionally uses
   repo-root-relative `packages/opencorvus/...` owned paths and fails if invoked
   from `packages/opencorvus` with `workDir=process.cwd()`.

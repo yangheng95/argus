@@ -87,9 +87,11 @@ describe("EngineService.retryTask — active blocked run reopen", () => {
         expect(reopened?.blocking_reason).toBeNull()
         expect(reopened?.error).toBeNull()
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        const event = (runTaskLoop.mock.calls[0]?.[0] as
-          | { event?: { note?: string; operatorIntent?: { kind?: string } } }
-          | undefined)?.event
+        const event = (
+          runTaskLoop.mock.calls[0]?.[0] as
+            | { event?: { note?: string; operatorIntent?: { kind?: string } } }
+            | undefined
+        )?.event
         expect(event?.operatorIntent).toEqual({ kind: "retry" })
         expect(event?.note).toContain("User requested retry")
         expect(event?.note).not.toContain("User requested replan")
@@ -172,9 +174,11 @@ describe("EngineService.replanTask — structured replan intent", () => {
         expect(blocked?.status).toBe("blocked")
         expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        const event = (runTaskLoop.mock.calls[0]?.[0] as
-          | { event?: { note?: string; operatorIntent?: { kind?: string } } }
-          | undefined)?.event
+        const event = (
+          runTaskLoop.mock.calls[0]?.[0] as
+            | { event?: { note?: string; operatorIntent?: { kind?: string } } }
+            | undefined
+        )?.event
         expect(event?.operatorIntent).toEqual({ kind: "replan" })
         expect(event?.note).toContain("User requested replan")
         expect(event?.note).not.toContain("User requested retry")

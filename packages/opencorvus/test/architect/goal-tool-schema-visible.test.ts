@@ -50,7 +50,9 @@ test("architect goal tool schemas expose scriptless acceptance_specs shape to th
   const registerGoalJsonSchema = asObject(asSchema(architect.tools.register_goal.inputSchema as never).jsonSchema)
   const modifyGoalJsonSchema = asObject(asSchema(architect.tools.modify_goal.inputSchema as never).jsonSchema)
 
-  assertArchitectAcceptanceSpecSchemaVisible(acceptanceSpecsNode(registerGoalJsonSchema, ["properties", "acceptance_specs"]))
+  assertArchitectAcceptanceSpecSchemaVisible(
+    acceptanceSpecsNode(registerGoalJsonSchema, ["properties", "acceptance_specs"]),
+  )
   assertArchitectAcceptanceSpecSchemaVisible(
     acceptanceSpecsNode(modifyGoalJsonSchema, ["properties", "updates", "properties", "acceptance_specs"]),
   )

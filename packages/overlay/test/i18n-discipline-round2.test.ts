@@ -49,7 +49,7 @@ describe("round 2 i18n discipline", () => {
       "card.error_reason",
       "card.error_reason_title",
       "card.inspect_agent_trace",
-      "card.rewind_step",
+      "card.rewind_disabled",
       "chat.attachment.remove",
       "command_palette.label",
       "trace.copy_json",

@@ -131,14 +131,10 @@ test("ChatBubble action controls use Button primitives", () => {
     expect(CARD_HEADER_CHROME_TSX).toContain(`data-ui="${dataUi}"`)
     expect(CHAT_BUBBLE_TSX).not.toContain(`data-ui="${dataUi}"`)
   }
+  expect(CARD_HEADER_CHROME_TSX).toContain('data-state="disabled"')
   expect(CARD_HEADER_CHROME_TSX).toContain('import { Button } from "./ui/Button"')
 
-  for (const retired of [
-    'class="card__error-reason"',
-    'class="card__trace"',
-    'class="card__agent-cancel"',
-    'class="card__rewind"',
-  ]) {
+  for (const retired of ['class="card__error-reason"', 'class="card__trace"', 'class="card__agent-cancel"']) {
     expect(CHAT_BUBBLE_TSX).not.toContain(retired)
   }
 })

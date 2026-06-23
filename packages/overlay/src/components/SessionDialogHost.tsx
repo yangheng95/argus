@@ -25,11 +25,7 @@ export function SessionDialogHost() {
         </Button>
       }
     >
-      <div
-        class="session-dialog-body"
-        id="sessionDialogBody"
-        innerHTML={dialogStore.session.bodyHtml}
-      />
+      <div class="session-dialog-body" id="sessionDialogBody" innerHTML={dialogStore.session.bodyHtml} />
     </Dialog>
   )
 }

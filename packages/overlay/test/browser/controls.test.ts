@@ -1254,9 +1254,7 @@ test(
       assert.equal(cancelAction.tone, "danger")
       await page.focus('[data-task-action="replan"]')
       await page.keyboard.press("Tab")
-      await page.waitForFunction(
-        () => document.activeElement?.getAttribute("data-task-action") === "cancel",
-      )
+      await page.waitForFunction(() => document.activeElement?.getAttribute("data-task-action") === "cancel")
       const cancelFocus = await page.evaluate(() => {
         const button = document.querySelector<HTMLButtonElement>('[data-task-action="cancel"]')
         if (!button) return { active: false, outlineStyle: "", outlineWidth: "", matchesFocusVisible: false }

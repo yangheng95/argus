@@ -2,14 +2,7 @@ import { expect, test } from "bun:test"
 import fs from "node:fs"
 import path from "node:path"
 
-const SCRIPT_PATH = path.join(
-  import.meta.dir,
-  "..",
-  "..",
-  "script",
-  "benchmark",
-  "browser-preview-repair-pressure.ts",
-)
+const SCRIPT_PATH = path.join(import.meta.dir, "..", "..", "script", "benchmark", "browser-preview-repair-pressure.ts")
 
 const src = fs.readFileSync(SCRIPT_PATH, "utf8")
 

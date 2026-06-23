@@ -17,17 +17,17 @@ unselected Select options.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-18-popup-contrast-light-palette.md` | Popup readability belongs to shared popup surfaces and light-theme tokens, not local component color patches. |
-| `2026-06-18-light-popup-active-state-contrast.md` | Popup contrast tests must include stateful rows, not only resting popup copy. |
-| `2026-06-17-select-popup-opaque-surface.md` | Popup surfaces must be opaque so readable foreground tokens are not blended with underlay text. |
+| Source                                            | Existing decision                                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-popup-contrast-light-palette.md`      | Popup readability belongs to shared popup surfaces and light-theme tokens, not local component color patches. |
+| `2026-06-18-light-popup-active-state-contrast.md` | Popup contrast tests must include stateful rows, not only resting popup copy.                                 |
+| `2026-06-17-select-popup-opaque-surface.md`       | Popup surfaces must be opaque so readable foreground tokens are not blended with underlay text.               |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "titlebar-menubar-item:disabled|executor-popover-model:disabled|project-worktree-remove:disabled|recent-dir-edit-submit:disabled" packages/overlay/src/styles/surfaces packages/overlay/test` | Disabled titlebar menu items, executor models, worktree remove buttons, and recent-directory submit buttons used whole-element opacity or lacked effective-opacity coverage. |
+| Sweep                                                         | Result                                                                                                                                 |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "titlebar-menubar-item:disabled                        | executor-popover-model:disabled                                                                                                        | project-worktree-remove:disabled | recent-dir-edit-submit:disabled" packages/overlay/src/styles/surfaces packages/overlay/test` | Disabled titlebar menu items, executor models, worktree remove buttons, and recent-directory submit buttons used whole-element opacity or lacked effective-opacity coverage. |
 | `packages/overlay/test/browser/popup-contrast-matrix.test.ts` | The matrix sampled popup text colors, but did not include disabled controls or multiply ancestor opacity into the measured foreground. |
 
 ## Fix

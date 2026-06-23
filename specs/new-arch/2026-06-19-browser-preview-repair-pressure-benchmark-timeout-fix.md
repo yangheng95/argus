@@ -51,14 +51,14 @@ false "hang" diagnosis even when stdout/stderr activity and test progress exist.
 
 ## Call Point Sweep
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Pressure benchmark command | `2026-06-18-browser-preview-repair-tool-algorithm-pressure-benchmark.md` lists a raw `bun test ...` command without `--timeout`. | Replace the benchmark entry with a dedicated runner and document the raw command only with explicit per-test timeout. |
-| Inactivity runner | `Shell.run(command, { idleTimeoutMs })` resets on stdout/stderr and is already tested by benchmark script tests. | Reuse this mature runner instead of adding another process runner. |
-| `runner-prompt.test.ts` | Eight tests use Bun's default timeout even though several create instances, databases, sessions, and dynamic imports. | Add one explicit test timeout constant and attach it to every test in the file. |
-| Browser Node sidecar executor | `runBrowserNodeSidecar(...)` has a fixed `hardTimeoutMs` and all browser-preview/webpage/frontend-design callers pass wall-clock budgets. | Record as a separate shared-runtime follow-up; do not rewrite the sidecar protocol inside this benchmark fix. |
-| Browser-preview region comparison | `region-comparison.ts` delegates runtime capture to `evidence-runner.ts`; it no longer owns a second sidecar. | No algorithm change required. |
-| Node Playwright runtime | `resolveBrowserNodeSidecarRuntime(...)` chooses `node.exe`/`node` under Bun development and sets `OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH`. | Preserve this path; do not launch Playwright directly from Bun. |
+| Surface                           | Evidence                                                                                                                                  | Decision                                                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Pressure benchmark command        | `2026-06-18-browser-preview-repair-tool-algorithm-pressure-benchmark.md` lists a raw `bun test ...` command without `--timeout`.          | Replace the benchmark entry with a dedicated runner and document the raw command only with explicit per-test timeout. |
+| Inactivity runner                 | `Shell.run(command, { idleTimeoutMs })` resets on stdout/stderr and is already tested by benchmark script tests.                          | Reuse this mature runner instead of adding another process runner.                                                    |
+| `runner-prompt.test.ts`           | Eight tests use Bun's default timeout even though several create instances, databases, sessions, and dynamic imports.                     | Add one explicit test timeout constant and attach it to every test in the file.                                       |
+| Browser Node sidecar executor     | `runBrowserNodeSidecar(...)` has a fixed `hardTimeoutMs` and all browser-preview/webpage/frontend-design callers pass wall-clock budgets. | Record as a separate shared-runtime follow-up; do not rewrite the sidecar protocol inside this benchmark fix.         |
+| Browser-preview region comparison | `region-comparison.ts` delegates runtime capture to `evidence-runner.ts`; it no longer owns a second sidecar.                             | No algorithm change required.                                                                                         |
+| Node Playwright runtime           | `resolveBrowserNodeSidecarRuntime(...)` chooses `node.exe`/`node` under Bun development and sets `OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH`.    | Preserve this path; do not launch Playwright directly from Bun.                                                       |
 
 ## Root Cause
 

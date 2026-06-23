@@ -18,27 +18,27 @@ owned minimum widths when toolbar panels open or the window is resized.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate source, no blind patching, test every change, visually verify UI work, and commit/push every round. |
-| `2026-06-22-overlay-viewport-size-contract.md` | The native overlay minimum is `1120x720`; pane and center workbench minimum widths are token-owned. |
-| `2026-06-22-overlay-layout-aspect-frame.md` | Legal overlay layout frame is constrained from the same minimum size tokens; do not reintroduce native resize feedback loops. |
-| `2026-06-22-center-workbench-panel-min-size-contract.md` | `--ui-workbench-panel-min-width` remains the only center workbench panel minimum width source. |
-| `2026-06-22-pane-semantics-layout-frame.md` | Pane layout and resize semantics remain owned by `services/pane.ts` and token-resolved CSS variables. |
-| Hume read-only audit | `body[data-resizing="true"] .pane-resizer::before` is high-confidence dead CSS; live pane drag uses `.pane-resizer::after`. |
-| User feedback 2026-06-23 | Limit aspect ratio and minimum panel width; illegal aspect ratios and too-small panels are not acceptable. |
+| Source                                                   | Constraint carried forward                                                                                                          |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | No fallback logic, no duplicate source, no blind patching, test every change, visually verify UI work, and commit/push every round. |
+| `2026-06-22-overlay-viewport-size-contract.md`           | The native overlay minimum is `1120x720`; pane and center workbench minimum widths are token-owned.                                 |
+| `2026-06-22-overlay-layout-aspect-frame.md`              | Legal overlay layout frame is constrained from the same minimum size tokens; do not reintroduce native resize feedback loops.       |
+| `2026-06-22-center-workbench-panel-min-size-contract.md` | `--ui-workbench-panel-min-width` remains the only center workbench panel minimum width source.                                      |
+| `2026-06-22-pane-semantics-layout-frame.md`              | Pane layout and resize semantics remain owned by `services/pane.ts` and token-resolved CSS variables.                               |
+| Hume read-only audit                                     | `body[data-resizing="true"] .pane-resizer::before` is high-confidence dead CSS; live pane drag uses `.pane-resizer::after`.         |
+| User feedback 2026-06-23                                 | Limit aspect ratio and minimum panel width; illegal aspect ratios and too-small panels are not acceptable.                          |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Overlay aspect frame | `base.css` and `overlay-layout-frame.ts` already derive layout height from `--ui-overlay-min-width` and `--ui-overlay-min-height`. | Keep the single source; this round does not add a second aspect constant. |
-| Center workbench panel minimum | `workspace.css` gives open center panels `min-width: var(--ui-workbench-panel-min-width)`. | Keep; tests already cover three open panels. |
-| Center workbench separator range | `main.tsx` used `Math.min(Math.max(raw, min), totalWidth - min)`, which can produce a value below `min` when `totalWidth < min * 2`. | Add a pure legal range helper and disable separator writes when adjacent panels cannot both satisfy the token minimum. |
-| Left activity shell minimum | `activity.css` declares `min-width: min(100%, calc(var(--ui-collapsed-pane-width) + var(--ui-rail-min-width)))` and then overrides it with `min-width: 0` in the same rule. | Remove the overriding declaration; this is the concrete illegal small-panel source. |
-| Pane drag cursor CSS | `workspace.css` still targets `body[data-resizing="true"] .pane-resizer::before`, but no `.pane-resizer::before` pseudo element exists. | Delete only that selector branch and keep the live `::after` hit area. |
-| Static tests | `left-activity-toolbar.test.ts` and `pane-config.test.ts` inspect these CSS contracts. | Extend them to guard the token minimum and dead selector removal. |
-| Browser tests | Existing left-pane and side-activity browser tests capture resize and toolbar visuals. | Re-run them and inspect screenshots for visual QA. |
+| Surface                          | Evidence                                                                                                                                                                    | Decision                                                                                                               |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Overlay aspect frame             | `base.css` and `overlay-layout-frame.ts` already derive layout height from `--ui-overlay-min-width` and `--ui-overlay-min-height`.                                          | Keep the single source; this round does not add a second aspect constant.                                              |
+| Center workbench panel minimum   | `workspace.css` gives open center panels `min-width: var(--ui-workbench-panel-min-width)`.                                                                                  | Keep; tests already cover three open panels.                                                                           |
+| Center workbench separator range | `main.tsx` used `Math.min(Math.max(raw, min), totalWidth - min)`, which can produce a value below `min` when `totalWidth < min * 2`.                                        | Add a pure legal range helper and disable separator writes when adjacent panels cannot both satisfy the token minimum. |
+| Left activity shell minimum      | `activity.css` declares `min-width: min(100%, calc(var(--ui-collapsed-pane-width) + var(--ui-rail-min-width)))` and then overrides it with `min-width: 0` in the same rule. | Remove the overriding declaration; this is the concrete illegal small-panel source.                                    |
+| Pane drag cursor CSS             | `workspace.css` still targets `body[data-resizing="true"] .pane-resizer::before`, but no `.pane-resizer::before` pseudo element exists.                                     | Delete only that selector branch and keep the live `::after` hit area.                                                 |
+| Static tests                     | `left-activity-toolbar.test.ts` and `pane-config.test.ts` inspect these CSS contracts.                                                                                      | Extend them to guard the token minimum and dead selector removal.                                                      |
+| Browser tests                    | Existing left-pane and side-activity browser tests capture resize and toolbar visuals.                                                                                      | Re-run them and inspect screenshots for visual QA.                                                                     |
 
 ## Root Cause
 
@@ -130,23 +130,23 @@ refusing the resize.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User feedback 2026-06-23 | Aspect ratio and minimum panel width are hard legality constraints; illegal aspect ratios and too-small panels are not acceptable. |
-| `2026-06-22-overlay-viewport-size-contract.md` | The operable native frame is `1120x720`; browser layout tokens mirror this source. |
-| `2026-06-22-pane-semantics-layout-frame.md` | `services/pane.ts` owns pane layout and separator ARIA, with no `main.tsx` duplicate writer. |
-| `2026-06-22-center-workbench-panel-min-size-contract.md` | Open center panels keep `--ui-workbench-panel-min-width`; constrained peer panels scroll instead of compressing. |
-| `2026-06-23-center-workbench-frame-phase-split.md` | Resize and toolbar-open work must remain frame-split; do not add synchronous geometry work to click paths. |
+| Source                                                   | Constraint carried forward                                                                                                         |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| User feedback 2026-06-23                                 | Aspect ratio and minimum panel width are hard legality constraints; illegal aspect ratios and too-small panels are not acceptable. |
+| `2026-06-22-overlay-viewport-size-contract.md`           | The operable native frame is `1120x720`; browser layout tokens mirror this source.                                                 |
+| `2026-06-22-pane-semantics-layout-frame.md`              | `services/pane.ts` owns pane layout and separator ARIA, with no `main.tsx` duplicate writer.                                       |
+| `2026-06-22-center-workbench-panel-min-size-contract.md` | Open center panels keep `--ui-workbench-panel-min-width`; constrained peer panels scroll instead of compressing.                   |
+| `2026-06-23-center-workbench-frame-phase-split.md`       | Resize and toolbar-open work must remain frame-split; do not add synchronous geometry work to click paths.                         |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Left activity toolbar | `#solidLeftActivityToolbar` is fixed chrome inside the left shell; `sidebarWidth` only represents `#sidebar`. | Add it to `PANEL_PANE_CONFIG` as left fixed chrome, so sidebar max cannot consume that width implicitly. |
-| Right activity toolbar | `#solidRightActivityToolbar` is fixed chrome inside `#workspaceMain`; the current pane max only reserves `--ui-chat-min-width`. | Add it to `PANEL_PANE_CONFIG` as remaining fixed chrome, so chat/workbench content gets the token minimum after toolbar width is paid. |
-| Remaining content minimum | `services/pane.ts` reads `layoutTokenPx("--ui-chat-min-width")` as the remaining work area minimum. | Keep the token as the content minimum and make fixed chrome explicit in the same pane solver. |
-| Pane drag and keyboard | Both call `paneResizeBounds()` / `resolvedPaneWidths()`. | Fix the solver once so pointer drag, keyboard resize, persisted restore, and window resize share the same legality math. |
-| Browser test | `left-pane-resizer-browser.test.ts` currently computes max as `panelWidth - resizer - chatMin`. | Update it to include both activity toolbars and assert chat width is still at least the token at max sidebar width. |
+| Surface                   | Evidence                                                                                                                        | Decision                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Left activity toolbar     | `#solidLeftActivityToolbar` is fixed chrome inside the left shell; `sidebarWidth` only represents `#sidebar`.                   | Add it to `PANEL_PANE_CONFIG` as left fixed chrome, so sidebar max cannot consume that width implicitly.                               |
+| Right activity toolbar    | `#solidRightActivityToolbar` is fixed chrome inside `#workspaceMain`; the current pane max only reserves `--ui-chat-min-width`. | Add it to `PANEL_PANE_CONFIG` as remaining fixed chrome, so chat/workbench content gets the token minimum after toolbar width is paid. |
+| Remaining content minimum | `services/pane.ts` reads `layoutTokenPx("--ui-chat-min-width")` as the remaining work area minimum.                             | Keep the token as the content minimum and make fixed chrome explicit in the same pane solver.                                          |
+| Pane drag and keyboard    | Both call `paneResizeBounds()` / `resolvedPaneWidths()`.                                                                        | Fix the solver once so pointer drag, keyboard resize, persisted restore, and window resize share the same legality math.               |
+| Browser test              | `left-pane-resizer-browser.test.ts` currently computes max as `panelWidth - resizer - chatMin`.                                 | Update it to include both activity toolbars and assert chat width is still at least the token at max sidebar width.                    |
 
 ### Root Cause
 
@@ -210,21 +210,21 @@ though ARIA claimed the pane was legal.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Sartre read-only audit | Pointerdown still calls `resizePane()` synchronously, and the browser probe resets immediately after pointerdown, masking drag-start work. |
-| `2026-06-22-window-resize-center-layout-frame.md` | Resize work must avoid read/write chains in the same event or RAF phase. |
-| `2026-06-23-center-workbench-frame-phase-split.md` | Toolbar and resize work must stay frame-split; no new synchronous geometry owner. |
-| This spec | Pane legal max must still reserve left/right activity toolbar chrome and the chat minimum. |
+| Source                                             | Constraint carried forward                                                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sartre read-only audit                             | Pointerdown still calls `resizePane()` synchronously, and the browser probe resets immediately after pointerdown, masking drag-start work. |
+| `2026-06-22-window-resize-center-layout-frame.md`  | Resize work must avoid read/write chains in the same event or RAF phase.                                                                   |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Toolbar and resize work must stay frame-split; no new synchronous geometry owner.                                                          |
+| This spec                                          | Pane legal max must still reserve left/right activity toolbar chrome and the chat minimum.                                                 |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `startPaneResize()` | Calls `paneHandleEnabled()`, then `resizePane(event.clientX, callbacks, config)` in the pointerdown event. | Avoid pointerdown geometry reads and schedule the initial pointer position through the existing pane RAF scheduler. |
-| `onPaneResizeMove()` | Already records `pendingClientX` and uses `paneDrag.resizeOnFrame.schedule()`. | Reuse this as the single drag geometry owner for pointerdown and pointermove. |
-| `paneResizeBounds()` | Owns panel body, handle, and fixed toolbar measurements. | Keep unchanged, but run from the scheduled resize frame. |
-| Browser probe | Counts only `panelBody` and `leftPaneResizer`, then resets after pointerdown. | Count both activity toolbars and assert pointerdown produces no pre-RAF geometry read or sidebar-width style write. |
+| Surface              | Evidence                                                                                                   | Decision                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `startPaneResize()`  | Calls `paneHandleEnabled()`, then `resizePane(event.clientX, callbacks, config)` in the pointerdown event. | Avoid pointerdown geometry reads and schedule the initial pointer position through the existing pane RAF scheduler. |
+| `onPaneResizeMove()` | Already records `pendingClientX` and uses `paneDrag.resizeOnFrame.schedule()`.                             | Reuse this as the single drag geometry owner for pointerdown and pointermove.                                       |
+| `paneResizeBounds()` | Owns panel body, handle, and fixed toolbar measurements.                                                   | Keep unchanged, but run from the scheduled resize frame.                                                            |
+| Browser probe        | Counts only `panelBody` and `leftPaneResizer`, then resets after pointerdown.                              | Count both activity toolbars and assert pointerdown produces no pre-RAF geometry read or sidebar-width style write. |
 
 ### Fix Plan
 
@@ -258,12 +258,12 @@ though ARIA claimed the pane was legal.
 
 ### Verification
 
-| Check | Result |
-| --- | --- |
-| `bun test packages/overlay/test/pane-config.test.ts packages/overlay/test/overlay-window-size-contract.test.ts --timeout 30000` | 15 pass |
-| `bun run --cwd packages/overlay typecheck` | Pass |
-| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts` | 1 pass |
-| Visual QA | Reviewed `.scratch/left-pane-resizer-accessibility.png`, `.scratch/left-pane-resizer-desktop-resize.png`, `.scratch/left-pane-resizer-illegal-narrow-legal-frame.png`, and `.scratch/left-pane-resizer-restored-desktop-resize.png`. |
+| Check                                                                                                                           | Result                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bun test packages/overlay/test/pane-config.test.ts packages/overlay/test/overlay-window-size-contract.test.ts --timeout 30000` | 15 pass                                                                                                                                                                                                                              |
+| `bun run --cwd packages/overlay typecheck`                                                                                      | Pass                                                                                                                                                                                                                                 |
+| `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts`                 | 1 pass                                                                                                                                                                                                                               |
+| Visual QA                                                                                                                       | Reviewed `.scratch/left-pane-resizer-accessibility.png`, `.scratch/left-pane-resizer-desktop-resize.png`, `.scratch/left-pane-resizer-illegal-narrow-legal-frame.png`, and `.scratch/left-pane-resizer-restored-desktop-resize.png`. |
 
 ### Self Review
 
@@ -278,21 +278,21 @@ though ARIA claimed the pane was legal.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Independent explorer audit 2026-06-23 | `centerWorkbenchResizeRange()` already rejects impossible adjacent widths, but callers still rederive `maxWidth` from `totalWidth - minWidth`. |
-| `2026-06-22-center-workbench-panel-min-size-contract.md` | Open panels must keep the token-owned minimum and scroll rather than compress. |
-| `2026-06-23-center-workbench-frame-phase-split.md` | Center workbench layout timing stays frame-split; do not add synchronous geometry work. |
+| Source                                                   | Constraint carried forward                                                                                                                     |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Independent explorer audit 2026-06-23                    | `centerWorkbenchResizeRange()` already rejects impossible adjacent widths, but callers still rederive `maxWidth` from `totalWidth - minWidth`. |
+| `2026-06-22-center-workbench-panel-min-size-contract.md` | Open panels must keep the token-owned minimum and scroll rather than compress.                                                                 |
+| `2026-06-23-center-workbench-frame-phase-split.md`       | Center workbench layout timing stays frame-split; do not add synchronous geometry work.                                                        |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Range helper | `center-workbench-size.ts` returns `{ minWidth, maxWidth }` from `centerWorkbenchResizeRange()`. | Keep this as the single legal range source. |
-| Separator ARIA | `main.tsx` writes `aria-valuemax` from `metrics.totalWidth - metrics.minWidth`. | Use `metrics.range.maxWidth` instead. |
-| Keyboard End | `resizeCenterWorkbenchPanelByKeyboard()` uses `metrics.totalWidth - metrics.minWidth`. | Use `metrics.range.maxWidth` instead. |
-| Drag clamp | `updateCenterWorkbenchPanelWeights()` calls `clampCenterWorkbenchResizeWidth(totalWidth, minWidth, rawLeftWidth)`, which recomputes the range. | Pass the existing range into clamp so impossible ranges cannot be reinterpreted. |
-| Tests | `center-workbench-size.test.ts` covers range and clamp; static tests pin current string call sites. | Update tests to guard range-object clamp and reject the retired rederived max strings. |
+| Surface        | Evidence                                                                                                                                       | Decision                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Range helper   | `center-workbench-size.ts` returns `{ minWidth, maxWidth }` from `centerWorkbenchResizeRange()`.                                               | Keep this as the single legal range source.                                            |
+| Separator ARIA | `main.tsx` writes `aria-valuemax` from `metrics.totalWidth - metrics.minWidth`.                                                                | Use `metrics.range.maxWidth` instead.                                                  |
+| Keyboard End   | `resizeCenterWorkbenchPanelByKeyboard()` uses `metrics.totalWidth - metrics.minWidth`.                                                         | Use `metrics.range.maxWidth` instead.                                                  |
+| Drag clamp     | `updateCenterWorkbenchPanelWeights()` calls `clampCenterWorkbenchResizeWidth(totalWidth, minWidth, rawLeftWidth)`, which recomputes the range. | Pass the existing range into clamp so impossible ranges cannot be reinterpreted.       |
+| Tests          | `center-workbench-size.test.ts` covers range and clamp; static tests pin current string call sites.                                            | Update tests to guard range-object clamp and reject the retired rederived max strings. |
 
 ### Fix Plan
 
@@ -340,21 +340,21 @@ though ARIA claimed the pane was legal.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Independent explorer audit 2026-06-23 | `layoutTokenPx()` cache invalidates only on `--ui-scale`, while `--ui-rail-width` depends on `22cqw`. |
-| `2026-06-22-overlay-viewport-size-contract.md` | Pane and center workbench dimensions must resolve from CSS layout tokens, not hardcoded JS constants. |
+| Source                                            | Constraint carried forward                                                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Independent explorer audit 2026-06-23             | `layoutTokenPx()` cache invalidates only on `--ui-scale`, while `--ui-rail-width` depends on `22cqw`.                     |
+| `2026-06-22-overlay-viewport-size-contract.md`    | Pane and center workbench dimensions must resolve from CSS layout tokens, not hardcoded JS constants.                     |
 | `2026-06-23-overlay-compact-legal-frame-query.md` | Descendant width clamps intentionally use `cqw` so they follow the legal overlay container instead of raw viewport width. |
-| `2026-06-23-pane-chrome-reserve` | Default rail width feeds the left pane solver and must stay current after legal window resize. |
+| `2026-06-23-pane-chrome-reserve`                  | Default rail width feeds the left pane solver and must stay current after legal window resize.                            |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Token resolver | `layout-tokens.ts#tokenSignature()` returns only `--ui-scale`. | Include the overlay container inline size in the cache signature. |
-| Cqw token | `--ui-rail-width: clamp(..., 22cqw, ...)` is consumed by `defaultRailWidth()`. | Keep this token as the single default rail source; do not mirror the clamp in JS. |
-| Fixed-min tokens | `--ui-rail-min-width`, `--ui-chat-min-width`, and `--ui-workbench-panel-min-width` depend on scale only today. | They may invalidate more often, but still resolve through the same helper. |
-| Resize path | Window resize schedules pane layout through RAF. | No new listener is needed; the existing layout pass re-reads tokens with the corrected signature. |
+| Surface          | Evidence                                                                                                       | Decision                                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Token resolver   | `layout-tokens.ts#tokenSignature()` returns only `--ui-scale`.                                                 | Include the overlay container inline size in the cache signature.                                 |
+| Cqw token        | `--ui-rail-width: clamp(..., 22cqw, ...)` is consumed by `defaultRailWidth()`.                                 | Keep this token as the single default rail source; do not mirror the clamp in JS.                 |
+| Fixed-min tokens | `--ui-rail-min-width`, `--ui-chat-min-width`, and `--ui-workbench-panel-min-width` depend on scale only today. | They may invalidate more often, but still resolve through the same helper.                        |
+| Resize path      | Window resize schedules pane layout through RAF.                                                               | No new listener is needed; the existing layout pass re-reads tokens with the corrected signature. |
 
 ### Fix Plan
 
@@ -400,21 +400,21 @@ though ARIA claimed the pane was legal.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `2026-06-22-window-resize-center-layout-frame.md` | Window resize must not mix layout writes and geometry reads in the same frame callback. |
-| This file, Layout Token Container Signature | `layoutTokenPx()` cache signature includes `--ui-scale` and the body overlay-shell width so `cqw` tokens stay current. |
-| Godel read-only audit | Even cache hits currently read `document.body.getBoundingClientRect().width`, so pane resize can repeat the same body width read for each token in one layout pass. |
+| Source                                            | Constraint carried forward                                                                                                                                          |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-22-window-resize-center-layout-frame.md` | Window resize must not mix layout writes and geometry reads in the same frame callback.                                                                             |
+| This file, Layout Token Container Signature       | `layoutTokenPx()` cache signature includes `--ui-scale` and the body overlay-shell width so `cqw` tokens stay current.                                              |
+| Godel read-only audit                             | Even cache hits currently read `document.body.getBoundingClientRect().width`, so pane resize can repeat the same body width read for each token in one layout pass. |
 
 ### Call Point Inventory
 
-| Call point | Current evidence | Decision |
-| --- | --- | --- |
-| `layout-tokens.ts#layoutTokenPx` | Computes `tokenSignature(root, document.body)` on every token call. | Keep this single-token API for low-frequency callers, but add a resolver that computes the signature once per layout pass. |
-| `pane.ts#readPaneGeometrySnapshot` | Resolves `--ui-chat-min-width`, `--ui-rail-min-width`, and `--ui-rail-width` during one pane geometry read. | Create one layout token resolver at the top of the snapshot and pass it to all token consumers in that snapshot. |
-| `pane.ts#defaultRailWidth` | Reads `layoutTokenPx("--ui-rail-width")`. | Accept an optional resolver so the default rail source remains the CSS token while batching hot-path reads. |
-| `pane.ts#defaultPanelRemainingMinWidth` | Reads `layoutTokenPx("--ui-chat-min-width")`. | Accept an optional resolver for the same reason. |
-| Static tests | Existing tests only assert the token names are used. | Add guards that pane geometry creates one resolver and does not call `layoutTokenPx` multiple times inside the snapshot. |
+| Call point                              | Current evidence                                                                                            | Decision                                                                                                                   |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `layout-tokens.ts#layoutTokenPx`        | Computes `tokenSignature(root, document.body)` on every token call.                                         | Keep this single-token API for low-frequency callers, but add a resolver that computes the signature once per layout pass. |
+| `pane.ts#readPaneGeometrySnapshot`      | Resolves `--ui-chat-min-width`, `--ui-rail-min-width`, and `--ui-rail-width` during one pane geometry read. | Create one layout token resolver at the top of the snapshot and pass it to all token consumers in that snapshot.           |
+| `pane.ts#defaultRailWidth`              | Reads `layoutTokenPx("--ui-rail-width")`.                                                                   | Accept an optional resolver so the default rail source remains the CSS token while batching hot-path reads.                |
+| `pane.ts#defaultPanelRemainingMinWidth` | Reads `layoutTokenPx("--ui-chat-min-width")`.                                                               | Accept an optional resolver for the same reason.                                                                           |
+| Static tests                            | Existing tests only assert the token names are used.                                                        | Add guards that pane geometry creates one resolver and does not call `layoutTokenPx` multiple times inside the snapshot.   |
 
 ### Root Cause
 
@@ -441,7 +441,7 @@ cache hit, multiplying synchronous layout reads during resize.
 - Pane layout reads the layout-token cache signature once per snapshot, not once
   per token.
 - CSS tokens remain the only width source; no JS copy of the `clamp(... 22cqw
-  ...)` math is introduced.
+...)` math is introduced.
 - No resize debounce, alternate listener, fallback token, or stale hardcoded
   default is added.
 
@@ -471,23 +471,23 @@ cache hit, multiplying synchronous layout reads during resize.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Lovelace read-only audit | Runtime child surfaces still use raw `vh` / `window.innerHeight`, and pane bounds repeatedly re-read the same fixed chrome widths inside one RAF. |
-| `2026-06-22-overlay-viewport-size-contract.md` | The body shell is the browser-side mirror of the native `1120x720` minimum and aspect frame. |
-| `2026-06-23-overlay-compact-legal-frame-query.md` | Descendant width clamps already read the legal shell instead of raw viewport width. Height must follow the same owner. |
-| `2026-06-22-pane-semantics-layout-frame.md` | Pane layout stays owned by `services/pane.ts`; frame-split semantics must not add another geometry writer. |
+| Source                                            | Constraint carried forward                                                                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lovelace read-only audit                          | Runtime child surfaces still use raw `vh` / `window.innerHeight`, and pane bounds repeatedly re-read the same fixed chrome widths inside one RAF. |
+| `2026-06-22-overlay-viewport-size-contract.md`    | The body shell is the browser-side mirror of the native `1120x720` minimum and aspect frame.                                                      |
+| `2026-06-23-overlay-compact-legal-frame-query.md` | Descendant width clamps already read the legal shell instead of raw viewport width. Height must follow the same owner.                            |
+| `2026-06-22-pane-semantics-layout-frame.md`       | Pane layout stays owned by `services/pane.ts`; frame-split semantics must not add another geometry writer.                                        |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Legal shell height | `base.css` directly computes body height from `100vh` and aspect tokens. | Add `--ui-overlay-shell-height` in `base.css` as the only raw viewport-height owner and make `body` consume it. |
-| Floating child surfaces | `dialog.css`, `cmdk.css`, `titlebar.css`, `settings.css`, `messages.css`, `workspace.css`, `field.css`, `changes.css`, `composer.css`, and `conversation.css` still use raw `vh`. | Replace child-surface `vh` with `var(--ui-overlay-shell-height)` arithmetic. |
-| Dialog drag clamp | `Dialog.tsx` clamps against `window.innerWidth/innerHeight`. | Clamp against `document.body.getBoundingClientRect()`, the legal shell. |
-| Pane bounds | `paneResizeBounds()` loops through `paneResolvedSidebarWidth()`, which re-reads panel body, handle, and fixed toolbar widths. | Compute one DOM measurement snapshot and derive `{ min, max, now }` from that snapshot. |
-| Static tests | `overlay-window-size-contract.test.ts` already rejects descendant raw `vw`. | Add the matching descendant raw `vh` guard and Dialog legal-shell clamp guard. |
-| Browser tests | Existing left-pane and titlebar/dialog image-preview tests produce screenshots. | Re-run focused browser visual tests and inspect screenshots. |
+| Surface                 | Evidence                                                                                                                                                                          | Decision                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Legal shell height      | `base.css` directly computes body height from `100vh` and aspect tokens.                                                                                                          | Add `--ui-overlay-shell-height` in `base.css` as the only raw viewport-height owner and make `body` consume it. |
+| Floating child surfaces | `dialog.css`, `cmdk.css`, `titlebar.css`, `settings.css`, `messages.css`, `workspace.css`, `field.css`, `changes.css`, `composer.css`, and `conversation.css` still use raw `vh`. | Replace child-surface `vh` with `var(--ui-overlay-shell-height)` arithmetic.                                    |
+| Dialog drag clamp       | `Dialog.tsx` clamps against `window.innerWidth/innerHeight`.                                                                                                                      | Clamp against `document.body.getBoundingClientRect()`, the legal shell.                                         |
+| Pane bounds             | `paneResizeBounds()` loops through `paneResolvedSidebarWidth()`, which re-reads panel body, handle, and fixed toolbar widths.                                                     | Compute one DOM measurement snapshot and derive `{ min, max, now }` from that snapshot.                         |
+| Static tests            | `overlay-window-size-contract.test.ts` already rejects descendant raw `vw`.                                                                                                       | Add the matching descendant raw `vh` guard and Dialog legal-shell clamp guard.                                  |
+| Browser tests           | Existing left-pane and titlebar/dialog image-preview tests produce screenshots.                                                                                                   | Re-run focused browser visual tests and inspect screenshots.                                                    |
 
 ### Root Cause
 
@@ -573,22 +573,22 @@ closed-form expression once fixed chrome widths are known.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User feedback 2026-06-23 | Illegal aspect ratios and too-small panels are not acceptable; the legal minimum panel frame must be enforced at runtime. |
-| Euclid read-only audit | CSS `--ui-overlay-shell-height` still computes from raw `100vw` before the native minimum width floor, so descendants can see a smaller height than the body legal frame. |
-| `overlay-layout-frame.ts` | The JS legal frame computes `width = max(viewport.width, minimum.width)` and `height = max(minimum.height, min(viewport.height, width / aspect))`. |
-| `2026-06-23-overlay-legal-shell-height` | `base.css` is the only raw viewport-height owner; child surfaces must consume the shell token instead of raw `vh`. |
+| Source                                  | Constraint carried forward                                                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User feedback 2026-06-23                | Illegal aspect ratios and too-small panels are not acceptable; the legal minimum panel frame must be enforced at runtime.                                                 |
+| Euclid read-only audit                  | CSS `--ui-overlay-shell-height` still computes from raw `100vw` before the native minimum width floor, so descendants can see a smaller height than the body legal frame. |
+| `overlay-layout-frame.ts`               | The JS legal frame computes `width = max(viewport.width, minimum.width)` and `height = max(minimum.height, min(viewport.height, width / aspect))`.                        |
+| `2026-06-23-overlay-legal-shell-height` | `base.css` is the only raw viewport-height owner; child surfaces must consume the shell token instead of raw `vh`.                                                        |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| CSS shell height owner | `base.css` defines `--ui-overlay-shell-height: min(100vh, calc(100vw * min-height / min-width))`. | Add a shell inline-size token with the same native minimum width floor before deriving shell height. |
-| JS legal frame | `constrainOverlayLayoutFrame()` already applies the minimum width before deriving height. | Keep unchanged and mirror its formula in CSS. |
-| Child surface clamps | Dialog, cmdk, workspace, settings, messages, changes, field, composer, conversation, and titlebar consume `--ui-overlay-shell-height`. | Fix the token value once; do not add per-surface height exceptions. |
-| Browser legal-frame tests | `side-activity-toolbar-browser.test.ts` already probes illegal narrow viewports. | Add a probe proving the resolved shell-height token equals body height and remains at least the overlay minimum. |
-| Static contract tests | `overlay-window-size-contract.test.ts` currently checks for raw formula fragments. | Update it to require the minimum-floor shell-width/height formula. |
+| Surface                   | Evidence                                                                                                                               | Decision                                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| CSS shell height owner    | `base.css` defines `--ui-overlay-shell-height: min(100vh, calc(100vw * min-height / min-width))`.                                      | Add a shell inline-size token with the same native minimum width floor before deriving shell height.             |
+| JS legal frame            | `constrainOverlayLayoutFrame()` already applies the minimum width before deriving height.                                              | Keep unchanged and mirror its formula in CSS.                                                                    |
+| Child surface clamps      | Dialog, cmdk, workspace, settings, messages, changes, field, composer, conversation, and titlebar consume `--ui-overlay-shell-height`. | Fix the token value once; do not add per-surface height exceptions.                                              |
+| Browser legal-frame tests | `side-activity-toolbar-browser.test.ts` already probes illegal narrow viewports.                                                       | Add a probe proving the resolved shell-height token equals body height and remains at least the overlay minimum. |
+| Static contract tests     | `overlay-window-size-contract.test.ts` currently checks for raw formula fragments.                                                     | Update it to require the minimum-floor shell-width/height formula.                                               |
 
 ### Root Cause
 
@@ -659,22 +659,22 @@ CSS shell token and `overlay-layout-frame.ts`.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User report | Opening toolbar screenshots is visibly slow; screenshot panel resize work is on the direct complaint path. |
-| Euclid read-only audit | `ScreenshotBrowserPanel` still does `ResizeObserver -> RAF -> element.clientWidth -> setListWidth`, creating a width read/write loop during toolbar open and container resize. |
-| `screenshot-browser-panel-browser.test.ts` | Existing browser coverage instruments screenshot panel open, RAF timing, thumbnail virtualization, and narrow-panel visual layout. |
-| `ScreenshotBrowserPanel.tsx` call inventory | `listWidth` only feeds `columnCount()`, which feeds row chunking and grid column count. |
+| Source                                      | Constraint carried forward                                                                                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| User report                                 | Opening toolbar screenshots is visibly slow; screenshot panel resize work is on the direct complaint path.                                                                     |
+| Euclid read-only audit                      | `ScreenshotBrowserPanel` still does `ResizeObserver -> RAF -> element.clientWidth -> setListWidth`, creating a width read/write loop during toolbar open and container resize. |
+| `screenshot-browser-panel-browser.test.ts`  | Existing browser coverage instruments screenshot panel open, RAF timing, thumbnail virtualization, and narrow-panel visual layout.                                             |
+| `ScreenshotBrowserPanel.tsx` call inventory | `listWidth` only feeds `columnCount()`, which feeds row chunking and grid column count.                                                                                        |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Resize observer callback | `ScreenshotBrowserPanel.tsx` constructs `new ResizeObserver(measureOnFrame.schedule)`. | Replace it with an entry-aware callback that stores `entry.contentRect.width`. |
-| RAF commit | Current `measure()` reads `element.clientWidth` inside the scheduled RAF. | RAF should commit the pending observer width only; no DOM width read. |
-| Initial width | Current code schedules an initial RAF read. | Let the observed element's first ResizeObserver delivery be the width source; no second initial source. |
-| Static test | `screenshot-browser-panel.test.ts` currently requires `clientWidth` measurement. | Flip the guard to require `contentRect.width` and reject `element.clientWidth`. |
-| Browser test | Existing instrumentation records `.screenshot-browser-groups` `clientWidth` reads. | Assert screenshot open produces no screenshot-list `clientWidth` read while cards still render and visual screenshots stay valid. |
+| Surface                  | Evidence                                                                               | Decision                                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Resize observer callback | `ScreenshotBrowserPanel.tsx` constructs `new ResizeObserver(measureOnFrame.schedule)`. | Replace it with an entry-aware callback that stores `entry.contentRect.width`.                                                    |
+| RAF commit               | Current `measure()` reads `element.clientWidth` inside the scheduled RAF.              | RAF should commit the pending observer width only; no DOM width read.                                                             |
+| Initial width            | Current code schedules an initial RAF read.                                            | Let the observed element's first ResizeObserver delivery be the width source; no second initial source.                           |
+| Static test              | `screenshot-browser-panel.test.ts` currently requires `clientWidth` measurement.       | Flip the guard to require `contentRect.width` and reject `element.clientWidth`.                                                   |
+| Browser test             | Existing instrumentation records `.screenshot-browser-groups` `clientWidth` reads.     | Assert screenshot open produces no screenshot-list `clientWidth` read while cards still render and visual screenshots stay valid. |
 
 ### Root Cause
 
@@ -739,22 +739,22 @@ the same surface that is recomputing virtual rows.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User report | Toolbar panel opening is slow, especially screenshots and preview panels. |
-| Euclid read-only audit | Center workbench opening reads adjacent panel rects per separator and repeats reads for middle panels in the same measurement frame. |
-| `2026-06-23-center-workbench-frame-phase-split.md` | Layout writes and measurement/reveal remain split across animation frames. |
-| Current browser probe | `center-workbench-separator-browser.test.ts` already verifies resize reads are in RAF and not in style-write frames. |
+| Source                                             | Constraint carried forward                                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| User report                                        | Toolbar panel opening is slow, especially screenshots and preview panels.                                                            |
+| Euclid read-only audit                             | Center workbench opening reads adjacent panel rects per separator and repeats reads for middle panels in the same measurement frame. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Layout writes and measurement/reveal remain split across animation frames.                                                           |
+| Current browser probe                              | `center-workbench-separator-browser.test.ts` already verifies resize reads are in RAF and not in style-write frames.                 |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Separator render | `renderCenterWorkbenchPanelSeparators()` calls `centerWorkbenchPanelResizeMetrics()` for every separator. | Read one open-panel geometry snapshot before the separator loop. |
-| Metrics helper | `centerWorkbenchPanelResizeMetrics()` reads left and right `getBoundingClientRect()` itself. | Accept a snapshot argument and consume pre-read rects. |
-| Drag/keyboard resize | Pointer start and keyboard resize also call `centerWorkbenchPanelResizeMetrics()`. | Keep them on the same helper; the default snapshot reads current open panels once for that call. |
-| Reveal ordering | `renderCenterWorkbenchPanelMeasurementsAndReveal()` runs separators then reveal. | Keep frame split and existing reveal ordering unchanged in this round. |
-| Tests | Static frame-scheduler and browser center-workbench tests cover the function boundary. | Add static guard for snapshot ownership and keep browser visual coverage. |
+| Surface              | Evidence                                                                                                  | Decision                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Separator render     | `renderCenterWorkbenchPanelSeparators()` calls `centerWorkbenchPanelResizeMetrics()` for every separator. | Read one open-panel geometry snapshot before the separator loop.                                 |
+| Metrics helper       | `centerWorkbenchPanelResizeMetrics()` reads left and right `getBoundingClientRect()` itself.              | Accept a snapshot argument and consume pre-read rects.                                           |
+| Drag/keyboard resize | Pointer start and keyboard resize also call `centerWorkbenchPanelResizeMetrics()`.                        | Keep them on the same helper; the default snapshot reads current open panels once for that call. |
+| Reveal ordering      | `renderCenterWorkbenchPanelMeasurementsAndReveal()` runs separators then reveal.                          | Keep frame split and existing reveal ordering unchanged in this round.                           |
+| Tests                | Static frame-scheduler and browser center-workbench tests cover the function boundary.                    | Add static guard for snapshot ownership and keep browser visual coverage.                        |
 
 ### Root Cause
 
@@ -812,23 +812,23 @@ and is measured twice in the same frame.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User feedback 2026-06-23 | Illegal aspect ratios and too-small panels are not acceptable; opening toolbar panels must not create resize jank. |
-| `2026-06-23-center-workbench-frame-phase-split.md` | DOM state writes, layout measurements, and layout-affecting follow-up work must stay in explicit frame phases. |
-| This spec, previous follow-up | Separator geometry now reads from one snapshot per measurement frame. |
-| Current live 7878 probe | The running 7878 tab appears stale and still shows the old illegal 900x900 bottom-toolbar layout without shell width/height CSS variables; do not refresh/restart it without explicit user approval. |
+| Source                                             | Constraint carried forward                                                                                                                                                                           |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User feedback 2026-06-23                           | Illegal aspect ratios and too-small panels are not acceptable; opening toolbar panels must not create resize jank.                                                                                   |
+| `2026-06-23-center-workbench-frame-phase-split.md` | DOM state writes, layout measurements, and layout-affecting follow-up work must stay in explicit frame phases.                                                                                       |
+| This spec, previous follow-up                      | Separator geometry now reads from one snapshot per measurement frame.                                                                                                                                |
+| Current live 7878 probe                            | The running 7878 tab appears stale and still shows the old illegal 900x900 bottom-toolbar layout without shell width/height CSS variables; do not refresh/restart it without explicit user approval. |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `revealPendingCenterWorkbenchPanel()` | Owns the only center workbench `scrollIntoView()` call in `main.tsx`. | Keep it as the single reveal owner. |
-| `renderCenterWorkbenchPanelMeasurementsAndReveal()` | Calls `renderCenterWorkbenchPanelSeparators()` and then `revealPendingCenterWorkbenchPanel()` in the same RAF. | Remove the scroll side effect from the measurement RAF. |
-| `renderCenterWorkbenchPanelMeasurementsOnFrame` | Schedules the separator measurement phase after layout writes. | Keep this scheduler as the measurement owner. |
-| `scheduleCenterWorkbenchPanelReveal()` | Sets `pendingCenterWorkbenchRevealPanel` and schedules layout. | Keep the public scheduling entry unchanged. |
-| Cleanup disposer | Cancels layout and measurement schedulers. | Add reveal scheduler cancellation in the same cleanup block. |
-| Browser instrumentation | `screenshot-browser-panel-browser.test.ts` records `scrollIntoView` and RAF context but not frame ordering against rect reads. | Extend instrumentation so reveal scroll is proven to be in a later frame than measurement reads. |
+| Surface                                             | Evidence                                                                                                                       | Decision                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `revealPendingCenterWorkbenchPanel()`               | Owns the only center workbench `scrollIntoView()` call in `main.tsx`.                                                          | Keep it as the single reveal owner.                                                              |
+| `renderCenterWorkbenchPanelMeasurementsAndReveal()` | Calls `renderCenterWorkbenchPanelSeparators()` and then `revealPendingCenterWorkbenchPanel()` in the same RAF.                 | Remove the scroll side effect from the measurement RAF.                                          |
+| `renderCenterWorkbenchPanelMeasurementsOnFrame`     | Schedules the separator measurement phase after layout writes.                                                                 | Keep this scheduler as the measurement owner.                                                    |
+| `scheduleCenterWorkbenchPanelReveal()`              | Sets `pendingCenterWorkbenchRevealPanel` and schedules layout.                                                                 | Keep the public scheduling entry unchanged.                                                      |
+| Cleanup disposer                                    | Cancels layout and measurement schedulers.                                                                                     | Add reveal scheduler cancellation in the same cleanup block.                                     |
+| Browser instrumentation                             | `screenshot-browser-panel-browser.test.ts` records `scrollIntoView` and RAF context but not frame ordering against rect reads. | Extend instrumentation so reveal scroll is proven to be in a later frame than measurement reads. |
 
 ### Root Cause
 
@@ -907,23 +907,23 @@ toolbar panel open and window resize.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User feedback 2026-06-23 | Aspect ratio and minimum panel width are hard legality constraints; illegal small panels must not be preserved as alternate layouts. |
-| Pascal read-only audit | `body` is the only `overlay-shell` container and has `min-width: var(--ui-overlay-min-width)`, so all `@container overlay-shell (width < 1120px)` and smaller branches are unreachable dead CSS. |
-| `2026-06-23-overlay-compact-legal-frame-query.md` | Raw viewport compact media queries were replaced with legal-shell queries to stop illegal browser fixtures from activating compact panel layouts. |
-| `2026-06-23-css-shell-height-minimum-floor` | The legal shell width/height now mirrors the native minimum frame; descendant layout must not reintroduce compact behavior below that frame. |
+| Source                                            | Constraint carried forward                                                                                                                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| User feedback 2026-06-23                          | Aspect ratio and minimum panel width are hard legality constraints; illegal small panels must not be preserved as alternate layouts.                                                             |
+| Pascal read-only audit                            | `body` is the only `overlay-shell` container and has `min-width: var(--ui-overlay-min-width)`, so all `@container overlay-shell (width < 1120px)` and smaller branches are unreachable dead CSS. |
+| `2026-06-23-overlay-compact-legal-frame-query.md` | Raw viewport compact media queries were replaced with legal-shell queries to stop illegal browser fixtures from activating compact panel layouts.                                                |
+| `2026-06-23-css-shell-height-minimum-floor`       | The legal shell width/height now mirrors the native minimum frame; descendant layout must not reintroduce compact behavior below that frame.                                                     |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `base.css` | `body` declares `container: overlay-shell / inline-size` and `min-width: var(--ui-overlay-min-width)`. | Keep the legal container owner. |
-| `workspace.css` | Contains `@container overlay-shell (width < 1120px)` and `< 520px` compact branches that shrink panels and hide non-selected workbench views. | Delete as unreachable and harmful to the legal panel-width contract. |
-| `activity.css` | Contains `@container overlay-shell (width < 1120px)` that turns the right toolbar horizontal. | Delete as the direct stale compact-toolbar branch. |
-| `titlebar.css` | Contains `< 760px` and `< 520px` overlay-shell branches for compact titlebar/menu/brand behavior. | Delete; legal shell never reaches these widths. |
-| `dialog.css`, `messages.css`, `settings.css`, `workspace-onboarding.css` | Contain smaller overlay-shell branches for local component compaction. | Delete the unreachable overlay-shell owners; component-local behavior must use component containers if later required. |
-| `--ui-overlay-min-aspect-ratio` | Defined in tokens and asserted in tests, but not consumed by runtime CSS/TS/Rust. | Remove the duplicate token contract surface. |
+| Surface                                                                  | Evidence                                                                                                                                      | Decision                                                                                                               |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `base.css`                                                               | `body` declares `container: overlay-shell / inline-size` and `min-width: var(--ui-overlay-min-width)`.                                        | Keep the legal container owner.                                                                                        |
+| `workspace.css`                                                          | Contains `@container overlay-shell (width < 1120px)` and `< 520px` compact branches that shrink panels and hide non-selected workbench views. | Delete as unreachable and harmful to the legal panel-width contract.                                                   |
+| `activity.css`                                                           | Contains `@container overlay-shell (width < 1120px)` that turns the right toolbar horizontal.                                                 | Delete as the direct stale compact-toolbar branch.                                                                     |
+| `titlebar.css`                                                           | Contains `< 760px` and `< 520px` overlay-shell branches for compact titlebar/menu/brand behavior.                                             | Delete; legal shell never reaches these widths.                                                                        |
+| `dialog.css`, `messages.css`, `settings.css`, `workspace-onboarding.css` | Contain smaller overlay-shell branches for local component compaction.                                                                        | Delete the unreachable overlay-shell owners; component-local behavior must use component containers if later required. |
+| `--ui-overlay-min-aspect-ratio`                                          | Defined in tokens and asserted in tests, but not consumed by runtime CSS/TS/Rust.                                                             | Remove the duplicate token contract surface.                                                                           |
 
 ### Root Cause
 
@@ -997,22 +997,22 @@ small-panel behavior easier to reintroduce.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Pascal read-only audit | Historical viewport spec said native resize cannot leave the overlay below the aspect contract, but the current pre-commit native hook is Windows-only. |
-| `2026-06-22-native-resize-no-set-size-loop.md` | Do not restore `WindowEvent::Resized -> window.set_size(...)`; that feedback loop caused resize jank. |
-| `2026-06-22-overlay-layout-aspect-frame.md` | Windows `WM_SIZING` constrains the mutable resize rectangle before OS commit. |
-| Local Tauri/tao source | `WindowSizeConstraints` exposes min/max size only; no cross-platform aspect-ratio constraint exists in the public Tauri runtime surface. |
+| Source                                         | Constraint carried forward                                                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pascal read-only audit                         | Historical viewport spec said native resize cannot leave the overlay below the aspect contract, but the current pre-commit native hook is Windows-only. |
+| `2026-06-22-native-resize-no-set-size-loop.md` | Do not restore `WindowEvent::Resized -> window.set_size(...)`; that feedback loop caused resize jank.                                                   |
+| `2026-06-22-overlay-layout-aspect-frame.md`    | Windows `WM_SIZING` constrains the mutable resize rectangle before OS commit.                                                                           |
+| Local Tauri/tao source                         | `WindowSizeConstraints` exposes min/max size only; no cross-platform aspect-ratio constraint exists in the public Tauri runtime surface.                |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Windows native resize | `main.rs` installs `install_overlay_resize_aspect_constraint()` under `#[cfg(windows)]`, using `WM_SIZING` and `SetWindowSubclass`. | Keep as the only native pre-commit aspect owner currently implemented. |
-| Non-Windows native resize | Tauri/tao exposes resize events and min/max constraints, not a verified aspect-ratio pre-commit API. | Do not add a post-resize correction loop or unverified platform dependency. |
-| Browser shell | CSS/TS legal frame clamps illegal browser/dev viewports. | Keep as the cross-platform WebView-side safety net. |
-| Historical specs | `2026-06-22-overlay-viewport-size-contract.md` still implied platform-neutral native aspect enforcement. | Correct the wording to Windows native + cross-platform browser shell. |
-| Static test | `overlay-window-size-contract.test.ts` checked for the Windows hook but did not state the platform boundary. | Require `#[cfg(windows)]` for the native aspect hook and reject `RunEvent::WindowEvent` feedback. |
+| Surface                   | Evidence                                                                                                                            | Decision                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Windows native resize     | `main.rs` installs `install_overlay_resize_aspect_constraint()` under `#[cfg(windows)]`, using `WM_SIZING` and `SetWindowSubclass`. | Keep as the only native pre-commit aspect owner currently implemented.                            |
+| Non-Windows native resize | Tauri/tao exposes resize events and min/max constraints, not a verified aspect-ratio pre-commit API.                                | Do not add a post-resize correction loop or unverified platform dependency.                       |
+| Browser shell             | CSS/TS legal frame clamps illegal browser/dev viewports.                                                                            | Keep as the cross-platform WebView-side safety net.                                               |
+| Historical specs          | `2026-06-22-overlay-viewport-size-contract.md` still implied platform-neutral native aspect enforcement.                            | Correct the wording to Windows native + cross-platform browser shell.                             |
+| Static test               | `overlay-window-size-contract.test.ts` checked for the Windows hook but did not state the platform boundary.                        | Require `#[cfg(windows)]` for the native aspect hook and reject `RunEvent::WindowEvent` feedback. |
 
 ### Root Cause
 
@@ -1072,21 +1072,21 @@ would reintroduce the exact live resize feedback loop the project retired.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User feedback 2026-06-23 | Minimum panel width is a legality constraint; illegal sizes must be rejected instead of hidden behind alternate values. |
-| `2026-06-22-pane-semantics-layout-frame.md` | `services/pane.ts` owns pane layout and handle semantics; do not add another pane writer. |
-| This spec | Pane legal max reserves fixed left and right toolbar chrome from the same solver. |
-| Static grep | `paneHandleWidth()` is consumed only by `readPaneGeometrySnapshot()`, which feeds `resolvedPaneWidths()` and `paneResizeBounds()`. |
+| Source                                      | Constraint carried forward                                                                                                         |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| User feedback 2026-06-23                    | Minimum panel width is a legality constraint; illegal sizes must be rejected instead of hidden behind alternate values.            |
+| `2026-06-22-pane-semantics-layout-frame.md` | `services/pane.ts` owns pane layout and handle semantics; do not add another pane writer.                                          |
+| This spec                                   | Pane legal max reserves fixed left and right toolbar chrome from the same solver.                                                  |
+| Static grep                                 | `paneHandleWidth()` is consumed only by `readPaneGeometrySnapshot()`, which feeds `resolvedPaneWidths()` and `paneResizeBounds()`. |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Pane resize handle CSS | `.pane-resizer` has `flex: 0 0 var(--ui-resizer-width)` and `min-width: var(--ui-resizer-width)`. | Keep CSS as the only rendered handle width source. |
+| Surface                         | Evidence                                                                                                                           | Decision                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Pane resize handle CSS          | `.pane-resizer` has `flex: 0 0 var(--ui-resizer-width)` and `min-width: var(--ui-resizer-width)`.                                  | Keep CSS as the only rendered handle width source.                                                    |
 | Pane service handle measurement | `paneHandleWidth()` read `getBoundingClientRect().width`, then read `--ui-resizer-width` when the rendered width was not positive. | Remove the token fallback; a visible handle that renders at zero width is an invalid layout contract. |
-| Pane layout solver | `readPaneGeometrySnapshot()` uses `paneHandleWidth()` for both pane max and ARIA range. | Keep the single solver and let invalid handle geometry fail instead of inventing a second value. |
-| Tests | `pane-config.test.ts` already pins pane ownership and geometry inputs. | Extend it to reject the retired token fallback and require the positive rendered-width assertion. |
+| Pane layout solver              | `readPaneGeometrySnapshot()` uses `paneHandleWidth()` for both pane max and ARIA range.                                            | Keep the single solver and let invalid handle geometry fail instead of inventing a second value.      |
+| Tests                           | `pane-config.test.ts` already pins pane ownership and geometry inputs.                                                             | Extend it to reject the retired token fallback and require the positive rendered-width assertion.     |
 
 ### Root Cause
 
@@ -1140,24 +1140,24 @@ actually render.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Peirce read-only audit | Native `minWidth/minHeight`, WebView overlay tokens, `currentUIScale()` fallback, and stale legal-size prose still left high-confidence double-source/fallback/spec debt. |
-| `2026-06-22-overlay-viewport-size-contract.md` | The native overlay minimum is `1120x720`; browser layout must mirror that legal frame. |
-| `2026-06-22-overlay-layout-aspect-frame.md` | Do not reintroduce `WindowEvent::Resized -> set_size()` feedback loops. |
-| `2026-06-22-center-workbench-panel-min-size-contract.md` | Historical intermediate `@media (width < 1120px)` decision is superseded by the legal shell cleanup. |
+| Source                                                   | Constraint carried forward                                                                                                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Peirce read-only audit                                   | Native `minWidth/minHeight`, WebView overlay tokens, `currentUIScale()` fallback, and stale legal-size prose still left high-confidence double-source/fallback/spec debt. |
+| `2026-06-22-overlay-viewport-size-contract.md`           | The native overlay minimum is `1120x720`; browser layout must mirror that legal frame.                                                                                    |
+| `2026-06-22-overlay-layout-aspect-frame.md`              | Do not reintroduce `WindowEvent::Resized -> set_size()` feedback loops.                                                                                                   |
+| `2026-06-22-center-workbench-panel-min-size-contract.md` | Historical intermediate `@media (width < 1120px)` decision is superseded by the legal shell cleanup.                                                                      |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Native author source | `src-tauri/tauri.conf.json` is required by Tauri and already owns the main window `minWidth/minHeight`. | Keep it as the only authored numeric legal frame source. |
-| WebView overlay tokens | `design-language.css` separately authored `--ui-overlay-min-width-units: 1120` and `--ui-overlay-min-height-units: 720`. | Delete these authored values and inject generated CSS from the Tauri config during Vite HTML transform. |
-| Build/dev entry | `vite.config.ts` already injects overlay version into HTML. | Add a second HTML transform that replaces an explicit marker with generated legal-frame tokens. |
-| Unused XL breakpoint | `--ui-breakpoint-xl: 1120px` has no production consumer after legal-shell compact branch deletion. | Delete it to avoid another apparent legal-width source. |
-| UI scale helper | `services/pane.ts` exported `currentUIScale()` with `document` and parse fallbacks to `1`; `ChatComposer.tsx` kept a local duplicate. | Move a single fail-fast `currentUIScale()` to `utils/layout-tokens.ts` and update all consumers. |
-| Zoom service | `theme.ts` read `--ui-scale` with `"1"` / `|| 1` fallback. | Use the shared fail-fast helper and reject invalid zoom base values. |
-| Stale spec | `2026-06-22-center-workbench-panel-min-size-contract.md` still read as an active verified compact-branch plan. | Mark it superseded and add a static guard. |
+| Surface                | Evidence                                                                                                                              | Decision                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------- |
+| Native author source   | `src-tauri/tauri.conf.json` is required by Tauri and already owns the main window `minWidth/minHeight`.                               | Keep it as the only authored numeric legal frame source.                                                |
+| WebView overlay tokens | `design-language.css` separately authored `--ui-overlay-min-width-units: 1120` and `--ui-overlay-min-height-units: 720`.              | Delete these authored values and inject generated CSS from the Tauri config during Vite HTML transform. |
+| Build/dev entry        | `vite.config.ts` already injects overlay version into HTML.                                                                           | Add a second HTML transform that replaces an explicit marker with generated legal-frame tokens.         |
+| Unused XL breakpoint   | `--ui-breakpoint-xl: 1120px` has no production consumer after legal-shell compact branch deletion.                                    | Delete it to avoid another apparent legal-width source.                                                 |
+| UI scale helper        | `services/pane.ts` exported `currentUIScale()` with `document` and parse fallbacks to `1`; `ChatComposer.tsx` kept a local duplicate. | Move a single fail-fast `currentUIScale()` to `utils/layout-tokens.ts` and update all consumers.        |
+| Zoom service           | `theme.ts` read `--ui-scale` with `"1"` / `                                                                                           |                                                                                                         | 1` fallback. | Use the shared fail-fast helper and reject invalid zoom base values. |
+| Stale spec             | `2026-06-22-center-workbench-panel-min-size-contract.md` still read as an active verified compact-branch plan.                        | Mark it superseded and add a static guard.                                                              |
 
 ### Root Cause
 
@@ -1246,22 +1246,22 @@ token source.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User feedback 2026-06-23 | Illegal aspect ratios and too-small panels are not acceptable; resize work must not make toolbar panels feel stuck. |
-| Aquinas read-only audit | `startCenterWorkbenchPanelResize()` still reads center panel rects synchronously during pointerdown before writing the resizing dataset. |
-| `2026-06-23-center-workbench-frame-phase-split.md` | Toolbar-open and resize work must keep DOM writes, layout reads, and layout-affecting follow-up work in explicit frame phases. |
-| This contract | Center workbench panel minimum width remains token-owned by `--ui-workbench-panel-min-width`; no alternate emergency minimum is allowed. |
+| Source                                             | Constraint carried forward                                                                                                               |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| User feedback 2026-06-23                           | Illegal aspect ratios and too-small panels are not acceptable; resize work must not make toolbar panels feel stuck.                      |
+| Aquinas read-only audit                            | `startCenterWorkbenchPanelResize()` still reads center panel rects synchronously during pointerdown before writing the resizing dataset. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Toolbar-open and resize work must keep DOM writes, layout reads, and layout-affecting follow-up work in explicit frame phases.           |
+| This contract                                      | Center workbench panel minimum width remains token-owned by `--ui-workbench-panel-min-width`; no alternate emergency minimum is allowed. |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Separator pointerdown | `startCenterWorkbenchPanelResize()` calls `centerWorkbenchPanelResizeMetrics()`, which reads panel rects. | Start a drag session without geometry reads; defer baseline metrics to the existing resize RAF. |
-| Pointermove | `updateCenterWorkbenchPanelResize()` already records `pendingCenterWorkbenchPanelResizeClientX` and schedules `applyCenterWorkbenchPanelResizeOnFrame`. | Keep this as the single pointer geometry owner. |
-| Resize baseline | Existing drag math needs the initial pair widths, total weight, and legal range. | Capture that baseline on the first scheduled resize frame and reuse it for the drag. |
-| Keyboard resize | `resizeCenterWorkbenchPanelByKeyboard()` is a discrete action and still reads metrics before applying one change. | Keep unchanged. |
-| Tests | Static frame scheduler tests and center workbench browser test already cover RAF resize paths. | Extend them to reject pointerdown geometry reads before RAF. |
+| Surface               | Evidence                                                                                                                                                | Decision                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Separator pointerdown | `startCenterWorkbenchPanelResize()` calls `centerWorkbenchPanelResizeMetrics()`, which reads panel rects.                                               | Start a drag session without geometry reads; defer baseline metrics to the existing resize RAF. |
+| Pointermove           | `updateCenterWorkbenchPanelResize()` already records `pendingCenterWorkbenchPanelResizeClientX` and schedules `applyCenterWorkbenchPanelResizeOnFrame`. | Keep this as the single pointer geometry owner.                                                 |
+| Resize baseline       | Existing drag math needs the initial pair widths, total weight, and legal range.                                                                        | Capture that baseline on the first scheduled resize frame and reuse it for the drag.            |
+| Keyboard resize       | `resizeCenterWorkbenchPanelByKeyboard()` is a discrete action and still reads metrics before applying one change.                                       | Keep unchanged.                                                                                 |
+| Tests                 | Static frame scheduler tests and center workbench browser test already cover RAF resize paths.                                                          | Extend them to reject pointerdown geometry reads before RAF.                                    |
 
 ### Root Cause
 
@@ -1333,20 +1333,20 @@ frame-split work was meant to avoid.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Einstein read-only audit | `window.stepZoom` still used `settingsStore.zoom || 1` and duplicated the zoom-step calculation outside `services/theme.ts`. |
-| Generated overlay size contract follow-up | UI scale readers used by resize/panel math must fail fast instead of inventing a default scale. |
-| `services/theme.ts` | `stepZoom()` already derives the current zoom from `currentUIScale()` and `overlayLayoutFrameSize()`. |
+| Source                                    | Constraint carried forward                                                                            |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- | --- | ---------------------------------------------------------------------- |
+| Einstein read-only audit                  | `window.stepZoom` still used `settingsStore.zoom                                                      |     | 1`and duplicated the zoom-step calculation outside`services/theme.ts`. |
+| Generated overlay size contract follow-up | UI scale readers used by resize/panel math must fail fast instead of inventing a default scale.       |
+| `services/theme.ts`                       | `stepZoom()` already derives the current zoom from `currentUIScale()` and `overlayLayoutFrameSize()`. |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Global bridge | `installGlobalBridges()` exposes `window.stepZoom` for tests/probes. | Keep the bridge, but make it delegate to the theme service's single zoom-step owner. |
-| Theme service | `stepZoom()` applies the zoom but did not return the applied sanitized value. | Return the applied zoom so callers that persist settings do not recompute it. |
-| Settings store | Existing settings hydration still owns persisted zoom sanitization. | Do not change hydration semantics in this frame-split fix. |
-| Static tests | `overlay-window-size-contract.test.ts` already guards scale fallback removal. | Extend it to reject `settingsStore.zoom || 1` in the bridge and require `theme.stepZoom()` ownership. |
+| Surface        | Evidence                                                                      | Decision                                                                             |
+| -------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --- | -------------------------------------------------------- |
+| Global bridge  | `installGlobalBridges()` exposes `window.stepZoom` for tests/probes.          | Keep the bridge, but make it delegate to the theme service's single zoom-step owner. |
+| Theme service  | `stepZoom()` applies the zoom but did not return the applied sanitized value. | Return the applied zoom so callers that persist settings do not recompute it.        |
+| Settings store | Existing settings hydration still owns persisted zoom sanitization.           | Do not change hydration semantics in this frame-split fix.                           |
+| Static tests   | `overlay-window-size-contract.test.ts` already guards scale fallback removal. | Extend it to reject `settingsStore.zoom                                              |     | 1`in the bridge and require`theme.stepZoom()` ownership. |
 
 ### Root Cause
 
@@ -1403,21 +1403,21 @@ calculation in `services/theme.ts`.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Aquinas read-only audit | Browser preview live input uses a cached image rect; horizontal center workbench reveal/scroll changes viewport coordinates without resizing the image. |
-| `2026-06-23-center-workbench-frame-phase-split.md` | Reveal scroll and measurement work must stay out of input-event handlers. |
-| `browser-preview-live-input-batch.test.ts` | Existing browser coverage already rejects `getBoundingClientRect()` reads inside live input events. |
-| `workspace.css` | `.center-workbench-body` owns horizontal overflow for multiple legal-width panels. |
+| Source                                             | Constraint carried forward                                                                                                                              |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Aquinas read-only audit                            | Browser preview live input uses a cached image rect; horizontal center workbench reveal/scroll changes viewport coordinates without resizing the image. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Reveal scroll and measurement work must stay out of input-event handlers.                                                                               |
+| `browser-preview-live-input-batch.test.ts`         | Existing browser coverage already rejects `getBoundingClientRect()` reads inside live input events.                                                     |
+| `workspace.css`                                    | `.center-workbench-body` owns horizontal overflow for multiple legal-width panels.                                                                      |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Live image bind/load | `BrowserPreviewPanel.tsx` schedules rect measurement when the live image binds, loads, or resizes. | Keep as existing owner for image size changes. |
-| Center workbench horizontal scroll | `.center-workbench-body` scrolls when several legal-width panels are open or revealed. | Register the live image against that scroll container and schedule a rect measurement on scroll. |
-| Live input events | `livePoint()` consumes the cached rect and schedules a measurement only if missing. | Keep input events read-free; do not call `getBoundingClientRect()` from pointer/wheel handlers. |
-| Tests | `browser-preview-live-input-batch.test.ts` already drives a live preview and records input-event rect reads. | Extend it with a forced horizontal scroll/reveal case and assert submitted coordinates match the post-scroll visual center. |
+| Surface                            | Evidence                                                                                                     | Decision                                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Live image bind/load               | `BrowserPreviewPanel.tsx` schedules rect measurement when the live image binds, loads, or resizes.           | Keep as existing owner for image size changes.                                                                              |
+| Center workbench horizontal scroll | `.center-workbench-body` scrolls when several legal-width panels are open or revealed.                       | Register the live image against that scroll container and schedule a rect measurement on scroll.                            |
+| Live input events                  | `livePoint()` consumes the cached rect and schedules a measurement only if missing.                          | Keep input events read-free; do not call `getBoundingClientRect()` from pointer/wheel handlers.                             |
+| Tests                              | `browser-preview-live-input-batch.test.ts` already drives a live preview and records input-event rect reads. | Extend it with a forced horizontal scroll/reveal case and assert submitted coordinates match the post-scroll visual center. |
 
 ### Root Cause
 
@@ -1496,22 +1496,22 @@ event.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Independent review 2026-06-23 | Corrupt successful live image bytes still lacked a real browser test after service pre-decode was removed. |
-| `2026-06-17-browser-preview-visual-stress-benchmark.md` | The benchmark already names corrupt HTTP 200 live PNG bytes as a required visual failure state. |
-| This contract | The rendered `<img>` is the single live frame decode owner; service-side pre-decode is retired as a duplicate decode source. |
-| `BrowserPreviewPanel.tsx` | `handleLiveImageDecodeError()` owns visible live decode failure, loading cleanup, and broken object URL cleanup. |
+| Source                                                  | Constraint carried forward                                                                                                   |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Independent review 2026-06-23                           | Corrupt successful live image bytes still lacked a real browser test after service pre-decode was removed.                   |
+| `2026-06-17-browser-preview-visual-stress-benchmark.md` | The benchmark already names corrupt HTTP 200 live PNG bytes as a required visual failure state.                              |
+| This contract                                           | The rendered `<img>` is the single live frame decode owner; service-side pre-decode is retired as a duplicate decode source. |
+| `BrowserPreviewPanel.tsx`                               | `handleLiveImageDecodeError()` owns visible live decode failure, loading cleanup, and broken object URL cleanup.             |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Visual stress fixture | `browser-preview-visual-stress.test.ts` serves live snapshot PNG bytes but never switches a successful HTTP 200 route to corrupt image bytes. | Add a corrupt live snapshot phase to the existing visual benchmark instead of adding a separate fake path. |
-| Decode owner | `BrowserPreviewPanel.tsx` handles `<img onError>` and clears the broken live image. | Test this rendered image path directly; do not reintroduce service pre-decode. |
-| Recovery path | Viewport switches already cause a new task/target/viewport live snapshot owner. | Recover by switching to another viewport and asserting a valid live image renders again. |
-| Historical spec | The 2026-06-17 benchmark previously assigned corrupt-frame rejection to the service. | Update that benchmark wording to the current single-owner decode contract. |
-| Narrow raw viewport assertion | The visual stress benchmark asserted zero body horizontal overflow at `390px`, contradicting the legal `1120px` overlay shell. | Assert preview content stays inside the legal shell instead of treating raw viewport overflow as illegal. |
+| Surface                       | Evidence                                                                                                                                      | Decision                                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Visual stress fixture         | `browser-preview-visual-stress.test.ts` serves live snapshot PNG bytes but never switches a successful HTTP 200 route to corrupt image bytes. | Add a corrupt live snapshot phase to the existing visual benchmark instead of adding a separate fake path. |
+| Decode owner                  | `BrowserPreviewPanel.tsx` handles `<img onError>` and clears the broken live image.                                                           | Test this rendered image path directly; do not reintroduce service pre-decode.                             |
+| Recovery path                 | Viewport switches already cause a new task/target/viewport live snapshot owner.                                                               | Recover by switching to another viewport and asserting a valid live image renders again.                   |
+| Historical spec               | The 2026-06-17 benchmark previously assigned corrupt-frame rejection to the service.                                                          | Update that benchmark wording to the current single-owner decode contract.                                 |
+| Narrow raw viewport assertion | The visual stress benchmark asserted zero body horizontal overflow at `390px`, contradicting the legal `1120px` overlay shell.                | Assert preview content stays inside the legal shell instead of treating raw viewport overflow as illegal.  |
 
 ### Root Cause
 
@@ -1592,19 +1592,19 @@ benchmark failure.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| Confucius read-only audit | Production legal-frame sources are single-owned, but `mission-visual-loop.ts` still named a `900x720` capture as a narrow breakpoint. |
-| Harvey read-only audit | The six-open-panel side toolbar browser state only asserted `width > 0`; it should assert token minimum width and horizontal scroll pressure. |
-| This contract | Illegal raw browser viewports must preserve the legal overlay shell and must not define an alternate compact panel layout. |
+| Source                    | Constraint carried forward                                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Confucius read-only audit | Production legal-frame sources are single-owned, but `mission-visual-loop.ts` still named a `900x720` capture as a narrow breakpoint.         |
+| Harvey read-only audit    | The six-open-panel side toolbar browser state only asserted `width > 0`; it should assert token minimum width and horizontal scroll pressure. |
+| This contract             | Illegal raw browser viewports must preserve the legal overlay shell and must not define an alternate compact panel layout.                    |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Mission visual loop | `VIEWPORT_NARROW` and `06-narrow-breakpoint` described a sub-minimum raw viewport as a breakpoint. | Rename it to `VIEWPORT_ILLEGAL_NARROW` and `06-illegal-narrow-legal-frame`. |
-| Side toolbar browser test | Six open center panels were checked only with `width > 0`. | Assert every open panel is at least `--ui-workbench-panel-min-width` and that `.center-workbench-body` scrolls horizontally. |
-| Static legal-size guard | `overlay-window-size-contract.test.ts` already guards removed compact size sources. | Extend it so the mission visual loop cannot reintroduce narrow-breakpoint language. |
+| Surface                   | Evidence                                                                                           | Decision                                                                                                                     |
+| ------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Mission visual loop       | `VIEWPORT_NARROW` and `06-narrow-breakpoint` described a sub-minimum raw viewport as a breakpoint. | Rename it to `VIEWPORT_ILLEGAL_NARROW` and `06-illegal-narrow-legal-frame`.                                                  |
+| Side toolbar browser test | Six open center panels were checked only with `width > 0`.                                         | Assert every open panel is at least `--ui-workbench-panel-min-width` and that `.center-workbench-body` scrolls horizontally. |
+| Static legal-size guard   | `overlay-window-size-contract.test.ts` already guards removed compact size sources.                | Extend it so the mission visual loop cannot reintroduce narrow-breakpoint language.                                          |
 
 ### Root Cause
 
@@ -1689,24 +1689,24 @@ as illegal-wide surfaces.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User feedback 2026-06-23 | Limit aspect ratio and minimum panel width; illegal aspect ratios and too-small panels are not valid UI states. |
-| `2026-06-22-overlay-layout-aspect-frame.md` | The legal shell and native Windows sizing constrain the minimum aspect ratio derived from `1120x720`; do not restore a resize feedback loop. |
-| This contract, dead compact CSS follow-up | The old `--ui-overlay-min-aspect-ratio` token was removed because it was declared but not consumed. |
-| Live stale 7878 observation | A stale tab still exposed `--ui-overlay-min-aspect-ratio`, while current disk source rejected it in tests, showing the need to make the disk contract explicit and consumed. |
-| Mendel read-only audit | Current code constrains illegal tall layouts but does not constrain illegal wide aspect ratios. |
+| Source                                      | Constraint carried forward                                                                                                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User feedback 2026-06-23                    | Limit aspect ratio and minimum panel width; illegal aspect ratios and too-small panels are not valid UI states.                                                              |
+| `2026-06-22-overlay-layout-aspect-frame.md` | The legal shell and native Windows sizing constrain the minimum aspect ratio derived from `1120x720`; do not restore a resize feedback loop.                                 |
+| This contract, dead compact CSS follow-up   | The old `--ui-overlay-min-aspect-ratio` token was removed because it was declared but not consumed.                                                                          |
+| Live stale 7878 observation                 | A stale tab still exposed `--ui-overlay-min-aspect-ratio`, while current disk source rejected it in tests, showing the need to make the disk contract explicit and consumed. |
+| Mendel read-only audit                      | Current code constrains illegal tall layouts but does not constrain illegal wide aspect ratios.                                                                              |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Size contract generator | `renderOverlaySizeContractStyle()` already emits the numeric width and height units from Tauri config. | Derive min and max aspect tokens in the same generated block. |
-| Max aspect source | Tauri `main` window `width` is the authored normal desktop width, and `minHeight` is the legal height floor. | Use `width / minHeight` as the maximum aspect ratio so a minimum-height window cannot stretch wider than the configured desktop width. |
-| Browser legal shell | `base.css` computes shell height from width, min-height units, and min-width units inline. | Consume generated min and max aspect tokens so the legal shell rejects both too-tall and too-wide viewports. |
-| Design tokens | `design-language.css` no longer owns overlay min width/height. | Keep it free of overlay aspect tokens; generated Tauri config remains the source. |
-| TypeScript layout frame | `overlay-layout-frame.ts` derives the minimum ratio from token-resolved min width and height. | Add generated max-aspect token reads so zoom/layout math matches CSS. |
-| Rust native sizing | `main.rs` derives `overlay_min_aspect_ratio()` from the configured minimum size. | Add an `OverlayWindowConstraints` source that also carries max aspect from the configured window width and min height. |
+| Surface                 | Evidence                                                                                                     | Decision                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Size contract generator | `renderOverlaySizeContractStyle()` already emits the numeric width and height units from Tauri config.       | Derive min and max aspect tokens in the same generated block.                                                                          |
+| Max aspect source       | Tauri `main` window `width` is the authored normal desktop width, and `minHeight` is the legal height floor. | Use `width / minHeight` as the maximum aspect ratio so a minimum-height window cannot stretch wider than the configured desktop width. |
+| Browser legal shell     | `base.css` computes shell height from width, min-height units, and min-width units inline.                   | Consume generated min and max aspect tokens so the legal shell rejects both too-tall and too-wide viewports.                           |
+| Design tokens           | `design-language.css` no longer owns overlay min width/height.                                               | Keep it free of overlay aspect tokens; generated Tauri config remains the source.                                                      |
+| TypeScript layout frame | `overlay-layout-frame.ts` derives the minimum ratio from token-resolved min width and height.                | Add generated max-aspect token reads so zoom/layout math matches CSS.                                                                  |
+| Rust native sizing      | `main.rs` derives `overlay_min_aspect_ratio()` from the configured minimum size.                             | Add an `OverlayWindowConstraints` source that also carries max aspect from the configured window width and min height.                 |
 
 ### Root Cause
 
@@ -1796,23 +1796,23 @@ width.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| User correction 2026-06-23 | Normal fullscreen is not illegal; calling it illegal exposes the flawed contract. |
-| Superseded `Consumed Aspect Range Tokens` | The previous fix derived a maximum aspect ratio from the default `1280x760` window width and `720` minimum height. |
-| `2026-06-22-overlay-layout-aspect-frame.md` | The original hard requirement was the minimum aspect ratio from `1120x720`, not a maximum fullscreen width. |
-| `2026-06-22-native-resize-no-set-size-loop.md` | Do not restore `WindowEvent::Resized -> set_size()` feedback loops. |
+| Source                                         | Constraint carried forward                                                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| User correction 2026-06-23                     | Normal fullscreen is not illegal; calling it illegal exposes the flawed contract.                                  |
+| Superseded `Consumed Aspect Range Tokens`      | The previous fix derived a maximum aspect ratio from the default `1280x760` window width and `720` minimum height. |
+| `2026-06-22-overlay-layout-aspect-frame.md`    | The original hard requirement was the minimum aspect ratio from `1120x720`, not a maximum fullscreen width.        |
+| `2026-06-22-native-resize-no-set-size-loop.md` | Do not restore `WindowEvent::Resized -> set_size()` feedback loops.                                                |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Tauri config | `width: 1280` is the default launch size and `minWidth: 1120` is the legal floor. | Keep default size validation, but do not derive a runtime maximum from `width`. |
-| Generated CSS tokens | `renderOverlaySizeContractStyle()` emitted `--ui-overlay-max-aspect-*`. | Delete those tokens; generated legal frame values are minimum width, minimum height, and minimum aspect only. |
-| Browser legal shell | `base.css` clamped shell width by `--ui-overlay-max-aspect-ratio`. | Remove the width clamp; fullscreen width is legal and should fill the viewport. |
-| TypeScript layout frame | `overlay-layout-frame.ts` clamped width by the same max aspect. | Remove the max-aspect input and preserve wide viewport width. |
-| Rust native sizing | `OverlayWindowConstraints` carried `max_aspect_size`; Windows `WM_SIZING` clamped wide rectangles. | Remove the max-width branch; keep minimum dimensions and too-tall minimum-aspect correction. |
-| Browser visual test | `1600x720` was named `illegal-wide` and expected a centered `1280px` shell. | Rename it to fullscreen-wide and assert the shell width equals the viewport. |
+| Surface                 | Evidence                                                                                           | Decision                                                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Tauri config            | `width: 1280` is the default launch size and `minWidth: 1120` is the legal floor.                  | Keep default size validation, but do not derive a runtime maximum from `width`.                               |
+| Generated CSS tokens    | `renderOverlaySizeContractStyle()` emitted `--ui-overlay-max-aspect-*`.                            | Delete those tokens; generated legal frame values are minimum width, minimum height, and minimum aspect only. |
+| Browser legal shell     | `base.css` clamped shell width by `--ui-overlay-max-aspect-ratio`.                                 | Remove the width clamp; fullscreen width is legal and should fill the viewport.                               |
+| TypeScript layout frame | `overlay-layout-frame.ts` clamped width by the same max aspect.                                    | Remove the max-aspect input and preserve wide viewport width.                                                 |
+| Rust native sizing      | `OverlayWindowConstraints` carried `max_aspect_size`; Windows `WM_SIZING` clamped wide rectangles. | Remove the max-width branch; keep minimum dimensions and too-tall minimum-aspect correction.                  |
+| Browser visual test     | `1600x720` was named `illegal-wide` and expected a centered `1280px` shell.                        | Rename it to fullscreen-wide and assert the shell width equals the viewport.                                  |
 
 ### Root Cause
 

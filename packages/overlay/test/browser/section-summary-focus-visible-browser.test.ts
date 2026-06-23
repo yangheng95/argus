@@ -108,7 +108,8 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
       return send({ root: "D:/overlay", defaultDirectory: "D:/overlay/workspace/app", projects: [] })
     if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [{ task, updated_at: now - 1_000 }] })
     if (path === "/mission") return send([])
-    if (path === "/executor") return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
+    if (path === "/executor")
+      return send([{ id: "opencorvus", label: "OpenCorvus", selectable: true, discovered: true }])
     if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
     if (path === "/project/current/worktrees") return send([])
     if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
@@ -130,7 +131,14 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config/prompt") return send([])
     if (path === "/config/prompt-profile")
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     if (path === "/config") return send({ model: "opencorvus/gpt-5-nano" })
     if (path === "/channel") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
@@ -157,10 +165,20 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
     if (path === `/task/${taskID}/operator-model-context`)
       return send({ taskID, sessionID: "session-section-summary", agent: "orchestrator", model: null })
     if (path === `/task/${taskID}/browser-preview`)
-      return send({ taskID, kind: "missing", status: "missing", viewports: [], diagnostics: [], candidates: [], source: "none" })
-    if (path === `/task/${taskID}/conversation/events`) return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
+      return send({
+        taskID,
+        kind: "missing",
+        status: "missing",
+        viewports: [],
+        diagnostics: [],
+        candidates: [],
+        source: "none",
+      })
+    if (path === `/task/${taskID}/conversation/events`)
+      return send({ events: [], eventReplay: { cursor: 0, latestSequence: 0 } })
     if (path === `/task/${taskID}/transcript`) return send([])
-    if (path === `/task/${taskID}/trace`) return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace" })
+    if (path === `/task/${taskID}/trace`)
+      return send({ events: [], traceDir: "D:/overlay/workspace/app/.opencorvus/trace" })
     if (path === "/task/events" || path === `/task/${taskID}/events`) return eventStream()
     if (path === "/panel/knowledge/memory" || path === "/panel/knowledge/preference") return send([])
     if (path === "/log" && req.method === "POST") return send({ ok: true })
@@ -179,15 +197,18 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 860 })
-    await page.evaluateOnNewDocument((seed: { serverUrl: string; taskID: string }) => {
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", seed.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
-      localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
-      localStorage.setItem("oc_workspace_task", seed.taskID)
-    }, { serverUrl: server.origin, taskID })
+    await page.evaluateOnNewDocument(
+      (seed: { serverUrl: string; taskID: string }) => {
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", seed.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_workspace_directory", "D:/overlay/workspace/app")
+        localStorage.setItem("oc_workspace_task", seed.taskID)
+      },
+      { serverUrl: server.origin, taskID },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
     await page.waitForSelector(`.task-row-main[data-task-id="${taskID}"]`, { state: "attached", timeout: 15_000 })
@@ -196,7 +217,10 @@ test("right inspector Section summary exposes tokenized keyboard focus", async (
       timeout: 15_000,
     })
     await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-    await page.waitForSelector('[data-ui="workflow-section-stack"] .oc-section__head', { visible: true, timeout: 15_000 })
+    await page.waitForSelector('[data-ui="workflow-section-stack"] .oc-section__head', {
+      visible: true,
+      timeout: 15_000,
+    })
     assert.deepEqual(errors, [])
 
     let focusState: any = null

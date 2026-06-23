@@ -11,18 +11,18 @@ muted text on `--accent-dim`.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-18-popup-contrast-light-palette.md` | Popup readability belongs to light-theme semantic palette tokens and browser matrix coverage, not component-local color patches. |
-| `2026-06-18-command-palette-activedescendant.md` | Command Palette keeps a hand-written combobox/listbox surface, so active option states need explicit visual coverage. |
-| `2026-06-18-prompt-profile-trigger-select-primitive.md` | Expert Squad now participates in the shared Select primitive; this follow-up covers non-Select active popup states. |
+| Source                                                  | Existing decision                                                                                                                |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-popup-contrast-light-palette.md`            | Popup readability belongs to light-theme semantic palette tokens and browser matrix coverage, not component-local color patches. |
+| `2026-06-18-command-palette-activedescendant.md`        | Command Palette keeps a hand-written combobox/listbox surface, so active option states need explicit visual coverage.            |
+| `2026-06-18-prompt-profile-trigger-select-primitive.md` | Expert Squad now participates in the shared Select primitive; this follow-up covers non-Select active popup states.              |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "accent-dim|cmdk-item--active|project-worktree-row\\[data-status=\\\"active\\\"\\]" packages/overlay/src/styles` | Worktree active state uses accent text on `--accent-dim`; Command Palette active rows keep muted child text on `--accent-dim`. |
-| `rg -n "workspace-terminal-menu|workspace-editor-menu|workspace-coding-cli-menu" packages/overlay/src packages/overlay/test` | Workspace split launcher DropdownMenu surfaces were not represented in the popup contrast matrix. |
+| Sweep                           | Result                |
+| ------------------------------- | --------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `rg -n "accent-dim              | cmdk-item--active     | project-worktree-row\\[data-status=\\\"active\\\"\\]" packages/overlay/src/styles` | Worktree active state uses accent text on `--accent-dim`; Command Palette active rows keep muted child text on `--accent-dim`. |
+| `rg -n "workspace-terminal-menu | workspace-editor-menu | workspace-coding-cli-menu" packages/overlay/src packages/overlay/test`             | Workspace split launcher DropdownMenu surfaces were not represented in the popup contrast matrix.                              |
 
 ## Fix
 

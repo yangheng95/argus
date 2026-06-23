@@ -135,7 +135,8 @@ export async function runResearchSession(
     taskID: input.taskID,
     signal: input.signal,
   })
-  const expectedWebpageSourceUrl = config.kind === "frontend-research" ? input.sourceUrls?.find(isHttpWebpageUrl) : undefined
+  const expectedWebpageSourceUrl =
+    config.kind === "frontend-research" ? input.sourceUrls?.find(isHttpWebpageUrl) : undefined
   const outputToolKit = createResearchOutputTools({ expectedWebpageSourceUrl })
   if (input.continuation) {
     const replayed = await outputToolKit.replayUpdateToolCalls(await completedResearchOutputToolCalls(session.id))

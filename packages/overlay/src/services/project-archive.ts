@@ -32,16 +32,16 @@ function decodeBinaryErrorBody(body: Uint8Array): unknown {
   }
 }
 
-export async function downloadProjectArchive(input: {
-  path: string
-}): Promise<boolean> {
+export async function downloadProjectArchive(input: { path: string }): Promise<boolean> {
   const response = await apiRequest<Uint8Array>(input.path, {
     responseKind: "binary",
   })
   if (!response.ok) {
     throw new ApiError(response.status, input.path, decodeBinaryErrorBody(response.body))
   }
-  const filename = contentDispositionFilename(response.headers["content-disposition"] || response.headers["Content-Disposition"])
+  const filename = contentDispositionFilename(
+    response.headers["content-disposition"] || response.headers["Content-Disposition"],
+  )
   if (!filename) {
     throw new Error(`Project archive response is missing a Content-Disposition filename for ${input.path}`)
   }

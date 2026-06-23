@@ -45,7 +45,10 @@ function toolText(result: unknown): string {
   }
   if (result && typeof result === "object" && "content" in result) {
     const content = (result as { content?: Array<{ text?: string }> }).content
-    const text = content?.map((part) => part.text).filter(Boolean).join("\n")
+    const text = content
+      ?.map((part) => part.text)
+      .filter(Boolean)
+      .join("\n")
     if (text) return text
   }
   if (
@@ -237,7 +240,9 @@ describe("orchestrator build goal references", () => {
         expect(observedContext?.frontendDesign).toContain(paths.templateAbsolute)
         expect(observedContext?.frontendDesign).toContain(paths.manifestAbsolute)
         expect(observedContext?.frontendDesign).toContain("web-clone-source/reference.png")
-        expect(observedContext?.frontendDesign).not.toContain(`Materialized frontend_design public report (read this): ${paths.templateRelative}`)
+        expect(observedContext?.frontendDesign).not.toContain(
+          `Materialized frontend_design public report (read this): ${paths.templateRelative}`,
+        )
       },
     })
   }, 30_000)

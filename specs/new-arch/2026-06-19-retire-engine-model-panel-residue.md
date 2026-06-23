@@ -13,12 +13,12 @@ CSS means Cascading Style Sheets. DOM means Document Object Model.
 
 ## Evidence
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "engine-model-panel" packages/overlay/src -g "!*.css"` | No production DOM owner exists. | Remove the dead selector instead of preserving a phantom model panel owner. |
-| `rg -n "engine-model-panel" packages/overlay/test specs/new-arch -g "*.ts" -g "*.md"` | No active test or plan protects the selector. | Add a retired-selector guard. |
-| `rg -n "agent-model-select|agent-model-assignment|provider-panel|executor-model-listbox" packages/overlay/src packages/overlay/test specs/new-arch -g "*.*"` | Live model surfaces use `.agent-model-select`, `.agent-model-assignment`, `.provider-panel`, and `.executor-model-listbox`. | Keep current owners unchanged. |
-| `packages/overlay/src/styles/surfaces/field.css` | The grouped reset applies to `.field-input`, `.config-status-box`, and dead `.engine-model-panel`; the comment also advertises retired `dir-panel` / model-panel ownership. | Narrow the rule and comment to the live field/status owners. |
+| Sweep                                                                                 | Result                                                                                                                                                                      | Decision                                                                    |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `rg -n "engine-model-panel" packages/overlay/src -g "!*.css"`                         | No production DOM owner exists.                                                                                                                                             | Remove the dead selector instead of preserving a phantom model panel owner. |
+| `rg -n "engine-model-panel" packages/overlay/test specs/new-arch -g "*.ts" -g "*.md"` | No active test or plan protects the selector.                                                                                                                               | Add a retired-selector guard.                                               |
+| `rg -n "agent-model-select                                                            | agent-model-assignment                                                                                                                                                      | provider-panel                                                              | executor-model-listbox" packages/overlay/src packages/overlay/test specs/new-arch -g "_._"` | Live model surfaces use `.agent-model-select`, `.agent-model-assignment`, `.provider-panel`, and `.executor-model-listbox`. | Keep current owners unchanged. |
+| `packages/overlay/src/styles/surfaces/field.css`                                      | The grouped reset applies to `.field-input`, `.config-status-box`, and dead `.engine-model-panel`; the comment also advertises retired `dir-panel` / model-panel ownership. | Narrow the rule and comment to the live field/status owners.                |
 
 ## Root Cause
 

@@ -22,16 +22,16 @@ future edits a stale target to revive.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
+| Source                                                | Existing decision                                                                                         |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Shared UI semantics should converge on mature primitives and remove hand-rolled remnants after migration. |
-| `2026-06-18-retire-settings-config-shell-residue.md` | Settings CSS-only shells should be retired once there are no production creation points. |
+| `2026-06-18-retire-settings-config-shell-residue.md`  | Settings CSS-only shells should be retired once there are no production creation points.                  |
 
 ## Impact Sweep
 
-| Sweep | Result |
-| --- | --- |
-| `rg -n "extension-block|extension-policy|knowledge-item-actions|knowledge-delete|ext-group|extension-row|extension-status|market-card|knowledge-item-meta-row|delete-memory" packages/overlay/src packages/overlay/test specs/new-arch` | Retired selectors were CSS/test-only; live component creation points use `.ext-group`, `.extension-row*`, `.market-card*`, `.knowledge-item-meta-row`, and `data-action="delete-memory"`. |
+| Sweep                                                                                                                                                                       | Result                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------- | ---------------- | --------- | ------------- | ---------------- | ----------- | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n "extension-block                                                                                                                                                     | extension-policy                                                                                                               | knowledge-item-actions | knowledge-delete | ext-group | extension-row | extension-status | market-card | knowledge-item-meta-row | delete-memory" packages/overlay/src packages/overlay/test specs/new-arch` | Retired selectors were CSS/test-only; live component creation points use `.ext-group`, `.extension-row*`, `.market-card*`, `.knowledge-item-meta-row`, and `data-action="delete-memory"`. |
 | `git diff -- packages/overlay/src/styles/surfaces/settings.css packages/overlay/src/styles/surfaces/activity.css packages/overlay/test/overlay-architecture-guards.test.ts` | `settings.css` and `activity.css` already had unrelated local changes; staging must isolate only the retired selector removal. |
 
 ## Fix

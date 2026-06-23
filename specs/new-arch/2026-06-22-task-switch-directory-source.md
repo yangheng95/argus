@@ -17,24 +17,24 @@ loading.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, recall disk plans before edits, test every change, visual verify UI work, commit and push each round. |
-| `2026-06-19-deep-performance-investigation.md` | Always-mounted overlay panels can amplify task selection pressure; fix trigger-level causes instead of caching broad stale data. |
-| `2026-06-22-section-phase-solid-owner.md` | Task selection UI state must have a single live owner and avoid imperative duplicate writers. |
-| `workspace-active-directory.test.ts` | Selected task directory already owns project-scoped controls over stale settings once `board.task.directory` exists. |
-| `task-directory-project-scope.test.ts` | Project-scope reloads must use selected task directory for direct panel requests. |
+| Source                                         | Constraint carried forward                                                                                                              |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                    | No fallback, no duplicate source, recall disk plans before edits, test every change, visual verify UI work, commit and push each round. |
+| `2026-06-19-deep-performance-investigation.md` | Always-mounted overlay panels can amplify task selection pressure; fix trigger-level causes instead of caching broad stale data.        |
+| `2026-06-22-section-phase-solid-owner.md`      | Task selection UI state must have a single live owner and avoid imperative duplicate writers.                                           |
+| `workspace-active-directory.test.ts`           | Selected task directory already owns project-scoped controls over stale settings once `board.task.directory` exists.                    |
+| `task-directory-project-scope.test.ts`         | Project-scope reloads must use selected task directory for direct panel requests.                                                       |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `selectTask()` | Synchronously writes `boardStore.selectedSource = { kind: "task", id, directory }` before async hydrate. | Treat this selected-source directory as the task-scoped directory while the board is empty. |
-| `selectTask()` sync phase | Previously updated `selectedSource`, `selectEpoch`, `taskSwitching`, board clearing, and writer reset as separate Solid writes. | Batch the switch identity and projection clears so reactive effects cannot observe a half-switched task. |
-| `activeProjectDirectory()` | Currently returns `boardStore.board?.task?.directory || settingsStore.directory`. | Add the selected-source directory to the same consistency-checked task directory source. |
-| `taskOwningDirectory()` | Already resolves and consistency-checks task row, matching board task, and selected source directories. | Reuse this owner resolver for selected-task project controls instead of adding a parallel resolver. |
-| Task switch trace | Selecting long tasks produced 51-53 requests and stale `economy_1` calls such as `operator-model-context`, `panel/knowledge/memory`, `terminal/profiles`, `config/prompt-profile`, and `followup`. | Fix the directory source before reducing individual request counts. |
-| Existing tests | `workspace-active-directory.test.ts` does not cover selected-source directory before board load. | Add a regression test for that race window and an inconsistency fail-loud case. |
+| Surface                    | Evidence                                                                                                                                                                                           | Decision                                                                                                 |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
+| `selectTask()`             | Synchronously writes `boardStore.selectedSource = { kind: "task", id, directory }` before async hydrate.                                                                                           | Treat this selected-source directory as the task-scoped directory while the board is empty.              |
+| `selectTask()` sync phase  | Previously updated `selectedSource`, `selectEpoch`, `taskSwitching`, board clearing, and writer reset as separate Solid writes.                                                                    | Batch the switch identity and projection clears so reactive effects cannot observe a half-switched task. |
+| `activeProjectDirectory()` | Currently returns `boardStore.board?.task?.directory                                                                                                                                               |                                                                                                          | settingsStore.directory`. | Add the selected-source directory to the same consistency-checked task directory source. |
+| `taskOwningDirectory()`    | Already resolves and consistency-checks task row, matching board task, and selected source directories.                                                                                            | Reuse this owner resolver for selected-task project controls instead of adding a parallel resolver.      |
+| Task switch trace          | Selecting long tasks produced 51-53 requests and stale `economy_1` calls such as `operator-model-context`, `panel/knowledge/memory`, `terminal/profiles`, `config/prompt-profile`, and `followup`. | Fix the directory source before reducing individual request counts.                                      |
+| Existing tests             | `workspace-active-directory.test.ts` does not cover selected-source directory before board load.                                                                                                   | Add a regression test for that race window and an inconsistency fail-loud case.                          |
 
 ## Root Cause
 
@@ -81,15 +81,15 @@ task switch window.
 
 ## Verification
 
-| Check | Result |
-| --- | --- |
-| `bun test packages/overlay/test/task-selection-dead-task.test.ts --timeout 30000` | 8 pass |
-| `bun test packages/overlay/test/workspace-active-directory.test.ts --timeout 30000` | 9 pass |
-| `bun test packages/overlay/test/task-directory-project-scope.test.ts --timeout 30000` | 8 pass |
-| `bun test packages/overlay/test/runtime-directory-actions.test.ts --timeout 30000` | 9 pass |
-| `bun run --cwd packages/overlay typecheck` | Pass |
-| `bun run --cwd packages/overlay build:vite` | Pass |
-| `node packages/overlay/.scratch/task-select-directory-window.mjs` | Previous-directory request count after click: 0; screenshot: `.scratch/task-select-directory-window-tsk_edc1eeb470011vW1ZfiEsw7ijo.png`. |
+| Check                                                                                 | Result                                                                                                                                   |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun test packages/overlay/test/task-selection-dead-task.test.ts --timeout 30000`     | 8 pass                                                                                                                                   |
+| `bun test packages/overlay/test/workspace-active-directory.test.ts --timeout 30000`   | 9 pass                                                                                                                                   |
+| `bun test packages/overlay/test/task-directory-project-scope.test.ts --timeout 30000` | 8 pass                                                                                                                                   |
+| `bun test packages/overlay/test/runtime-directory-actions.test.ts --timeout 30000`    | 9 pass                                                                                                                                   |
+| `bun run --cwd packages/overlay typecheck`                                            | Pass                                                                                                                                     |
+| `bun run --cwd packages/overlay build:vite`                                           | Pass                                                                                                                                     |
+| `node packages/overlay/.scratch/task-select-directory-window.mjs`                     | Previous-directory request count after click: 0; screenshot: `.scratch/task-select-directory-window-tsk_edc1eeb470011vW1ZfiEsw7ijo.png`. |
 
 ## Self Review
 

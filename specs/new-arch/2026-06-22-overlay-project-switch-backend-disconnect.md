@@ -21,7 +21,7 @@ longer matches the active project.
     top-level Solid effect in `main.tsx` to retarget the API client.
 - `packages/overlay/src/main.tsx`
   - the top-level effect eventually calls `configureApi({ directory:
-    activeDirectory() })` after settings hydration.
+activeDirectory() })` after settings hydration.
 - `packages/overlay/src/services/sse.ts`
   - selected-task SSE gets an explicit directory from callers.
   - task-list SSE computes its directory with

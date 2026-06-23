@@ -30,28 +30,28 @@ not enough.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate source, no blind patching, test every code change, visually verify UI changes, and commit/push each round. |
-| `2026-06-22-overlay-viewport-size-contract.md` | The native overlay minimum is `1120x720`; center workbench panel minimum width is owned by `--ui-workbench-panel-min-width`. |
-| `2026-06-22-overlay-resize-frame-coalescing.md` | Resize work is frame-coalesced through the shared RAF scheduler; do not add debounce or gate paths. |
-| `2026-06-22-center-workbench-open-layout-frame.md` | Panel open writes DOM state immediately and schedules layout reads to RAF. |
-| `2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md` | Center workbench layout and reveal share one RAF owner; `centerWorkbenchPanelWeights` remains the only persisted width source. |
-| Live `7878` evidence | With workflow, screenshots, and inspector open, the screenshots panel measured about `244px`, below the `280px` token, and the visual screenshot showed clipped panel content. |
-| Popper read-only audit | Screenshot panel rendering is virtualized and lazy; remaining toolbar-open jank candidates are layout/reveal geometry and asset/source mismatch, not a second screenshot panel implementation. |
-| Harvey read-only audit | `1120px` was both the native minimum width and an inclusive compact breakpoint, so the smallest legal native size entered compact layout. |
+| Source                                                               | Constraint carried forward                                                                                                                                                                     |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                          | No fallback logic, no duplicate source, no blind patching, test every code change, visually verify UI changes, and commit/push each round.                                                     |
+| `2026-06-22-overlay-viewport-size-contract.md`                       | The native overlay minimum is `1120x720`; center workbench panel minimum width is owned by `--ui-workbench-panel-min-width`.                                                                   |
+| `2026-06-22-overlay-resize-frame-coalescing.md`                      | Resize work is frame-coalesced through the shared RAF scheduler; do not add debounce or gate paths.                                                                                            |
+| `2026-06-22-center-workbench-open-layout-frame.md`                   | Panel open writes DOM state immediately and schedules layout reads to RAF.                                                                                                                     |
+| `2026-06-22-center-workbench-deferred-reveal-single-layout-owner.md` | Center workbench layout and reveal share one RAF owner; `centerWorkbenchPanelWeights` remains the only persisted width source.                                                                 |
+| Live `7878` evidence                                                 | With workflow, screenshots, and inspector open, the screenshots panel measured about `244px`, below the `280px` token, and the visual screenshot showed clipped panel content.                 |
+| Popper read-only audit                                               | Screenshot panel rendering is virtualized and lazy; remaining toolbar-open jank candidates are layout/reveal geometry and asset/source mismatch, not a second screenshot panel implementation. |
+| Harvey read-only audit                                               | `1120px` was both the native minimum width and an inclusive compact breakpoint, so the smallest legal native size entered compact layout.                                                      |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Minimum token | `design-language.css` defines `--ui-workbench-panel-min-width: calc(280px * var(--ui-scale))`. | Keep this as the only center panel minimum width source. |
-| Resize math | `main.tsx` resolves `--ui-workbench-panel-min-width` in `centerWorkbenchPanelMinWidth()`. | Keep; this owns drag and keyboard separator constraints. |
-| Base center body layout | `workspace.css` `.center-workbench-body` uses `overflow: hidden`. | Change base overflow to horizontal scroll and hidden vertical overflow so illegal compression is not the release valve. |
-| Base open panel layout | `workspace.css` `.center-workbench-view` uses `min-width: 0`; only compact mode sets a token-based flex basis. | Add a base open-panel minimum width using the same token. |
-| Compact workbench mode | `workspace.css` and `activity.css` used inclusive `@media (max-width: 1120px)` while native minimum width is `1120px`. | Historical intermediate step: make the compact breakpoint exclusive. Superseded by the 2026-06-23 legal shell cleanup, which removed these production branches. |
-| Static tests | `workspace-surface-consistency.test.ts` currently only asserts compact open-panel scrolling. | Add assertions for the base desktop min-size contract. |
-| Browser tests | `center-workbench-separator-browser.test.ts` covers two panels and resize screenshots, not three simultaneous peer panels. | Add a three-panel browser check that every open panel is at least the token width and capture a visual screenshot. |
+| Surface                 | Evidence                                                                                                                   | Decision                                                                                                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Minimum token           | `design-language.css` defines `--ui-workbench-panel-min-width: calc(280px * var(--ui-scale))`.                             | Keep this as the only center panel minimum width source.                                                                                                        |
+| Resize math             | `main.tsx` resolves `--ui-workbench-panel-min-width` in `centerWorkbenchPanelMinWidth()`.                                  | Keep; this owns drag and keyboard separator constraints.                                                                                                        |
+| Base center body layout | `workspace.css` `.center-workbench-body` uses `overflow: hidden`.                                                          | Change base overflow to horizontal scroll and hidden vertical overflow so illegal compression is not the release valve.                                         |
+| Base open panel layout  | `workspace.css` `.center-workbench-view` uses `min-width: 0`; only compact mode sets a token-based flex basis.             | Add a base open-panel minimum width using the same token.                                                                                                       |
+| Compact workbench mode  | `workspace.css` and `activity.css` used inclusive `@media (max-width: 1120px)` while native minimum width is `1120px`.     | Historical intermediate step: make the compact breakpoint exclusive. Superseded by the 2026-06-23 legal shell cleanup, which removed these production branches. |
+| Static tests            | `workspace-surface-consistency.test.ts` currently only asserts compact open-panel scrolling.                               | Add assertions for the base desktop min-size contract.                                                                                                          |
+| Browser tests           | `center-workbench-separator-browser.test.ts` covers two panels and resize screenshots, not three simultaneous peer panels. | Add a three-panel browser check that every open panel is at least the token width and capture a visual screenshot.                                              |
 
 ## Root Cause
 

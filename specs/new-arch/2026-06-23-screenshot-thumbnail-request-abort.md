@@ -19,28 +19,28 @@ visible consumer still needs the same resource.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate source, recall before edits, test every change, visually verify UI work, commit and push. |
-| `2026-06-23-screenshot-thumbnail-load-queue-cancellation.md` | Thumbnail jobs are physically removed from the RAF queue before starting; warm-cache thumbnails still wait for load permission. |
-| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md` | Thumbnail fetch/decode remains off the toolbar-open critical path. |
-| Gibbs read-only audit 2026-06-23 | `ScreenshotThumbnail` can cancel queued work but cannot abort a request after `fetchResourceAsObjectUrl()` starts. |
-| User feedback 2026-06-23 | Overlay aspect ratio and minimum panel width are legality constraints; this thumbnail fix must not reintroduce illegal wide/tall frames or crushed panels. |
-| Current call sweep | `FilePart`, `InlineToolPart`, and `ScreenshotBrowserPanel` all use the same resource object URL API. |
+| Source                                                       | Constraint carried forward                                                                                                                                 |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                  | No fallback logic, no duplicate source, recall before edits, test every change, visually verify UI work, commit and push.                                  |
+| `2026-06-23-screenshot-thumbnail-load-queue-cancellation.md` | Thumbnail jobs are physically removed from the RAF queue before starting; warm-cache thumbnails still wait for load permission.                            |
+| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md`   | Thumbnail fetch/decode remains off the toolbar-open critical path.                                                                                         |
+| Gibbs read-only audit 2026-06-23                             | `ScreenshotThumbnail` can cancel queued work but cannot abort a request after `fetchResourceAsObjectUrl()` starts.                                         |
+| User feedback 2026-06-23                                     | Overlay aspect ratio and minimum panel width are legality constraints; this thumbnail fix must not reintroduce illegal wide/tall frames or crushed panels. |
+| Current call sweep                                           | `FilePart`, `InlineToolPart`, and `ScreenshotBrowserPanel` all use the same resource object URL API.                                                       |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Resource API | `services/api.ts::fetchResourceAsObjectUrl(raw)` owns object URL fetch, in-flight de-duplication, and blob cache writes. | Extend this single API with optional `AbortSignal`; do not add screenshot-only fetch logic. |
-| Host transport | `TransportRequest.signal` already exists and is forwarded by `apiRequest()` / transports. | Reuse the existing signal channel for server-relative attachments. |
-| External/data/blob/file resources | `fetchResourceAsObjectUrl()` still uses plain `fetch()` for these schemes. | Pass the same abort signal to plain `fetch()` paths. |
-| In-flight de-duplication | `blobInFlight` currently stores one promise per raw URL. | Replace with an entry that tracks consumers and aborts the underlying request only when the final consumer cancels. |
-| Screenshot thumbnails | `ScreenshotThumbnail` starts `fetchResourceAsObjectUrl()` after `loadAllowed()` and cleanup only cancels queued jobs. | Add a thumbnail-owned `AbortController` and abort on cleanup/unmount. |
-| FilePart / InlineToolPart | These callers need warm-cache immediate render and do not currently own unmount cancellation. | Keep call sites compatible; they continue to call `fetchResourceAsObjectUrl(raw)` without a signal. |
-| Static tests | `screenshot-browser-panel.test.ts` pins queue, cache, and shared preview contracts. | Add guards that screenshot thumbnail cleanup aborts active resource requests and passes a signal. |
-| API tests | `blob-cache.test.ts` pins shared in-flight fetch and cache behavior. | Add abort tests for single-consumer cancellation and shared-consumer survival. |
-| Browser visual test | `screenshot-browser-panel-browser.test.ts` already exercises open, scroll, close, reopen, resize, and screenshots. | Re-run and inspect screenshots after the API/component change. |
+| Surface                           | Evidence                                                                                                                 | Decision                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Resource API                      | `services/api.ts::fetchResourceAsObjectUrl(raw)` owns object URL fetch, in-flight de-duplication, and blob cache writes. | Extend this single API with optional `AbortSignal`; do not add screenshot-only fetch logic.                         |
+| Host transport                    | `TransportRequest.signal` already exists and is forwarded by `apiRequest()` / transports.                                | Reuse the existing signal channel for server-relative attachments.                                                  |
+| External/data/blob/file resources | `fetchResourceAsObjectUrl()` still uses plain `fetch()` for these schemes.                                               | Pass the same abort signal to plain `fetch()` paths.                                                                |
+| In-flight de-duplication          | `blobInFlight` currently stores one promise per raw URL.                                                                 | Replace with an entry that tracks consumers and aborts the underlying request only when the final consumer cancels. |
+| Screenshot thumbnails             | `ScreenshotThumbnail` starts `fetchResourceAsObjectUrl()` after `loadAllowed()` and cleanup only cancels queued jobs.    | Add a thumbnail-owned `AbortController` and abort on cleanup/unmount.                                               |
+| FilePart / InlineToolPart         | These callers need warm-cache immediate render and do not currently own unmount cancellation.                            | Keep call sites compatible; they continue to call `fetchResourceAsObjectUrl(raw)` without a signal.                 |
+| Static tests                      | `screenshot-browser-panel.test.ts` pins queue, cache, and shared preview contracts.                                      | Add guards that screenshot thumbnail cleanup aborts active resource requests and passes a signal.                   |
+| API tests                         | `blob-cache.test.ts` pins shared in-flight fetch and cache behavior.                                                     | Add abort tests for single-consumer cancellation and shared-consumer survival.                                      |
+| Browser visual test               | `screenshot-browser-panel-browser.test.ts` already exercises open, scroll, close, reopen, resize, and screenshots.       | Re-run and inspect screenshots after the API/component change.                                                      |
 
 ## Root Cause
 

@@ -56,10 +56,7 @@ test("setExecutorModel patches and reloads with the same explicit project direct
 
   await setExecutorModel({ executorID: "codex", model: "gpt-5.1", directory: "D:/repo/from-row" })
 
-  expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
-    "PATCH executor/codex/model",
-    "GET executor",
-  ])
+  expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(["PATCH executor/codex/model", "GET executor"])
   expect(calls.map((call) => call.query?.directory)).toEqual(["D:/repo/from-row", "D:/repo/from-row"])
   expect(calls[0]!.body?.kind).toBe("json")
   expect((calls[0]!.body as { kind: "json"; value: unknown }).value).toEqual({ model: "gpt-5.1" })

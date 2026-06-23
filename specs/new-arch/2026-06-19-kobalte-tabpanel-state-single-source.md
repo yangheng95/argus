@@ -20,19 +20,19 @@ mounts only the selected panel by default and marks the mounted panel with
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-19-kobalte-selected-state-single-source.md` | Kobalte runtime state attributes must be the visual source for selected/pressed/checked controls. |
-| `2026-06-19-dropdown-menu-highlighted-contrast-source.md` | Kobalte runtime state attributes, not local mirrors, own popup/listbox visibility and selection styling. |
+| Source                                                                  | Relevant decision                                                                                                                      |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-19-kobalte-selected-state-single-source.md`                    | Kobalte runtime state attributes must be the visual source for selected/pressed/checked controls.                                      |
+| `2026-06-19-dropdown-menu-highlighted-contrast-source.md`               | Kobalte runtime state attributes, not local mirrors, own popup/listbox visibility and selection styling.                               |
 | `packages/overlay/node_modules/@kobalte/core/src/tabs/tabs-content.tsx` | `Tabs.Content` emits `role="tabpanel"`, `aria-labelledby`, and `data-selected` when selected; default presence follows selected state. |
-| `packages/overlay/src/components/ui/Tabs.tsx` | `TabPanel` is a thin wrapper over `KobalteTabs.Content`. |
+| `packages/overlay/src/components/ui/Tabs.tsx`                           | `TabPanel` is a thin wrapper over `KobalteTabs.Content`.                                                                               |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "<TabPanel\\b|data-active=\\{|file-changes-view\\[data-active" packages/overlay/src packages/overlay/test` | Only `FileChangesPanel` writes `data-active` on `TabPanel`; `activity.css` has the matching hide rule. | Remove the local panel state and dead CSS rule. |
-| `rg -n "data-selected|hidden|Tabs.Content" packages/overlay/node_modules/@kobalte/core/src/tabs` | Kobalte Content owns `data-selected` and selected presence. | Browser tests should assert panel `data-selected`, not local `data-active`. |
+| Sweep                 | Result          | Decision                                                                     |
+| --------------------- | --------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `rg -n "<TabPanel\\b  | data-active=\\{ | file-changes-view\\[data-active" packages/overlay/src packages/overlay/test` | Only `FileChangesPanel` writes `data-active` on `TabPanel`; `activity.css` has the matching hide rule. | Remove the local panel state and dead CSS rule.                             |
+| `rg -n "data-selected | hidden          | Tabs.Content" packages/overlay/node_modules/@kobalte/core/src/tabs`          | Kobalte Content owns `data-selected` and selected presence.                                            | Browser tests should assert panel `data-selected`, not local `data-active`. |
 
 ## Fix Plan
 

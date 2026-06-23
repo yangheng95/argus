@@ -151,7 +151,12 @@ describe("overlay theme palette intent", () => {
     expect(designLanguage).not.toMatch(/--oc-syntax-[a-z-]+\s*:/)
 
     for (const [themeName, css] of themes) {
-      const windowBacking = composite(toRgba(resolveThemeValue(css, themeToken(css, "--bg"))), { r: 255, g: 255, b: 255, a: 1 })
+      const windowBacking = composite(toRgba(resolveThemeValue(css, themeToken(css, "--bg"))), {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 1,
+      })
       const contentSurface = composite(toRgba(resolveThemeValue(css, themeToken(css, "--surface"))), windowBacking)
       const codeSurface = composite(toRgba(resolveThemeValue(css, themeToken(css, "--surface-inset"))), contentSurface)
       for (const token of syntaxTokens) {
@@ -225,9 +230,7 @@ function toRgba(value: string): Rgba {
 }
 
 function colorMixWithTransparentToRgba(css: string, value: string, background: Rgba): Rgba {
-  const match = value
-    .trim()
-    .match(/^color-mix\(\s*in\s+srgb\s*,\s*([^,]+?)\s+([0-9.]+)%\s*,\s*transparent\s*\)$/i)
+  const match = value.trim().match(/^color-mix\(\s*in\s+srgb\s*,\s*([^,]+?)\s+([0-9.]+)%\s*,\s*transparent\s*\)$/i)
   if (!match) throw new Error(`Unsupported transparent color-mix ${value}`)
   const color = toRgba(resolveThemeValue(css, match[1]!.trim()))
   color.a = Number.parseFloat(match[2]!) / 100

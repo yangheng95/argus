@@ -19,14 +19,14 @@ Command:
 
 `rg "CommandPalette|command palette|Dialog primitive|dialog primitive|@kobalte/core/dialog" specs packages/overlay/src packages/overlay/test -n`
 
-| Surface | Call points | Decision |
-| --- | --- | --- |
-| `CommandPalette` mount | `packages/overlay/src/components/App.tsx` | Keep single app-level mount. |
-| Raw Kobalte dialog | `packages/overlay/src/components/CommandPalette.tsx` | Replace with `components/primitives/Dialog.tsx`. |
-| Shared dialog primitive | `packages/overlay/src/components/primitives/Dialog.tsx` | Add minimal API for overlay class and Kobalte focus event passthrough; keep Kobalte internals centralized here. |
-| Command palette CSS | `packages/overlay/src/styles/surfaces/cmdk.css` | Re-target `.cmdk-backdrop`, `.cmdk-dialog`, and `.cmdk-panel` to the shared primitive DOM. |
-| Static primitive tests | `packages/overlay/test/command-palette-primitive.test.ts`, `packages/overlay/test/dialog-primitive.test.ts` | Invert tests so only the primitive may import `@kobalte/core/dialog`; `CommandPalette` must import `./primitives/Dialog`. |
-| Browser behavior | `packages/overlay/test/browser/command-palette.test.ts` | Keep hotkey/focus/Escape coverage and add screenshot evidence for the migrated DOM. |
+| Surface                 | Call points                                                                                                 | Decision                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `CommandPalette` mount  | `packages/overlay/src/components/App.tsx`                                                                   | Keep single app-level mount.                                                                                              |
+| Raw Kobalte dialog      | `packages/overlay/src/components/CommandPalette.tsx`                                                        | Replace with `components/primitives/Dialog.tsx`.                                                                          |
+| Shared dialog primitive | `packages/overlay/src/components/primitives/Dialog.tsx`                                                     | Add minimal API for overlay class and Kobalte focus event passthrough; keep Kobalte internals centralized here.           |
+| Command palette CSS     | `packages/overlay/src/styles/surfaces/cmdk.css`                                                             | Re-target `.cmdk-backdrop`, `.cmdk-dialog`, and `.cmdk-panel` to the shared primitive DOM.                                |
+| Static primitive tests  | `packages/overlay/test/command-palette-primitive.test.ts`, `packages/overlay/test/dialog-primitive.test.ts` | Invert tests so only the primitive may import `@kobalte/core/dialog`; `CommandPalette` must import `./primitives/Dialog`. |
+| Browser behavior        | `packages/overlay/test/browser/command-palette.test.ts`                                                     | Keep hotkey/focus/Escape coverage and add screenshot evidence for the migrated DOM.                                       |
 
 ## Acceptance
 

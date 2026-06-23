@@ -8,12 +8,12 @@
 
 ## Evidence
 
-| Source | Finding |
-| --- | --- |
-| `packages/overlay/src/components/FileChangesView.tsx` | Rows are `Listbox.Item as="button"` and status filters are `SegmentedControl` options. |
-| `packages/overlay/src/styles/surfaces/changes.css` | Pointer hover uses `.change-row:hover`; Kobalte focus uses `[data-highlighted]`; selected uses `[data-selected]`. These are distinct states and must not be collapsed in tests. |
-| `packages/overlay/src/styles/surfaces/diff.css` | Diff stat colors had a delete foreground path separate from the existing `--diff-del-fg` token. |
-| Browser run before fix | Selected row secondary text, modified pill, delete stat, and active filter count could fall below 4.5:1 on the light surface. |
+| Source                                                | Finding                                                                                                                                                                         |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/components/FileChangesView.tsx` | Rows are `Listbox.Item as="button"` and status filters are `SegmentedControl` options.                                                                                          |
+| `packages/overlay/src/styles/surfaces/changes.css`    | Pointer hover uses `.change-row:hover`; Kobalte focus uses `[data-highlighted]`; selected uses `[data-selected]`. These are distinct states and must not be collapsed in tests. |
+| `packages/overlay/src/styles/surfaces/diff.css`       | Diff stat colors had a delete foreground path separate from the existing `--diff-del-fg` token.                                                                                 |
+| Browser run before fix                                | Selected row secondary text, modified pill, delete stat, and active filter count could fall below 4.5:1 on the light surface.                                                   |
 
 ## Decision
 

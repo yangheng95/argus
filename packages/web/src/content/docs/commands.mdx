@@ -7,12 +7,12 @@ OpenCorvus provides a slash-command system for session prompts, including ACP `s
 
 ## Built-in slash commands
 
-| Command  | Purpose                                          |
-| -------- | ------------------------------------------------ |
-| `/init`  | Initialize an `AGENTS.md` from the current repo  |
-| `/share` | Generate a share link for the current session    |
-| `/undo`  | Roll back the last agent change (uses snapshots) |
-| `/help`  | Show the command map                             |
+| Command  | Purpose                                                               |
+| -------- | --------------------------------------------------------------------- |
+| `/init`  | Initialize an `AGENTS.md` from the current repo                       |
+| `/share` | Generate a share link for the current session                         |
+| `/undo`  | Roll back the last agent change when snapshots are explicitly enabled |
+| `/help`  | Show the command map                                                  |
 
 The exact set is version-dependent — `/help` is authoritative.
 
@@ -49,4 +49,4 @@ Custom commands run through the same permission system as direct prompts. If you
 
 ## Snapshots & `/undo`
 
-`/undo` works because OpenCorvus snapshots files before each agent step. If you have disabled `snapshot` in [config](/docs/config/), `/undo` becomes a no-op.
+`/undo` requires `snapshot: true` in [config](/docs/config/). Snapshot capture is disabled by default; without that explicit setting, `/undo` is a no-op.

@@ -497,14 +497,10 @@ export default function PromptCatalog() {
                         actions={
                           <div class="prompt-profile-list-meta">
                             <Show when={projectActiveProfileID() === profile.id}>
-                              <SettingsPill tone="accent">
-                                {t("prompt_profile.project_active")}
-                              </SettingsPill>
+                              <SettingsPill tone="accent">{t("prompt_profile.project_active")}</SettingsPill>
                             </Show>
                             <Show when={!!currentScopeSessionID() && sessionActiveProfileID() === profile.id}>
-                              <SettingsPill tone="ok">
-                                {t("prompt_profile.session_active")}
-                              </SettingsPill>
+                              <SettingsPill tone="ok">{t("prompt_profile.session_active")}</SettingsPill>
                             </Show>
                             <SettingsPill tone={profile.built_in ? "muted" : "ok"}>
                               {profileTypeLabel(profile)}
@@ -624,9 +620,7 @@ export default function PromptCatalog() {
                                     <span>{target.id}</span>
                                   </div>
                                   <Show when={target.built_in_only}>
-                                    <SettingsPill tone="muted">
-                                      {t("prompt_profile.built_in_only")}
-                                    </SettingsPill>
+                                    <SettingsPill tone="muted">{t("prompt_profile.built_in_only")}</SettingsPill>
                                   </Show>
                                 </div>
                                 <Show when={target.description}>

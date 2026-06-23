@@ -19,27 +19,27 @@ top-level root.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate source, recall disk plans before edits, test every change, visually verify UI-adjacent work, commit and push every round. |
-| `2026-06-22-screenshot-browser-top-level-index.md` | The screenshot panel reads `cardTreeStore.screenshotItems`; the stats kernel owns the store-level cache. |
-| `2026-06-22-screenshot-browser-card-tree-cache.md` | Per-card `subtreeScreenshotItems` remains the canonical subtree aggregate and must not be replaced by a panel cache. |
-| `2026-06-22-screenshot-browser-bounded-card-collector.md` | The visible screenshot history is capped at `SCREENSHOT_BROWSER_ITEM_LIMIT` and ordered newest-first with existing dedupe semantics. |
-| `2026-06-23-screenshot-cache-server-time-restamp.md` | Server-time restamps must update card cache, subtree cache, and top-level screenshot cache together. |
-| Cicero read-only audit | `flushTopLevelScreenshotItems()` still calls `mergeScreenshotBrowserItemSets(topLevelScreenshotItemSets.values())`, making single-root updates proportional to all screenshot roots. |
-| Heisenberg read-only audit | Dirty-root update alone is insufficient; root append/remove/reorder must not fall back to full root-array reads, duplicate owner transfer and equal-time order must be covered, and stale heap entries must not accumulate. |
+| Source                                                    | Constraint carried forward                                                                                                                                                                                                  |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                               | No fallback, no duplicate source, recall disk plans before edits, test every change, visually verify UI-adjacent work, commit and push every round.                                                                         |
+| `2026-06-22-screenshot-browser-top-level-index.md`        | The screenshot panel reads `cardTreeStore.screenshotItems`; the stats kernel owns the store-level cache.                                                                                                                    |
+| `2026-06-22-screenshot-browser-card-tree-cache.md`        | Per-card `subtreeScreenshotItems` remains the canonical subtree aggregate and must not be replaced by a panel cache.                                                                                                        |
+| `2026-06-22-screenshot-browser-bounded-card-collector.md` | The visible screenshot history is capped at `SCREENSHOT_BROWSER_ITEM_LIMIT` and ordered newest-first with existing dedupe semantics.                                                                                        |
+| `2026-06-23-screenshot-cache-server-time-restamp.md`      | Server-time restamps must update card cache, subtree cache, and top-level screenshot cache together.                                                                                                                        |
+| Cicero read-only audit                                    | `flushTopLevelScreenshotItems()` still calls `mergeScreenshotBrowserItemSets(topLevelScreenshotItemSets.values())`, making single-root updates proportional to all screenshot roots.                                        |
+| Heisenberg read-only audit                                | Dirty-root update alone is insufficient; root append/remove/reorder must not fall back to full root-array reads, duplicate owner transfer and equal-time order must be covered, and stale heap entries must not accumulate. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Panel read | `ScreenshotBrowserPanel.tsx` returns `cardTreeStore.screenshotItems`. | Keep unchanged; the panel is not the remaining full-scan owner. |
-| Top-level flush | `card-tree-stats.ts::flushTopLevelScreenshotItems()` merges all `topLevelScreenshotItemSets.values()`. | Replace with an incremental root-owned item index and bounded heap read. |
-| Root cache sync | `syncTopLevelRootScreenshotItems(cardID, items)` runs when a top-level root's subtree screenshot cache changes. | Update only that root's item ownership and heap entries. |
-| Order changes | `replaceCardTreeOrder()` now passes old/new order to the stats handler. | Diff roots incrementally: added roots read only their own cache, removed roots remove their owned keys, retained reorders update rank/heap without reading root arrays. |
-| Reset/prune | `__resetCardStatsForTests()` clears index state; prune removes roots through `replaceCardTreeOrder()` before card pruning. | Reset clears the index; prune relies on root removal diff plus card dirty marks, not a second order rebuild source. |
-| Per-node subtree cache | `recomputeNodeStats()` still uses `mergeScreenshotBrowserItemSets()` for one card's own items plus direct children. | Keep this bounded subtree operation; this round targets only the top-level all-root merge. |
-| Tests | `tree-writer-stats-cache.test.ts` has a 5000-root initial bound test but no single-root update cost guard. | Add a proxy-backed regression proving one dirty root update does not read unrelated root item arrays. |
+| Surface                | Evidence                                                                                                                   | Decision                                                                                                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel read             | `ScreenshotBrowserPanel.tsx` returns `cardTreeStore.screenshotItems`.                                                      | Keep unchanged; the panel is not the remaining full-scan owner.                                                                                                         |
+| Top-level flush        | `card-tree-stats.ts::flushTopLevelScreenshotItems()` merges all `topLevelScreenshotItemSets.values()`.                     | Replace with an incremental root-owned item index and bounded heap read.                                                                                                |
+| Root cache sync        | `syncTopLevelRootScreenshotItems(cardID, items)` runs when a top-level root's subtree screenshot cache changes.            | Update only that root's item ownership and heap entries.                                                                                                                |
+| Order changes          | `replaceCardTreeOrder()` now passes old/new order to the stats handler.                                                    | Diff roots incrementally: added roots read only their own cache, removed roots remove their owned keys, retained reorders update rank/heap without reading root arrays. |
+| Reset/prune            | `__resetCardStatsForTests()` clears index state; prune removes roots through `replaceCardTreeOrder()` before card pruning. | Reset clears the index; prune relies on root removal diff plus card dirty marks, not a second order rebuild source.                                                     |
+| Per-node subtree cache | `recomputeNodeStats()` still uses `mergeScreenshotBrowserItemSets()` for one card's own items plus direct children.        | Keep this bounded subtree operation; this round targets only the top-level all-root merge.                                                                              |
+| Tests                  | `tree-writer-stats-cache.test.ts` has a 5000-root initial bound test but no single-root update cost guard.                 | Add a proxy-backed regression proving one dirty root update does not read unrelated root item arrays.                                                                   |
 
 ## Root Cause
 

@@ -37,13 +37,13 @@ Reviewed before edits:
 
 Current source evidence:
 
-| Surface | Evidence | Status |
-| --- | --- | --- |
-| `engine/queue.ts::dispatchTaskLoop` | Live ownership branch stores the event in `queuedTaskEvents` and returns `queued`; it does not call `abortLiveOrchestratorToolOwnership`. | Correct in HEAD. |
-| `task-api/index.ts::appendAndWakeTaskOperatorMessage` | `/message` and `/inject` dispatch a wake event without any scheduler-level interrupt flag. | Correct after repair: task messages are wake facts, not cancellation commands. |
-| `engine/tool-ownership.ts::completeOrchestratorToolOwnership` | Ownership completion drains queued wake events. | Correct in HEAD. |
-| `engine/writer.ts::abortLiveOrchestratorToolOwnership` | Cancels sessions, aborts goal runs, closes tool parts. | Must remain explicit-cancel only. |
-| `engine/runtime.ts::syncTerminalGoalRefills` | Wakes the task through `dispatchTaskLoop` from durable terminal-goal facts. | Must never abort live siblings. |
+| Surface                                                       | Evidence                                                                                                                                  | Status                                                                         |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `engine/queue.ts::dispatchTaskLoop`                           | Live ownership branch stores the event in `queuedTaskEvents` and returns `queued`; it does not call `abortLiveOrchestratorToolOwnership`. | Correct in HEAD.                                                               |
+| `task-api/index.ts::appendAndWakeTaskOperatorMessage`         | `/message` and `/inject` dispatch a wake event without any scheduler-level interrupt flag.                                                | Correct after repair: task messages are wake facts, not cancellation commands. |
+| `engine/tool-ownership.ts::completeOrchestratorToolOwnership` | Ownership completion drains queued wake events.                                                                                           | Correct in HEAD.                                                               |
+| `engine/writer.ts::abortLiveOrchestratorToolOwnership`        | Cancels sessions, aborts goal runs, closes tool parts.                                                                                    | Must remain explicit-cancel only.                                              |
+| `engine/runtime.ts::syncTerminalGoalRefills`                  | Wakes the task through `dispatchTaskLoop` from durable terminal-goal facts.                                                               | Must never abort live siblings.                                                |
 
 Existing targeted tests already passing on HEAD:
 

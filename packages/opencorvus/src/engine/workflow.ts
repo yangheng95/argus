@@ -375,9 +375,7 @@ function taskStepStatusByTool(
           .readByPhase("frontend_design")
           .map((entry) => entry.key),
       )
-      return FRONTEND_DESIGN_COMPLETION_KEYS.every((key) => keys.has(key))
-        ? "completed"
-        : "pending"
+      return FRONTEND_DESIGN_COMPLETION_KEYS.every((key) => keys.has(key)) ? "completed" : "pending"
     }
     case "frontend_research":
       return findLatestFrontendResearchBriefArtifact(taskID) ? "completed" : "pending"
@@ -453,9 +451,7 @@ function parseVisualQaReportProjection(
       if (context.referenceParityRequired && !report.reference_parity.required) return undefined
       if (
         report.findings.some(
-          (finding) =>
-            finding.status === "open" &&
-            (finding.severity === "critical" || finding.severity === "major"),
+          (finding) => finding.status === "open" && (finding.severity === "critical" || finding.severity === "major"),
         )
       ) {
         return undefined

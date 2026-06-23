@@ -141,10 +141,9 @@ export function CardHeaderChrome(props: {
     return parts.length > 0 ? t("card.usage_tooltip", { detail: parts.join(t("card.meta_separator")) }) : ""
   }
   const contextTokensTip = () =>
-    t(
-      props.node.contextTokensEstimated ? "card.context_tokens_tooltip_estimated" : "card.context_tokens_tooltip",
-      { value: String(props.node.contextTokens) },
-    )
+    t(props.node.contextTokensEstimated ? "card.context_tokens_tooltip_estimated" : "card.context_tokens_tooltip", {
+      value: String(props.node.contextTokens),
+    })
   const hasMetaActions = () => !!modelLabel() || hasContextTokens() || hasUsage()
   const hasControlActions = () =>
     (!!props.traceSessionID && !!props.onTrace) ||
@@ -274,10 +273,10 @@ export function CardHeaderChrome(props: {
                 size="icon"
                 tone="neutral"
                 data-ui="card-rewind"
-                data-state={headActions.state.rewinding() ? "pending" : "idle"}
-                title={headActions.labels.rewind()}
-                aria-label={headActions.labels.rewindStep()}
-                disabled={headActions.state.rewinding()}
+                data-state="disabled"
+                title={headActions.labels.rewindDisabled()}
+                aria-label={headActions.labels.rewindDisabled()}
+                disabled
                 onClick={headActions.onRewind}
               >
                 <Icon name="rewind" size={13} />

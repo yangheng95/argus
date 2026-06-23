@@ -64,18 +64,18 @@ Command:
 rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|BrowserPreviewPanel|loadTaskBrowserPreviewTarget|captureTaskBrowserPreviewEvidence|loadTaskBrowserPreviewLiveSnapshotObjectUrl|sendTaskBrowserPreviewLiveInputObjectUrl|selectTaskBrowserPreviewTarget|startBrowserFixture|browser-runner|7778|OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER" packages/overlay packages/opencorvus specs -g "*.ts" -g "*.tsx" -g "*.css" -g "*.md" -g "*.mjs"
 ```
 
-| Surface                 | Evidence                                                                                                                                                              | Decision                                                                                                                                                  |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overlay panel           | `packages/overlay/src/components/BrowserPreviewPanel.tsx` owns target loading, candidate selection, capture requests, live screenshot object URLs, and input routing. | Keep the backend/evidence-backed design. Bind live image object URLs to task/target/viewport scope so stale frames cannot display or receive input.       |
+| Surface                 | Evidence                                                                                                                                                              | Decision                                                                                                                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overlay panel           | `packages/overlay/src/components/BrowserPreviewPanel.tsx` owns target loading, candidate selection, capture requests, live screenshot object URLs, and input routing. | Keep the backend/evidence-backed design. Bind live image object URLs to task/target/viewport scope so stale frames cannot display or receive input.                                      |
 | Overlay service         | `packages/overlay/src/services/browser-preview.ts` exposes only task-scoped preview routes.                                                                           | Return task-scoped binary object URLs only; rendered live `<img>` decode failure is the single corrupt-frame owner. Do not add direct URL, local frame APIs, or service-side pre-decode. |
-| Backend route           | `packages/opencorvus/src/server/routes/browser-preview.ts` owns target, capture, compare, live snapshot, and live input routes.                                       | Unknown target IDs must fail before capture starts. Live display must remain task/target scoped and must not create evidence.                             |
-| Backend target/evidence | `packages/opencorvus/src/browser-preview/target.ts` and `persist.ts` own target selection and latest evidence lookup.                                                 | Preserve `latestEvidenceIDs` per viewport and reject stale evidence by target/viewport in the overlay.                                                    |
-| Live sidecar            | `packages/opencorvus/src/browser-preview/live.ts` owns Playwright live PNG frames.                                                                                    | Keep Node sidecar ownership; overlay only displays returned PNG object URLs.                                                                              |
-| Evidence runner         | `packages/opencorvus/src/browser-preview/evidence-runner.ts` owns Playwright evidence capture.                                                                        | Do not create another runner in the benchmark.                                                                                                            |
-| Browser runner          | `packages/overlay/test/browser-runner.mjs` starts Node browser tests with `OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER=1`.                                            | New benchmark must run through this Node path, not Bun Playwright.                                                                                        |
-| HTTP fixture            | `packages/overlay/test/browser/http-fixture.ts` currently binds a random port.                                                                                        | Add an explicit port option and use `7778` for this benchmark only. No fallback port.                                                                     |
-| Existing E2E tests      | `packages/overlay/test/browser/browser-preview-evidence.test.ts` covers target switch, persisted viewport evidence, live click and wheel.                             | Keep those tests and add broader stress coverage for visual screenshots, failure states, long text, narrow layout, key input, and stale live frame scope. |
-| Obsolete CSS            | `packages/overlay/src/styles/surfaces/inspector.css` no longer contains `.browser-preview-url-form` or `.browser-preview-url-input`.                                  | Keep manual URL CSS removed so the backend preview target remains the only rendered source.                                                               |
+| Backend route           | `packages/opencorvus/src/server/routes/browser-preview.ts` owns target, capture, compare, live snapshot, and live input routes.                                       | Unknown target IDs must fail before capture starts. Live display must remain task/target scoped and must not create evidence.                                                            |
+| Backend target/evidence | `packages/opencorvus/src/browser-preview/target.ts` and `persist.ts` own target selection and latest evidence lookup.                                                 | Preserve `latestEvidenceIDs` per viewport and reject stale evidence by target/viewport in the overlay.                                                                                   |
+| Live sidecar            | `packages/opencorvus/src/browser-preview/live.ts` owns Playwright live PNG frames.                                                                                    | Keep Node sidecar ownership; overlay only displays returned PNG object URLs.                                                                                                             |
+| Evidence runner         | `packages/opencorvus/src/browser-preview/evidence-runner.ts` owns Playwright evidence capture.                                                                        | Do not create another runner in the benchmark.                                                                                                                                           |
+| Browser runner          | `packages/overlay/test/browser-runner.mjs` starts Node browser tests with `OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER=1`.                                            | New benchmark must run through this Node path, not Bun Playwright.                                                                                                                       |
+| HTTP fixture            | `packages/overlay/test/browser/http-fixture.ts` currently binds a random port.                                                                                        | Add an explicit port option and use `7778` for this benchmark only. No fallback port.                                                                                                    |
+| Existing E2E tests      | `packages/overlay/test/browser/browser-preview-evidence.test.ts` covers target switch, persisted viewport evidence, live click and wheel.                             | Keep those tests and add broader stress coverage for visual screenshots, failure states, long text, narrow layout, key input, and stale live frame scope.                                |
+| Obsolete CSS            | `packages/overlay/src/styles/surfaces/inspector.css` no longer contains `.browser-preview-url-form` or `.browser-preview-url-input`.                                  | Keep manual URL CSS removed so the backend preview target remains the only rendered source.                                                                                              |
 
 ## Stress Cases
 
@@ -109,33 +109,33 @@ rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|Browser
    `<img>` decode error owner, renders the live error state, clears the broken
    image, and can recover on the next active viewport snapshot.
 10. Live failure: a first-frame snapshot failure renders the live error state
-   before the evidence-missing state and includes the backend error body.
+    before the evidence-missing state and includes the backend error body.
 11. Capture failure: failed capture evidence is rendered as failed evidence, not
-   as an empty missing preview.
+    as an empty missing preview.
 12. Unknown target capture: an unknown capture target fails with 404 instead of
-   producing a 200 failed verification body.
+    producing a 200 failed verification body.
 13. Layout pressure: desktop and narrow raw browser viewports keep preview
-   controls inside the legal overlay shell, have no incoherent overlap,
-   truncate long candidate/status text, and preserve nonblank screenshot
-   evidence without shrinking panels below the legal shell contract.
+    controls inside the legal overlay shell, have no incoherent overlap,
+    truncate long candidate/status text, and preserve nonblank screenshot
+    evidence without shrinking panels below the legal shell contract.
 14. Cross-task scope reset: after a candidate selection failure on one task,
-   switching to another task must clear selection errors, live screenshots,
-   persisted evidence, and verification status before rendering that task's
-   own missing/ready/failed preview state.
+    switching to another task must clear selection errors, live screenshots,
+    persisted evidence, and verification status before rendering that task's
+    own missing/ready/failed preview state.
 15. Failed target authority: when the backend reports the selected target as
-   `status: failed`, the panel must render the target-failed state and clear
-   live/evidence screenshots and stale verification status for that target.
-   Capture controls must be disabled until the target is ready again. Persisted
-   evidence from an earlier ready state must not mask a now-unreachable preview
-   target.
+    `status: failed`, the panel must render the target-failed state and clear
+    live/evidence screenshots and stale verification status for that target.
+    Capture controls must be disabled until the target is ready again. Persisted
+    evidence from an earlier ready state must not mask a now-unreachable preview
+    target.
 16. Build-agent target persistence: when the preview panel is already showing
-   the missing-target state and the backend emits a task-scoped
-   `task.updated` event from `browser-preview.target`, the overlay must reload
-   the selected board, refetch `/task/:taskID/browser-preview`, and render the
-   newly persisted target without a manual refresh click. The benchmark must
-   first close the selected-task SSE stream and wait for it to reconnect, then
-   deliver the target update. This guards the "build agent started services but
-   the Preview panel stayed blank" workflow after a transient live-stream break.
+    the missing-target state and the backend emits a task-scoped
+    `task.updated` event from `browser-preview.target`, the overlay must reload
+    the selected board, refetch `/task/:taskID/browser-preview`, and render the
+    newly persisted target without a manual refresh click. The benchmark must
+    first close the selected-task SSE stream and wait for it to reconnect, then
+    deliver the target update. This guards the "build agent started services but
+    the Preview panel stayed blank" workflow after a transient live-stream break.
 
 ## Acceptance
 

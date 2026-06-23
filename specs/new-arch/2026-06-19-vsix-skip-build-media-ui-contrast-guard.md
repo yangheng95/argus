@@ -10,12 +10,12 @@ popup surface.
 
 The remaining host-side risk was the VSIX packaging path:
 
-| Path | Evidence | Decision |
-| --- | --- | --- |
-| `packages/overlay/src/components/ChatComposer.tsx` | Expert Squad now uses shared `SelectControl`, not a native select. | Do not add local color overrides. |
-| `packages/overlay/src/styles/surfaces/field.css` | `.oc-select-content` and `.oc-select-option` own popup foreground/background tokens. | Keep shared Select styling as the only visual source. |
-| `packages/vscode-extension/esbuild.mjs` | Normal extension builds build and sync `media/ui`, then assert retired prompt-profile markers are absent. | Keep the normal build assertion. |
-| `packages/vscode-extension/script/package-vsix.ts` | `--skip-build` previously only assumed existing `dist/` and `media/ui` were current. | Validate existing `media/ui` before packaging, even when skipping the build. |
+| Path                                               | Evidence                                                                                                  | Decision                                                                     |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `packages/overlay/src/components/ChatComposer.tsx` | Expert Squad now uses shared `SelectControl`, not a native select.                                        | Do not add local color overrides.                                            |
+| `packages/overlay/src/styles/surfaces/field.css`   | `.oc-select-content` and `.oc-select-option` own popup foreground/background tokens.                      | Keep shared Select styling as the only visual source.                        |
+| `packages/vscode-extension/esbuild.mjs`            | Normal extension builds build and sync `media/ui`, then assert retired prompt-profile markers are absent. | Keep the normal build assertion.                                             |
+| `packages/vscode-extension/script/package-vsix.ts` | `--skip-build` previously only assumed existing `dist/` and `media/ui` were current.                      | Validate existing `media/ui` before packaging, even when skipping the build. |
 
 ## Implementation
 

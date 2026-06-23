@@ -406,7 +406,9 @@ describe("vscode-transport native command bridge", () => {
         ok: true,
         value: "D:/workspace/late",
       } as any)
-      expect(await Promise.race([Promise.resolve(result), new Promise((resolve) => setTimeout(resolve, 0))])).toBe(result)
+      expect(await Promise.race([Promise.resolve(result), new Promise((resolve) => setTimeout(resolve, 0))])).toBe(
+        result,
+      )
     } finally {
       globalThis.setTimeout = originalSetTimeout
       globalThis.clearTimeout = originalClearTimeout

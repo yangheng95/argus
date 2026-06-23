@@ -23,7 +23,9 @@ describe("Mission and Coding Assistant ledger row interactions", () => {
 
   test("main row buttons remain the only keyboard selection controls", () => {
     expect(rowMainButton).toContain('data-ui="ledger-row-main"')
-    expect(rowMainButton).toContain('className = () => (props.class ? `task-row-main ${props.class}` : "task-row-main")')
+    expect(rowMainButton).toContain(
+      'className = () => (props.class ? `task-row-main ${props.class}` : "task-row-main")',
+    )
     expect(mission).toContain('import { LedgerRowMainButton } from "./LedgerRowMainButton"')
     expect(mission).toContain("<LedgerRowMainButton")
     expect(mission).toContain('class="mission-row-main"')
@@ -60,7 +62,7 @@ describe("Mission and Coding Assistant ledger row interactions", () => {
       expect(source).toContain('import { useTaskRowActionsKeyboard } from "./useTaskRowActionsKeyboard"')
       expect(source).toContain("const hasActions = () => true")
       expect(source).toContain("const rowActions = useTaskRowActionsKeyboard(hasActions)")
-      expect(source).toContain('data-actions-keyboard-open={rowActions.actionsKeyboardOpenData()}')
+      expect(source).toContain("data-actions-keyboard-open={rowActions.actionsKeyboardOpenData()}")
       expect(source).toContain('aria-keyshortcuts={hasActions() ? "ArrowRight" : undefined}')
       expect(source).toContain("onKeyDown={rowActions.openActionsFromKeyboard}")
       expect(source).toContain("onKeyDown={rowActions.closeActionsFromKeyboardEvent}")

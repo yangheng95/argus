@@ -205,8 +205,7 @@ export function SettingsSelect<T extends SettingsSelectOption>(props: SettingsSe
     props.onChange(option.value)
   }
   const rootClass = () => (props.class ? `settings-select ${props.class}` : "settings-select")
-  const triggerClass = () =>
-    props.triggerClass ? `field-input ${props.triggerClass}` : "field-input"
+  const triggerClass = () => (props.triggerClass ? `field-input ${props.triggerClass}` : "field-input")
 
   return (
     <SelectControl<T>

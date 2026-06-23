@@ -18,25 +18,25 @@ job at a time.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate source, recall before edits, test every change, visually verify UI work, commit and push. |
-| `2026-06-22-screenshot-browser-open-jank.md` | Screenshot browser derives from card-tree screenshot items, renders through `virtua/solid`, lazy-loads thumbnails, and reuses `PreviewableImage`. |
-| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md` | Thumbnail decode/fetch priority must stay off the toolbar-open critical path; browser benchmark measures first visible card and frame gaps. |
-| `2026-06-22-screenshot-browser-virtual-row-measurement.md` | CSS and `virtua` own row geometry; do not add fixed row-height or alternate geometry sources. |
-| Live 7878 measurement 2026-06-23 | Screenshot activity opens fast with a few screenshots, but after multiple right panels and screenshot entries it can take seconds; current source still has a cancelled-job queue hazard. |
-| James read-only audit 2026-06-23 | `pendingThumbnailLoads` only marks cancelled jobs and drains one cancelled closure per RAF frame. |
+| Source                                                     | Constraint carried forward                                                                                                                                                                |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                | No fallback logic, no duplicate source, recall before edits, test every change, visually verify UI work, commit and push.                                                                 |
+| `2026-06-22-screenshot-browser-open-jank.md`               | Screenshot browser derives from card-tree screenshot items, renders through `virtua/solid`, lazy-loads thumbnails, and reuses `PreviewableImage`.                                         |
+| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md` | Thumbnail decode/fetch priority must stay off the toolbar-open critical path; browser benchmark measures first visible card and frame gaps.                                               |
+| `2026-06-22-screenshot-browser-virtual-row-measurement.md` | CSS and `virtua` own row geometry; do not add fixed row-height or alternate geometry sources.                                                                                             |
+| Live 7878 measurement 2026-06-23                           | Screenshot activity opens fast with a few screenshots, but after multiple right panels and screenshot entries it can take seconds; current source still has a cancelled-job queue hazard. |
+| James read-only audit 2026-06-23                           | `pendingThumbnailLoads` only marks cancelled jobs and drains one cancelled closure per RAF frame.                                                                                         |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Thumbnail queue | `ScreenshotBrowserPanel.tsx` has module-level `pendingThumbnailLoads: Array<() => void>`. | Replace it with removable job records so cleanup deletes pending work immediately. |
-| Pump budget | `SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 1`. | Keep the one-load-per-frame decode budget. |
-| Thumbnail cleanup | `onCleanup` calls `cancelQueuedLoad?.()` and disconnects `IntersectionObserver`. | Preserve cleanup ownership, but make cancellation remove the exact job from the pending queue. |
-| Fetch/cache path | `ScreenshotThumbnail` uses `fetchResourceAsObjectUrl`, `peekResourceObjectUrl`, and `PreviewableImage`. | Keep the shared preview and object URL path unchanged. |
+| Surface           | Evidence                                                                                                                                   | Decision                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Thumbnail queue   | `ScreenshotBrowserPanel.tsx` has module-level `pendingThumbnailLoads: Array<() => void>`.                                                  | Replace it with removable job records so cleanup deletes pending work immediately.                    |
+| Pump budget       | `SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 1`.                                                                                        | Keep the one-load-per-frame decode budget.                                                            |
+| Thumbnail cleanup | `onCleanup` calls `cancelQueuedLoad?.()` and disconnects `IntersectionObserver`.                                                           | Preserve cleanup ownership, but make cancellation remove the exact job from the pending queue.        |
+| Fetch/cache path  | `ScreenshotThumbnail` uses `fetchResourceAsObjectUrl`, `peekResourceObjectUrl`, and `PreviewableImage`.                                    | Keep the shared preview and object URL path unchanged.                                                |
 | Browser benchmark | `screenshot-browser-panel-browser.test.ts` measures initial open, RAF gaps, long tasks, bounded requests, scroll, resize, and screenshots. | Add a close/reopen path after scroll/resize to exercise queued cancellation and visible-card latency. |
-| Static tests | `screenshot-browser-panel.test.ts` pins lazy loading and shared preview ownership. | Add guards that cancellation deletes queued jobs and no cancelled-closure drain remains. |
+| Static tests      | `screenshot-browser-panel.test.ts` pins lazy loading and shared preview ownership.                                                         | Add guards that cancellation deletes queued jobs and no cancelled-closure drain remains.              |
 
 ## Root Cause
 
@@ -74,12 +74,12 @@ thumbnail loads after a fast close/reopen or resize churn.
 
 ## Implementation
 
-| Change | Reason |
-| --- | --- |
-| Replaced queued thumbnail closures with `ScreenshotThumbnailLoadJob` records. | Gives cleanup a concrete queue item to remove instead of leaving a cancelled closure behind. |
-| `enqueueScreenshotThumbnailLoad()` now removes the pending job and cancels the scheduled RAF when the queue becomes empty. | Prevents closed/unmounted thumbnails from spending future frames before visible thumbnails can load. |
-| Kept `SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 1`. | Preserves the previous decode/fetch budget. |
-| Extended the browser benchmark with scroll churn, close, reopen, first-card timing, request-budget checks, and a reopen screenshot. | Verifies the exact lifecycle that left cancelled thumbnail jobs queued. |
+| Change                                                                                                                              | Reason                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Replaced queued thumbnail closures with `ScreenshotThumbnailLoadJob` records.                                                       | Gives cleanup a concrete queue item to remove instead of leaving a cancelled closure behind.         |
+| `enqueueScreenshotThumbnailLoad()` now removes the pending job and cancels the scheduled RAF when the queue becomes empty.          | Prevents closed/unmounted thumbnails from spending future frames before visible thumbnails can load. |
+| Kept `SCREENSHOT_BROWSER_THUMBNAIL_LOADS_PER_FRAME = 1`.                                                                            | Preserves the previous decode/fetch budget.                                                          |
+| Extended the browser benchmark with scroll churn, close, reopen, first-card timing, request-budget checks, and a reopen screenshot. | Verifies the exact lifecycle that left cancelled thumbnail jobs queued.                              |
 
 ## Verification
 
@@ -112,24 +112,24 @@ thumbnail loads after a fast close/reopen or resize churn.
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `2026-06-22-screenshot-browser-open-jank.md` | Screenshot browser rows derive from the card tree, render through `virtua/solid`, and visible thumbnails must enter the load path through the lazy queue. |
-| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md` | Thumbnail fetch/decode remains off the toolbar-open critical path; the browser benchmark samples RAF gaps and long tasks. |
-| This file | Cancelled thumbnail jobs must be physically removed from the queue, and the queue starts at most one thumbnail load per RAF frame. |
-| Godel read-only audit | Warm cache hits currently seed `createResource` through `initialValue`, so cached blob URLs can render before `loadAllowed()` and bypass the per-frame queue. |
+| Source                                                     | Constraint carried forward                                                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-22-screenshot-browser-open-jank.md`               | Screenshot browser rows derive from the card tree, render through `virtua/solid`, and visible thumbnails must enter the load path through the lazy queue.     |
+| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md` | Thumbnail fetch/decode remains off the toolbar-open critical path; the browser benchmark samples RAF gaps and long tasks.                                     |
+| This file                                                  | Cancelled thumbnail jobs must be physically removed from the queue, and the queue starts at most one thumbnail load per RAF frame.                            |
+| Godel read-only audit                                      | Warm cache hits currently seed `createResource` through `initialValue`, so cached blob URLs can render before `loadAllowed()` and bypass the per-frame queue. |
 
 ### Call Point Inventory
 
-| Call point | Current evidence | Decision |
-| --- | --- | --- |
-| `ScreenshotBrowserPanel.tsx` `ScreenshotThumbnail` | Authenticated screenshots call `peekResourceObjectUrl(props.item.src)` as the resource `initialValue`. | Remove the eager `initialValue`; read warm cache only after `loadAllowed()` is true. |
-| `ScreenshotBrowserPanel.tsx` `src()` | Authenticated screenshots return `objectUrl()` regardless of `loadAllowed()`. | Require `loadAllowed()` before exposing any authenticated or raw URL to `PreviewableImage`. |
-| `ScreenshotBrowserPanel.tsx` URL branch | The component still has a non-authenticated `resolveResourceUrl` path even though `screenshot-browser.ts` filters screenshot items through `/attachment/<project>/<name>`. | Remove the raw URL branch; screenshot thumbnails use only stored attachment URLs and object URLs. |
-| `ScreenshotBrowserPanel.tsx` error branch | `<Show when={!objectUrl.error}>` hides failed thumbnails as an empty slot. | Render an explicit same-size error placeholder for invalid sources or load failures. |
-| `services/api.ts` `peekResourceObjectUrl` | The API comment recommends `initialValue` for flicker-free first render. | Clarify that staged/lazy renderers must not use the peek to bypass their reveal gate. |
-| `screenshot-browser-panel.test.ts` | Static contract only checks that `peekResourceObjectUrl` is present. | Add guards that screenshot browser has no cache-backed `initialValue` and that `src()` remains gated by `loadAllowed()`. |
-| `screenshot-browser-panel-browser.test.ts` | The browser benchmark opens, scrolls, closes, and reopens 120 screenshots, but does not prove warm-cache images wait for RAF permission. | Prewarm cache on the first open, instrument image insertions per RAF on reopen, and assert warm-cache insertion spans multiple frames. |
+| Call point                                         | Current evidence                                                                                                                                                           | Decision                                                                                                                               |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `ScreenshotBrowserPanel.tsx` `ScreenshotThumbnail` | Authenticated screenshots call `peekResourceObjectUrl(props.item.src)` as the resource `initialValue`.                                                                     | Remove the eager `initialValue`; read warm cache only after `loadAllowed()` is true.                                                   |
+| `ScreenshotBrowserPanel.tsx` `src()`               | Authenticated screenshots return `objectUrl()` regardless of `loadAllowed()`.                                                                                              | Require `loadAllowed()` before exposing any authenticated or raw URL to `PreviewableImage`.                                            |
+| `ScreenshotBrowserPanel.tsx` URL branch            | The component still has a non-authenticated `resolveResourceUrl` path even though `screenshot-browser.ts` filters screenshot items through `/attachment/<project>/<name>`. | Remove the raw URL branch; screenshot thumbnails use only stored attachment URLs and object URLs.                                      |
+| `ScreenshotBrowserPanel.tsx` error branch          | `<Show when={!objectUrl.error}>` hides failed thumbnails as an empty slot.                                                                                                 | Render an explicit same-size error placeholder for invalid sources or load failures.                                                   |
+| `services/api.ts` `peekResourceObjectUrl`          | The API comment recommends `initialValue` for flicker-free first render.                                                                                                   | Clarify that staged/lazy renderers must not use the peek to bypass their reveal gate.                                                  |
+| `screenshot-browser-panel.test.ts`                 | Static contract only checks that `peekResourceObjectUrl` is present.                                                                                                       | Add guards that screenshot browser has no cache-backed `initialValue` and that `src()` remains gated by `loadAllowed()`.               |
+| `screenshot-browser-panel-browser.test.ts`         | The browser benchmark opens, scrolls, closes, and reopens 120 screenshots, but does not prove warm-cache images wait for RAF permission.                                   | Prewarm cache on the first open, instrument image insertions per RAF on reopen, and assert warm-cache insertion spans multiple frames. |
 
 ### Root Cause
 

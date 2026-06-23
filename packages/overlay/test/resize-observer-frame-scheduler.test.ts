@@ -68,7 +68,10 @@ test("ResizeObserver callbacks never run layout-affecting work synchronously", (
   const card = readFileSync(join(repoRoot, "packages/overlay/src/components/Card.tsx"), "utf8")
   const conversation = readFileSync(join(repoRoot, "packages/overlay/src/components/Conversation.tsx"), "utf8")
   const imagePreview = readFileSync(join(repoRoot, "packages/overlay/src/components/ImagePreview.tsx"), "utf8")
-  const screenshotBrowser = readFileSync(join(repoRoot, "packages/overlay/src/components/ScreenshotBrowserPanel.tsx"), "utf8")
+  const screenshotBrowser = readFileSync(
+    join(repoRoot, "packages/overlay/src/components/ScreenshotBrowserPanel.tsx"),
+    "utf8",
+  )
   const taskProgress = readFileSync(join(repoRoot, "packages/overlay/src/components/TaskProgressBar.tsx"), "utf8")
 
   expect(card).toContain("createAnimationFrameScheduler(updateStickyInlineSize)")
@@ -117,7 +120,7 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   expect(main).toContain('window.addEventListener("resize", applyWindowResizeOnFrame.schedule')
   expect(main).toContain('window.visualViewport.addEventListener("resize", applyWindowResizeOnFrame.schedule')
   expect(main).not.toContain('window.addEventListener("resize", onResize')
-  expect(main).not.toContain("window.visualViewport.addEventListener(\"resize\", onResize")
+  expect(main).not.toContain('window.visualViewport.addEventListener("resize", onResize')
 
   expect(main).toContain(
     "const applyCenterWorkbenchPanelResizeOnFrame = createAnimationFrameScheduler(applyPendingCenterWorkbenchPanelResize)",
@@ -131,7 +134,7 @@ test("window and center workbench resize paths use the shared frame scheduler", 
   expect(windowResizeFunction).toContain("renderCenterWorkbenchPanelLayoutOnFrame.schedule()")
   expect(windowResizeFunction).not.toContain("renderCenterWorkbenchPanelLayout()")
   expect(windowResizeFunction).not.toContain("renderCenterWorkbenchPanelSeparators()")
-  expect(updateWeightsFunction).toContain("setSettingsStore(\"centerWorkbenchPanelWeights\"")
+  expect(updateWeightsFunction).toContain('setSettingsStore("centerWorkbenchPanelWeights"')
   expect(updateWeightsFunction).toContain("renderCenterWorkbenchPanelLayoutOnFrame.schedule()")
   expect(main).toContain("pendingCenterWorkbenchPanelResizeClientX = event.clientX")
   expect(main).toContain("applyCenterWorkbenchPanelResizeOnFrame.schedule()")
@@ -151,7 +154,9 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   const nextAfterResetStart = main.indexOf("function hasWorkspaceDiffTarget", resetPanelStart)
   const openPanelStart = main.indexOf("function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void")
   const closePanelStart = main.indexOf("function closeCenterWorkbenchPanel", openPanelStart)
-  const scheduleRevealStart = main.indexOf("function scheduleCenterWorkbenchPanelReveal(panel: CenterWorkbenchPanel): void")
+  const scheduleRevealStart = main.indexOf(
+    "function scheduleCenterWorkbenchPanelReveal(panel: CenterWorkbenchPanel): void",
+  )
   const scheduleRevealEnd = main.indexOf("function isRecord", scheduleRevealStart)
   const dragApplyStart = main.indexOf("function applyPendingCenterWorkbenchPanelResize(): void")
   const dragApplyEnd = main.indexOf("const applyCenterWorkbenchPanelResizeOnFrame", dragApplyStart)
@@ -168,7 +173,10 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   )
   const panelEffectStart = main.indexOf("createEffect(() => {\n      const panels = centerWorkbenchPanels()")
   const settingsEffectStart = main.indexOf("createEffect(() => {\n      centerWorkbenchPanelWeightsSignature()")
-  const nextEffectStart = main.indexOf("createEffect(() => {\n      const panels = centerWorkbenchPanels()", settingsEffectStart)
+  const nextEffectStart = main.indexOf(
+    "createEffect(() => {\n      const panels = centerWorkbenchPanels()",
+    settingsEffectStart,
+  )
 
   expect(resetPanelStart).toBeGreaterThan(0)
   expect(nextAfterResetStart).toBeGreaterThan(resetPanelStart)
@@ -209,9 +217,7 @@ test("center workbench panel open schedules layout reads after DOM state writes"
   expect(main).toContain("function centerWorkbenchPanelWeightsSignature(): string")
   expect(main).toContain("const weights = settingsStore.centerWorkbenchPanelWeights")
   expect(main).toContain("const weight = Number(weights[panel])")
-  expect(main).toContain(
-    "const renderCenterWorkbenchPanelMeasurementsOnFrame = createAnimationFrameScheduler(",
-  )
+  expect(main).toContain("const renderCenterWorkbenchPanelMeasurementsOnFrame = createAnimationFrameScheduler(")
   expect(main).toContain(
     "const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayout)",
   )

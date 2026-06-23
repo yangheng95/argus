@@ -14,21 +14,21 @@ ordinary buttons instead of listbox/option semantics.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `ExecutorSelector.tsx` | Mirror and external model pickers share `ProviderModelGroup` as their model choice renderer. |
-| `FileChangesView.tsx` | Existing Kobalte Listbox usage shows the mature primitive pattern for option rows. |
-| `ComboboxControl.tsx` | Search combobox is reserved for searchable command-style input; browser visual review showed it duplicated selected values in this model picker. |
-| `AgentModelsPanel.tsx` | Model selection in settings already avoids handwritten button lists by using shared selection primitives. |
-| `executor-selector-dualbar.test.ts` | Existing tests pinned the wrong `aria-current` model button contract. |
+| Source                              | Relevant constraint                                                                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ExecutorSelector.tsx`              | Mirror and external model pickers share `ProviderModelGroup` as their model choice renderer.                                                     |
+| `FileChangesView.tsx`               | Existing Kobalte Listbox usage shows the mature primitive pattern for option rows.                                                               |
+| `ComboboxControl.tsx`               | Search combobox is reserved for searchable command-style input; browser visual review showed it duplicated selected values in this model picker. |
+| `AgentModelsPanel.tsx`              | Model selection in settings already avoids handwritten button lists by using shared selection primitives.                                        |
+| `executor-selector-dualbar.test.ts` | Existing tests pinned the wrong `aria-current` model button contract.                                                                            |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n "ProviderModelGroup|executor-popover-model|aria-current" packages/overlay/src/components/ExecutorSelector.tsx packages/overlay/test` | `ProviderModelGroup` owned the handwritten button list and tests asserted `aria-current`. | Replace the renderer and update tests to reject the retired button contract. |
-| `rg -n "Listbox.Root|ComboboxControl|SelectControl|SettingsSelect" packages/overlay/src/components packages/overlay/test` | Kobalte Listbox already backs row selection in `FileChangesView`; combobox is search-oriented and produced duplicate input chrome in screenshots. | Use `Listbox.Root` / `Listbox.Item` for visible provider model lists. |
-| `rg -n "executor-popover-model" packages/overlay/src/styles packages/overlay/test` | CSS and architecture guards also protected the old button classes. | Rename CSS hooks to listbox-specific classes and remove `.executor-popover-model`. |
+| Command                                                                            | Result                                                             | Decision                                                                                  |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `rg -n "ProviderModelGroup                                                         | executor-popover-model                                             | aria-current" packages/overlay/src/components/ExecutorSelector.tsx packages/overlay/test` | `ProviderModelGroup` owned the handwritten button list and tests asserted `aria-current`. | Replace the renderer and update tests to reject the retired button contract.                                                                      |
+| `rg -n "Listbox.Root                                                               | ComboboxControl                                                    | SelectControl                                                                             | SettingsSelect" packages/overlay/src/components packages/overlay/test`                    | Kobalte Listbox already backs row selection in `FileChangesView`; combobox is search-oriented and produced duplicate input chrome in screenshots. | Use `Listbox.Root` / `Listbox.Item` for visible provider model lists. |
+| `rg -n "executor-popover-model" packages/overlay/src/styles packages/overlay/test` | CSS and architecture guards also protected the old button classes. | Rename CSS hooks to listbox-specific classes and remove `.executor-popover-model`.        |
 
 ## Fix Plan
 

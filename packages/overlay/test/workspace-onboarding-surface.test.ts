@@ -41,11 +41,15 @@ test("workspace onboarding directory rows use the shared Button primitive", () =
 })
 
 test("workspace onboarding browser path input uses the shared field primitive", () => {
-  expect(component).toMatch(/<input[\s\S]*class="field-input"[\s\S]*data-testid="workspace-onboarding-browser-path-input"/)
+  expect(component).toMatch(
+    /<input[\s\S]*class="field-input"[\s\S]*data-testid="workspace-onboarding-browser-path-input"/,
+  )
   expect(source).toMatch(/\.workspace-onboarding-browser-path-label\s+\.field-input\s*\{/)
   expect(source).not.toMatch(/\.workspace-onboarding-browser-path-label\s+input\b/)
   expect(source).not.toMatch(/\.workspace-onboarding-browser-path-label\s+input:focus\b/)
-  const pathInputRule = source.match(/\.workspace-onboarding-browser-path-label\s+\.field-input\s*\{(?<body>[\s\S]*?)\}/)
+  const pathInputRule = source.match(
+    /\.workspace-onboarding-browser-path-label\s+\.field-input\s*\{(?<body>[\s\S]*?)\}/,
+  )
   expect(pathInputRule?.groups?.body ?? "").toMatch(/height:\s*calc\(34px \* var\(--ui-scale\)\)/)
   expect(pathInputRule?.groups?.body ?? "").toMatch(/padding:\s*0 calc\(10px \* var\(--ui-scale\)\)/)
   expect(pathInputRule?.groups?.body ?? "").not.toMatch(/\bborder(?:-color)?:/)

@@ -20,22 +20,22 @@ control is an ordinary destructive operation button, it belongs to
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-18-workspace-split-launcher-button-primitive.md` | Kobalte menu triggers and visible operation controls should route through `Button`, preserving `data-ui` selectors for tests. |
-| `2026-06-18-chat-composer-button-primitive-owner.md` | Raw operation buttons with local chrome create a second button system and must migrate to `Button`. |
-| `2026-06-18-popup-disabled-effective-contrast.md` | Worktree popup disabled states are part of the light-popup contrast matrix and must stay readable without whole-surface opacity drift. |
-| `packages/overlay/src/components/ui/Button.tsx` | `Button` owns `.oc-button`, `variant`, `size`, and `tone`. |
-| `packages/overlay/src/styles/primitives/button.css` | Focus ring, hover, disabled, danger tone, and icon-action chrome are single-sourced here. |
+| Source                                                    | Relevant constraint                                                                                                                    |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-18-workspace-split-launcher-button-primitive.md` | Kobalte menu triggers and visible operation controls should route through `Button`, preserving `data-ui` selectors for tests.          |
+| `2026-06-18-chat-composer-button-primitive-owner.md`      | Raw operation buttons with local chrome create a second button system and must migrate to `Button`.                                    |
+| `2026-06-18-popup-disabled-effective-contrast.md`         | Worktree popup disabled states are part of the light-popup contrast matrix and must stay readable without whole-surface opacity drift. |
+| `packages/overlay/src/components/ui/Button.tsx`           | `Button` owns `.oc-button`, `variant`, `size`, and `tone`.                                                                             |
+| `packages/overlay/src/styles/primitives/button.css`       | Focus ring, hover, disabled, danger tone, and icon-action chrome are single-sourced here.                                              |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "project-worktree-remove|project-worktree-dropdown" packages/overlay/src packages/overlay/test specs/new-arch` | Production owner is `TaskDirBar.tsx`; CSS owner is `conversation.css`; tests are `task-cwd-row-layout.test.ts` and `popup-contrast-matrix.test.ts`. | Retire `class="project-worktree-remove"` and retarget tests to `data-ui="project-worktree-remove"`. |
-| `TaskDirBar.tsx` import review | The component already imports `Button` for `project-worktree-dropdown`. | Reuse the existing import; do not add a second primitive. |
-| `conversation.css` review | `.project-worktree-remove` duplicates `appearance`, dimensions, alignment, border, background, color, cursor, hover, focus, expired, and disabled chrome. | Delete the private button shell and keep only scoped `--oc-button-*` variables where row-specific sizing/tone is needed. |
-| `popup-contrast-matrix.test.ts` review | The fixture samples disabled and expired worktree controls using raw `.project-worktree-remove` buttons. | Update the fixture to `.oc-button` with `data-chrome="icon-action"` and add primitive/focus/hover assertions. |
+| Sweep                                  | Result                                                                                                                                                    | Decision                                                                                                                                            |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `rg -n "project-worktree-remove        | project-worktree-dropdown" packages/overlay/src packages/overlay/test specs/new-arch`                                                                     | Production owner is `TaskDirBar.tsx`; CSS owner is `conversation.css`; tests are `task-cwd-row-layout.test.ts` and `popup-contrast-matrix.test.ts`. | Retire `class="project-worktree-remove"` and retarget tests to `data-ui="project-worktree-remove"`. |
+| `TaskDirBar.tsx` import review         | The component already imports `Button` for `project-worktree-dropdown`.                                                                                   | Reuse the existing import; do not add a second primitive.                                                                                           |
+| `conversation.css` review              | `.project-worktree-remove` duplicates `appearance`, dimensions, alignment, border, background, color, cursor, hover, focus, expired, and disabled chrome. | Delete the private button shell and keep only scoped `--oc-button-*` variables where row-specific sizing/tone is needed.                            |
+| `popup-contrast-matrix.test.ts` review | The fixture samples disabled and expired worktree controls using raw `.project-worktree-remove` buttons.                                                  | Update the fixture to `.oc-button` with `data-chrome="icon-action"` and add primitive/focus/hover assertions.                                       |
 
 ## Fix Plan
 

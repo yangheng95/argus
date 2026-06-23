@@ -16,10 +16,10 @@ evidence.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
+| Source                                          | Existing decision                                                                                                    |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `2026-06-17-left-pane-resizer-accessibility.md` | `aria-valuemax` is the actual width reachable by one handle under `resolvedPaneWidths()`, not a theoretical maximum. |
-| `packages/overlay/src/services/pane.ts` | Pointer and keyboard resizing share `paneResizeBounds()` and `resolvedPaneWidths()`. |
+| `packages/overlay/src/services/pane.ts`         | Pointer and keyboard resizing share `paneResizeBounds()` and `resolvedPaneWidths()`.                                 |
 
 ## Fix
 

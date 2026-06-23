@@ -141,7 +141,10 @@ export function setCodingAssistantSearchQuery(query: string): void {
   setCodingAssistantStore("searchQuery", query)
 }
 
-export async function createCodingAssistantSession(options: { directory: string; signal?: AbortSignal }): Promise<string> {
+export async function createCodingAssistantSession(options: {
+  directory: string
+  signal?: AbortSignal
+}): Promise<string> {
   const directory = options.directory.trim()
   if (!directory) throw new Error("createCodingAssistantSession: directory is required")
   assertNotAborted(options.signal)
@@ -252,7 +255,8 @@ export async function renameCodingAssistantSession(
 
 export async function stopCodingAssistantSession(target: CodingAssistantSessionActionTarget): Promise<boolean> {
   const id = target.sessionID.trim()
-  if (!id || !target.directory.trim()) throw new Error("stopCodingAssistantSession: sessionID and directory are required")
+  if (!id || !target.directory.trim())
+    throw new Error("stopCodingAssistantSession: sessionID and directory are required")
   setCodingAssistantStore("actionBusyID", id)
   try {
     if (selectedCodingAssistantSessionID() === id) abortChatRequest()

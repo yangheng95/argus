@@ -18,24 +18,24 @@ snapshot for the new scope.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no dual source, test every change, visually verify UI work, and commit/push every round. |
-| `2026-06-11-browser-preview-interactive-live-session.md` | Live preview is task-scoped and backend-owned; screenshot routes are task/target/viewport scoped. |
-| `2026-06-22-browser-preview-evidence-live-snapshot-boundary.md` | Persisted evidence suppresses live snapshots; live snapshots are only for live preview ownership. |
-| `2026-06-22-browser-preview-live-input-batch-owner.md` | Live input request batching must remain the input owner; snapshot ownership must not reintroduce request pressure. |
-| `2026-06-23-browser-preview-live-input-rect-cache.md` | Live input handlers use a cached image rect; snapshot ownership must not affect input coordinate routing. |
-| Confucius read-only audit | First live image writes could retrigger the live-scope effect and duplicate `/live/snapshot` requests. |
+| Source                                                          | Constraint carried forward                                                                                         |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                                     | No fallback, no dual source, test every change, visually verify UI work, and commit/push every round.              |
+| `2026-06-11-browser-preview-interactive-live-session.md`        | Live preview is task-scoped and backend-owned; screenshot routes are task/target/viewport scoped.                  |
+| `2026-06-22-browser-preview-evidence-live-snapshot-boundary.md` | Persisted evidence suppresses live snapshots; live snapshots are only for live preview ownership.                  |
+| `2026-06-22-browser-preview-live-input-batch-owner.md`          | Live input request batching must remain the input owner; snapshot ownership must not reintroduce request pressure. |
+| `2026-06-23-browser-preview-live-input-rect-cache.md`           | Live input handlers use a cached image rect; snapshot ownership must not affect input coordinate routing.          |
+| Confucius read-only audit                                       | First live image writes could retrigger the live-scope effect and duplicate `/live/snapshot` requests.             |
 
 ## Call Point Inventory
 
-| Search | Findings | Decision |
-| --- | --- | --- |
-| `createEffect<string | undefined>` in `BrowserPreviewPanel.tsx` | The live-scope effect calls `clearLiveImageUrl()` when the scope key changes, then calls `loadLiveFrame(scope)`. | Keep the scope effect as the single snapshot requester. |
-| `clearLiveImageUrl()` | The helper read `liveImage()` directly. When called inside the scope effect, that read subscribed the effect to live image changes. | Read `liveImage` through Solid `untrack` so cleanup does not add a dependency. |
-| `replaceLiveImageUrl()` | Setting the first live image could retrigger any effect subscribed to `liveImage`. | Do not add response-discard or request gates; remove the accidental subscription at the source. |
-| `browser-preview-live-input-batch.test.ts` | The live test recorded snapshot bodies but only asserted that one existed. | Assert exact snapshot counts for desktop initial scope and tablet scope switch. |
-| `browser-preview-panel.test.ts` | Static guard covered live ownership broadly. | Add a guard that `clearLiveImageUrl` uses `untrack(liveImage)` and does not call `liveImage()`. |
+| Search                                     | Findings                                                                                                                            | Decision                                                                                                         |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `createEffect<string                       | undefined>`in`BrowserPreviewPanel.tsx`                                                                                              | The live-scope effect calls `clearLiveImageUrl()` when the scope key changes, then calls `loadLiveFrame(scope)`. | Keep the scope effect as the single snapshot requester. |
+| `clearLiveImageUrl()`                      | The helper read `liveImage()` directly. When called inside the scope effect, that read subscribed the effect to live image changes. | Read `liveImage` through Solid `untrack` so cleanup does not add a dependency.                                   |
+| `replaceLiveImageUrl()`                    | Setting the first live image could retrigger any effect subscribed to `liveImage`.                                                  | Do not add response-discard or request gates; remove the accidental subscription at the source.                  |
+| `browser-preview-live-input-batch.test.ts` | The live test recorded snapshot bodies but only asserted that one existed.                                                          | Assert exact snapshot counts for desktop initial scope and tablet scope switch.                                  |
+| `browser-preview-panel.test.ts`            | Static guard covered live ownership broadly.                                                                                        | Add a guard that `clearLiveImageUrl` uses `untrack(liveImage)` and does not call `liveImage()`.                  |
 
 ## Root Cause
 

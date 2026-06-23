@@ -321,9 +321,7 @@ test(
       assert.ok(editorOpenScreenshot.length > 0)
       writeFileSync(resolve(".scratch/workspace-split-launcher-expanded-state.png"), editorOpenScreenshot)
       await page.keyboard.press("ArrowDown")
-      await page.waitForFunction(() =>
-        document.activeElement?.classList.contains("workspace-editor-option"),
-      )
+      await page.waitForFunction(() => document.activeElement?.classList.contains("workspace-editor-option"))
       const editorMenuFocus = await page.evaluate(() => {
         const active = document.activeElement as HTMLElement | null
         if (!active) throw new Error("Missing focused workspace editor option")

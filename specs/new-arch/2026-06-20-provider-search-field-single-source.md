@@ -18,21 +18,21 @@ and `.search-field .oc-button[data-ui$="-search-clear"]`.
 
 ## Recall
 
-| Source | Constraint |
-| --- | --- |
-| `AGENTS.md` | Remove UI double sources and keep mature/shared primitives as the single behavior and visual source. |
-| `2026-06-19-memory-search-field-primitive.md` | Search rows should use `.search-field`, `.search-field-input`, `.search-field-icon`, and Button primitive clear actions. |
-| `2026-06-19-retire-toolbar-search-residue.md` | `.search-field*` is the search input primitive surface; retired toolbar search hooks should not be preserved. |
+| Source                                            | Constraint                                                                                                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                       | Remove UI double sources and keep mature/shared primitives as the single behavior and visual source.                                                    |
+| `2026-06-19-memory-search-field-primitive.md`     | Search rows should use `.search-field`, `.search-field-input`, `.search-field-icon`, and Button primitive clear actions.                                |
+| `2026-06-19-retire-toolbar-search-residue.md`     | `.search-field*` is the search input primitive surface; retired toolbar search hooks should not be preserved.                                           |
 | `2026-06-19-retire-field-input-action-residue.md` | Live field owners are `.field-input`, `.field-input-group`, and shared `.search-field*`; old per-surface action/icon/search families should be retired. |
-| `2026-06-20-settings-textarea-primitive.md` | Provider settings has browser coverage that can open the real dialog and inspect provider controls. |
+| `2026-06-20-settings-textarea-primitive.md`       | Provider settings has browser coverage that can open the real dialog and inspect provider controls.                                                     |
 
 ## Evidence Sweep
 
-| Command | Result | Decision |
-| --- | --- | --- |
-| `rg -n "provider-search|search-field|field-input-action|toolbar-search|search-clear" packages/overlay/src/components/settings/ProvidersPanel.tsx packages/overlay/src/styles/surfaces/settings.css packages/overlay/src/styles/surfaces/field.css packages/overlay/test specs/new-arch` | Provider settings is the remaining production search surface with private `provider-search-*` chrome. `field.css` owns shared search chrome and tests already protect task/file/memory search. | Move provider search to the shared search classes and remove provider-specific search chrome from `settings.css`. |
-| `provider-auth-panel.test.ts` inspection | Existing browser coverage opens real Provider settings, measures search layout, types into search, clears it, and screenshots the settings dialog. | Extend the same test to assert shared classes and save focused/typed screenshots. |
-| `provider-search-clear-primitive.test.ts` and `icon-affordance-visibility.test.ts` | Tests currently pin provider-specific clear CSS. | Update tests so provider search clear is governed by the shared `.search-field` rule. |
+| Command                                                                            | Result                                                                                                                                             | Decision                                                                              |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `rg -n "provider-search                                                            | search-field                                                                                                                                       | field-input-action                                                                    | toolbar-search | search-clear" packages/overlay/src/components/settings/ProvidersPanel.tsx packages/overlay/src/styles/surfaces/settings.css packages/overlay/src/styles/surfaces/field.css packages/overlay/test specs/new-arch` | Provider settings is the remaining production search surface with private `provider-search-*` chrome. `field.css` owns shared search chrome and tests already protect task/file/memory search. | Move provider search to the shared search classes and remove provider-specific search chrome from `settings.css`. |
+| `provider-auth-panel.test.ts` inspection                                           | Existing browser coverage opens real Provider settings, measures search layout, types into search, clears it, and screenshots the settings dialog. | Extend the same test to assert shared classes and save focused/typed screenshots.     |
+| `provider-search-clear-primitive.test.ts` and `icon-affordance-visibility.test.ts` | Tests currently pin provider-specific clear CSS.                                                                                                   | Update tests so provider search clear is governed by the shared `.search-field` rule. |
 
 ## Fix Plan
 

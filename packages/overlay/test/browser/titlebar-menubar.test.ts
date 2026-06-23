@@ -176,11 +176,7 @@ test(
           const geometry = await page.evaluate(() => {
             const titlebar = document.querySelector("#titlebar") as HTMLElement | null
             if (!titlebar) throw new Error("Missing titlebar")
-            const selectors = [
-              ".titlebar-brand",
-              "[data-menu-trigger]",
-              ".titlebar-window-controls button",
-            ]
+            const selectors = [".titlebar-brand", "[data-menu-trigger]", ".titlebar-window-controls button"]
             const nodes = selectors
               .flatMap((selector) => Array.from(document.querySelectorAll<HTMLElement>(selector)))
               .filter((node) => {
@@ -472,7 +468,9 @@ test(
           await page.waitForFunction(() => {
             return (
               document.querySelector("#configDialog") !== null &&
-              document.querySelector('[data-config-panel="about"] #aboutRuntimeGrid')?.textContent?.includes("12345") === true
+              document
+                .querySelector('[data-config-panel="about"] #aboutRuntimeGrid')
+                ?.textContent?.includes("12345") === true
             )
           })
           await page.click("#btnCloseConfigDialog")
@@ -714,7 +712,9 @@ test(
       }))
       assert.deepEqual(pointerOpenState, { expanded: "true", hasExpandedData: true })
       await page.keyboard.press("Escape")
-      await page.waitForFunction(() => document.querySelector('[data-menu-trigger="workspace"]')?.getAttribute("aria-expanded") !== "true")
+      await page.waitForFunction(
+        () => document.querySelector('[data-menu-trigger="workspace"]')?.getAttribute("aria-expanded") !== "true",
+      )
       const titlebarAnchorWrites = await page.evaluate(() => {
         const target = window as typeof window & {
           __titlebarAnchorWrites: string[]
@@ -793,7 +793,9 @@ test(
         },
       ])
       for (let attempt = 0; attempt < 8; attempt += 1) {
-        const activeTestid = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid || "")
+        const activeTestid = await page.evaluate(
+          () => (document.activeElement as HTMLElement | null)?.dataset.testid || "",
+        )
         if (activeTestid === "titlebar-auto-confirm-proposed-tasks") break
         await page.keyboard.press("ArrowDown")
       }
@@ -880,11 +882,14 @@ test(
       assert.ok(themeRadioState.count >= 3)
       assert.deepEqual([...new Set(themeRadioState.roles)], ["menuitemradio"])
       assert.equal(themeRadioState.legacyRadioCount, 0)
-      assert.deepEqual(themeRadioState.checked.find((item) => item.testid === "titlebar-theme-vscode-dark"), {
-        testid: "titlebar-theme-vscode-dark",
-        ariaChecked: "true",
-        checked: true,
-      })
+      assert.deepEqual(
+        themeRadioState.checked.find((item) => item.testid === "titlebar-theme-vscode-dark"),
+        {
+          testid: "titlebar-theme-vscode-dark",
+          ariaChecked: "true",
+          checked: true,
+        },
+      )
       await page.focus('[data-testid="titlebar-opacity-range"]')
       const rangeFocusState = await page.$eval('[data-testid="titlebar-opacity-range"]', (node: HTMLInputElement) => {
         const row = node.closest<HTMLElement>(".titlebar-menubar-range")
@@ -1323,7 +1328,7 @@ test(
           ".btn.mini",
           '[data-ui^="executor-chip-"]',
           ".chat-input",
-          '.chat-compose-row .oc-button[data-mode]',
+          ".chat-compose-row .oc-button[data-mode]",
         ]
         return selectors.flatMap((selector) => {
           const node = document.querySelector<HTMLElement>(selector)
@@ -1362,8 +1367,12 @@ test(
             props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 8,
           },
-          { selector: '.chat-compose-row .oc-button[data-mode]', props: ["paddingLeft", "paddingRight"], max: 9 },
-          { selector: '.chat-compose-row .oc-button[data-mode]', props: ["columnGap", "paddingLeft", "paddingRight"], max: 9 },
+          { selector: ".chat-compose-row .oc-button[data-mode]", props: ["paddingLeft", "paddingRight"], max: 9 },
+          {
+            selector: ".chat-compose-row .oc-button[data-mode]",
+            props: ["columnGap", "paddingLeft", "paddingRight"],
+            max: 9,
+          },
         ]
         return checks.flatMap(({ selector, props, max }) => {
           const node = document.querySelector<HTMLElement>(selector)
@@ -1433,13 +1442,7 @@ test(
       assert.deepEqual(looseRightPanelSpacing, [])
 
       const rightPanelDecorativeBorders = await page.evaluate(() => {
-        const selectors = [
-          ".sections",
-          ".sections-header",
-          ".section",
-          ".section-head",
-          ".acceptance-panel",
-        ]
+        const selectors = [".sections", ".sections-header", ".section", ".section-head", ".acceptance-panel"]
         const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
         return selectors.flatMap((selector) => {
           const node = document.querySelector<HTMLElement>(selector)

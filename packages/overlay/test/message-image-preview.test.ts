@@ -66,7 +66,12 @@ function block(css: string, selector: string): string {
 }
 
 function escapeTestAttr(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
 }
 
 describe("message image preview", () => {
@@ -118,13 +123,15 @@ describe("message image preview", () => {
     expect(component).toContain("imagePreviewTriggerContract({ src: props.src, alt: alt() })")
     expect(component).toContain("previewLoader?: PreviewImageLoader")
     expect(component).toContain("const delegatedPreview = () => !props.previewLoader")
-    expect(component).toContain("const loadPreviewSource = async () => (props.previewLoader ? await props.previewLoader() : props.src)")
+    expect(component).toContain(
+      "const loadPreviewSource = async () => (props.previewLoader ? await props.previewLoader() : props.src)",
+    )
     expect(component).toContain("openImagePreview(await loadPreviewSource(), alt())")
     expect(component).toContain("notifyError({")
     expect(component).toContain("<Button")
     expect(component).toContain("data-ui={trigger().dataUi}")
     expect(component).toContain("data-image-preview-trigger={delegatedPreview() ? trigger().triggerFlag : undefined}")
-    expect(markdown).toContain("imagePreviewTriggerHtmlAttributes({ src, alt: text || \"\" }, escapeAttr)")
+    expect(markdown).toContain('imagePreviewTriggerHtmlAttributes({ src, alt: text || "" }, escapeAttr)')
     expect(markdown).not.toContain('class="oc-button msg-image-trigger"')
     expect(markdown).not.toContain('data-ui="image-preview-trigger"')
     expect(markdown).not.toContain('data-image-preview-trigger="true"')
@@ -307,7 +314,7 @@ describe("message image preview", () => {
     expect(component).toContain('"image/png"')
     expect(component).toContain("new ClipboardItem")
     expect(component).toContain("readonly key: ImageCopyFeedbackKey")
-    expect(component).toContain("setCopyFeedback({ tone: \"success\", key: IMAGE_COPY_SUCCESS_KEY })")
+    expect(component).toContain('setCopyFeedback({ tone: "success", key: IMAGE_COPY_SUCCESS_KEY })')
     expect(component).toContain("imageCopyStatusText(feedback().key)")
     expect(component).toContain('role={feedback().tone === "error" ? "alert" : "status"}')
     expect(component).toContain("onClick={() => void copyPreviewImage()}")

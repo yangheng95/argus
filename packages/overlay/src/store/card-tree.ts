@@ -477,7 +477,9 @@ function equalCardTreeOrder(a: readonly string[], b: readonly string[]): boolean
   return true
 }
 
-export function replaceCardTreeOrder(nextOrder: readonly string[] | ((order: readonly string[]) => readonly string[])): void {
+export function replaceCardTreeOrder(
+  nextOrder: readonly string[] | ((order: readonly string[]) => readonly string[]),
+): void {
   let changed = false
   let previousSnapshot: string[] = []
   let nextSnapshot: string[] = []

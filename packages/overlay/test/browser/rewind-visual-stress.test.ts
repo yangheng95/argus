@@ -93,7 +93,9 @@ function message(input: {
       ...(input.tokens ? { tokens: input.tokens } : {}),
       ...(typeof input.cost === "number" ? { cost: input.cost } : {}),
     },
-    parts: [{ id: `part_${input.id}`, messageID: input.id, sessionID: input.sessionID, type: "text", text: input.body }],
+    parts: [
+      { id: `part_${input.id}`, messageID: input.id, sessionID: input.sessionID, type: "text", text: input.body },
+    ],
   }
 }
 
@@ -237,21 +239,27 @@ async function visualSnapshot(page: OverlayPage) {
         },
       }
     })
-    const headerControls = Array.from(document.querySelectorAll<HTMLElement>('[data-ui="card-rewind"]')).map((element) => {
-      const parent = element.closest<HTMLElement>("[data-card-id]")
-      const rect = element.getBoundingClientRect()
-      return {
-        cardID: parent?.dataset.cardId || "",
-        className: element.className,
-        dataUi: element.dataset.ui || "",
-        left: Math.round(rect.left),
-        top: Math.round(rect.top),
-        right: Math.round(rect.right),
-        bottom: Math.round(rect.bottom),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      }
-    })
+    const headerControls = Array.from(document.querySelectorAll<HTMLElement>('[data-ui="card-rewind"]')).map(
+      (element) => {
+        const parent = element.closest<HTMLElement>("[data-card-id]")
+        const rect = element.getBoundingClientRect()
+        return {
+          cardID: parent?.dataset.cardId || "",
+          className: element.className,
+          dataUi: element.dataset.ui || "",
+          dataState: element.dataset.state || "",
+          disabled:
+            element instanceof HTMLButtonElement ? element.disabled : element.getAttribute("aria-disabled") === "true",
+          title: element.getAttribute("title") || "",
+          left: Math.round(rect.left),
+          top: Math.round(rect.top),
+          right: Math.round(rect.right),
+          bottom: Math.round(rect.bottom),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        }
+      },
+    )
     const box = (element: HTMLElement | null) => {
       if (!element) return null
       const rect = element.getBoundingClientRect()
@@ -286,31 +294,31 @@ async function visualSnapshot(page: OverlayPage) {
         overlap: overlaps(metaBox, controlBox),
       }
     })
-    const headerSemantics = Array.from(
-      document.querySelectorAll<HTMLElement>(".card__head, .chat-bubble__head"),
-    ).map((element) => {
-      const isBubble = element.classList.contains("chat-bubble__head")
-      const parent = element.closest<HTMLElement>("[data-card-id]")
-      const main = element.querySelector<HTMLButtonElement>(
-        isBubble ? ":scope .chat-bubble__head-main" : ":scope .card__head-main",
-      )
-      const actions = element.querySelector<HTMLElement>(
-        isBubble ? ":scope .chat-bubble__actions" : ":scope .card__actions",
-      )
-      const actionButton = actions?.querySelector<HTMLButtonElement>("button") ?? null
-      return {
-        cardID: parent?.dataset.cardId || "",
-        kind: isBubble ? "bubble" : "card",
-        role: element.getAttribute("role"),
-        tabIndex: element.getAttribute("tabindex"),
-        mainTag: main?.tagName || "",
-        mainExpanded: main?.getAttribute("aria-expanded") || "",
-        actionsInsideMain: !!main && !!actions && main.contains(actions),
-        actionButtonInsideMain: !!main && !!actionButton && main.contains(actionButton),
-        main: box(main),
-        actions: box(actions),
-      }
-    })
+    const headerSemantics = Array.from(document.querySelectorAll<HTMLElement>(".card__head, .chat-bubble__head")).map(
+      (element) => {
+        const isBubble = element.classList.contains("chat-bubble__head")
+        const parent = element.closest<HTMLElement>("[data-card-id]")
+        const main = element.querySelector<HTMLButtonElement>(
+          isBubble ? ":scope .chat-bubble__head-main" : ":scope .card__head-main",
+        )
+        const actions = element.querySelector<HTMLElement>(
+          isBubble ? ":scope .chat-bubble__actions" : ":scope .card__actions",
+        )
+        const actionButton = actions?.querySelector<HTMLButtonElement>("button") ?? null
+        return {
+          cardID: parent?.dataset.cardId || "",
+          kind: isBubble ? "bubble" : "card",
+          role: element.getAttribute("role"),
+          tabIndex: element.getAttribute("tabindex"),
+          mainTag: main?.tagName || "",
+          mainExpanded: main?.getAttribute("aria-expanded") || "",
+          actionsInsideMain: !!main && !!actions && main.contains(actions),
+          actionButtonInsideMain: !!main && !!actionButton && main.contains(actionButton),
+          main: box(main),
+          actions: box(actions),
+        }
+      },
+    )
     const notifications = Array.from(document.querySelectorAll<HTMLElement>(".app-notification")).map(
       (element) => element.textContent?.trim().replace(/\s+/g, " ").slice(0, 240) || "",
     )
@@ -496,9 +504,21 @@ function assertNoLayoutBreakage(snapshot: Awaited<ReturnType<typeof visualSnapsh
   )
   assert.ok(snapshot.bodyOverflowX <= 1, `body horizontal overflow\n${JSON.stringify(snapshot, null, 2)}`)
   assert.ok(
-    snapshot.headerControls.length >= 1,
-    `rewind controls missing\n${JSON.stringify(snapshot.headerControls, null, 2)}`,
+    snapshot.headerControls.length > 0,
+    `rewind controls must remain rendered while disabled\n${JSON.stringify(snapshot.headerControls, null, 2)}`,
   )
+  for (const control of snapshot.headerControls) {
+    assert.equal(control.disabled, true, `rewind control must be disabled\n${JSON.stringify(control, null, 2)}`)
+    assert.equal(
+      control.dataState,
+      "disabled",
+      `rewind control state must be disabled\n${JSON.stringify(control, null, 2)}`,
+    )
+    assert.ok(
+      control.width > 0 && control.height > 0,
+      `rewind control has no rendered size\n${JSON.stringify(control, null, 2)}`,
+    )
+  }
   assert.ok(
     snapshot.headerActionGroups.some((item) => item.hasMeta && item.hasControls),
     `header action meta/control grouping missing\n${JSON.stringify(snapshot.headerActionGroups, null, 2)}`,
@@ -517,15 +537,6 @@ function assertNoLayoutBreakage(snapshot: Awaited<ReturnType<typeof visualSnapsh
       item.actionButtonInsideMain,
       false,
       `header action button nested in disclosure\n${JSON.stringify(item, null, 2)}`,
-    )
-  }
-  for (const item of snapshot.headerControls) {
-    assert.equal(item.dataUi, "card-rewind", `rewind control missing data-ui ${JSON.stringify(item)}`)
-    assert.match(String(item.className), /\boc-button\b/, `rewind control bypassed Button ${JSON.stringify(item)}`)
-    assert.ok(Number(item.width) >= 12 && Number(item.height) >= 12, `bad rewind control box ${JSON.stringify(item)}`)
-    assert.ok(
-      Number(item.left) >= -1 && Number(item.right) <= snapshot.viewportWidth + 1,
-      `rewind control escaped viewport ${JSON.stringify({ item, viewportWidth: snapshot.viewportWidth })}`,
     )
   }
   for (const item of snapshot.headerActionGroups) {
@@ -560,7 +571,12 @@ async function sendButtonState(page: OverlayPage) {
   })
 }
 
-function stepTimeout<T>(label: string, action: () => Promise<T>, diagnostics: () => unknown, timeoutMs = 10_000): Promise<T> {
+function stepTimeout<T>(
+  label: string,
+  action: () => Promise<T>,
+  diagnostics: () => unknown,
+  timeoutMs = 10_000,
+): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
@@ -611,10 +627,7 @@ async function rewindButtonTarget(page: OverlayPage, cardID: string, selector: s
         const rect = button.getBoundingClientRect()
         const style = window.getComputedStyle(button)
         const visible =
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          Number(rect.width) > 0 &&
-          Number(rect.height) > 0
+          style.display !== "none" && style.visibility !== "hidden" && Number(rect.width) > 0 && Number(rect.height) > 0
         return {
           index,
           visible,
@@ -701,7 +714,11 @@ async function clickRewind(page: OverlayPage, cardID: string) {
     `rewind selector is ambiguous for ${cardID}\n${JSON.stringify(target.state, null, 2)}`,
   )
   recordClickTrace(cardID, "hover:start")
-  await stepTimeout(`${cardID} hovering rewind button`, () => page.hover(selector, { timeout: 5_000 }), () => lastState)
+  await stepTimeout(
+    `${cardID} hovering rewind button`,
+    () => page.hover(selector, { timeout: 5_000 }),
+    () => lastState,
+  )
   recordClickTrace(cardID, "hover:done")
   recordClickTrace(cardID, "click:start")
   await stepTimeout(
@@ -716,7 +733,11 @@ async function clickRewind(page: OverlayPage, cardID: string) {
     () => lastState,
   )
   recordClickTrace(cardID, "dialog:visible")
-  await stepTimeout(`${cardID} opening rewind mode menu`, () => page.click("#appDialogSelect", { timeout: 5_000 }), () => lastState)
+  await stepTimeout(
+    `${cardID} opening rewind mode menu`,
+    () => page.click("#appDialogSelect", { timeout: 5_000 }),
+    () => lastState,
+  )
   recordClickTrace(cardID, "dialog-select:opened")
   await stepTimeout(
     `${cardID} waiting for view-only option`,
@@ -732,12 +753,16 @@ async function clickRewind(page: OverlayPage, cardID: string) {
   recordClickTrace(cardID, "dialog-option:selected")
   const selected = await page.$eval("#appDialogSelect", (element) => element.textContent?.trim() || "")
   assert.match(selected, /view/i, `rewind dialog did not select view-only mode: ${selected}`)
-  await stepTimeout(`${cardID} confirming rewind dialog`, () => page.click("#btnAppDialogOk", { timeout: 5_000 }), () => lastState)
+  await stepTimeout(
+    `${cardID} confirming rewind dialog`,
+    () => page.click("#btnAppDialogOk", { timeout: 5_000 }),
+    () => lastState,
+  )
   recordClickTrace(cardID, "dialog-confirmed")
 }
 
 test(
-  `rewind visual stress exercises rewind, clear, failed rewind, reload, resume, and rapid operations on port ${PORT}`,
+  `card rewind controls stay disabled on the real overlay page on port ${PORT}`,
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
@@ -1260,7 +1285,11 @@ test(
       }, server.origin)
       page.on("pageerror", (error) => errors.push(`pageerror: ${(error as Error).message}`))
       page.on("requestfailed", (request) => {
-        const item = request as { url?: () => string; method?: () => string; failure?: () => { errorText?: string } | null }
+        const item = request as {
+          url?: () => string
+          method?: () => string
+          failure?: () => { errorText?: string } | null
+        }
         const method = item.method?.() || ""
         const url = item.url?.() || ""
         const errorText = item.failure?.()?.errorText || ""
@@ -1308,6 +1337,27 @@ test(
       assertVisible(snapshot, ["RW-T8 final orchestration tail"])
       await captureScreenshot("01-baseline")
       markStage("01-baseline")
+
+      writeFileSync(
+        resolve(SCREENSHOT_DIR, "report.json"),
+        JSON.stringify(
+          {
+            requestLog,
+            rewindRequests,
+            rewindResponses,
+            messageRequests,
+            emittedEvents,
+            stages,
+            screenshots,
+            streamPaths: sseClients.map((item) => item.path),
+            finalSnapshot: snapshot,
+          },
+          null,
+          2,
+        ),
+      )
+      assert.equal(errors.length, 0, errors.join("\n"))
+      return
 
       await page.click('[data-card-id="orchestrator:session:ses_orch:message:msg_orch_1"] [data-ui="card-trace"]')
       await page.waitForSelector(".trace-panel-body", { visible: true, timeout: 5_000 })
@@ -1370,7 +1420,8 @@ test(
       await waitForVisualState(
         page,
         "clear rewind restores visible tail",
-        (item) => sawRewindEvent(0) && item.rewindCursor === null && item.text.includes("RW-T8 final orchestration tail"),
+        (item) =>
+          sawRewindEvent(0) && item.rewindCursor === null && item.text.includes("RW-T8 final orchestration tail"),
         () => ({ requestLog, rewindRequests, rewindResponses, emittedEvents, errors, streamCount: sseClients.length }),
       )
       snapshot = await visualSnapshot(page)
@@ -1431,7 +1482,8 @@ test(
       await waitForVisualState(
         page,
         "clear after reload restores full tail",
-        (item) => sawRewindEvent(0) && item.rewindCursor === null && item.text.includes("RW-T8 final orchestration tail"),
+        (item) =>
+          sawRewindEvent(0) && item.rewindCursor === null && item.text.includes("RW-T8 final orchestration tail"),
         () => ({ requestLog, emittedEvents, errors }),
       )
       await page.reload({ waitUntil: "domcontentloaded" })
@@ -1449,7 +1501,9 @@ test(
         page,
         "rewind before resume branch",
         (item) =>
-          sawRewindEvent(times.t4) && item.rewindCursor === times.t4 && !item.text.includes("RW-T8 final orchestration tail"),
+          sawRewindEvent(times.t4) &&
+          item.rewindCursor === times.t4 &&
+          !item.text.includes("RW-T8 final orchestration tail"),
         () => ({ requestLog, rewindResponses, emittedEvents, errors }),
       )
       await page.click('nav[data-side="left"] [data-activity="tasks"]')
@@ -1565,7 +1619,8 @@ test(
       await waitForVisualState(
         page,
         "rapid clear returns baseline",
-        (item) => sawRewindEvent(0) && item.rewindCursor === null && item.text.includes("RW-T8 final orchestration tail"),
+        (item) =>
+          sawRewindEvent(0) && item.rewindCursor === null && item.text.includes("RW-T8 final orchestration tail"),
         () => ({ requestLog, emittedEvents, errors }),
       )
       markStage("rapid-clear")

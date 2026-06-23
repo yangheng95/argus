@@ -14,21 +14,21 @@ triggers, so the local attributes create a second visual state source.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Workspace split launchers, executor selector, and titlebar menubar were migrated to mature Kobalte primitives. |
-| `2026-06-19-kobalte-selected-state-single-source.md` | Kobalte runtime state attributes must own visual selected/pressed/checked state instead of local mirrors. |
-| `2026-06-19-dropdown-menu-highlighted-contrast-source.md` | Kobalte popup highlighted state must use Kobalte attributes. |
-| `2026-06-18-task-dirbar-recent-trigger-semantics.md` | The CWD recent panel is a separate manual trigger surface and is not this Kobalte Trigger open-state pass. |
+| Source                                                    | Relevant decision                                                                                              |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `2026-06-01-overlay-mature-ui-primitives-refactor.md`     | Workspace split launchers, executor selector, and titlebar menubar were migrated to mature Kobalte primitives. |
+| `2026-06-19-kobalte-selected-state-single-source.md`      | Kobalte runtime state attributes must own visual selected/pressed/checked state instead of local mirrors.      |
+| `2026-06-19-dropdown-menu-highlighted-contrast-source.md` | Kobalte popup highlighted state must use Kobalte attributes.                                                   |
+| `2026-06-18-task-dirbar-recent-trigger-semantics.md`      | The CWD recent panel is a separate manual trigger surface and is not this Kobalte Trigger open-state pass.     |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n "data-open|data-active|data-expanded|aria-expanded" packages/overlay/src/components/WorkspaceSplitLauncher.tsx packages/overlay/src/components/ExecutorSelector.tsx packages/overlay/src/components/TaskDirBar.tsx packages/overlay/src/components/titlebar/TitlebarMenubar.tsx packages/overlay/src/styles/surfaces` | Kobalte Trigger local mirrors exist in workspace split menu, executor chips, project worktree dropdown, and titlebar menubar triggers. | Remove only those local mirror attributes and restyle with `[data-expanded]`. |
-| Kobalte source scan | `MenuTrigger` and `PopoverTrigger` emit `aria-expanded` and spread the root dataset that includes `data-expanded`. | Use Kobalte as the single open-state source. |
-| Test scan | Static tests currently require `.executor-chip-slot[data-open="true"]` and titlebar `[data-active="true"]`; browser tests mostly check only `aria-expanded`. | Update tests to reject the mirror attributes and assert `[data-expanded]` in real runtime. |
-| Independent GUI QA agent review | The four local mirror attributes were removed, but executor caret still read `props.disclosure.open()` directly for its visual direction. | Treat caret direction as open-state chrome and move it behind the trigger `[data-expanded]` selector too. |
+| Sweep                           | Result                                                                                                                                                       | Decision                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `rg -n "data-open               | data-active                                                                                                                                                  | data-expanded                                                                                             | aria-expanded" packages/overlay/src/components/WorkspaceSplitLauncher.tsx packages/overlay/src/components/ExecutorSelector.tsx packages/overlay/src/components/TaskDirBar.tsx packages/overlay/src/components/titlebar/TitlebarMenubar.tsx packages/overlay/src/styles/surfaces` | Kobalte Trigger local mirrors exist in workspace split menu, executor chips, project worktree dropdown, and titlebar menubar triggers. | Remove only those local mirror attributes and restyle with `[data-expanded]`. |
+| Kobalte source scan             | `MenuTrigger` and `PopoverTrigger` emit `aria-expanded` and spread the root dataset that includes `data-expanded`.                                           | Use Kobalte as the single open-state source.                                                              |
+| Test scan                       | Static tests currently require `.executor-chip-slot[data-open="true"]` and titlebar `[data-active="true"]`; browser tests mostly check only `aria-expanded`. | Update tests to reject the mirror attributes and assert `[data-expanded]` in real runtime.                |
+| Independent GUI QA agent review | The four local mirror attributes were removed, but executor caret still read `props.disclosure.open()` directly for its visual direction.                    | Treat caret direction as open-state chrome and move it behind the trigger `[data-expanded]` selector too. |
 
 ## Fix
 
@@ -57,12 +57,12 @@ triggers, so the local attributes create a second visual state source.
 
 ## Evidence
 
-| Surface | Runtime screenshot | Verified state |
-| --- | --- | --- |
-| Workspace split menu | `.scratch/workspace-split-launcher-expanded-state.png` | `aria-expanded="true"`, `data-expanded` present, trigger `data-open` absent. |
-| Executor chip | `.scratch/executor-chip-expanded-state.png` | `aria-expanded="true"`, `data-expanded` present, trigger and slot `data-open` absent; caret rotation comes from CSS. |
-| Project worktree dropdown | `.scratch/task-dirbar-project-worktree-expanded-state.png` | `aria-expanded="true"`, `data-expanded` present, trigger `data-open` absent. |
-| Titlebar menubar | `.scratch/titlebar-menubar-trigger-expanded-state.png` | `aria-expanded="true"`, `data-expanded` present, trigger `data-active` absent. |
+| Surface                   | Runtime screenshot                                         | Verified state                                                                                                       |
+| ------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Workspace split menu      | `.scratch/workspace-split-launcher-expanded-state.png`     | `aria-expanded="true"`, `data-expanded` present, trigger `data-open` absent.                                         |
+| Executor chip             | `.scratch/executor-chip-expanded-state.png`                | `aria-expanded="true"`, `data-expanded` present, trigger and slot `data-open` absent; caret rotation comes from CSS. |
+| Project worktree dropdown | `.scratch/task-dirbar-project-worktree-expanded-state.png` | `aria-expanded="true"`, `data-expanded` present, trigger `data-open` absent.                                         |
+| Titlebar menubar          | `.scratch/titlebar-menubar-trigger-expanded-state.png`     | `aria-expanded="true"`, `data-expanded` present, trigger `data-active` absent.                                       |
 
 Validation commands:
 

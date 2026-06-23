@@ -13,12 +13,12 @@ Remove OpenCorvus' software-internal default network proxy. Proxy traffic must o
 
 ## Grep Findings
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Config schema/default merge | `packages/opencorvus/src/config/config.ts` owns `Config.DEFAULT_NETWORK_PROXY` and `Config.state` auto-materializes it when `result.network?.proxy` is absent. | Delete the constant and the auto-materialization block. Keep the `NetworkProxy` schema. |
-| Config tests | `packages/opencorvus/test/config/config.test.ts` asserts no-config loads `Config.DEFAULT_NETWORK_PROXY` and has a dedicated default-proxy test. | Replace those assertions with tests that no config leaves `network.proxy` unset and does not write project config files. |
-| Explicit proxy callers | `Provider.resolveFetchProxy()`, `resolveNetworkProxy()`, WebFetch, Exa MCP, proxy test route, and frontend-design capture consume explicit `network.proxy`. | Leave these paths intact; they remain the single proxy transport path once config is explicit. |
-| Historical index | `specs/new-arch/HISTORY.md` links the previous default proxy note. | Update the entry to this retirement note so future recall does not reintroduce the default. |
+| Area                        | Evidence                                                                                                                                                       | Decision                                                                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Config schema/default merge | `packages/opencorvus/src/config/config.ts` owns `Config.DEFAULT_NETWORK_PROXY` and `Config.state` auto-materializes it when `result.network?.proxy` is absent. | Delete the constant and the auto-materialization block. Keep the `NetworkProxy` schema.                                  |
+| Config tests                | `packages/opencorvus/test/config/config.test.ts` asserts no-config loads `Config.DEFAULT_NETWORK_PROXY` and has a dedicated default-proxy test.                | Replace those assertions with tests that no config leaves `network.proxy` unset and does not write project config files. |
+| Explicit proxy callers      | `Provider.resolveFetchProxy()`, `resolveNetworkProxy()`, WebFetch, Exa MCP, proxy test route, and frontend-design capture consume explicit `network.proxy`.    | Leave these paths intact; they remain the single proxy transport path once config is explicit.                           |
+| Historical index            | `specs/new-arch/HISTORY.md` links the previous default proxy note.                                                                                             | Update the entry to this retirement note so future recall does not reintroduce the default.                              |
 
 ## Acceptance
 

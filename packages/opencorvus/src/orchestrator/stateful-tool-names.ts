@@ -55,8 +55,7 @@ export const ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES = [
   "bash",
 ] as const
 
-export type OrchestratorNoDecisionObservationToolName =
-  (typeof ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES)[number]
+export type OrchestratorNoDecisionObservationToolName = (typeof ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES)[number]
 
 const ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAME_SET = new Set<string>(
   ORCHESTRATOR_NO_DECISION_OBSERVATION_TOOL_NAMES,

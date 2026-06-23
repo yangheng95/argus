@@ -111,12 +111,7 @@ export function ComboboxControl<T extends object>(props: ComboboxControlProps<T>
     >
       <ComboboxFocusFirst open={props.open} />
       <Combobox.Control class={controlClass()}>
-        <Combobox.Input
-          id={props.inputID}
-          ref={props.inputRef}
-          class={inputClass()}
-          aria-label={props.ariaLabel}
-        />
+        <Combobox.Input id={props.inputID} ref={props.inputRef} class={inputClass()} aria-label={props.ariaLabel} />
       </Combobox.Control>
       <Combobox.Listbox id={props.listboxID} class={listboxClass()} />
       <ComboboxEmptyState open={props.open}>{props.emptyContent}</ComboboxEmptyState>

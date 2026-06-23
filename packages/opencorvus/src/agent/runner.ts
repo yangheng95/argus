@@ -686,9 +686,7 @@ export async function runAgentSession<C>(input: RunAgentSessionInput<C>): Promis
     : baseSystemPrompt
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
-  const userText = input.continuation
-    ? buildContinuationUserPrompt(input.continuation)
-    : await input.buildUserPrompt()
+  const userText = input.continuation ? buildContinuationUserPrompt(input.continuation) : await input.buildUserPrompt()
   let parts: SessionPrompt.PromptInput["parts"]
   if (!input.continuation && input.buildUserParts) {
     parts = await input.buildUserParts()

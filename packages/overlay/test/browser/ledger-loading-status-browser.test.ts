@@ -36,7 +36,10 @@ function deferredResponse() {
   return { promise, resolve }
 }
 
-async function saveScreenshot(element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> }, name: string) {
+async function saveScreenshot(
+  element: { screenshot(options?: Record<string, unknown>): Promise<Buffer> },
+  name: string,
+) {
   const target = resolve(".scratch", name)
   mkdirSync(dirname(target), { recursive: true })
   const bytes = await element.screenshot({})
@@ -75,7 +78,11 @@ async function assertLedgerLoading(page: any, containerSelector: string, name: s
   assert.equal(state.rowsHidden, "true", `${name} skeleton rows should be decorative`)
   assert.equal(state.rowCount, 3, `${name} skeleton rows`)
   assert.deepEqual(state.skeletonRowText, ["", "", ""], `${name} skeleton rows should not add readable text`)
-  assert.equal(state.rowRects.every((rect) => rect.width > 0 && rect.height > 0), true, JSON.stringify(state))
+  assert.equal(
+    state.rowRects.every((rect) => rect.width > 0 && rect.height > 0),
+    true,
+    JSON.stringify(state),
+  )
   const element = await page.$(containerSelector)
   assert.ok(element)
   return saveScreenshot(element, `${name}.png`)
@@ -115,11 +122,19 @@ test("left ledger loading skeletons expose live status text without visual regre
     if (path === "/config/providers") return send({ providers: [], default: {} })
     if (path === "/config") return send({ server: {}, provider: {}, channel: {}, mcp: {}, model: "" })
     if (path === "/config/prompt" || path === "/config/prompt-profile") {
-      return send({ active: "general", project_active: "general", session_active: null, default: "general", targets: [], profiles: [] })
+      return send({
+        active: "general",
+        project_active: "general",
+        session_active: null,
+        default: "general",
+        targets: [],
+        profiles: [],
+      })
     }
     if (path === "/channel" || path === "/executor" || path === "/agent") return send([])
     if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
-    if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ defaultProfileID: "", profiles: [] })
+    if (path === "/terminal/profiles" || path === "/coding/cli/profiles")
+      return send({ defaultProfileID: "", profiles: [] })
     if (path === "/project/current/worktrees") return send([])
     if (path === "/skill/installed" || path === "/skill" || path === "/skill/market") return send([])
     if (path === "/skill/directories") {
@@ -144,14 +159,17 @@ test("left ledger loading skeletons expose live status text without visual regre
       if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
     })
     await page.setViewport({ width: 1280, height: 760 })
-    await page.evaluateOnNewDocument((input: { directory: string; serverUrl: string }) => {
-      localStorage.setItem("oc_directory", input.directory)
-      localStorage.setItem("oc_saved_directory", input.directory)
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", input.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-    }, { directory: PROJECT_DIRECTORY, serverUrl: server.origin })
+    await page.evaluateOnNewDocument(
+      (input: { directory: string; serverUrl: string }) => {
+        localStorage.setItem("oc_directory", input.directory)
+        localStorage.setItem("oc_saved_directory", input.directory)
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", input.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+      },
+      { directory: PROJECT_DIRECTORY, serverUrl: server.origin },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]', {
@@ -159,11 +177,7 @@ test("left ledger loading skeletons expose live status text without visual regre
     })
 
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]')
-    const missionScreenshot = await assertLedgerLoading(
-      page,
-      ".mission-ledger-list",
-      "mission-ledger-loading-status",
-    )
+    const missionScreenshot = await assertLedgerLoading(page, ".mission-ledger-list", "mission-ledger-loading-status")
     assert.ok(missionScreenshot.endsWith("mission-ledger-loading-status.png"))
 
     await page.click('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
@@ -228,14 +242,17 @@ test("Mission ledger shows offline connection boundary without requesting missio
       }
     })
     await page.setViewport({ width: 1280, height: 760 })
-    await page.evaluateOnNewDocument((input: { directory: string; serverUrl: string }) => {
-      localStorage.setItem("oc_directory", input.directory)
-      localStorage.setItem("oc_saved_directory", input.directory)
-      localStorage.setItem("oc_locale", "en-US")
-      localStorage.setItem("oc_theme", "light")
-      localStorage.setItem("oc_server_url", input.serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-    }, { directory: PROJECT_DIRECTORY, serverUrl: server.origin })
+    await page.evaluateOnNewDocument(
+      (input: { directory: string; serverUrl: string }) => {
+        localStorage.setItem("oc_directory", input.directory)
+        localStorage.setItem("oc_saved_directory", input.directory)
+        localStorage.setItem("oc_locale", "en-US")
+        localStorage.setItem("oc_theme", "light")
+        localStorage.setItem("oc_server_url", input.serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+      },
+      { directory: PROJECT_DIRECTORY, serverUrl: server.origin },
+    )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="mission"]', {

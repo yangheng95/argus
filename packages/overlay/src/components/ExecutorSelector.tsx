@@ -260,10 +260,7 @@ function parseHexinBudgetBaseKey(key: string): HexinBudgetBaseResourceKey {
   return {
     directory: readResourceKeyString(value.directory, "Hexin budget base key directory"),
     model: readResourceKeyString(value.model, "Hexin budget base key model"),
-    providerAuthRefresh: readResourceKeyNumber(
-      value.providerAuthRefresh,
-      "Hexin budget base key providerAuthRefresh",
-    ),
+    providerAuthRefresh: readResourceKeyNumber(value.providerAuthRefresh, "Hexin budget base key providerAuthRefresh"),
     refresh: readResourceKeyNumber(value.refresh, "Hexin budget base key refresh"),
     taskID: typeof value.taskID === "string" ? value.taskID : "",
   }
@@ -674,12 +671,7 @@ export function ExecutorSelector() {
               onValueChange={changeExternalTab}
             >
               <TabList size="sm" tone="neutral" data-ui="executor-popover-tabs">
-                <Tab
-                  value={EXTERNAL_DISABLED_TAB_ID}
-                  size="sm"
-                  tone="neutral"
-                  data-ui="executor-popover-tab"
-                >
+                <Tab value={EXTERNAL_DISABLED_TAB_ID} size="sm" tone="neutral" data-ui="executor-popover-tab">
                   {t("executor.external_disabled")}
                 </Tab>
                 <For each={externalTabs()}>

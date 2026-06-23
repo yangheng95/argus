@@ -112,9 +112,13 @@ export function FilePart(props: {
 // path renders on the first tick without a spinner flash.
 
 function AuthedImage(props: { url: string; alt: string }) {
-  const [objectUrl] = createResource(() => props.url, (raw) => fetchResourceAsObjectUrl(raw), {
-    initialValue: peekResourceObjectUrl(props.url),
-  })
+  const [objectUrl] = createResource(
+    () => props.url,
+    (raw) => fetchResourceAsObjectUrl(raw),
+    {
+      initialValue: peekResourceObjectUrl(props.url),
+    },
+  )
 
   return (
     <Show when={!objectUrl.error} fallback={<LoadError name={props.alt} />}>
@@ -130,9 +134,13 @@ function AuthedImage(props: { url: string; alt: string }) {
 }
 
 function AuthedVideo(props: { url: string; name: string; mime: string }) {
-  const [objectUrl] = createResource(() => props.url, (raw) => fetchResourceAsObjectUrl(raw), {
-    initialValue: peekResourceObjectUrl(props.url),
-  })
+  const [objectUrl] = createResource(
+    () => props.url,
+    (raw) => fetchResourceAsObjectUrl(raw),
+    {
+      initialValue: peekResourceObjectUrl(props.url),
+    },
+  )
   return (
     <Show when={!objectUrl.error} fallback={<LoadError name={props.name} />}>
       <Show when={objectUrl()}>
@@ -150,9 +158,13 @@ function AuthedVideo(props: { url: string; name: string; mime: string }) {
 }
 
 function AuthedAudio(props: { url: string; name: string; mime: string }) {
-  const [objectUrl] = createResource(() => props.url, (raw) => fetchResourceAsObjectUrl(raw), {
-    initialValue: peekResourceObjectUrl(props.url),
-  })
+  const [objectUrl] = createResource(
+    () => props.url,
+    (raw) => fetchResourceAsObjectUrl(raw),
+    {
+      initialValue: peekResourceObjectUrl(props.url),
+    },
+  )
   return (
     <Show when={!objectUrl.error} fallback={<LoadError name={props.name} />}>
       <Show when={objectUrl()}>
@@ -170,9 +182,13 @@ function AuthedAudio(props: { url: string; name: string; mime: string }) {
 }
 
 function AuthedPdf(props: { url: string; name: string }) {
-  const [objectUrl] = createResource(() => props.url, (raw) => fetchResourceAsObjectUrl(raw), {
-    initialValue: peekResourceObjectUrl(props.url),
-  })
+  const [objectUrl] = createResource(
+    () => props.url,
+    (raw) => fetchResourceAsObjectUrl(raw),
+    {
+      initialValue: peekResourceObjectUrl(props.url),
+    },
+  )
   return (
     <Show when={!objectUrl.error} fallback={<LoadError name={props.name} />}>
       <Show when={objectUrl()}>

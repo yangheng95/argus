@@ -19,28 +19,28 @@ surfaces.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `AGENTS.md` | UI work must reuse mature primitives, avoid double sources, and verify visually. |
-| `2026-06-18-agent-reply-box-primitives.md` | Reply actions route through `Button` while layout classes remain surface-owned. |
-| `2026-06-18-card-trace-action-button-owner.md` | Operation controls should use `Button` and stable `data-ui` selectors instead of private raw button classes. |
-| `packages/overlay/src/components/ui/Button.tsx` | `Button` owns the canonical `.oc-button` class plus `variant`, `size`, and `tone` data attributes. |
-| `packages/overlay/src/styles/primitives/button.css` | Focus, hover, disabled, icon-action, and solid button chrome live in the primitive. |
+| Source                                              | Relevant constraint                                                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                         | UI work must reuse mature primitives, avoid double sources, and verify visually.                             |
+| `2026-06-18-agent-reply-box-primitives.md`          | Reply actions route through `Button` while layout classes remain surface-owned.                              |
+| `2026-06-18-card-trace-action-button-owner.md`      | Operation controls should use `Button` and stable `data-ui` selectors instead of private raw button classes. |
+| `packages/overlay/src/components/ui/Button.tsx`     | `Button` owns the canonical `.oc-button` class plus `variant`, `size`, and `tone` data attributes.           |
+| `packages/overlay/src/styles/primitives/button.css` | Focus, hover, disabled, icon-action, and solid button chrome live in the primitive.                          |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -F "chat-send" packages/overlay/src packages/overlay/test specs/new-arch` | Live source: `ChatComposer.tsx`, `composer.css`, density/architecture/icon/browser tests. `base.css` owns only `--ui-chat-send-size`. | Retire `class="chat-send"` and `.chat-send*` state selectors; keep `chat-send-icon` and `chat-send-label` as internal layout hooks. |
-| `rg -n -F "chat-attachment-remove" packages/overlay/src packages/overlay/test specs/new-arch` | Live source: raw remove button in `ChatComposer.tsx`, private hover class in `composer.css`, architecture guard. | Replace raw class with `Button data-ui="chat-attachment-remove"`; style only layout/sizing through `.oc-button[data-ui=...]`. |
-| `rg -n -e 'class="chat-send' -e 'class="chat-attachment-remove' -e '\.chat-send' -e '\.chat-attachment-remove' packages/overlay/src packages/overlay/test specs/new-arch` | No other production owner emits these private classes. Tests and fixture HTML are the only other active references. | Update tests to assert Button ownership and data selectors. |
-| `rg -n -e 'sendDataUI' -e 'chatSend' -e 'btnTaskInterrupt' packages/overlay/src packages/overlay/test specs/new-arch` | `sendDataUI` is context-specific (`mission-composer-submit`, `coding-assistant-composer-submit`), while `#chatSend` and `#btnTaskInterrupt` remain stable IDs for legacy DOM integration/tests. | Preserve IDs and incoming `sendDataUI`; use existing `data-mode` as the stable composer style hook. |
+| Sweep                                                                                                                                                                     | Result                                                                                                                                                                                          | Decision                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `rg -n -F "chat-send" packages/overlay/src packages/overlay/test specs/new-arch`                                                                                          | Live source: `ChatComposer.tsx`, `composer.css`, density/architecture/icon/browser tests. `base.css` owns only `--ui-chat-send-size`.                                                           | Retire `class="chat-send"` and `.chat-send*` state selectors; keep `chat-send-icon` and `chat-send-label` as internal layout hooks. |
+| `rg -n -F "chat-attachment-remove" packages/overlay/src packages/overlay/test specs/new-arch`                                                                             | Live source: raw remove button in `ChatComposer.tsx`, private hover class in `composer.css`, architecture guard.                                                                                | Replace raw class with `Button data-ui="chat-attachment-remove"`; style only layout/sizing through `.oc-button[data-ui=...]`.       |
+| `rg -n -e 'class="chat-send' -e 'class="chat-attachment-remove' -e '\.chat-send' -e '\.chat-attachment-remove' packages/overlay/src packages/overlay/test specs/new-arch` | No other production owner emits these private classes. Tests and fixture HTML are the only other active references.                                                                             | Update tests to assert Button ownership and data selectors.                                                                         |
+| `rg -n -e 'sendDataUI' -e 'chatSend' -e 'btnTaskInterrupt' packages/overlay/src packages/overlay/test specs/new-arch`                                                     | `sendDataUI` is context-specific (`mission-composer-submit`, `coding-assistant-composer-submit`), while `#chatSend` and `#btnTaskInterrupt` remain stable IDs for legacy DOM integration/tests. | Preserve IDs and incoming `sendDataUI`; use existing `data-mode` as the stable composer style hook.                                 |
 
 ## Fix Plan
 
 1. Import `Button` in `ChatComposer`.
 2. Replace attachment remove with `Button variant="ghost" size="icon"
-   tone="neutral" data-chrome="icon-action" data-ui="chat-attachment-remove"`
+tone="neutral" data-chrome="icon-action" data-ui="chat-attachment-remove"`
    and the shared `Icon name="close"`.
 3. Replace send/stop with `Button`; use `variant="solid"`, `size="md"`,
    `tone={props.busy ? "danger" : "accent"}`, and keep `data-mode`.

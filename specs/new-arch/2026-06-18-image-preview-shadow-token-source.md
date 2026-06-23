@@ -10,20 +10,20 @@ shadow outside the theme palette source.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-18-css-token-closure.md` | Runtime dimensions may be runtime variables, but visible colors must resolve through canonical tokens. |
-| `flat-redesign-color-literal-coverage.test.ts` | Surface and primitive CSS must not contain named `white` / `black`, hex, or rgb literals. |
-| `cascade/*` theme files | `--ui-shadow-tone` is the theme-owned shadow color token. |
-| `css-token-closure-browser.test.ts` | Image preview dialog is already part of the browser token-closure fixture. |
+| Source                                         | Existing decision                                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `2026-06-18-css-token-closure.md`              | Runtime dimensions may be runtime variables, but visible colors must resolve through canonical tokens. |
+| `flat-redesign-color-literal-coverage.test.ts` | Surface and primitive CSS must not contain named `white` / `black`, hex, or rgb literals.              |
+| `cascade/*` theme files                        | `--ui-shadow-tone` is the theme-owned shadow color token.                                              |
+| `css-token-closure-browser.test.ts`            | Image preview dialog is already part of the browser token-closure fixture.                             |
 
 ## Evidence Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `bun test packages/overlay/test/flat-redesign-color-literal-coverage.test.ts` | Fails on `src/styles/surfaces/messages.css:671` because `.image-preview-dialog__image` mixes raw `black`. | Fix the source CSS, not the test. |
-| `rg -n -e "\\bblack\\b" -e "\\bwhite\\b" packages/overlay/src/styles` | The only active surface violation is the image preview shadow; cascade theme files intentionally own black/white inside tokens. | Replace the surface literal with an existing token. |
-| `rg -n "ui-shadow-tone|box-shadow" packages/overlay/src/styles/surfaces` | Other surfaces already use `var(--ui-shadow-tone)` for themed drop shadows. | Use `var(--ui-shadow-tone)` as the image preview shadow color. |
+| Sweep                                                                         | Result                                                                                                                          | Decision                                                                    |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `bun test packages/overlay/test/flat-redesign-color-literal-coverage.test.ts` | Fails on `src/styles/surfaces/messages.css:671` because `.image-preview-dialog__image` mixes raw `black`.                       | Fix the source CSS, not the test.                                           |
+| `rg -n -e "\\bblack\\b" -e "\\bwhite\\b" packages/overlay/src/styles`         | The only active surface violation is the image preview shadow; cascade theme files intentionally own black/white inside tokens. | Replace the surface literal with an existing token.                         |
+| `rg -n "ui-shadow-tone                                                        | box-shadow" packages/overlay/src/styles/surfaces`                                                                               | Other surfaces already use `var(--ui-shadow-tone)` for themed drop shadows. | Use `var(--ui-shadow-tone)` as the image preview shadow color. |
 
 ## Fix
 

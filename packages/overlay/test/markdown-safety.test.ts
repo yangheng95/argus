@@ -15,8 +15,14 @@ import { installRealOverlayI18n } from "./fixtures/i18n"
 const MARKDOWN_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/markdown.css"), "utf8")
 const MARKDOWN_SOURCE = readFileSync(join(import.meta.dir, "../src/utils/markdown.ts"), "utf8")
 const MAIN_SOURCE = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
-const EN_US = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")) as Record<string, unknown>
-const ZH_CN = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")) as Record<string, unknown>
+const EN_US = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/en-US.json"), "utf8")) as Record<
+  string,
+  unknown
+>
+const ZH_CN = JSON.parse(readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")) as Record<
+  string,
+  unknown
+>
 
 const disposeIconHtmlRenderer = installIconHtmlRenderer(({ name, size }) => {
   if (name !== "copy") throw new Error(`Unknown test icon "${name}"`)
@@ -60,8 +66,20 @@ test("rendered markdown anchors expose tokenized focus-visible chrome", () => {
 })
 
 test("rendered markdown no longer emits or styles retired class selectors", () => {
-  const html = renderMarkdown("# Title\n\nParagraph with [link](https://example.com).\n\n- item\n\n```ts\nconst x = 1\n```")
-  const retiredClassNames = ["md-h1", "md-h2", "md-h3", "md-p", "md-break", "md-code-block", "md-inline-code", "md-list", "md-link"]
+  const html = renderMarkdown(
+    "# Title\n\nParagraph with [link](https://example.com).\n\n- item\n\n```ts\nconst x = 1\n```",
+  )
+  const retiredClassNames = [
+    "md-h1",
+    "md-h2",
+    "md-h3",
+    "md-p",
+    "md-break",
+    "md-code-block",
+    "md-inline-code",
+    "md-list",
+    "md-link",
+  ]
   for (const className of retiredClassNames) {
     expect(html).not.toContain(`class="${className}"`)
   }
@@ -150,7 +168,7 @@ test("renderCodeBlock copy action uses the shared Button contract", () => {
   expect(result.html).toContain('data-tone="neutral"')
   expect(result.html).toContain('data-chrome="icon-action"')
   expect(result.html).toContain('data-ui="markdown-code-copy"')
-  expect(result.html).toContain('data-md-copy=')
+  expect(result.html).toContain("data-md-copy=")
   expect(result.html).toContain('title="Copy code"')
   expect(result.html).toContain('aria-label="Copy code"')
   expect(result.html).toContain('data-test-icon="copy"')

@@ -13,21 +13,21 @@ opaque white panels.
 
 ## Recall
 
-| Source | Existing decision |
-| --- | --- |
-| `2026-06-17-prompt-profile-selector-select-primitive.md` | The Expert Squad picker must not use a hidden native `<select>` plus visual chrome. It delegates option rendering to Kobalte Select. |
-| `2026-06-17-expert-squad-select-readability-impact.md` | Shared `.oc-select-*` popup styling is the single source for Select popup readability. |
-| `2026-06-18-select-popup-readability-impact-review.md` | The Select matrix covers Expert Squad, Agent Models, Settings, AppDialog, Browser Preview, and Log Level, but does not cover non-Select popup families. |
-| `2026-06-18-command-palette-activedescendant.md` | Command Palette has its own hand-written combobox/listbox surface, so it requires its own visual coverage if kept outside Select. |
+| Source                                                   | Existing decision                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-06-17-prompt-profile-selector-select-primitive.md` | The Expert Squad picker must not use a hidden native `<select>` plus visual chrome. It delegates option rendering to Kobalte Select.                    |
+| `2026-06-17-expert-squad-select-readability-impact.md`   | Shared `.oc-select-*` popup styling is the single source for Select popup readability.                                                                  |
+| `2026-06-18-select-popup-readability-impact-review.md`   | The Select matrix covers Expert Squad, Agent Models, Settings, AppDialog, Browser Preview, and Log Level, but does not cover non-Select popup families. |
+| `2026-06-18-command-palette-activedescendant.md`         | Command Palette has its own hand-written combobox/listbox surface, so it requires its own visual coverage if kept outside Select.                       |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -F "<select" packages/overlay/src packages/overlay/test specs/new-arch` | No active overlay component renders a native prompt-profile `<select>` or `<option>`. | Do not reintroduce native select-specific CSS. |
-| `rg -n -F "Select.Root" packages/overlay/src packages/overlay/test specs/new-arch` | Kobalte Select users are Expert Squad, LogViewer, BrowserPreview, AppDialog, and `SettingsSelect`. | Keep the existing Select contrast matrix. |
-| `rg -n "executor-popover|project-worktree-panel|recent-dir-panel|titlebar-menubar-panel|cmdk-panel" packages/overlay/src packages/overlay/test` | Executor popover, worktree panel, recent directory panel, titlebar menus, and Command Palette are popup/dropdown-like surfaces outside `.oc-select-*`. | Add a separate popup contrast matrix for these families. |
-| Light palette token contrast calculation | `--text-muted` on white was about 3.02:1; `--warn` on white was about 2.96:1. | Fix the light palette source instead of local component colors. |
+| Sweep                                                                              | Result                                                                                             | Decision                                                        |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| `rg -n -F "<select" packages/overlay/src packages/overlay/test specs/new-arch`     | No active overlay component renders a native prompt-profile `<select>` or `<option>`.              | Do not reintroduce native select-specific CSS.                  |
+| `rg -n -F "Select.Root" packages/overlay/src packages/overlay/test specs/new-arch` | Kobalte Select users are Expert Squad, LogViewer, BrowserPreview, AppDialog, and `SettingsSelect`. | Keep the existing Select contrast matrix.                       |
+| `rg -n "executor-popover                                                           | project-worktree-panel                                                                             | recent-dir-panel                                                | titlebar-menubar-panel | cmdk-panel" packages/overlay/src packages/overlay/test` | Executor popover, worktree panel, recent directory panel, titlebar menus, and Command Palette are popup/dropdown-like surfaces outside `.oc-select-*`. | Add a separate popup contrast matrix for these families. |
+| Light palette token contrast calculation                                           | `--text-muted` on white was about 3.02:1; `--warn` on white was about 2.96:1.                      | Fix the light palette source instead of local component colors. |
 
 ## Fix
 

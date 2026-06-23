@@ -19,26 +19,26 @@ owner.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback logic, no duplicate source, recall before edits, test every change, visually verify UI work, commit and push every round. |
-| `2026-06-23-dialog-drag-frame-owner.md` | High-frequency dialog pointer streams record the latest input and defer layout reads/writes to RAF, then flush on end when needed. |
-| `2026-06-23-overlay-panel-legal-size-contract.md` | Dialogs and overlay panels must use the legal overlay shell and token-owned sizes, not raw viewport fallback dimensions. |
-| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md` | Screenshot thumbnails reuse `PreviewableImage`; the modal preview remains the shared zoom/copy surface. |
-| `2026-06-23-screenshot-thumbnail-load-queue-cancellation.md` | Screenshot browser must keep `PreviewableImage` as the shared preview path and avoid second image sources. |
-| Independent read-only audit 2026-06-23 | `ImagePreview.tsx` reads `.image-preview-dialog__body.getBoundingClientRect()` and `clientWidth/clientHeight` inside ctrl-wheel zoom handling. |
+| Source                                                       | Constraint carried forward                                                                                                                     |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                  | No fallback logic, no duplicate source, recall before edits, test every change, visually verify UI work, commit and push every round.          |
+| `2026-06-23-dialog-drag-frame-owner.md`                      | High-frequency dialog pointer streams record the latest input and defer layout reads/writes to RAF, then flush on end when needed.             |
+| `2026-06-23-overlay-panel-legal-size-contract.md`            | Dialogs and overlay panels must use the legal overlay shell and token-owned sizes, not raw viewport fallback dimensions.                       |
+| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md`   | Screenshot thumbnails reuse `PreviewableImage`; the modal preview remains the shared zoom/copy surface.                                        |
+| `2026-06-23-screenshot-thumbnail-load-queue-cancellation.md` | Screenshot browser must keep `PreviewableImage` as the shared preview path and avoid second image sources.                                     |
+| Independent read-only audit 2026-06-23                       | `ImagePreview.tsx` reads `.image-preview-dialog__body.getBoundingClientRect()` and `clientWidth/clientHeight` inside ctrl-wheel zoom handling. |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Wheel handler | `handleWheel()` reads `body.getBoundingClientRect()` and calls `applyScale()` during the wheel event. | Change it to record a pending wheel zoom and schedule one RAF commit. |
-| Scale commit | `applyScale()` reads `body.clientWidth/clientHeight` when no anchor is supplied and writes scale immediately. | Keep discrete button calls synchronous, but make wheel pass cached geometry-owned anchors from RAF. |
-| Viewport scale math | `viewportSize()` reads computed padding plus body client size for open/fit/width scales. | Cache body viewport size in a signal updated by the same body-geometry frame owner. |
-| Body resize | `ResizeObserver(applyOpenScaleOnFrame.schedule)` currently triggers open-scale recomputation. | Route ResizeObserver through the body-geometry frame owner before open-scale computation. |
-| Shared preview callers | `FilePart.tsx`, `InlineToolPart.tsx`, `BrowserPreviewPanel.tsx`, and `ScreenshotBrowserPanel.tsx` use `PreviewableImage`. | Do not add another image preview component or screenshot-specific zoom path. |
-| Static tests | `message-image-preview.test.ts` pins Image Preview ownership and UI contract. | Extend it to reject wheel handler layout reads and require RAF scheduling. |
-| Browser tests | `image-preview-copy.test.ts` opens a real Image Preview dialog. | Extend it with ctrl-wheel burst instrumentation and a screenshot artifact. |
+| Surface                | Evidence                                                                                                                  | Decision                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Wheel handler          | `handleWheel()` reads `body.getBoundingClientRect()` and calls `applyScale()` during the wheel event.                     | Change it to record a pending wheel zoom and schedule one RAF commit.                               |
+| Scale commit           | `applyScale()` reads `body.clientWidth/clientHeight` when no anchor is supplied and writes scale immediately.             | Keep discrete button calls synchronous, but make wheel pass cached geometry-owned anchors from RAF. |
+| Viewport scale math    | `viewportSize()` reads computed padding plus body client size for open/fit/width scales.                                  | Cache body viewport size in a signal updated by the same body-geometry frame owner.                 |
+| Body resize            | `ResizeObserver(applyOpenScaleOnFrame.schedule)` currently triggers open-scale recomputation.                             | Route ResizeObserver through the body-geometry frame owner before open-scale computation.           |
+| Shared preview callers | `FilePart.tsx`, `InlineToolPart.tsx`, `BrowserPreviewPanel.tsx`, and `ScreenshotBrowserPanel.tsx` use `PreviewableImage`. | Do not add another image preview component or screenshot-specific zoom path.                        |
+| Static tests           | `message-image-preview.test.ts` pins Image Preview ownership and UI contract.                                             | Extend it to reject wheel handler layout reads and require RAF scheduling.                          |
+| Browser tests          | `image-preview-copy.test.ts` opens a real Image Preview dialog.                                                           | Extend it with ctrl-wheel burst instrumentation and a screenshot artifact.                          |
 
 ## Root Cause
 

@@ -385,7 +385,9 @@ export function providerAuthPrompt(prompt: any): AuthPrompt | null {
     throw new Error(`Provider auth select prompt ${prompt.key} requires selectValue`)
   }
   if (!options.some((option) => option.value === selectValue)) {
-    throw new Error(`Provider auth select prompt ${prompt.key} selectValue ${JSON.stringify(selectValue)} is not in options`)
+    throw new Error(
+      `Provider auth select prompt ${prompt.key} selectValue ${JSON.stringify(selectValue)} is not in options`,
+    )
   }
 
   return {

@@ -34,12 +34,12 @@ rg -n "routeRequiresProjectDirectory|directoryContext|requireTask\(|getTask\(|ta
 
 Relevant first-batch decisions:
 
-| Surface | Existing call point | Decision |
-| --- | --- | --- |
-| Project git lock | `packages/opencorvus/src/worktree/index.ts::withGitLock` | Use `Instance.project.worktree` as the lock root. This is the registered primary project root even when the active directory is a managed worktree. |
-| Tool output | `packages/opencorvus/src/tool/truncation.ts::Truncate.output` | Resolve `taskID -> task.project_id -> Project.get(...).worktree` and write tool output under that primary runtime session root. |
-| Browser preview evidence root | `packages/opencorvus/src/browser-preview/task-evidence-root.ts` and all server/tool callers | Resolve evidence root from the task row's project. When the active `Instance.project.id` does not match the task project, fail explicitly instead of using the ambient directory or trying another root. |
-| Browser preview old path spelling | `verification-core.ts` still writes `browser-preview/<captureID>` while newer code uses `bp/<job>` | Leave for a later pass because it is a separate browser-preview writer layout issue and needs its own tests. Do not add a read candidate. |
+| Surface                           | Existing call point                                                                                | Decision                                                                                                                                                                                                 |
+| --------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Project git lock                  | `packages/opencorvus/src/worktree/index.ts::withGitLock`                                           | Use `Instance.project.worktree` as the lock root. This is the registered primary project root even when the active directory is a managed worktree.                                                      |
+| Tool output                       | `packages/opencorvus/src/tool/truncation.ts::Truncate.output`                                      | Resolve `taskID -> task.project_id -> Project.get(...).worktree` and write tool output under that primary runtime session root.                                                                          |
+| Browser preview evidence root     | `packages/opencorvus/src/browser-preview/task-evidence-root.ts` and all server/tool callers        | Resolve evidence root from the task row's project. When the active `Instance.project.id` does not match the task project, fail explicitly instead of using the ambient directory or trying another root. |
+| Browser preview old path spelling | `verification-core.ts` still writes `browser-preview/<captureID>` while newer code uses `bp/<job>` | Leave for a later pass because it is a separate browser-preview writer layout issue and needs its own tests. Do not add a read candidate.                                                                |
 
 ## Tests
 

@@ -73,6 +73,7 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(CSS).toContain("width: min(calc(340px * var(--ui-scale)), calc(100cqw - calc(24px * var(--ui-scale))));")
     expect(CSS).toContain("width: min(calc(460px * var(--ui-scale)), calc(100cqw - calc(24px * var(--ui-scale))));")
   })
+
   test("keeps product Alt access keys outside handwritten menu roles", () => {
     expect(SOURCE).toContain("menuIDForAccessKey")
     expect(SOURCE).toContain("Alt+")
@@ -81,9 +82,7 @@ describe("TitlebarMenubar primitive ownership", () => {
   })
 
   test("keeps the top-level menu order and removes the old Tools trigger", () => {
-    expect(SOURCE).toContain(
-      'const MENU_IDS: MenuID[] = ["workspace", "provider", "run", "view", "settings", "help"]',
-    )
+    expect(SOURCE).toContain('const MENU_IDS: MenuID[] = ["workspace", "provider", "run", "view", "settings", "help"]')
     expect(SOURCE).not.toContain('| "tools"')
     expect(SOURCE).not.toContain("MENU_ACCESS_KEYS.tools")
     expect(SOURCE).not.toContain('id: "tools"')
@@ -127,6 +126,6 @@ describe("TitlebarMenubar primitive ownership", () => {
   test("styles Kobalte checked theme radio items without local active state", () => {
     expect(CSS).toContain(".titlebar-theme-option[data-checked]")
     expect(CSS).not.toContain('.titlebar-theme-option[data-active="true"]')
-    expect(SOURCE).not.toContain('data-active={settingsStore.theme === item.id')
+    expect(SOURCE).not.toContain("data-active={settingsStore.theme === item.id")
   })
 })

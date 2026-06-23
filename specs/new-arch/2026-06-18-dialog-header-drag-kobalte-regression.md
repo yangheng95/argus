@@ -16,10 +16,10 @@ dialog semantics while preserving draggable dialog support.
 
 ## Evidence Sweep
 
-| Source | Result | Decision |
-| --- | --- | --- |
-| `specs/new-arch/2026-06-01-overlay-mature-ui-primitives-refactor.md` | Dialog migration explicitly says not to remove draggable dialog support. | Restore drag in the primitive, not per dialog callsite. |
-| `packages/overlay/test/browser/config-panel-sizing.test.ts` | Header drag assertion failed after Kobalte migration. | Keep this as browser acceptance. |
+| Source                                                                      | Result                                                                                  | Decision                                                        |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `specs/new-arch/2026-06-01-overlay-mature-ui-primitives-refactor.md`        | Dialog migration explicitly says not to remove draggable dialog support.                | Restore drag in the primitive, not per dialog callsite.         |
+| `packages/overlay/test/browser/config-panel-sizing.test.ts`                 | Header drag assertion failed after Kobalte migration.                                   | Keep this as browser acceptance.                                |
 | `git show fc1eac9df3:packages/overlay/src/components/primitives/Dialog.tsx` | Historical native-dialog primitive had a viewport-clamped header offset implementation. | Reuse the offset model without reintroducing native `<dialog>`. |
 
 ## Fix

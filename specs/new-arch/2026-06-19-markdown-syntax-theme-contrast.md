@@ -8,12 +8,12 @@
 
 ## Evidence
 
-| Source | Finding |
-| --- | --- |
-| `packages/overlay/src/styles/tokens/design-language.css` | `--oc-syntax-*` tokens were declared at root as a fixed GitHub Dark palette. |
-| `packages/overlay/src/styles/surfaces/markdown.css` | `.hljs-*` classes consume `--oc-syntax-*`; code block backgrounds use theme token `--surface-inset`. |
-| `packages/overlay/src/utils/markdown.ts` | `renderMarkdown()` registers highlight.js languages and emits `hljs` classes for fenced code. |
-| Independent review | Light `--surface-inset` plus fixed GitHub Dark syntax colors produced contrast as low as roughly 1.5:1 for common token classes. |
+| Source                                                   | Finding                                                                                                                          |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/styles/tokens/design-language.css` | `--oc-syntax-*` tokens were declared at root as a fixed GitHub Dark palette.                                                     |
+| `packages/overlay/src/styles/surfaces/markdown.css`      | `.hljs-*` classes consume `--oc-syntax-*`; code block backgrounds use theme token `--surface-inset`.                             |
+| `packages/overlay/src/utils/markdown.ts`                 | `renderMarkdown()` registers highlight.js languages and emits `hljs` classes for fenced code.                                    |
+| Independent review                                       | Light `--surface-inset` plus fixed GitHub Dark syntax colors produced contrast as low as roughly 1.5:1 for common token classes. |
 
 ## Decision
 

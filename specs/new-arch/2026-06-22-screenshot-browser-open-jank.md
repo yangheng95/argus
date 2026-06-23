@@ -40,26 +40,26 @@ inactivity timeout, not a process-start wall-clock timeout.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no gate, no hidden duplicate source, test every code change, and visually inspect UI fixes. |
-| `2026-06-14-right-toolbar-screenshot-browser.md` | Screenshot browser must derive from the task card/message source, only accept stored `/attachment/<project>/<name>` URLs, reuse `PreviewableImage`, and avoid local screenshot storage. |
-| `2026-06-18-right-activity-toolbar-responsive-rail.md` | Right toolbar must stay a single `SideActivityToolbar` source and remain hit-testable at responsive widths. |
-| `2026-06-20-side-activity-toolbar-aria-semantics.md` | Right activity buttons keep `pressed-toggle` semantics; left navigation uses `current-page`. |
-| `2026-06-19-deep-performance-investigation.md` | Always-mounted hidden panels must not prefetch or materialize resources. |
-| `2026-06-19-system-performance-high-confidence-pass.md` | Previous backend diff/log hot spots are already fixed; do not reintroduce broad polling or completed-empty diff caches. |
+| Source                                                  | Constraint carried forward                                                                                                                                                              |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                             | No fallback, no gate, no hidden duplicate source, test every code change, and visually inspect UI fixes.                                                                                |
+| `2026-06-14-right-toolbar-screenshot-browser.md`        | Screenshot browser must derive from the task card/message source, only accept stored `/attachment/<project>/<name>` URLs, reuse `PreviewableImage`, and avoid local screenshot storage. |
+| `2026-06-18-right-activity-toolbar-responsive-rail.md`  | Right toolbar must stay a single `SideActivityToolbar` source and remain hit-testable at responsive widths.                                                                             |
+| `2026-06-20-side-activity-toolbar-aria-semantics.md`    | Right activity buttons keep `pressed-toggle` semantics; left navigation uses `current-page`.                                                                                            |
+| `2026-06-19-deep-performance-investigation.md`          | Always-mounted hidden panels must not prefetch or materialize resources.                                                                                                                |
+| `2026-06-19-system-performance-high-confidence-pass.md` | Previous backend diff/log hot spots are already fixed; do not reintroduce broad polling or completed-empty diff caches.                                                                 |
 
 ## Call Point Inventory
 
-| Surface | Current evidence | Decision |
-| --- | --- | --- |
-| Screenshot source | `ScreenshotBrowserPanel.tsx` gates item derivation on `active()` and calls `collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)`. | Keep card tree as the single source; no second store or message mirror. |
-| Thumbnail rendering | `ScreenshotThumbnail` creates one Solid resource per rendered item and calls `fetchResourceAsObjectUrl` for stored attachment URLs. | Do not render all 120 capped items at once; route visible thumbnail cards through the existing `virtua/solid` virtualizer. |
-| Item cap | `screenshot-browser.ts` sorts and slices to `SCREENSHOT_BROWSER_ITEM_LIMIT = 120`. | Keep the cap as data protection, but do not rely on it as the render/request budget. |
-| Shared preview | `ScreenshotThumbnail` renders `PreviewableImage`. | Preserve the shared preview path and object URL LRU; no direct `URL.createObjectURL` in the panel. |
-| CSS owner | `activity.css` owns `.screenshot-browser-*` layout. | Add only structural virtual-window/item rules in the same owner. |
-| Browser coverage | `screenshot-browser-panel-browser.test.ts` opens a one-image panel and screenshots desktop/narrow layout. | Extend it with many screenshot cards, request-count assertions, open latency, resize/scroll behavior, and screenshots. |
-| Resize path | Center workbench resize lives in `main.tsx`; default pane resize lives in `services/pane.ts`. | Do not add a second resize implementation; verify screenshot panel remains stable under existing workbench resize. |
+| Surface             | Current evidence                                                                                                                                                  | Decision                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Screenshot source   | `ScreenshotBrowserPanel.tsx` gates item derivation on `active()` and calls `collectScreenshotBrowserItemsFromCardTree(cardTreeStore.order, cardTreeStore.cards)`. | Keep card tree as the single source; no second store or message mirror.                                                    |
+| Thumbnail rendering | `ScreenshotThumbnail` creates one Solid resource per rendered item and calls `fetchResourceAsObjectUrl` for stored attachment URLs.                               | Do not render all 120 capped items at once; route visible thumbnail cards through the existing `virtua/solid` virtualizer. |
+| Item cap            | `screenshot-browser.ts` sorts and slices to `SCREENSHOT_BROWSER_ITEM_LIMIT = 120`.                                                                                | Keep the cap as data protection, but do not rely on it as the render/request budget.                                       |
+| Shared preview      | `ScreenshotThumbnail` renders `PreviewableImage`.                                                                                                                 | Preserve the shared preview path and object URL LRU; no direct `URL.createObjectURL` in the panel.                         |
+| CSS owner           | `activity.css` owns `.screenshot-browser-*` layout.                                                                                                               | Add only structural virtual-window/item rules in the same owner.                                                           |
+| Browser coverage    | `screenshot-browser-panel-browser.test.ts` opens a one-image panel and screenshots desktop/narrow layout.                                                         | Extend it with many screenshot cards, request-count assertions, open latency, resize/scroll behavior, and screenshots.     |
+| Resize path         | Center workbench resize lives in `main.tsx`; default pane resize lives in `services/pane.ts`.                                                                     | Do not add a second resize implementation; verify screenshot panel remains stable under existing workbench resize.         |
 
 ## Root Cause
 

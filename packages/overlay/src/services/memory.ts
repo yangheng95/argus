@@ -41,11 +41,14 @@ export async function searchMemory(input: MemoryTaskRequest, query: string): Pro
   if (!query || !query.trim()) {
     return loadMemory(input)
   }
-  const results = await apiJson(directoryScopedPath("panel/knowledge/memory/search", input.directory, "memory search"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: query.trim(), taskID: input.taskID.trim(), limit: 20 }),
-  })
+  const results = await apiJson(
+    directoryScopedPath("panel/knowledge/memory/search", input.directory, "memory search"),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query.trim(), taskID: input.taskID.trim(), limit: 20 }),
+    },
+  )
   const files = (Array.isArray(results) ? results : []).map((r: any) => ({
     id: r.fileId,
     title: r.fileTitle,
@@ -64,9 +67,12 @@ export async function searchMemory(input: MemoryTaskRequest, query: string): Pro
 export async function deleteMemory(input: MemoryFileRequest & Partial<MemoryTaskRequest>): Promise<void> {
   const fileId = input.fileId.trim()
   if (!fileId) throw new Error("deleteMemory requires a fileId")
-  await apiJson(directoryScopedPath(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, input.directory, "deleteMemory"), {
-    method: "DELETE",
-  })
+  await apiJson(
+    directoryScopedPath(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, input.directory, "deleteMemory"),
+    {
+      method: "DELETE",
+    },
+  )
   if (input.taskID) await loadMemory({ taskID: input.taskID, directory: input.directory })
 }
 

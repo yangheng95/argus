@@ -75,12 +75,7 @@ function pendingQueuedOperatorWakeTaskIDs(): string[] {
     db
       .select({ taskID: EngineArtifactTable.task_id })
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.kind, "queued_operator_wake"),
-          eq(EngineArtifactTable.label, "pending"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.kind, "queued_operator_wake"), eq(EngineArtifactTable.label, "pending")))
       .all()
       .map((row) => row.taskID),
   )

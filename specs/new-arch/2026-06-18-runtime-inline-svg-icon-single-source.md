@@ -16,19 +16,19 @@ This created a second runtime icon source outside the Lucide/custom registry.
 
 ## Recall
 
-| Source | Relevant decision |
-| --- | --- |
-| `2026-06-17-icon-html-single-source.md` | `components/Icon.tsx` owns icon rendering; callers must use `<Icon>` or `iconHtml()` for string-template flows. |
-| `2026-06-18-trace-panel-icon-guard-retirement.md` | Component exceptions weaken the icon guard and should be removed once migrated. |
-| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Overlay runtime icons should not reintroduce scattered inline SVG definitions. |
+| Source                                                | Relevant decision                                                                                               |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `2026-06-17-icon-html-single-source.md`               | `components/Icon.tsx` owns icon rendering; callers must use `<Icon>` or `iconHtml()` for string-template flows. |
+| `2026-06-18-trace-panel-icon-guard-retirement.md`     | Component exceptions weaken the icon guard and should be removed once migrated.                                 |
+| `2026-06-01-overlay-mature-ui-primitives-refactor.md` | Overlay runtime icons should not reintroduce scattered inline SVG definitions.                                  |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n '<svg\b|</svg>|viewBox=' packages/overlay/src packages/overlay/test specs/new-arch -g '*.ts' -g '*.tsx' -g '*.md'` | Runtime source outside `Icon.tsx` only had inline SVG in `ConfigDialogHost.tsx` and `Conversation.tsx`; test fixtures still use SVG as external sample data. | Replace runtime SVG with existing Icon names; leave test fixtures out of runtime guard. |
-| `packages/overlay/src/components/Icon.tsx` | Existing registry already exposes `avatar-user`, `message`, and `file-document`. | Reuse existing Icon names instead of adding custom glyphs. |
-| `packages/overlay/test/flat-redesign-icon-coverage.test.ts` | Guard rejected only 16/24 inline SVG icons. | Reject any inline `<svg>` in runtime component sources outside `Icon.tsx`. |
+| Sweep                                                       | Result                                                                           | Decision                                                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `rg -n '<svg\b                                              | </svg>                                                                           | viewBox=' packages/overlay/src packages/overlay/test specs/new-arch -g '_.ts' -g '_.tsx' -g '\*.md'` | Runtime source outside `Icon.tsx` only had inline SVG in `ConfigDialogHost.tsx` and `Conversation.tsx`; test fixtures still use SVG as external sample data. | Replace runtime SVG with existing Icon names; leave test fixtures out of runtime guard. |
+| `packages/overlay/src/components/Icon.tsx`                  | Existing registry already exposes `avatar-user`, `message`, and `file-document`. | Reuse existing Icon names instead of adding custom glyphs.                                           |
+| `packages/overlay/test/flat-redesign-icon-coverage.test.ts` | Guard rejected only 16/24 inline SVG icons.                                      | Reject any inline `<svg>` in runtime component sources outside `Icon.tsx`.                           |
 
 ## Fix
 

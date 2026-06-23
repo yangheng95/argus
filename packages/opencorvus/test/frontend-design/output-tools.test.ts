@@ -48,8 +48,8 @@ const implementationPhaseOutcomes = [
     phase: "runtime_visual_verification" as const,
     title: "Runtime and visual verification",
     deliverable: "Verify the running project against reference screenshots and interaction-state evidence.",
-    source_refs: ["web-clone-source/reference.png", "web-clone-source/reference-mobile.png"],
-    acceptance: "Reference-vs-implementation visual evidence is captured for desktop and mobile.",
+    source_refs: ["web-clone-source/reference.png"],
+    acceptance: "Reference-vs-implementation visual evidence is captured for the desktop clone target.",
   },
   {
     id: "phase-source-quality-cleanup",
@@ -57,7 +57,8 @@ const implementationPhaseOutcomes = [
     title: "Source quality cleanup",
     deliverable: "Remove generated/static skeleton debt and verify design-system component usage.",
     source_refs: ["web-clone-source/web-clone-implementation-contract.json"],
-    acceptance: "No screenshot wrappers, primitive substitutes, raw generated DOM dumps, or unverified library claims remain.",
+    acceptance:
+      "No screenshot wrappers, primitive substitutes, raw generated DOM dumps, or unverified library claims remain.",
   },
 ]
 
@@ -107,7 +108,10 @@ async function createVisualEvidenceFixture(overrides: Record<string, unknown> = 
     entrypointFile: entrypoint,
     viewport: { width: 320, height: 180 },
   })
-  await fs.writeFile(path.join(artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), renderedScreenshotPng)
+  await fs.writeFile(
+    path.join(artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"),
+    renderedScreenshotPng,
+  )
   await fs.writeFile(path.join(artifactRoot, "web-clone-source", "reference.png"), sourceReferencePng)
   await fs.writeFile(path.join(artifactRoot, "visual-html-skeleton", "visual-diff.json"), diffBytes)
 
@@ -126,10 +130,7 @@ async function createImplementationProjectFixture(dependencies: Record<string, s
   const projectRoot = "app"
   const projectDir = path.join(workspaceRoot, projectRoot)
   await fs.mkdir(path.join(projectDir, "src"), { recursive: true })
-  await fs.writeFile(
-    path.join(projectDir, "package.json"),
-    JSON.stringify({ dependencies }, null, 2),
-  )
+  await fs.writeFile(path.join(projectDir, "package.json"), JSON.stringify({ dependencies }, null, 2))
   await fs.writeFile(path.join(projectDir, "src", "main.tsx"), "export const app = true\n")
   return { workspaceRoot, projectRoot }
 }
@@ -198,6 +199,102 @@ function visualValidationEvidence(overrides: Record<string, unknown> = {}) {
       ...overrides,
     },
   ]
+}
+
+async function writeSourceStructureContentModel(artifactRoot: string) {
+  const dir = path.join(artifactRoot, "web-clone-source", "source-ir")
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(
+    path.join(dir, "content-model.json"),
+    JSON.stringify(
+      {
+        repeatedGroups: [
+          {
+            itemTag: "section",
+            sampleTexts: [
+              "Economic trends Inflation map GDP growth India Indonesia rates currencies bonds",
+              "Countries Argentina Australia Brazil Canada China France Germany India",
+              "Ideas Popular Recent Video Different semiconductor cycle inflation markets",
+            ],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+}
+
+async function writeVisualSkeletonHtmlAndEvidence(input: {
+  artifactRoot: string
+  html: string
+}): Promise<ReturnType<typeof visualValidationEvidence>> {
+  const entrypoint = path.join(input.artifactRoot, "visual-html-skeleton", "index.html")
+  await fs.writeFile(entrypoint, input.html)
+  const renderedScreenshotPng = await renderVisualHtmlSkeletonScreenshotForValidation({
+    entrypointFile: entrypoint,
+    viewport: { width: 320, height: 180 },
+  })
+  await fs.writeFile(
+    path.join(input.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"),
+    renderedScreenshotPng,
+  )
+  return visualValidationEvidence({
+    screenshot_sha256: sha256(renderedScreenshotPng),
+    source_reference_sha256: sha256(sourceReferencePng),
+  })
+}
+
+function visualBaselinePayload(
+  fixture: Awaited<ReturnType<typeof createVisualEvidenceFixture>>,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    design_system: "source-derived static visual baseline",
+    tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+    final_acceptance_mode: "visual_baseline_allowed",
+    frontend_template: "Restore a source-derived visual HTML skeleton.",
+    fillable_modules: "Economic trends, Countries, and Ideas source sections.",
+    component_inventory: "Static visual skeleton content sections.",
+    component_reuse_plan: [
+      {
+        family_id: "comp-static-skeleton",
+        name: "Static visual skeleton",
+        observed_surface: "Full captured page first viewport",
+        source_refs: ["web-clone-source/reference.png", "web-clone-source/source-ir/content-model.json"],
+        implementation_strategy: "extracted_baseline_defer",
+        reuse_source: "visual-html-skeleton/index.html",
+        mature_library_candidates: [],
+        props_states: "static representative visual states only",
+        replacement_boundary: "visual skeleton root",
+        parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+        project_specific_reason: "not applicable",
+      },
+    ],
+    material_inventory: "Source content model and reference pixels.",
+    material_inventory_items: materialInventoryItems,
+    visual_consistency_contract: "Match source order, density, and visible section content.",
+    ui_data_contract: "Static content from source-ir/content-model.json.",
+    frontend_project: {
+      status: "created",
+      role: "visual_baseline_input",
+      project_root: "visual-html-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: [
+        "visual-html-skeleton/index.html",
+        "visual-html-skeleton/screenshots/desktop.png",
+        "visual-html-skeleton/visual-diff.json",
+      ],
+      generation_tool: "source-ir-static-html-skeleton",
+      notes: ["Derived from source IR and rendered with no blocking visual debt."],
+    },
+    visual_validation_evidence: fixture.evidence,
+    template_iteration_notes: ["checked visual skeleton source structure and screenshot evidence"],
+    completeness_review: "Rendered screenshot review found no blocking visual debt.",
+    reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+    open_questions: [],
+    ...overrides,
+  }
 }
 
 test("submit_frontend_template defaults missing fact_check_items during direct execution", async () => {
@@ -659,10 +756,59 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
   expect(report).not.toContain("maintainable_status: incomplete_source_baseline")
 })
 
+test("submit_frontend_template rejects visual skeletons that demote source content sections into navigation labels", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  await writeSourceStructureContentModel(fixture.artifactRoot)
+  const evidence = await writeVisualSkeletonHtmlAndEvidence({
+    artifactRoot: fixture.artifactRoot,
+    html: [
+      "<!doctype html>",
+      '<meta charset="utf-8">',
+      "<nav><a>Economic trends</a><a>Countries</a><a>Ideas</a></nav>",
+      "<main>",
+      "  <section><h2>Market overview</h2><p>Inflation growth markets table snapshot</p></section>",
+      "</main>",
+    ].join("\n"),
+  })
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await expect(submit.execute(visualBaselinePayload({ ...fixture, evidence }), {})).rejects.toThrow(
+    "failed source structure coverage",
+  )
+  expect(kit.getCollector().final).toBeUndefined()
+})
+
+test("submit_frontend_template accepts visual skeletons that preserve source content section order and coverage", async () => {
+  const fixture = await createVisualEvidenceFixture()
+  await writeSourceStructureContentModel(fixture.artifactRoot)
+  const evidence = await writeVisualSkeletonHtmlAndEvidence({
+    artifactRoot: fixture.artifactRoot,
+    html: [
+      "<!doctype html>",
+      '<meta charset="utf-8">',
+      "<main>",
+      '  <section data-oc-region="economic-trends"><h2>Economic trends</h2><p>Inflation map GDP growth India Indonesia rates currencies bonds</p></section>',
+      '  <section data-oc-region="countries"><h2>Countries</h2><p>Argentina Australia Brazil Canada China France Germany India</p></section>',
+      '  <section data-oc-region="ideas"><h2>Ideas</h2><p>Popular Recent Video Different semiconductor cycle inflation markets</p></section>',
+      "</main>",
+    ].join("\n"),
+  })
+  const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
+  const submit = kit.tools.submit_frontend_template as any
+
+  await submit.execute(visualBaselinePayload({ ...fixture, evidence }), {})
+
+  expect(kit.getCollector().final?.frontend_project.role).toBe("visual_baseline_input")
+})
+
 test("submit_frontend_template rejects text files masquerading as visual baseline screenshots", async () => {
   const fakeScreenshot = Buffer.from("rendered visual skeleton screenshot", "utf8")
   const fixture = await createVisualEvidenceFixture({ screenshot_sha256: sha256(fakeScreenshot) })
-  await fs.writeFile(path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), fakeScreenshot)
+  await fs.writeFile(
+    path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"),
+    fakeScreenshot,
+  )
   const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
   const submit = kit.tools.submit_frontend_template as any
 
@@ -723,7 +869,10 @@ test("submit_frontend_template rejects text files masquerading as visual baselin
 test("submit_frontend_template rejects forged image headers as visual baseline screenshots", async () => {
   const fakeScreenshot = forgedPngHeader()
   const fixture = await createVisualEvidenceFixture({ screenshot_sha256: sha256(fakeScreenshot) })
-  await fs.writeFile(path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"), fakeScreenshot)
+  await fs.writeFile(
+    path.join(fixture.artifactRoot, "visual-html-skeleton", "screenshots", "desktop.png"),
+    fakeScreenshot,
+  )
   const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
   const submit = kit.tools.submit_frontend_template as any
 
@@ -2094,13 +2243,12 @@ test("submit_frontend_template rejects visual baseline with blocking screenshot 
   expect(kit.getCollector().final).toBeUndefined()
 })
 
-test("submit_frontend_template rejects visual baseline when debt remains phrasing is reversed", async () => {
-  const fixture = await createVisualEvidenceFixture()
-
-  for (const completenessReview of [
-    "Visual debt remains: map, table, legend, logo, and social icons.",
-    "Mismatches remain: map, table, legend, logo, and social icons.",
-  ]) {
+for (const completenessReview of [
+  "Visual debt remains: map, table, legend, logo, and social icons.",
+  "Mismatches remain: map, table, legend, logo, and social icons.",
+]) {
+  test(`submit_frontend_template rejects visual baseline when debt remains phrasing is reversed: ${completenessReview}`, async () => {
+    const fixture = await createVisualEvidenceFixture()
     const kit = createFrontendTemplateOutputTools({ artifactRoot: fixture.artifactRoot })
     const submit = kit.tools.submit_frontend_template as any
 
@@ -2161,8 +2309,8 @@ test("submit_frontend_template rejects visual baseline when debt remains phrasin
     ).rejects.toThrow("cannot be submitted with blocking visual debt")
 
     expect(kit.getCollector().final).toBeUndefined()
-  }
-})
+  })
+}
 
 test("submit_frontend_template accepts explicit no-blocking-debt screenshot review wording", async () => {
   const fixture = await createVisualEvidenceFixture()

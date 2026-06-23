@@ -18,20 +18,20 @@ by `.task-row-main`.
 
 ## Recall
 
-| Source | Relevant constraint |
-| --- | --- |
-| `2026-06-05-mission-task-projection.md` | Mission task projections are compact child rows under the Mission ledger and select canonical tasks by task ID. |
-| `2026-06-18-ledger-row-nested-interactions.md` | Ledger row containers are non-interactive; the row command owns keyboard selection. |
-| `2026-06-18-ledger-row-current-aria.md` | `.task-row-main` is the shared row-select command with visible focus semantics. |
-| `sidebar.css` | `.task-row-main:focus-visible` owns the tokenized outline for row selection controls. |
+| Source                                         | Relevant constraint                                                                                             |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `2026-06-05-mission-task-projection.md`        | Mission task projections are compact child rows under the Mission ledger and select canonical tasks by task ID. |
+| `2026-06-18-ledger-row-nested-interactions.md` | Ledger row containers are non-interactive; the row command owns keyboard selection.                             |
+| `2026-06-18-ledger-row-current-aria.md`        | `.task-row-main` is the shared row-select command with visible focus semantics.                                 |
+| `sidebar.css`                                  | `.task-row-main:focus-visible` owns the tokenized outline for row selection controls.                           |
 
 ## Impact Sweep
 
-| Sweep | Result | Decision |
-| --- | --- | --- |
-| `rg -n -e "mission-task-projection" -e "task-row-main" packages/overlay/src packages/overlay/test specs/new-arch` | Projection select is the only Mission child task row command using `mission-task-projection-button`; Mission and Assistant main rows already use `.task-row-main`. | Replace the local class with `.task-row-main` plus a stable projection data-ui hook. |
-| `packages/overlay/src/styles/surfaces/mission.css` | `.mission-task-projection-button:focus-visible` sets only background/color and `outline: none`. | Remove the local focus owner; keep projection-specific layout in a data-ui scoped rule. |
-| `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts` | Real browser flow already opens Mission ledger and clicks a projection select. | Extend this path to keyboard-focus the projection select and screenshot the focused row. |
+| Sweep                                                                                                             | Result                                                                                                                                                             | Decision                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `rg -n -e "mission-task-projection" -e "task-row-main" packages/overlay/src packages/overlay/test specs/new-arch` | Projection select is the only Mission child task row command using `mission-task-projection-button`; Mission and Assistant main rows already use `.task-row-main`. | Replace the local class with `.task-row-main` plus a stable projection data-ui hook.     |
+| `packages/overlay/src/styles/surfaces/mission.css`                                                                | `.mission-task-projection-button:focus-visible` sets only background/color and `outline: none`.                                                                    | Remove the local focus owner; keep projection-specific layout in a data-ui scoped rule.  |
+| `packages/overlay/test/browser/side-activity-toolbar-browser.test.ts`                                             | Real browser flow already opens Mission ledger and clicks a projection select.                                                                                     | Extend this path to keyboard-focus the projection select and screenshot the focused row. |
 
 ## Fix Plan
 

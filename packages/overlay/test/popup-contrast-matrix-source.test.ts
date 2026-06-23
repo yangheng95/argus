@@ -13,7 +13,7 @@ test("popup contrast browser matrices load stylesheet order from the real overla
   const selectMatrix = readText("test/browser/select-popup-contrast-matrix.test.ts")
 
   for (const source of [popupMatrix, selectMatrix]) {
-    expect(source).toContain('src/index.html')
+    expect(source).toContain("src/index.html")
     expect(source).toContain("function overlayStyleHrefs()")
     expect(source).toContain("const OVERLAY_STYLE_HREFS = overlayStyleHrefs()")
     expect(source).toContain("return OVERLAY_STYLE_HREFS.map(readCss).join")

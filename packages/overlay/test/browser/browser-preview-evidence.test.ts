@@ -104,7 +104,8 @@ async function waitForPageText(page: any, text: string, label: string) {
 }
 
 async function openBrowserPreviewFromTask(page: any, taskID: string, label: string, diagnostics?: () => unknown) {
-  const tasksButton = '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]'
+  const tasksButton =
+    '#solidLeftActivityToolbar [data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]'
   await page.waitForSelector(tasksButton, { visible: true })
   await page.click(tasksButton)
   await waitForPageState(

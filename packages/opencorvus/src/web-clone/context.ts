@@ -52,7 +52,6 @@ const REQUIRED_READS = [
   "implementation-blueprint.md",
   "web-clone-context.md",
   "web-clone-implementation-contract.json",
-  "reference-mobile.png for mobile viewport visual truth",
   "source-ir/component-tree.json",
   "source-ir/content-model.json",
   "source-ir/layout-map.json",
@@ -222,8 +221,8 @@ function renderContextMarkdown(
     "- Implement normal framework components, data arrays, adapters, states, and interactions.",
     "- Repeated rows/cards/items must be data plus render loops, not duplicated JSX literals.",
     "- For full-stack/database work, derive schema, seed/reset data, and read APIs from `source-ir/content-model.json` and visible skeleton text.",
-    "- Do not render `reference.png`, `reference-mobile.png`, screenshots, base64/data URI payloads, or hidden semantic layers as the page. The frontend-design source skeleton and CSS sidecars are the visual baseline implementation; refine regions only when parity can be maintained.",
-    "- Use `web_clone_source_audit` and runtime visual evaluation against `reference.png` plus `reference-mobile.png` as evidence; report measured results and concrete findings instead of inventing a score.",
+    "- Do not render `reference.png`, screenshots, base64/data URI payloads, or hidden semantic layers as the page. The frontend-design source skeleton and CSS sidecars are the visual baseline implementation; refine regions only when parity can be maintained.",
+    "- Use `web_clone_source_audit` and runtime visual evaluation against `reference.png` as evidence; report measured results and concrete findings instead of inventing a score.",
     "",
     "## Components",
     ...summary.components
@@ -280,7 +279,6 @@ function renderContract(
         "source-skeleton/index.html is raw evidence for DOM order and missing text; it is not an app-source template.",
       sourceAuditTool: "web_clone_source_audit",
       visualTruth: "web-clone-source/reference.png",
-      responsiveVisualTruth: "web-clone-source/reference-mobile.png",
       visualEvaluation: {
         role: "diagnostic_measurement",
         report: ["score", "ssim", "pixelDiffPercent", "structural differences"],
@@ -335,11 +333,6 @@ async function materializeVisibleSourcePackage(input: {
     path.join(input.outputDir, "reference.png"),
     written,
   )
-  await copyFileIfExists(
-    path.join(input.webpageEvidenceDir, "reference-mobile.png"),
-    path.join(input.outputDir, "reference-mobile.png"),
-    written,
-  )
   await copyDirIfExists(
     path.join(input.webpageEvidenceDir, "source-skeleton"),
     path.join(input.outputDir, "source-skeleton"),
@@ -386,7 +379,6 @@ async function materializeVisibleSourcePackage(input: {
 
   const manifestPath = path.join(input.outputDir, "web-clone-source-manifest.json")
   const referenceEvidence = await readPngEvidence(path.join(input.outputDir, "reference.png"))
-  const mobileReferenceEvidence = await readPngEvidence(path.join(input.outputDir, "reference-mobile.png"))
   const captureViewport = await readCaptureViewport(input.webpageEvidenceDir)
   const manifestEntries = await buildSourceManifestEntries(input.outputDir, input.webpageEvidenceDir, written)
   await fs.writeFile(
@@ -408,16 +400,6 @@ async function materializeVisibleSourcePackage(input: {
                 width: referenceEvidence.width,
                 height: referenceEvidence.height,
                 bytes: referenceEvidence.bytes,
-              }
-            : undefined,
-          mobileReference: mobileReferenceEvidence.valid
-            ? {
-                path: "reference-mobile.png",
-                sha256: mobileReferenceEvidence.sha256,
-                width: mobileReferenceEvidence.width,
-                height: mobileReferenceEvidence.height,
-                bytes: mobileReferenceEvidence.bytes,
-                viewport: { width: 390, height: 844 },
               }
             : undefined,
         },
@@ -443,7 +425,6 @@ async function materializeVisibleSourcePackage(input: {
           "source-skeleton/index.html",
           "assets/manifest.json",
           "reference.png",
-          "reference-mobile.png",
         ],
         rules: [
           "Build agents must read this project-root source package before implementation.",
@@ -455,7 +436,6 @@ async function materializeVisibleSourcePackage(input: {
           "Use sidecar assets by file reference instead of inlining dense SVG/base64 payloads.",
           "Do not runtime-load third-party CSS bundles; copy or author project-owned CSS from the extracted critical styles and tokens.",
           "Runtime acceptance still compares the target app against reference.png.",
-          "Responsive acceptance compares the target app against reference-mobile.png for the mobile-review viewport.",
         ],
       },
       null,
@@ -496,7 +476,7 @@ function renderSourcePackageReadme(webpageEvidenceDir: string, stats: PrepareWeb
     "",
     "`source-ir/interaction-state-snapshots.json` is factual runtime evidence for frontend-research investigation packets and implementation verification; it must not be treated as generated PRD prose.",
     "",
-    "Verification evidence should include source-consumption diagnostics plus runtime visual comparison against `reference.png` and `reference-mobile.png` when those checks are available.",
+    "Verification evidence should include source-consumption diagnostics plus runtime visual comparison against `reference.png` when that check is available.",
     "",
     `Webpage evidence source: ${webpageEvidenceDir}`,
     "",
@@ -559,7 +539,7 @@ function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWe
     "",
     "## Verification Checks",
     "- Run `web_clone_source_audit` against this source package and use its findings as implementation evidence.",
-    "- Run runtime overlay/visual diff against `reference.png` and `reference-mobile.png` and inspect the rendered output before claiming fidelity.",
+    "- Run runtime overlay/visual diff against `reference.png` and inspect the rendered output before claiming fidelity.",
     "",
   ].join("\n")
 }
@@ -846,12 +826,8 @@ function isSameOrInside(child: string, parent: string): boolean {
 
 async function assertContextInputs(webpageEvidenceDir: string): Promise<void> {
   const referenceEvidence = await readPngEvidence(path.join(webpageEvidenceDir, "reference.png"))
-  const mobileReferenceEvidence = await readPngEvidence(path.join(webpageEvidenceDir, "reference-mobile.png"))
   const missing: string[] = []
   if (!referenceEvidence.valid) missing.push(`${referenceEvidence.path} (${referenceEvidence.error ?? "invalid PNG"})`)
-  if (!mobileReferenceEvidence.valid) {
-    missing.push(`${mobileReferenceEvidence.path} (${mobileReferenceEvidence.error ?? "invalid PNG"})`)
-  }
   for (const relative of REQUIRED_SOURCE_HANDOFF_ARTIFACTS) {
     const file = path.join(webpageEvidenceDir, relative)
     if (!(await exists(file))) missing.push(file)

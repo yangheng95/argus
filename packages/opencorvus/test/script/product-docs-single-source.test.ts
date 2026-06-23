@@ -62,7 +62,10 @@ describe("product documentation single source", () => {
     const taskModel = fs.readFileSync(path.join(repoRoot, "packages/opencorvus/src/engine/model.ts"), "utf8")
     const enSdk = fs.readFileSync(path.join(repoRoot, "packages/web/src/content/docs/reference/sdk.mdx"), "utf8")
     const zhSdk = fs.readFileSync(path.join(repoRoot, "packages/web/src/content/docs/zh-cn/reference/sdk.mdx"), "utf8")
-    const enGuide = fs.readFileSync(path.join(repoRoot, "packages/web/src/content/docs/reference/mission-task.mdx"), "utf8")
+    const enGuide = fs.readFileSync(
+      path.join(repoRoot, "packages/web/src/content/docs/reference/mission-task.mdx"),
+      "utf8",
+    )
     const zhGuide = fs.readFileSync(
       path.join(repoRoot, "packages/web/src/content/docs/zh-cn/reference/mission-task.mdx"),
       "utf8",

@@ -17,22 +17,22 @@ center workbench resize sources.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no duplicate resize owner, test every change, and visually verify UI changes. |
-| `2026-06-03-resize-observer-frame-coalescing-plan.md` | Layout-affecting resize work must run outside synchronous observer/event delivery when the browser can emit high-frequency resize signals. |
-| `2026-06-07-overlay-workbench-resizable-panels.md` | Center workbench panel weights are the single persisted width source. |
-| `2026-06-17-center-workbench-separator-accessibility.md` | Center workbench separators remain the real accessible resize controls. |
-| `2026-06-18-right-activity-toolbar-responsive-rail.md` | Right activity toolbar remains the single `SideActivityToolbar` source. |
+| Source                                                   | Constraint carried forward                                                                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                              | No fallback, no duplicate resize owner, test every change, and visually verify UI changes.                                                 |
+| `2026-06-03-resize-observer-frame-coalescing-plan.md`    | Layout-affecting resize work must run outside synchronous observer/event delivery when the browser can emit high-frequency resize signals. |
+| `2026-06-07-overlay-workbench-resizable-panels.md`       | Center workbench panel weights are the single persisted width source.                                                                      |
+| `2026-06-17-center-workbench-separator-accessibility.md` | Center workbench separators remain the real accessible resize controls.                                                                    |
+| `2026-06-18-right-activity-toolbar-responsive-rail.md`   | Right activity toolbar remains the single `SideActivityToolbar` source.                                                                    |
 
 ## Call Point Inventory
 
-| Surface | Current evidence | Decision |
-| --- | --- | --- |
-| Window resize | `main.tsx` has the only `window.addEventListener("resize", ...)` and `visualViewport.resize` path. | Keep one listener path, but schedule its layout work through the shared RAF scheduler. |
-| Center workbench drag | `main.tsx` has the only `[data-center-workbench-separator]` pointermove handler. | Keep existing weight source and separator DOM; coalesce drag updates per frame and flush the final pending pointer position on pointerup. |
-| Default pane resizer | `services/pane.ts` owns the left/default pane resize service. | Leave unchanged in this round; it is a separate mature service and not the observed window resize path. |
-| Tests | `resize-observer-frame-scheduler.test.ts` already guards shared frame scheduling for resize observers; `center-workbench-separator-browser.test.ts` covers real separator resize and screenshots. | Extend the guard to window resize and center workbench drag scheduling, then rerun the real browser separator visual test. |
+| Surface               | Current evidence                                                                                                                                                                                  | Decision                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Window resize         | `main.tsx` has the only `window.addEventListener("resize", ...)` and `visualViewport.resize` path.                                                                                                | Keep one listener path, but schedule its layout work through the shared RAF scheduler.                                                    |
+| Center workbench drag | `main.tsx` has the only `[data-center-workbench-separator]` pointermove handler.                                                                                                                  | Keep existing weight source and separator DOM; coalesce drag updates per frame and flush the final pending pointer position on pointerup. |
+| Default pane resizer  | `services/pane.ts` owns the left/default pane resize service.                                                                                                                                     | Leave unchanged in this round; it is a separate mature service and not the observed window resize path.                                   |
+| Tests                 | `resize-observer-frame-scheduler.test.ts` already guards shared frame scheduling for resize observers; `center-workbench-separator-browser.test.ts` covers real separator resize and screenshots. | Extend the guard to window resize and center workbench drag scheduling, then rerun the real browser separator visual test.                |
 
 ## Root Cause
 

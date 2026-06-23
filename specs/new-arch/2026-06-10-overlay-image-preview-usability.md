@@ -33,18 +33,18 @@ Copy uses `fetch(imagePreviewState().src)` first because Browser MCP screenshots
 
 ### Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
+| Source                                            | Constraint carried forward                                                                                                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `2026-06-23-overlay-panel-legal-size-contract.md` | Overlay UI must stay inside the legal layout frame and token-owned panel minimums; illegal viewport aspect ratios are not an alternate layout source. |
-| `2026-06-23-overlay-compact-legal-frame-query.md` | Descendant surfaces use container query units so they follow the legal overlay container instead of the raw browser viewport. |
-| This spec | The image preview dialog stays bounded, leaves usable close/backdrop space, and keeps toolbar copy status readable. |
+| `2026-06-23-overlay-compact-legal-frame-query.md` | Descendant surfaces use container query units so they follow the legal overlay container instead of the raw browser viewport.                         |
+| This spec                                         | The image preview dialog stays bounded, leaves usable close/backdrop space, and keeps toolbar copy status readable.                                   |
 
 ### Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| Dialog form CSS | `.dialog .image-preview-dialog__form` in `messages.css` uses `100cqw`, while `message-image-preview.test.ts` still asserted the old `100vw` width. | Treat the CSS as the source and update the test to reject viewport-width sizing. |
-| Copy status CSS | `.image-preview-dialog__copy-status` uses `52cqw`, while the static test still asserted `52vw`. | Update the test and keep the toolbar status bounded by the legal container. |
+| Surface          | Evidence                                                                                                                                                        | Decision                                                                                                                                                |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dialog form CSS  | `.dialog .image-preview-dialog__form` in `messages.css` uses `100cqw`, while `message-image-preview.test.ts` still asserted the old `100vw` width.              | Treat the CSS as the source and update the test to reject viewport-width sizing.                                                                        |
+| Copy status CSS  | `.image-preview-dialog__copy-status` uses `52cqw`, while the static test still asserted `52vw`.                                                                 | Update the test and keep the toolbar status bounded by the legal container.                                                                             |
 | Browser coverage | `image-preview-accessible-name.test.ts` captures the mounted preview dialog, and `image-preview-copy.test.ts` captures the localized toolbar/copy-status state. | Assert dialog close space against `document.body`'s `overlay-shell` container, then re-run both through the Node browser runner and review screenshots. |
 
 ### Root Cause

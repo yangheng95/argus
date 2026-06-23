@@ -883,11 +883,9 @@ describe("scheduler.task-queue-service", () => {
       git: true,
       config: { assistant: { activity: { task_queue_run_timeout_ms: 1000 } } },
     })
-    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(
-      (async () => {
-        await new Promise<never>(() => {})
-      }) as never,
-    )
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+      await new Promise<never>(() => {})
+    }) as never)
     const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => true)
 
     await Instance.provide({

@@ -164,8 +164,7 @@ describe("EngineGit.prepare — baseline scenarios", () => {
         expect(baseline.head_before).toBe(headBefore)
         expect(baseline.dirty).toBe(false)
         expect(baseline.conflicts).toBe(0)
-        expect(typeof baseline.snapshot).toBe("string")
-        expect(baseline.snapshot.length).toBeGreaterThan(0)
+        expect(baseline.snapshot).toBeUndefined()
 
         const commitsAfter = await gitCommitCount(tmp.path)
         expect(commitsAfter).toBe(commitsBefore)
@@ -205,7 +204,7 @@ describe("EngineGit.prepare — baseline scenarios", () => {
         expect(baseline.dirty).toBe(true)
         expect(baseline.staged).toBeGreaterThan(0)
         expect(baseline.untracked).toBeGreaterThan(0)
-        expect(typeof baseline.snapshot).toBe("string")
+        expect(baseline.snapshot).toBeUndefined()
 
         // Exactly one new commit landed (the baseline) — git add -A folded
         // staged + untracked into the same commit.

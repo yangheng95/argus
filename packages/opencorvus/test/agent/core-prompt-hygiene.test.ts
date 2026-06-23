@@ -968,7 +968,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Do not give draft-quality")
     expect(normalized).toContain("peer post-build review agents")
     expect(normalized).toContain("Test the real running product")
-    expect(normalized).toContain("complete task frontend surface and all terminal blocking build evidence as the primary review surface")
+    expect(normalized).toContain(
+      "complete task frontend surface and all terminal blocking build evidence as the primary review surface",
+    )
     expect(normalized).toContain("Repair coarse-to-fine")
     expect(normalized).toContain("fake or placeholder widgets")
     expect(normalized).toContain("static mock charts")
@@ -1148,9 +1150,7 @@ describe("core prompt hygiene", () => {
       "After a successful `architect` result has created pending goals and no build attempt exists yet",
     )
     expect(normalized).toContain("do not re-run `architect` just because implementation has not started")
-    expect(normalized).toContain(
-      "dispatch `build({ goalID })` for the first eligible pending goal",
-    )
+    expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
     expect(normalized).toContain("Read context on terminal goal refill wakes")
     expect(normalized).toContain("Do not call `wait` for live build completion")
     expect(normalized).toContain("terminal goal refill polling; those are internal engine facts")
@@ -1200,7 +1200,9 @@ describe("core prompt hygiene", () => {
     )
     expect(normalized).toContain("do not call `frontend_design` first merely to materialize raw webpage evidence")
     expect(normalized).toContain("do not let frontend_design invent or reorder the page skeleton")
-    expect(normalized).not.toContain("raw webpage evidence/source package materialization may require frontend_design first")
+    expect(normalized).not.toContain(
+      "raw webpage evidence/source package materialization may require frontend_design first",
+    )
     expect(normalized).not.toContain("`frontend_design` and any needed `frontend_research` MUST be first")
     expect(normalized).not.toContain("`frontend_design` and `frontend_research` in parallel")
     expect(normalized).not.toContain("frontend_research brief exists for the relevant scope, do not rerun that agent")
@@ -1229,7 +1231,9 @@ describe("core prompt hygiene", () => {
     expect(frontendResearch).toContain("Page Skeleton Blueprint")
     expect(frontendDesign).toContain("Frontend Research Page Skeleton Blueprint")
     expect(frontendDesign).toContain("page information-architecture input")
-    expect(frontendDesign).toContain("must record those conflicts instead of inventing, reordering, or demoting major sections")
+    expect(frontendDesign).toContain(
+      "must record those conflicts instead of inventing, reordering, or demoting major sections",
+    )
     expect(orchestratorTools).toContain("Single-shot task-scope handoff producer")
     expect(orchestratorTools).toContain("Do not use frontend_design as a repeated repair")
     expect(orchestratorTools).toContain("call frontend_research first when the Page Skeleton Blueprint is missing")
@@ -1237,7 +1241,9 @@ describe("core prompt hygiene", () => {
       "Non-Figma URLs are rendered for webpage evidence extraction and screenshot materialization only after the live webpage clone's source-backed Page Skeleton Blueprint is already available or not needed",
     )
     expect(orchestratorTools).toContain("Source-page-scoped brief producer")
-    expect(orchestratorTools).toContain("Page Skeleton Blueprint that frontend_design consumes as page information architecture")
+    expect(orchestratorTools).toContain(
+      "Page Skeleton Blueprint that frontend_design consumes as page information architecture",
+    )
     expect(orchestratorTools).toContain("call frontend_research separately only for additional page URLs")
     expect(orchestratorTools).toContain(
       "Same URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",

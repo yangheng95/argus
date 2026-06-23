@@ -128,7 +128,7 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain("const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp")
     expect(source).toContain("return await loadSkillMountMatrix()")
     expect(source).toContain("return (await loadMcpStatus()) as Record<string, McpItem>")
-    expect(source).toContain('deleteAllSkills,')
+    expect(source).toContain("deleteAllSkills,")
     expect(source).toContain("await deleteAllSkills()")
     expect(source).toContain('import { addMcpServer, deleteAllMcp } from "../../services/mcp"')
     expect(source).toContain("await deleteAllMcp()")

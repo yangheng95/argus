@@ -26,7 +26,9 @@ describe("MemoryPanel inline detail lifecycle", () => {
     expect(source).not.toContain('role="button"')
     expect(source).not.toContain("tabIndex={0}")
     expect(source).toMatch(/<Button[\s\S]*class="knowledge-item-main"[\s\S]*data-ui="memory-row-main"/)
-    expect(source).not.toContain('<button\n                      type="button"\n                      class="knowledge-item-main"')
+    expect(source).not.toContain(
+      '<button\n                      type="button"\n                      class="knowledge-item-main"',
+    )
     expect(source).toContain('data-action="delete-memory"')
 
     const mainButton = source.indexOf('class="knowledge-item-main"')

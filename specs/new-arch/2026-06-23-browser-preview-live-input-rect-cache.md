@@ -21,24 +21,24 @@ handler.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no dual source, test every change, visually verify UI work, and use Node for Playwright browser tests on Windows. |
-| `2026-06-11-browser-preview-interactive-live-session.md` | Live preview is task-scoped and backend-owned; the overlay computes coordinates from the displayed screenshot bounds and selected viewport. |
-| `2026-06-19-browser-preview-live-frame-application-role.md` | The live frame is an interactive application region and must preserve click, wheel, and keyboard routing. |
-| `2026-06-22-browser-preview-live-input-batch-owner.md` | The overlay already owns request batching; this round must not reintroduce one-request-per-input behavior. |
-| `2026-06-22-browser-preview-evidence-live-snapshot-boundary.md` | Persisted evidence remains the preview owner when available; live input changes must not request hidden evidence capture. |
-| Confucius read-only audit | `livePoint()` still used `querySelector` and `image.getBoundingClientRect()` for every click/wheel event. |
+| Source                                                          | Constraint carried forward                                                                                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                                     | No fallback, no dual source, test every change, visually verify UI work, and use Node for Playwright browser tests on Windows.              |
+| `2026-06-11-browser-preview-interactive-live-session.md`        | Live preview is task-scoped and backend-owned; the overlay computes coordinates from the displayed screenshot bounds and selected viewport. |
+| `2026-06-19-browser-preview-live-frame-application-role.md`     | The live frame is an interactive application region and must preserve click, wheel, and keyboard routing.                                   |
+| `2026-06-22-browser-preview-live-input-batch-owner.md`          | The overlay already owns request batching; this round must not reintroduce one-request-per-input behavior.                                  |
+| `2026-06-22-browser-preview-evidence-live-snapshot-boundary.md` | Persisted evidence remains the preview owner when available; live input changes must not request hidden evidence capture.                   |
+| Confucius read-only audit                                       | `livePoint()` still used `querySelector` and `image.getBoundingClientRect()` for every click/wheel event.                                   |
 
 ## Call Point Inventory
 
-| Search | Findings | Decision |
-| --- | --- | --- |
-| `livePoint`, `handleLiveWheel`, `handleLivePointerDown` | Both click and wheel handlers called `livePoint(event, event.currentTarget)`, and `livePoint()` queried the image and read its rect synchronously. | Make input handlers call `livePoint(event)` and read only cached rect state. |
-| `browserPreviewLivePoint` | Pure helper maps event coordinates and image rect into viewport coordinates. | Keep the pure helper; change only the rect owner. |
-| `flushLiveInputOnFrame`, `pendingLiveInputs` | Existing batch owner coalesces requests but still depends on event-time point calculation. | Keep batching and move only screenshot rect measurement out of input events. |
-| `browser-preview-live-input-batch.test.ts` | Browser test already opens a real live preview and dispatches mixed input plus wheel bursts. | Add layout-read instrumentation to assert live input event handlers do not read screenshot geometry. |
-| `browser-preview-panel.test.ts` | Static guard covers live input ownership and no iframe. | Add guard that `livePoint` has no `querySelector` or `getBoundingClientRect`. |
+| Search                                                  | Findings                                                                                                                                           | Decision                                                                                             |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `livePoint`, `handleLiveWheel`, `handleLivePointerDown` | Both click and wheel handlers called `livePoint(event, event.currentTarget)`, and `livePoint()` queried the image and read its rect synchronously. | Make input handlers call `livePoint(event)` and read only cached rect state.                         |
+| `browserPreviewLivePoint`                               | Pure helper maps event coordinates and image rect into viewport coordinates.                                                                       | Keep the pure helper; change only the rect owner.                                                    |
+| `flushLiveInputOnFrame`, `pendingLiveInputs`            | Existing batch owner coalesces requests but still depends on event-time point calculation.                                                         | Keep batching and move only screenshot rect measurement out of input events.                         |
+| `browser-preview-live-input-batch.test.ts`              | Browser test already opens a real live preview and dispatches mixed input plus wheel bursts.                                                       | Add layout-read instrumentation to assert live input event handlers do not read screenshot geometry. |
+| `browser-preview-panel.test.ts`                         | Static guard covers live input ownership and no iframe.                                                                                            | Add guard that `livePoint` has no `querySelector` or `getBoundingClientRect`.                        |
 
 ## Root Cause
 

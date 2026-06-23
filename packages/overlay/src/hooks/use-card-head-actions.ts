@@ -22,6 +22,7 @@ export interface UseCardHeadActionsOutput {
   caps: {
     canCopy: () => boolean
     canRewind: () => boolean
+    rewindDisabled: () => boolean
     canCancel: () => boolean
   }
   onCopy: (e: Event) => void
@@ -32,6 +33,7 @@ export interface UseCardHeadActionsOutput {
     copied: () => string
     rewind: () => string
     rewindStep: () => string
+    rewindDisabled: () => string
     cancel: () => string
   }
 }
@@ -59,6 +61,7 @@ export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadA
     const node = input.node()
     return !!input.onRewind && isStageCard(node) && typeof node.time === "number" && node.time > 0
   }
+  const rewindDisabled = () => canRewind()
   const canCancel = () => input.node().status === "running" && !!input.onAgentCancel && !!input.agentSessionID?.()
 
   const onCopy = (event: Event) => {
@@ -75,6 +78,7 @@ export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadA
 
   const onRewind = (event: Event) => {
     event.stopPropagation()
+    if (rewindDisabled()) return
     if (!input.onRewind || !canRewind() || rewinding()) return
     void (async () => {
       const choice = await showAppDialog({
@@ -133,6 +137,7 @@ export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadA
     caps: {
       canCopy,
       canRewind,
+      rewindDisabled,
       canCancel,
     },
     onCopy,
@@ -143,6 +148,7 @@ export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadA
       copied: () => t("common.copied"),
       rewind: () => t("card.rewind"),
       rewindStep: () => t("card.rewind_step"),
+      rewindDisabled: () => t("card.rewind_disabled"),
       cancel: () => t("card.agent_cancel"),
     },
   }
