@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test"
 import { cardTreeStore, setCardTreeStore, type CardNode } from "../src/store/card-tree"
 import { resetWriter } from "../src/services/tree-writer"
-import { orderedReachableCardIDs, reachableCardIDsFromTree } from "../src/utils/card-tree"
+import {
+  orderedReachableCardIDs,
+  parentIDChainForCard,
+  reachableCardIDsFromTree,
+  topLevelCardIDForCard,
+} from "../src/utils/card-tree"
 
 const OVERLAY_ROOT = import.meta.dir.replace(/\\test$/, "")
 
@@ -48,6 +53,24 @@ test("orderedReachableCardIDs follows inserted live cards via order instead of O
   }
 })
 
+test("parentID helpers resolve ancestors without scanning child arrays", () => {
+  const cards = {
+    root: { parentID: undefined },
+    parent: { parentID: "root" },
+    child: { parentID: "parent" },
+    unrelated: {
+      get parentID() {
+        throw new Error("parent helper enumerated unrelated card")
+      },
+    },
+  }
+
+  expect(parentIDChainForCard("child", cards)).toEqual(["root", "parent"])
+  expect(topLevelCardIDForCard("child", ["root"], cards)).toBe("root")
+  expect(topLevelCardIDForCard("parent", ["root"], cards)).toBe("root")
+  expect(topLevelCardIDForCard("root", ["root"], cards)).toBe("root")
+})
+
 test("Board stage-message discovery does not enumerate cardTreeStore.cards keys", async () => {
   const source = await Bun.file(`${OVERLAY_ROOT}/src/components/Board.tsx`).text()
   expect(source).toContain("orderedReachableCardIDs()")
@@ -66,10 +89,15 @@ test("store-backed conversation renderers use explicit card dereference primitiv
   const card = await Bun.file(`${OVERLAY_ROOT}/src/components/Card.tsx`).text()
   const chatBubble = await Bun.file(`${OVERLAY_ROOT}/src/components/ChatBubble.tsx`).text()
   const primitive = await Bun.file(`${OVERLAY_ROOT}/src/components/StoreCardNode.tsx`).text()
+  const rail = await Bun.file(`${OVERLAY_ROOT}/src/components/ConversationAgentRail.tsx`).text()
 
   expect(primitive).toContain("export function storeCardNode")
   expect(primitive).toContain("cardTreeStore.cards[id]")
   expect(conversation).toContain("<StoreCardNode id={props.id}>")
+  expect(conversation).toContain("topLevelCardIDForCard(cardID, order())")
+  expect(conversation).not.toContain("Object.values(cardTreeStore.cards).find")
+  expect(rail).toContain("parentIDChainForCard(cardID)")
+  expect(rail).not.toContain("Object.values(cardTreeStore.cards).find")
   expect(conversation).toContain(
     "<ErrorBoundary fallback={(error) => <ConversationCardRenderFailure id={props.id} error={error} />}>",
   )

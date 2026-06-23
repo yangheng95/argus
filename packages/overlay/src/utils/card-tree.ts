@@ -201,6 +201,38 @@ export function orderedReachableCardIDs(): string[] {
   return reachableCardIDsFromTree(cardTreeStore.order, cardTreeStore.cards)
 }
 
+export function parentIDChainForCard(
+  cardID: string,
+  cards: Record<string, Pick<CardNode, "parentID"> | undefined> = cardTreeStore.cards,
+): string[] {
+  const ancestors: string[] = []
+  const seen = new Set<string>()
+  let current = String(cardID || "")
+  while (current) {
+    if (seen.has(current)) throw new Error(`card-tree: parentID cycle at ${current}`)
+    seen.add(current)
+    const parentID = cards[current]?.parentID
+    if (!parentID) break
+    if (!cards[parentID]) throw new Error(`card-tree: card ${current} references missing parent ${parentID}`)
+    ancestors.unshift(parentID)
+    current = parentID
+  }
+  return ancestors
+}
+
+export function topLevelCardIDForCard(
+  cardID: string,
+  order: readonly string[] = cardTreeStore.order,
+  cards: Record<string, Pick<CardNode, "parentID"> | undefined> = cardTreeStore.cards,
+): string | undefined {
+  const orderSet = new Set(order)
+  if (orderSet.has(cardID)) return cardID
+  for (const parentID of parentIDChainForCard(cardID, cards)) {
+    if (orderSet.has(parentID)) return parentID
+  }
+  return undefined
+}
+
 export function isBuildPhaseCard(node: Pick<CardNode, "kind" | "phaseID"> | undefined): boolean {
   return node?.kind === "phase" && node.phaseID === "build"
 }

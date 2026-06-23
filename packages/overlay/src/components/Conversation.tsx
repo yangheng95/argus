@@ -7,6 +7,7 @@ import { cardTreeStore } from "../store/card-tree"
 import { boardStore, activeTaskID } from "../store/board"
 import { t } from "../utils/i18n"
 import { renderAsBubble } from "../utils/chat-bubble"
+import { topLevelCardIDForCard } from "../utils/card-tree"
 import { setupAutoScroll, type AutoScrollController } from "../utils/dom-utils"
 import { taskLifecycleStatusOrIdleLabel } from "../utils/status-labels"
 import { StoreCardNode } from "./StoreCardNode"
@@ -117,20 +118,7 @@ function VirtualizedConversationCards(props: {
   const order = createMemo(() => cardTreeStore.order.slice())
   const activePinID = createMemo(() => props.pinnedCardID() || scrollPinID())
 
-  const topLevelIDForCard = (cardID: string): string | undefined => {
-    const ids = order()
-    if (ids.includes(cardID)) return cardID
-    let current = cardID
-    const seen = new Set<string>()
-    while (current && !seen.has(current)) {
-      seen.add(current)
-      const parent = Object.values(cardTreeStore.cards).find((card) => card.childIDs?.includes(current))
-      if (!parent) return undefined
-      if (ids.includes(parent.id)) return parent.id
-      current = parent.id
-    }
-    return undefined
-  }
+  const topLevelIDForCard = (cardID: string): string | undefined => topLevelCardIDForCard(cardID, order())
 
   const pinnedIndexes = createMemo(() => {
     const pinID = activePinID()
