@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { GlobalBus } from "../../src/bus/global"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA } from "../../src/coding-assistant/session"
 import { Message, Session } from "../../src/session"
 import { Instance } from "../../src/project/instance"
@@ -7,9 +8,11 @@ import {
   enrichStandaloneSessionTranscript,
   mapSessionBusEvent,
   mirrorSessionBusEvent,
+  subscribeSessionMirror,
 } from "../../src/protocol/session-mirror"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { expectNoProcessErrors } from "../fixture/process-errors"
 
 async function waitFor(assertion: () => boolean, timeoutMs = 2_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
@@ -273,6 +276,42 @@ describe("session mirror", () => {
         expect(mapped?.payload?.channel).toBe("assistant")
         expect(mapped?.payload?.resolvedRole).toBe("assistant")
         expect(mapped?.payload?.sessionID).toBe(sidebar.id)
+      },
+    })
+  })
+
+  test("subscription boundary records mirror failures without process-level rejection", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sidebar = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const stop = subscribeSessionMirror(sidebar.id)
+        try {
+          await expectNoProcessErrors(async () => {
+            GlobalBus.emit("event", {
+              directory: tmp.path,
+              payload: {
+                type: Message.Event.PartUpdated.type,
+                properties: {
+                  part: {
+                    id: "prt_missing",
+                    sessionID: sidebar.id,
+                    messageID: "msg_missing",
+                    type: "text",
+                    text: "late chunk",
+                  },
+                },
+              },
+            })
+          })
+        } finally {
+          stop()
+        }
       },
     })
   })

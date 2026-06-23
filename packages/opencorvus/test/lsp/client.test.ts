@@ -8,6 +8,7 @@ import { Instance } from "../../src/project/instance"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
+import { expectNoProcessErrors } from "../fixture/process-errors"
 
 // Minimal fake LSP server that speaks JSON-RPC over stdio
 function spawnFakeServer() {
@@ -221,6 +222,27 @@ describe("LSPClient interop", () => {
     } finally {
       process.off("unhandledRejection", onUnhandled)
       handle.process.kill()
+    }
+  }, 15_000)
+
+  test("server process error after initialize is observed by the client", async () => {
+    const handle = spawnFakeServer() as any
+    const client = await Instance.provide({
+      directory: process.cwd(),
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: process.cwd(),
+        }),
+    })
+
+    try {
+      await expectNoProcessErrors(async () => {
+        handle.process.emit("error", new Error("post-init lsp process error"))
+      })
+    } finally {
+      await client.shutdown()
     }
   }, 15_000)
 

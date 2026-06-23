@@ -94,7 +94,6 @@ import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/en
 import { TaskChannelBindingProjectConflictError, TaskGlobalProjectBindingError } from "@/engine/task-project-error"
 import {
   assertSessionPromptSubtreeFinished,
-  cancelSessionPromptByID,
   requestSessionPromptSubtreeCancellation,
 } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
@@ -1971,20 +1970,28 @@ export namespace EngineService {
   }
 
   export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean }) {
-    const ids = await Session.tree(sessionID)
-    for (const id of ids) {
-      await cancelSessionPromptByID({ sessionID: id })
-    }
+    const root = await Session.get(sessionID)
+    const requested = await requestSessionPromptSubtreeCancellation({
+      sessionID,
+      projectID: root.projectID,
+      handle: "EngineService.deleteSession",
+    })
+    const ids = requested.sessionIDs
     TaskQueueService.cancelSessionPrompts({
       sessionIDs: ids,
       reason: "session deleted",
+    })
+    await assertSessionPromptSubtreeFinished({
+      sessions: requested.cancelledSessions,
+      failures: requested.failures,
+      handle: "EngineService.deleteSession",
     })
     if (input?.deleteTasks) {
       const tasks = Database.use((db) =>
         db
           .select()
           .from(EngineTaskTable)
-          .where(and(eq(EngineTaskTable.project_id, Instance.project.id), inArray(EngineTaskTable.session_id, ids)))
+          .where(and(eq(EngineTaskTable.project_id, root.projectID), inArray(EngineTaskTable.session_id, ids)))
           .all(),
       )
       for (const item of tasks) {
@@ -1993,7 +2000,7 @@ export namespace EngineService {
       }
       Database.use((db) => {
         db.delete(EngineTaskTable)
-          .where(and(eq(EngineTaskTable.project_id, Instance.project.id), inArray(EngineTaskTable.session_id, ids)))
+          .where(and(eq(EngineTaskTable.project_id, root.projectID), inArray(EngineTaskTable.session_id, ids)))
           .run()
         Database.effect(() => Database.incrementalVacuum())
       })

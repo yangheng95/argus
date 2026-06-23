@@ -31,6 +31,17 @@ test("interactive browser preview command abort and timeout paths release listen
   expect(live).toContain('signal?.removeEventListener("abort", abort)')
 })
 
+test("interactive browser preview live sidecar observes background failures", () => {
+  const live = source("src/browser-preview/live.ts")
+
+  expect(live).toContain('this.child.stdin.on("error", (error) => this.closeWithError(error, onClose))')
+  expect(live).toContain('this.child.stdout.on("error", (error) => this.closeWithError(error, onClose))')
+  expect(live).toContain('this.child.stderr.on("error", (error) => this.closeWithError(error, onClose))')
+  expect(live).toContain("void this.close().catch((error) =>")
+  expect(live).toContain('log.warn("browser preview live idle close failed"')
+  expect(live).toContain('log.warn("browser preview live child kill failed"')
+})
+
 test("interactive browser preview sidecars close on parent pipe teardown", () => {
   const live = source("src/browser-preview/live.ts")
 

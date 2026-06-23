@@ -403,7 +403,7 @@ export function MissionRoutes() {
       validator("param", MissionParam),
       async (c) => {
         const session = await missionRouteSession(c.req.valid("param").missionID)
-        await Session.removeInProject({ sessionID: session.id, projectID: session.projectID })
+        await EngineService.deleteSession(session.id)
         return c.json(true)
       },
     )

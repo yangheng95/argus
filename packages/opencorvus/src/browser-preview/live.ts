@@ -4,12 +4,14 @@ import { BrowserRuntime } from "@/browser/runtime"
 import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
 import { ServeRuntimeMemoryMetrics } from "@/runtime/memory-metrics"
 import { findBrowserPreviewTargetByID } from "./persist"
+import { Log } from "@/util/log"
 
 const LIVE_COMMAND_TIMEOUT_MILLISECONDS = 60_000
 const LIVE_NAVIGATION_TIMEOUT_MILLISECONDS = 20_000
 const LIVE_SETTLE_MILLISECONDS = 80
 const LIVE_IDLE_TIMEOUT_MILLISECONDS = 120_000
 const LIVE_CLOSE_TIMEOUT_MILLISECONDS = 5_000
+const log = Log.create({ service: "browser-preview-live" })
 
 export type BrowserPreviewLiveInput =
   | { kind: "click"; x: number; y: number; button?: "left" | "middle" | "right" }
@@ -28,7 +30,7 @@ export async function captureBrowserPreviewLiveSnapshot(input: {
     {
       kind: "snapshot",
       url: target.url,
-      viewport: browserPreviewViewportByID(input.viewportID),
+      viewport: browserPreviewViewportByID(target.viewports, input.viewportID),
       navigationTimeoutMs: LIVE_NAVIGATION_TIMEOUT_MILLISECONDS,
       settleMs: LIVE_SETTLE_MILLISECONDS,
     },
@@ -50,7 +52,7 @@ export async function interactBrowserPreviewLive(input: {
     {
       kind: "input",
       url: target.url,
-      viewport: browserPreviewViewportByID(input.viewportID),
+      viewport: browserPreviewViewportByID(target.viewports, input.viewportID),
       navigationTimeoutMs: LIVE_NAVIGATION_TIMEOUT_MILLISECONDS,
       settleMs: LIVE_SETTLE_MILLISECONDS,
       inputs: input.inputs,
@@ -215,6 +217,9 @@ class BrowserPreviewLiveSidecar {
       this.stderr += String(chunk)
       if (this.stderr.length > 8_000) this.stderr = this.stderr.slice(-8_000)
     })
+    this.child.stdin.on("error", (error) => this.closeWithError(error, onClose))
+    this.child.stdout.on("error", (error) => this.closeWithError(error, onClose))
+    this.child.stderr.on("error", (error) => this.closeWithError(error, onClose))
     this.child.once("error", (error) => this.closeWithError(error, onClose))
     this.child.once("exit", (code, signal) =>
       this.closeWithError(
@@ -315,7 +320,14 @@ class BrowserPreviewLiveSidecar {
     this.clearIdleTimer()
     this.idleTimer = setTimeout(() => {
       liveMetrics.idleClosed++
-      void this.close()
+      void this.close().catch((error) => {
+        log.warn("browser preview live idle close failed", {
+          taskID: this.owner.taskID,
+          targetID: this.owner.targetID,
+          viewportID: this.owner.viewportID,
+          error: errorMessage(error),
+        })
+      })
     }, LIVE_IDLE_TIMEOUT_MILLISECONDS)
     this.idleTimer.unref?.()
   }
@@ -372,18 +384,33 @@ class BrowserPreviewLiveSidecar {
   }
 }
 
-function terminateChildTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+function terminateChildTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): boolean {
   const pid = child.pid
-  if (!pid) return
+  if (!pid) return false
   if (process.platform === "win32") {
-    child.kill(signal)
-    return
+    try {
+      return child.kill(signal)
+    } catch (error) {
+      log.warn("browser preview live child kill failed", { signal, error: errorMessage(error) })
+      return false
+    }
   }
   try {
     process.kill(-pid, signal)
+    return true
   } catch {
-    child.kill(signal)
+    try {
+      return child.kill(signal)
+    } catch (error) {
+      log.warn("browser preview live child kill failed", { signal, error: errorMessage(error) })
+      return false
+    }
   }
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
 }
 
 const BROWSER_PREVIEW_LIVE_SCRIPT = String.raw`

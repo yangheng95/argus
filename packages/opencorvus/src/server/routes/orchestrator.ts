@@ -67,6 +67,12 @@ import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 const log = Log.create({ service: "server.routes.orchestrator" })
 const CONVERSATION_EVENT_PAGE_LIMIT = 500
 const TASK_MESSAGE_CHANGE_POLL_MS = 2_000
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
 const TASK_LIST_PROJECTION_EVENT_TYPES = new Set([
   "task.created",
   "task.updated",
@@ -393,12 +399,37 @@ export const EngineRoutes = lazy(() =>
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
+          let heartbeat: ReturnType<typeof setInterval> | undefined
+          let stop = () => {}
+          let finishStream = () => {}
+          let closed = false
+          const cleanup = (input?: { closeStream?: boolean; error?: unknown }) => {
+            if (closed) return
+            closed = true
+            if (heartbeat) clearInterval(heartbeat)
+            stop()
+            if (input?.error) {
+              log.warn("task-list event stream write failed", { error: errorMessage(input.error) })
+            }
+            if (input?.closeStream) stream.close()
+            finishStream()
+          }
+          const finished = new Promise<void>((resolve) => {
+            finishStream = resolve
+          })
           let writes = Promise.resolve()
           const writeData = (data: string) => {
-            writes = writes.then(() => stream.writeSSE({ data }))
+            writes = writes
+              .then(() => {
+                if (closed) return
+                return stream.writeSSE({ data })
+              })
+              .catch((error) => {
+                cleanup({ closeStream: true, error })
+              })
             return writes
           }
-          const stop = ProtocolStore.subscribeEvents(
+          stop = ProtocolStore.subscribeEvents(
             (event) => {
               if (!isTaskListProjectionEventType(event.type)) return
               const payload = JSON.stringify(taskListProtocolEvent(event))
@@ -407,16 +438,17 @@ export const EngineRoutes = lazy(() =>
             { aggregate: "task" },
           )
           await writeData(JSON.stringify({ type: "task-list.connected", taskID: null, sequence: 0 }))
-          const heartbeat = setInterval(() => {
+          if (closed) {
+            await writes
+            return
+          }
+          heartbeat = setInterval(() => {
             void writeData(JSON.stringify({ type: "task-list.heartbeat", taskID: null, sequence: 0 }))
           }, 10_000)
-          await new Promise<void>((resolve) => {
-            stream.onAbort(() => {
-              clearInterval(heartbeat)
-              stop()
-              resolve()
-            })
+          stream.onAbort(() => {
+            cleanup()
           })
+          await finished
           await writes
         })
       },
@@ -621,10 +653,41 @@ export const EngineRoutes = lazy(() =>
           let liveCursor = afterLive
           let messageWatermark = afterMessageWatermark
           let ready = false
+          let heartbeat: ReturnType<typeof setInterval> | undefined
+          let messageChangePoll: ReturnType<typeof setInterval> | undefined
+          let stop = () => {}
+          let finishStream = () => {}
+          let closed = false
+          const cleanup = (input?: { closeStream?: boolean; error?: unknown }) => {
+            if (closed) return
+            closed = true
+            if (heartbeat) clearInterval(heartbeat)
+            if (messageChangePoll) clearInterval(messageChangePoll)
+            stop()
+            if (input?.error) {
+              log.warn("task event stream write failed", {
+                taskID,
+                sessionID,
+                error: errorMessage(input.error),
+              })
+            }
+            if (input?.closeStream) stream.close()
+            finishStream()
+          }
+          const finished = new Promise<void>((resolve) => {
+            finishStream = resolve
+          })
           const buffered: Array<{ sequence: number; liveSequence: number; data: string }> = []
           let writes = Promise.resolve()
           const writeData = (data: string) => {
-            writes = writes.then(() => stream.writeSSE({ data }))
+            writes = writes
+              .then(() => {
+                if (closed) return
+                return stream.writeSSE({ data })
+              })
+              .catch((error) => {
+                cleanup({ closeStream: true, error })
+              })
             return writes
           }
           const emitMessageChange = async (watermark: number) => {
@@ -662,7 +725,7 @@ export const EngineRoutes = lazy(() =>
             else liveCursor = Math.max(liveCursor, event.liveSequence ?? 0)
             void writeData(data)
           }
-          const stop = ProtocolStore.subscribeEvents(enqueueProtocolEvent, {
+          stop = ProtocolStore.subscribeEvents(enqueueProtocolEvent, {
             aggregate: "task",
             taskID,
           })
@@ -678,7 +741,7 @@ export const EngineRoutes = lazy(() =>
             })
             if (liveReplay.expired) {
               await writeData(JSON.stringify(protocolTaskEvent(liveReplay.event)))
-              stop()
+              cleanup()
               return
             }
             for (const event of liveReplay.events) {
@@ -686,6 +749,10 @@ export const EngineRoutes = lazy(() =>
               markLiveMessageSeen(event)
               await writeData(JSON.stringify(protocolTaskEvent(event)))
             }
+          }
+          if (closed) {
+            await writes
+            return
           }
           ready = true
           buffered.forEach((item) => {
@@ -709,11 +776,19 @@ export const EngineRoutes = lazy(() =>
             }),
           )
           await writeData(connData)
+          if (closed) {
+            await writes
+            return
+          }
           const initialMessageWatermark = taskMessageWatermark(taskID)
           if (initialMessageWatermark > messageWatermark) {
             await emitMessageChange(initialMessageWatermark)
           }
-          const heartbeat = setInterval(() => {
+          if (closed) {
+            await writes
+            return
+          }
+          heartbeat = setInterval(() => {
             const data = JSON.stringify(
               taskEvent(taskID, {
                 type: "task.heartbeat",
@@ -725,19 +800,15 @@ export const EngineRoutes = lazy(() =>
             )
             void writeData(data)
           }, 10_000)
-          const messageChangePoll = setInterval(() => {
+          messageChangePoll = setInterval(() => {
             const nextWatermark = taskMessageWatermark(taskID)
             if (nextWatermark <= messageWatermark) return
             void emitMessageChange(nextWatermark)
           }, TASK_MESSAGE_CHANGE_POLL_MS)
-          await new Promise<void>((resolve) => {
-            stream.onAbort(() => {
-              clearInterval(heartbeat)
-              clearInterval(messageChangePoll)
-              stop()
-              resolve()
-            })
+          stream.onAbort(() => {
+            cleanup()
           })
+          await finished
           await writes
         })
       },

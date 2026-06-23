@@ -389,22 +389,30 @@ async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefin
  */
 function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<void>): void {
   retainLoop(taskID)
-  loopPromise.finally(() => {
-    releaseLoop(taskID)
-    // Detach via queueMicrotask so `advanceQueue` → `startLoopForTask` →
-    // `.finally` re-entry doesn't stack synchronously.
-    queueMicrotask(() => {
-      void (async () => {
-        if (await drainQueuedTaskEventIfUnowned(taskID)) return
-        await advanceQueue(cwd)
-      })().catch((err) => {
-        log.error("advanceQueue failed after loop exit", {
-          cwd,
-          error: err instanceof Error ? err.message : String(err),
+  void loopPromise
+    .finally(() => {
+      releaseLoop(taskID)
+      // Detach via queueMicrotask so `advanceQueue` → `startLoopForTask` →
+      // `.finally` re-entry doesn't stack synchronously.
+      queueMicrotask(() => {
+        void (async () => {
+          if (await drainQueuedTaskEventIfUnowned(taskID)) return
+          await advanceQueue(cwd)
+        })().catch((err) => {
+          log.error("advanceQueue failed after loop exit", {
+            cwd,
+            error: err instanceof Error ? err.message : String(err),
+          })
         })
       })
     })
-  })
+    .catch((err) => {
+      log.error("task loop completion hook observed failure", {
+        taskID,
+        cwd,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
 }
 
 export async function drainQueuedTaskEventIfUnowned(taskID: string): Promise<boolean> {

@@ -26,6 +26,7 @@ import { Bus } from "@/bus"
 import path from "path"
 import z from "zod"
 import { WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS } from "@/frontend-design/tools/ids"
+import { EngineService } from "@/task-api"
 
 const log = Log.create({ service: "mcp.serve" })
 
@@ -301,7 +302,9 @@ export namespace MCPServe {
           unsubscribePrompts?.()
           unsubscribeResources?.()
           await server.close().catch(() => undefined)
-          await Session.remove(session.id).catch(() => undefined)
+          await EngineService.deleteSession(session.id).catch((error) => {
+            log.warn("mcp session remove failed", { error: error instanceof Error ? error.message : String(error) })
+          })
         }
       },
     })

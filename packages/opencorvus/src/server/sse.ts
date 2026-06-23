@@ -1,9 +1,12 @@
 import type { Context } from "hono"
 import { streamSSE as honoStreamSSE, type SSEStreamingApi } from "hono/streaming"
+import { Log } from "@/util/log"
 
 type StreamSSECallback = (stream: SSEStreamingApi) => Promise<void>
 type StreamSSEErrorHandler = (error: Error, stream: SSEStreamingApi) => Promise<void>
 type AbortListener = () => void | Promise<void>
+
+const log = Log.create({ service: "server.sse" })
 
 // SSE means Server-Sent Events; this wrapper is the only server-side SSE primitive.
 function attachRequestAbort(c: Context, stream: SSEStreamingApi) {
@@ -13,7 +16,11 @@ function attachRequestAbort(c: Context, stream: SSEStreamingApi) {
   stream.onAbort = ((listener: AbortListener) => {
     originalOnAbort(listener)
     if (stream.aborted || signal.aborted) {
-      void listener()
+      void Promise.resolve()
+        .then(listener)
+        .catch((error) => {
+          log.warn("SSE abort listener failed", { error: error instanceof Error ? error.message : String(error) })
+        })
     }
   }) as typeof stream.onAbort
 

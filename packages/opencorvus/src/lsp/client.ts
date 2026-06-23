@@ -196,6 +196,11 @@ export namespace LSPClient {
 
     await connection.sendNotification("initialized", {})
 
+    const onServerError = (error: Error) => {
+      l.warn("LSP server process error", { error: error.message })
+    }
+    input.server.process.on("error", onServerError)
+
     if (input.server.initialization) {
       await connection.sendNotification("workspace/didChangeConfiguration", {
         settings: input.server.initialization,
@@ -321,7 +326,11 @@ export namespace LSPClient {
         await connection.sendNotification("exit").catch(() => {})
         connection.end()
         connection.dispose()
-        await disposeServer(input.server)
+        try {
+          await disposeServer(input.server)
+        } finally {
+          input.server.process.off("error", onServerError)
+        }
         l.info("shutdown")
       },
     }

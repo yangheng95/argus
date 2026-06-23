@@ -84,24 +84,35 @@ export namespace Bus {
     },
   )
 
-  export async function publish<Definition extends BusEvent.Definition>(
+  function observePublishPromise<T extends Promise<unknown>>(promise: T, type: string): T {
+    void promise.catch((err) => {
+      log.warn("publish failed", { type, error: err instanceof Error ? err.message : String(err) })
+    })
+    return promise
+  }
+
+  export function publish<Definition extends BusEvent.Definition>(
     def: Definition,
     properties: z.output<Definition["properties"]>,
   ) {
-    const parsed = BusEvent.parseProperties(def, properties)
-    const payload = {
-      type: def.type,
-      properties: parsed,
+    try {
+      const parsed = BusEvent.parseProperties(def, properties)
+      const payload = {
+        type: def.type,
+        properties: parsed,
+      }
+      log.debug("publishing", {
+        type: def.type,
+      })
+      const result = dispatch(payload)
+      GlobalBus.emit("event", {
+        directory: Instance.directory,
+        payload,
+      })
+      return observePublishPromise(result, def.type)
+    } catch (err) {
+      return observePublishPromise(Promise.reject(err), def.type)
     }
-    log.debug("publishing", {
-      type: def.type,
-    })
-    const result = dispatch(payload)
-    GlobalBus.emit("event", {
-      directory: Instance.directory,
-      payload,
-    })
-    return result
   }
 
   export function subscribe<Definition extends BusEvent.Definition>(

@@ -11,6 +11,7 @@ import { EOL } from "os"
 import path from "path"
 import * as prompts from "@clack/prompts"
 import { which } from "@/util/which"
+import { EngineService } from "@/task-api"
 
 function pagerCmd(): string[] {
   const lessOptions = ["-R", "-S"]
@@ -135,7 +136,7 @@ export const SessionDeleteCommand = cmd({
       const spinner = prompts.spinner()
       spinner.start(`Deleting ${targets.length} session${suffix}...`)
       for (const target of targets) {
-        await Session.remove(target.id)
+        await EngineService.deleteSession(target.id)
       }
       spinner.stop(`Deleted ${targets.length} session${suffix}`)
     })

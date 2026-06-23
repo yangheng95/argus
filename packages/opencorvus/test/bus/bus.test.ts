@@ -4,6 +4,7 @@ import path from "node:path"
 import z from "zod"
 import { Bus } from "../../src/bus"
 import { BusEvent } from "../../src/bus/bus-event"
+import { GlobalBus } from "../../src/bus/global"
 import { Event } from "../../src/engine/model"
 import { Instance } from "../../src/project/instance"
 import { Message } from "../../src/session/message"
@@ -11,6 +12,7 @@ import { SessionEvents } from "../../src/session/events"
 import { Event as ServerEvent, globalEnvelope, payload as serverEventPayload } from "../../src/server/event"
 import { Workspace } from "../../src/workspace/workspace"
 import { tmpdir } from "../fixture/fixture"
+import { expectNoProcessErrors } from "../fixture/process-errors"
 
 // Define a test event for use in tests
 const TestEvent = BusEvent.define("test.event", z.object({ value: z.string() }))
@@ -124,6 +126,29 @@ describe("Bus.subscribe / Bus.publish", () => {
         } finally {
           unsub1()
           unsub2()
+        }
+      },
+    })
+  })
+
+  test("global bus listener failures do not reject publish or leak process errors", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const throwing = () => {
+          throw new Error("global listener failed")
+        }
+        const rejecting = () => Promise.reject(new Error("global listener rejected"))
+        GlobalBus.on("event", throwing)
+        GlobalBus.on("event", rejecting)
+        try {
+          await expectNoProcessErrors(async () => {
+            await expect(Bus.publish(TestEvent, { value: "global-survived" })).resolves.toBeDefined()
+          })
+        } finally {
+          GlobalBus.off("event", throwing)
+          GlobalBus.off("event", rejecting)
         }
       },
     })
@@ -300,6 +325,18 @@ describe("Bus.subscribeAll", () => {
         } finally {
           unsub()
         }
+      },
+    })
+  })
+
+  test("fire-and-forget publish validation failures are observed", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expectNoProcessErrors(async () => {
+          void Bus.publish(TestEvent as any, { value: 123 })
+        })
       },
     })
   })

@@ -58,7 +58,9 @@ export namespace BrowserMCP {
       await Promise.resolve(transport.close())
     }
     transport.onclose = () => {
-      void close()
+      void close().catch((error) => {
+        console.error(`[browser-mcp] close failed: ${error instanceof Error ? error.message : String(error)}`)
+      })
     }
     await server.connect(transport)
   }

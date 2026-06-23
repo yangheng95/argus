@@ -8,6 +8,7 @@ import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Database, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { expectNoProcessErrors } from "../fixture/process-errors"
 
 function result() {
   return {
@@ -69,6 +70,31 @@ describe("scheduler.task-queue-service", () => {
         })
         const row = await waitForQueueStatus(id, "completed")
         expect(row?.status).toBe("completed")
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
+  })
+
+  test("background prompt failure is recorded without process-level rejection", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const prompt = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("prompt failed"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        await expectNoProcessErrors(async () => {
+          const id = TaskQueueService.enqueuePrompt({
+            sessionID: session.id,
+            prompt: {
+              parts: [{ type: "text", text: "fail from background drain" }],
+            },
+            source: "test",
+          })
+          const row = await waitForQueueStatus(id, "failed")
+          expect(row?.error_message).toBe("prompt failed")
+        })
       },
     })
 

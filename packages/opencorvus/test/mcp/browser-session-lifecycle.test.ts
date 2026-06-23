@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { BrowserRuntime } from "../../src/browser/runtime"
 import {
   createSession,
@@ -105,6 +107,17 @@ class FakeBrowser {
 describe("browser MCP session lifecycle", () => {
   const originalLaunch = BrowserRuntime.launchPlaywrightBrowserInNodeProcess
   const launchedBrowsers: FakeBrowser[] = []
+
+  test("session cleanup timers and shutdown signals observe async failures", () => {
+    const sessions = readFileSync(path.resolve(import.meta.dir, "../../src/mcp/browser/sessions.ts"), "utf8")
+    const index = readFileSync(path.resolve(import.meta.dir, "../../src/mcp/browser/index.ts"), "utf8")
+
+    expect(sessions).toContain("})().catch((error) => {")
+    expect(sessions).toContain("session cleanup failed")
+    expect(sessions).toContain("SIGINT shutdown failed")
+    expect(sessions).toContain("SIGTERM shutdown failed")
+    expect(index).toContain("void close().catch((error) => {")
+  })
 
   afterEach(async () => {
     for (const session of getSessions()) {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
@@ -72,5 +73,13 @@ describe("browser MCP node launcher", () => {
     expect(BrowserMCPNodeLauncher.childSpawnOptions({ env: {}, platform: "linux" }).detached).toBe(true)
     expect(BrowserMCPNodeLauncher.childSpawnOptions({ env: {}, platform: "darwin" }).detached).toBe(true)
     expect(BrowserMCPNodeLauncher.childSpawnOptions({ env: {}, platform: "win32" }).detached).toBe(false)
+  })
+
+  test("signal and stdin termination promises are observed", () => {
+    const source = readFileSync(path.resolve(import.meta.dir, "../../src/mcp/browser/node-launcher.ts"), "utf8")
+    expect(source).toContain('.catch((error) => logLauncherError("SIGINT terminate failed", error))')
+    expect(source).toContain('.catch((error) => logLauncherError("SIGTERM terminate failed", error))')
+    expect(source).toContain('void terminate("SIGTERM").catch((error) => logLauncherError("stdin close terminate failed", error))')
+    expect(source).toContain('logLauncherError("process group force kill fallback failed", error)')
   })
 })

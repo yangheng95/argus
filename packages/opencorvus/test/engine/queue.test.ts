@@ -57,6 +57,15 @@ describe("engine queue", () => {
     await resetDatabase()
   })
 
+  test("loop completion finally promise is observed", async () => {
+    const source = await Bun.file(new URL("../../src/engine/queue.ts", import.meta.url)).text()
+    const attach = source.slice(source.indexOf("function attachLoopCompletion"))
+    expect(attach).toContain("void loopPromise")
+    expect(attach).toContain(".finally(() => {")
+    expect(attach).toContain(".catch((err) => {")
+    expect(attach.indexOf(".finally(() => {")).toBeLessThan(attach.indexOf(".catch((err) => {"))
+  })
+
   test("dispatchTaskLoop preserves the caller's event through the queue claim", async () => {
     await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 

@@ -263,24 +263,33 @@ export namespace SessionProcessor {
                         const prev = reasoningDeltaBuf.get(bufKey) || ""
                         reasoningDeltaBuf.set(bufKey, prev + value.text)
                         if (!reasoningFlushTimer) {
-                          reasoningFlushTimer = setTimeout(async () => {
+                          reasoningFlushTimer = setTimeout(() => {
                             reasoningFlushTimer = null
-                            for (const [pid, buf] of reasoningDeltaBuf) {
-                              // Skip deltas that are only brackets/whitespace
-                              if (buf.replace(/[\[\]\s]/g, "")) {
-                                const rp = Object.values(reasoningMap).find((p: any) => p.id === pid) as any
-                                if (rp) {
-                                  await Session.updatePartDelta({
-                                    sessionID: rp.sessionID,
-                                    messageID: rp.messageID,
-                                    partID: rp.id,
-                                    field: "text",
-                                    delta: buf,
-                                  })
+                            void (async () => {
+                              for (const [pid, buf] of reasoningDeltaBuf) {
+                                // Skip deltas that are only brackets/whitespace
+                                if (buf.replace(/[\[\]\s]/g, "")) {
+                                  const rp = Object.values(reasoningMap).find((p: any) => p.id === pid) as any
+                                  if (rp) {
+                                    await Session.updatePartDelta({
+                                      sessionID: rp.sessionID,
+                                      messageID: rp.messageID,
+                                      partID: rp.id,
+                                      field: "text",
+                                      delta: buf,
+                                    })
+                                  }
                                 }
                               }
-                            }
-                            reasoningDeltaBuf.clear()
+                              reasoningDeltaBuf.clear()
+                            })().catch((error) => {
+                              reasoningDeltaBuf.clear()
+                              log.warn("reasoning delta flush failed", {
+                                sessionID: input.assistantMessage.sessionID,
+                                messageID: input.assistantMessage.id,
+                                error: error instanceof Error ? error.message : String(error),
+                              })
+                            })
                           }, 200)
                         }
                       }

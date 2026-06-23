@@ -7,12 +7,23 @@ import { Database, eq } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
+import { SessionPromptState } from "../../src/session/prompt/state"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS } from "../../src/coding-assistant/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { installControlModel } from "../workspace/mock-control-model"
+import { expectNoProcessErrors } from "../fixture/process-errors"
 
 const PROMPT_ASYNC_TEST_CONFIG = { model: "mock-control/control" } as const
+
+async function waitUntil(assertion: () => boolean, label: string, inactivityMs = 500): Promise<void> {
+  const started = Date.now()
+  while (Date.now() - started <= inactivityMs) {
+    if (assertion()) return
+    await Bun.sleep(10)
+  }
+  throw new Error(`timed out waiting for ${label}`)
+}
 
 describe("coding assistant routes", () => {
   afterEach(async () => {
@@ -123,6 +134,9 @@ describe("coding assistant routes", () => {
         const searchedBody = (await searched.json()) as { sessions: Session.Info[] }
         expect(searchedBody.sessions.map((session) => session.id)).toEqual([second.id])
 
+        const expectedOrder = [first, second].sort(
+          (a, b) => b.time.updated - a.time.updated || b.id.localeCompare(a.id),
+        )
         const firstPage = await app.request("/coding/sessions?limit=1", {
           method: "GET",
           headers: {
@@ -135,10 +149,10 @@ describe("coding assistant routes", () => {
           nextCursor?: { updated: number; sessionID: string }
         }
         expect(firstBody.sessions).toHaveLength(1)
-        expect(firstBody.sessions[0].id).toBe(second.id)
+        expect(firstBody.sessions[0].id).toBe(expectedOrder[0].id)
         expect(firstBody.nextCursor).toEqual({
-          updated: second.time.updated,
-          sessionID: second.id,
+          updated: expectedOrder[0].time.updated,
+          sessionID: expectedOrder[0].id,
         })
 
         const cursor = new URLSearchParams({
@@ -154,7 +168,7 @@ describe("coding assistant routes", () => {
         })
         expect(secondPage.status).toBe(200)
         const secondBody = (await secondPage.json()) as { sessions: Session.Info[] }
-        expect(secondBody.sessions.map((session) => session.id)).toEqual([first.id])
+        expect(secondBody.sessions.map((session) => session.id)).toEqual([expectedOrder[1].id])
       },
     })
   })
@@ -391,6 +405,61 @@ describe("coding assistant routes", () => {
     })
   })
 
+  test("delete waits for active right sidebar prompt to finish before removing the session", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/coding/session", {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(created.status).toBe(201)
+        const { session } = (await created.json()) as { session: Session.Info }
+        const abort = SessionPromptState.start(session.id, tmp.path)
+        if (!abort) throw new Error("expected active prompt state")
+        let cancelled = false
+        abort.addEventListener("abort", () => {
+          cancelled = true
+        })
+
+        await expectNoProcessErrors(async () => {
+          const deletedPromise = app.request(`/coding/session/${session.id}`, {
+            method: "DELETE",
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          })
+          await waitUntil(() => cancelled, "coding session cancellation")
+          const beforeFinish = await Promise.race([
+            deletedPromise.then(() => "resolved" as const),
+            Bun.sleep(50).then(() => "pending" as const),
+          ])
+          try {
+            expect(beforeFinish).toBe("pending")
+          } finally {
+            SessionPromptState.finish(session.id, abort, tmp.path)
+          }
+          const deleted = await deletedPromise
+          expect(deleted.status).toBe(200)
+        })
+
+        expect(SessionPromptState.isActive(session.id, tmp.path)).toBe(false)
+        const claimDeleted = await app.request(`/coding/session/${session.id}`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(claimDeleted.status).toBe(404)
+      },
+    })
+  })
+
   test("coding session abort reports incomplete cancellation when live prompt state is missing", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -422,6 +491,44 @@ describe("coding assistant routes", () => {
             },
           })
           expect(SessionStatus.get(session.id)).toEqual({ type: "streaming" })
+        } finally {
+          SessionStatus.set(session.id, { type: "idle" }, { publish: false })
+        }
+      },
+    })
+  })
+
+  test("delete preserves right sidebar session when live prompt cancellation is incomplete", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/coding/session", {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(created.status).toBe(201)
+        const { session } = (await created.json()) as { session: Session.Info }
+        SessionStatus.set(session.id, { type: "streaming" }, { publish: false })
+        try {
+          const deleted = await app.request(`/coding/session/${session.id}`, {
+            method: "DELETE",
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          })
+          expect(deleted.status).toBe(409)
+          expect(await deleted.json()).toMatchObject({
+            name: "TaskCancellationIncompleteError",
+            data: {
+              handle: "EngineService.deleteSession",
+            },
+          })
+          expect((await Session.get(session.id)).id).toBe(session.id)
         } finally {
           SessionStatus.set(session.id, { type: "idle" }, { publish: false })
         }
