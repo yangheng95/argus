@@ -327,6 +327,8 @@ test("orchestrator does not inherit generic skill policy", async () => {
         `---
 name: tool-skill
 description: Skill for system-prompt visibility tests.
+mounted_agents:
+  - requirements
 ---
 
 # Tool Skill
@@ -357,6 +359,8 @@ test("skill policy follows the current resolved tool surface", async () => {
         `---
 name: tool-skill
 description: Skill for resolved-tool visibility tests.
+mounted_agents:
+  - requirements
 ---
 
 # Tool Skill
@@ -387,6 +391,9 @@ test("frontend agents expose skill loading without reopening retrieval tools", a
         `---
 name: frontend-skill
 description: Skill for frontend agent visibility tests.
+mounted_agents:
+  - frontend-design
+  - frontend-research
 ---
 
 # Frontend Skill

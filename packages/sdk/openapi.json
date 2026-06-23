@@ -8917,6 +8917,13 @@
                           "type": "string"
                         }
                       },
+                      "mounted_agents": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
                       "expires_at": {
                         "type": "string"
                       },
@@ -8955,6 +8962,1628 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.app.skills({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/mounts": {
+      "get": {
+        "operationId": "skill.mounts",
+        "summary": "List agent skill mounts",
+        "description": "Get the skill pool, known agents, effective per-agent mounts, and unmounted warnings.",
+        "responses": {
+          "200": {
+            "description": "Agent skill mount matrix",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "session"
+                      ]
+                    },
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "platforms": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "win32",
+                                "darwin",
+                                "linux"
+                              ]
+                            }
+                          },
+                          "builtin": {
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "location": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "auto_detect": {
+                            "type": "object",
+                            "properties": {
+                              "files": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "deps": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "task_signals": {
+                                "type": "object",
+                                "properties": {
+                                  "has_attachment_image": {
+                                    "type": "boolean"
+                                  },
+                                  "request_contains_url": {
+                                    "type": "boolean"
+                                  },
+                                  "request_contains_figma_url": {
+                                    "type": "boolean"
+                                  },
+                                  "package_has_script": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "request_text_any": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "priority": {
+                            "default": 0,
+                            "type": "number"
+                          },
+                          "required_tools": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "agents": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "mounted_agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "expires_at": {
+                            "type": "string"
+                          },
+                          "duplicate_locations": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "dir": {
+                            "type": "string"
+                          },
+                          "source_type": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "managed_git",
+                              "config_path",
+                              "config_url",
+                              "external",
+                              "unknown"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "official",
+                              "curated",
+                              "community",
+                              "local",
+                              "external",
+                              "unknown"
+                            ]
+                          },
+                          "risk": {
+                            "type": "object",
+                            "properties": {
+                              "level": {
+                                "type": "string",
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high"
+                                ]
+                              },
+                              "has_scripts": {
+                                "type": "boolean"
+                              },
+                              "has_agents": {
+                                "type": "boolean"
+                              },
+                              "has_references": {
+                                "type": "boolean"
+                              },
+                              "has_templates": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "level",
+                              "has_scripts",
+                              "has_agents",
+                              "has_references",
+                              "has_templates"
+                            ]
+                          },
+                          "recommended_policy": {
+                            "$ref": "#/components/schemas/PermissionAction"
+                          },
+                          "policy": {
+                            "$ref": "#/components/schemas/PermissionAction"
+                          },
+                          "managed": {
+                            "type": "boolean"
+                          },
+                          "writable": {
+                            "type": "boolean"
+                          },
+                          "unmounted": {
+                            "type": "boolean"
+                          },
+                          "warning": {
+                            "type": "string",
+                            "const": "unmounted"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "description",
+                          "location",
+                          "content",
+                          "mounted_agents",
+                          "source_type",
+                          "trust",
+                          "risk",
+                          "recommended_policy",
+                          "policy",
+                          "managed",
+                          "writable",
+                          "unmounted"
+                        ]
+                      }
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "subagent",
+                              "primary",
+                              "all"
+                            ]
+                          },
+                          "native": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean"
+                          },
+                          "skill_tool_available": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "mode",
+                          "skill_tool_available"
+                        ]
+                      }
+                    },
+                    "matrix": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "mounted": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "location": {
+                                  "type": "string"
+                                },
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "enum": [
+                                    "skill_tool_unavailable",
+                                    "permission_denied",
+                                    "platform_incompatible",
+                                    "agent_incompatible",
+                                    "missing_required_tool"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "description",
+                                "location",
+                                "enabled"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent",
+                          "mounted"
+                        ]
+                      }
+                    },
+                    "project_mounts": {
+                      "type": "object",
+                      "properties": {
+                        "agents": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "unmounted_count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "scope",
+                    "skills",
+                    "agents",
+                    "matrix",
+                    "project_mounts",
+                    "unmounted_count"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.mounts({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/mount": {
+      "post": {
+        "operationId": "skill.mount",
+        "summary": "Mount a skill to an agent",
+        "description": "Persist an explicit agent-skill mount in project or session scope.",
+        "responses": {
+          "200": {
+            "description": "Updated agent skill mount matrix",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "session"
+                      ]
+                    },
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "platforms": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "win32",
+                                "darwin",
+                                "linux"
+                              ]
+                            }
+                          },
+                          "builtin": {
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "location": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "auto_detect": {
+                            "type": "object",
+                            "properties": {
+                              "files": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "deps": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "task_signals": {
+                                "type": "object",
+                                "properties": {
+                                  "has_attachment_image": {
+                                    "type": "boolean"
+                                  },
+                                  "request_contains_url": {
+                                    "type": "boolean"
+                                  },
+                                  "request_contains_figma_url": {
+                                    "type": "boolean"
+                                  },
+                                  "package_has_script": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "request_text_any": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "priority": {
+                            "default": 0,
+                            "type": "number"
+                          },
+                          "required_tools": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "agents": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "mounted_agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "expires_at": {
+                            "type": "string"
+                          },
+                          "duplicate_locations": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "dir": {
+                            "type": "string"
+                          },
+                          "source_type": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "managed_git",
+                              "config_path",
+                              "config_url",
+                              "external",
+                              "unknown"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "official",
+                              "curated",
+                              "community",
+                              "local",
+                              "external",
+                              "unknown"
+                            ]
+                          },
+                          "risk": {
+                            "type": "object",
+                            "properties": {
+                              "level": {
+                                "type": "string",
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high"
+                                ]
+                              },
+                              "has_scripts": {
+                                "type": "boolean"
+                              },
+                              "has_agents": {
+                                "type": "boolean"
+                              },
+                              "has_references": {
+                                "type": "boolean"
+                              },
+                              "has_templates": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "level",
+                              "has_scripts",
+                              "has_agents",
+                              "has_references",
+                              "has_templates"
+                            ]
+                          },
+                          "recommended_policy": {
+                            "$ref": "#/components/schemas/PermissionAction"
+                          },
+                          "policy": {
+                            "$ref": "#/components/schemas/PermissionAction"
+                          },
+                          "managed": {
+                            "type": "boolean"
+                          },
+                          "writable": {
+                            "type": "boolean"
+                          },
+                          "unmounted": {
+                            "type": "boolean"
+                          },
+                          "warning": {
+                            "type": "string",
+                            "const": "unmounted"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "description",
+                          "location",
+                          "content",
+                          "mounted_agents",
+                          "source_type",
+                          "trust",
+                          "risk",
+                          "recommended_policy",
+                          "policy",
+                          "managed",
+                          "writable",
+                          "unmounted"
+                        ]
+                      }
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "subagent",
+                              "primary",
+                              "all"
+                            ]
+                          },
+                          "native": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean"
+                          },
+                          "skill_tool_available": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "mode",
+                          "skill_tool_available"
+                        ]
+                      }
+                    },
+                    "matrix": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "mounted": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "location": {
+                                  "type": "string"
+                                },
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "enum": [
+                                    "skill_tool_unavailable",
+                                    "permission_denied",
+                                    "platform_incompatible",
+                                    "agent_incompatible",
+                                    "missing_required_tool"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "description",
+                                "location",
+                                "enabled"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent",
+                          "mounted"
+                        ]
+                      }
+                    },
+                    "project_mounts": {
+                      "type": "object",
+                      "properties": {
+                        "agents": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "unmounted_count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "scope",
+                    "skills",
+                    "agents",
+                    "matrix",
+                    "project_mounts",
+                    "unmounted_count"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "skill": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionID": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "agent",
+                  "skill"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.mount({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/unmount": {
+      "post": {
+        "operationId": "skill.unmount",
+        "summary": "Unmount a skill from an agent",
+        "description": "Remove an explicit agent-skill mount in project or session scope.",
+        "responses": {
+          "200": {
+            "description": "Updated agent skill mount matrix",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "session"
+                      ]
+                    },
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "platforms": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "win32",
+                                "darwin",
+                                "linux"
+                              ]
+                            }
+                          },
+                          "builtin": {
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "location": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "auto_detect": {
+                            "type": "object",
+                            "properties": {
+                              "files": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "deps": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "task_signals": {
+                                "type": "object",
+                                "properties": {
+                                  "has_attachment_image": {
+                                    "type": "boolean"
+                                  },
+                                  "request_contains_url": {
+                                    "type": "boolean"
+                                  },
+                                  "request_contains_figma_url": {
+                                    "type": "boolean"
+                                  },
+                                  "package_has_script": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "request_text_any": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "priority": {
+                            "default": 0,
+                            "type": "number"
+                          },
+                          "required_tools": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "agents": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "mounted_agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "expires_at": {
+                            "type": "string"
+                          },
+                          "duplicate_locations": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "dir": {
+                            "type": "string"
+                          },
+                          "source_type": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "managed_git",
+                              "config_path",
+                              "config_url",
+                              "external",
+                              "unknown"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "official",
+                              "curated",
+                              "community",
+                              "local",
+                              "external",
+                              "unknown"
+                            ]
+                          },
+                          "risk": {
+                            "type": "object",
+                            "properties": {
+                              "level": {
+                                "type": "string",
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high"
+                                ]
+                              },
+                              "has_scripts": {
+                                "type": "boolean"
+                              },
+                              "has_agents": {
+                                "type": "boolean"
+                              },
+                              "has_references": {
+                                "type": "boolean"
+                              },
+                              "has_templates": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "level",
+                              "has_scripts",
+                              "has_agents",
+                              "has_references",
+                              "has_templates"
+                            ]
+                          },
+                          "recommended_policy": {
+                            "$ref": "#/components/schemas/PermissionAction"
+                          },
+                          "policy": {
+                            "$ref": "#/components/schemas/PermissionAction"
+                          },
+                          "managed": {
+                            "type": "boolean"
+                          },
+                          "writable": {
+                            "type": "boolean"
+                          },
+                          "unmounted": {
+                            "type": "boolean"
+                          },
+                          "warning": {
+                            "type": "string",
+                            "const": "unmounted"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "description",
+                          "location",
+                          "content",
+                          "mounted_agents",
+                          "source_type",
+                          "trust",
+                          "risk",
+                          "recommended_policy",
+                          "policy",
+                          "managed",
+                          "writable",
+                          "unmounted"
+                        ]
+                      }
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "subagent",
+                              "primary",
+                              "all"
+                            ]
+                          },
+                          "native": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean"
+                          },
+                          "skill_tool_available": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "mode",
+                          "skill_tool_available"
+                        ]
+                      }
+                    },
+                    "matrix": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "mounted": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "location": {
+                                  "type": "string"
+                                },
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "enum": [
+                                    "skill_tool_unavailable",
+                                    "permission_denied",
+                                    "platform_incompatible",
+                                    "agent_incompatible",
+                                    "missing_required_tool"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "description",
+                                "location",
+                                "enabled"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent",
+                          "mounted"
+                        ]
+                      }
+                    },
+                    "project_mounts": {
+                      "type": "object",
+                      "properties": {
+                        "agents": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "unmounted_count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "scope",
+                    "skills",
+                    "agents",
+                    "matrix",
+                    "project_mounts",
+                    "unmounted_count"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "skill": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionID": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "agent",
+                  "skill"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.unmount({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/import-and-mount": {
+      "post": {
+        "operationId": "skill.importAndMount",
+        "summary": "Import a dropped skill and mount it to an agent",
+        "description": "Write a dropped skill source into the project skill pool and mount the resolved skill name.",
+        "responses": {
+          "200": {
+            "description": "Updated agent skill mount matrix",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "session"
+                      ]
+                    },
+                    "skills": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "platforms": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "win32",
+                                "darwin",
+                                "linux"
+                              ]
+                            }
+                          },
+                          "builtin": {
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "location": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "auto_detect": {
+                            "type": "object",
+                            "properties": {
+                              "files": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "deps": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "task_signals": {
+                                "type": "object",
+                                "properties": {
+                                  "has_attachment_image": {
+                                    "type": "boolean"
+                                  },
+                                  "request_contains_url": {
+                                    "type": "boolean"
+                                  },
+                                  "request_contains_figma_url": {
+                                    "type": "boolean"
+                                  },
+                                  "package_has_script": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "request_text_any": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "priority": {
+                            "default": 0,
+                            "type": "number"
+                          },
+                          "required_tools": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "agents": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "mounted_agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "expires_at": {
+                            "type": "string"
+                          },
+                          "duplicate_locations": {
+                            "default": [],
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "dir": {
+                            "type": "string"
+                          },
+                          "source_type": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "managed_git",
+                              "config_path",
+                              "config_url",
+                              "external",
+                              "unknown"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "trust": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "official",
+                              "curated",
+                              "community",
+                              "local",
+                              "external",
+                              "unknown"
+                            ]
+                          },
+                          "risk": {
+                            "type": "object",
+                            "properties": {
+                              "level": {
+                                "type": "string",
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high"
+                                ]
+                              },
+                              "has_scripts": {
+                                "type": "boolean"
+                              },
+                              "has_agents": {
+                                "type": "boolean"
+                              },
+                              "has_references": {
+                                "type": "boolean"
+                              },
+                              "has_templates": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "level",
+                              "has_scripts",
+                              "has_agents",
+                              "has_references",
+                              "has_templates"
+                            ]
+                          },
+                          "recommended_policy": {
+                            "$ref": "#/components/schemas/PermissionAction"
+                          },
+                          "policy": {
+                            "$ref": "#/components/schemas/PermissionAction"
+                          },
+                          "managed": {
+                            "type": "boolean"
+                          },
+                          "writable": {
+                            "type": "boolean"
+                          },
+                          "unmounted": {
+                            "type": "boolean"
+                          },
+                          "warning": {
+                            "type": "string",
+                            "const": "unmounted"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "description",
+                          "location",
+                          "content",
+                          "mounted_agents",
+                          "source_type",
+                          "trust",
+                          "risk",
+                          "recommended_policy",
+                          "policy",
+                          "managed",
+                          "writable",
+                          "unmounted"
+                        ]
+                      }
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "subagent",
+                              "primary",
+                              "all"
+                            ]
+                          },
+                          "native": {
+                            "type": "boolean"
+                          },
+                          "hidden": {
+                            "type": "boolean"
+                          },
+                          "skill_tool_available": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "mode",
+                          "skill_tool_available"
+                        ]
+                      }
+                    },
+                    "matrix": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "mounted": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "location": {
+                                  "type": "string"
+                                },
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "enum": [
+                                    "skill_tool_unavailable",
+                                    "permission_denied",
+                                    "platform_incompatible",
+                                    "agent_incompatible",
+                                    "missing_required_tool"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "description",
+                                "location",
+                                "enabled"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent",
+                          "mounted"
+                        ]
+                      }
+                    },
+                    "project_mounts": {
+                      "type": "object",
+                      "properties": {
+                        "agents": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "unmounted_count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "scope",
+                    "skills",
+                    "agents",
+                    "matrix",
+                    "project_mounts",
+                    "unmounted_count"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agent": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sessionID": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "import": {
+                    "type": "object",
+                    "properties": {
+                      "filename": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "sourceName": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "files": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "content": {
+                              "type": "string"
+                            },
+                            "contentBase64": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path"
+                          ]
+                        }
+                      },
+                      "archiveBase64": {
+                        "type": "string"
+                      },
+                      "policy": {
+                        "$ref": "#/components/schemas/PermissionAction"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "agent",
+                  "import"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.importAndMount({\n  ...\n})"
           }
         ]
       }
@@ -9057,6 +10686,13 @@
                         }
                       },
                       "agents": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "mounted_agents": {
                         "default": [],
                         "type": "array",
                         "items": {
@@ -39558,6 +41194,7 @@
             }
           },
           "snapshot": {
+            "description": "Enable file snapshot capture for /undo and patch evidence. Default false.",
             "type": "boolean"
           },
           "share": {

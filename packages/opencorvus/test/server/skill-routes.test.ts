@@ -7,6 +7,7 @@ import type { PermissionNext } from "../../src/permission/next"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { SkillTool } from "../../src/tool/skill"
+import { Agent } from "../../src/agent/agent"
 import type { Tool } from "../../src/tool/tool"
 import { Log } from "../../src/util/log"
 import { Filesystem } from "../../src/util/filesystem"
@@ -193,7 +194,7 @@ describe("skill routes", () => {
         }>
         const item = body.find((entry) => entry.name === "dropped-review")
         expect(item).toBeDefined()
-        expect(item?.source_type).toBe("unknown")
+        expect(item?.source_type).toBe("external")
         expect(item?.location).toBe(importBody.source)
         expect(item?.policy).toBe("ask")
       },
@@ -311,6 +312,169 @@ describe("skill routes", () => {
     })
   }, 20000)
 
+  test("POST /skill/import-and-mount imports every dropped archive skill and mounts each to the agent", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const archiveBase64 = await zipBase64({
+          "bundle-alpha/SKILL.md": [
+            "---",
+            "name: bundle-alpha",
+            "description: First dropped bundle skill",
+            "---",
+            "",
+            "Use this first bundle skill.",
+          ].join("\n"),
+          "bundle-beta/SKILL.md": [
+            "---",
+            "name: bundle-beta",
+            "description: Second dropped bundle skill",
+            "---",
+            "",
+            "Use this second bundle skill.",
+          ].join("\n"),
+        })
+        const mounted = await app.request("/skill/import-and-mount", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "requirements",
+            import: {
+              filename: "skill-bundle.zip",
+              archiveBase64,
+            },
+          }),
+        })
+
+        expect(mounted.status).toBe(200)
+        const body = (await mounted.json()) as {
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+          matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
+        }
+        const mountedNames = body.matrix.find((row) => row.agent === "requirements")?.mounted.map((item) => item.name)
+        expect(mountedNames).toContain("bundle-alpha")
+        expect(mountedNames).toContain("bundle-beta")
+        for (const name of ["bundle-alpha", "bundle-beta"]) {
+          const poolSkill = body.skills.find((entry) => entry.name === name)
+          expect(poolSkill?.mounted_agents).toEqual(["requirements"])
+          expect(poolSkill?.unmounted).toBe(false)
+          const yaml = await Filesystem.readText(path.join(tmp.path, ".opencorvus", "skill", name, "SKILL.md"))
+          expect(yaml).toContain("mounted_agents:")
+          expect(yaml).toContain("- requirements")
+        }
+      },
+    })
+  }, 20000)
+
+  test("POST /skill/import-and-mount validates agent before writing dropped skills", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/skill/import-and-mount", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "requriements",
+            import: {
+              filename: "atomic-skill/SKILL.md",
+              content: [
+                "---",
+                "name: atomic-skill",
+                "description: Skill that must not be written on failed mount.",
+                "---",
+                "",
+                "Do not write this skill when the agent is invalid.",
+              ].join("\n"),
+            },
+          }),
+        })
+
+        expect(response.status).toBe(500)
+        const body = (await response.json()) as { data?: { message?: string } }
+        expect(body.data?.message).toContain("Unknown agent: requriements")
+        expect(await Filesystem.exists(path.join(tmp.path, ".opencorvus", "skill", "atomic-skill", "SKILL.md"))).toBe(
+          false,
+        )
+      },
+    })
+  })
+
+  test("POST /skill/mount persists builtin skill mounts in the project SKILL.md", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const home = process.env.OPENCORVUS_TEST_HOME
+    const opencorvusHome = process.env.OPENCORVUS_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+    process.env.OPENCORVUS_HOME = path.join(tmp.path, "portable")
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const app = Server.App()
+          const mounted = await app.request("/skill/mount", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-opencorvus-directory": tmp.path,
+            },
+            body: JSON.stringify({
+              agent: "build",
+              skill: "research-report",
+            }),
+          })
+
+          expect(mounted.status).toBe(200)
+          const body = (await mounted.json()) as {
+            skills: Array<{ name: string; location: string; mounted_agents: string[]; unmounted: boolean }>
+            matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
+          }
+          const skill = body.skills.find((entry) => entry.name === "research-report")
+          expect(skill).toBeDefined()
+          expect(skill!.location).toBe(path.join(tmp.path, ".opencorvus", "skills", "research-report", "SKILL.md"))
+          expect(skill!.mounted_agents).toContain("build")
+          expect(skill!.unmounted).toBe(false)
+          expect(body.matrix.find((row) => row.agent === "build")?.mounted).toContainEqual(
+            expect.objectContaining({ name: "research-report", enabled: true }),
+          )
+          const yaml = await Filesystem.readText(skill!.location)
+          expect(yaml).toContain("mounted_agents:")
+          expect(yaml).toContain("- build")
+          expect(await Filesystem.exists(path.join(tmp.path, ".opencorvus", "skills", "research-report", "SKILL.md"))).toBe(
+            true,
+          )
+
+          const listed = await app.request("/skill/mounts", {
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          })
+          expect(listed.status).toBe(200)
+          const listedBody = (await listed.json()) as {
+            skills: Array<{ name: string; mounted_agents: string[] }>
+          }
+          expect(listedBody.skills.find((entry) => entry.name === "research-report")?.mounted_agents).toContain("build")
+        },
+      })
+    } finally {
+      if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+      else process.env.OPENCORVUS_TEST_HOME = home
+      if (opencorvusHome === undefined) delete process.env.OPENCORVUS_HOME
+      else process.env.OPENCORVUS_HOME = opencorvusHome
+    }
+  }, 20000)
+
   test("GET /skill/installed classifies .codex skills as external", async () => {
     await using tmp = await tmpdir({
       git: true,
@@ -356,22 +520,184 @@ describe("skill routes", () => {
     })
   }, 20000)
 
-  test("GET /skill/installed classifies .opencorvus/skills as external without duplicating config scan", async () => {
+  test("GET /skill/mounts pools external skills as unmounted and keeps mounted pool rows reusable", async () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        const skillDir = path.join(dir, ".opencorvus", "skills", "opencorvus-review")
-        await Filesystem.write(
-          path.join(skillDir, "SKILL.md"),
+        for (const [root, name] of [
+          [path.join(".claude", "skills"), "claude-review"],
+          [path.join(".agents", "skills"), "agents-review"],
+          [path.join(".codex", "skills"), "codex-review"],
+          [path.join(".opencorvus", "skill"), "opencorvus-singular-review"],
+          [path.join(".opencorvus", "skills"), "opencorvus-plural-review"],
+        ] as const) {
+          await Filesystem.write(
+            path.join(dir, root, name, "SKILL.md"),
+            [
+              "---",
+              `name: ${name}`,
+              `description: ${root} external review skill`,
+              "---",
+              "",
+              `Use this skill from ${root}.`,
+            ].join("\n"),
+          )
+        }
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const initial = await app.request("/skill/mounts", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(initial.status).toBe(200)
+        const initialBody = (await initial.json()) as {
+          unmounted_count: number
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean; warning?: string }>
+        }
+        for (const name of [
+          "claude-review",
+          "agents-review",
+          "codex-review",
+          "opencorvus-singular-review",
+          "opencorvus-plural-review",
+        ]) {
+          const skill = initialBody.skills.find((entry) => entry.name === name)
+          expect(skill).toBeDefined()
+          expect(skill?.mounted_agents).toEqual([])
+          expect(skill?.unmounted).toBe(true)
+          expect(skill?.warning).toBe("unmounted")
+        }
+
+        const mountedRequirements = await app.request("/skill/mount", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "requirements",
+            skill: "claude-review",
+          }),
+        })
+        expect(mountedRequirements.status).toBe(200)
+
+        const mountedArchitect = await app.request("/skill/mount", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "architect",
+            skill: "claude-review",
+          }),
+        })
+        expect(mountedArchitect.status).toBe(200)
+        const body = (await mountedArchitect.json()) as {
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+          matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
+        }
+        const poolSkill = body.skills.find((entry) => entry.name === "claude-review")
+        expect(poolSkill?.mounted_agents).toEqual(["requirements", "architect"])
+        expect(poolSkill?.unmounted).toBe(false)
+        expect(body.matrix.find((row) => row.agent === "requirements")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "claude-review", enabled: true }),
+        )
+        expect(body.matrix.find((row) => row.agent === "architect")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "claude-review", enabled: true }),
+        )
+        const mountedYaml = await Filesystem.readText(
+          path.join(tmp.path, ".claude", "skills", "claude-review", "SKILL.md"),
+        )
+        expect(mountedYaml).toContain("mounted_agents:")
+        expect(mountedYaml).toContain("- requirements")
+        expect(mountedYaml).toContain("- architect")
+
+        const unmountedRequirements = await app.request("/skill/unmount", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "requirements",
+            skill: "claude-review",
+          }),
+        })
+        expect(unmountedRequirements.status).toBe(200)
+        const unmountedYaml = await Filesystem.readText(
+          path.join(tmp.path, ".claude", "skills", "claude-review", "SKILL.md"),
+        )
+        expect(unmountedYaml).toContain("mounted_agents:")
+        expect(unmountedYaml).not.toContain("- requirements")
+        expect(unmountedYaml).toContain("- architect")
+      },
+    })
+  }, 20000)
+
+  test("GET /skill/mounts rejects SKILL.md mounted_agents with unknown agent names", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, ".opencorvus", "skill", "typo-mounted", "SKILL.md"),
           [
             "---",
-            "name: opencorvus-review",
-            "description: OpenCorvus plural skill root",
+            "name: typo-mounted",
+            "description: Skill with misspelled mounted agent.",
+            "mounted_agents:",
+            "  - requriements",
             "---",
             "",
-            "Use this skill from an OpenCorvus plural skill directory.",
+            "This skill should make the matrix fail loudly.",
           ].join("\n"),
         )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/skill/mounts", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(500)
+        const body = (await response.json()) as { data?: { message?: string } }
+        expect(body.data?.message).toContain("Skill typo-mounted mounted_agents contains unknown agent(s): requriements")
+      },
+    })
+  })
+
+  test("GET /skill/installed classifies .opencorvus skill roots as external without duplicating config scan", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        for (const [root, name] of [
+          [path.join(".opencorvus", "skill"), "opencorvus-singular-review"],
+          [path.join(".opencorvus", "skills"), "opencorvus-plural-review"],
+        ] as const) {
+          await Filesystem.write(
+            path.join(dir, root, name, "SKILL.md"),
+            [
+              "---",
+              `name: ${name}`,
+              `description: ${root} OpenCorvus skill root`,
+              "---",
+              "",
+              `Use this skill from ${root}.`,
+            ].join("\n"),
+          )
+        }
       },
     })
 
@@ -393,12 +719,14 @@ describe("skill routes", () => {
           recommended_policy: string
           duplicate_locations: string[]
         }>
-        const matches = body.filter((entry) => entry.name === "opencorvus-review")
-        expect(matches.length).toBe(1)
-        expect(matches[0]?.source_type).toBe("external")
-        expect(matches[0]?.trust).toBe("external")
-        expect(matches[0]?.recommended_policy).toBe("ask")
-        expect(matches[0]?.duplicate_locations).toEqual([])
+        for (const name of ["opencorvus-singular-review", "opencorvus-plural-review"]) {
+          const matches = body.filter((entry) => entry.name === name)
+          expect(matches.length).toBe(1)
+          expect(matches[0]?.source_type).toBe("external")
+          expect(matches[0]?.trust).toBe("external")
+          expect(matches[0]?.recommended_policy).toBe("ask")
+          expect(matches[0]?.duplicate_locations).toEqual([])
+        }
       },
     })
   }, 20000)
@@ -588,7 +916,29 @@ describe("skill routes", () => {
         const body = (await listed.json()) as Array<{ name: string; policy: string }>
         expect(body.find((item) => item.name === "route-installed-skill")?.policy).toBe("ask")
 
-        const tool = await SkillTool.init()
+        const mounted = await app.request("/skill/mount", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "build",
+            skill: "route-installed-skill",
+          }),
+        })
+        expect(mounted.status).toBe(200)
+        const mountBody = (await mounted.json()) as {
+          unmounted_count: number
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+        }
+        const mountedSkill = mountBody.skills.find((item) => item.name === "route-installed-skill")
+        expect(mountedSkill?.mounted_agents).toContain("build")
+        expect(mountedSkill?.unmounted).toBe(false)
+
+        const build = await Agent.get("build")
+        expect(build).toBeDefined()
+        const tool = await SkillTool.init({ agent: build })
         const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
         const ctx: Tool.Context = {
           ...baseCtx,

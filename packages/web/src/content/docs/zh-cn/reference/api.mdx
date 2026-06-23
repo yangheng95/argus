@@ -232,12 +232,16 @@ description: "HTTP API 参考--由生成的 OpenAPI 规格自动生成。"
 | GET | `/agent` | List agents | `app.agents` |
 | GET | `/skill` | List skills | `app.skills` |
 | GET | `/skill/directories` | Get skill directories | `skill.directories` |
+| POST | `/skill/import-and-mount` | Import a dropped skill and mount it to an agent | `skill.importAndMount` |
 | POST | `/skill/import-file` | Import a dropped skill source | `skill.importFile` |
 | POST | `/skill/install` | Install or import a skill source | `skill.install` |
 | GET | `/skill/installed` | List installed skills | `skill.installed` |
 | GET | `/skill/market` | List skill markets | `skill.market` |
+| POST | `/skill/mount` | Mount a skill to an agent | `skill.mount` |
+| GET | `/skill/mounts` | List agent skill mounts | `skill.mounts` |
 | POST | `/skill/policy` | Set skill permission policy | `skill.policy` |
 | POST | `/skill/remove` | Remove a skill source | `skill.remove` |
+| POST | `/skill/unmount` | Unmount a skill from an agent | `skill.unmount` |
 
 ### Control
 

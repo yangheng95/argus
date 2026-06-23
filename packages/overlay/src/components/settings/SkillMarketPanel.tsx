@@ -19,12 +19,17 @@ import { nativeConfirm, nativeOpen } from "../../utils/native"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
 import {
   loadInstalledSkills,
+  loadSkillMountMatrix,
   loadMcpStatus,
   loadSkillMarket,
   deleteAllSkills,
   importSkillArchive,
+  importAndMountSkill,
   importSkillFile,
   importSkillPackage,
+  mountSkill,
+  unmountSkill,
+  type AgentSkillMountMatrix,
   type SkillImportPackageFile,
 } from "../../services/extensions"
 import { addMcpServer, deleteAllMcp } from "../../services/mcp"
@@ -53,6 +58,27 @@ interface SkillItem {
   source_type?: string
   builtin?: boolean
   duplicate_locations?: string[]
+  mounted_agents?: string[]
+  unmounted?: boolean
+  warning?: string
+}
+
+interface MountedSkillItem {
+  name: string
+  description?: string
+  location?: string
+  enabled: boolean
+  reason?: string
+}
+
+interface AgentSkillRow {
+  name: string
+  description?: string
+  mode: "subagent" | "primary" | "all"
+  native?: boolean
+  hidden?: boolean
+  skill_tool_available: boolean
+  mounted: MountedSkillItem[]
 }
 
 interface McpItem {
@@ -258,6 +284,40 @@ function requireManagedSkillDirectory(value: unknown): string {
   return managedSkills.trim()
 }
 
+function skillMountMatrix(value: unknown): AgentSkillMountMatrix | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const matrix = value as AgentSkillMountMatrix
+  if (!Array.isArray(matrix.skills) || !Array.isArray(matrix.agents) || !Array.isArray(matrix.matrix)) return undefined
+  return matrix
+}
+
+function mountedAgentLabel(count: number): string {
+  if (count <= 0) return t("skill.mount.unmounted")
+  return t("skill.mount.mounted_count", { count })
+}
+
+function mountedAgentsFor(item: SkillItem): string[] {
+  return Array.isArray(item.mounted_agents) ? item.mounted_agents : []
+}
+
+function mountedSkillFor(agent: AgentSkillRow, skill: SkillItem): MountedSkillItem | undefined {
+  return agent.mounted.find((item) => item.name === skill.name)
+}
+
+function skillSourceRoot(item: SkillItem): string {
+  if (item.builtin) return "builtin"
+  const location = `${item.location || item.source || ""}`.replaceAll("\\", "/")
+  const roots = [".opencorvus", ".claude", ".agents", ".codex"]
+  return roots.find((root) => location.includes(`/${root}/`) || location.includes(`${root}/`)) || ""
+}
+
+function agentColumnLabel(name: string): string {
+  const parts = name.split(/[^a-zA-Z0-9]+/).filter(Boolean)
+  if (parts.length <= 1) return name.slice(0, 4)
+  const compact = parts.map((part) => part[0]).join("")
+  return (compact || name).slice(0, 4)
+}
+
 // ── Extension Settings Panels ──
 
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
@@ -369,16 +429,38 @@ function ExtensionSettingsPanel(props: {
   }
 
   const skills = createMemo((): SkillItem[] => [...(appStore.skills as SkillItem[])])
+  const mounts = createMemo(() => skillMountMatrix(appStore.skillMounts))
+  const poolSkills = createMemo(() => mounts()?.skills ?? skills())
+  const agentRows = createMemo(() => {
+    const matrix = mounts()
+    if (!matrix) return []
+    const rows = new Map(matrix.matrix.map((row) => [row.agent, row.mounted]))
+    return matrix.agents.map((agent) => ({
+      ...agent,
+      mounted: rows.get(agent.name) ?? [],
+    })) as AgentSkillRow[]
+  })
+  const matrixGridTemplate = createMemo(() => {
+    const agentColumns = agentRows()
+      .map(() => "minmax(calc(28px * var(--ui-scale)), calc(28px * var(--ui-scale)))")
+      .join(" ")
+    return `minmax(calc(120px * var(--ui-scale)), 1fr) ${agentColumns}`.trim()
+  })
   const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp as Record<string, McpItem>) }))
   const market = createMemo((): MarketItem[] => [...(appStore.skillMarket as MarketItem[])])
 
-  const customSkills = createMemo(() => skills().filter((item) => !item.builtin))
+  const customSkills = createMemo(() => poolSkills().filter((item) => !item.builtin))
   const removableSkills = createMemo(() => customSkills().filter(skillRemovable))
-  const builtinCount = createMemo(() => skills().length - customSkills().length)
+  const builtinCount = createMemo(() => poolSkills().length - customSkills().length)
   const mcpEntries = createMemo(() => Object.entries(mcp()))
 
   async function refreshInstalledSkills() {
     return (await loadInstalledSkills()) as SkillItem[]
+  }
+
+  async function refreshSkillMounts() {
+    if (!currentDirectory()) return undefined
+    return await loadSkillMountMatrix()
   }
 
   async function refreshMcpStatus() {
@@ -390,7 +472,7 @@ function ExtensionSettingsPanel(props: {
     setLoading(true)
     setNotice("")
     try {
-      await Promise.all([refreshInstalledSkills(), refreshMcpStatus(), loadSkillMarket()])
+      await Promise.all([refreshInstalledSkills(), refreshSkillMounts(), refreshMcpStatus(), loadSkillMarket()])
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     } finally {
@@ -435,7 +517,7 @@ function ExtensionSettingsPanel(props: {
     if (!(await nativeConfirm(message))) return
     try {
       await deleteAllSkills()
-      await Promise.all([refreshMcpStatus(), loadSkillMarket()])
+      await reloadAll()
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
@@ -472,6 +554,31 @@ function ExtensionSettingsPanel(props: {
     } catch (e) {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     }
+  }
+
+  async function droppedSkillImportPayload(payload: SkillDropPayload): Promise<Record<string, unknown> | undefined> {
+    if (payload.archive) {
+      return {
+        filename: payload.archive.name,
+        archiveBase64: await fileToBase64(payload.archive),
+        policy: skillForm.policy,
+      }
+    }
+    if (payload.files) {
+      return {
+        sourceName: payload.sourceName,
+        files: payload.files,
+        policy: skillForm.policy,
+      }
+    }
+    if (payload.file) {
+      return {
+        filename: payload.file.name,
+        content: await payload.file.text(),
+        policy: skillForm.policy,
+      }
+    }
+    return undefined
   }
 
   async function handleOpenHomepage(url: string | undefined) {
@@ -546,6 +653,61 @@ function ExtensionSettingsPanel(props: {
     }
   }
 
+  async function handleMount(agent: string, skill: string) {
+    if (!requireActiveDirectory()) return
+    try {
+      setLoading(true)
+      setNotice("")
+      await mountSkill(agent, skill)
+      setPanelNotice(t("skill.mount.success", { skill, agent }), "active")
+    } catch (e) {
+      setPanelNotice(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleUnmount(agent: string, skill: string) {
+    if (!requireActiveDirectory()) return
+    try {
+      setLoading(true)
+      setNotice("")
+      await unmountSkill(agent, skill)
+      setPanelNotice(t("skill.mount.removed", { skill, agent }), "active")
+    } catch (e) {
+      setPanelNotice(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleAgentDrop(agent: string, event: DragEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    setSkillDragActive(false)
+    if (!requireActiveDirectory()) return
+    const skillName = event.dataTransfer?.getData("application/x-opencorvus-skill")
+    if (skillName) {
+      await handleMount(agent, skillName)
+      return
+    }
+    try {
+      const payload = await droppedSkillPayload(event)
+      if (!payload) return
+      if (!(await nativeConfirm(t("skill.drop_mount_confirm", { name: payload.sourceName, agent })))) return
+      const body = await droppedSkillImportPayload(payload)
+      if (!body) return
+      setLoading(true)
+      setNotice("")
+      await importAndMountSkill(agent, body)
+      setPanelNotice(t("skill.drop_mount_success", { name: payload.sourceName, agent }), "active")
+    } catch (e) {
+      setPanelNotice(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleBrowseFolder() {
     if (!canPickSkillDirectory()) return
     try {
@@ -587,7 +749,7 @@ function ExtensionSettingsPanel(props: {
     if (!directory) return
 
     if (props.mode === "skill") {
-      refreshInstalledSkills().catch((e) => {
+      refreshSkillMounts().catch((e) => {
         setPanelNotice(e instanceof Error ? e.message : String(e))
       })
       return
@@ -608,7 +770,7 @@ function ExtensionSettingsPanel(props: {
     }
 
     setNotice("")
-    refreshInstalledSkills().catch((e) => {
+    refreshSkillMounts().catch((e) => {
       setPanelNotice(e instanceof Error ? e.message : String(e))
     })
   })
@@ -688,8 +850,18 @@ function ExtensionSettingsPanel(props: {
       <Show when={notice()}>
         <div class="config-status-box" data-status={noticeStatus()}>
           <span class="config-status-box__text">{notice()}</span>
-          <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={() => setNotice("")}>
-            {t("common.dismiss")}
+          <Button
+            type="button"
+            variant="ghost"
+            size={props.compact ? "icon" : "sm"}
+            tone="neutral"
+            title={t("common.dismiss")}
+            aria-label={t("common.dismiss")}
+            onClick={() => setNotice("")}
+          >
+            <Show when={props.compact} fallback={t("common.dismiss")}>
+              <Icon name="cancel" />
+            </Show>
           </Button>
         </div>
       </Show>
@@ -724,10 +896,12 @@ function ExtensionSettingsPanel(props: {
             )
           }
           onDragEnter={(event) => {
+            if (props.compact) return
             event.preventDefault()
             setSkillDragActive(true)
           }}
           onDragOver={(event) => {
+            if (props.compact) return
             event.preventDefault()
             if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
             setSkillDragActive(true)
@@ -739,6 +913,7 @@ function ExtensionSettingsPanel(props: {
           onDrop={(event) => {
             event.preventDefault()
             setSkillDragActive(false)
+            if (props.compact) return
             void handleDroppedSkillDrop(event)
           }}
         >
@@ -756,29 +931,173 @@ function ExtensionSettingsPanel(props: {
               <PanelActionButton
                 compact
                 icon="plus"
-                label={t("skill.add")}
-                onClick={() => void setShowAddSkill(!showAddSkill())}
-              />
-              <PanelActionButton
-                compact
-                icon="cancel"
-                label={t("skill.delete_all")}
-                tone="danger"
-                disabled={removableSkills().length === 0}
-                onClick={handleDeleteAllSkills}
-              />
+                  label={t("skill.add")}
+                  onClick={() => void setShowAddSkill(!showAddSkill())}
+                />
             </div>
           </Show>
           <div class="extension-settings-body">
-            <div class="skill-drop-zone" data-active={skillDragActive() ? "true" : "false"}>
-              <span class="skill-drop-zone__icon" aria-hidden="true">
-                <Icon name="upload" />
-              </span>
-              <span class="skill-drop-zone__copy">
-                <strong>{t("skill.drop_title")}</strong>
-                <span>{t("skill.drop_hint")}</span>
-              </span>
+            <div class="agent-skill-matrix" data-unmounted={mounts()?.unmounted_count ? "true" : "false"}>
+              <div class="agent-skill-matrix__summary">
+                <strong>{t("skill.mount.matrix")}</strong>
+                <Show when={mounts()?.unmounted_count}>
+                  <SettingsPill tone="warn">
+                    {t("skill.mount.unmounted_count", { count: mounts()?.unmounted_count ?? 0 })}
+                  </SettingsPill>
+                </Show>
+              </div>
+              <Show when={poolSkills().length > 0} fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}>
+                <div
+                  class="agent-skill-matrix-grid"
+                  style={{ "grid-template-columns": matrixGridTemplate() }}
+                  aria-label={t("skill.mount.matrix")}
+                >
+                  <div class="agent-skill-grid-corner" role="columnheader">
+                    {t("skill.mount.pool")}
+                  </div>
+                  <For each={agentRows()}>
+                    {(agent) => (
+                      <div
+                        class="agent-skill-grid-agent"
+                        data-skill-tool={agent.skill_tool_available ? "true" : "false"}
+                        role="columnheader"
+                        title={agent.name}
+                        onDragOver={(event) => {
+                          if (!agent.skill_tool_available) return
+                          event.preventDefault()
+                          if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
+                        }}
+                        onDrop={(event) => {
+                          if (!agent.skill_tool_available) return
+                          void handleAgentDrop(agent.name, event)
+                        }}
+                      >
+                        <span>{agentColumnLabel(agent.name)}</span>
+                        <Show when={!agent.skill_tool_available}>
+                          <span class="agent-skill-grid-cell__reason">{t("skill.mount.no_skill_tool")}</span>
+                        </Show>
+                      </div>
+                    )}
+                  </For>
+                  <For each={poolSkills()}>
+                    {(item) => {
+                      const mountedAgents = () => mountedAgentsFor(item)
+                      const sourceRoot = () => skillSourceRoot(item)
+                      const skillTitle = () =>
+                        [
+                          item.name,
+                          item.description,
+                          sourceRoot(),
+                          mountedAgents().join(", ") || t("skill.mount.unmounted"),
+                          item.location,
+                        ]
+                          .filter(Boolean)
+                          .join("\n")
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            class="agent-skill-grid-skill"
+                            data-unmounted={item.unmounted ? "true" : "false"}
+                            title={skillTitle()}
+                            draggable
+                            onDragStart={(event) => {
+                              event.dataTransfer?.setData("application/x-opencorvus-skill", item.name)
+                              if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy"
+                            }}
+                          >
+                            <span class="agent-skill-grid-skill__name">{item.name}</span>
+                            <span class="agent-skill-grid-skill__meta">
+                              <Show when={sourceRoot()}>
+                                <span>{sourceRoot()}</span>
+                              </Show>
+                              <span>{mountedAgentLabel(mountedAgents().length)}</span>
+                              <Show when={skillDuplicateLocations(item).length > 1}>
+                                <span title={skillDuplicateTitle(item)}>{t("skill.duplicate")}</span>
+                              </Show>
+                            </span>
+                          </button>
+                          <For each={agentRows()}>
+                            {(agent) => {
+                              const mounted = () => mountedSkillFor(agent, item)
+                              const cellState = () => {
+                                if (!agent.skill_tool_available) return "unavailable"
+                                const current = mounted()
+                                if (!current) return "available"
+                                return current.enabled ? "mounted" : "conflict"
+                              }
+                              const cellLabel = () => {
+                                const current = mounted()
+                                if (!agent.skill_tool_available) {
+                                  return `${agent.name}: ${t("skill.mount.no_skill_tool")}`
+                                }
+                                if (!current) return `${t("skill.mount.add")}: ${item.name} -> ${agent.name}`
+                                if (current.enabled) return `${t("skill.mount.remove")}: ${item.name} -> ${agent.name}`
+                                return `${item.name} -> ${agent.name}: ${current.reason || ""}`
+                              }
+                              return (
+                                <button
+                                  type="button"
+                                  class="agent-skill-grid-cell"
+                                  data-state={cellState()}
+                                  disabled={!agent.skill_tool_available || loading()}
+                                  title={cellLabel()}
+                                  aria-label={cellLabel()}
+                                  onClick={() => {
+                                    if (!agent.skill_tool_available) return
+                                    const current = mounted()
+                                    if (current) {
+                                      void handleUnmount(agent.name, item.name)
+                                      return
+                                    }
+                                    void handleMount(agent.name, item.name)
+                                  }}
+                                  onDragOver={(event) => {
+                                    if (!agent.skill_tool_available) return
+                                    event.preventDefault()
+                                    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"
+                                  }}
+                                  onDrop={(event) => {
+                                    if (!agent.skill_tool_available) return
+                                    void handleAgentDrop(agent.name, event)
+                                  }}
+                                >
+                                  <Show when={cellState() === "mounted"}>
+                                    <Icon name="check" />
+                                  </Show>
+                                  <Show when={cellState() === "conflict"}>
+                                    <Icon name="info-circle" />
+                                    <span class="agent-skill-grid-cell__reason">{mounted()?.reason || ""}</span>
+                                  </Show>
+                                  <Show when={cellState() === "available"}>
+                                    <Icon name="plus" />
+                                  </Show>
+                                  <Show when={cellState() === "unavailable"}>
+                                    <Icon name="cancel" />
+                                  </Show>
+                                </button>
+                              )
+                            }}
+                          </For>
+                        </>
+                      )
+                    }}
+                  </For>
+                </div>
+              </Show>
             </div>
+
+            <Show when={!props.compact}>
+              <div class="skill-drop-zone" data-active={skillDragActive() ? "true" : "false"}>
+                <span class="skill-drop-zone__icon" aria-hidden="true">
+                  <Icon name="upload" />
+                </span>
+                <span class="skill-drop-zone__copy">
+                  <strong>{t("skill.drop_title")}</strong>
+                  <span>{t("skill.drop_hint")}</span>
+                </span>
+              </div>
+            </Show>
 
             {/* Add Skill inline form */}
             <Show when={showAddSkill()}>
@@ -803,8 +1122,19 @@ function ExtensionSettingsPanel(props: {
                       onInput={(e) => setSkillForm("value", e.currentTarget.value)}
                     />
                     <Show when={skillForm.type === "path" && canPickSkillDirectory()}>
-                      <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleBrowseFolder}>
-                        {t("skill.browse_folder")}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size={props.compact ? "icon" : "sm"}
+                        tone="neutral"
+                        title={t("skill.browse_folder")}
+                        aria-label={t("skill.browse_folder")}
+                        data-ui={props.compact ? "skill-form-icon-action" : undefined}
+                        onClick={handleBrowseFolder}
+                      >
+                        <Show when={props.compact} fallback={t("skill.browse_folder")}>
+                          <Icon name="folder-open" />
+                        </Show>
                       </Button>
                     </Show>
                   </div>
@@ -819,85 +1149,103 @@ function ExtensionSettingsPanel(props: {
                   />
                 </label>
                 <div class="dialog-actions compact">
-                  <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={() => setShowAddSkill(false)}>
-                    {t("common.cancel")}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size={props.compact ? "icon" : "sm"}
+                    tone="neutral"
+                    title={t("common.cancel")}
+                    aria-label={t("common.cancel")}
+                    data-ui={props.compact ? "skill-form-icon-action" : undefined}
+                    onClick={() => setShowAddSkill(false)}
+                  >
+                    <Show when={props.compact} fallback={t("common.cancel")}>
+                      <Icon name="cancel" />
+                    </Show>
                   </Button>
                   <Button
                     type="button"
                     variant="solid"
-                    size="sm"
+                    size={props.compact ? "icon" : "sm"}
                     tone="accent"
                     disabled={!skillForm.value.trim()}
+                    title={t("skill.install")}
+                    aria-label={t("skill.install")}
+                    data-ui={props.compact ? "skill-form-icon-action" : undefined}
                     onClick={handleAddSkill}
                   >
-                    {t("skill.install")}
+                    <Show when={props.compact} fallback={t("skill.install")}>
+                      <Icon name="plus" />
+                    </Show>
                   </Button>
                 </div>
               </div>
             </Show>
-            <div class="extension-list" id="skillList">
-              <Show when={skills().length > 0} fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}>
-                <For each={skills()}>
-                  {(item) => (
-                    <SettingsRow
-                      class="extension-settings-row"
-                      title={
-                        <>
-                          <span>{item.name}</span>
-                          <Show when={skillDuplicateLocations(item).length > 1}>
-                            <SettingsPill tone="warn" title={skillDuplicateTitle(item)}>
-                              {t("skill.duplicate")}
+            <Show when={!props.compact}>
+              <div class="extension-list" id="skillList">
+                <Show when={poolSkills().length > 0} fallback={<div class="empty-hint">{t("skill.none_custom")}</div>}>
+                  <For each={poolSkills()}>
+                    {(item) => (
+                      <SettingsRow
+                        class="extension-settings-row"
+                        title={
+                          <>
+                            <span>{item.name}</span>
+                            <Show when={skillDuplicateLocations(item).length > 1}>
+                              <SettingsPill tone="warn" title={skillDuplicateTitle(item)}>
+                                {t("skill.duplicate")}
+                              </SettingsPill>
+                            </Show>
+                          </>
+                        }
+                        desc={item.description || ""}
+                        meta={<small>{item.location || ""}</small>}
+                        interactive
+                        actions={
+                          <div class="extension-settings-actions">
+                            <Show when={skillRemovable(item)}>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                tone="danger"
+                                title={t("skill.delete_button_title")}
+                                aria-label={t("skill.delete_button_title")}
+                                onClick={() => handleRemoveSkill(item.source || "", skillRemoveKind(item), item.name)}
+                              >
+                                {t("common.delete")}
+                              </Button>
+                            </Show>
+                            <Show
+                              when={
+                                item.location &&
+                                item.location !== "builtin" &&
+                                (isRemoteUrl(item.location) ? canOpenRemoteUrl() : canOpenLocalPath())
+                              }
+                            >
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                tone="neutral"
+                                title={t("skill.open_button_title")}
+                                aria-label={t("skill.open_button_title")}
+                                onClick={() => handleOpenSkill(item.location!)}
+                              >
+                                {t("common.open")}
+                              </Button>
+                            </Show>
+                            <SettingsPill tone="ok">
+                              {item.builtin ? t("skill.builtin") : t("common.loaded")}
                             </SettingsPill>
-                          </Show>
-                        </>
-                      }
-                      desc={item.description || ""}
-                      meta={<small>{item.location || ""}</small>}
-                      interactive
-                      actions={
-                        <div class="extension-settings-actions">
-                          <Show when={skillRemovable(item)}>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              tone="danger"
-                              title={t("skill.delete_button_title")}
-                              aria-label={t("skill.delete_button_title")}
-                              onClick={() => handleRemoveSkill(item.source || "", skillRemoveKind(item), item.name)}
-                            >
-                              {t("common.delete")}
-                            </Button>
-                          </Show>
-                          <Show
-                            when={
-                              item.location &&
-                              item.location !== "builtin" &&
-                              (isRemoteUrl(item.location) ? canOpenRemoteUrl() : canOpenLocalPath())
-                            }
-                          >
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              tone="neutral"
-                              title={t("skill.open_button_title")}
-                              aria-label={t("skill.open_button_title")}
-                              onClick={() => handleOpenSkill(item.location!)}
-                            >
-                              {t("common.open")}
-                            </Button>
-                          </Show>
-                          <SettingsPill tone="ok">
-                            {item.builtin ? t("skill.builtin") : t("common.loaded")}
-                          </SettingsPill>
-                        </div>
-                      }
-                    />
-                  )}
-                </For>
-              </Show>
-            </div>
+                          </div>
+                        }
+                      />
+                    )}
+                  </For>
+                </Show>
+              </div>
+            </Show>
           </div>
         </SettingsGroup>
       </Show>

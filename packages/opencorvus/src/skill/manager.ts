@@ -57,6 +57,7 @@ const SkillInfo = z.object({
   priority: z.number().optional().default(0),
   required_tools: z.array(z.string()).optional().default([]),
   agents: z.array(z.string()).optional().default([]),
+  mounted_agents: z.array(z.string()).optional().default([]),
   expires_at: ExpirationTimestamp,
   duplicate_locations: z.array(z.string()).optional().default([]),
 })
@@ -263,18 +264,30 @@ export namespace SkillManager {
       await Promise.all(
         (await Skill.all()).map(async (skill) => {
           const dir = skill.location === "builtin" ? undefined : path.dirname(skill.location)
-          const manifest = dir ? await readManifest(dir, root, cache) : undefined
-          const sourceType = dir ? sourceTypeFor(dir, configuredPaths, cache, manifest?.kind) : "builtin"
+          const manifest = !skill.builtin && dir ? await readManifest(dir, root, cache) : undefined
+          const sourceType = skill.builtin
+            ? "builtin"
+            : dir
+              ? sourceTypeFor(dir, configuredPaths, cache, manifest?.kind)
+              : "builtin"
           const trust = trustFor(skill, manifest?.source)
-          const risk = dir
-            ? await riskFor(dir, trust)
-            : {
+          const risk = skill.builtin
+            ? {
                 level: "low" as const,
                 has_scripts: false,
                 has_agents: false,
                 has_references: false,
                 has_templates: false,
               }
+            : dir
+              ? await riskFor(dir, trust)
+              : {
+                  level: "low" as const,
+                  has_scripts: false,
+                  has_agents: false,
+                  has_references: false,
+                  has_templates: false,
+                }
           return {
             ...skill,
             dir,
@@ -357,22 +370,22 @@ export namespace SkillManager {
     return { source, path: target, kind: input.kind }
   }
 
-  export async function importFile(raw: z.input<typeof ImportFileInput>) {
+  export async function previewImportFile(raw: z.input<typeof ImportFileInput>) {
     const input = ImportFileInput.parse(raw)
-    const files = input.archiveBase64
-      ? await readZipSkillFiles(input.filename ?? input.sourceName ?? "skill.zip", input.archiveBase64)
-      : input.files?.length
-        ? input.files
-        : [
-            {
-              path: input.filename ?? "SKILL.md",
-              content: input.content ?? "",
-            },
-          ]
+    const skillRoots = await readImportSkillRoots(input)
+    return {
+      names: skillRoots.map((root) => root.info.name),
+      skills: skillRoots.map((root) => root.info),
+    }
+  }
 
+  export async function importFile(
+    raw: z.input<typeof ImportFileInput>,
+    options: { mountedAgent?: string } = {},
+  ) {
+    const input = ImportFileInput.parse(raw)
     const projectConfigDir = Config.projectConfigDirectory()
-    const normalized = normalizeBundleFiles(files)
-    const skillRoots = parseSkillRoots(normalized)
+    const skillRoots = await readImportSkillRoots(input)
     const imported: Array<{ name: string; source: string }> = []
 
     for (const root of skillRoots) {
@@ -385,7 +398,11 @@ export namespace SkillManager {
         if (!Filesystem.contains(projectConfigDir, target)) {
           throw new Error(`Refusing to write skill outside project config directory: ${file.sourcePath}`)
         }
-        await Filesystem.write(target, file.bytes)
+        const bytes =
+          options.mountedAgent && file.relativePath.toLowerCase() === "skill.md"
+            ? skillFileBytesWithMountedAgent(file.bytes, options.mountedAgent)
+            : file.bytes
+        await Filesystem.write(target, bytes)
       }
       imported.push({ name: root.info.name, source: path.join(targetDir, "SKILL.md") })
     }
@@ -568,6 +585,7 @@ function sourceTypeFor(dir: string, configuredPaths: string[], cache: string, ki
     dir.includes(`${path.sep}.claude${path.sep}`) ||
     dir.includes(`${path.sep}.agents${path.sep}`) ||
     dir.includes(`${path.sep}.codex${path.sep}`) ||
+    dir.includes(`${path.sep}.opencorvus${path.sep}skill${path.sep}`) ||
     dir.includes(`${path.sep}.opencorvus${path.sep}skills${path.sep}`)
   )
     return "external"
@@ -585,6 +603,7 @@ function trustFor(skill: z.infer<typeof SkillInfo>, source?: string) {
     skill.location.includes(`${path.sep}.claude${path.sep}`) ||
     skill.location.includes(`${path.sep}.agents${path.sep}`) ||
     skill.location.includes(`${path.sep}.codex${path.sep}`) ||
+    skill.location.includes(`${path.sep}.opencorvus${path.sep}skill${path.sep}`) ||
     skill.location.includes(`${path.sep}.opencorvus${path.sep}skills${path.sep}`)
   ) {
     return "external" as const
@@ -682,12 +701,26 @@ type NormalizedSkillFile = {
   bytes: Uint8Array
 }
 type ParsedSkillRoot = {
-  info: Pick<z.infer<typeof Skill.Info>, "name" | "description">
+  info: Pick<z.infer<typeof Skill.Info>, "name" | "description" | "platforms" | "required_tools" | "agents" | "mounted_agents">
   files: Array<{
     sourcePath: string
     relativePath: string
     bytes: Uint8Array
   }>
+}
+
+async function readImportSkillRoots(input: z.infer<typeof SkillManager.ImportFileInput>): Promise<ParsedSkillRoot[]> {
+  const files = input.archiveBase64
+    ? await readZipSkillFiles(input.filename ?? input.sourceName ?? "skill.zip", input.archiveBase64)
+    : input.files?.length
+      ? input.files
+      : [
+          {
+            path: input.filename ?? "SKILL.md",
+            content: input.content ?? "",
+          },
+        ]
+  return parseSkillRoots(normalizeBundleFiles(files))
 }
 
 async function readZipSkillFiles(filename: string, archiveBase64: string): Promise<SkillImportFileInput[]> {
@@ -755,7 +788,14 @@ function parseSkillRoots(files: NormalizedSkillFile[]): ParsedSkillRoot[] {
       })
       .filter(Boolean)
     const parsed = matter(new TextDecoder().decode(skillFile.bytes))
-    const info = Skill.Info.pick({ name: true, description: true }).parse(parsed.data)
+    const info = Skill.Info.pick({
+      name: true,
+      description: true,
+      platforms: true,
+      required_tools: true,
+      agents: true,
+      mounted_agents: true,
+    }).parse(parsed.data)
     const rootFiles = files
       .filter((file) => {
         if (root) return file.path === root || file.path.startsWith(`${root}/`)
@@ -770,4 +810,14 @@ function parseSkillRoots(files: NormalizedSkillFile[]): ParsedSkillRoot[] {
       .filter((file) => file.relativePath)
     return { info, files: rootFiles }
   })
+}
+
+function skillFileBytesWithMountedAgent(bytes: Uint8Array, agent: string): Uint8Array {
+  const parsed = matter(new TextDecoder().decode(bytes))
+  const mounted = Skill.Info.pick({ mounted_agents: true }).safeParse(parsed.data).data?.mounted_agents ?? []
+  const next = matter.stringify(parsed.content, {
+    ...parsed.data,
+    mounted_agents: dedupe([...mounted, agent]),
+  })
+  return new TextEncoder().encode(next)
 }

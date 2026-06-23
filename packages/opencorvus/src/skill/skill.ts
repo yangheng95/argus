@@ -88,6 +88,8 @@ export namespace Skill {
     required_tools: z.array(z.string()).optional().default([]),
     /** Optional agent-name allow list. Empty or omitted means any compatible agent may load it. */
     agents: z.array(z.string()).optional().default([]),
+    /** Explicit OpenCorvus mount list. Empty or omitted means this skill is in the pool but unavailable. */
+    mounted_agents: z.array(z.string()).optional().default([]),
     expires_at: ExpirationTimestamp,
     duplicate_locations: z.array(z.string()).optional().default([]),
   })
@@ -117,7 +119,9 @@ export namespace Skill {
   const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
   const OPENCORVUS_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
   const SKILL_PATTERN = "**/SKILL.md"
-  const BUILTIN_PATH = path.join(Global.Path.cache, "builtin-skills")
+  function builtinPath() {
+    return path.join(Global.Path.cache, "builtin-skills")
+  }
 
   type BuiltinFile =
     | string
@@ -155,15 +159,93 @@ export namespace Skill {
     return file.content
   }
 
+  function builtinProjectSlug(value: string) {
+    return value
+      .replace(/[^\w.-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase()
+  }
+
+  function builtinProjectSkillPath(name: string) {
+    const slug = builtinProjectSlug(name)
+    if (!slug || slug === "." || slug === ".." || path.basename(slug) !== slug) {
+      throw new Error(`Invalid builtin skill name: ${name}`)
+    }
+    return path.join(Config.projectConfigDirectory(), "skills", slug, "SKILL.md")
+  }
+
+  function builtinSource(name: string) {
+    for (const raw of builtins) {
+      const md = matter(raw.skill)
+      const parsed = Info.pick({ name: true }).safeParse(md.data)
+      if (parsed.success && parsed.data.name === name) return raw
+    }
+    return undefined
+  }
+
+  export async function writeMountedAgents(location: string, agents: string[]) {
+    if (location === "builtin") throw new Error("Built-in skills must be materialized before mounting.")
+    const uniqueAgents = Array.from(new Set(agents.map((agent) => agent.trim()).filter(Boolean)))
+    const md = await ConfigMarkdown.parse(location)
+    const next = matter.stringify(md.content, {
+      ...md.data,
+      mounted_agents: uniqueAgents,
+    })
+    await Filesystem.write(location, next)
+    await state.reset()
+  }
+
   async function install(id: string, skill: string, files: Readonly<Record<string, BuiltinFile>>) {
-    const dir = path.join(BUILTIN_PATH, id)
-    await Filesystem.write(path.join(dir, "SKILL.md"), skill)
+    const dir = path.join(builtinPath(), id)
+    const skillPath = path.join(dir, "SKILL.md")
+    const source = matter(skill)
+    const existing = await ConfigMarkdown.parse(skillPath).catch(() => undefined)
+    const existingMountedAgents = existing
+      ? Info.pick({ mounted_agents: true }).safeParse(existing.data).data?.mounted_agents
+      : undefined
+    const hasExistingMountField = existing
+      ? Object.prototype.hasOwnProperty.call(existing.data, "mounted_agents")
+      : false
+    const next = matter.stringify(source.content, {
+      ...source.data,
+      ...(existingMountedAgents || hasExistingMountField ? { mounted_agents: existingMountedAgents ?? [] } : {}),
+    })
+    await Filesystem.write(skillPath, next)
     await Promise.all(
       Object.entries(files).map(([file, content]) =>
         Filesystem.write(path.join(dir, file), decodeBuiltinFile(content)),
       ),
     )
-    return path.join(dir, "SKILL.md")
+    return skillPath
+  }
+
+  export async function materializeBuiltinProjectSkill(name: string, mountedAgents: string[] = []) {
+    const raw = builtinSource(name)
+    if (!raw) throw new Error(`Unknown builtin skill: ${name}`)
+    const target = builtinProjectSkillPath(name)
+    const existing = await ConfigMarkdown.parse(target).catch(() => undefined)
+    if (existing) {
+      const parsed = Info.pick({ name: true }).safeParse(existing.data)
+      if (parsed.success && parsed.data.name !== name) {
+        throw new NameMismatchError({ path: target, expected: name, actual: parsed.data.name })
+      }
+      return target
+    }
+
+    const source = matter(raw.skill)
+    const next = matter.stringify(source.content, {
+      ...source.data,
+      mounted_agents: Array.from(new Set(mountedAgents.map((agent) => agent.trim()).filter(Boolean))),
+    })
+    await Filesystem.write(target, next)
+    await Promise.all(
+      Object.entries(raw.files as Readonly<Record<string, BuiltinFile>>).map(([file, content]) =>
+        Filesystem.write(path.join(path.dirname(target), file), decodeBuiltinFile(content)),
+      ),
+    )
+    await Config.state.reset()
+    await state.reset()
+    return target
   }
 
   export const state = lazyInstanceState(async () => {
@@ -182,24 +264,39 @@ export namespace Skill {
         priority: true,
         required_tools: true,
         agents: true,
+        mounted_agents: true,
         expires_at: true,
       }).safeParse(md.data)
       if (!parsed.success) continue
       if (isExpired(parsed.data)) continue
-      const location =
-        Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
+      if (await Filesystem.exists(builtinProjectSkillPath(parsed.data.name))) continue
+      const location = await install(parsed.data.name, raw.skill, raw.files)
+      const installed = await ConfigMarkdown.parse(location)
+      const installedParsed = Info.pick({
+        name: true,
+        description: true,
+        platforms: true,
+        auto_detect: true,
+        priority: true,
+        required_tools: true,
+        agents: true,
+        mounted_agents: true,
+        expires_at: true,
+      }).parse(installed.data)
+      if (isExpired(installedParsed)) continue
       registerSkill(skills, skillLocations, {
-        name: parsed.data.name,
-        description: parsed.data.description,
-        platforms: parsed.data.platforms,
+        name: installedParsed.name,
+        description: installedParsed.description,
+        platforms: installedParsed.platforms,
         builtin: true,
         location,
-        content: md.content,
-        auto_detect: parsed.data.auto_detect,
-        priority: parsed.data.priority,
-        required_tools: parsed.data.required_tools,
-        agents: parsed.data.agents,
-        expires_at: parsed.data.expires_at,
+        content: installed.content,
+        auto_detect: installedParsed.auto_detect,
+        priority: installedParsed.priority,
+        required_tools: installedParsed.required_tools,
+        agents: installedParsed.agents,
+        mounted_agents: installedParsed.mounted_agents,
+        expires_at: installedParsed.expires_at,
         duplicate_locations: [],
       })
     }
@@ -224,6 +321,7 @@ export namespace Skill {
         priority: true,
         required_tools: true,
         agents: true,
+        mounted_agents: true,
         expires_at: true,
       }).safeParse(md.data)
       if (!parsed.success) return
@@ -242,6 +340,7 @@ export namespace Skill {
         priority: parsed.data.priority,
         required_tools: parsed.data.required_tools,
         agents: parsed.data.agents,
+        mounted_agents: parsed.data.mounted_agents,
         expires_at: parsed.data.expires_at,
         duplicate_locations: [],
       })

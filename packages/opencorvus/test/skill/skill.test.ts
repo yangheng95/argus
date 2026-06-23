@@ -390,17 +390,30 @@ test("does not expose removed builtin plan, coding, panel-control, webpage-gener
 
 test("registers builtin research-report skill without stage routing metadata", async () => {
   await using tmp = await tmpdir({ git: true })
+  const home = process.env.OPENCORVUS_TEST_HOME
+  const opencorvusHome = process.env.OPENCORVUS_HOME
+  process.env.OPENCORVUS_TEST_HOME = tmp.path
+  process.env.OPENCORVUS_HOME = path.join(tmp.path, "portable")
 
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const skill = await Skill.get("research-report")
-      expect(skill).toBeDefined()
-      expect(skill!.builtin).toBe(true)
-      expect("stage" in skill!).toBe(false)
-      expect(skill!.required_tools).toContain("websearch")
-    },
-  })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const skill = await Skill.get("research-report")
+        expect(skill).toBeDefined()
+        expect(skill!.builtin).toBe(true)
+        expect(skill!.location).toContain(path.join("builtin-skills", "research-report", "SKILL.md"))
+        expect(skill!.mounted_agents).toEqual([])
+        expect("stage" in skill!).toBe(false)
+        expect(skill!.required_tools).toContain("websearch")
+      },
+    })
+  } finally {
+    if (home === undefined) delete process.env.OPENCORVUS_TEST_HOME
+    else process.env.OPENCORVUS_TEST_HOME = home
+    if (opencorvusHome === undefined) delete process.env.OPENCORVUS_HOME
+    else process.env.OPENCORVUS_HOME = opencorvusHome
+  }
 })
 
 test("discovers skills from .agents/skills/ directory", async () => {

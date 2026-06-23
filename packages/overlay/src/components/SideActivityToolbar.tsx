@@ -1,4 +1,4 @@
-import { For, type Accessor, type JSX } from "solid-js"
+import { For, Show, type Accessor, type JSX } from "solid-js"
 import { t } from "../utils/i18n"
 import { Icon, type IconName } from "./Icon"
 import { Button } from "./ui/Button"
@@ -8,6 +8,7 @@ export interface SideActivity<T extends string> {
   icon: IconName
   labelKey: string
   tooltipKey?: string
+  badge?: () => JSX.Element
 }
 
 export type SideActivityActiveSemantics = "current-page" | "pressed-toggle"
@@ -49,6 +50,7 @@ export function SideActivityToolbar<T extends string>(props: SideActivityToolbar
                 onClick={() => props.onSelect(activity.id)}
               >
                 <Icon name={activity.icon} />
+                <Show when={activity.badge?.()}>{(badge) => <span class="side-activity-badge">{badge()}</span>}</Show>
                 <span class="side-activity-label">{label()}</span>
               </Button>
             )
