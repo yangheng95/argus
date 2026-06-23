@@ -205,3 +205,65 @@ though ARIA claimed the pane was legal.
   writer, center workbench panel minimums still use
   `--ui-workbench-panel-min-width`, and overlay aspect-ratio handling remains
   unchanged.
+
+## Follow-up 2026-06-23: Center Workbench Range Source
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Independent explorer audit 2026-06-23 | `centerWorkbenchResizeRange()` already rejects impossible adjacent widths, but callers still rederive `maxWidth` from `totalWidth - minWidth`. |
+| `2026-06-22-center-workbench-panel-min-size-contract.md` | Open panels must keep the token-owned minimum and scroll rather than compress. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Center workbench layout timing stays frame-split; do not add synchronous geometry work. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Range helper | `center-workbench-size.ts` returns `{ minWidth, maxWidth }` from `centerWorkbenchResizeRange()`. | Keep this as the single legal range source. |
+| Separator ARIA | `main.tsx` writes `aria-valuemax` from `metrics.totalWidth - metrics.minWidth`. | Use `metrics.range.maxWidth` instead. |
+| Keyboard End | `resizeCenterWorkbenchPanelByKeyboard()` uses `metrics.totalWidth - metrics.minWidth`. | Use `metrics.range.maxWidth` instead. |
+| Drag clamp | `updateCenterWorkbenchPanelWeights()` calls `clampCenterWorkbenchResizeWidth(totalWidth, minWidth, rawLeftWidth)`, which recomputes the range. | Pass the existing range into clamp so impossible ranges cannot be reinterpreted. |
+| Tests | `center-workbench-size.test.ts` covers range and clamp; static tests pin current string call sites. | Update tests to guard range-object clamp and reject the retired rederived max strings. |
+
+### Fix Plan
+
+1. Change `clampCenterWorkbenchResizeWidth()` to accept a
+   `CenterWorkbenchResizeRange`.
+2. Store that range in `CenterWorkbenchPanelResizeMetrics` and
+   `CenterWorkbenchPanelResize`.
+3. Route separator ARIA, keyboard Home/End, and drag clamp through the stored
+   range.
+4. Update focused tests and browser center workbench visual coverage.
+
+### Acceptance
+
+- Center workbench resize math has one legal range object per measured adjacent
+  pair.
+- No caller rederives `maxWidth` as `totalWidth - minWidth`.
+- Impossible adjacent panel widths remain disabled rather than clamped to a
+  smaller fallback minimum.
+- Existing frame-split layout and persisted weight source remain unchanged.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/center-workbench-size.test.ts packages/overlay/test/pane-config.test.ts packages/overlay/test/resize-observer-frame-scheduler.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+- Visual QA reviewed:
+  `.scratch/center-workbench-three-panel-min-width.png`,
+  `.scratch/center-workbench-three-panel-min-width-1120.png`,
+  `.scratch/center-workbench-separator-restored-desktop-resize.png`, and
+  `.scratch/center-workbench-illegal-tall-aspect-frame.png`.
+
+### Self Review
+
+- Rechecked `main.tsx`: `centerWorkbenchPanelResizeMetrics()` computes the
+  legal range once and all separator ARIA, keyboard, and pointer resize paths
+  consume `metrics.range`.
+- Rechecked `center-workbench-size.ts`: clamp no longer recomputes the range
+  from `totalWidth/minWidth`; invalid range objects throw instead of silently
+  falling back to a smaller value.
+- Rechecked timing boundaries: this change only changes math inputs and does
+  not add a resize listener, synchronous reveal, or duplicate persisted width
+  source.
