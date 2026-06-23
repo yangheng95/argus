@@ -18,11 +18,14 @@ export function centerWorkbenchResizeRange(totalWidth: number, minWidth: number)
   return { minWidth, maxWidth }
 }
 
-export function clampCenterWorkbenchResizeWidth(totalWidth: number, minWidth: number, rawWidth: number): number | null {
+export function clampCenterWorkbenchResizeWidth(range: CenterWorkbenchResizeRange, rawWidth: number): number {
+  assertFinitePositive(range.minWidth, "Center workbench resize range minimum width")
+  assertFinitePositive(range.maxWidth, "Center workbench resize range maximum width")
+  if (range.maxWidth < range.minWidth) {
+    throw new Error("Center workbench resize range maximum width must be greater than or equal to the minimum width.")
+  }
   if (!Number.isFinite(rawWidth)) {
     throw new Error("Center workbench resize width must be finite.")
   }
-  const range = centerWorkbenchResizeRange(totalWidth, minWidth)
-  if (!range) return null
   return Math.min(Math.max(rawWidth, range.minWidth), range.maxWidth)
 }

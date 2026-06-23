@@ -102,7 +102,11 @@ import { taskOwningDirectory } from "./services/task-directory"
 import { taskScopedPath } from "./services/task-path"
 import { createAnimationFrameScheduler } from "./utils/animation-frame"
 import { promptProfileCatalogRequestKey, promptProfileCatalogScope } from "./services/prompt-profile-scope"
-import { clampCenterWorkbenchResizeWidth, centerWorkbenchResizeRange } from "./utils/center-workbench-size"
+import {
+  clampCenterWorkbenchResizeWidth,
+  centerWorkbenchResizeRange,
+  type CenterWorkbenchResizeRange,
+} from "./utils/center-workbench-size"
 import { layoutTokenPx } from "./utils/layout-tokens"
 
 // ── Module teardown ──
@@ -694,7 +698,8 @@ function centerWorkbenchPanelResizeMetrics(
   const totalWidth = leftRect.width + rightRect.width
   if (totalWidth <= 0) return null
   const minWidth = centerWorkbenchPanelMinWidth(totalWidth)
-  if (!centerWorkbenchResizeRange(totalWidth, minWidth)) return null
+  const range = centerWorkbenchResizeRange(totalWidth, minWidth)
+  if (!range) return null
   return {
     leftPanel,
     rightPanel,
@@ -704,7 +709,7 @@ function centerWorkbenchPanelResizeMetrics(
     rightRect,
     totalWidth,
     totalWeight: centerWorkbenchPanelWeight(leftPanel) + centerWorkbenchPanelWeight(rightPanel),
-    minWidth,
+    range,
   }
 }
 
@@ -732,8 +737,8 @@ function renderCenterWorkbenchPanelSeparators(): void {
     const rightControlID = views[rightPanel]?.id
     if (leftControlID && rightControlID) separator.setAttribute("aria-controls", `${leftControlID} ${rightControlID}`)
     else separator.removeAttribute("aria-controls")
-    const min = Math.round(metrics.minWidth)
-    const max = Math.round(metrics.totalWidth - metrics.minWidth)
+    const min = Math.round(metrics.range.minWidth)
+    const max = Math.round(metrics.range.maxWidth)
     const now = Math.round(metrics.leftRect.width)
     separator.setAttribute("aria-valuemin", String(min))
     separator.setAttribute("aria-valuemax", String(max))
@@ -1844,7 +1849,7 @@ interface CenterWorkbenchPanelResizeMetrics {
   rightRect: DOMRect
   totalWidth: number
   totalWeight: number
-  minWidth: number
+  range: CenterWorkbenchResizeRange
 }
 
 interface CenterWorkbenchPanelResize {
@@ -1853,7 +1858,7 @@ interface CenterWorkbenchPanelResize {
   leftRect: DOMRect
   totalWidth: number
   totalWeight: number
-  minWidth: number
+  range: CenterWorkbenchResizeRange
 }
 
 let centerWorkbenchPanelResize: CenterWorkbenchPanelResize | null = null
@@ -1868,7 +1873,7 @@ function startCenterWorkbenchPanelResize(event: PointerEvent, leftPanel: CenterW
     leftRect: metrics.leftRect,
     totalWidth: metrics.totalWidth,
     totalWeight: metrics.totalWeight,
-    minWidth: metrics.minWidth,
+    range: metrics.range,
   }
   document.body.dataset.centerWorkbenchPanelResizing = "true"
   event.preventDefault()
@@ -1889,11 +1894,10 @@ disposers.push(() => {
 })
 
 function updateCenterWorkbenchPanelWeights(
-  metrics: Pick<CenterWorkbenchPanelResize, "leftPanel" | "rightPanel" | "totalWidth" | "totalWeight" | "minWidth">,
+  metrics: Pick<CenterWorkbenchPanelResize, "leftPanel" | "rightPanel" | "totalWidth" | "totalWeight" | "range">,
   rawLeftWidth: number,
 ): void {
-  const leftWidth = clampCenterWorkbenchResizeWidth(metrics.totalWidth, metrics.minWidth, rawLeftWidth)
-  if (leftWidth === null) return
+  const leftWidth = clampCenterWorkbenchResizeWidth(metrics.range, rawLeftWidth)
   const leftWeight = metrics.totalWeight * (leftWidth / metrics.totalWidth)
   const rightWeight = metrics.totalWeight - leftWeight
   setSettingsStore("centerWorkbenchPanelWeights", {
@@ -1919,9 +1923,9 @@ function resizeCenterWorkbenchPanelByKeyboard(event: KeyboardEvent, leftPanel: C
   } else if (event.key === "ArrowRight") {
     leftWidth += step
   } else if (event.key === "Home") {
-    leftWidth = metrics.minWidth
+    leftWidth = metrics.range.minWidth
   } else if (event.key === "End") {
-    leftWidth = metrics.totalWidth - metrics.minWidth
+    leftWidth = metrics.range.maxWidth
   } else {
     return
   }
