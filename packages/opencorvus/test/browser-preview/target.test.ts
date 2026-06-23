@@ -8,7 +8,7 @@ import {
   extractBrowserPreviewUrlsFromText,
   persistBrowserPreviewUrls,
 } from "../../src/browser-preview/extract"
-import { findRecentBrowserPreviewTargets, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { findRecentBrowserPreviewTargets } from "../../src/browser-preview/persist"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
@@ -16,6 +16,7 @@ import { ProtocolStore } from "../../src/protocol/store"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget, TEST_BROWSER_PREVIEW_VIEWPORTS } from "../fixture/browser-preview"
 
 const BROWSER_PREVIEW_TARGET_TEST_TIMEOUT_MILLISECONDS = 60_000
 
@@ -65,7 +66,7 @@ describe("browser preview target resolver", () => {
         },
       })
       const taskID = await seedTask(tmp.path)
-      const persisted = await persistBrowserPreviewTarget({
+      const persisted = await persistTestBrowserPreviewTarget({
         taskID,
         url: "http://127.0.0.1:5173/task",
       })
@@ -90,7 +91,7 @@ describe("browser preview target resolver", () => {
           timeUpdated: persisted.timeUpdated,
         },
       ])
-      expect(target.viewports.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
+      expect(target.viewports).toEqual(TEST_BROWSER_PREVIEW_VIEWPORTS)
     },
     { timeout: BROWSER_PREVIEW_TARGET_TEST_TIMEOUT_MILLISECONDS },
   )
@@ -100,12 +101,12 @@ describe("browser preview target resolver", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const first = await persistBrowserPreviewTarget({
+      const first = await persistTestBrowserPreviewTarget({
         taskID,
         url: "http://127.0.0.1:5173/task",
         now: 100,
       })
-      const second = await persistBrowserPreviewTarget({
+      const second = await persistTestBrowserPreviewTarget({
         taskID,
         url: "http://127.0.0.1:5173/task",
         now: 100,
@@ -123,7 +124,7 @@ describe("browser preview target resolver", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const persisted = await persistBrowserPreviewTarget({
+      const persisted = await persistTestBrowserPreviewTarget({
         taskID,
         url: "http://127.0.0.1:5173/task",
         now: 100,
@@ -159,12 +160,12 @@ describe("browser preview target resolver", () => {
     async () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
-      const reachable = await persistBrowserPreviewTarget({
+      const reachable = await persistTestBrowserPreviewTarget({
         taskID,
         url: "http://127.0.0.1:5173/reachable",
         now: 100,
       })
-      const unreachable = await persistBrowserPreviewTarget({
+      const unreachable = await persistTestBrowserPreviewTarget({
         taskID,
         url: "http://127.0.0.1:5174/unreachable",
         now: 200,
@@ -200,7 +201,7 @@ describe("browser preview target resolver", () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
       for (let index = 0; index < 12; index += 1) {
-        await persistBrowserPreviewTarget({
+        await persistTestBrowserPreviewTarget({
           taskID,
           url: `http://127.0.0.1:${5200 + index}/candidate-${index}`,
           now: 100 + index,
@@ -297,6 +298,7 @@ describe("browser preview target resolver", () => {
         await persistBrowserPreviewUrls({
           taskID,
           urls: [previewUrl],
+          viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
         })
 
         expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([previewUrl])
@@ -316,6 +318,7 @@ describe("browser preview target resolver", () => {
       const input = {
         taskID,
         urls: ["http://127.0.0.1:5173/app"],
+        viewports: TEST_BROWSER_PREVIEW_VIEWPORTS,
         probe: async () => ++probeCount >= 2,
       }
 
@@ -324,9 +327,7 @@ describe("browser preview target resolver", () => {
 
       expect(probeCount).toBe(2)
       expect(persisted.map((target) => target.url)).toEqual(["http://127.0.0.1:5173/app"])
-      expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual([
-        "http://127.0.0.1:5173/app",
-      ])
+      expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual(["http://127.0.0.1:5173/app"])
     },
     { timeout: BROWSER_PREVIEW_TARGET_TEST_TIMEOUT_MILLISECONDS },
   )
@@ -337,7 +338,7 @@ describe("browser preview target resolver", () => {
       await using tmp = await tmpdir()
       const taskID = await seedTask(tmp.path)
 
-      await persistBrowserPreviewTarget({
+      await persistTestBrowserPreviewTarget({
         taskID,
         url: "http://127.0.0.1:5173/task",
       })

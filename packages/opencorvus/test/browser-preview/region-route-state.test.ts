@@ -7,13 +7,13 @@ import {
   compareBrowserPreviewRegions,
   type BrowserPreviewRegionBinding,
 } from "../../src/browser-preview/region-comparison"
-import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 const REGION_ROUTE_STATE_TEST_TIMEOUT_MILLISECONDS = 60_000
 
@@ -33,7 +33,7 @@ describe("browser preview region route state", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
         })
 
         const result = await compareBrowserPreviewRegions({

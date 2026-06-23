@@ -4,7 +4,12 @@ import { deriveBrowserPreviewUrlsFromDevServerCommand } from "@/browser-preview/
 import { extractBrowserPreviewUrlsFromText } from "@/browser-preview/extract"
 import { waitForBrowserPreviewUrlReachable } from "@/browser-preview/liveness"
 import { browserPreviewTaskEvidenceRoot } from "@/browser-preview/task-evidence-root"
-import { missingBrowserPreviewTarget, normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "@/browser-preview/target"
+import {
+  missingBrowserPreviewTarget,
+  normalizeBrowserPreviewUrl,
+  resolveBrowserPreviewTarget,
+} from "@/browser-preview/target"
+import { BrowserPreviewViewport, normalizeBrowserPreviewViewports } from "@/browser-preview/viewport"
 import { BashTool } from "./bash"
 import { BrowserPreviewToolID } from "./browser-preview-tool-ids"
 import { Tool } from "./tool"
@@ -41,6 +46,11 @@ export const BrowserPreviewToolParameters = z.object({
       "Optional explicit preview URL (Uniform Resource Locator) to save after the service starts, for commands that do not print a local URL.",
     )
     .optional(),
+  viewports: BrowserPreviewViewport.array()
+    .min(1)
+    .describe(
+      "Task-scoped preview viewport dimensions to persist with the target. These must come from source evidence or the current deliverable requirements, not global presets.",
+    ),
   timeout: z.number().describe("Optional startup readiness wait in milliseconds before this tool returns.").optional(),
   leaseTimeout: z
     .number()
@@ -71,6 +81,7 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
           "browser_preview requires a task context so the preview target can be saved as a task artifact.",
         )
       }
+      const viewports = normalizeBrowserPreviewViewports(params.viewports)
 
       const explicitUrl = normalizeBrowserPreviewUrl(params.url)
       if (params.url && !explicitUrl) {
@@ -98,7 +109,7 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
       if (explicitUrl) {
         const reachable = await waitForBrowserPreviewUrlReachable(explicitUrl, { timeoutMs: targetStartupWaitMs })
         if (reachable) {
-          const persisted = await persistBrowserPreviewTarget({ taskID, url: explicitUrl })
+          const persisted = await persistBrowserPreviewTarget({ taskID, url: explicitUrl, viewports })
           explicitUrlPersisted = true
           startupCandidates.push({
             source: "explicit",
@@ -122,6 +133,7 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
             taskID,
             output: () => observedStartupOutput || startupOutput,
             timeoutMs: targetStartupWaitMs,
+            viewports,
           })),
         )
         startupOutput = observedStartupOutput || startupOutput
@@ -206,10 +218,7 @@ export const BrowserPreviewTool = Tool.define(BrowserPreviewToolID, async (initC
 
 type BashOutputObserverInput = { stream: "stdout" | "stderr"; chunk: string; output: string }
 
-function withBrowserPreviewOutputObserver(
-  ctx: Tool.Context,
-  observe: (output: string) => void,
-): Tool.Context {
+function withBrowserPreviewOutputObserver(ctx: Tool.Context, observe: (output: string) => void): Tool.Context {
   const previousObserver =
     typeof ctx.extra?.bashOutputObserver === "function"
       ? (ctx.extra.bashOutputObserver as (input: BashOutputObserverInput) => void)
@@ -230,6 +239,7 @@ async function waitForProcessOutputPreviewTargets(input: {
   taskID: string
   output: () => string
   timeoutMs: number
+  viewports: ReturnType<typeof normalizeBrowserPreviewViewports>
 }): Promise<BrowserPreviewStartupCandidate[]> {
   const candidates = new Map<string, BrowserPreviewStartupCandidate>()
   const start = Date.now()
@@ -257,7 +267,7 @@ async function waitForProcessOutputPreviewTargets(input: {
         })
         continue
       }
-      const target = await persistBrowserPreviewTarget({ taskID: input.taskID, url })
+      const target = await persistBrowserPreviewTarget({ taskID: input.taskID, url, viewports: input.viewports })
       candidates.set(url, {
         source: "process-output",
         url,

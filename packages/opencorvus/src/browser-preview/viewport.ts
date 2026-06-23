@@ -1,11 +1,5 @@
 import z from "zod"
 
-export const BROWSER_PREVIEW_VIEWPORTS = [
-  { id: "desktop", labelKey: "browser_preview.viewport.desktop", width: 1280, height: 800 },
-  { id: "tablet", labelKey: "browser_preview.viewport.tablet", width: 834, height: 1112 },
-  { id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 },
-] as const
-
 export const BrowserPreviewViewportID = z.enum(["desktop", "tablet", "mobile"])
 export type BrowserPreviewViewportID = z.infer<typeof BrowserPreviewViewportID>
 
@@ -17,6 +11,30 @@ export const BrowserPreviewViewport = z.object({
 })
 export type BrowserPreviewViewport = z.infer<typeof BrowserPreviewViewport>
 
-export function browserPreviewViewportByID(id: BrowserPreviewViewportID): BrowserPreviewViewport {
-  return BROWSER_PREVIEW_VIEWPORTS.find((viewport) => viewport.id === id) ?? BROWSER_PREVIEW_VIEWPORTS[0]
+export class BrowserPreviewViewportNotFoundError extends Error {
+  constructor(readonly viewportID: BrowserPreviewViewportID) {
+    super(`Browser preview viewport not found on target: ${viewportID}`)
+    this.name = "BrowserPreviewViewportNotFoundError"
+  }
+}
+
+export function normalizeBrowserPreviewViewports(input: readonly BrowserPreviewViewport[]): BrowserPreviewViewport[] {
+  const parsed = BrowserPreviewViewport.array().min(1).parse(input)
+  const seen = new Set<BrowserPreviewViewportID>()
+  return parsed.map((viewport) => {
+    if (seen.has(viewport.id)) {
+      throw new Error(`Duplicate browser preview viewport ID: ${viewport.id}`)
+    }
+    seen.add(viewport.id)
+    return viewport
+  })
+}
+
+export function browserPreviewViewportByID(
+  viewports: readonly BrowserPreviewViewport[],
+  id: BrowserPreviewViewportID,
+): BrowserPreviewViewport {
+  const viewport = viewports.find((item) => item.id === id)
+  if (!viewport) throw new BrowserPreviewViewportNotFoundError(id)
+  return viewport
 }

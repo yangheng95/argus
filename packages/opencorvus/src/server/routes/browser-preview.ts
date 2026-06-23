@@ -8,7 +8,6 @@ import {
   findReadableBrowserPreviewEvidenceArtifactPath,
   findReadableBrowserPreviewEvidenceCapturePath,
   findBrowserPreviewTargetByID,
-  persistBrowserPreviewTarget,
   promoteBrowserPreviewTarget,
   PersistedBrowserPreviewEvidence,
   resolveRuntimeRelativePath,
@@ -30,10 +29,12 @@ import {
 } from "../../browser-preview/region-comparison"
 import { browserPreviewTaskEvidenceRoot } from "../../browser-preview/task-evidence-root"
 
-const BrowserPreviewLiveRequest = z.object({
-  targetID: z.string().min(1),
-  viewportID: BrowserPreviewViewportID,
-}).strict()
+const BrowserPreviewLiveRequest = z
+  .object({
+    targetID: z.string().min(1),
+    viewportID: BrowserPreviewViewportID,
+  })
+  .strict()
 
 const BrowserPreviewCaptureRequest = z
   .object({
@@ -266,6 +267,7 @@ export const BrowserPreviewRoutes = lazy(() =>
             taskID,
             projectRoot,
             url: persisted.url,
+            viewports: persisted.viewports,
             diagnostics: [`Selected task browser preview target ${persisted.id}.`],
           }) satisfies BrowserPreviewTarget,
         )
@@ -302,6 +304,7 @@ export const BrowserPreviewRoutes = lazy(() =>
           taskID,
           projectRoot,
           url: persisted.url,
+          viewports: persisted.viewports,
           diagnostics: [`Using task browser preview target ${persisted.id}.`],
         })
         const verification = await verifyBrowserPreview({

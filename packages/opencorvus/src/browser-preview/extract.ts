@@ -2,6 +2,7 @@ import { persistBrowserPreviewTarget, type PersistedBrowserPreviewTarget } from 
 import { normalizeBrowserPreviewUrl } from "./target"
 import { isLoopbackBrowserPreviewUrl, waitForBrowserPreviewUrlReachable } from "./liveness"
 import { Log } from "@/util/log"
+import type { BrowserPreviewViewport } from "./viewport"
 
 const LOCAL_URL_TOKEN =
   /(?:^|[\s(<"'=])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/[^\s<>"'`]*)?)/gi
@@ -35,6 +36,7 @@ export function extractBrowserPreviewUrlsFromText(text: string): string[] {
 export function persistBrowserPreviewUrls(input: {
   taskID: string
   urls: string[]
+  viewports: readonly BrowserPreviewViewport[]
   probe?: (url: string) => Promise<boolean>
 }): Promise<PersistedBrowserPreviewTarget[]> {
   const probe = input.probe ?? waitForBrowserPreviewUrlReachable
@@ -52,7 +54,7 @@ export function persistBrowserPreviewUrls(input: {
           log.warn("skipped unreachable browser preview target from process output", { taskID: input.taskID, url })
           return undefined
         }
-        return persistBrowserPreviewTarget({ taskID: input.taskID, url })
+        return persistBrowserPreviewTarget({ taskID: input.taskID, url, viewports: input.viewports })
       } catch (error) {
         log.warn("failed to persist browser preview target from process output", { taskID: input.taskID, url, error })
         return undefined

@@ -6,7 +6,7 @@ import {
   findRecentBrowserPreviewTargets,
   type PersistedBrowserPreviewTarget,
 } from "./persist"
-import { BROWSER_PREVIEW_VIEWPORTS, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
+import { BrowserPreviewViewport, BrowserPreviewViewportID, normalizeBrowserPreviewViewports } from "./viewport"
 
 export const BrowserPreviewCandidate = z.object({
   id: z.string(),
@@ -57,6 +57,7 @@ export async function resolveBrowserPreviewTarget(input: {
       taskID,
       id: selected.id,
       url: selected.url,
+      viewports: selected.viewports,
       source: selected.source,
       diagnostics: [`Saved browser preview target is unreachable: ${selected.url}`],
       candidates: browserPreviewCandidates(persistedTargets, selected.id),
@@ -67,6 +68,7 @@ export async function resolveBrowserPreviewTarget(input: {
     taskID,
     id: selected.id,
     url: selected.url,
+    viewports: selected.viewports,
     candidates: browserPreviewCandidates(persistedTargets, selected.id),
     diagnostics: [`Using task browser preview target ${selected.id}.`],
     latestEvidenceIDs: await latestBrowserPreviewEvidenceIDs({ projectRoot, taskID, targetID: selected.id }),
@@ -78,6 +80,7 @@ export function taskBrowserPreviewTarget(input: {
   taskID: string
   id: string
   url: string
+  viewports: BrowserPreviewViewport[]
   latestEvidenceIDs?: Partial<Record<BrowserPreviewViewportID, string>>
   diagnostics: string[]
   candidates?: BrowserPreviewCandidate[]
@@ -90,7 +93,7 @@ export function taskBrowserPreviewTarget(input: {
     status: "ready",
     projectRoot: path.resolve(input.projectRoot),
     url: input.url,
-    viewports: [...BROWSER_PREVIEW_VIEWPORTS],
+    viewports: normalizeBrowserPreviewViewports(input.viewports),
     diagnostics: input.diagnostics,
     candidates: input.candidates ?? [],
     source: "task-artifact",
@@ -107,7 +110,7 @@ export function missingBrowserPreviewTarget(input: {
     status: "missing",
     projectRoot: path.resolve(input.projectRoot),
     taskID: input.taskID,
-    viewports: [...BROWSER_PREVIEW_VIEWPORTS],
+    viewports: [],
     diagnostics: input.diagnostics ?? ["No browser preview target saved for this task."],
     candidates: [],
     source: "none",
@@ -119,6 +122,7 @@ export function failedBrowserPreviewTarget(input: {
   taskID: string
   id?: string
   url?: string
+  viewports?: BrowserPreviewViewport[]
   source?: "task-artifact"
   candidates?: BrowserPreviewCandidate[]
   diagnostics: string[]
@@ -130,7 +134,7 @@ export function failedBrowserPreviewTarget(input: {
     projectRoot: path.resolve(input.projectRoot),
     taskID: input.taskID,
     url: input.url,
-    viewports: [...BROWSER_PREVIEW_VIEWPORTS],
+    viewports: input.viewports ? normalizeBrowserPreviewViewports(input.viewports) : [],
     diagnostics: input.diagnostics,
     candidates: input.candidates ?? [],
     source: input.source ?? "none",

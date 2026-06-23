@@ -5,13 +5,17 @@ import path from "node:path"
 import sharp from "sharp"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { compareBrowserPreviewScrollSlice } from "../../src/browser-preview/scroll-slice-comparison"
-import { findBrowserPreviewTargetByID, persistBrowserPreviewTarget, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
-import { BrowserPreviewCompareScrollSlicesTool, BrowserPreviewCompareScrollSlicesToolParameters } from "../../src/tool/browser-preview-compare-scroll-slices"
+import { findBrowserPreviewTargetByID, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
+import {
+  BrowserPreviewCompareScrollSlicesTool,
+  BrowserPreviewCompareScrollSlicesToolParameters,
+} from "../../src/tool/browser-preview-compare-scroll-slices"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 const SCROLL_SLICE_TEST_TIMEOUT_MILLISECONDS = 60_000
 
@@ -37,7 +41,7 @@ describe("browser preview scroll-slice comparison", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
         })
         const result = await Instance.provide({
           directory: tmp.path,
@@ -134,7 +138,7 @@ describe("browser preview scroll-slice comparison", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
         })
         const tool = await BrowserPreviewCompareScrollSlicesTool.init()
         const output = await Instance.provide({
@@ -180,7 +184,7 @@ describe("browser preview scroll-slice comparison", () => {
     })
     const target = await Instance.provide({
       directory: tmp.path,
-      fn: () => persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/" }),
+      fn: () => persistTestBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:9/" }),
     })
     await Instance.provide({
       directory: tmp.path,
