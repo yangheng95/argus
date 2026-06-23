@@ -38,6 +38,9 @@ describe("WorkspaceSplitLauncher primitive", () => {
     expect(LAUNCHER_SOURCE).not.toContain("document.addEventListener")
     expect(LAUNCHER_SOURCE).not.toContain("getBoundingClientRect")
     expect(LAUNCHER_SOURCE).not.toContain('from "solid-js/web"')
+    expect(LAUNCHER_SOURCE).toContain("function runWorkspaceLauncherAction")
+    expect(LAUNCHER_SOURCE).not.toContain("void props.onPrimaryClick")
+    expect(LAUNCHER_SOURCE).not.toContain("void props.onSelect")
   })
 
   test("styles Kobalte highlighted workspace menu options", () => {

@@ -8,10 +8,15 @@ import { browseDirectory, loadRecentDirectories, setDirectory, type DiscoveredPr
 import { getHostTransport } from "../services/host-transport"
 import { loadWorkspaceOnboardingDiscovery } from "../services/workspace-onboarding-discovery"
 import { t } from "../utils/i18n"
+import { AppLog } from "../utils/log"
 
 function leafName(value: string): string {
   const parts = value.split(/[\\/]/).filter(Boolean)
   return parts.at(-1) || value
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function WorkspaceOnboardingDialog() {
@@ -38,26 +43,39 @@ export function WorkspaceOnboardingDialog() {
 
   async function runAction(key: string, fn: () => Promise<void>) {
     if (actionRunner.pending()) return
-    await actionRunner.run(key, fn)
+    try {
+      setDiscoveryError("")
+      await actionRunner.run(key, fn)
+    } catch (error) {
+      const message = errorMessage(error)
+      setDiscoveryError(message)
+      AppLog.error("ui", "Workspace onboarding action failed", { action: key, error: message })
+    }
   }
 
-  async function submitBrowserPath(event: Event) {
+  function submitBrowserPath(event: Event) {
     event.preventDefault()
     const next = browserPathDraft().trim()
     if (!next) return
-    await runAction("browser-path", () => setDirectory(next))
+    void runAction("browser-path", () => setDirectory(next))
   }
 
   onMount(() => {
-    void loadWorkspaceOnboardingDiscovery().then((discovery) => {
-      if (discovery.status === "ready") {
-        setDiscoveryError("")
-        setDiscoveredRoot(discovery.root)
-        setDiscoveredProjects(discovery.projects)
-        return
-      }
-      setDiscoveryError(discovery.message)
-    })
+    void loadWorkspaceOnboardingDiscovery()
+      .then((discovery) => {
+        if (discovery.status === "ready") {
+          setDiscoveryError("")
+          setDiscoveredRoot(discovery.root)
+          setDiscoveredProjects(discovery.projects)
+          return
+        }
+        setDiscoveryError(discovery.message)
+      })
+      .catch((error) => {
+        const message = errorMessage(error)
+        setDiscoveryError(message)
+        AppLog.warn("ui", "Workspace onboarding discovery failed", { error: message })
+      })
   })
 
   return (
