@@ -540,6 +540,15 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
         const headers = Array.from(node.querySelectorAll(".agent-skill-grid-agent")).map((item) =>
           (item.textContent || "").trim(),
         )
+        const headerMetrics = Array.from(node.querySelectorAll(".agent-skill-grid-agent")).map((item) => {
+          const header = item as HTMLElement
+          return {
+            text: (header.textContent || "").trim(),
+            width: header.getBoundingClientRect().width,
+            scrollWidth: header.scrollWidth,
+            clientWidth: header.clientWidth,
+          }
+        })
         const rowNames = Array.from(node.querySelectorAll(".agent-skill-grid-skill__name")).map((item) =>
           (item.textContent || "").trim(),
         )
@@ -552,7 +561,9 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
           height: gridRect.height,
           scrollWidth: grid.scrollWidth,
           clientWidth: grid.clientWidth,
+          compact: node.dataset.compact,
           headers,
+          headerMetrics,
           rowNames,
           unavailableCells: node.querySelectorAll('.agent-skill-grid-cell[data-state="unavailable"]').length,
           cornerBackground: getComputedStyle(corner).backgroundColor,
@@ -568,10 +579,11 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       },
     )
     assert.equal(settingsScreenshot.endsWith("skill-mount-matrix-settings-panel.png"), true)
+    assert.equal(settingsLayout.compact, "false")
     assert.equal(settingsLayout.display, "grid")
-    assert.ok(settingsLayout.height >= 140, "settings matrix must be visibly rendered above the skill registry")
+    assert.ok(settingsLayout.height >= 240, "settings matrix must be visibly rendered above the skill registry")
     assert.ok(settingsLayout.columns.includes("px"), "settings matrix should receive explicit grid columns")
-    assert.ok(settingsLayout.scrollWidth > settingsLayout.clientWidth, "settings matrix should scroll instead of crushing headers")
+    assert.ok(settingsLayout.scrollWidth >= settingsLayout.clientWidth, "settings matrix should not underflow its viewport")
     assert.ok(settingsLayout.headers.includes("frontend-research"), "settings matrix should show full agent names")
     assert.equal(settingsLayout.headers.includes("mission"), false)
     assert.equal(settingsLayout.headers.includes("orchestrator"), false)
@@ -586,13 +598,19 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
     assert.notEqual(settingsLayout.topHeaderBackground, "rgba(0, 0, 0, 0)")
     assert.ok(settingsLayout.firstCellWidth >= 70, "settings matrix cells must not collapse into icon strips")
     assert.ok(
-      settingsLayout.topHeaderWidth >= 110,
+      settingsLayout.topHeaderWidth >= 120,
       `agent headers must reserve full-name width: ${JSON.stringify({
         width: settingsLayout.topHeaderWidth,
         columns: settingsLayout.columns,
         headers: settingsLayout.headers,
       })}`,
     )
+    for (const header of settingsLayout.headerMetrics) {
+      assert.ok(
+        header.scrollWidth <= header.clientWidth + 1,
+        `agent header should not clip full name: ${JSON.stringify(header)}`,
+      )
+    }
   } finally {
     await browser.close()
     await server.close()

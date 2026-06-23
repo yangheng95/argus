@@ -958,9 +958,15 @@ button.s-row:focus-visible {
   align-content: start;
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
   border: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 72%, transparent);
   border-radius: var(--oc-radius-soft);
   background: color-mix(in srgb, var(--surface-inset) 36%, transparent);
+}
+
+.agent-skill-matrix[data-compact="false"] .agent-skill-matrix-grid {
+  min-height: clamp(calc(260px * var(--ui-scale)), 36vh, calc(440px * var(--ui-scale)));
+  max-height: min(54vh, calc(560px * var(--ui-scale)));
 }
 
 .agent-skill-grid-corner,
@@ -1003,6 +1009,13 @@ button.s-row:focus-visible {
   white-space: nowrap;
 }
 
+.agent-skill-matrix[data-compact="false"] .agent-skill-grid-agent {
+  justify-content: flex-start;
+  min-width: calc(132px * var(--ui-scale));
+  min-height: calc(36px * var(--ui-scale));
+  padding: 0 calc(14px * var(--ui-scale));
+}
+
 .agent-skill-grid-agent > span {
   min-width: max-content;
   overflow: visible;
@@ -1030,6 +1043,11 @@ button.s-row:focus-visible {
   font-size: var(--ui-font-control);
   text-align: left;
   box-shadow: inset calc(-1px * var(--ui-scale)) 0 0 color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.agent-skill-matrix[data-compact="false"] .agent-skill-grid-skill {
+  min-height: calc(50px * var(--ui-scale));
+  padding: calc(7px * var(--ui-scale)) calc(14px * var(--ui-scale));
 }
 
 .agent-skill-grid-skill[data-unmounted="true"] {
@@ -1075,6 +1093,11 @@ button.s-row:focus-visible {
   background: color-mix(in srgb, var(--surface) 62%, transparent);
   color: var(--text-subtle);
   font-family: var(--font);
+}
+
+.agent-skill-matrix[data-compact="false"] .agent-skill-grid-cell {
+  min-width: calc(132px * var(--ui-scale));
+  min-height: calc(50px * var(--ui-scale));
 }
 
 .agent-skill-grid-cell:not(:disabled) {

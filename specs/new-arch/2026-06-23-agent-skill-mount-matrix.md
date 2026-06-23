@@ -194,6 +194,13 @@ Layout:
 - Keyboard-accessible mount/unmount buttons must use the same mutation path as drag.
 - Conflict states are server-derived: denied policy, incompatible platform, missing required
   tool, agent frontmatter mismatch, or agent cannot call `skill`.
+- Settings-panel matrix and toolbar matrix share the same data and mutation path, but
+  they are not the same layout target. The settings panel must reserve management-grade
+  width for full agent names, keep the skill pool column sticky and highlighted, keep the
+  agent header row sticky and highlighted, remove agents that cannot expose the `skill`
+  tool, and preserve visible skill row order after mount/unmount responses. Toolbar
+  compact mode may rely on horizontal scrolling, but it must still use the same component
+  contract rather than a second renderer.
 
 Implementation guidance:
 
