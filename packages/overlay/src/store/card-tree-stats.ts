@@ -48,6 +48,8 @@ import { extractTodos } from "../utils/todos"
 import {
   collectScreenshotBrowserItemsFromCard,
   mergeScreenshotBrowserItemSets,
+  screenshotBrowserItemKey,
+  SCREENSHOT_BROWSER_ITEM_LIMIT,
   type ScreenshotBrowserItem,
 } from "../utils/screenshot-browser"
 import { aggregateUsageAcrossSessions, type UsageAggregate } from "../utils/format-usage"
@@ -216,81 +218,323 @@ function equalTodoHit(a: TodoActivityHit | undefined, b: TodoActivityHit | undef
   return a.todos === b.todos
 }
 
+function equalScreenshotItem(a: ScreenshotBrowserItem | undefined, b: ScreenshotBrowserItem | undefined): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return (
+    a.id === b.id &&
+    a.role === b.role &&
+    a.src === b.src &&
+    a.alt === b.alt &&
+    a.title === b.title &&
+    a.detail === b.detail &&
+    a.time === b.time &&
+    a.messageID === b.messageID &&
+    a.partID === b.partID &&
+    a.source === b.source
+  )
+}
+
 function equalScreenshotItems(a: readonly ScreenshotBrowserItem[] | undefined, b: readonly ScreenshotBrowserItem[]): boolean {
   if (a === b) return true
   if (!a || a.length !== b.length) return false
   for (let index = 0; index < b.length; index += 1) {
-    const left = a[index]
-    const right = b[index]
-    if (
-      !left ||
-      left.id !== right.id ||
-      left.role !== right.role ||
-      left.src !== right.src ||
-      left.alt !== right.alt ||
-      left.title !== right.title ||
-      left.detail !== right.detail ||
-      left.time !== right.time ||
-      left.messageID !== right.messageID ||
-      left.partID !== right.partID ||
-      left.source !== right.source
-    ) {
-      return false
-    }
+    if (!equalScreenshotItem(a[index], b[index])) return false
   }
   return true
 }
 
 // ── Dirty queue + bubble-up ──
 
+interface TopLevelScreenshotOwnedItem {
+  rootID: string
+  item: ScreenshotBrowserItem
+  index: number
+}
+
+interface TopLevelScreenshotHeapEntry extends TopLevelScreenshotOwnedItem {
+  key: string
+}
+
 const dirtyCardIDs = new Set<string>()
 let topLevelRootIDs = new Set<string>()
-let topLevelScreenshotItemSets = new Map<string, readonly ScreenshotBrowserItem[]>()
+let topLevelRootRank = new Map<string, number>()
+let topLevelScreenshotRootItemKeys = new Map<string, Set<string>>()
+let topLevelScreenshotItemOwners = new Map<string, Map<string, TopLevelScreenshotOwnedItem>>()
+let topLevelScreenshotActiveOwners = new Map<string, TopLevelScreenshotOwnedItem>()
+let topLevelScreenshotHeap: TopLevelScreenshotHeapEntry[] = []
+let topLevelScreenshotHeapIndexes = new Map<string, number>()
 let cardUsageAggregates = new Map<string, UsageAggregate>()
-let topLevelOrderDirty = true
 let topLevelScreenshotItemsDirty = true
 let usageAggregateDirty = true
 
-function markTopLevelOrderDirty(): void {
-  topLevelOrderDirty = true
+function compareTopLevelScreenshotOwnedItem(a: TopLevelScreenshotOwnedItem, b: TopLevelScreenshotOwnedItem): number {
+  const rootRankA = topLevelRootRank.get(a.rootID) ?? Number.MAX_SAFE_INTEGER
+  const rootRankB = topLevelRootRank.get(b.rootID) ?? Number.MAX_SAFE_INTEGER
+  if (rootRankA !== rootRankB) return rootRankA - rootRankB
+  return a.index - b.index
+}
+
+function isTopLevelScreenshotHeapEntryHigher(
+  a: TopLevelScreenshotHeapEntry,
+  b: TopLevelScreenshotHeapEntry,
+): boolean {
+  if (a.item.time !== b.item.time) return a.item.time > b.item.time
+  const ownerOrder = compareTopLevelScreenshotOwnedItem(a, b)
+  if (ownerOrder !== 0) return ownerOrder < 0
+  return a.key < b.key
+}
+
+function swapTopLevelScreenshotHeapEntries(left: number, right: number): void {
+  const current = topLevelScreenshotHeap[left]
+  topLevelScreenshotHeap[left] = topLevelScreenshotHeap[right]
+  topLevelScreenshotHeap[right] = current
+  topLevelScreenshotHeapIndexes.set(topLevelScreenshotHeap[left].key, left)
+  topLevelScreenshotHeapIndexes.set(topLevelScreenshotHeap[right].key, right)
+}
+
+function bubbleTopLevelScreenshotHeapUp(index: number): number {
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2)
+    if (!isTopLevelScreenshotHeapEntryHigher(topLevelScreenshotHeap[index], topLevelScreenshotHeap[parent])) break
+    swapTopLevelScreenshotHeapEntries(index, parent)
+    index = parent
+  }
+  return index
+}
+
+function bubbleTopLevelScreenshotHeapDown(index: number): void {
+  while (true) {
+    const left = index * 2 + 1
+    const right = left + 1
+    let highest = index
+    if (
+      left < topLevelScreenshotHeap.length &&
+      isTopLevelScreenshotHeapEntryHigher(topLevelScreenshotHeap[left], topLevelScreenshotHeap[highest])
+    ) {
+      highest = left
+    }
+    if (
+      right < topLevelScreenshotHeap.length &&
+      isTopLevelScreenshotHeapEntryHigher(topLevelScreenshotHeap[right], topLevelScreenshotHeap[highest])
+    ) {
+      highest = right
+    }
+    if (highest === index) break
+    swapTopLevelScreenshotHeapEntries(index, highest)
+    index = highest
+  }
+}
+
+function upsertTopLevelScreenshotHeap(entry: TopLevelScreenshotHeapEntry): void {
+  const existingIndex = topLevelScreenshotHeapIndexes.get(entry.key)
+  if (existingIndex === undefined) {
+    topLevelScreenshotHeap.push(entry)
+    topLevelScreenshotHeapIndexes.set(entry.key, topLevelScreenshotHeap.length - 1)
+    bubbleTopLevelScreenshotHeapUp(topLevelScreenshotHeap.length - 1)
+    return
+  }
+  topLevelScreenshotHeap[existingIndex] = entry
+  topLevelScreenshotHeapIndexes.set(entry.key, existingIndex)
+  const bubbledIndex = bubbleTopLevelScreenshotHeapUp(existingIndex)
+  bubbleTopLevelScreenshotHeapDown(bubbledIndex)
+}
+
+function popTopLevelScreenshotHeap(): TopLevelScreenshotHeapEntry | undefined {
+  const first = topLevelScreenshotHeap[0]
+  const last = topLevelScreenshotHeap.pop()
+  if (!first || !last) return first
+  topLevelScreenshotHeapIndexes.delete(first.key)
+  if (topLevelScreenshotHeap.length === 0) return first
+  topLevelScreenshotHeap[0] = last
+  topLevelScreenshotHeapIndexes.set(last.key, 0)
+  bubbleTopLevelScreenshotHeapDown(0)
+  return first
+}
+
+function removeTopLevelScreenshotHeapEntry(key: string): void {
+  const index = topLevelScreenshotHeapIndexes.get(key)
+  if (index === undefined) return
+  topLevelScreenshotHeapIndexes.delete(key)
+  const last = topLevelScreenshotHeap.pop()
+  if (!last || index >= topLevelScreenshotHeap.length) return
+  topLevelScreenshotHeap[index] = last
+  topLevelScreenshotHeapIndexes.set(last.key, index)
+  const bubbledIndex = bubbleTopLevelScreenshotHeapUp(index)
+  bubbleTopLevelScreenshotHeapDown(bubbledIndex)
+}
+
+function rebuildTopLevelScreenshotHeapFromActiveOwners(): void {
+  topLevelScreenshotHeap = []
+  topLevelScreenshotHeapIndexes = new Map<string, number>()
+  for (const [key, owner] of topLevelScreenshotActiveOwners) {
+    upsertTopLevelScreenshotHeap({ ...owner, key })
+  }
+}
+
+function setTopLevelScreenshotActiveOwner(key: string, owner: TopLevelScreenshotOwnedItem | undefined): void {
+  const previous = topLevelScreenshotActiveOwners.get(key)
+  if (!owner) {
+    if (!previous) return
+    topLevelScreenshotActiveOwners.delete(key)
+    removeTopLevelScreenshotHeapEntry(key)
+    topLevelScreenshotItemsDirty = true
+    return
+  }
+  if (
+    previous &&
+    previous.rootID === owner.rootID &&
+    previous.index === owner.index &&
+    equalScreenshotItem(previous.item, owner.item)
+  ) {
+    return
+  }
+  topLevelScreenshotActiveOwners.set(key, owner)
+  upsertTopLevelScreenshotHeap({ ...owner, key })
   topLevelScreenshotItemsDirty = true
+}
+
+function chooseTopLevelScreenshotOwner(key: string): TopLevelScreenshotOwnedItem | undefined {
+  const owners = topLevelScreenshotItemOwners.get(key)
+  if (!owners || owners.size === 0) return undefined
+  let selected: TopLevelScreenshotOwnedItem | undefined
+  for (const owner of owners.values()) {
+    if (!selected || compareTopLevelScreenshotOwnedItem(owner, selected) < 0) selected = owner
+  }
+  return selected
+}
+
+function reconcileTopLevelScreenshotItemOwner(key: string): void {
+  setTopLevelScreenshotActiveOwner(key, chooseTopLevelScreenshotOwner(key))
+}
+
+function removeTopLevelRootScreenshotItems(rootID: string): void {
+  const keys = topLevelScreenshotRootItemKeys.get(rootID)
+  if (!keys) return
+  topLevelScreenshotRootItemKeys.delete(rootID)
+  for (const key of keys) {
+    const owners = topLevelScreenshotItemOwners.get(key)
+    if (!owners) continue
+    owners.delete(rootID)
+    if (owners.size === 0) topLevelScreenshotItemOwners.delete(key)
+    reconcileTopLevelScreenshotItemOwner(key)
+  }
+}
+
+function addTopLevelRootScreenshotItems(rootID: string, items: readonly ScreenshotBrowserItem[]): void {
+  if (!topLevelRootIDs.has(rootID)) return
+  const keys = new Set<string>()
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index]
+    if (!item?.src) continue
+    const key = screenshotBrowserItemKey(item)
+    if (keys.has(key)) continue
+    keys.add(key)
+    let owners = topLevelScreenshotItemOwners.get(key)
+    if (!owners) {
+      owners = new Map<string, TopLevelScreenshotOwnedItem>()
+      topLevelScreenshotItemOwners.set(key, owners)
+    }
+    owners.set(rootID, { rootID, item, index })
+  }
+  if (keys.size > 0) topLevelScreenshotRootItemKeys.set(rootID, keys)
+  for (const key of keys) reconcileTopLevelScreenshotItemOwner(key)
 }
 
 function syncTopLevelRootScreenshotItems(cardID: string, items: readonly ScreenshotBrowserItem[]): void {
   if (!topLevelRootIDs.has(cardID)) return
-  if (items.length > 0) {
-    topLevelScreenshotItemSets.set(cardID, items)
-  } else {
-    topLevelScreenshotItemSets.delete(cardID)
-  }
-  topLevelScreenshotItemsDirty = true
+  removeTopLevelRootScreenshotItems(cardID)
+  if (items.length > 0) addTopLevelRootScreenshotItems(cardID, items)
 }
 
-function rebuildTopLevelScreenshotRoots(): void {
-  const nextRootIDs = new Set<string>()
-  const nextItemSets = new Map<string, readonly ScreenshotBrowserItem[]>()
-  for (const cardID of cardTreeStore.order) {
-    if (nextRootIDs.has(cardID)) continue
-    nextRootIDs.add(cardID)
-    const card = cardTreeStore.cards[cardID]
-    if (!card) throw new Error(`card-tree stats order references missing card ${cardID}`)
-    const items = card.subtreeScreenshotItems
-    if (!Array.isArray(items)) {
-      throw new Error(`card-tree root ${cardID} is missing subtreeScreenshotItems cache`)
-    }
-    if (items.length > 0) nextItemSets.set(cardID, items)
+function clearTopLevelScreenshotIndex(): void {
+  topLevelRootIDs = new Set<string>()
+  topLevelRootRank = new Map<string, number>()
+  topLevelScreenshotRootItemKeys = new Map<string, Set<string>>()
+  topLevelScreenshotItemOwners = new Map<string, Map<string, TopLevelScreenshotOwnedItem>>()
+  topLevelScreenshotActiveOwners = new Map<string, TopLevelScreenshotOwnedItem>()
+  topLevelScreenshotHeap = []
+  topLevelScreenshotHeapIndexes = new Map<string, number>()
+}
+
+function uniqueTopLevelOrder(order: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const unique: string[] = []
+  for (const cardID of order) {
+    if (seen.has(cardID)) continue
+    seen.add(cardID)
+    unique.push(cardID)
   }
+  return unique
+}
+
+function equalStringList(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let index = 0; index < b.length; index += 1) {
+    if (a[index] !== b[index]) return false
+  }
+  return true
+}
+
+function reconcileAllTopLevelScreenshotItemOwners(): void {
+  for (const key of Array.from(topLevelScreenshotItemOwners.keys())) reconcileTopLevelScreenshotItemOwner(key)
+}
+
+function addTopLevelRootFromStore(cardID: string): void {
+  const card = cardTreeStore.cards[cardID]
+  if (!card) throw new Error(`card-tree stats order references missing card ${cardID}`)
+  const items = card.subtreeScreenshotItems
+  if (Array.isArray(items)) {
+    if (items.length > 0) addTopLevelRootScreenshotItems(cardID, items)
+    return
+  }
+  markCardStatsDirty(cardID)
+}
+
+function applyTopLevelOrderChange(_previousOrder: readonly string[], nextOrder: readonly string[]): void {
+  const previousRootIDs = topLevelRootIDs
+  const nextRootList = uniqueTopLevelOrder(nextOrder)
+  const nextRootIDs = new Set(nextRootList)
+  const retainedBefore = Array.from(previousRootIDs).filter((cardID) => nextRootIDs.has(cardID))
+  const retainedAfter = nextRootList.filter((cardID) => previousRootIDs.has(cardID))
+  const retainedRootsReordered = !equalStringList(retainedBefore, retainedAfter)
+
+  for (const cardID of previousRootIDs) {
+    if (!nextRootIDs.has(cardID)) removeTopLevelRootScreenshotItems(cardID)
+  }
+
   topLevelRootIDs = nextRootIDs
-  topLevelScreenshotItemSets = nextItemSets
-  topLevelOrderDirty = false
-  topLevelScreenshotItemsDirty = true
+  topLevelRootRank = new Map(nextRootList.map((cardID, index) => [cardID, index]))
+
+  for (const cardID of nextRootList) {
+    if (previousRootIDs.has(cardID)) continue
+    addTopLevelRootFromStore(cardID)
+  }
+
+  if (retainedRootsReordered) {
+    reconcileAllTopLevelScreenshotItemOwners()
+    rebuildTopLevelScreenshotHeapFromActiveOwners()
+    topLevelScreenshotItemsDirty = true
+  }
+}
+
+function collectTopLevelScreenshotItemsFromHeap(): ScreenshotBrowserItem[] {
+  const retained: TopLevelScreenshotHeapEntry[] = []
+  const items: ScreenshotBrowserItem[] = []
+  while (topLevelScreenshotHeap.length > 0 && items.length < SCREENSHOT_BROWSER_ITEM_LIMIT) {
+    const entry = popTopLevelScreenshotHeap()
+    if (!entry) break
+    retained.push(entry)
+    items.push(entry.item)
+  }
+  for (const entry of retained) upsertTopLevelScreenshotHeap(entry)
+  return items
 }
 
 function flushTopLevelScreenshotItems(): void {
-  if (topLevelOrderDirty) rebuildTopLevelScreenshotRoots()
   if (!topLevelScreenshotItemsDirty) return
   topLevelScreenshotItemsDirty = false
-  const screenshotItems = mergeScreenshotBrowserItemSets(topLevelScreenshotItemSets.values())
+  const screenshotItems = collectTopLevelScreenshotItemsFromHeap()
   if (!equalScreenshotItems(cardTreeStore.screenshotItems, screenshotItems)) {
     setCardTreeStore("screenshotItems", screenshotItems)
   }
@@ -477,18 +721,15 @@ export function flushCardStats(): void {
  *  should never need this — tree-writer always flushes at batch end. */
 export function __resetCardStatsForTests(): void {
   dirtyCardIDs.clear()
-  topLevelRootIDs = new Set<string>()
-  topLevelScreenshotItemSets = new Map<string, readonly ScreenshotBrowserItem[]>()
+  clearTopLevelScreenshotIndex()
   cardUsageAggregates = new Map<string, UsageAggregate>()
-  topLevelOrderDirty = true
   topLevelScreenshotItemsDirty = true
   usageAggregateDirty = true
 }
 
-registerCardTreeOrderStatsHandler(markTopLevelOrderDirty)
+registerCardTreeOrderStatsHandler(applyTopLevelOrderChange)
 
 registerCardTreePruneStatsHandler(() => {
-  markTopLevelOrderDirty()
   for (const cardID of cardUsageAggregates.keys()) {
     if (!cardTreeStore.cards[cardID]) removeCardUsageAggregate(cardID)
   }

@@ -442,13 +442,15 @@ export function setHydratedRewindCursor(cursorTime: number | null): void {
 }
 
 let pruneStatsHandler: (() => void) | undefined
-let orderStatsHandler: (() => void) | undefined
+let orderStatsHandler: ((previousOrder: readonly string[], nextOrder: readonly string[]) => void) | undefined
 
 export function registerCardTreePruneStatsHandler(handler: () => void): void {
   pruneStatsHandler = handler
 }
 
-export function registerCardTreeOrderStatsHandler(handler: () => void): void {
+export function registerCardTreeOrderStatsHandler(
+  handler: (previousOrder: readonly string[], nextOrder: readonly string[]) => void,
+): void {
   orderStatsHandler = handler
 }
 
@@ -459,11 +461,11 @@ function flushPrunedCardTreeStats(): void {
   pruneStatsHandler()
 }
 
-function notifyCardTreeOrderStats(): void {
+function notifyCardTreeOrderStats(previousOrder: readonly string[], nextOrder: readonly string[]): void {
   if (!orderStatsHandler) {
     throw new Error("card tree order changes require the card-tree stats kernel to be registered")
   }
-  orderStatsHandler()
+  orderStatsHandler(previousOrder, nextOrder)
 }
 
 function equalCardTreeOrder(a: readonly string[], b: readonly string[]): boolean {
@@ -477,12 +479,16 @@ function equalCardTreeOrder(a: readonly string[], b: readonly string[]): boolean
 
 export function replaceCardTreeOrder(nextOrder: readonly string[] | ((order: readonly string[]) => readonly string[])): void {
   let changed = false
+  let previousSnapshot: string[] = []
+  let nextSnapshot: string[] = []
   setCardTreeStore("order", (current) => {
+    previousSnapshot = Array.from(current)
     const next = typeof nextOrder === "function" ? Array.from(nextOrder(current)) : Array.from(nextOrder)
+    nextSnapshot = next
     changed = !equalCardTreeOrder(current, next)
     return next
   })
-  if (changed) notifyCardTreeOrderStats()
+  if (changed) notifyCardTreeOrderStats(previousSnapshot, nextSnapshot)
 }
 
 /**
