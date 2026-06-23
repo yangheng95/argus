@@ -83,9 +83,16 @@
 }
 
 body {
-  --ui-overlay-shell-height: min(
-    100vh,
-    calc(100vw * var(--ui-overlay-min-height-units) / var(--ui-overlay-min-width-units))
+  --ui-overlay-shell-width: max(100vw, var(--ui-overlay-min-width));
+  --ui-overlay-shell-height: max(
+    var(--ui-overlay-min-height),
+    min(
+      100vh,
+      calc(
+        var(--ui-overlay-shell-width) * var(--ui-overlay-min-height-units) /
+          var(--ui-overlay-min-width-units)
+      )
+    )
   );
 
   font-family: var(--font);
