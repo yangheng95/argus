@@ -6,6 +6,7 @@ import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import {
   buildScreenshotBrowserRows,
   groupScreenshotBrowserItems,
+  isScreenshotBrowserThumbnailUrl,
   isStoredAttachmentUrl,
   type ScreenshotBrowserItem,
   type ScreenshotBrowserRow,
@@ -84,10 +85,13 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
   let thumbnailLoadController: AbortController | undefined
   const [loadAllowed, setLoadAllowed] = createSignal(false)
   const sourceError = createMemo(() =>
-    loadAllowed() && !isStoredAttachmentUrl(props.item.src) ? t("screenshots.thumbnail_invalid_source") : "",
+    loadAllowed() &&
+    (!isStoredAttachmentUrl(props.item.src) || !isScreenshotBrowserThumbnailUrl(props.item.thumbnailSrc))
+      ? t("screenshots.thumbnail_invalid_source")
+      : "",
   )
   const [objectUrl] = createResource(
-    () => (loadAllowed() && !sourceError() ? props.item.src : null),
+    () => (loadAllowed() && !sourceError() ? props.item.thumbnailSrc : null),
     async (url: string | null) => {
       thumbnailLoadController?.abort(new DOMException("Screenshot thumbnail source changed", "AbortError"))
       thumbnailLoadController = undefined
@@ -154,6 +158,7 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
             <PreviewableImage
               src={resolved()}
               alt={props.item.alt}
+              previewLoader={() => fetchResourceAsObjectUrl(props.item.src)}
               triggerClass="screenshot-browser__thumb-trigger"
               imageClass="screenshot-browser__thumb-image"
               imageAttributes={{

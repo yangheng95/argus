@@ -541,6 +541,7 @@ test("top-level screenshot cache bounds many roots before the panel reads it", (
           id: `file:bulk-message-${index}:bulk-part-${index}`,
           role: "visual-qa" as const,
           src: `/attachment/project/bulk-${index}.png`,
+          thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl(`/attachment/project/bulk-${index}.png`),
           alt: `bulk-${index}.png`,
           title: `bulk-${index}.png`,
           detail: "image/png",
@@ -574,6 +575,9 @@ test("top-level screenshot cache bounds many roots before the panel reads it", (
 
     expect(cardTreeStore.screenshotItems).toHaveLength(screenshotBrowserUtils.SCREENSHOT_BROWSER_ITEM_LIMIT)
     expect(cardTreeStore.screenshotItems[0]?.src).toBe("/attachment/project/bulk-4999.png")
+    expect(cardTreeStore.screenshotItems[0]?.thumbnailSrc).toBe(
+      `/attachment/project/bulk-4999.png?variant=${screenshotBrowserUtils.SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+    )
     expect(cardTreeStore.screenshotItems.at(-1)?.src).toBe("/attachment/project/bulk-4880.png")
   } finally {
     resetWriter()
@@ -608,6 +612,7 @@ test("top-level screenshot cache updates one dirty root without reading unrelate
           id: `file:bulk-message-${index}:bulk-part-${index}`,
           role: "visual-qa",
           src: `/attachment/project/bulk-${index}.png`,
+          thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl(`/attachment/project/bulk-${index}.png`),
           alt: `bulk-${index}.png`,
           title: `bulk-${index}.png`,
           detail: "image/png",
@@ -761,6 +766,7 @@ test("top-level screenshot cache preserves duplicate-owner and equal-time order 
       id: "file:shared-message:shared-part",
       role: "visual-qa",
       src: "/attachment/project/shared.png",
+      thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl("/attachment/project/shared.png"),
       alt: "shared.png",
       title,
       detail: "image/png",
@@ -773,6 +779,7 @@ test("top-level screenshot cache preserves duplicate-owner and equal-time order 
       id: `file:${id}`,
       role: "visual-qa",
       src: `/attachment/project/${id}.png`,
+      thumbnailSrc: screenshotBrowserUtils.screenshotBrowserThumbnailUrl(`/attachment/project/${id}.png`),
       alt: `${id}.png`,
       title: id,
       detail: "image/png",

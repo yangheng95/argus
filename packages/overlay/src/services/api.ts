@@ -581,9 +581,10 @@ function createBlobInFlightEntry(raw: string): BlobInFlightEntry {
         blobCache.set(raw, objectUrl)
         return objectUrl
       }
-      const path = raw.replace(/^\/+/, "")
+      const { pathOnly, query } = splitPathQuery(raw.replace(/^\/+/, ""))
       const res = await transport.request<Uint8Array>({
-        path,
+        path: pathOnly,
+        query,
         method: "GET",
         responseKind: "binary",
         signal: controller.signal,

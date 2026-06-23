@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import test from "node:test"
 import { deflateSync } from "node:zlib"
 
+import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
 import { startBrowserFixture } from "./http-fixture.ts"
@@ -23,7 +24,9 @@ const SCREENSHOT_COUNT = 120
 
 const SCREENSHOT_IMAGE_WIDTH = 1440
 const SCREENSHOT_IMAGE_HEIGHT = 900
-const screenshotPngCache = new Map<number, Buffer>()
+const SCREENSHOT_THUMBNAIL_IMAGE_WIDTH = 360
+const SCREENSHOT_THUMBNAIL_IMAGE_HEIGHT = 225
+const screenshotPngCache = new Map<string, Buffer>()
 
 function u32(value: number): Buffer {
   const buffer = Buffer.alloc(4)
@@ -47,16 +50,17 @@ function pngChunk(type: string, data = Buffer.alloc(0)): Buffer {
   return Buffer.concat([u32(data.length), typeBuffer, data, u32(crc32(Buffer.concat([typeBuffer, data])))])
 }
 
-function screenshotPngBytes(index: number): Buffer {
-  const cached = screenshotPngCache.get(index)
+function screenshotPngBytes(index: number, width = SCREENSHOT_IMAGE_WIDTH, height = SCREENSHOT_IMAGE_HEIGHT): Buffer {
+  const cacheKey = `${index}:${width}x${height}`
+  const cached = screenshotPngCache.get(cacheKey)
   if (cached) return cached
   const bytesPerPixel = 3
-  const rowStride = 1 + SCREENSHOT_IMAGE_WIDTH * bytesPerPixel
-  const raw = Buffer.alloc(rowStride * SCREENSHOT_IMAGE_HEIGHT)
-  for (let y = 0; y < SCREENSHOT_IMAGE_HEIGHT; y += 1) {
+  const rowStride = 1 + width * bytesPerPixel
+  const raw = Buffer.alloc(rowStride * height)
+  for (let y = 0; y < height; y += 1) {
     const row = y * rowStride
     raw[row] = 0
-    for (let x = 0; x < SCREENSHOT_IMAGE_WIDTH; x += 1) {
+    for (let x = 0; x < width; x += 1) {
       const offset = row + 1 + x * bytesPerPixel
       raw[offset] = (x + index * 17) & 255
       raw[offset + 1] = (y + index * 29) & 255
@@ -64,8 +68,8 @@ function screenshotPngBytes(index: number): Buffer {
     }
   }
   const ihdr = Buffer.concat([
-    u32(SCREENSHOT_IMAGE_WIDTH),
-    u32(SCREENSHOT_IMAGE_HEIGHT),
+    u32(width),
+    u32(height),
     Buffer.from([8, 2, 0, 0, 0]),
   ])
   const png = Buffer.concat([
@@ -74,7 +78,7 @@ function screenshotPngBytes(index: number): Buffer {
     pngChunk("IDAT", deflateSync(raw, { level: 1 })),
     pngChunk("IEND"),
   ])
-  screenshotPngCache.set(index, png)
+  screenshotPngCache.set(cacheKey, png)
   return png
 }
 
@@ -95,6 +99,70 @@ function json(value: unknown, init?: ResponseInit) {
       ...(init?.headers || {}),
     },
   })
+}
+
+async function waitForVisibleScreenshotThumbnails(page: any, label: string, attachmentRequests: readonly string[]): Promise<void> {
+  try {
+    await page.waitForFunction(() => {
+      const root = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+      if (!root) return false
+      const rootRect = root.getBoundingClientRect()
+      const visibleCards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card")).filter((card) => {
+        const rect = card.getBoundingClientRect()
+        return rect.bottom > rootRect.top && rect.top < rootRect.bottom && rect.right > rootRect.left && rect.left < rootRect.right
+      })
+      return (
+        visibleCards.length > 1 &&
+        visibleCards.every((card) => {
+          const img = card.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
+          return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+        })
+      )
+    })
+  } catch (error) {
+    const state = await page.evaluate((attachmentRequests) => {
+      const root = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
+      const rootRect = root?.getBoundingClientRect()
+      const cards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card"))
+      const visibleCards = rootRect
+        ? cards.filter((card) => {
+            const rect = card.getBoundingClientRect()
+            return (
+              rect.bottom > rootRect.top &&
+              rect.top < rootRect.bottom &&
+              rect.right > rootRect.left &&
+              rect.left < rootRect.right
+            )
+          })
+        : []
+      return {
+        panelOpen: document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open,
+        rootPresent: Boolean(root),
+        cardCount: cards.length,
+        visibleCount: visibleCards.length,
+        visibleCards: visibleCards.slice(0, 6).map((card) => {
+          const img = card.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
+          return {
+            title: card.querySelector<HTMLElement>(".screenshot-browser-card__body strong")?.textContent ?? "",
+            complete: img?.complete ?? false,
+            naturalWidth: img?.naturalWidth ?? 0,
+            naturalHeight: img?.naturalHeight ?? 0,
+            attrSrc: img?.getAttribute("src") ?? "",
+            src: img?.src ?? "",
+            outerHTML: img?.outerHTML ?? "",
+            triggerSrc: card
+              .querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
+              ?.getAttribute("data-image-preview-src") ?? "",
+            hasPlaceholder: Boolean(card.querySelector(".screenshot-browser__thumb-placeholder")),
+            errorText: card.querySelector<HTMLElement>(".screenshot-browser__thumb-error")?.textContent?.trim() ?? "",
+          }
+        }),
+        attachmentRequests,
+      }
+    }, attachmentRequests)
+    const message = error instanceof Error ? error.message : String(error)
+    assert.fail(`${label}: ${message}; state=${JSON.stringify(state)}`)
+  }
 }
 
 function conversationPayload() {
@@ -190,7 +258,25 @@ test(
       if (staticResponse) return staticResponse
       const requestedScreenshotIndex = screenshotIndex(path)
       if (requestedScreenshotIndex != null) {
-        attachmentRequests.push(path)
+        const requestPath = `${path}${url.search}`
+        attachmentRequests.push(requestPath)
+        const queryKeys = Array.from(url.searchParams.keys())
+        if (url.search) {
+          if (
+            queryKeys.length === 1 &&
+            url.searchParams.get("variant") === SCREENSHOT_BROWSER_THUMBNAIL_VARIANT
+          ) {
+            return new Response(
+              screenshotPngBytes(
+                requestedScreenshotIndex,
+                SCREENSHOT_THUMBNAIL_IMAGE_WIDTH,
+                SCREENSHOT_THUMBNAIL_IMAGE_HEIGHT,
+              ),
+              { headers: { "content-type": "image/png" } },
+            )
+          }
+          return json({ error: "unknown screenshot attachment variant", path: requestPath }, { status: 404 })
+        }
         return new Response(screenshotPngBytes(requestedScreenshotIndex), { headers: { "content-type": "image/png" } })
       }
       if (path === "/global/health") return json({ version: "1.2.3" })
@@ -478,15 +564,7 @@ test(
       await page.waitForSelector(".screenshot-browser-card")
       const firstCardVisibleElapsed = Date.now() - openStart
       assert.ok(firstCardVisibleElapsed < 1_500, `screenshot browser first card took ${firstCardVisibleElapsed}ms`)
-      await page.waitForFunction(() => {
-        const cardCount = document.querySelectorAll(".screenshot-browser-card").length
-        const images = Array.from(document.querySelectorAll<HTMLImageElement>(".screenshot-browser__thumb-image"))
-        return (
-          cardCount > 0 &&
-          images.length === cardCount &&
-          images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)
-        )
-      })
+      await waitForVisibleScreenshotThumbnails(page, "initial open", attachmentRequests)
       const decodedElapsed = Date.now() - openStart
       const openPerf = await page.evaluate(() => (window as any).__screenshotBrowserStopOpenPerf())
       await page.evaluate(() => (window as any).__screenshotBrowserRestoreInstrumentation())
@@ -529,6 +607,14 @@ test(
         openAttachmentRequests < 24,
         `initial screenshot open fetched too many attachments: ${openAttachmentRequests}`,
       )
+      const initialAttachmentRequests = attachmentRequests.slice(requestsBeforeOpen)
+      assert.ok(initialAttachmentRequests.length > 0, "initial screenshot open did not request visible thumbnails")
+      assert.ok(
+        initialAttachmentRequests.every((requestPath) =>
+          requestPath.endsWith(`?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`),
+        ),
+        `thumbnail open requested non-thumbnail attachments: ${JSON.stringify(initialAttachmentRequests)}`,
+      )
 
       const thumbLayout = await page.evaluate(() => {
         const trigger = document.querySelector<HTMLElement>(".screenshot-browser__thumb-trigger")
@@ -548,8 +634,34 @@ test(
       assert.ok(thumbLayout.triggerHeight >= 130, JSON.stringify(thumbLayout))
       assert.ok(thumbLayout.imageWidth >= thumbLayout.triggerWidth - 1, JSON.stringify(thumbLayout))
       assert.ok(thumbLayout.imageHeight >= thumbLayout.triggerHeight - 1, JSON.stringify(thumbLayout))
-      assert.equal(thumbLayout.naturalWidth, SCREENSHOT_IMAGE_WIDTH, JSON.stringify(thumbLayout))
-      assert.equal(thumbLayout.naturalHeight, SCREENSHOT_IMAGE_HEIGHT, JSON.stringify(thumbLayout))
+      assert.equal(thumbLayout.naturalWidth, SCREENSHOT_THUMBNAIL_IMAGE_WIDTH, JSON.stringify(thumbLayout))
+      assert.equal(thumbLayout.naturalHeight, SCREENSHOT_THUMBNAIL_IMAGE_HEIGHT, JSON.stringify(thumbLayout))
+      assert.ok(thumbLayout.naturalWidth < SCREENSHOT_IMAGE_WIDTH, JSON.stringify(thumbLayout))
+      assert.ok(thumbLayout.naturalHeight < SCREENSHOT_IMAGE_HEIGHT, JSON.stringify(thumbLayout))
+
+      const requestsBeforePreview = attachmentRequests.length
+      await page.click(".screenshot-browser__thumb-trigger")
+      await page.waitForSelector("#imagePreviewDialog .image-preview-dialog__image")
+      await page.waitForFunction(() => {
+        const image = document.querySelector<HTMLImageElement>("#imagePreviewDialog .image-preview-dialog__image")
+        return !!image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
+      })
+      const previewLayout = await page.evaluate(() => {
+        const image = document.querySelector<HTMLImageElement>("#imagePreviewDialog .image-preview-dialog__image")
+        return {
+          naturalWidth: image?.naturalWidth ?? 0,
+          naturalHeight: image?.naturalHeight ?? 0,
+          src: image?.src ?? "",
+        }
+      })
+      assert.equal(previewLayout.naturalWidth, SCREENSHOT_IMAGE_WIDTH, JSON.stringify(previewLayout))
+      assert.equal(previewLayout.naturalHeight, SCREENSHOT_IMAGE_HEIGHT, JSON.stringify(previewLayout))
+      const previewAttachmentRequests = attachmentRequests.slice(requestsBeforePreview)
+      assert.equal(previewAttachmentRequests.length, 1, JSON.stringify(previewAttachmentRequests))
+      assert.ok(!previewAttachmentRequests[0].includes("?variant="), JSON.stringify(previewAttachmentRequests))
+      writeFileSync(resolve(".scratch/screenshot-browser-panel-browser-preview.png"), await page.screenshot({ fullPage: false }))
+      await page.click('#imagePreviewDialog [aria-label="Close"]')
+      await page.waitForFunction(() => document.querySelector("#imagePreviewDialog") === null)
 
       await page.setViewport({ width: 960, height: 760 })
       await new Promise((resolve) => setTimeout(resolve, 100))
@@ -615,22 +727,7 @@ test(
             requestAnimationFrame(() => resolve())
           }),
       )
-      await page.waitForFunction(() => {
-        const root = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
-        if (!root) return false
-        const rootRect = root.getBoundingClientRect()
-        const visibleCards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card")).filter((card) => {
-          const rect = card.getBoundingClientRect()
-          return rect.bottom > rootRect.top && rect.top < rootRect.bottom && rect.right > rootRect.left && rect.left < rootRect.right
-        })
-        return (
-          visibleCards.length > 1 &&
-          visibleCards.every((card) => {
-            const img = card.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
-            return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
-          })
-        )
-      })
+      await waitForVisibleScreenshotThumbnails(page, "cancellation stress", attachmentRequests)
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForFunction(
         () => document.querySelector<HTMLElement>("#centerWorkbenchScreenshots")?.dataset.open === "false",
@@ -694,22 +791,7 @@ test(
       await page.waitForSelector(".screenshot-browser-card")
       const reopenFirstCardElapsed = Date.now() - reopenStart
       assert.ok(reopenFirstCardElapsed < 1_500, `screenshot browser reopen first card took ${reopenFirstCardElapsed}ms`)
-      await page.waitForFunction(() => {
-        const root = document.querySelector<HTMLElement>(".screenshot-browser-groups[data-virtualized=\"true\"]")
-        if (!root) return false
-        const rootRect = root.getBoundingClientRect()
-        const visibleCards = Array.from(document.querySelectorAll<HTMLElement>(".screenshot-browser-card")).filter((card) => {
-          const rect = card.getBoundingClientRect()
-          return rect.bottom > rootRect.top && rect.top < rootRect.bottom && rect.right > rootRect.left && rect.left < rootRect.right
-        })
-        return (
-          visibleCards.length > 1 &&
-          visibleCards.every((card) => {
-            const img = card.querySelector<HTMLImageElement>(".screenshot-browser__thumb-image")
-            return !!img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
-          })
-        )
-      })
+      await waitForVisibleScreenshotThumbnails(page, "warm-cache reopen", attachmentRequests)
       const warmCacheProbe = await page.evaluate(() => (window as any).__screenshotBrowserStopWarmCacheProbe())
       const insertions = (warmCacheProbe?.imageInsertions ?? []) as Array<{ frameID: number; src: string }>
       const insertionFrames = new Set(insertions.map((insertion) => insertion.frameID))

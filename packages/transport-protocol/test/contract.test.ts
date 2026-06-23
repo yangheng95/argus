@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   EXTENSION_MESSAGE_TYPES,
   PROTOCOL_VERSION,
+  SCREENSHOT_BROWSER_THUMBNAIL_VARIANT,
   WEBVIEW_MESSAGE_TYPES,
   base64ToUint8,
   isExtensionMessage,
@@ -296,6 +297,8 @@ describe("route directory policy", () => {
       "/auth/login",
       "/ui/index.html",
       "/mission",
+      "/attachment/project/shot.png",
+      `/attachment/project/shot.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
       "/task/abc/conversation",
       "/task/abc/conversation/history",
       "/task/abc/conversation/events",

@@ -7,9 +7,12 @@ import {
   collectScreenshotBrowserItemsFromCardTree,
   collectScreenshotBrowserItems,
   groupScreenshotBrowserItems,
+  isScreenshotBrowserThumbnailUrl,
   isStoredAttachmentUrl,
   mergeScreenshotBrowserItemSets,
   SCREENSHOT_BROWSER_ITEM_LIMIT,
+  SCREENSHOT_BROWSER_THUMBNAIL_VARIANT,
+  screenshotBrowserThumbnailUrl,
   type ScreenshotBrowserItem,
 } from "../src/utils/screenshot-browser"
 import type { CardNode } from "../src/store/card-tree"
@@ -42,6 +45,7 @@ function screenshotItem(input: Partial<ScreenshotBrowserItem> & Pick<ScreenshotB
     id: input.id ?? `file:${src}`,
     role: input.role ?? "visual-qa",
     src,
+    thumbnailSrc: input.thumbnailSrc ?? screenshotBrowserThumbnailUrl(src),
     alt: input.alt ?? src,
     title: input.title ?? src,
     detail: input.detail ?? "image/png",
@@ -173,6 +177,11 @@ describe("screenshot browser panel", () => {
       "/attachment/project/tool.webp",
       "/attachment/project/a.png",
     ])
+    expect(items.map((item) => item.thumbnailSrc)).toEqual([
+      `/attachment/project/browser.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+      `/attachment/project/tool.webp?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+      `/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+    ])
     expect(groups.map((group) => group.role)).toEqual(["visual-qa", "build"])
     expect(groups[0].items.map((item) => item.source)).toEqual(["tool-browser-evidence", "tool-attachment"])
     expect(groups[1].items.map((item) => item.source)).toEqual(["file"])
@@ -189,6 +198,20 @@ describe("screenshot browser panel", () => {
     expect(isStoredAttachmentUrl("/browser-preview/a.png")).toBe(false)
     expect(isStoredAttachmentUrl("https://example.test/a.png")).toBe(false)
     expect(isStoredAttachmentUrl("data:image/png;base64,AAAA")).toBe(false)
+    expect(screenshotBrowserThumbnailUrl("/attachment/project/a.png")).toBe(
+      `/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+    )
+    expect(() => screenshotBrowserThumbnailUrl("/api/a.png")).toThrow("stored attachment")
+    expect(isScreenshotBrowserThumbnailUrl(`/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`)).toBe(
+      true,
+    )
+    expect(isScreenshotBrowserThumbnailUrl("/attachment/project/a.png")).toBe(false)
+    expect(isScreenshotBrowserThumbnailUrl("/attachment/project/a.png?variant=unknown")).toBe(false)
+    expect(
+      isScreenshotBrowserThumbnailUrl(
+        `/attachment/project/a.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}&other=1`,
+      ),
+    ).toBe(false)
   })
 
   test("collects screenshots from hydrated card tree as the panel source", () => {
@@ -275,6 +298,11 @@ describe("screenshot browser panel", () => {
       "/attachment/project/browser.png",
       "/attachment/project/visual.png",
       "/attachment/project/build.png",
+    ])
+    expect(items.map((item) => item.thumbnailSrc)).toEqual([
+      `/attachment/project/browser.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+      `/attachment/project/visual.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+      `/attachment/project/build.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
     ])
     expect(groupScreenshotBrowserItems(items).map((group) => group.role)).toEqual(["visual-qa", "build"])
   })
@@ -488,6 +516,7 @@ describe("screenshot browser panel", () => {
     expect(component).not.toContain("element.clientWidth")
     expect(component).toContain("groupScreenshotBrowserItems")
     expect(component).toContain("isStoredAttachmentUrl")
+    expect(component).toContain("isScreenshotBrowserThumbnailUrl")
     expect(component).not.toContain("needsAuthedFetch")
     expect(component).not.toContain("resolveResourceUrl")
     expect(component).toContain("fetchResourceAsObjectUrl")
@@ -495,6 +524,8 @@ describe("screenshot browser panel", () => {
     expect(component).toContain("let thumbnailLoadController: AbortController | undefined")
     expect(component).toContain('new DOMException("Screenshot thumbnail source changed", "AbortError")')
     expect(component).toContain('new DOMException("Screenshot thumbnail unmounted", "AbortError")')
+    expect(component).toContain("!isStoredAttachmentUrl(props.item.src) || !isScreenshotBrowserThumbnailUrl(props.item.thumbnailSrc)")
+    expect(component).toContain("props.item.thumbnailSrc")
     expect(component).toContain("const cached = peekResourceObjectUrl(url)")
     expect(component).toContain("if (cached) return cached")
     expect(component).toContain("fetchResourceAsObjectUrl(url, { signal: controller.signal })")
@@ -504,7 +535,9 @@ describe("screenshot browser panel", () => {
     expect(component).toContain('class="screenshot-browser__thumb-trigger screenshot-browser__thumb-error"')
     expect(component).not.toContain("initialValue: authed() ?")
     expect(component).not.toContain("peekResourceObjectUrl(props.item.src)")
+    expect(component).not.toContain("fetchResourceAsObjectUrl(props.item.src, { signal")
     expect(component).toContain("<PreviewableImage")
+    expect(component).toContain("previewLoader={() => fetchResourceAsObjectUrl(props.item.src)}")
     expect(component).toContain("imageAttributes={{")
     expect(component).toContain('decoding: "async"')
     expect(component).toContain('fetchpriority: "low"')
@@ -516,6 +549,12 @@ describe("screenshot browser panel", () => {
     expect(component).not.toContain("fetch(")
     expect(component).not.toContain("localStorage")
     expect(component).not.toContain("sessionStorage")
+    const screenshotUtils = read("src/utils/screenshot-browser.ts")
+    expect(screenshotUtils).toContain('from "@opencorvus-ai/transport-protocol"')
+    expect(screenshotUtils).toContain("export { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT }")
+    expect(screenshotUtils).toContain("thumbnailSrc: screenshotBrowserThumbnailUrl(src)")
+    expect(screenshotUtils).toContain("isScreenshotBrowserThumbnailUrl")
+    expect(screenshotUtils).not.toContain("canvas")
     expect(css).toContain(".screenshot-browser-panel")
     expect(normalizedCss).toContain(
       '.screenshot-browser-groups[data-virtualized="true"] {\n  display: block;\n  gap: 0;\n  overflow-x: hidden;\n  overflow-y: auto;\n}',
