@@ -1,8 +1,13 @@
 let layoutTokenProbe: HTMLElement | null = null
 const layoutTokenCache = new Map<string, { signature: string; value: number }>()
 
-function tokenSignature(root: HTMLElement): string {
-  return getComputedStyle(root).getPropertyValue("--ui-scale").trim()
+function tokenSignature(root: HTMLElement, container: HTMLElement): string {
+  const scale = getComputedStyle(root).getPropertyValue("--ui-scale").trim()
+  const containerInlineSize = container.getBoundingClientRect().width
+  if (!Number.isFinite(containerInlineSize) || containerInlineSize <= 0) {
+    throw new Error(`Layout token cache container resolved to invalid width: ${containerInlineSize}`)
+  }
+  return `${scale}|${containerInlineSize.toFixed(3)}`
 }
 
 function probeElement(): HTMLElement {
@@ -36,11 +41,11 @@ export function layoutTokenPx(name: string): number {
   if (!root) {
     throw new Error(`Layout token ${name} cannot be resolved without documentElement.`)
   }
-  const signature = tokenSignature(root)
+  const probe = probeElement()
+  const signature = tokenSignature(root, document.body)
   const cached = layoutTokenCache.get(name)
   if (cached?.signature === signature) return cached.value
 
-  const probe = probeElement()
   probe.style.width = `var(${name})`
   const value = probe.getBoundingClientRect().width
   if (!Number.isFinite(value) || value <= 0) {
