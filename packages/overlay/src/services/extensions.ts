@@ -47,6 +47,35 @@ export interface AgentSkillMountMatrix {
 
 // ── Helpers ──
 
+function stabilizeSkillOrder(matrix: AgentSkillMountMatrix): AgentSkillMountMatrix {
+  const previousSkills =
+    appStore.skillMounts && Array.isArray(appStore.skillMounts.skills) ? appStore.skillMounts.skills : appStore.skills
+  if (!Array.isArray(previousSkills) || previousSkills.length === 0 || !Array.isArray(matrix.skills)) return matrix
+  const order = new Map<string, number>()
+  previousSkills.forEach((skill: SkillDescriptor, index: number) => {
+    if (typeof skill?.name === "string" && !order.has(skill.name)) order.set(skill.name, index)
+  })
+  const sortedSkills = matrix.skills
+    .map((skill, index) => ({ skill, index }))
+    .sort((left, right) => {
+      const leftOrder = order.get(left.skill.name)
+      const rightOrder = order.get(right.skill.name)
+      if (leftOrder !== undefined && rightOrder !== undefined) return leftOrder - rightOrder
+      if (leftOrder !== undefined) return -1
+      if (rightOrder !== undefined) return 1
+      return left.index - right.index
+    })
+    .map((entry) => entry.skill)
+  return { ...matrix, skills: sortedSkills }
+}
+
+function commitSkillMountMatrix(matrix: AgentSkillMountMatrix): AgentSkillMountMatrix {
+  const stable = stabilizeSkillOrder(matrix)
+  setSkillMounts(stable)
+  if (Array.isArray(stable.skills)) setSkills(stable.skills)
+  return stable
+}
+
 /**
  * Returns the removal kind for a skill, used when calling removeSkillSource.
  * Mirrors skillRemoveKind.
@@ -99,9 +128,7 @@ export async function loadSkillMountMatrix(sessionID?: string): Promise<AgentSki
   if (!matrix || typeof matrix !== "object" || Array.isArray(matrix)) {
     throw new Error("skill/mounts returned a non-object payload")
   }
-  setSkillMounts(matrix)
-  if (Array.isArray((matrix as AgentSkillMountMatrix).skills)) setSkills((matrix as AgentSkillMountMatrix).skills)
-  return matrix as AgentSkillMountMatrix
+  return commitSkillMountMatrix(matrix as AgentSkillMountMatrix)
 }
 
 export async function mountSkill(agent: string, skill: string, sessionID?: string): Promise<AgentSkillMountMatrix> {
@@ -110,9 +137,7 @@ export async function mountSkill(agent: string, skill: string, sessionID?: strin
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ agent, skill, sessionID: sessionID || undefined }),
   })
-  setSkillMounts(matrix)
-  if (Array.isArray((matrix as AgentSkillMountMatrix).skills)) setSkills((matrix as AgentSkillMountMatrix).skills)
-  return matrix as AgentSkillMountMatrix
+  return commitSkillMountMatrix(matrix as AgentSkillMountMatrix)
 }
 
 export async function unmountSkill(agent: string, skill: string, sessionID?: string): Promise<AgentSkillMountMatrix> {
@@ -121,9 +146,7 @@ export async function unmountSkill(agent: string, skill: string, sessionID?: str
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ agent, skill, sessionID: sessionID || undefined }),
   })
-  setSkillMounts(matrix)
-  if (Array.isArray((matrix as AgentSkillMountMatrix).skills)) setSkills((matrix as AgentSkillMountMatrix).skills)
-  return matrix as AgentSkillMountMatrix
+  return commitSkillMountMatrix(matrix as AgentSkillMountMatrix)
 }
 
 export async function importAndMountSkill(
@@ -136,9 +159,7 @@ export async function importAndMountSkill(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ agent, sessionID: sessionID || undefined, import: payload }),
   })
-  setSkillMounts(matrix)
-  if (Array.isArray((matrix as AgentSkillMountMatrix).skills)) setSkills((matrix as AgentSkillMountMatrix).skills)
-  return matrix as AgentSkillMountMatrix
+  return commitSkillMountMatrix(matrix as AgentSkillMountMatrix)
 }
 
 export async function loadMcpStatus(): Promise<Record<string, any>> {

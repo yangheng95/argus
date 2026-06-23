@@ -582,7 +582,6 @@ button.s-row:focus-visible {
   height: calc(22px * var(--ui-scale));
 }
 
-
 /* Memory scope chip: "global" / "session" / "builtin_default"
    tones. Knowledge scope owns its compact pill shape here so settings
    chips do not depend on a retired cross-surface extension status
@@ -686,7 +685,6 @@ button.s-row:focus-visible {
 
 /* ── ExtensionsPanel.tsx (Skill / Channel sections) ─────── */
 
-
 /* Section head: card-shaped header that opens the section body
    beneath. Hover/focus-within wash routed through the shared
    `--hover-accent-*` tokens; the inset-highlight white wash
@@ -746,7 +744,6 @@ button.s-row:focus-visible {
   flex-wrap: wrap;
   flex-shrink: 0;
 }
-
 
 /* ── ChannelsPanel.tsx (channel docs + actions) ──────────── */
 
@@ -919,6 +916,198 @@ button.s-row:focus-visible {
   font-size: var(--ui-font-small);
   line-height: 1.35;
   color: var(--text-muted);
+}
+
+.agent-skill-matrix {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+  overflow: visible;
+}
+
+.agent-skill-matrix__summary,
+.agent-skill-grid-agent,
+.agent-skill-grid-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.agent-skill-matrix__summary {
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  min-height: calc(26px * var(--ui-scale));
+  flex: 0 0 auto;
+}
+
+.agent-skill-matrix__summary strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-size: var(--ui-font-title);
+}
+
+.agent-skill-matrix-grid {
+  display: grid;
+  flex: 0 0 auto;
+  min-height: calc(160px * var(--ui-scale));
+  align-content: start;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 72%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--surface-inset) 36%, transparent);
+}
+
+.agent-skill-grid-corner,
+.agent-skill-grid-agent,
+.agent-skill-grid-skill,
+.agent-skill-grid-cell {
+  min-width: 0;
+  box-sizing: border-box;
+  border-right: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 64%, transparent);
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 64%, transparent);
+}
+
+.agent-skill-grid-corner,
+.agent-skill-grid-agent {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  min-height: calc(32px * var(--ui-scale));
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: 0;
+  box-shadow: inset 0 calc(-1px * var(--ui-scale)) 0 color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.agent-skill-grid-corner {
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  padding: 0 calc(12px * var(--ui-scale));
+  text-transform: uppercase;
+}
+
+.agent-skill-grid-agent {
+  justify-content: center;
+  min-width: calc(92px * var(--ui-scale));
+  padding: 0 calc(10px * var(--ui-scale));
+  white-space: nowrap;
+}
+
+.agent-skill-grid-agent > span {
+  min-width: max-content;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.agent-skill-grid-skill {
+  appearance: none;
+  -webkit-appearance: none;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(3px * var(--ui-scale));
+  min-height: calc(46px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-top: 0;
+  border-left: 0;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-inset));
+  color: var(--text-strong);
+  cursor: grab;
+  font-family: var(--font);
+  font-size: var(--ui-font-control);
+  text-align: left;
+  box-shadow: inset calc(-1px * var(--ui-scale)) 0 0 color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.agent-skill-grid-skill[data-unmounted="true"] {
+  border-left: calc(3px * var(--ui-scale)) solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface-inset));
+}
+
+.agent-skill-grid-skill__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.agent-skill-grid-skill__meta {
+  display: flex;
+  min-width: 0;
+  gap: calc(5px * var(--ui-scale));
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+}
+
+.agent-skill-grid-skill__meta > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-skill-grid-cell {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  justify-content: center;
+  width: auto;
+  min-width: calc(92px * var(--ui-scale));
+  min-height: calc(46px * var(--ui-scale));
+  padding: 0;
+  border-top: 0;
+  border-left: 0;
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+  color: var(--text-subtle);
+  font-family: var(--font);
+}
+
+.agent-skill-grid-cell:not(:disabled) {
+  cursor: pointer;
+}
+
+.agent-skill-grid-cell:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--accent);
+}
+
+.agent-skill-grid-cell[data-state="mounted"] {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+}
+
+.agent-skill-grid-cell[data-state="conflict"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 11%, transparent);
+}
+
+.agent-skill-grid-cell .icon {
+  width: calc(14px * var(--ui-scale));
+  height: calc(14px * var(--ui-scale));
+}
+
+.agent-skill-grid-cell__reason {
+  position: absolute;
+  width: calc(1px * var(--ui-scale));
+  height: calc(1px * var(--ui-scale));
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Log viewer container — scrollable mono-font region that holds
@@ -1733,7 +1922,6 @@ button.s-row:focus-visible {
   min-height: calc(160px * var(--ui-scale));
 }
 
-
 .agent-models-info {
   margin: var(--ui-gap-xs) 0 var(--ui-gap-lg) 0;
   font-size: var(--ui-font-meta);
@@ -2124,7 +2312,6 @@ button.s-row:focus-visible {
 .provider-catalog-row {
   align-items: start;
 }
-
 
 .agent-models-loading {
   display: flex;
