@@ -1188,11 +1188,13 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("do not rerun frontend_research for that same page")
     expect(normalized).toContain("additional source page URLs that still need their own prepared evidence")
     expect(normalized).toContain("Page Skeleton Blueprint")
-    expect(normalized).toContain("raw webpage evidence/source package materialization may require frontend_design first")
+    expect(normalized).toContain("the `frontend_research` tool path prepares rendered webpage evidence")
     expect(normalized).toContain(
-      "once prepared visual/source evidence exists, call frontend_research when the Page Skeleton Blueprint is missing",
+      "when a source-backed Page Skeleton Blueprint is missing, call `frontend_research` before `frontend_design`",
     )
     expect(normalized).toContain("do not let frontend_design invent or reorder the page skeleton")
+    expect(normalized).toContain("do not call `frontend_design` first merely to materialize raw webpage evidence")
+    expect(normalized).not.toContain("raw webpage evidence/source package materialization may require frontend_design first")
     expect(normalized).not.toContain("`frontend_design` and any needed `frontend_research` MUST be first")
     expect(normalized).not.toContain("`frontend_design` and `frontend_research` in parallel")
     expect(normalized).not.toContain("frontend_research brief exists for the relevant scope, do not rerun that agent")
@@ -1224,6 +1226,10 @@ describe("core prompt hygiene", () => {
     expect(frontendDesign).toContain("must record those conflicts instead of inventing, reordering, or demoting major sections")
     expect(orchestratorTools).toContain("Single-shot task-scope handoff producer")
     expect(orchestratorTools).toContain("Do not use frontend_design as a repeated repair")
+    expect(orchestratorTools).toContain("call frontend_research first when the Page Skeleton Blueprint is missing")
+    expect(orchestratorTools).toContain(
+      "Non-Figma URLs are rendered for webpage evidence extraction and screenshot materialization only after the live webpage clone's source-backed Page Skeleton Blueprint is already available or not needed",
+    )
     expect(orchestratorTools).toContain("Source-page-scoped brief producer")
     expect(orchestratorTools).toContain("Page Skeleton Blueprint that frontend_design consumes as page information architecture")
     expect(orchestratorTools).toContain("call frontend_research separately for additional pages")

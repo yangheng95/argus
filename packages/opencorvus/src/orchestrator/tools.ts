@@ -1281,13 +1281,13 @@ const AddGoalInputSchema = z.object({
 const FrontendDesignReasonField = z
   .string()
   .describe(
-    "Why frontend_design is the right visual implementation-template producer for the current task. Name the requested deliverable, the visual reference source, and why the downstream workflow needs a frontend_design public report/evidence manifest instead of only research notes.",
+    "Why frontend_design is the right visual implementation-template producer for the current task. Name the requested deliverable, the visual reference source, and why the downstream workflow needs a frontend_design public report/evidence manifest instead of only research notes. For live webpage clones with no non-stale Page Skeleton Blueprint, call frontend_research before frontend_design instead of using frontend_design to discover page information architecture.",
   )
 const FrontendDesignUrlsField = z
   .array(z.string().min(1).refine(isHttpWebpageUrl, "frontend_design urls entries must be HTTP(S) URLs"))
   .optional()
   .describe(
-    "Fresh frontend_design visual reference URLs. Use the plural field `urls`; do not send legacy `url`, `source_url`, or `source_urls`. Provide at most one non-Figma live/page URL for the primary webpage clone evidence package, plus any Figma design links. Non-Figma URLs are rendered for webpage evidence extraction and screenshot materialization. Figma URLs use the connected Figma MCP path. Use only when the URL is implementation/clone/visual-parity evidence, not merely PRD/SPEC/report source material.",
+    "Fresh frontend_design visual reference URLs. Use the plural field `urls`; do not send legacy `url`, `source_url`, or `source_urls`. Provide at most one non-Figma live/page URL for the primary webpage clone evidence package, plus any Figma design links. Non-Figma URLs are rendered for webpage evidence extraction and screenshot materialization only after the live webpage clone's source-backed Page Skeleton Blueprint is already available or not needed. Figma URLs use the connected Figma MCP path. Use only when the URL is implementation/clone/visual-parity evidence, not merely PRD/SPEC/report source material.",
   )
 const FrontendDesignFigmaUrlField = z
   .string()
@@ -3717,6 +3717,7 @@ export function createOrchestratorTools(input: {
         "  - Image attachments are provided (screenshots, mockups, design files)",
         "  - The request mentions a URL as a visual reference to clone, implement, reproduce, or refine",
         "  - The request explicitly asks for layout/frontend design as implementation input",
+        "For live webpage clones that need source-backed page information architecture, call frontend_research first when the Page Skeleton Blueprint is missing; do not use frontend_design merely to materialize raw webpage evidence or discover page structure.",
         "",
         "The frontend-design agent must follow assistant.auto_iteration: one bounded frontend template review pass when disabled, at least two review passes when enabled.",
         "The full frontend template plus visual_consistency_contract and iteration/completeness review is persisted",
