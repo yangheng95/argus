@@ -200,7 +200,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                   <section class="recent-dir-section">
                     <div class="recent-dir-section-title" data-popup-text>Pinned</div>
                     <div class="recent-dir-row">
-                      <button class="recent-dir-item" type="button">
+                      <button class="oc-button recent-dir-item" data-variant="ghost" data-size="sm" data-tone="neutral" data-ui="recent-dir-item" type="button">
                         <span class="recent-dir-copy">
                           <span class="recent-dir-label" data-popup-text>OpenCorvus</span>
                           <span class="recent-dir-path" data-popup-text>C:/Workspaces/opencorvus</span>
@@ -209,7 +209,7 @@ test("popup and command surfaces keep secondary text readable on light opaque pa
                       <button class="oc-button" data-variant="ghost" data-size="icon" data-tone="neutral" data-chrome="icon-action" data-ui="recent-dir-remove" type="button">×</button>
                     </div>
                     <div class="recent-dir-row">
-                      <button class="recent-dir-item" type="button" data-popup-recent-focus>
+                      <button class="oc-button recent-dir-item" data-variant="ghost" data-size="sm" data-tone="neutral" data-ui="recent-dir-item" type="button" data-popup-recent-focus>
                         <span class="recent-dir-copy">
                           <span class="recent-dir-label" data-popup-text>Economy Clone</span>
                           <span class="recent-dir-path" data-popup-text>C:/Workspaces/economy</span>

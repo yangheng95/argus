@@ -3,9 +3,11 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const MEMORY_PANEL_SOURCE = join(import.meta.dir, "..", "src", "components", "MemoryPanel.tsx")
+const SETTINGS_SURFACE = join(import.meta.dir, "..", "src", "styles", "surfaces", "settings.css")
 
 describe("MemoryPanel inline detail lifecycle", () => {
   const source = readFileSync(MEMORY_PANEL_SOURCE, "utf8")
+  const settings = readFileSync(SETTINGS_SURFACE, "utf8")
 
   test("memory detail expands inline instead of opening a dialog", () => {
     expect(source).not.toContain("MemoryDetailDialog")
@@ -23,7 +25,8 @@ describe("MemoryPanel inline detail lifecycle", () => {
   test("memory row disclosure and delete controls are sibling interactives", () => {
     expect(source).not.toContain('role="button"')
     expect(source).not.toContain("tabIndex={0}")
-    expect(source).toContain('<button\n                      type="button"\n                      class="knowledge-item-main"')
+    expect(source).toMatch(/<Button[\s\S]*class="knowledge-item-main"[\s\S]*data-ui="memory-row-main"/)
+    expect(source).not.toContain('<button\n                      type="button"\n                      class="knowledge-item-main"')
     expect(source).toContain('data-action="delete-memory"')
 
     const mainButton = source.indexOf('class="knowledge-item-main"')
@@ -32,6 +35,16 @@ describe("MemoryPanel inline detail lifecycle", () => {
     expect(mainButton).toBeGreaterThan(0)
     expect(deleteButton).toBeGreaterThan(mainButton)
     expect(detail).toBeGreaterThan(deleteButton)
+  })
+
+  test("memory row primitive keeps disclosure height content-owned", () => {
+    expect(settings).toContain('.knowledge-item-row > .oc-button[data-ui="memory-row-main"].knowledge-item-main')
+    expect(settings).toMatch(
+      /\.knowledge-item-row\s*>\s*\.oc-button\[data-ui="memory-row-main"\]\.knowledge-item-main\s*\{[\s\S]*?--oc-button-height:\s*auto\s*;/,
+    )
+    expect(settings).toMatch(
+      /\.knowledge-item-row\s*>\s*\.oc-button\[data-ui="memory-row-main"\]\.knowledge-item-main\s*\{[\s\S]*?--oc-button-padding-y:\s*0\s*;/,
+    )
   })
 
   test("memory panel reads task identifier through a reactive accessor", () => {

@@ -491,15 +491,32 @@ button.s-row:focus-visible {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-  padding: 0;
-  border: 0;
+  align-items: stretch;
+  justify-content: flex-start;
   border-radius: var(--oc-radius-soft);
-  background: transparent;
-  color: inherit;
   font: inherit;
   text-align: left;
+  white-space: normal;
   cursor: pointer;
+}
+
+.knowledge-item-row > .oc-button[data-ui="memory-row-main"].knowledge-item-main {
+  --oc-button-height: auto;
+  --oc-button-padding-x: 0;
+  --oc-button-padding-y: 0;
+  --oc-button-gap: calc(2px * var(--ui-scale));
+  --oc-button-bg: transparent;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: inherit;
+  --oc-button-shadow: none;
+}
+
+.oc-button[data-ui="memory-row-main"].knowledge-item-main:hover,
+.oc-button[data-ui="memory-row-main"].knowledge-item-main:focus-visible {
+  --oc-button-bg: transparent;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: inherit;
+  --oc-button-shadow: none;
 }
 
 .memory-panel[data-compact="true"] .knowledge-item-main {

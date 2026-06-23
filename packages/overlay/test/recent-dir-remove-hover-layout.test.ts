@@ -55,6 +55,8 @@ describe("recent directory remove action hover layout", () => {
   })
 
   test("recent directory actions route through the shared Button primitive", () => {
+    expect(TASK_DIR_BAR.match(/data-ui="recent-dir-item"/g)?.length).toBe(2)
+    expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*class="recent-dir-item"[\s\S]*data-ui="recent-dir-item"/)
     expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="recent-dir-edit-submit"/)
     expect(TASK_DIR_BAR).toMatch(/<Button[\s\S]*data-ui="recent-dir-remove"/)
     expect(TASK_DIR_BAR).toContain('data-chrome="icon-action"')
@@ -62,8 +64,10 @@ describe("recent directory remove action hover layout", () => {
     expect(TASK_DIR_BAR).toContain('aria-label={t("common.delete")}')
     expect(TASK_DIR_BAR).not.toContain('class="recent-dir-edit-submit"')
     expect(TASK_DIR_BAR).not.toContain('class="recent-dir-remove"')
+    expect(TASK_DIR_BAR).not.toMatch(/<button[\s\S]*class="recent-dir-item"/)
     expect(CONVERSATION_CSS).not.toContain(".recent-dir-edit-submit")
     expect(CONVERSATION_CSS).not.toContain(".recent-dir-remove {")
+    expect(CONVERSATION_CSS).toContain('.oc-button[data-ui="recent-dir-item"].recent-dir-item:hover')
     expect(CONVERSATION_CSS).not.toContain("recent-dir-item[data-highlighted]")
   })
 })
