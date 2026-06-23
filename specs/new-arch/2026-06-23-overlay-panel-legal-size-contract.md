@@ -1679,6 +1679,14 @@ acceptance because it can hide a regression back to crushed panels.
 
 ## Follow-up 2026-06-23: Consumed Aspect Range Tokens
 
+Status: Superseded 2026-06-23 by `Fullscreen Width Legality`.
+
+This section is kept as the historical record for commit
+`6ddcf5878c fix(overlay): constrain legal aspect range`. Its max-aspect
+decision was wrong: it treated the authored default window width as a runtime
+maximum width and therefore misclassified normal maximized/fullscreen windows
+as illegal-wide surfaces.
+
 ### Recall
 
 | Source | Constraint carried forward |
@@ -1783,3 +1791,52 @@ width.
 - Rechecked panel minimums: center workbench panels still use
   `--ui-workbench-panel-min-width`, and pane layout still reserves left/right
   toolbar chrome through `services/pane.ts`.
+
+## Follow-up 2026-06-23: Fullscreen Width Legality
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User correction 2026-06-23 | Normal fullscreen is not illegal; calling it illegal exposes the flawed contract. |
+| Superseded `Consumed Aspect Range Tokens` | The previous fix derived a maximum aspect ratio from the default `1280x760` window width and `720` minimum height. |
+| `2026-06-22-overlay-layout-aspect-frame.md` | The original hard requirement was the minimum aspect ratio from `1120x720`, not a maximum fullscreen width. |
+| `2026-06-22-native-resize-no-set-size-loop.md` | Do not restore `WindowEvent::Resized -> set_size()` feedback loops. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Tauri config | `width: 1280` is the default launch size and `minWidth: 1120` is the legal floor. | Keep default size validation, but do not derive a runtime maximum from `width`. |
+| Generated CSS tokens | `renderOverlaySizeContractStyle()` emitted `--ui-overlay-max-aspect-*`. | Delete those tokens; generated legal frame values are minimum width, minimum height, and minimum aspect only. |
+| Browser legal shell | `base.css` clamped shell width by `--ui-overlay-max-aspect-ratio`. | Remove the width clamp; fullscreen width is legal and should fill the viewport. |
+| TypeScript layout frame | `overlay-layout-frame.ts` clamped width by the same max aspect. | Remove the max-aspect input and preserve wide viewport width. |
+| Rust native sizing | `OverlayWindowConstraints` carried `max_aspect_size`; Windows `WM_SIZING` clamped wide rectangles. | Remove the max-width branch; keep minimum dimensions and too-tall minimum-aspect correction. |
+| Browser visual test | `1600x720` was named `illegal-wide` and expected a centered `1280px` shell. | Rename it to fullscreen-wide and assert the shell width equals the viewport. |
+
+### Root Cause
+
+`6ddcf5878c` confused the authored default window width with a runtime legality
+limit. That made fullscreen and maximized states look like illegal-wide
+fixtures, so the overlay could leave unused viewport area or appear to leak
+when it should have treated the native fullscreen surface as valid.
+
+### Fix Plan
+
+1. Remove max-aspect fields and generated tokens from the overlay size
+   contract.
+2. Remove max-aspect width clamping from CSS, TypeScript, and Rust native
+   sizing.
+3. Keep minimum width, minimum height, and minimum aspect handling unchanged.
+4. Update tests and screenshots so fullscreen-wide is legal and fills the
+   viewport.
+
+### Acceptance
+
+- Normal fullscreen/maximized width is a legal overlay state.
+- The legal shell still rejects too-small and too-tall surfaces via the
+  `1120x720` minimum frame.
+- No max-aspect token, `max_aspect_size`, or `overlay_max_aspect_ratio`
+  remains in runtime code.
+- No fallback background, alternate fullscreen branch, or resize feedback loop
+  is introduced.

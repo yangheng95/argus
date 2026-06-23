@@ -93,10 +93,7 @@ body {
   );
   --ui-overlay-shell-width: max(
     var(--ui-overlay-min-width),
-    min(
-      var(--ui-overlay-viewport-width),
-      calc(var(--ui-overlay-shell-height) * var(--ui-overlay-max-aspect-ratio))
-    )
+    var(--ui-overlay-viewport-width)
   );
 
   font-family: var(--font);
