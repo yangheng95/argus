@@ -172,6 +172,7 @@ export namespace TerminalProfile {
     commands: string[]
     args: string[]
     icon: Icon
+    acceptResolvedCommand?: (command: string) => boolean
   }
 
   interface SystemProfileOptions {
@@ -182,6 +183,46 @@ export namespace TerminalProfile {
 
   function uniqueStrings(values: Array<string | undefined>): string[] {
     return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => !!value))]
+  }
+
+  function windowsGitBashPathsFromRoot(root: string | undefined): string[] {
+    if (!root?.trim()) return []
+    return [path.win32.join(root, "bin", "bash.exe"), path.win32.join(root, "usr", "bin", "bash.exe")]
+  }
+
+  function windowsGitRootsFromGitCommand(command: string): string[] {
+    const directory = path.win32.dirname(command)
+    return uniqueStrings([path.win32.resolve(directory, ".."), path.win32.resolve(directory, "..", "..")])
+  }
+
+  function isGitForWindowsBashPath(command: string): boolean {
+    const normalized = command.replace(/\\/g, "/").toLowerCase()
+    return (
+      normalized.includes("/git/") &&
+      (normalized.endsWith("/bin/bash.exe") || normalized.endsWith("/usr/bin/bash.exe"))
+    )
+  }
+
+  function windowsGitBashCommands(options: SystemProfileOptions): string[] {
+    const resolvedGitCommands = uniqueStrings(
+      ["git.exe", "git"].map((command) => options.resolveCommand(command)).filter(Boolean) as string[],
+    )
+    const rootsFromGit = resolvedGitCommands.flatMap(windowsGitRootsFromGitCommand)
+    return uniqueStrings([
+      options.env.OPENCORVUS_SYSTEM_TERMINAL_GIT_BASH_BIN,
+      ...rootsFromGit.flatMap(windowsGitBashPathsFromRoot),
+      ...windowsGitBashPathsFromRoot(
+        options.env.ProgramFiles ? path.win32.join(options.env.ProgramFiles, "Git") : undefined,
+      ),
+      ...windowsGitBashPathsFromRoot(
+        options.env["ProgramFiles(x86)"] ? path.win32.join(options.env["ProgramFiles(x86)"], "Git") : undefined,
+      ),
+      ...windowsGitBashPathsFromRoot(
+        options.env.LOCALAPPDATA ? path.win32.join(options.env.LOCALAPPDATA, "Programs", "Git") : undefined,
+      ),
+      "bash.exe",
+      "bash",
+    ])
   }
 
   const GENERATED_SYSTEM_PROFILE_DEFINITIONS: readonly SystemProfileDefinition[] = [
@@ -211,6 +252,16 @@ export namespace TerminalProfile {
       commands: ["cmd.exe", "cmd"],
       args: [],
       icon: "command-prompt",
+    },
+    {
+      id: "git-bash",
+      label: "Git Bash",
+      scope: "win32",
+      commandNames: ["bash.exe", "bash"],
+      commands: [],
+      args: [],
+      icon: "bash",
+      acceptResolvedCommand: isGitForWindowsBashPath,
     },
     {
       id: "bash",
@@ -257,6 +308,12 @@ export namespace TerminalProfile {
           commands: uniqueStrings([options.env.ComSpec, ...definition.commands]),
         }
       }
+      if (definition.id === "git-bash") {
+        return {
+          ...definition,
+          commands: windowsGitBashCommands(options),
+        }
+      }
       if (definition.id === "bash") {
         return {
           ...definition,
@@ -291,7 +348,9 @@ export namespace TerminalProfile {
   function createSystemTerminalProfileConfig(options: SystemProfileOptions): Config.Terminal | undefined {
     const profiles: Record<string, Config.TerminalProfile> = {}
     for (const definition of systemProfileDefinitions(options)) {
-      const command = definition.commands.map(options.resolveCommand).find((resolved) => !!resolved)
+      const command = definition.commands
+        .map(options.resolveCommand)
+        .find((resolved) => !!resolved && (!definition.acceptResolvedCommand || definition.acceptResolvedCommand(resolved)))
       if (!command) continue
       profiles[definition.id] = {
         label: definition.label,
@@ -335,6 +394,13 @@ export namespace TerminalProfile {
     return definition.commandNames.some((candidate) => candidate.toLowerCase() === configuredName)
   }
 
+  function generatedCommandMatchesCurrentDefinition(
+    definition: SystemProfileDefinition,
+    profile: Config.TerminalProfile,
+  ): boolean {
+    return !definition.acceptResolvedCommand || definition.acceptResolvedCommand(profile.command)
+  }
+
   function profileArgsMatchGenerated(profile: Config.TerminalProfile, definition: SystemProfileDefinition): boolean {
     return (
       profile.args.length === definition.args.length &&
@@ -363,10 +429,41 @@ export namespace TerminalProfile {
     )
   }
 
+  function profilesEqual(left: Config.TerminalProfile | undefined, right: Config.TerminalProfile | undefined): boolean {
+    if (!left || !right) return left === right
+    return (
+      left.label === right.label &&
+      left.command === right.command &&
+      left.icon === right.icon &&
+      left.args.length === right.args.length &&
+      left.args.every((arg, index) => arg === right.args[index]) &&
+      Object.keys(left.env).length === Object.keys(right.env).length &&
+      Object.entries(left.env).every(([key, value]) => right.env[key] === value)
+    )
+  }
+
+  function generatedProfilesDifferFromHost(
+    terminal: Config.Terminal,
+    hostTerminal: Config.Terminal | undefined,
+  ): boolean {
+    if (!hostTerminal?.profiles) return false
+    const entries = Object.entries(terminal.profiles ?? {})
+    const generatedEntries = entries.filter(([id, profile]) => isGeneratedSystemProfile(id, profile))
+    if (generatedEntries.length === 0) return false
+    const existingGeneratedProfiles = Object.fromEntries(generatedEntries)
+    const customProfiles = customProfilePatch(terminal, { removeLegacyDefault: false })
+    const hostGeneratedProfiles = generatedProfilePatch(hostTerminal, customProfiles)
+    const existingIDs = Object.keys(existingGeneratedProfiles).sort()
+    const hostIDs = Object.keys(hostGeneratedProfiles).sort()
+    if (existingIDs.length !== hostIDs.length || existingIDs.some((id, index) => id !== hostIDs[index])) return true
+    return hostIDs.some((id) => !profilesEqual(existingGeneratedProfiles[id], hostGeneratedProfiles[id]))
+  }
+
   export function shouldRegenerateGeneratedProfilesForTest(
     terminal: Config.Terminal,
     resolveCommandForHost: (command: string) => string | undefined,
     platform: NodeJS.Platform = process.platform,
+    hostTerminal?: Config.Terminal,
   ): boolean {
     const profiles = terminal.profiles ?? {}
     const entries = Object.entries(profiles)
@@ -374,9 +471,12 @@ export namespace TerminalProfile {
     const generatedEntries = entries.filter(([id, profile]) => isGeneratedSystemProfile(id, profile))
     if (generatedEntries.length === 0) return false
     if (
-      generatedEntries.some(([id]) => {
+      generatedEntries.some(([id, profile]) => {
         const definition = generatedDefinitionForID(id)
-        return definition ? !definitionAppliesToPlatform(definition.scope, platform) : false
+        return definition
+          ? !definitionAppliesToPlatform(definition.scope, platform) ||
+              !generatedCommandMatchesCurrentDefinition(definition, profile)
+          : false
       })
     ) {
       return true
@@ -384,11 +484,17 @@ export namespace TerminalProfile {
     if (!terminal.default_profile_id || !profiles[terminal.default_profile_id]) {
       return generatedEntries.length === entries.length
     }
+    if (generatedProfilesDifferFromHost(terminal, hostTerminal)) return true
     return generatedEntries.some(([, profile]) => !resolveCommandForHost(profile.command))
   }
 
   function shouldRegenerateGeneratedProfiles(terminal: Config.Terminal): boolean {
-    return shouldRegenerateGeneratedProfilesForTest(terminal, resolveCommandIfAvailable)
+    return shouldRegenerateGeneratedProfilesForTest(
+      terminal,
+      resolveCommandIfAvailable,
+      process.platform,
+      setupDefaultProfile(),
+    )
   }
 
   function removableGeneratedProfilePatch(

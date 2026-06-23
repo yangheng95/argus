@@ -24,6 +24,12 @@ function generatedBashProfile(command: string): Config.Terminal {
   }
 }
 
+function windowsNativeShellResolver(command: string): string | undefined {
+  if (["powershell.exe", "powershell", "pwsh.exe", "pwsh", "cmd.exe", "cmd"].includes(command)) {
+    return command
+  }
+}
+
 describe("system terminal generated profile drift", () => {
   test("detects generated profile drift when the generated command no longer resolves", () => {
     const terminal = generatedBashProfile("/definitely/missing/bash")
@@ -65,22 +71,83 @@ describe("system terminal generated profile drift", () => {
   test("does not rewrite a generated profile that still resolves on a supported host platform", () => {
     const terminal = generatedBashProfile("/bin/bash")
 
-    expect(TerminalProfile.shouldRegenerateGeneratedProfilesForTest(terminal, (command) => command, "linux")).toBe(false)
+    expect(TerminalProfile.shouldRegenerateGeneratedProfilesForTest(terminal, (command) => command, "linux")).toBe(
+      false,
+    )
   })
 
-  test("does not include Bash in generated Windows terminal profiles", () => {
+  test("does not treat WSL bash as generated Windows Git Bash", () => {
     const terminal = TerminalProfile.createSystemTerminalProfilesForTest({
       platform: "win32",
       env: {
         ComSpec: "C:\\Windows\\System32\\cmd.exe",
       },
       resolveCommand(command) {
-        return command
+        if (command === "bash.exe" || command === "bash") return "C:\\Windows\\System32\\bash.exe"
+        return windowsNativeShellResolver(command)
       },
     })
 
     expect(terminal?.default_profile_id).toBe("powershell")
     expect(Object.keys(terminal?.profiles ?? {})).toEqual(["powershell", "pwsh", "cmd"])
+  })
+
+  test("includes Git Bash in generated Windows terminal profiles when Git for Windows is discovered", () => {
+    const terminal = TerminalProfile.createSystemTerminalProfilesForTest({
+      platform: "win32",
+      env: {
+        ComSpec: "C:\\Windows\\System32\\cmd.exe",
+        ProgramFiles: "C:\\Program Files",
+      },
+      resolveCommand(command) {
+        if (command === "git.exe" || command === "git") return "C:\\Program Files\\Git\\cmd\\git.exe"
+        if (command === "C:\\Program Files\\Git\\bin\\bash.exe") return command
+        return windowsNativeShellResolver(command)
+      },
+    })
+
+    expect(terminal?.default_profile_id).toBe("powershell")
+    expect(Object.keys(terminal?.profiles ?? {})).toEqual(["powershell", "pwsh", "cmd", "git-bash"])
+    expect(terminal?.profiles["git-bash"]).toMatchObject({
+      label: "Git Bash",
+      command: "C:\\Program Files\\Git\\bin\\bash.exe",
+      icon: "bash",
+    })
+  })
+
+  test("detects generated profile set drift when the current Windows host adds Git Bash", () => {
+    const existing = TerminalProfile.createSystemTerminalProfilesForTest({
+      platform: "win32",
+      env: {
+        ComSpec: "C:\\Windows\\System32\\cmd.exe",
+      },
+      resolveCommand(command) {
+        return windowsNativeShellResolver(command)
+      },
+    })
+    const currentHost = TerminalProfile.createSystemTerminalProfilesForTest({
+      platform: "win32",
+      env: {
+        ComSpec: "C:\\Windows\\System32\\cmd.exe",
+        ProgramFiles: "C:\\Program Files",
+      },
+      resolveCommand(command) {
+        if (command === "git.exe" || command === "git") return "C:\\Program Files\\Git\\cmd\\git.exe"
+        if (command === "C:\\Program Files\\Git\\bin\\bash.exe") return command
+        return windowsNativeShellResolver(command)
+      },
+    })
+
+    expect(existing).toBeDefined()
+    expect(currentHost).toBeDefined()
+    expect(
+      TerminalProfile.shouldRegenerateGeneratedProfilesForTest(
+        existing as Config.Terminal,
+        (command) => command,
+        "win32",
+        currentHost,
+      ),
+    ).toBe(true)
   })
 
   test("rewrites stale generated profiles in the project .opencorvus config", async () => {
