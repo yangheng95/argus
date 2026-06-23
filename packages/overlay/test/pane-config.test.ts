@@ -51,6 +51,8 @@ test("default pane resizer exposes separator semantics through the pane service"
   expect(pane).toContain("pendingClientX")
   expect(pane).toContain("paneDrag.resizeOnFrame.schedule()")
   expect(pane).toContain("paneDrag.resizeOnFrame.cancel()")
+  expect(pane).toContain("onPaneResizeMove(event)")
+  expect(pane).not.toContain("resizePane(event.clientX, callbacks, config)")
   expect(pane).not.toContain("resizePane(paneDrag.side, event.clientX")
   expect(pane).not.toContain('side: "left" | "right"')
   expect(pane).not.toContain("sectionsWidth")
