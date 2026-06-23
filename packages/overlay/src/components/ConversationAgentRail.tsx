@@ -91,15 +91,19 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
         block: "start",
         focus: "header",
         highlight: true,
-      }).then((found) => {
-        if (found) return
-        const selector = `[data-card-id="${CSS.escape(record.renderedCardID!)}"]`
-        notifyWarning({
-          title: t("agent_rail.card_unavailable_title"),
-          message: t("agent_rail.rendered_card_missing", { id: record.renderedCardID }),
-          details: describeRecord(record, selector),
-        })
       })
+        .then((found) => {
+          if (found) return
+          const selector = `[data-card-id="${CSS.escape(record.renderedCardID!)}"]`
+          notifyWarning({
+            title: t("agent_rail.card_unavailable_title"),
+            message: t("agent_rail.rendered_card_missing", { id: record.renderedCardID }),
+            details: describeRecord(record, selector),
+          })
+        })
+        .catch((error) => {
+          console.error("[agent-rail] card scroll request failed", error)
+        })
     })
   })
 }

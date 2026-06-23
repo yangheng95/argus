@@ -18,25 +18,25 @@ backend `agentView`, not from a component-level card-tree fallback scan.
 
 ## Recall
 
-| Source | Constraint carried forward |
-| --- | --- |
-| `AGENTS.md` | No fallback, no double source, recall disk plans before edits, test every change, visually verify UI work, do not restart the live overlay process without explicit user confirmation. |
-| `2026-05-13-conversation-agent-workflow-rail.md` | The rail is an independent Conversation-owned bottom strip; empty rail should not reserve height. |
-| `2026-06-10-agent-rail-identity-empty-card-fix.md` | Lifecycle-only sessions must not create blank cards or rail records; message-backed or goal-phase records are the canonical display records. |
-| `2026-06-20-agent-rail-drag-scroll-regression.md` | Browser validation must use a real browser and screenshot evidence for the rail. |
-| `2026-06-23-overlay-conversation-render-backpressure.md` | The live rail source is `conversationAgentStore.records`; do not restore `buildAgentWorkflow()` or card-tree scans in the mounted rail. |
-| `2026-06-23-conversation-agent-rail-pointer-capture.md` | `attachRailDragScroll` remains the single drag-scroll owner. |
+| Source                                                   | Constraint carried forward                                                                                                                                                             |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                              | No fallback, no double source, recall disk plans before edits, test every change, visually verify UI work, do not restart the live overlay process without explicit user confirmation. |
+| `2026-05-13-conversation-agent-workflow-rail.md`         | The rail is an independent Conversation-owned bottom strip; empty rail should not reserve height.                                                                                      |
+| `2026-06-10-agent-rail-identity-empty-card-fix.md`       | Lifecycle-only sessions must not create blank cards or rail records; message-backed or goal-phase records are the canonical display records.                                           |
+| `2026-06-20-agent-rail-drag-scroll-regression.md`        | Browser validation must use a real browser and screenshot evidence for the rail.                                                                                                       |
+| `2026-06-23-overlay-conversation-render-backpressure.md` | The live rail source is `conversationAgentStore.records`; do not restore `buildAgentWorkflow()` or card-tree scans in the mounted rail.                                                |
+| `2026-06-23-conversation-agent-rail-pointer-capture.md`  | `attachRailDragScroll` remains the single drag-scroll owner.                                                                                                                           |
 
 ## Call Point Inventory
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `App.tsx` | `StaticMountPortal id="solidConversationAgentRailMount"` still renders `<ConversationAgentRail />`. | Keep global owner in `App`; do not remount from `main.tsx`. |
-| `index.html` | `solidConversationAgentRailMount` is still below `conversationBody` inside `chatMessagePane`. | Keep Conversation bottom-strip placement. |
-| `ConversationAgentRail.tsx` | Rail hides via `<Show when={records().length > 0}>`. | Preserve empty hidden behavior; any visibility fix must ensure real records exist or fix legal layout clipping. |
-| `conversation-agents.ts` | Store is keyed by `task:<id>` / `session:<id>`. | Keep one store source; add coverage for task and session hydration if needed. |
-| `events.ts` | `message.*` SSE writes card tree; `task.messages.changed` schedules `mergeLatestConversationTail()`. | Rail freshness must be verified through tail merge, not component fallback. |
-| `conversation-agent-rail-scroll-browser.test.ts` | Existing visual test waited for a task row that is hidden while Mission is the default left activity. | Update the browser path to use the visible Tasks activity before selecting the task. |
+| Surface                                          | Evidence                                                                                              | Decision                                                                                                        |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `App.tsx`                                        | `StaticMountPortal id="solidConversationAgentRailMount"` still renders `<ConversationAgentRail />`.   | Keep global owner in `App`; do not remount from `main.tsx`.                                                     |
+| `index.html`                                     | `solidConversationAgentRailMount` is still below `conversationBody` inside `chatMessagePane`.         | Keep Conversation bottom-strip placement.                                                                       |
+| `ConversationAgentRail.tsx`                      | Rail hides via `<Show when={records().length > 0}>`.                                                  | Preserve empty hidden behavior; any visibility fix must ensure real records exist or fix legal layout clipping. |
+| `conversation-agents.ts`                         | Store is keyed by `task:<id>` / `session:<id>`.                                                       | Keep one store source; add coverage for task and session hydration if needed.                                   |
+| `events.ts`                                      | `message.*` SSE writes card tree; `task.messages.changed` schedules `mergeLatestConversationTail()`.  | Rail freshness must be verified through tail merge, not component fallback.                                     |
+| `conversation-agent-rail-scroll-browser.test.ts` | Existing visual test waited for a task row that is hidden while Mission is the default left activity. | Update the browser path to use the visible Tasks activity before selecting the task.                            |
 
 ## Working Root Cause Hypotheses
 

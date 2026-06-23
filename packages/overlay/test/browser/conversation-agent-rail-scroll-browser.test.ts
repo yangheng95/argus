@@ -328,10 +328,10 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     )
 
     await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "load" })
-    await page.waitForSelector(
-      '.oc-button[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]',
-      { visible: true, timeout: 15_000 },
-    )
+    await page.waitForSelector('.oc-button[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]', {
+      visible: true,
+      timeout: 15_000,
+    })
     await page.click('.oc-button[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
     await page.waitForSelector(`.task-row-main[data-task-id="${TASK_ID}"]`, { visible: true, timeout: 15_000 })
     await page.click(`.task-row-main[data-task-id="${TASK_ID}"]`)
@@ -532,20 +532,26 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
       visible: true,
       timeout: 15_000,
     })
-    await page.waitForSelector(`[data-ui="coding-assistant-row"][data-session-id="${ASSISTANT_SESSION_ID}"][data-active="true"]`, {
-      visible: true,
-      timeout: 15_000,
-    })
-    await page.waitForFunction(() => {
-      const rail = document.querySelector<HTMLElement>(".conversation-agent-rail")
-      if (!rail) return false
-      const rect = rail.getBoundingClientRect()
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        rail.querySelectorAll('.oc-button[data-ui="conversation-agent-rail-locate"]').length > 0
-      )
-    }, { timeout: 15_000 })
+    await page.waitForSelector(
+      `[data-ui="coding-assistant-row"][data-session-id="${ASSISTANT_SESSION_ID}"][data-active="true"]`,
+      {
+        visible: true,
+        timeout: 15_000,
+      },
+    )
+    await page.waitForFunction(
+      () => {
+        const rail = document.querySelector<HTMLElement>(".conversation-agent-rail")
+        if (!rail) return false
+        const rect = rail.getBoundingClientRect()
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rail.querySelectorAll('.oc-button[data-ui="conversation-agent-rail-locate"]').length > 0
+        )
+      },
+      { timeout: 15_000 },
+    )
     const assistantRailState = await page.$eval(".conversation-agent-rail", (el: HTMLElement) => {
       const rect = el.getBoundingClientRect()
       const ancestors = [
@@ -580,8 +586,14 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
         ancestors,
       }
     })
-    assert.ok(assistantRailState.buttons > 0, `coding assistant rail should have buttons: ${JSON.stringify(assistantRailState)}`)
-    assert.ok(assistantRailState.width > 0 && assistantRailState.height > 0, `coding assistant rail should be visible: ${JSON.stringify(assistantRailState)}`)
+    assert.ok(
+      assistantRailState.buttons > 0,
+      `coding assistant rail should have buttons: ${JSON.stringify(assistantRailState)}`,
+    )
+    assert.ok(
+      assistantRailState.width > 0 && assistantRailState.height > 0,
+      `coding assistant rail should be visible: ${JSON.stringify(assistantRailState)}`,
+    )
     assert.deepEqual(errors, [])
     const assistantRail = await page.$(".conversation-agent-rail")
     assert.ok(assistantRail, "coding assistant agent rail should exist for screenshot review")
