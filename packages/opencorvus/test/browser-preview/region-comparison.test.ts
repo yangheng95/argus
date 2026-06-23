@@ -152,7 +152,11 @@ describe("browser preview region comparison", () => {
         })
 
         expect(result.status).toBe("passed")
+        expect(result.comparison_mode).toBe("true-size")
+        expect(result.artifact_note).toContain("True-size comparison")
+        expect(result.diagnostics[0]).toContain("True-size comparison")
         expect(result.regions).toHaveLength(1)
+        expect(result.regions[0].artifact_note).toContain("True-size comparison")
         expect(result.manifestPath).toContain(".opencorvus/r/")
         expect(result.regions[0].artifacts?.side_by_side).toEndWith("side-by-side.png")
         expect(result.regions[0].implementation_bbox?.width).toBeGreaterThan(250)
@@ -253,6 +257,7 @@ describe("browser preview region comparison", () => {
         const region = result.regions[0]
         expect(region.region_id).toBe("credit-pulse")
         expect(region.status).toBe("failed")
+        expect(region.artifact_note).toContain("True-size comparison")
         expect(region.reason).toContain("visual score")
         expect(region.coverage?.implementation_covers_source).toBe(true)
         expect(region.visual?.overall_score).toBeLessThan(85)
@@ -268,7 +273,7 @@ describe("browser preview region comparison", () => {
         const diffPath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.diff!)
         await expectPngDimensions(sourceCropPath, { width: 280, height: 110 })
         await expectPngDimensions(implementationCropPath, { width: 280, height: 110 })
-        await expectPngDimensions(sideBySidePath, { width: 576, height: 186 })
+        await expectPngDimensions(sideBySidePath, { width: 576, height: 204 })
         await expectPngDimensions(diffPath, { width: 280, height: 110 })
         await expectPngContainsColor(sourceCropPath, { red: 220, green: 252, blue: 231 })
         await expectPngContainsColor(implementationCropPath, { red: 254, green: 202, blue: 202 })
@@ -361,18 +366,19 @@ describe("browser preview region comparison", () => {
         expect(result.regions).toHaveLength(1)
         const region = result.regions[0]
         expect(region.status).toBe("failed")
-        expect(region.reason).toContain("Implementation crop is smaller than source region")
+        expect(region.reason).toContain("Implementation crop size does not match source region")
         expect(region.coverage).toEqual({
           source_width: 320,
           source_height: 140,
           implementation_width: 260,
           implementation_height: 90,
           implementation_covers_source: false,
+          implementation_matches_source_size: false,
         })
         expect(region.artifacts?.source_crop).toEndWith("source.png")
         expect(region.artifacts?.implementation_crop).toEndWith("implementation.png")
         expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
-        expect(region.artifacts?.diff).toEndWith("diff.png")
+        expect(region.artifacts?.diff).toBeUndefined()
         const evidenceID = result.evidenceIDs["desktop:default:coverage-module"]
         expect(evidenceID).toBeTruthy()
         const evidence = await Instance.provide({
@@ -389,7 +395,7 @@ describe("browser preview region comparison", () => {
   )
 
   test(
-    "scales the source bbox to the implementation viewport before crop coverage",
+    "keeps source bbox true-sized when source and implementation viewport widths differ",
     async () => {
       await using tmp = await tmpdir({ git: true })
       const taskID = await seedTask(tmp.path)
@@ -469,16 +475,14 @@ describe("browser preview region comparison", () => {
         expect(region.implementation_viewport).toEqual({ width: 1280, height: 800 })
         expect(region.implementation_fullpage_size?.width).toBe(1280)
         expect(region.implementation_screenshot_path).toEndWith(".png")
-        expect(region.normalized_source_bbox?.x).toBeCloseTo(35.56, 2)
-        expect(region.normalized_source_bbox?.y).toBeCloseTo(53.33, 2)
-        expect(region.normalized_source_bbox?.width).toBeCloseTo(284.44, 2)
-        expect(region.normalized_source_bbox?.height).toBeCloseTo(124.44, 2)
+        expect("normalized_source_bbox" in region).toBe(false)
         expect(region.coverage).toEqual({
-          source_width: 285,
-          source_height: 125,
+          source_width: 320,
+          source_height: 140,
           implementation_width: 320,
           implementation_height: 140,
           implementation_covers_source: true,
+          implementation_matches_source_size: true,
         })
         await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.source_crop), {
           width: 320,
@@ -490,7 +494,7 @@ describe("browser preview region comparison", () => {
         })
         await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side), {
           width: 656,
-          height: 216,
+          height: 234,
         })
         const evidence = await Instance.provide({
           directory: tmp.path,
@@ -511,7 +515,7 @@ describe("browser preview region comparison", () => {
   )
 
   test(
-    "normalizes source crops before visual scoring when viewport scaling changes crop dimensions",
+    "fails size-mismatched local crops without resizing the source crop",
     async () => {
       await using tmp = await tmpdir({ git: true })
       const taskID = await seedTask(tmp.path)
@@ -538,7 +542,7 @@ describe("browser preview region comparison", () => {
         ])
         .png()
         .toFile(path.join(paths.sourcePackageAbsolute, "reference.png"))
-      const server = await startScaledPlainPreviewServer()
+      const server = await startSizeMismatchedPlainPreviewServer()
       try {
         const target = await Instance.provide({
           directory: tmp.path,
@@ -550,23 +554,23 @@ describe("browser preview region comparison", () => {
             }),
         })
         const binding: BrowserPreviewRegionBinding = {
-          region_id: "economy-scaled-plain",
+          region_id: "economy-size-mismatch",
           viewport_id: "desktop",
           state_id: "default",
           region_scope: "page-section",
           source: {
             reference_artifact_id: "reference.png",
             bbox: { x: 40, y: 60, width: 320, height: 140 },
-            semantic_role: "plain scaled source section",
+            semantic_role: "plain size-mismatched source section",
             text_anchors: [],
             source_refs: ["wide source screenshot"],
           },
           implementation: {
-            route: "/scaled-plain",
-            locator: { kind: "data-oc-region", value: "economy-scaled-plain" },
-            component_files: ["src/EconomyScaledPlain.tsx"],
+            route: "/size-mismatch",
+            locator: { kind: "data-oc-region", value: "economy-size-mismatch" },
+            component_files: ["src/EconomySizeMismatch.tsx"],
           },
-          acceptance_refs: ["scaled source visual parity"],
+          acceptance_refs: ["true-size source visual parity"],
         }
 
         const result = await compareBrowserPreviewRegions({
@@ -578,40 +582,37 @@ describe("browser preview region comparison", () => {
           includeDiff: true,
         })
 
-        expect(result.status).toBe("passed")
+        expect(result.status).toBe("failed")
         const region = result.regions[0]
-        expect(region.status).toBe("completed")
-        expect(region.reason).toBeUndefined()
-        expect(region.visual?.dimensions_match).toBe(true)
-        expect(region.visual?.overall_score).toBeGreaterThanOrEqual(85)
+        expect(region.status).toBe("failed")
+        expect(region.reason).toContain("Implementation crop size does not match source region")
+        expect(region.visual?.dimensions_match).toBe(false)
+        expect(region.visual?.overall_score).toBe(0)
         expect(region.artifacts?.source_crop).toEndWith("source.png")
-        expect(region.artifacts?.normalized_source_crop).toEndWith("source-normalized.png")
+        expect("normalized_source_crop" in region.artifacts!).toBe(false)
         expect(region.artifacts?.implementation_crop).toEndWith("implementation.png")
         expect(region.artifacts?.side_by_side).toEndWith("side-by-side.png")
-        expect(region.artifacts?.diff).toEndWith("diff.png")
+        expect(region.artifacts?.diff).toBeUndefined()
         expect(region.coverage).toEqual({
-          source_width: 285,
-          source_height: 125,
+          source_width: 320,
+          source_height: 140,
           implementation_width: 285,
           implementation_height: 125,
-          implementation_covers_source: true,
+          implementation_covers_source: false,
+          implementation_matches_source_size: false,
         })
 
         await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.source_crop), {
           width: 320,
           height: 140,
         })
-        await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.normalized_source_crop!), {
-          width: 285,
-          height: 125,
-        })
         await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.implementation_crop), {
           width: 285,
           height: 125,
         })
         await expectPngDimensions(resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side), {
-          width: 586,
-          height: 201,
+          width: 621,
+          height: 234,
         })
       } finally {
         await server.close()
@@ -740,12 +741,12 @@ describe("browser preview region comparison", () => {
 
         await expectPngDimensions(laborSourceCrop, { width: 280, height: 110 })
         await expectPngDimensions(laborImplementationCrop, { width: 280, height: 110 })
-        await expectPngDimensions(laborSideBySide, { width: 576, height: 186 })
+        await expectPngDimensions(laborSideBySide, { width: 576, height: 204 })
         await expectPngContainsColor(laborSourceCrop, { red: 220, green: 252, blue: 231 })
         await expectPngContainsColor(laborImplementationCrop, { red: 220, green: 252, blue: 231 })
         await expectPngDimensions(tradeSourceCrop, { width: 280, height: 110 })
         await expectPngDimensions(tradeImplementationCrop, { width: 280, height: 110 })
-        await expectPngDimensions(tradeSideBySide, { width: 576, height: 186 })
+        await expectPngDimensions(tradeSideBySide, { width: 576, height: 204 })
         await expectPngContainsColor(tradeSourceCrop, { red: 237, green: 233, blue: 254 })
         await expectPngContainsColor(tradeImplementationCrop, { red: 237, green: 233, blue: 254 })
 
@@ -911,12 +912,12 @@ describe("browser preview region comparison", () => {
 
         await expectPngDimensions(compactSourceCrop, { width: 280, height: 100 })
         await expectPngDimensions(compactImplementationCrop, { width: 280, height: 100 })
-        await expectPngDimensions(compactSideBySide, { width: 576, height: 176 })
+        await expectPngDimensions(compactSideBySide, { width: 576, height: 194 })
         await expectPngContainsColor(compactSourceCrop, { red: 254, green: 243, blue: 199 })
         await expectPngContainsColor(compactImplementationCrop, { red: 254, green: 243, blue: 199 })
         await expectPngDimensions(expandedSourceCrop, { width: 280, height: 160 })
         await expectPngDimensions(expandedImplementationCrop, { width: 280, height: 160 })
-        await expectPngDimensions(expandedSideBySide, { width: 576, height: 236 })
+        await expectPngDimensions(expandedSideBySide, { width: 576, height: 254 })
         await expectPngContainsColor(expandedSourceCrop, { red: 207, green: 250, blue: 254 })
         await expectPngContainsColor(expandedImplementationCrop, { red: 207, green: 250, blue: 254 })
 
@@ -1028,7 +1029,7 @@ describe("browser preview region comparison", () => {
         const implementationCropPath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.implementation_crop)
         const sideBySidePath = resolveRuntimeRelativePath(tmp.path, region.artifacts!.side_by_side)
         await expectPngDimensions(implementationCropPath, { width: 320, height: 140 })
-        await expectPngDimensions(sideBySidePath, { width: 656, height: 216 })
+        await expectPngDimensions(sideBySidePath, { width: 656, height: 234 })
         await expectPngHasColorDiversity(implementationCropPath)
         await expectPngHasColorDiversity(sideBySidePath)
       } finally {
@@ -1147,17 +1148,17 @@ async function startPreviewServer(): Promise<{ url: string; close: () => Promise
   }
 }
 
-async function startScaledPlainPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+async function startSizeMismatchedPlainPreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((req, res) => {
     const body = `<!doctype html>
       <html>
         <head>
-          <title>Scaled plain preview</title>
+          <title>Size mismatch plain preview</title>
           <style>
             body { margin: 0; background: #ffffff; }
             main { padding: 53px 36px; }
-            [data-oc-region="economy-scaled-plain"] {
+            [data-oc-region="economy-size-mismatch"] {
               width: 285px;
               height: 125px;
               background: #e7f5ee;
@@ -1165,9 +1166,9 @@ async function startScaledPlainPreviewServer(): Promise<{ url: string; close: ()
             }
           </style>
         </head>
-        <body><main><section data-oc-region="economy-scaled-plain"></section></main></body>
+        <body><main><section data-oc-region="economy-size-mismatch"></section></main></body>
       </html>`
-    if (req.url !== "/scaled-plain") {
+    if (req.url !== "/size-mismatch") {
       res.writeHead(404, { "content-type": "text/plain" })
       res.end("not found")
       return
@@ -1177,7 +1178,8 @@ async function startScaledPlainPreviewServer(): Promise<{ url: string; close: ()
   })
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
   const address = server.address()
-  if (!address || typeof address === "string") throw new Error("scaled plain test server did not bind a TCP address")
+  if (!address || typeof address === "string")
+    throw new Error("size mismatch plain test server did not bind a TCP address")
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>

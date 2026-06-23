@@ -1068,7 +1068,7 @@ describe("tool.browser_preview", () => {
             await expectPngDimensions(diffPath, sourceDimensions)
             await expectPngDimensions(sideBySidePath, {
               width: sourceDimensions.width + implementationDimensions.width + 16,
-              height: 44 + 32 + Math.max(sourceDimensions.height, implementationDimensions.height),
+              height: 62 + 32 + Math.max(sourceDimensions.height, implementationDimensions.height),
             })
             await expectPngHasColorDiversity(sourceCropPath)
             await expectPngHasColorDiversity(implementationCropPath)

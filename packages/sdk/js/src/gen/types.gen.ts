@@ -10456,6 +10456,8 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
     taskID: string
     targetID: string
     operation: "reference-comparison"
+    comparison_mode: "true-size"
+    artifact_note: string
     evidenceIDs: {
       [key: string]: string
     }
@@ -10466,12 +10468,6 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
       status: "completed" | "failed"
       reason?: string
       source_bbox?: {
-        x: number
-        y: number
-        width: number
-        height: number
-      }
-      normalized_source_bbox?: {
         x: number
         y: number
         width: number
@@ -10523,6 +10519,7 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
         reason?: string
         screenshot_path?: string
       }
+      artifact_note?: string
       visual?: {
         overall_score: number
         ssim_score: number
@@ -10537,10 +10534,10 @@ export type BrowserPreviewCompareTaskTargetRegionsResponses = {
         implementation_width: number
         implementation_height: number
         implementation_covers_source: boolean
+        implementation_matches_source_size: boolean
       }
       artifacts?: {
         source_crop: string
-        normalized_source_crop?: string
         implementation_crop: string
         side_by_side: string
         diff?: string

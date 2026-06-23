@@ -60,7 +60,7 @@ export function browserPreviewRegionComparisonAttachmentImages(input: {
 
 export const BrowserPreviewCompareRegionsTool = Tool.define(BrowserPreviewCompareRegionsToolID, {
   description:
-    "Preferred frontend visual repair-loop tool when source/reference evidence and a persisted browser_preview_target both exist. Capture local implementation regions, crop matching source reference regions, persist comparison evidence, and return source/local side-by-side PNG attachments directly in the build agent message, including failed/mismatched regions first and diff PNGs when generated. Use before standalone screenshot review for reference-parity regions with bindings.",
+    "Preferred frontend visual repair-loop tool when source/reference evidence and a persisted browser_preview_target both exist. Capture local implementation regions, crop matching source reference regions, persist true-size comparison evidence, and return source/local side-by-side PNG attachments directly in the build agent message, including failed/mismatched regions first. Diff PNGs are generated only when true source/local crop dimensions match. The side-by-side artifacts use real source and local screenshot crop dimensions without runner-side resizing, so size mismatch is part of the evaluation. Use before standalone screenshot review for reference-parity regions with bindings.",
   parameters: BrowserPreviewCompareRegionsToolParameters,
   async execute(params: BrowserPreviewCompareRegionsToolParameters, ctx: Tool.Context) {
     const taskID = typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID.trim() : ""
