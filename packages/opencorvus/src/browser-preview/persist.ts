@@ -11,6 +11,7 @@ import { deriveTaskStatus } from "@/engine/task-status"
 import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Database } from "@/storage/db"
+import { BrowserPreviewViewport, normalizeBrowserPreviewViewports } from "./viewport"
 
 export const BROWSER_PREVIEW_TARGET_KIND = "browser_preview_target" as const
 export const BROWSER_PREVIEW_EVIDENCE_KIND = "browser_preview_evidence" as const
@@ -23,6 +24,7 @@ export const PersistedBrowserPreviewTarget = z.object({
   taskID: z.string(),
   url: z.string(),
   source: z.literal("task-artifact"),
+  viewports: BrowserPreviewViewport.array().min(1),
   timeCreated: z.number(),
   timeUpdated: z.number(),
 })
@@ -50,15 +52,23 @@ export type PersistedBrowserPreviewEvidence = z.infer<typeof PersistedBrowserPre
 const PersistedBrowserPreviewTargetPayload = z.object({
   url: z.string(),
   source: z.literal("task-artifact"),
+  viewports: BrowserPreviewViewport.array().min(1),
 })
 
 export function persistBrowserPreviewTarget(input: {
   taskID: string
   url: string
+  viewports: readonly BrowserPreviewViewport[]
   now?: number
 }): Promise<PersistedBrowserPreviewTarget> {
+  const viewports = normalizeBrowserPreviewViewports(input.viewports)
   const existing = findBrowserPreviewTargetByUrl(input)
   const now = Math.max(input.now ?? Date.now(), existing ? existing.timeUpdated + 1 : 0)
+  const payload = {
+    url: input.url,
+    source: "task-artifact" as const,
+    viewports,
+  }
   if (existing) {
     Database.use((db) =>
       db
@@ -66,12 +76,14 @@ export function persistBrowserPreviewTarget(input: {
         .set({
           time_updated: now,
           label: "active",
+          payload,
         })
         .where(eq(EngineArtifactTable.id, existing.id))
         .run(),
     )
     const persisted: PersistedBrowserPreviewTarget = {
       ...existing,
+      viewports,
       timeUpdated: now,
     }
     return EngineProtocol.emit(
@@ -85,10 +97,6 @@ export function persistBrowserPreviewTarget(input: {
     ).then(() => persisted)
   }
   const id = Identifier.ascending("artifact")
-  const payload = {
-    url: input.url,
-    source: "task-artifact" as const,
-  }
   Database.use((db) =>
     db
       .insert(EngineArtifactTable)
@@ -111,6 +119,7 @@ export function persistBrowserPreviewTarget(input: {
     taskID: input.taskID,
     url: input.url,
     source: "task-artifact",
+    viewports,
     timeCreated: now,
     timeUpdated: now,
   }
@@ -189,6 +198,7 @@ export function findRecentBrowserPreviewTargets(taskID: string, limit = 12): Per
       taskID: row.task_id,
       url: payload.data.url,
       source: payload.data.source,
+      viewports: payload.data.viewports,
       timeCreated: row.time_created,
       timeUpdated: row.time_updated,
     })
@@ -223,6 +233,7 @@ export function findBrowserPreviewTargetByID(input: {
     taskID: row.task_id,
     url: payload.data.url,
     source: payload.data.source,
+    viewports: payload.data.viewports,
     timeCreated: row.time_created,
     timeUpdated: row.time_updated,
   }
@@ -256,6 +267,7 @@ function findBrowserPreviewTargetByUrl(input: {
       taskID: row.task_id,
       url: payload.data.url,
       source: payload.data.source,
+      viewports: payload.data.viewports,
       timeCreated: row.time_created,
       timeUpdated: row.time_updated,
     }
@@ -584,7 +596,8 @@ export function normalizeRuntimePathRefs(projectRoot: string, input: unknown): u
 }
 
 function normalizeBrowserPreviewRuntimePathRefs(projectRoot: string, taskID: string, input: unknown): unknown {
-  if (Array.isArray(input)) return input.map((item) => normalizeBrowserPreviewRuntimePathRefs(projectRoot, taskID, item))
+  if (Array.isArray(input))
+    return input.map((item) => normalizeBrowserPreviewRuntimePathRefs(projectRoot, taskID, item))
   if (!input || typeof input !== "object") return input
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(input)) {
@@ -621,6 +634,7 @@ function isPathRefKey(key: string): boolean {
     key === "manifest_path" ||
     key === "diagnosticsPath" ||
     key === "source_crop" ||
+    key === "normalized_source_crop" ||
     key === "implementation_crop" ||
     key === "side_by_side" ||
     key === "diff"

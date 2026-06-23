@@ -15,7 +15,7 @@ import {
   resolveSourceReferencePath,
   type BrowserPreviewSourceReferenceArtifactID,
 } from "./region-comparison"
-import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
+import { browserPreviewViewportByID, type BrowserPreviewViewport, type BrowserPreviewViewportID } from "./viewport"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
@@ -111,6 +111,7 @@ export async function bindLocalModuleToSourceRegion(
     outDir,
     targetUrl: target.url,
     route: input.route,
+    viewports: target.viewports,
     viewportID: input.viewportID,
     locator: input.implementationLocator,
     signal: input.signal,
@@ -314,11 +315,12 @@ async function captureLocalModule(input: {
   outDir: string
   targetUrl: string
   route: string
+  viewports: BrowserPreviewViewport[]
   viewportID: BrowserPreviewViewportID
   locator: BrowserPreviewRegionLocator
   signal?: AbortSignal
 }): Promise<LocalModuleCapture> {
-  const viewport = browserPreviewViewportByID(input.viewportID)
+  const viewport = browserPreviewViewportByID(input.viewports, input.viewportID)
   const runtime = await resolveBrowserNodeSidecarRuntime()
   const executablePath = await BrowserRuntime.findBrowserExecutable()
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(undefined)
@@ -575,30 +577,32 @@ function expandAnchorText(value: string): string[] {
 }
 
 function normalizeText(value: string): string {
-  return value
-    // NFKC is Unicode Normalization Form KC; it folds fullwidth metric text to ASCII equivalents.
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/(?:\p{L}\.){2,}/gu, (match) => match.replace(/\./g, ""))
-    // S&P means Standard & Poor's; source captures often include the ampersand while local text uses SP.
-    .replace(/(?<![\p{L}\p{N}])(\p{L})\s*&\s*(\p{L})(?![\p{L}\p{N}])/gu, "$1$2")
-    // QoQ, YoY, and MoM mean quarter-over-quarter, year-over-year, and month-over-month.
-    .replace(/\bq\s*\/\s*q\b/gu, "qoq")
-    .replace(/\by\s*\/\s*y\b/gu, "yoy")
-    .replace(/\bm\s*\/\s*m\b/gu, "mom")
-    .replace(/\u2212/g, "-")
-    // Normalize locale decimal commas before preserving thousands group separators.
-    .replace(/(?<=\p{N}),(?=\p{N}{1,2}(?!\p{N}))/gu, ".")
-    .replace(/(?<=\p{N}),(?=\p{N})/gu, "\uE000")
-    // Preserve numeric ranges separately from signed values.
-    .replace(/(?<=[\p{N}%])[-\u2013\u2014](?=\p{N})/gu, "\uE002")
-    .replace(/(?<![\p{L}\p{N}%])-(?=\p{N})/gu, "\uE001")
-    .replace(/[^\p{L}\p{N}%.$+\uE000\uE001\uE002]+/gu, " ")
-    .replace(/\uE000/g, ",")
-    .replace(/\uE001/g, "-")
-    .replace(/\uE002/g, "-")
-    .replace(/\s+/g, " ")
-    .trim()
+  return (
+    value
+      // NFKC is Unicode Normalization Form KC; it folds fullwidth metric text to ASCII equivalents.
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/(?:\p{L}\.){2,}/gu, (match) => match.replace(/\./g, ""))
+      // S&P means Standard & Poor's; source captures often include the ampersand while local text uses SP.
+      .replace(/(?<![\p{L}\p{N}])(\p{L})\s*&\s*(\p{L})(?![\p{L}\p{N}])/gu, "$1$2")
+      // QoQ, YoY, and MoM mean quarter-over-quarter, year-over-year, and month-over-month.
+      .replace(/\bq\s*\/\s*q\b/gu, "qoq")
+      .replace(/\by\s*\/\s*y\b/gu, "yoy")
+      .replace(/\bm\s*\/\s*m\b/gu, "mom")
+      .replace(/\u2212/g, "-")
+      // Normalize locale decimal commas before preserving thousands group separators.
+      .replace(/(?<=\p{N}),(?=\p{N}{1,2}(?!\p{N}))/gu, ".")
+      .replace(/(?<=\p{N}),(?=\p{N})/gu, "\uE000")
+      // Preserve numeric ranges separately from signed values.
+      .replace(/(?<=[\p{N}%])[-\u2013\u2014](?=\p{N})/gu, "\uE002")
+      .replace(/(?<![\p{L}\p{N}%])-(?=\p{N})/gu, "\uE001")
+      .replace(/[^\p{L}\p{N}%.$+\uE000\uE001\uE002]+/gu, " ")
+      .replace(/\uE000/g, ",")
+      .replace(/\uE001/g, "-")
+      .replace(/\uE002/g, "-")
+      .replace(/\s+/g, " ")
+      .trim()
+  )
 }
 
 function anchorMatchesNormalizedText(haystack: string, anchor: string): boolean {

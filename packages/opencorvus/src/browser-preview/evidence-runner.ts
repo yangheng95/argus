@@ -175,7 +175,7 @@ export async function runBrowserPreviewEvidenceJob(
   await fs.mkdir(outDir, { recursive: true })
 
   const viewports: SidecarViewportInput[] = input.viewportIDs.map((id) => {
-    const preset = browserPreviewViewportByID(id)
+    const preset = browserPreviewViewportByID(target.viewports, id)
     const viewport = normalizeRuntimeCaptureViewport({ width: preset.width, height: preset.height })
     return {
       id,
@@ -283,7 +283,7 @@ export async function runBrowserPreviewRegionComparisonCapture(
       viewportIDs: input.viewportIDs,
       viewportByID: Object.fromEntries(
         input.viewportIDs.map((id) => {
-          const viewport = input.viewportByID?.[id] ?? browserPreviewViewportByID(id)
+          const viewport = input.viewportByID?.[id] ?? browserPreviewViewportByID(target.viewports, id)
           return [id, { width: viewport.width, height: viewport.height }]
         }),
       ),

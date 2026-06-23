@@ -6,7 +6,12 @@ import z from "zod"
 import type { BrowserEvidenceManifestSummary } from "./evidence-runner"
 import { normalizeRuntimePathRefs, persistBrowserPreviewEvidence, stripRuntimePathRefs } from "./persist"
 import { BrowserPreviewTarget } from "./target"
-import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
+import {
+  browserPreviewViewportByID,
+  BrowserPreviewViewport,
+  BrowserPreviewViewportID,
+  BrowserPreviewViewportNotFoundError,
+} from "./viewport"
 
 export const BrowserPreviewCaptureSummary = z.object({
   captured: z.boolean(),
@@ -79,13 +84,12 @@ export async function runBrowserPreviewVerification(
 ): Promise<BrowserPreviewVerification> {
   const projectRoot = path.resolve(input.projectRoot)
   const viewportIDs = dedupeViewportIDs(input.viewportIDs)
-  const viewports = viewportIDs.map((id) => browserPreviewViewportByID(id))
-  if (viewports.length === 0) {
+  if (viewportIDs.length === 0) {
     return {
       status: "failed",
       projectRoot,
       target: input.target,
-      viewports,
+      viewports: [],
       captures: {},
       evidenceIDs: {},
       diagnostics: [
@@ -99,7 +103,7 @@ export async function runBrowserPreviewVerification(
       status: "failed",
       projectRoot,
       target: input.target,
-      viewports,
+      viewports: [],
       captures: {},
       evidenceIDs: {},
       diagnostics: [
@@ -113,10 +117,31 @@ export async function runBrowserPreviewVerification(
       status: "failed",
       projectRoot,
       target: input.target,
-      viewports,
+      viewports: [],
       captures: {},
       evidenceIDs: {},
       diagnostics: ["Preview verification requires a resolved http(s) URL.", ...input.target.diagnostics],
+    }
+  }
+  let viewports: BrowserPreviewViewport[]
+  try {
+    viewports = viewportIDs.map((id) => browserPreviewViewportByID(input.target.viewports, id))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      status: "failed",
+      projectRoot,
+      target: input.target,
+      viewports: [],
+      captures: {},
+      evidenceIDs: {},
+      diagnostics: [
+        message,
+        ...(error instanceof BrowserPreviewViewportNotFoundError
+          ? [`Persisted browser preview target ${input.targetID} does not define viewport ${error.viewportID}.`]
+          : []),
+        ...input.target.diagnostics,
+      ],
     }
   }
 

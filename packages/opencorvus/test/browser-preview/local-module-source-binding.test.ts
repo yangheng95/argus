@@ -13,13 +13,13 @@ import {
   type SourceRegionCandidate,
 } from "../../src/browser-preview/local-module-source-binding"
 import type { BrowserPreviewRegionLocator } from "../../src/browser-preview/region-comparison"
-import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 const LOCAL_MODULE_BINDING_TEST_TIMEOUT_MILLISECONDS = 60_000
 
@@ -67,8 +67,7 @@ describe("browser preview local module source binding", () => {
         id: "WorldEconomyPage",
         source: "source-dom-region",
         bbox: { x: 0, y: 0, width: 1440, height: 5200 },
-        text:
-          "Header Navigation Markets News Economy Calendar Countries Ideas Overview Bonds Stocks GDP Inflation Calendar",
+        text: "Header Navigation Markets News Economy Calendar Countries Ideas Overview Bonds Stocks GDP Inflation Calendar",
         sourceRefs: ["sourceDomRegions.ts"],
       },
       {
@@ -534,9 +533,7 @@ describe("browser preview local module source binding", () => {
         "utf8",
       )
 
-      await expect(collectSourceRegionCandidates({ projectRoot: tmp.path, taskID })).rejects.toThrow(
-        expectedFile,
-      )
+      await expect(collectSourceRegionCandidates({ projectRoot: tmp.path, taskID })).rejects.toThrow(expectedFile)
     }
   })
 
@@ -796,7 +793,7 @@ describe("browser preview local module source binding", () => {
         try {
           const target = await Instance.provide({
             directory: tmp.path,
-            fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+            fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
           })
 
           await expect(
@@ -820,11 +817,7 @@ describe("browser preview local module source binding", () => {
             directory: tmp.path,
             fn: () =>
               Database.use((db) =>
-                db
-                  .select()
-                  .from(EngineArtifactTable)
-                  .where(eq(EngineArtifactTable.task_id, taskID))
-                  .all(),
+                db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.task_id, taskID)).all(),
               ),
           })
           expect(evidenceRows.filter((row) => row.kind === "browser_preview_evidence")).toHaveLength(0)
@@ -848,7 +841,7 @@ describe("browser preview local module source binding", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
         })
 
         const locators: Array<{ label: string; locator: BrowserPreviewRegionLocator }> = [
@@ -900,7 +893,7 @@ describe("browser preview local module source binding", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
         })
 
         const result = await bindLocalModuleToSourceRegion({
@@ -1031,7 +1024,9 @@ async function writeLocatorVariantCandidateFiles(sourcePackageAbsolute: string):
   )
 }
 
-async function startLocalModuleServer(mode: "hidden" | "zero-size"): Promise<{ url: string; close: () => Promise<void> }> {
+async function startLocalModuleServer(
+  mode: "hidden" | "zero-size",
+): Promise<{ url: string; close: () => Promise<void> }> {
   let server: Server | undefined
   server = createServer((_req, res) => {
     const regionRule =

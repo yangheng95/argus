@@ -7,13 +7,14 @@ import {
   compareBrowserPreviewRegions,
   type BrowserPreviewRegionBinding,
 } from "../../src/browser-preview/region-comparison"
-import { persistBrowserPreviewTarget, resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
+import { resolveRuntimeRelativePath } from "../../src/browser-preview/persist"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 const REGION_ROUTE_DIAGNOSTICS_TEST_TIMEOUT_MILLISECONDS = 60_000
 
@@ -33,7 +34,7 @@ describe("browser preview region route diagnostics", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
         })
 
         const result = await compareBrowserPreviewRegions({
@@ -94,7 +95,7 @@ describe("browser preview region route diagnostics", () => {
       try {
         const target = await Instance.provide({
           directory: tmp.path,
-          fn: () => persistBrowserPreviewTarget({ taskID, url: server.url }),
+          fn: () => persistTestBrowserPreviewTarget({ taskID, url: server.url }),
         })
 
         const result = await compareBrowserPreviewRegions({
@@ -127,11 +128,7 @@ describe("browser preview region route diagnostics", () => {
   )
 })
 
-function routeBinding(input: {
-  regionID: string
-  route: string
-  locatorValue: string
-}): BrowserPreviewRegionBinding {
+function routeBinding(input: { regionID: string; route: string; locatorValue: string }): BrowserPreviewRegionBinding {
   return {
     region_id: input.regionID,
     viewport_id: "desktop",
@@ -248,7 +245,8 @@ async function startRouteDiagnosticsServer(): Promise<{ url: string; close: () =
   })
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
   const address = server.address()
-  if (!address || typeof address === "string") throw new Error("route diagnostics test server did not bind a TCP address")
+  if (!address || typeof address === "string")
+    throw new Error("route diagnostics test server did not bind a TCP address")
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>
