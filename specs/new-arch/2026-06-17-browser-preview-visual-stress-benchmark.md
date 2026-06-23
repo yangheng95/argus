@@ -67,7 +67,7 @@ rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|Browser
 | Surface                 | Evidence                                                                                                                                                              | Decision                                                                                                                                                  |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Overlay panel           | `packages/overlay/src/components/BrowserPreviewPanel.tsx` owns target loading, candidate selection, capture requests, live screenshot object URLs, and input routing. | Keep the backend/evidence-backed design. Bind live image object URLs to task/target/viewport scope so stale frames cannot display or receive input.       |
-| Overlay service         | `packages/overlay/src/services/browser-preview.ts` exposes only task-scoped preview routes.                                                                           | Decode live PNG bytes before returning an object URL so corrupt HTTP 200 frames fail visibly instead of entering the DOM image tree. Do not add direct URL or local frame APIs. |
+| Overlay service         | `packages/overlay/src/services/browser-preview.ts` exposes only task-scoped preview routes.                                                                           | Return task-scoped binary object URLs only; rendered live `<img>` decode failure is the single corrupt-frame owner. Do not add direct URL, local frame APIs, or service-side pre-decode. |
 | Backend route           | `packages/opencorvus/src/server/routes/browser-preview.ts` owns target, capture, compare, live snapshot, and live input routes.                                       | Unknown target IDs must fail before capture starts. Live display must remain task/target scoped and must not create evidence.                             |
 | Backend target/evidence | `packages/opencorvus/src/browser-preview/target.ts` and `persist.ts` own target selection and latest evidence lookup.                                                 | Preserve `latestEvidenceIDs` per viewport and reject stale evidence by target/viewport in the overlay.                                                    |
 | Live sidecar            | `packages/opencorvus/src/browser-preview/live.ts` owns Playwright live PNG frames.                                                                                    | Keep Node sidecar ownership; overlay only displays returned PNG object URLs.                                                                              |
@@ -105,18 +105,19 @@ rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|Browser
    matching the active task/target/viewport is visible, and the returned frame
    must visually match the expected input-response PNG.
 9. Live image decode failure: a live snapshot route that returns HTTP 200 but
-   supplies corrupt PNG bytes is rejected before an object URL is returned,
-   renders the live error state, clears the broken image, and can recover on
-   the next active viewport snapshot.
+   supplies corrupt PNG bytes reaches the rendered live image, triggers the
+   `<img>` decode error owner, renders the live error state, clears the broken
+   image, and can recover on the next active viewport snapshot.
 10. Live failure: a first-frame snapshot failure renders the live error state
    before the evidence-missing state and includes the backend error body.
 11. Capture failure: failed capture evidence is rendered as failed evidence, not
    as an empty missing preview.
 12. Unknown target capture: an unknown capture target fails with 404 instead of
    producing a 200 failed verification body.
-13. Layout pressure: desktop and narrow viewports have no incoherent overlap,
-   no body-level horizontal overflow, truncated long candidate/status text, and
-   nonblank screenshot evidence.
+13. Layout pressure: desktop and narrow raw browser viewports keep preview
+   controls inside the legal overlay shell, have no incoherent overlap,
+   truncate long candidate/status text, and preserve nonblank screenshot
+   evidence without shrinking panels below the legal shell contract.
 14. Cross-task scope reset: after a candidate selection failure on one task,
    switching to another task must clear selection errors, live screenshots,
    persisted evidence, and verification status before rendering that task's
@@ -150,9 +151,9 @@ rg -n "latestEvidenceIDs|liveImageUrl|liveError|browser-preview-url-form|Browser
 - Initial preview target load failures and explicit failed targets render
   visible failed states; neither path is allowed to keep showing stale live or
   persisted evidence, stale verification status, or an enabled capture action.
-- Corrupt HTTP 200 live snapshot image bytes are decoded before object URL
-  creation, render a visible live decode failure, and clear the broken image
-  before recovery.
+- Corrupt HTTP 200 live snapshot image bytes are decoded by the rendered live
+  `<img>` owner, render a visible live decode failure, and clear the broken
+  image before recovery.
 - Switching tasks after a preview selection failure renders the next task's
   own preview state and leaves no stale selection, live, evidence, or
   verification UI behind.

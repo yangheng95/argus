@@ -1420,3 +1420,99 @@ event.
 - Rechecked size legality: this round adds no second aspect-ratio source; the
   existing generated overlay frame remains the aspect owner, while open
   workbench panels keep the token-owned minimum width.
+
+## Follow-up 2026-06-23: Browser Preview Corrupt Live Image Browser Coverage
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Independent review 2026-06-23 | Corrupt successful live image bytes still lacked a real browser test after service pre-decode was removed. |
+| `2026-06-17-browser-preview-visual-stress-benchmark.md` | The benchmark already names corrupt HTTP 200 live PNG bytes as a required visual failure state. |
+| This contract | The rendered `<img>` is the single live frame decode owner; service-side pre-decode is retired as a duplicate decode source. |
+| `BrowserPreviewPanel.tsx` | `handleLiveImageDecodeError()` owns visible live decode failure, loading cleanup, and broken object URL cleanup. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Visual stress fixture | `browser-preview-visual-stress.test.ts` serves live snapshot PNG bytes but never switches a successful HTTP 200 route to corrupt image bytes. | Add a corrupt live snapshot phase to the existing visual benchmark instead of adding a separate fake path. |
+| Decode owner | `BrowserPreviewPanel.tsx` handles `<img onError>` and clears the broken live image. | Test this rendered image path directly; do not reintroduce service pre-decode. |
+| Recovery path | Viewport switches already cause a new task/target/viewport live snapshot owner. | Recover by switching to another viewport and asserting a valid live image renders again. |
+| Historical spec | The 2026-06-17 benchmark previously assigned corrupt-frame rejection to the service. | Update that benchmark wording to the current single-owner decode contract. |
+| Narrow raw viewport assertion | The visual stress benchmark asserted zero body horizontal overflow at `390px`, contradicting the legal `1120px` overlay shell. | Assert preview content stays inside the legal shell instead of treating raw viewport overflow as illegal. |
+
+### Root Cause
+
+The live frame ownership repair removed duplicate service pre-decode, but the
+older visual stress benchmark retained the pre-decode acceptance text and did
+not exercise the browser's real image decode failure path. That left a
+documentation double source and allowed a future regression where corrupt HTTP
+200 image bytes could become a blank or broken rendered image without a visible
+benchmark failure.
+
+### Fix Plan
+
+1. Add a one-shot corrupt live snapshot mode to the visual stress fake backend.
+2. Switch the active live preview viewport to trigger the corrupt HTTP 200 image.
+3. Assert the UI renders `browser-preview-live-error`, clears the live image,
+   and shows the decode failure message.
+4. Switch to a different viewport and assert the live preview recovers with a
+   valid image from the same task-scoped route.
+5. Update the 2026-06-17 benchmark spec to remove the retired service
+   pre-decode requirement and pin the rendered image decode owner.
+
+### Acceptance
+
+- `browser-preview-visual-stress.test.ts` covers corrupt HTTP 200 live PNG bytes
+  in a real browser and writes a visual screenshot for the failure state.
+- The corrupt image path uses the rendered `<img onError>` owner and does not
+  restore service-side pre-decode.
+- The broken image is cleared before the next valid live frame renders.
+- Historical benchmark wording no longer advertises a retired duplicate decode
+  owner.
+- Narrow raw browser viewports are checked against the legal overlay shell, not
+  against an illegal raw viewport width.
+
+### Implementation
+
+- Added a one-shot corrupt live snapshot mode to the visual stress fake backend.
+- The benchmark now switches the live viewport to `tablet`, receives HTTP 200
+  `image/png` corrupt bytes, and waits for `browser-preview-live-error` with no
+  remaining `browser-preview-live-screenshot`.
+- The benchmark then switches to `mobile` and asserts a valid live frame
+  renders again through the same task-scoped live route.
+- Updated the layout pressure probe to measure against `document.body`, the
+  legal overlay shell, so `390px` raw browser fixtures cannot require panels to
+  shrink below the `1120px` shell contract.
+- Updated `2026-06-17-browser-preview-visual-stress-benchmark.md` to make the
+  rendered live `<img>` the corrupt-frame decode owner.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/browser-preview-panel.test.ts packages/overlay/test/browser-preview-service.test.ts --timeout 30000`.
+- PASS: `bun test packages/overlay/test/browser-preview-panel.test.ts packages/overlay/test/browser-preview-service.test.ts packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/workspace-surface-consistency.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS after fixing the stale raw-viewport assertion:
+  `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/browser-preview-visual-stress.test.ts`.
+
+### Visual QA
+
+- Reviewed `.scratch/browser-preview-visual-stress/07-live-decode-failure.png`;
+  the error state is visible, the broken image is gone, and long URL/error text
+  stays inside the panel.
+- Reviewed `.scratch/browser-preview-visual-stress/08-live-decode-recovery.png`;
+  a valid live frame returns after viewport recovery.
+- Reviewed `.scratch/browser-preview-visual-stress/09-narrow-layout.png`; the
+  raw `390px` fixture preserves the legal shell behavior instead of crushing
+  the Browser Preview panel below the legal size contract.
+
+### Self Review
+
+- Rechecked source ownership: `browser-preview.ts` still has no service-side
+  image decoder, `Image.decode()`, `createImageBitmap()`, or `new Image()`.
+- Rechecked the browser benchmark: corrupt bytes enter the DOM image path and
+  failure is detected through visible UI, not a static source assertion.
+- Rechecked layout semantics: the benchmark no longer asks an illegal raw
+  viewport to have no document overflow; it verifies preview content does not
+  escape the legal overlay shell.
