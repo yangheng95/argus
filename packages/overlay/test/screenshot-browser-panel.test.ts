@@ -347,6 +347,7 @@ describe("screenshot browser panel", () => {
     expect(source).toContain("function insertBoundedNewestFirst")
     expect(source).toContain("subtreeScreenshotItems")
     expect(statsSource).toContain("collectScreenshotBrowserItemsFromCard(card)")
+    expect(statsSource).not.toContain("mergeScreenshotBrowserItemSets(topLevelScreenshotItemSets.values())")
     expect(source).not.toContain("function collectCardTreeScreenshots")
     expect(source).not.toContain("collectCardTreeScreenshots(")
     expect(source).not.toContain("const messages: any[] = []")

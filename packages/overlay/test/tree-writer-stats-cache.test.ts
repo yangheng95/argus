@@ -580,6 +580,343 @@ test("top-level screenshot cache bounds many roots before the panel reads it", (
   }
 })
 
+test("top-level screenshot cache updates one dirty root without reading unrelated root arrays", () => {
+  resetWriter()
+  try {
+    type ScreenshotBrowserItem = import("../src/utils/screenshot-browser").ScreenshotBrowserItem
+    const rootCount = 5_000
+    const changedRootID = "bulk-root-2500"
+    let countUnrelatedReads = false
+    let unrelatedArrayReads = 0
+    const cachedItemsForRoot = (rootID: string, item: ScreenshotBrowserItem): ScreenshotBrowserItem[] =>
+      new Proxy([item], {
+        get(target, property, receiver) {
+          if (
+            countUnrelatedReads &&
+            rootID !== changedRootID &&
+            (property === "length" || property === Symbol.iterator || (typeof property === "string" && /^\d+$/.test(property)))
+          ) {
+            unrelatedArrayReads += 1
+          }
+          return Reflect.get(target, property, receiver)
+        },
+      })
+    const order = Array.from({ length: rootCount }, (_item, index) => `bulk-root-${index}`)
+    const cards = Object.fromEntries(
+      order.map((id, index) => {
+        const item: ScreenshotBrowserItem = {
+          id: `file:bulk-message-${index}:bulk-part-${index}`,
+          role: "visual-qa",
+          src: `/attachment/project/bulk-${index}.png`,
+          alt: `bulk-${index}.png`,
+          title: `bulk-${index}.png`,
+          detail: "image/png",
+          time: index + 1,
+          messageID: `bulk-message-${index}`,
+          partID: `bulk-part-${index}`,
+          source: "file",
+        }
+        return [
+          id,
+          {
+            id,
+            kind: "agent" as const,
+            role: "visual-qa",
+            stage: "visual-qa",
+            messageID: `bulk-message-${index}`,
+            title: `Bulk ${index}`,
+            time: index + 1,
+            parts: [],
+            childIDs: [],
+            subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
+            subtreeScreenshotItems: cachedItemsForRoot(id, item),
+            subtreeUsageAggregate: { tokens: 0, costUSD: 0, estimated: false },
+          },
+        ]
+      }),
+    )
+
+    setCardTreeStore("cards", cards)
+    replaceCardTreeOrder(order)
+    flushCardStats()
+    expect(cardTreeStore.screenshotItems[0]?.src).toBe("/attachment/project/bulk-4999.png")
+
+    countUnrelatedReads = true
+    setCardTreeStore("cards", changedRootID, "messageID", "bulk-message-changed")
+    setCardTreeStore("cards", changedRootID, "time", rootCount + 1)
+    setCardTreeStore("cards", changedRootID, "parts", [
+      {
+        id: "bulk-part-changed",
+        type: "file",
+        messageID: "bulk-message-changed",
+        sessionID: "ses_visual",
+        url: "/attachment/project/bulk-changed.png",
+        mime: "image/png",
+        filename: "bulk-changed.png",
+      },
+    ])
+    markCardStatsDirty(changedRootID)
+    flushCardStats()
+
+    expect(unrelatedArrayReads).toBe(0)
+    expect(cardTreeStore.screenshotItems).toHaveLength(screenshotBrowserUtils.SCREENSHOT_BROWSER_ITEM_LIMIT)
+    expect(cardTreeStore.screenshotItems[0]?.src).toBe("/attachment/project/bulk-changed.png")
+  } finally {
+    resetWriter()
+  }
+})
+
+test("top-level screenshot cache appends and removes roots without reading stable root arrays", () => {
+  resetWriter()
+  try {
+    type ScreenshotBrowserItem = import("../src/utils/screenshot-browser").ScreenshotBrowserItem
+    const rootCount = 160
+    let countStableReads = false
+    let stableArrayReads = 0
+    const stableItemsForRoot = (rootID: string, item: ScreenshotBrowserItem): ScreenshotBrowserItem[] =>
+      new Proxy([item], {
+        get(target, property, receiver) {
+          if (
+            countStableReads &&
+            rootID !== "root-appended" &&
+            (property === "length" || property === Symbol.iterator || (typeof property === "string" && /^\d+$/.test(property)))
+          ) {
+            stableArrayReads += 1
+          }
+          return Reflect.get(target, property, receiver)
+        },
+      })
+    const itemFor = (id: string, index: number): ScreenshotBrowserItem => ({
+      id: `file:${id}`,
+      role: "visual-qa",
+      src: `/attachment/project/${id}.png`,
+      alt: `${id}.png`,
+      title: `${id}.png`,
+      detail: "image/png",
+      time: index + 1,
+      messageID: `message-${id}`,
+      partID: `part-${id}`,
+      source: "file",
+    })
+    const order = Array.from({ length: rootCount }, (_item, index) => `root-${index}`)
+    const cards = Object.fromEntries(
+      order.map((id, index) => [
+        id,
+        {
+          id,
+          kind: "agent" as const,
+          role: "visual-qa",
+          stage: "visual-qa",
+          title: id,
+          time: index + 1,
+          parts: [],
+          childIDs: [],
+          subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
+          subtreeScreenshotItems: stableItemsForRoot(id, itemFor(id, index)),
+          subtreeUsageAggregate: { tokens: 0, costUSD: 0, estimated: false },
+        },
+      ]),
+    )
+
+    setCardTreeStore("cards", cards)
+    replaceCardTreeOrder(order)
+    flushCardStats()
+
+    countStableReads = true
+    const appended = itemFor("root-appended", rootCount)
+    setCardTreeStore("cards", "root-appended", {
+      id: "root-appended",
+      kind: "agent",
+      role: "visual-qa",
+      stage: "visual-qa",
+      title: "root-appended",
+      time: rootCount + 1,
+      parts: [],
+      childIDs: [],
+      subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
+      subtreeScreenshotItems: [appended],
+      subtreeUsageAggregate: { tokens: 0, costUSD: 0, estimated: false },
+    })
+    replaceCardTreeOrder([...order, "root-appended"])
+    flushCardStats()
+
+    expect(stableArrayReads).toBe(0)
+    expect(cardTreeStore.screenshotItems[0]?.src).toBe("/attachment/project/root-appended.png")
+
+    replaceCardTreeOrder(order)
+    flushCardStats()
+
+    expect(stableArrayReads).toBe(0)
+    expect(cardTreeStore.screenshotItems[0]?.src).toBe("/attachment/project/root-159.png")
+  } finally {
+    resetWriter()
+  }
+})
+
+test("top-level screenshot cache preserves duplicate-owner and equal-time order semantics", () => {
+  resetWriter()
+  try {
+    type ScreenshotBrowserItem = import("../src/utils/screenshot-browser").ScreenshotBrowserItem
+    const duplicate = (title: string): ScreenshotBrowserItem => ({
+      id: "file:shared-message:shared-part",
+      role: "visual-qa",
+      src: "/attachment/project/shared.png",
+      alt: "shared.png",
+      title,
+      detail: "image/png",
+      time: 100,
+      messageID: "shared-message",
+      partID: "shared-part",
+      source: "file",
+    })
+    const item = (id: string): ScreenshotBrowserItem => ({
+      id: `file:${id}`,
+      role: "visual-qa",
+      src: `/attachment/project/${id}.png`,
+      alt: `${id}.png`,
+      title: id,
+      detail: "image/png",
+      time: 100,
+      messageID: `message-${id}`,
+      partID: `part-${id}`,
+      source: "file",
+    })
+    setCardTreeStore("cards", {
+      duplicate_a: {
+        id: "duplicate_a",
+        kind: "agent",
+        role: "visual-qa",
+        stage: "visual-qa",
+        title: "duplicate_a",
+        time: 1,
+        parts: [],
+        childIDs: [],
+        subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
+        subtreeScreenshotItems: [duplicate("first owner")],
+        subtreeUsageAggregate: { tokens: 0, costUSD: 0, estimated: false },
+      },
+      duplicate_b: {
+        id: "duplicate_b",
+        kind: "agent",
+        role: "visual-qa",
+        stage: "visual-qa",
+        title: "duplicate_b",
+        time: 2,
+        parts: [],
+        childIDs: [],
+        subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
+        subtreeScreenshotItems: [duplicate("second owner")],
+        subtreeUsageAggregate: { tokens: 0, costUSD: 0, estimated: false },
+      },
+      equal_a: {
+        id: "equal_a",
+        kind: "agent",
+        role: "visual-qa",
+        stage: "visual-qa",
+        title: "equal_a",
+        time: 3,
+        parts: [],
+        childIDs: [],
+        subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
+        subtreeScreenshotItems: [item("equal-a")],
+        subtreeUsageAggregate: { tokens: 0, costUSD: 0, estimated: false },
+      },
+      equal_b: {
+        id: "equal_b",
+        kind: "agent",
+        role: "visual-qa",
+        stage: "visual-qa",
+        title: "equal_b",
+        time: 4,
+        parts: [],
+        childIDs: [],
+        subtreeCounts: { messages: 0, tools: 0, agents: 0, skills: 0 },
+        subtreeScreenshotItems: [item("equal-b")],
+        subtreeUsageAggregate: { tokens: 0, costUSD: 0, estimated: false },
+      },
+    })
+    replaceCardTreeOrder(["duplicate_a", "duplicate_b", "equal_a", "equal_b"])
+    flushCardStats()
+
+    expect(cardTreeStore.screenshotItems.map((entry) => entry.title)).toEqual([
+      "first owner",
+      "equal-a",
+      "equal-b",
+    ])
+
+    replaceCardTreeOrder(["duplicate_b", "equal_b", "equal_a"])
+    flushCardStats()
+
+    expect(cardTreeStore.screenshotItems.map((entry) => entry.title)).toEqual([
+      "second owner",
+      "equal-b",
+      "equal-a",
+    ])
+  } finally {
+    resetWriter()
+  }
+})
+
+test("resetWriter clears the incremental top-level screenshot index before the next hydrate", () => {
+  bootstrap()
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: "part_screenshot_reset_index",
+        messageID: MSG_ID_A,
+        sessionID: SID,
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "file",
+        url: "/attachment/project/reset-index-old.png",
+        mime: "image/png",
+        filename: "reset-index-old.png",
+      },
+    },
+  })
+  flushBufferedPartDeltas()
+  expect(cardTreeStore.screenshotItems.map((entry) => entry.src)).toEqual(["/attachment/project/reset-index-old.png"])
+
+  resetWriter()
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_stats_after_reset",
+        sessionID: SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        channel: "assistant",
+        time: { created: 1_777_000_100_000 },
+      },
+    },
+  })
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: "part_screenshot_reset_index_new",
+        messageID: "msg_stats_after_reset",
+        sessionID: SID,
+        resolvedRole: "assistant",
+        channel: "assistant",
+        type: "file",
+        url: "/attachment/project/reset-index-new.png",
+        mime: "image/png",
+        filename: "reset-index-new.png",
+      },
+    },
+  })
+  flushBufferedPartDeltas()
+
+  expect(cardTreeStore.screenshotItems.map((entry) => entry.src)).toEqual(["/attachment/project/reset-index-new.png"])
+})
+
 test("subtree latest-hit cache equals the fresh recursive pick", () => {
   bootstrap()
   applyEvent({

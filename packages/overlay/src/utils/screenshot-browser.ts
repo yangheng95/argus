@@ -80,7 +80,7 @@ function isStoredImageReference(input: { url?: unknown; mime?: unknown; mediaTyp
   return /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(url)
 }
 
-function itemKey(item: ScreenshotBrowserItem): string {
+export function screenshotBrowserItemKey(item: ScreenshotBrowserItem): string {
   return `${item.role}:${item.src}:${item.messageID}:${item.partID}:${item.source}`
 }
 
@@ -96,7 +96,7 @@ function insertBoundedNewestFirst(items: ScreenshotBrowserItem[], item: Screensh
 
 function pushUnique(collector: ScreenshotBrowserCollector, item: ScreenshotBrowserItem): void {
   if (!item.src) return
-  const key = itemKey(item)
+  const key = screenshotBrowserItemKey(item)
   if (collector.seen.has(key)) return
   collector.seen.add(key)
   insertBoundedNewestFirst(collector.items, item)
