@@ -11,7 +11,7 @@
 import { batch } from "solid-js"
 
 import { apiJson, ApiError } from "./api"
-import { getHostTransport } from "./host-transport"
+import { getHostTransport, type StreamHandle } from "./host-transport"
 import { isSelectedTaskSSEConnected, startSSE, stopSSE } from "./sse"
 import { showAppDialog } from "./app-dialog"
 import { initGitCurrent } from "../utils/git"
@@ -43,8 +43,9 @@ import { applyDirectory } from "./workspace"
 import { ingestPersistedConversationMessage, resetWriter } from "./tree-writer"
 import { cancelConversationReplay, conversationSourceDirectory, hydrateTaskConversation } from "./conversation"
 import { resetSelectedLiveCursor } from "./selected-stream-cursor"
-import { ackTaskNotificationIfPresent } from "./notify"
+import { ackTaskNotificationIfPresent, formatErrorDetails } from "./notify"
 import { cardTreeStore } from "../store/card-tree"
+import { AppLog } from "../utils/log"
 
 // ── Types ──
 
@@ -293,7 +294,7 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     // task the user just deselected.
     setSettingsStore("workspaceTaskID", "")
     setSettingsStore("workspaceDirectory", "")
-    saveSettings()
+    await saveSettings()
     return
   }
 
@@ -327,7 +328,7 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     const restoreDir = workspaceRestoreDirectory(taskDirectory || settingsStore.directory || "")
     setSettingsStore("workspaceTaskID", nextTaskID)
     setSettingsStore("workspaceDirectory", restoreDir)
-    saveSettings()
+    await saveSettings()
     ackTaskNotificationIfPresent(nextTaskID)
   } catch (error) {
     if (stale() && isAbortError(error)) return
@@ -488,8 +489,41 @@ export async function submitMessage(
   return new Promise<unknown>((resolve, reject) => {
     let result: unknown = null
     let settled = false
+    let handle: StreamHandle | null = null
+    let abortListener: (() => void) | null = null
 
-    const handle = getHostTransport().openStream(
+    const cleanup = () => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer)
+        inactivityTimer = null
+      }
+      cleanupRelay()
+      if (abortListener) {
+        controller.signal.removeEventListener("abort", abortListener)
+        abortListener = null
+      }
+    }
+
+    const rejectStream = (error: unknown) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      handle?.close()
+      reject(error)
+    }
+
+    const observeStreamHook = (run: () => void | Promise<void>) => {
+      try {
+        const hookResult = run()
+        if (hookResult && typeof (hookResult as Promise<void>).then === "function") {
+          void Promise.resolve(hookResult).catch(rejectStream)
+        }
+      } catch (error) {
+        rejectStream(error)
+      }
+    }
+
+    handle = getHostTransport().openStream(
       {
         path: "panel/message/stream",
         method: "POST",
@@ -500,7 +534,7 @@ export async function submitMessage(
       {
         onOpen: () => {
           markActivity()
-          void options.onOpen?.()
+          observeStreamHook(() => options.onOpen?.())
         },
         onEvent: (data) => {
           let ev: any
@@ -510,21 +544,19 @@ export async function submitMessage(
             return // malformed SSE event — skip
           }
           markActivity()
-          void options.onEvent?.(ev)
+          observeStreamHook(() => options.onEvent?.(ev))
           if (ev?.type === "done") result = ev.result
         },
         onError: (err) => {
           if (settled) return
           settled = true
-          if (inactivityTimer) clearTimeout(inactivityTimer)
-          cleanupRelay()
+          cleanup()
           reject(err)
         },
         onClose: (_reason) => {
           if (settled) return
           settled = true
-          if (inactivityTimer) clearTimeout(inactivityTimer)
-          cleanupRelay()
+          cleanup()
           if (result !== null && result !== undefined) {
             resolve(result)
           } else {
@@ -535,9 +567,9 @@ export async function submitMessage(
     )
 
     // Mirror prior abort behaviour: caller-side abort closes the stream.
-    const abortListener = () => handle.close()
+    abortListener = () => handle?.close()
     if (controller.signal.aborted) {
-      handle.close()
+      handle?.close()
     } else {
       controller.signal.addEventListener("abort", abortListener, { once: true })
     }
@@ -791,5 +823,13 @@ export async function interruptTask(taskID: string): Promise<boolean> {
 // stopSSE) that every intentional deselect uses. Registered at module load so
 // it's in place before any tasks fetch completes.
 setOrphanedSelectionHandler(() => {
-  void selectTask("")
+  void selectTask("").catch((error) => {
+    AppLog.error("task", "failed to clear orphaned task selection", {
+      error: formatErrorDetails(error),
+      notificationID: "task:orphan-selection-clear-failed",
+      notificationTitle: t("common.error"),
+      notificationMessage: error instanceof Error ? error.message : String(error),
+      notificationDetails: formatErrorDetails(error),
+    })
+  })
 })
