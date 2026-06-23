@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import fs from "node:fs/promises"
+import path from "node:path"
 import test from "node:test"
 
 import { launchBrowser } from "../launch.ts"
@@ -32,12 +34,13 @@ async function waitFor<T>(read: () => T | null | Promise<T | null>, label: strin
 }
 
 test(
-  "workspace terminal command opens the selected system terminal profile",
+  "workspace command dock opens coding CLI and terminal launchers",
   async () => {
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
 
     const openBodies: Record<string, unknown>[] = []
+    const codingOpenBodies: Record<string, unknown>[] = []
     const profileRequestDirectories: string[] = []
 
     const server = await startBrowserFixture(async (req) => {
@@ -70,7 +73,12 @@ test(
       if (path === "/panel/knowledge/preference") return send([])
       if (path === "/coding/cli/profiles") {
         profileRequestDirectories.push(url.searchParams.get("directory") || "")
-        return send({ profiles: [] })
+        return send({
+          profiles: [
+            { id: "claude-code", label: "Claude Code", icon: "claude-code" },
+            { id: "codex", label: "Codex CLI", icon: "codex" },
+          ],
+        })
       }
       if (path === "/terminal/profiles") {
         profileRequestDirectories.push(url.searchParams.get("directory") || "")
@@ -84,6 +92,10 @@ test(
       }
       if (path === "/terminal/open" && req.method === "POST") {
         openBodies.push((await req.json()) as Record<string, unknown>)
+        return send({ ok: true })
+      }
+      if (path === "/coding/cli/open" && req.method === "POST") {
+        codingOpenBodies.push((await req.json()) as Record<string, unknown>)
         return send({ ok: true })
       }
       return send({})
@@ -101,10 +113,21 @@ test(
       }, server.origin)
       await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector('[data-ui="workspace-terminal-open"]')
+      await page.waitForSelector('[data-ui="workspace-coding-cli-open-default"]')
       await page.waitForFunction(() => {
         const button = document.querySelector<HTMLButtonElement>('[data-ui="workspace-terminal-open"]')
         return !!button && !button.disabled
       })
+      await page.waitForFunction(() => {
+        const button = document.querySelector<HTMLButtonElement>('[data-ui="workspace-coding-cli-open-default"]')
+        return !!button && !button.disabled
+      })
+
+      const screenshotPath = path.resolve(".scratch", "workspace-command-dock-launchers.png")
+      await fs.mkdir(path.dirname(screenshotPath), { recursive: true })
+      const commandDock = await page.$(".workspace-command-dock")
+      assert.notEqual(commandDock, null)
+      await commandDock.screenshot({ path: screenshotPath })
 
       const initialPanelState = await page.evaluate(() => ({
         diffViewActive: document.querySelector<HTMLElement>("#centerWorkbenchDiff")?.dataset.active ?? "missing",
@@ -118,6 +141,17 @@ test(
       await page.waitForSelector('[data-terminal-profile="default"]')
       await page.waitForSelector('[data-terminal-profile="cmd"]')
       await page.keyboard.press("Escape")
+      await page.click('[data-ui="workspace-coding-cli-menu"]')
+      await page.waitForSelector('[data-coding-cli="claude-code"]')
+      await page.waitForSelector('[data-coding-cli="codex"]')
+      await page.keyboard.press("Escape")
+      await page.click('[data-ui="workspace-coding-cli-open-default"]')
+      const codingBody = await waitFor(() => codingOpenBodies[0] ?? null, "coding CLI open request")
+
+      assert.equal(codingBody.cwd, "D:/overlay/workspace/app")
+      assert.equal(codingBody.cliID, "claude-code")
+      assert.equal(codingBody.terminalProfileID, "default")
+
       await page.click('[data-ui="workspace-terminal-open"]')
       const body = await waitFor(() => openBodies[0] ?? null, "terminal open request")
 
