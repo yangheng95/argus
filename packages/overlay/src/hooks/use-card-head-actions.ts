@@ -51,6 +51,27 @@ async function writeClipboard(text: string): Promise<boolean> {
   return false
 }
 
+function cardHeadActionErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function reportCardHeadActionError(owner: string, nodeID: string, error: unknown): void {
+  notifyError({
+    id: `card-head:${owner}:${nodeID}`,
+    title: t("common.error"),
+    message: cardHeadActionErrorMessage(error),
+    details: formatErrorDetails(error),
+  })
+}
+
+function runCardHeadAction(owner: string, nodeID: string, action: () => void | Promise<void>): void {
+  try {
+    void Promise.resolve(action()).catch((error) => reportCardHeadActionError(owner, nodeID, error))
+  } catch (error) {
+    reportCardHeadActionError(owner, nodeID, error)
+  }
+}
+
 export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadActionsOutput {
   const [copied, setCopied] = createSignal(false)
   const [rewinding, setRewinding] = createSignal(false)
@@ -66,21 +87,21 @@ export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadA
 
   const onCopy = (event: Event) => {
     event.stopPropagation()
-    void (async () => {
+    runCardHeadAction("copy", input.node().id, async () => {
       const text = collectCardText(input.node())
       if (!text) return
       const ok = await writeClipboard(text)
       if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
-    })()
+    })
   }
 
   const onRewind = (event: Event) => {
     event.stopPropagation()
     if (rewindDisabled()) return
     if (!input.onRewind || !canRewind() || rewinding()) return
-    void (async () => {
+    runCardHeadAction("rewind", input.node().id, async () => {
       const choice = await showAppDialog({
         title: t("card.rewind_confirm.title"),
         message: t("card.rewind_confirm.message"),
@@ -111,21 +132,21 @@ export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadA
       } finally {
         setTimeout(() => setRewinding(false), 800)
       }
-    })()
+    })
   }
 
   const onAgentCancel = (event: Event) => {
     event.stopPropagation()
     const sessionID = input.agentSessionID?.()
     if (!sessionID || !input.onAgentCancel || cancelling()) return
-    void (async () => {
+    runCardHeadAction("agent-cancel", input.node().id, async () => {
       setCancelling(true)
       try {
         await input.onAgentCancel!(sessionID)
       } finally {
         setTimeout(() => setCancelling(false), 800)
       }
-    })()
+    })
   }
 
   return {

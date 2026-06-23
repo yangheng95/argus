@@ -13,6 +13,7 @@ import { renderMarkdown, escapeHtml } from "../utils/markdown"
 import { describeToolPart } from "../utils/tool"
 import { dialogStore, setDialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog"
 import { panelMessage } from "./chat"
+import { formatErrorDetails, notifyError } from "./notify"
 import { OPENCORVUS_VERSION_LABEL, OVERLAY_VERSION } from "../utils/version"
 import { clampConfigSidebarWidth, configSidebarResizeBounds } from "../utils/config-sidebar-resizer"
 import { currentUIScale } from "../utils/layout-tokens"
@@ -44,6 +45,10 @@ function renderSessionToolChip(part: any): string {
     ${detail}
     ${status}
   </div>`
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 // ── Public API ──
@@ -114,7 +119,16 @@ export function openConfigDialog(
     agentModelsSessionID: options.sessionID ?? null,
   })
   setDialogStore("config", "open", true)
-  void loadSettingsInfo().then(() => renderAboutVersion())
+  void loadSettingsInfo()
+    .then(() => renderAboutVersion())
+    .catch((error) => {
+      notifyError({
+        id: "config:load-settings-info",
+        title: t("config.title"),
+        message: errorMessage(error),
+        details: formatErrorDetails(error),
+      })
+    })
 
   if (section) {
     focusConfigSection(section)

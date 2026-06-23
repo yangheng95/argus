@@ -14,7 +14,9 @@ import {
   type ChangeGroup,
   type DiffTarget,
 } from "../services/diff"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { collectAgentFileChangeGroupsFromNodes, mergeChangeGroups } from "../utils/file-change-summary"
+import { t } from "../utils/i18n"
 import type { FileChange } from "./DiffView"
 import { FileChangesView } from "./FileChangesView"
 
@@ -76,13 +78,20 @@ export function ChangesPanel(props: ChangesPanelProps) {
         : sourceGroups().filter((group) => group.changes.length > 0),
   )
 
-  async function handleRowClick(group: ChangeGroup, item: FileChange) {
+  function handleRowClick(group: ChangeGroup, item: FileChange) {
     const target: DiffTarget = {
       filePath: item.file,
       ...(group.goalRunID ? { goalRunID: group.goalRunID } : {}),
       ...(group.goalLabel ? { goalLabel: group.goalLabel } : {}),
     }
-    void resolveDiff(target)
+    void resolveDiff(target).catch((error) => {
+      notifyError({
+        id: `changes:resolve-diff:${item.file}`,
+        title: t("common.error"),
+        message: error instanceof Error ? error.message : String(error),
+        details: formatErrorDetails(error),
+      })
+    })
   }
 
   return (

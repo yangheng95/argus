@@ -7,6 +7,7 @@ import type { JSX } from "solid-js"
 import { t, tArray } from "../utils/i18n"
 import { ExecutorSelector } from "./ExecutorSelector"
 import { nativeMessage } from "../services/app-dialog"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { messageStore, setChatAttachments } from "../store/messages"
 import {
   MAX_ATTACHMENT_SIZE,
@@ -96,6 +97,25 @@ export interface ChatComposerProps {
   promptProfiles: PromptProfileOption[]
   promptProfileID: string
   onPromptProfileChange: (profileID: string) => void
+}
+
+function composerDialogErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function showComposerMessage(
+  owner: string,
+  message: string,
+  options: { title?: string; kind?: string; okLabel?: string } = {},
+): void {
+  void nativeMessage(message, options).catch((error) => {
+    notifyError({
+      id: `chat-composer:${owner}`,
+      title: t("common.error"),
+      message: composerDialogErrorMessage(error),
+      details: formatErrorDetails(error),
+    })
+  })
 }
 
 // ── Constants ──
@@ -325,9 +345,13 @@ export function ChatComposer(props: ChatComposerProps) {
       console.warn("[ChatComposer] file too large:", file.name, file.size)
       const limitMb = (MAX_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0)
       const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
-      void nativeMessage(t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }), {
-        title: t("chat.attach_too_large_title"),
-      })
+      showComposerMessage(
+        "attachment-too-large",
+        t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }),
+        {
+          title: t("chat.attach_too_large_title"),
+        },
+      )
       return
     }
     // audit-2026-04-29 W2-V18 — pre-fix the FileReader reject
@@ -345,7 +369,7 @@ export function ChatComposer(props: ChatComposerProps) {
       url = await fileToDataUrl(file)
     } catch (err) {
       console.warn("[ChatComposer] FileReader failed for", file.name, err)
-      void nativeMessage(t("chat.attach_read_failed", { name: file.name }), {
+      showComposerMessage("attachment-read-failed", t("chat.attach_read_failed", { name: file.name }), {
         title: t("chat.attach_too_large_title"),
       })
       return
@@ -358,9 +382,13 @@ export function ChatComposer(props: ChatComposerProps) {
       // the locale catalogues for a single new copy line; the user
       // sees the same actionable message ("attachment too big") with
       // the aggregate numbers.
-      void nativeMessage(t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }), {
-        title: t("chat.attach_too_large_title"),
-      })
+      showComposerMessage(
+        "attachment-total-too-large",
+        t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }),
+        {
+          title: t("chat.attach_too_large_title"),
+        },
+      )
       return
     }
     // Clipboard paste hands us a synthesized File whose `name` is often
@@ -412,7 +440,7 @@ export function ChatComposer(props: ChatComposerProps) {
       }
     } catch (error) {
       console.error("[ChatComposer] submit failed", error)
-      void nativeMessage(t("chat.send_failed", { error: submitErrorMessage(error) }), {
+      showComposerMessage("send-failed", t("chat.send_failed", { error: submitErrorMessage(error) }), {
         title: t("chat.send_failed_title"),
         kind: "error",
       })

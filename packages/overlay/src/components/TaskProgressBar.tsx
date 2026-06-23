@@ -188,6 +188,8 @@ export function TaskProgressBar() {
       behavior: "smooth",
       block: "start",
       focus: "card",
+    }).catch((error) => {
+      console.error("[task-progress] goal card scroll request failed", error)
     })
   }
 

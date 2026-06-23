@@ -4,7 +4,9 @@ import { loadTasks } from "../store/board"
 import {
   centerHistoryNotificationItems,
   dismissNotification,
+  formatErrorDetails,
   notificationTaskTitle,
+  notifyError,
   visibleNotificationItems,
   type AppNotificationItem,
 } from "../services/notify"
@@ -38,6 +40,22 @@ export async function activateTaskNotification(item: AppNotificationItem): Promi
   await selectTask(item.taskID)
   await loadTasks()
   dismissNotification(item.id)
+}
+
+function activateTaskNotificationErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function runTaskNotificationAction(item: AppNotificationItem): void {
+  void activateTaskNotification(item).catch((error) => {
+    notifyError({
+      id: `notification:open-task:${item.id}`,
+      title: t("common.error"),
+      message: activateTaskNotificationErrorMessage(error),
+      details: formatErrorDetails(error),
+      taskID: item.taskID,
+    })
+  })
 }
 
 function NotificationDetails(props: { details: string }) {
@@ -137,7 +155,7 @@ function NotificationItem(props: { item: AppNotificationItem; surface: Notificat
               data-ui="app-notification-open-task"
               title={`${t("common.open")}: ${taskTitle()}`}
               aria-label={`${t("common.open")}: ${taskTitle()}`}
-              onClick={() => void activateTaskNotification(props.item)}
+              onClick={() => runTaskNotificationAction(props.item)}
             >
               {t("common.open")}
             </Button>

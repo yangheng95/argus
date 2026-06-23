@@ -39,7 +39,7 @@ interface Command {
   hint?: string
   group: string
   keywords?: string
-  run: () => void
+  run: () => void | Promise<void>
 }
 
 const COMMAND_PALETTE_INPUT_ID = "commandPaletteInput"
@@ -72,8 +72,8 @@ export function CommandPalette() {
       hint: t("cmdk.group.task"),
       group: t("cmdk.group.task"),
       keywords: "new task create",
-      run: () => {
-        void selectTask("")
+      run: async () => {
+        await selectTask("")
         const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
         textarea?.focus()
       },
@@ -89,8 +89,8 @@ export function CommandPalette() {
         hint: String(item?.task?.status || ""),
         group: t("cmdk.group.task"),
         keywords: `${id} ${item?.task?.directory || ""}`,
-        run: () => {
-          void selectTask(id)
+        run: async () => {
+          await selectTask(id)
         },
       })
     }
@@ -113,10 +113,10 @@ export function CommandPalette() {
         label: `${t("cmdk.theme_prefix")}: ${t(`cmdk.theme.${theme.i18nSlug}`)}`,
         group: t("cmdk.group.appearance"),
         keywords: `theme ${theme.id}`,
-        run: () => {
+        run: async () => {
           setSettingsStore("theme", theme.id)
           applyTheme(theme.id)
-          saveSettings()
+          await saveSettings()
         },
       })
     }
@@ -127,11 +127,11 @@ export function CommandPalette() {
         label: `${t("cmdk.locale_prefix")}: ${loc.label}`,
         group: t("cmdk.group.appearance"),
         keywords: `locale language ${loc.id}`,
-        run: () => {
+        run: async () => {
           setSettingsStore("locale", loc.id)
-          void setLocale(loc.id)
-          void syncAgentPromptLocale(loc.id)
-          saveSettings()
+          await setLocale(loc.id)
+          await syncAgentPromptLocale(loc.id)
+          await saveSettings()
         },
       })
     }
@@ -176,7 +176,13 @@ export function CommandPalette() {
     if (!cmd) return
     close()
     try {
-      cmd.run()
+      void Promise.resolve(cmd.run()).catch((err) => {
+        notifyError({
+          title: t("common.error"),
+          message: `${t("command_palette.label")}: ${cmd.label}`,
+          details: formatErrorDetails(err),
+        })
+      })
     } catch (err) {
       notifyError({
         title: t("common.error"),

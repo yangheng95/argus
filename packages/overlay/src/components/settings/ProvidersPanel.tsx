@@ -167,7 +167,9 @@ export default function ProvidersPanel() {
     nativeConfirm: (message, opts) => nativeConfirm(message, opts),
     nativeOpen,
     showLlmNotice: (message, tone = "info") => {
-      void nativeMessage(message, { title: t("llm.title"), kind: tone })
+      void nativeMessage(message, { title: t("llm.title"), kind: tone }).catch((error) => {
+        setFormError(t("provider.auth.failed", { reason: describeFailure(error) }))
+      })
     },
     onAuthCancelled: dismissProviderAuth,
   }

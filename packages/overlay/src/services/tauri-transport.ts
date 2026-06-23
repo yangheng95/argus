@@ -281,7 +281,14 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
     } finally {
       closeWithReason("post-stream-done")
     }
-  })()
+  })().catch((err) => {
+    if (closed) return
+    const error = err instanceof Error ? err : new Error(String(err))
+    try {
+      handlers.onError?.(error)
+    } catch {}
+    closeWithReason("post-stream-unhandled-error")
+  })
 
   return {
     close() {

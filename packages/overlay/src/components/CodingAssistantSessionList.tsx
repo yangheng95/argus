@@ -2,6 +2,7 @@ import { createMemo, createSignal, For, Show } from "solid-js"
 import type { CodingAssistantSessionInfo } from "../store/coding-assistant"
 import { t } from "../utils/i18n"
 import { detailStamp, relativeTime } from "../utils/time"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { Icon } from "./Icon"
 import { LedgerList } from "./LedgerList"
 import { LedgerRowMainButton } from "./LedgerRowMainButton"
@@ -181,7 +182,14 @@ function CodingAssistantSessionRow(props: {
     setEditing(false)
     setDraftTitle("")
     if (!next || next === title().trim()) return
-    void props.onRenameSession(props.session, next)
+    void Promise.resolve(props.onRenameSession(props.session, next)).catch((error) => {
+      notifyError({
+        id: `coding-assistant:rename:${props.session.id}`,
+        title: t("common.error"),
+        message: error instanceof Error ? error.message : String(error),
+        details: formatErrorDetails(error),
+      })
+    })
   }
 
   return (

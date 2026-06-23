@@ -13,6 +13,7 @@ import { appStore } from "../../store/app"
 import { t } from "../../utils/i18n"
 import type { ToolPermAction } from "../../store/settings"
 import { patchConfig } from "../../services/config"
+import { formatErrorDetails, notifyError } from "../../services/notify"
 import {
   SettingsGroup,
   SettingsPanel,
@@ -72,8 +73,19 @@ function currentAction(key: keyof ToolPermsObj): ToolPermAction {
   return toolPerms()[key] ?? "allow"
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function setPermission(key: keyof ToolPermsObj, action: ToolPermAction): void {
-  void patchConfig({ tool_permissions: { [key]: action } })
+  void patchConfig({ tool_permissions: { [key]: action } }).catch((error) => {
+    notifyError({
+      id: `permissions:${key}`,
+      title: t("permissions.title"),
+      message: errorMessage(error),
+      details: formatErrorDetails(error),
+    })
+  })
 }
 
 // ── Main Panel ──

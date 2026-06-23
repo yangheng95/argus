@@ -9,6 +9,7 @@ import { createSignal, createMemo, createEffect, For, Show } from "solid-js"
 import { t } from "../utils/i18n"
 import { apiJson } from "../services/api"
 import { nativeMessage } from "../services/app-dialog"
+import { formatErrorDetails, notifyError } from "../services/notify"
 import { syncActiveDirectoryApiContext } from "../services/workspace"
 import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
@@ -47,6 +48,21 @@ function knowledgeScopeLabel(scope: string): string {
   if (scope === "cwd") return t("memory.scope.cwd")
   if (scope === "global") return t("memory.scope.global")
   return scope || ""
+}
+
+function memoryDialogErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function showMemoryMessage(owner: string, message: string, options: { title?: string; kind?: string } = {}): void {
+  void nativeMessage(message, options).catch((error) => {
+    notifyError({
+      id: `memory-panel:${owner}`,
+      title: t("common.error"),
+      message: memoryDialogErrorMessage(error),
+      details: formatErrorDetails(error),
+    })
+  })
 }
 
 function formatDate(ts: number): string {
@@ -162,7 +178,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
       const msg = err instanceof Error ? err.message : String(err)
       setErrorMessage(msg)
       console.error("[MemoryPanel] search failed", err)
-      void nativeMessage(t("memory.search_failed", { error: msg }), {
+      showMemoryMessage("search-failed", t("memory.search_failed", { error: msg }), {
         title: t("memory.search_failed_title"),
       })
     } finally {
@@ -199,7 +215,7 @@ export function MemoryPanel(props: MemoryPanelProps) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error("[MemoryPanel] inline delete failed", err)
-      void nativeMessage(t("memory.delete_failed", { error: msg }), {
+      showMemoryMessage("delete-failed", t("memory.delete_failed", { error: msg }), {
         title: t("memory.delete_failed_title"),
       })
     }
