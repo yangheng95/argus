@@ -4,7 +4,6 @@ import path from "node:path"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Database } from "../../src/storage/db"
 import { persistBrowserPreviewEvidence } from "../../src/browser-preview/persist"
-import { persistTestBrowserPreviewTarget as persistBrowserPreviewTarget } from "../fixture/browser-preview"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import {
@@ -14,6 +13,7 @@ import {
 import { BuildResultSchema } from "../../src/build/types"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { persistTestBrowserPreviewTarget } from "../fixture/browser-preview"
 
 afterEach(async () => {
   await resetDatabase()
@@ -65,7 +65,7 @@ async function seedReferenceComparisonEvidence(input: {
       for (const file of ["source.png", "implementation.png", "side-by-side.png"]) {
         await fs.writeFile(path.join(artifactDir, file), `png:${file}`)
       }
-      const target = await persistBrowserPreviewTarget({
+      const target = await persistTestBrowserPreviewTarget({
         taskID: input.taskID,
         url: "http://127.0.0.1:4173/",
       })
