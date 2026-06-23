@@ -442,20 +442,28 @@ test(
         const form = document.querySelector<HTMLElement>(".image-preview-dialog__form")
         if (!form) throw new Error("image preview dialog form missing")
         const rect = form.getBoundingClientRect()
+        const shellRect = document.body.getBoundingClientRect()
+        const shellStyle = getComputedStyle(document.body)
         return {
           width: rect.width,
           height: rect.height,
+          shellWidth: shellRect.width,
+          shellHeight: shellRect.height,
+          shellContainerName: shellStyle.containerName,
+          shellContainerType: shellStyle.containerType,
           viewportWidth: window.innerWidth,
           viewportHeight: window.innerHeight,
         }
       })
+      assert.equal(dialogMetrics.shellContainerName, "overlay-shell")
+      assert.equal(dialogMetrics.shellContainerType, "inline-size")
       assert.ok(
-        dialogMetrics.viewportWidth - dialogMetrics.width >= 72,
-        `expected horizontal backdrop close area, got ${JSON.stringify(dialogMetrics)}`,
+        dialogMetrics.shellWidth - dialogMetrics.width >= 72,
+        `expected horizontal legal-shell backdrop close area, got ${JSON.stringify(dialogMetrics)}`,
       )
       assert.ok(
-        dialogMetrics.viewportHeight - dialogMetrics.height >= 72,
-        `expected vertical backdrop close area, got ${JSON.stringify(dialogMetrics)}`,
+        dialogMetrics.shellHeight - dialogMetrics.height >= 72,
+        `expected vertical legal-shell backdrop close area, got ${JSON.stringify(dialogMetrics)}`,
       )
 
       const previewSrc = await page.evaluate(() => {
