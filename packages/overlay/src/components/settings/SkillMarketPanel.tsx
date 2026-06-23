@@ -16,6 +16,7 @@ import { appStore } from "../../store/app"
 import { updateConfig } from "../../services/config"
 import { getHostTransport } from "../../services/host-transport"
 import { nativeConfirm, nativeOpen } from "../../utils/native"
+import { formatErrorDetails, notifyError } from "../../services/notify"
 import { createVisibilityInterval } from "../../utils/visibility-interval"
 import {
   loadSkillMountMatrix,
@@ -354,6 +355,26 @@ function PanelActionButton(props: {
   compact?: boolean
   onClick: () => void | Promise<void>
 }) {
+  const runAction = () => {
+    try {
+      void Promise.resolve(props.onClick()).catch((error) => {
+        notifyError({
+          id: `skill-panel-action:${props.label}`,
+          title: t("common.error"),
+          message: error instanceof Error ? error.message : String(error),
+          details: formatErrorDetails(error),
+        })
+      })
+    } catch (error) {
+      notifyError({
+        id: `skill-panel-action:${props.label}`,
+        title: t("common.error"),
+        message: error instanceof Error ? error.message : String(error),
+        details: formatErrorDetails(error),
+      })
+    }
+  }
+
   return (
     <Button
       type="button"
@@ -364,7 +385,7 @@ function PanelActionButton(props: {
       title={props.label}
       aria-label={props.label}
       disabled={props.disabled}
-      onClick={() => void props.onClick()}
+      onClick={runAction}
     >
       <Icon name={props.icon} />
       <Show when={!props.compact}>
@@ -960,9 +981,9 @@ function ExtensionSettingsPanel(props: {
               <PanelActionButton
                 compact
                 icon="plus"
-                  label={t("skill.add")}
-                  onClick={() => void setShowAddSkill(!showAddSkill())}
-                />
+                label={t("skill.add")}
+                onClick={() => void setShowAddSkill(!showAddSkill())}
+              />
             </div>
           </Show>
           <div class="extension-settings-body">

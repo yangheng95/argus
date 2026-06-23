@@ -154,18 +154,16 @@ mounted_agents:
           const build = await Agent.get("build")
           expect(build).toBeDefined()
           const surface = await SkillMount.resolve({ agent: build!, availableToolNames: ["skill"] })
-          expect(surface.skills.find((skill) => skill.name === "needs-websearch")?.reason).toBe(
-            "missing_required_tool",
-          )
+          expect(surface.skills.find((skill) => skill.name === "needs-websearch")?.reason).toBe("missing_required_tool")
           const prompt = await SystemPrompt.skills(build!, { surface })
           expect(prompt ?? "").not.toContain("needs-websearch")
 
           const tool = await SkillTool.init({ agent: build, skillSurface: surface })
           const result = await tool.execute({ query: "websearch" }, { ...baseCtx, ask: async () => {} })
           expect(result.output).not.toContain("<name>needs-websearch</name>")
-          await expect(
-            tool.execute({ name: "needs-websearch" }, { ...baseCtx, ask: async () => {} }),
-          ).rejects.toThrow('Skill "needs-websearch" not found or not allowed')
+          await expect(tool.execute({ name: "needs-websearch" }, { ...baseCtx, ask: async () => {} })).rejects.toThrow(
+            'Skill "needs-websearch" not found or not allowed',
+          )
         },
       })
     } finally {

@@ -451,9 +451,9 @@ describe("skill routes", () => {
           const yaml = await Filesystem.readText(skill!.location)
           expect(yaml).toContain("mounted_agents:")
           expect(yaml).toContain("- build")
-          expect(await Filesystem.exists(path.join(tmp.path, ".opencorvus", "skills", "research-report", "SKILL.md"))).toBe(
-            true,
-          )
+          expect(
+            await Filesystem.exists(path.join(tmp.path, ".opencorvus", "skills", "research-report", "SKILL.md")),
+          ).toBe(true)
 
           const listed = await app.request("/skill/mounts", {
             headers: {
@@ -673,7 +673,9 @@ describe("skill routes", () => {
 
         expect(response.status).toBe(500)
         const body = (await response.json()) as { data?: { message?: string } }
-        expect(body.data?.message).toContain("Skill typo-mounted mounted_agents contains unknown agent(s): requriements")
+        expect(body.data?.message).toContain(
+          "Skill typo-mounted mounted_agents contains unknown agent(s): requriements",
+        )
       },
     })
   })
