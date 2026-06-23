@@ -1516,3 +1516,92 @@ benchmark failure.
 - Rechecked layout semantics: the benchmark no longer asks an illegal raw
   viewport to have no document overflow; it verifies preview content does not
   escape the legal overlay shell.
+
+## Follow-up 2026-06-23: Visual Loop Legal Frame Naming
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Confucius read-only audit | Production legal-frame sources are single-owned, but `mission-visual-loop.ts` still named a `900x720` capture as a narrow breakpoint. |
+| Harvey read-only audit | The six-open-panel side toolbar browser state only asserted `width > 0`; it should assert token minimum width and horizontal scroll pressure. |
+| This contract | Illegal raw browser viewports must preserve the legal overlay shell and must not define an alternate compact panel layout. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Mission visual loop | `VIEWPORT_NARROW` and `06-narrow-breakpoint` described a sub-minimum raw viewport as a breakpoint. | Rename it to `VIEWPORT_ILLEGAL_NARROW` and `06-illegal-narrow-legal-frame`. |
+| Side toolbar browser test | Six open center panels were checked only with `width > 0`. | Assert every open panel is at least `--ui-workbench-panel-min-width` and that `.center-workbench-body` scrolls horizontally. |
+| Static legal-size guard | `overlay-window-size-contract.test.ts` already guards removed compact size sources. | Extend it so the mission visual loop cannot reintroduce narrow-breakpoint language. |
+
+### Root Cause
+
+The production legal-size path already rejects illegal small panels, but one
+visual loop and one browser assertion still used the old mental model: a raw
+sub-minimum viewport was treated as a narrow breakpoint, and six open center
+panels were only required to be nonzero width. That weakens future GUI
+acceptance because it can hide a regression back to crushed panels.
+
+### Fix Plan
+
+1. Rename the mission visual loop's sub-minimum viewport and screenshot state
+   to legal-frame language.
+2. Add a static guard rejecting the retired narrow-breakpoint state name.
+3. Strengthen the side activity toolbar browser test to compare open panel
+   widths against the token minimum and require horizontal overflow when six
+   panels are open.
+4. Run focused static/browser tests, typecheck, visual QA, self-review, commit,
+   and push.
+
+### Acceptance
+
+- Visual-loop evidence no longer advertises a narrow breakpoint below the
+  legal native overlay width.
+- Six open center workbench panels cannot pass browser QA if any panel is below
+  `--ui-workbench-panel-min-width`.
+- Overflow pressure is released by `.center-workbench-body` horizontal scroll,
+  not by shrinking panels.
+- No production size source, fallback width, or native resize feedback path is
+  added.
+
+### Implementation
+
+- Renamed the mission visual loop sub-minimum viewport from
+  `VIEWPORT_NARROW` to `VIEWPORT_ILLEGAL_NARROW`.
+- Renamed its screenshot state from `06-narrow-breakpoint` to
+  `06-illegal-narrow-legal-frame`.
+- Added a static legal-size guard so the old narrow-breakpoint naming cannot
+  return.
+- Strengthened the side activity toolbar browser test so six simultaneously
+  open center workbench panels must all satisfy
+  `--ui-workbench-panel-min-width` and `.center-workbench-body` must carry the
+  horizontal overflow.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/workspace-surface-consistency.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/side-activity-toolbar-browser.test.ts`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts`.
+
+### Visual QA
+
+- Reviewed `.scratch/side-activity-toolbar-illegal-narrow-legal-frame.png`:
+  the right toolbar remains vertical and the raw narrow viewport clips the
+  legal shell instead of creating a compact panel layout.
+- Reviewed `.scratch/center-workbench-three-panel-min-width-1120.png`: open
+  center panels remain visually coherent at the legal minimum.
+- Reviewed `.scratch/left-pane-resizer-restored-desktop-resize.png`: left pane
+  maximum width still preserves the chat work area and right toolbar.
+
+### Self Review
+
+- Rechecked production source scope: no production size source, fallback width,
+  or resize feedback path was changed.
+- Rechecked `side-activity-toolbar-browser.test.ts`: the new assertion reads
+  the same token that production layout uses and verifies scroll pressure
+  instead of accepting crushed panel widths.
+- Rechecked `mission-visual-loop.ts`: sub-minimum viewport evidence now uses
+  legal-frame language and the generated summary key is `illegalNarrow`.

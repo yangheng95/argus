@@ -32,7 +32,7 @@ const OUT_DIR_ARG = process.argv[2]
 const OUT_DIR = path.resolve(OUT_DIR_ARG ?? path.join(tmpdir(), "mission-visual-loop"))
 const VITE_PORT = 5173
 const VIEWPORT_WIDE = { width: 1440, height: 900 }
-const VIEWPORT_NARROW = { width: 900, height: 720 }
+const VIEWPORT_ILLEGAL_NARROW = { width: 900, height: 720 }
 
 // ── Fixture data the mock server returns ─────────────────────────────
 //
@@ -643,15 +643,19 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
     await new Promise((r) => setTimeout(r, 400))
   })
 
-  // Narrow-breakpoint capture — flip viewport with the shared composer still
-  // active in the center workflow while the Mission ledger remains in the
-  // left activity panel.
+  // Illegal-narrow legal-frame capture — the raw browser viewport is narrower
+  // than the native overlay minimum, so the body shell must preserve the legal
+  // 1120px workbench instead of activating a compact breakpoint.
   try {
     await new Promise((r) => setTimeout(r, 300))
-    const narrowPath = await snap(page, "06-narrow-breakpoint", VIEWPORT_NARROW)
-    results.push({ state: "06-narrow-breakpoint", ok: true, path: narrowPath })
+    const legalFramePath = await snap(page, "06-illegal-narrow-legal-frame", VIEWPORT_ILLEGAL_NARROW)
+    results.push({ state: "06-illegal-narrow-legal-frame", ok: true, path: legalFramePath })
   } catch (err) {
-    results.push({ state: "06-narrow-breakpoint", ok: false, error: err instanceof Error ? err.message : String(err) })
+    results.push({
+      state: "06-illegal-narrow-legal-frame",
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
   await page.setViewportSize(VIEWPORT_WIDE)
 
@@ -714,7 +718,7 @@ async function run(): Promise<void> {
     const summary = {
       generatedAt: new Date().toISOString(),
       outDir: OUT_DIR,
-      viewports: { wide: VIEWPORT_WIDE, narrow: VIEWPORT_NARROW },
+      viewports: { wide: VIEWPORT_WIDE, illegalNarrow: VIEWPORT_ILLEGAL_NARROW },
       results,
     }
     await writeFile(summaryPath, JSON.stringify(summary, null, 2), "utf8")
