@@ -396,6 +396,77 @@ though ARIA claimed the pane was legal.
 - Rechecked resize ownership: existing window resize RAF scheduling remains the
   only path that re-renders pane layout after viewport changes.
 
+## Follow-up 2026-06-23: Pane Layout Token Resolution Batch
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| `2026-06-22-window-resize-center-layout-frame.md` | Window resize must not mix layout writes and geometry reads in the same frame callback. |
+| This file, Layout Token Container Signature | `layoutTokenPx()` cache signature includes `--ui-scale` and the body overlay-shell width so `cqw` tokens stay current. |
+| Godel read-only audit | Even cache hits currently read `document.body.getBoundingClientRect().width`, so pane resize can repeat the same body width read for each token in one layout pass. |
+
+### Call Point Inventory
+
+| Call point | Current evidence | Decision |
+| --- | --- | --- |
+| `layout-tokens.ts#layoutTokenPx` | Computes `tokenSignature(root, document.body)` on every token call. | Keep this single-token API for low-frequency callers, but add a resolver that computes the signature once per layout pass. |
+| `pane.ts#readPaneGeometrySnapshot` | Resolves `--ui-chat-min-width`, `--ui-rail-min-width`, and `--ui-rail-width` during one pane geometry read. | Create one layout token resolver at the top of the snapshot and pass it to all token consumers in that snapshot. |
+| `pane.ts#defaultRailWidth` | Reads `layoutTokenPx("--ui-rail-width")`. | Accept an optional resolver so the default rail source remains the CSS token while batching hot-path reads. |
+| `pane.ts#defaultPanelRemainingMinWidth` | Reads `layoutTokenPx("--ui-chat-min-width")`. | Accept an optional resolver for the same reason. |
+| Static tests | Existing tests only assert the token names are used. | Add guards that pane geometry creates one resolver and does not call `layoutTokenPx` multiple times inside the snapshot. |
+
+### Root Cause
+
+The prior token signature fix made cache invalidation correct for `cqw`, but it
+left the signature read inside every `layoutTokenPx()` call. During pane layout,
+the hot path resolves three tokens in sequence. Each call reads the body
+overlay-shell width before it can even determine whether the token value is a
+cache hit, multiplying synchronous layout reads during resize.
+
+### Fix Plan
+
+1. Add `LayoutTokenResolver` and `createLayoutTokenResolver()` to
+   `layout-tokens.ts`.
+2. Keep `layoutTokenPx(name)` as the single-token wrapper over the resolver.
+3. Thread one resolver through `readPaneGeometrySnapshot()`,
+   `defaultPanelRemainingMinWidth()`, and `defaultRailWidth()`.
+4. Extend static tests so the pane hot path can no longer call
+   `layoutTokenPx()` separately for each token.
+5. Run focused tests, typecheck, browser resize visual QA, self-review,
+   commit, and push.
+
+### Acceptance
+
+- Pane layout reads the layout-token cache signature once per snapshot, not once
+  per token.
+- CSS tokens remain the only width source; no JS copy of the `clamp(... 22cqw
+  ...)` math is introduced.
+- No resize debounce, alternate listener, fallback token, or stale hardcoded
+  default is added.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/pane-config.test.ts packages/overlay/test/overlay-window-size-contract.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts`.
+- PASS: `bun test packages/overlay/test/resize-observer-frame-scheduler.test.ts --timeout 30000`.
+- Visual QA reviewed:
+  `.scratch/left-pane-resizer-desktop-resize.png`,
+  `.scratch/left-pane-resizer-restored-desktop-resize.png`, and
+  `.scratch/left-pane-resizer-illegal-narrow-legal-frame.png`.
+
+### Self Review
+
+- Rechecked `layout-tokens.ts`: `layoutTokenPx(name)` is now a single-token
+  wrapper over `createLayoutTokenResolver().tokenPx(name)`.
+- Rechecked `pane.ts`: `readPaneGeometrySnapshot()` creates one resolver and
+  threads it through `remainingMinWidth`, `--ui-rail-min-width`, and
+  `defaultRailWidth`.
+- Rechecked ownership: `--ui-rail-width`, `--ui-rail-min-width`, and
+  `--ui-chat-min-width` remain CSS token sources; no JS copy of token math,
+  debounce, fallback token, or resize listener was added.
+
 ## Follow-up 2026-06-23: Legal Shell Height and Pane Bounds Budget
 
 ### Recall

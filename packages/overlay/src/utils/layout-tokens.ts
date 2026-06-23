@@ -1,6 +1,10 @@
 let layoutTokenProbe: HTMLElement | null = null
 const layoutTokenCache = new Map<string, { signature: string; value: number }>()
 
+export interface LayoutTokenResolver {
+  tokenPx(name: string): number
+}
+
 function tokenSignature(root: HTMLElement, container: HTMLElement): string {
   const scale = getComputedStyle(root).getPropertyValue("--ui-scale").trim()
   const containerInlineSize = container.getBoundingClientRect().width
@@ -50,23 +54,32 @@ export function currentUIScale(): number {
 }
 
 export function layoutTokenPx(name: string): number {
+  return createLayoutTokenResolver().tokenPx(name)
+}
+
+export function createLayoutTokenResolver(): LayoutTokenResolver {
   if (typeof document === "undefined") {
-    throw new Error(`Layout token ${name} cannot be resolved without a document.`)
+    throw new Error("Layout token resolution requires a document.")
   }
   const root = document.documentElement
   if (!root) {
-    throw new Error(`Layout token ${name} cannot be resolved without documentElement.`)
+    throw new Error("Layout token resolution requires documentElement.")
   }
   const probe = probeElement()
   const signature = tokenSignature(root, document.body)
-  const cached = layoutTokenCache.get(name)
-  if (cached?.signature === signature) return cached.value
 
-  probe.style.width = `var(${name})`
-  const value = probe.getBoundingClientRect().width
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(`Layout token ${name} resolved to invalid width: ${value}`)
+  return {
+    tokenPx(name: string): number {
+      const cached = layoutTokenCache.get(name)
+      if (cached?.signature === signature) return cached.value
+
+      probe.style.width = `var(${name})`
+      const value = probe.getBoundingClientRect().width
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new Error(`Layout token ${name} resolved to invalid width: ${value}`)
+      }
+      layoutTokenCache.set(name, { signature, value })
+      return value
+    },
   }
-  layoutTokenCache.set(name, { signature, value })
-  return value
 }
