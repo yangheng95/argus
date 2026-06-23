@@ -68,6 +68,55 @@ describe("project routes", () => {
     expect(body.created).toBe(false)
   }, 30_000)
 
+  test("PATCH /project/current renames the current project without renaming the source directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const nextName = "Renamed route project"
+
+    const response = await app.request("/project/current", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ name: nextName }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as Project.Info
+    expect(body.name).toBe(nextName)
+    expect(body.worktree).toBe(tmp.path)
+    expect(await Filesystem.exists(tmp.path)).toBe(true)
+    expect(path.basename(tmp.path)).not.toBe(nextName)
+
+    const current = await app.request("/project/current", {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    expect(current.status).toBe(200)
+    expect(((await current.json()) as Project.Info).name).toBe(nextName)
+    expect(
+      Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, body.id)).get())?.name,
+    ).toBe(nextName)
+  }, 30_000)
+
+  test("PATCH /project/current rejects empty project names", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+
+    const response = await app.request("/project/current", {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ name: "   " }),
+    })
+
+    expect(response.status).toBe(400)
+  }, 30_000)
+
   test("DELETE /project/current deletes OpenCorvus project state without deleting source files", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.App()

@@ -329,6 +329,7 @@ describe("route directory policy", () => {
       expect(routeRequiresProjectDirectory(path)).toBe(true)
     }
     expect(routeRequiresProjectDirectory("/project/current", "DELETE")).toBe(true)
+    expect(routeRequiresProjectDirectory("/project/current", "PATCH")).toBe(true)
     expect(routeRequiresProjectDirectory("/task/abc", "GET")).toBe(true)
     expect(routeRequiresProjectDirectory("/task/abc/conversation", "POST")).toBe(true)
   })

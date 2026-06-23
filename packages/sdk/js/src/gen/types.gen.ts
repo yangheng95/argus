@@ -3684,6 +3684,54 @@ export type ProjectCurrentResponses = {
 
 export type ProjectCurrentResponse = ProjectCurrentResponses[keyof ProjectCurrentResponses]
 
+export type ProjectCurrentUpdateData = {
+  body: {
+    name: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/project/current"
+}
+
+export type ProjectCurrentUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404:
+    | {
+        name: "NotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+    | {
+        name: "LogFileNotFoundError"
+        data: {
+          [key: string]: unknown
+        }
+      }
+}
+
+export type ProjectCurrentUpdateError = ProjectCurrentUpdateErrors[keyof ProjectCurrentUpdateErrors]
+
+export type ProjectCurrentUpdateResponses = {
+  /**
+   * Updated current project information
+   */
+  200: Project
+}
+
+export type ProjectCurrentUpdateResponse = ProjectCurrentUpdateResponses[keyof ProjectCurrentUpdateResponses]
+
 export type ProjectCurrentInitGitData = {
   body?: never
   path?: never

@@ -28,6 +28,7 @@ describe("app routes", () => {
 
     expect(paths["/global/health"]?.get).toBeDefined()
     expect(paths["/project/current"]?.get).toBeDefined()
+    expect(paths["/project/current"]?.patch).toBeDefined()
     expect(paths["/project/current"]?.delete).toBeDefined()
     expect(paths["/goal-run/{goalRunID}/acceptance"]?.get).toBeDefined()
     expect(paths["/task/{taskID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"]).toBeDefined()
@@ -59,6 +60,7 @@ describe("app routes", () => {
       queryParameterNames(operation).filter((name) => name === "directory")
 
     expect(directoryParameterNames(paths["/project/current"]?.get)).toEqual(["directory"])
+    expect(directoryParameterNames(paths["/project/current"]?.patch)).toEqual(["directory"])
     expect(directoryParameterNames(paths["/project/current"]?.delete)).toEqual(["directory"])
     expect(directoryParameterNames(paths["/task/{taskID}/browser-preview"]?.get)).toEqual(["directory"])
     expect(directoryParameterNames(paths["/task/{taskID}/browser-preview/evidence/{evidenceID}"]?.get)).toEqual([

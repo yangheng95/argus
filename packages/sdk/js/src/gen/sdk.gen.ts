@@ -173,6 +173,8 @@ import type {
   ProjectCurrentInitGitErrors,
   ProjectCurrentInitGitResponses,
   ProjectCurrentResponses,
+  ProjectCurrentUpdateErrors,
+  ProjectCurrentUpdateResponses,
   ProjectCurrentWorktreesDeleteErrors,
   ProjectCurrentWorktreesDeleteResponses,
   ProjectCurrentWorktreesErrors,
@@ -486,6 +488,45 @@ export class Current extends HeyApiClient {
       url: "/project/current",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Update current project
+   *
+   * Rename the currently active project record. The source directory on disk is not renamed.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      name: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      ProjectCurrentUpdateResponses,
+      ProjectCurrentUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/project/current",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
