@@ -201,11 +201,16 @@ export function ScreenshotBrowserPanel(props: { active: () => boolean }) {
   createEffect(() => {
     const element = listEl()
     if (!element) return
-    const measure = () => setListWidth(element.clientWidth)
-    const measureOnFrame = createAnimationFrameScheduler(measure)
-    const observer = new ResizeObserver(measureOnFrame.schedule)
+    let pendingWidth = 0
+    const commitWidth = () => setListWidth(pendingWidth)
+    const measureOnFrame = createAnimationFrameScheduler(commitWidth)
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries.find((candidate) => candidate.target === element)
+      if (!entry) return
+      pendingWidth = entry.contentRect.width
+      measureOnFrame.schedule()
+    })
     observer.observe(element)
-    measureOnFrame.schedule()
     onCleanup(() => {
       measureOnFrame.cancel()
       observer.disconnect()

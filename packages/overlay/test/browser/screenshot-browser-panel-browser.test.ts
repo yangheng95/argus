@@ -434,8 +434,8 @@ test(
         type: "screenshots-scroll-into-view",
         workbenchOpen: "true",
       })
-      const widthRead = layoutEvents.find((event: any) => event.type === "screenshot-list-client-width")
-      assert.ok(widthRead?.inRaf, `screenshot open did not measure list width on RAF: ${JSON.stringify(layoutEvents)}`)
+      const widthReads = layoutEvents.filter((event: any) => event.type === "screenshot-list-client-width")
+      assert.deepEqual(widthReads, [], `screenshot open should use ResizeObserver entries: ${JSON.stringify(layoutEvents)}`)
       await page.waitForSelector(".screenshot-browser-card")
       const firstCardVisibleElapsed = Date.now() - openStart
       assert.ok(firstCardVisibleElapsed < 1_500, `screenshot browser first card took ${firstCardVisibleElapsed}ms`)

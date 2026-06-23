@@ -583,3 +583,83 @@ CSS shell token and `overlay-layout-frame.ts`.
   vertical inside the legal 1120px canvas, and illegal tall viewports keep the
   overlay content aspect-clamped instead of expanding child panels to the raw
   viewport height.
+
+## Follow-up 2026-06-23: Screenshot Panel ResizeObserver Width Source
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User report | Opening toolbar screenshots is visibly slow; screenshot panel resize work is on the direct complaint path. |
+| Euclid read-only audit | `ScreenshotBrowserPanel` still does `ResizeObserver -> RAF -> element.clientWidth -> setListWidth`, creating a width read/write loop during toolbar open and container resize. |
+| `screenshot-browser-panel-browser.test.ts` | Existing browser coverage instruments screenshot panel open, RAF timing, thumbnail virtualization, and narrow-panel visual layout. |
+| `ScreenshotBrowserPanel.tsx` call inventory | `listWidth` only feeds `columnCount()`, which feeds row chunking and grid column count. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Resize observer callback | `ScreenshotBrowserPanel.tsx` constructs `new ResizeObserver(measureOnFrame.schedule)`. | Replace it with an entry-aware callback that stores `entry.contentRect.width`. |
+| RAF commit | Current `measure()` reads `element.clientWidth` inside the scheduled RAF. | RAF should commit the pending observer width only; no DOM width read. |
+| Initial width | Current code schedules an initial RAF read. | Let the observed element's first ResizeObserver delivery be the width source; no second initial source. |
+| Static test | `screenshot-browser-panel.test.ts` currently requires `clientWidth` measurement. | Flip the guard to require `contentRect.width` and reject `element.clientWidth`. |
+| Browser test | Existing instrumentation records `.screenshot-browser-groups` `clientWidth` reads. | Assert screenshot open produces no screenshot-list `clientWidth` read while cards still render and visual screenshots stay valid. |
+
+### Root Cause
+
+The screenshot panel already subscribes to ResizeObserver, but then discards
+the entry's measured width and re-reads layout in the next RAF. On toolbar open
+and viewport resize this adds an avoidable synchronous geometry dependency to
+the same surface that is recomputing virtual rows.
+
+### Fix Plan
+
+1. Store the observed `.screenshot-browser-groups` width from
+   `ResizeObserverEntry.contentRect.width`.
+2. Let the existing RAF scheduler coalesce width commits from observer
+   deliveries.
+3. Remove the initial RAF `clientWidth` read; the observer delivery is the
+   single width source.
+4. Update static and browser tests to reject screenshot-list `clientWidth`
+   reads during open while preserving virtualization and visual layout checks.
+5. Run focused tests, browser visual QA, self-review, commit, and push.
+
+### Acceptance
+
+- Screenshot panel width updates consume ResizeObserver entries instead of
+  reading `.clientWidth` in RAF.
+- Toolbar screenshot open still renders cards, lazy thumbnails, and narrow
+  visual layout.
+- No fallback width, duplicate measurement source, or active-state gate is
+  introduced.
+
+### Implementation
+
+- `ScreenshotBrowserPanel.tsx` now stores width from the matching
+  `ResizeObserverEntry.contentRect.width`.
+- The existing animation-frame scheduler now only coalesces `setListWidth()`
+  commits; it no longer performs a DOM width read.
+- The initial scheduled `clientWidth` read was removed so ResizeObserver is the
+  only screenshot-list width source.
+- Static and browser tests now reject screenshot-list `clientWidth` reads while
+  keeping card rendering, lazy thumbnail decode, and narrow visual layout
+  assertions.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/screenshot-browser-panel.test.ts --timeout 30000`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/screenshot-browser-panel-browser.test.ts`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- Visual QA reviewed:
+  `.scratch/screenshot-browser-panel-browser.png` and
+  `.scratch/screenshot-browser-panel-browser-narrow-panel.png`.
+
+### Self Review
+
+- Rechecked width ownership: `listWidth` is still the single width signal for
+  column count, but its source is now the observer entry rather than a second
+  DOM read.
+- Rechecked activation semantics: no active-state gate or fallback width was
+  introduced; inactive behavior still comes from the existing `items()` memo.
+- Rechecked visual output: grouped screenshots, thumbnail images, and the
+  narrow minimum panel layout still render without card or thumbnail overflow.
