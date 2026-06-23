@@ -7,6 +7,7 @@ export type ResearchEvidenceSource = "deep_research" | "frontend_research"
 
 const FRONTEND_RESEARCH_REQUIREMENTS_ITEM_CAP = 24
 const FRONTEND_RESEARCH_ARCHITECT_ITEM_CAP = 32
+const FRONTEND_RESEARCH_DESIGN_ITEM_CAP = 32
 const FRONTEND_RESEARCH_BUILD_ITEM_CAP = 12
 const FRONTEND_RESEARCH_OPEN_QUESTION_CAP = 16
 const FRONTEND_RESEARCH_BUILD_OPEN_QUESTION_CAP = 8
@@ -125,6 +126,11 @@ export function renderFrontendResearchBuildPromptSection(input: { taskID?: strin
   return renderFrontendResearchBuildSection({ briefs })
 }
 
+export function renderFrontendResearchDesignPromptSection(input: { taskID?: string; request: string }): string {
+  const briefs = findNonStaleFrontendResearchBriefs(input)
+  return renderFrontendResearchDesignSection({ briefs })
+}
+
 function renderResearchBriefSection(input: {
   briefs?: ResearchPromptBrief[]
   source: ResearchEvidenceSource
@@ -189,6 +195,10 @@ function renderResearchBriefSection(input: {
                 id: item.id,
                 title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
                 user_visible_behavior: limitText(item.user_visible_behavior, RESEARCH_PROMPT_LIMITS.itemChars),
+                component_kind_hypothesis: limitText(
+                  item.component_kind_hypothesis,
+                  RESEARCH_PROMPT_LIMITS.itemChars,
+                ),
                 required_interactions: item.required_interactions.map((interaction) =>
                   limitText(interaction, RESEARCH_PROMPT_LIMITS.itemChars),
                 ),
@@ -403,6 +413,7 @@ function renderFrontendResearchArchitectSection(input: { briefs?: FrontendResear
             .map((item) => ({
               id: item.id,
               title: limitText(item.title, FRONTEND_RESEARCH_LABEL_CHARS),
+              component_kind_hypothesis: limitText(item.component_kind_hypothesis, FRONTEND_RESEARCH_LABEL_CHARS),
               behavior: limitText(item.user_visible_behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
               interactions: item.required_interactions
                 .slice(0, 4)
@@ -477,6 +488,113 @@ function renderFrontendResearchArchitectSection(input: { briefs?: FrontendResear
   ].join("\n")
 }
 
+function renderFrontendResearchDesignSection(input: { briefs?: FrontendResearchPromptBrief[] }): string {
+  const briefs = (input.briefs ?? []).filter((item) => item.brief.webpage_contract)
+  if (briefs.length === 0) return ""
+  const data = {
+    briefs: briefs.map(({ artifactID, brief }) => {
+      const contract = brief.webpage_contract!
+      return {
+        artifact_id: artifactID,
+        source_url: limitText(contract.source_url, FRONTEND_RESEARCH_DETAIL_CHARS),
+        bundle_paths: brief.bundle,
+        reference_image_evidence_refs: scopedFrontendResearchEvidenceRefs(
+          artifactID,
+          contract.reference_image_evidence_ids,
+        ),
+        page_skeleton_blueprint: {
+          region_count: contract.visual_layout.length,
+          visible_flow: contract.visual_layout.slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP).map((item, index) => ({
+            order: index + 1,
+            id: item.id,
+            viewport: item.viewport,
+            region: limitText(item.region, FRONTEND_RESEARCH_LABEL_CHARS),
+            layout_contract: limitText(item.layout_contract, FRONTEND_RESEARCH_DETAIL_CHARS),
+            spacing_and_alignment: limitText(item.spacing_and_alignment, FRONTEND_RESEARCH_DETAIL_CHARS),
+            evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+          })),
+          major_surfaces: contract.functional_surfaces
+            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
+            .map((item) => ({
+              id: item.id,
+              title: limitText(item.title, FRONTEND_RESEARCH_LABEL_CHARS),
+              component_kind_hypothesis: limitText(item.component_kind_hypothesis, FRONTEND_RESEARCH_LABEL_CHARS),
+              behavior: limitText(item.user_visible_behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
+              interactions: item.required_interactions
+                .slice(0, 4)
+                .map((interaction) => limitText(interaction, FRONTEND_RESEARCH_LABEL_CHARS)),
+              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+            })),
+          data_content_anchors: contract.data_content_inventory
+            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
+            .map((item) => ({
+              id: item.id,
+              surface: limitText(item.surface, FRONTEND_RESEARCH_LABEL_CHARS),
+              content_contract: limitText(item.content_contract, FRONTEND_RESEARCH_DETAIL_CHARS),
+              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+            })),
+          interaction_states: contract.interaction_states
+            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
+            .map((item) => ({
+              id: item.id,
+              component: limitText(item.component, FRONTEND_RESEARCH_LABEL_CHARS),
+              state: limitText(item.state, FRONTEND_RESEARCH_LABEL_CHARS),
+              behavior: limitText(item.behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
+              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+            })),
+          component_kind_hypotheses: contract.functional_surfaces
+            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
+            .map((item) => ({
+              id: item.id,
+              surface: limitText(item.title, FRONTEND_RESEARCH_LABEL_CHARS),
+              hypothesis: limitText(item.component_kind_hypothesis, FRONTEND_RESEARCH_DETAIL_CHARS),
+              behavior: limitText(item.user_visible_behavior, FRONTEND_RESEARCH_DETAIL_CHARS),
+              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+            })),
+          style_layout_anchors: contract.style_requirements
+            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
+            .map((item) => ({
+              id: item.id,
+              token_or_selector: limitText(item.token_or_selector, FRONTEND_RESEARCH_LABEL_CHARS),
+              requirement: limitText(item.requirement, FRONTEND_RESEARCH_DETAIL_CHARS),
+              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+            })),
+          fidelity_acceptance: contract.fidelity_acceptance
+            .slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP)
+            .map((item) => ({
+              id: item.id,
+              target: limitText(item.target, FRONTEND_RESEARCH_LABEL_CHARS),
+              criterion: limitText(item.criterion, FRONTEND_RESEARCH_DETAIL_CHARS),
+              evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+            })),
+          fidelity_risks: contract.fidelity_risks.slice(0, FRONTEND_RESEARCH_DESIGN_ITEM_CAP).map((item) => ({
+            id: item.id,
+            risk: limitText(item.risk, FRONTEND_RESEARCH_LABEL_CHARS),
+            impact: limitText(item.impact, FRONTEND_RESEARCH_DETAIL_CHARS),
+            evidence_refs: scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids),
+          })),
+        },
+        open_questions: brief.open_questions.slice(0, FRONTEND_RESEARCH_OPEN_QUESTION_CAP).map((item) => ({
+          id: item.id,
+          blocking: item.blocking,
+          question: limitText(item.question, FRONTEND_RESEARCH_DETAIL_CHARS),
+          related_fact_ids: item.related_fact_ids,
+        })),
+      }
+    }),
+  }
+  return [
+    "# Frontend Research Page Skeleton Blueprint",
+    "",
+    "Frontend research owns this source-backed page skeleton blueprint: visible flow/order, region count, major content sections, component-kind hypotheses, data/content anchors, interaction states, fidelity risks, and evidence refs.",
+    "Frontend_design consumes this as the page information-architecture input and materializes it into visual-html-skeleton. It must not invent, reorder, or demote major sections from this visible-flow order; sourceDomIterationState/sourceDomReplacementPlan are per-region repair evidence only.",
+    "Only source-qualified evidence ref values present in this JSON block may be copied into downstream evidence_refs. Use bundle_paths only for bounded drilldown.",
+    "```json",
+    JSON.stringify(data, null, 2),
+    "```",
+  ].join("\n")
+}
+
 function renderFrontendResearchBuildSection(input: { briefs?: FrontendResearchPromptBrief[] }): string {
   const sections = (input.briefs ?? [])
     .map((entry) => renderFrontendResearchBuildBriefSection(entry))
@@ -512,7 +630,7 @@ function renderFrontendResearchBuildBriefSection(input: FrontendResearchPromptBr
         .slice(0, 3)
         .map((interaction) => limitText(interaction, FRONTEND_RESEARCH_LABEL_CHARS))
         .join(" | ")
-      return `${item.id}: ${limitText(item.title, FRONTEND_RESEARCH_LABEL_CHARS)}; interactions=${interactions || "(none)"}; evidence_refs=${scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids).join(", ")}`
+      return `${item.id}: ${limitText(item.title, FRONTEND_RESEARCH_LABEL_CHARS)}; component_kind=${limitText(item.component_kind_hypothesis, FRONTEND_RESEARCH_LABEL_CHARS)}; interactions=${interactions || "(none)"}; evidence_refs=${scopedFrontendResearchEvidenceRefs(artifactID, item.evidence_ids).join(", ")}`
     }),
   )
   pushBuildPacketLines(

@@ -91,7 +91,7 @@ import {
   markStageContinuationClaimFailed,
   markStageContinuationConsumed,
 } from "../../src/engine/stage-continuation"
-import { researchSourceDigest } from "../../src/research/schema"
+import { researchRequestHash, researchSourceDigest } from "../../src/research/schema"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -141,7 +141,7 @@ function toolText(result: unknown): string {
   throw new Error(`Expected string tool result or known wrapped string output, got ${JSON.stringify(result)}`)
 }
 
-function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string; sourceURL: string }) {
+function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string; sourceURL: string; request?: string }) {
   const evidence = [
     {
       id: "ev_page_reference",
@@ -159,7 +159,7 @@ function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string
     metadata: {
       research_session_id: input.sessionID,
       created_for_message_id: "msg_frontend_research_recovered",
-      request_hash: "frontend-research-request-hash",
+      request_hash: researchRequestHash(input.request ?? "frontend-research-request"),
       source_digest: researchSourceDigest(evidence),
       created_at: "2026-06-21T00:00:00.000Z",
     },
@@ -230,6 +230,7 @@ function minimalFrontendResearchBrief(input: { taskID: string; sessionID: string
           evidence_ids: ["ev_page_reference"],
           title: "Page surface",
           user_visible_behavior: "The page renders a visible webpage surface.",
+          component_kind_hypothesis: "static page surface",
           required_interactions: [],
         },
       ],
@@ -999,7 +1000,6 @@ async function writePassingSourceSkeletonHandoff(projectDir: string) {
   await fs.mkdir(skeletonDir, { recursive: true })
   await fs.mkdir(sourceIrDir, { recursive: true })
   await fs.writeFile(path.join(sourcePackageDir, "reference.png"), minimalPngBytes())
-  await fs.writeFile(path.join(sourcePackageDir, "reference-mobile.png"), minimalPngBytes())
   await fs.writeFile(
     path.join(skeletonDir, "index.html"),
     '<!doctype html><body data-reference-image="../reference.png"><main data-source-node-id="main"><h1>Economic calendar</h1></main></body>',
@@ -1072,14 +1072,6 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             height: 1,
             bytes: minimalPngBytes().length,
           },
-          mobileReference: {
-            path: "reference-mobile.png",
-            sha256: referenceSha256,
-            width: 1,
-            height: 1,
-            bytes: minimalPngBytes().length,
-            viewport: { width: 390, height: 844 },
-          },
         },
         files: [
           {
@@ -1087,12 +1079,6 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             sha256: referenceSha256,
             bytes: minimalPngBytes().length,
             source: "webpage-evidence/reference.png",
-          },
-          {
-            path: "reference-mobile.png",
-            sha256: referenceSha256,
-            bytes: minimalPngBytes().length,
-            source: "webpage-evidence/reference-mobile.png",
           },
         ],
       },
@@ -2634,6 +2620,103 @@ describe("orchestrator tools", () => {
             continuation_artifact_id: continuationArtifactID,
           },
           buildToolOptions("frontend_design_stale_host_evidence"),
+        )
+        expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
+        expect(toolText(staleResult)).toContain("scope_mismatch")
+        expect(toolText(staleResult)).toContain("start a fresh frontend_design")
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
+  test("frontend_design continuation rejects stale frontend research blueprint before resuming worker", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const taskID = `tsk_frontend_design_stale_blueprint_${stamp}`
+    const failedSessionID = `ses_frontend_design_stale_blueprint_${stamp}`
+    const request = "Clone https://example.com/page into a visual HTML skeleton."
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend design stale blueprint parent" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend design stale blueprint task",
+              request,
+              kind: "workflow",
+              priority: "normal",
+              attachments: [
+                {
+                  sha: "sha-original-reference",
+                  url: "attachment://original-reference.png",
+                  mime: "image/png",
+                  size: 42,
+                  filename: "original-reference.png",
+                  intent: "visual_reference",
+                  source: "user-upload",
+                },
+              ],
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        let continuationArtifactID = ""
+        let calls = 0
+        designAnalyzeImpl = async (input: any) => {
+          calls += 1
+          input.onSessionCreated?.(failedSessionID)
+          throw new AgentRunError("frontend-design", "missing terminal submit_frontend_template", {
+            nonRetryable: true,
+            cause: new Message.TerminalToolMissingError({
+              message: "Frontend design ended without submit_frontend_template.",
+              toolName: "submit_frontend_template",
+              retries: 0,
+            }),
+          })
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const first = await tools.frontend_design.execute(
+          {
+            reason: "Need frontend design handoff.",
+          },
+          buildToolOptions("frontend_design_stale_blueprint"),
+        )
+        const match = toolText(first).match(/continuation_artifact_id[^\n]*?(art_[A-Za-z0-9]+)/)
+        expect(match?.[1]).toBeTruthy()
+        continuationArtifactID = match![1]
+
+        persistTaskFrontendResearchBrief({
+          taskID,
+          brief: minimalFrontendResearchBrief({
+            taskID,
+            sessionID: `ses_frontend_research_blueprint_${stamp}`,
+            sourceURL: "https://example.com/page",
+            request,
+          }),
+          now: now + 1,
+        })
+
+        const staleResult = await tools.frontend_design.execute(
+          {
+            reason: "Continue previous frontend design finalizer miss.",
+            continuation_artifact_id: continuationArtifactID,
+          },
+          buildToolOptions("frontend_design_stale_blueprint"),
         )
         expect(toolText(staleResult)).toContain("continuation artifact scope is stale")
         expect(toolText(staleResult)).toContain("scope_mismatch")
@@ -5851,7 +5934,7 @@ describe("orchestrator tools", () => {
           notes: [],
         },
         visualConsistencyContract:
-          "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with measured visual comparison plus source-quality review.",
+          "Match reference layout, typography, colors, and spacing exactly. Verify desktop and wide viewports with measured visual comparison plus source-quality review.",
         uiDataContract:
           "UI data contract derived from source-skeleton table/list/control structure; unknown backend details remain unknown.",
         templateIterationNotes: ["First pass covered layout.", "Second pass covered visual consistency."],
@@ -5931,7 +6014,7 @@ describe("orchestrator tools", () => {
             "- adoption_rule: frontend-design-skeleton is a source baseline excluded from final acceptance",
             "",
             "## Visual Consistency Contract",
-            "Match reference layout, typography, colors, and spacing exactly. Verify 1440x900, 1024x768, and 390x844 with measured visual comparison plus source-quality review.",
+            "Match reference layout, typography, colors, and spacing exactly. Verify desktop and wide viewports with measured visual comparison plus source-quality review.",
             "",
             "## UI Data Contract",
             "UI data contract derived from source-skeleton table/list/control structure; unknown backend details remain unknown.",

@@ -86,34 +86,10 @@ work items: dispatch parallel `deep_research` calls for the subpages that are
 still material to the task, but do not treat the list as a mandatory next-tool
 command.
 
-For a PRD/SPEC/report request about a webpage, including one that asks for both
-functional and visual description, `frontend_research` is the available
-webpage-investigation-division publisher. Decide whether to invoke it from the
-full task context, requested deliverable, existing evidence, and downstream
-coverage needs. It partitions prepared evidence, source URLs, visible regions,
-components, tables, charts, maps, navigation, interactions, responsive behavior,
-fidelity risks, and unknowns into source-backed work packets. It persists a
-`frontend_research_brief` with an investigation-partition `webpage_contract`;
-downstream requirements, architect, and build consume it as a coverage checklist,
-not as a completed PRD fact contract.
+For a PRD/SPEC/report request about a webpage, including one that asks for both functional and visual description, `frontend_research` is the available webpage-investigation-division publisher. Decide whether to invoke it from the full task context, requested deliverable, existing evidence, and downstream coverage needs. It partitions prepared evidence, source URLs, visible regions, components, tables, charts, maps, navigation, interactions, responsive behavior, fidelity risks, and unknowns into source-backed work packets. It persists a `frontend_research_brief` with an investigation-partition `webpage_contract`; frontend_design consumes the `webpage_contract` through a Page Skeleton Blueprint as page information architecture, while downstream requirements, architect, and build consume compact projections as coverage checklists, not completed PRD fact contracts.
 
-`frontend_research` and `frontend_design` are sibling evidence tools, not
-substitutes and not a hard-coded pair. `frontend_design` materializes the
-maintainable frontend template/source handoff when the task needs implementation
-or visual/page-replica evidence. `frontend_research` publishes the
-functional/visual investigation division and risks from prepared evidence. Both
-are bounded evidence producers, not fixed lifecycle gates. After a successful
-frontend_design handoff exists, do not rerun frontend_design as a repair loop or
-implementation iteration strategy. After a frontend_research brief exists for a
-specific source page scope, do not rerun frontend_research for that same page as
-a repair loop, retry loop, crawler, or implementation iteration strategy; call it
-separately only for additional source page URLs that still need their own
-prepared evidence and brief. Later fixes consume the persisted artifacts and move
-through requirements, architect, build, visual_qa, and integrity as appropriate.
-Frontend_research does not acquire webpage evidence; if prepared evidence is
-missing, treat that as an input-quality fact and choose the next action from the
-full task context instead of expecting frontend_research to materialize it. For
-generic market/API facts around the same task, use `deep_research` separately. For webpage clone or frontend implementation requests from a live URL, if no frontend_design public report / evidence_source_manifest / prepared evidence is present, dispatch `frontend_design` before `frontend_research` unless you only need a source-URL-level risk brief. Do not let `frontend_research` replace missing frontend_design evidence with assumptions or placeholder visual evidence.
+`frontend_research` and `frontend_design` are sibling evidence tools, not substitutes and not a hard-coded pair. `frontend_design` materializes the maintainable frontend template/source handoff when the task needs implementation or visual/page-replica evidence. `frontend_research` publishes the functional/visual investigation division, Page Skeleton Blueprint, and risks from prepared evidence. Both are bounded evidence producers, not fixed lifecycle gates. After a successful frontend_design handoff exists, do not rerun frontend_design as a repair loop or implementation iteration strategy. After a frontend_research brief exists for a specific source page scope, do not rerun frontend_research for that same page as a repair loop, retry loop, crawler, or implementation iteration strategy; call it separately only for additional source page URLs that still need their own prepared evidence and brief. Later fixes consume the persisted artifacts and move through requirements, architect, build, visual_qa, and integrity as appropriate.
+Frontend_research does not acquire webpage evidence; if prepared evidence is missing, treat that as an input-quality fact and choose the next action from the full task context instead of expecting frontend_research to materialize it. For generic market/API facts around the same task, use `deep_research` separately. For webpage clone or frontend implementation requests from a live URL, raw webpage evidence/source package materialization may require frontend_design first; once prepared visual/source evidence exists, call frontend_research when the Page Skeleton Blueprint is missing before asking frontend_design to finalize page skeleton information architecture. Do not let frontend_research replace missing prepared visual evidence with assumptions, and do not let frontend_design invent or reorder the page skeleton when a source-backed blueprint is needed.
 
 `visual_qa` is the dedicated final frontend visual GUI and functional product-review agent (GUI means Graphical User Interface). It consumes frontend_design/build evidence plus any prior integrity evidence, tests the real rendered product, may repair in-scope visual or functional defects, and submits a structured visual QA report; it does not acquire webpage evidence and is not the final gate because integrity remains final acceptance. Visual QA and integrity are peer post-build review agents, not replacements for each other and not workflow prerequisites for each other. For frontend/browser-visible work, run `visual_qa` once near task completion after all blocking build work is terminal and before final task acceptance.
 

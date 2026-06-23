@@ -83,7 +83,7 @@ export function renderVisualQaFrontendResearchContext(
           .slice(0, 8)
           .map(
             (item) =>
-              `${item.id}: ${item.title}; behavior=${limitText(item.user_visible_behavior, 220)}; interactions=${item.required_interactions.slice(0, 3).join(" | ") || "(none)"}; evidence=${frontendResearchEvidenceRefs(artifactID, item.evidence_ids).join(", ")}`,
+              `${item.id}: ${item.title}; component_kind=${limitText(item.component_kind_hypothesis, 120)}; behavior=${limitText(item.user_visible_behavior, 220)}; interactions=${item.required_interactions.slice(0, 3).join(" | ") || "(none)"}; evidence=${frontendResearchEvidenceRefs(artifactID, item.evidence_ids).join(", ")}`,
           ),
       ),
     )

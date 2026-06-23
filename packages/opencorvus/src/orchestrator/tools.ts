@@ -58,6 +58,7 @@ import {
   renderFrontendResearchArchitectPromptSection,
   renderFrontendResearchBriefPromptSection,
   renderFrontendResearchBuildPromptSection,
+  renderFrontendResearchDesignPromptSection,
   renderResearchBriefPromptSection,
 } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
@@ -426,6 +427,7 @@ async function frontendDesignPromptEvidenceSnapshot(taskID: string, task: TaskRo
     design_specs: taskArrayField(task, "design_specs"),
     metadata: frontendDesignMetadataPromptScope(task.metadata),
     host_prepared_frontend_project: await hostPreparedFrontendProjectEvidenceSnapshot(taskID),
+    frontend_research: renderFrontendResearchDesignPromptSection({ taskID, request: task.request }),
   })
 }
 
@@ -5694,7 +5696,7 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL webpage/UI investigation publisher. Source-page-scoped brief producer: pass exactly one source page URL per fresh call, let the host prepare rendered evidence for that page, persist the brief, and call frontend_research separately for additional pages. Do not reuse frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after the same page scope's frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It persists a frontend_research_brief/webpage_contract artifact built from small registration tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+        "OPTIONAL webpage/UI investigation publisher. Source-page-scoped brief producer: pass exactly one source page URL per fresh call, let the host prepare rendered evidence for that page, persist the brief, and call frontend_research separately for additional pages. Do not reuse frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after the same page scope's frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, risks, and the Page Skeleton Blueprint that frontend_design consumes as page information architecture. It persists a frontend_research_brief/webpage_contract artifact built from small registration tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: FrontendResearchInputSchema,
       execute: async ({ reason, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)

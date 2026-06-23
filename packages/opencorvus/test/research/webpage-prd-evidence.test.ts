@@ -50,13 +50,19 @@ describe("research webpage PRD evidence", () => {
         "missing metadata, source text, or linked-source confirmation becomes an investigation-packet risk",
       )
       expect(prompt).toContain("Return `document_outline` as the visible-flow investigation module list")
-      expect(prompt).toContain("Also register `webpage_contract` chunks")
+      expect(prompt).toContain("Also register `webpage_contract` chunks as the source for the frontend_design Page Skeleton Blueprint")
       expect(prompt).toContain("functional_surfaces, visual_layout, style_requirements, interaction_states")
       expect(prompt).toContain("Register bundle sections for this webpage contract")
+      expect(prompt).toContain("Under Visual HTML Skeleton Coverage, write the Page Skeleton Blueprint")
+      expect(prompt).toContain("visible region order/count")
+      expect(prompt).toContain("major content sections")
+      expect(prompt).toContain("data/content anchors")
+      expect(prompt).toContain("source evidence ids")
+      expect(prompt).toContain("for frontend_design to materialize")
       expect(prompt).toContain("complete but bounded single-line points")
       expect(prompt).toContain("do not submit raw markdown or JSON documents as string fields")
       expect(prompt).toContain("work-packet inputs")
-      expect(prompt).toContain("component-kind hypotheses")
+      expect(prompt).toContain("`functional_surfaces.component_kind_hypothesis`")
       expect(prompt).not.toContain("1000+ substantive non-empty lines")
       expect(prompt).toContain("source-ir/interaction-state-snapshots.json")
       expect(prompt).toContain("factual runtime evidence")
@@ -210,7 +216,7 @@ async function writeCompleteEvidence(
     const relative = artifact.slice(artifactRoot.length + 1)
     const file = path.join(webpageEvidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
-    if (relative === "reference.png" || relative === "reference-mobile.png") {
+    if (relative === "reference.png") {
       await fs.writeFile(file, minimalPngBytes())
       continue
     }

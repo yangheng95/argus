@@ -52,6 +52,7 @@ import { PromptProfile } from "@/agent/prompt-profile"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
 import { INFORMATION_MISSING_DIAGNOSTIC_TEXT } from "@/prompt/information-missing"
+import { appendNonExecutorSourceBoundary } from "@/prompt/non-executor-source-boundary"
 import {
   AgentRunError,
   buildInformationMissingError,
@@ -1209,10 +1210,13 @@ async function buildSystemParts(
   const config = task.session_id
     ? await EffectiveConfig.effective({ sessionID: task.session_id })
     : await EffectiveConfig.effective({ taskID: task.id })
-  const instructions = PromptProfile.composeAgentPrompt({
+  const instructions = appendNonExecutorSourceBoundary({
     agentID: "orchestrator",
-    base: ORCHESTRATOR_INSTRUCTIONS,
-    config,
+    prompt: PromptProfile.composeAgentPrompt({
+      agentID: "orchestrator",
+      base: ORCHESTRATOR_INSTRUCTIONS,
+      config,
+    }),
   })
   const ctx: string[] = []
   const autoIteration = (await EngineConfig.get()).auto_iteration === true

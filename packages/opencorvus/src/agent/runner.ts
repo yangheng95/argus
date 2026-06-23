@@ -72,6 +72,7 @@ import { Provider } from "@/provider/provider"
 import { EffectiveConfig } from "@/config/effective"
 import { EngineConfig } from "@/engine"
 import { appendInformationMissingDiagnostic } from "@/prompt/information-missing"
+import { appendNonExecutorSourceBoundary } from "@/prompt/non-executor-source-boundary"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
@@ -1484,7 +1485,10 @@ async function composeSystemPrompt(
   const effectiveAgent = baseAgent ? Agent.resolveSessionAgent(baseAgent, overlay) : undefined
   const userAppend =
     effectiveAgent?.promptAppend ?? (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt_append
-  const prompt = PromptProfile.composeAgentPrompt({ agentID: agentName, base: core, userAppend, config })
+  const prompt = appendNonExecutorSourceBoundary({
+    agentID: agentName,
+    prompt: PromptProfile.composeAgentPrompt({ agentID: agentName, base: core, userAppend, config }),
+  })
   return { prompt }
 }
 

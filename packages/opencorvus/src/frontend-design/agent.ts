@@ -36,6 +36,7 @@ import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { deriveUrlSignals } from "@/engine/task-signals"
 import { EngineConfig } from "@/engine/config"
+import { renderFrontendResearchDesignPromptSection } from "@/research/prompt-section"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
 import type { Tool } from "@/tool/tool"
@@ -449,6 +450,11 @@ function buildUserPrompt(
     "# Delegation\n\nOrchestrator is asking frontend_design to produce the high-fidelity visual HTML skeleton contract, frontend template, fillable modules, material inventory, visual/data contracts, known transcription problems, and downstream agent handoff notes for this task. Web-clone source artifacts are visual skeleton seeds and evidence; keep the handoff anchored to source-region traceability instead of a standalone component checklist.",
     renderUserRequestSection({ heading: "# Task", title: input.title, request: input.request, taskID: input.taskID }),
   ]
+  const frontendResearchBlueprint = renderFrontendResearchDesignPromptSection({
+    taskID: input.taskID,
+    request: input.request,
+  })
+  if (frontendResearchBlueprint) sections.push(frontendResearchBlueprint)
   // URL presence is a *structural* detection (syntactic protocol scheme),
   // not a keyword policy: the agent decides whether to propose a
   // `url_screenshot` capture based on whether a web URL is even

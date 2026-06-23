@@ -5,6 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { PNG } from "pngjs"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { persistTaskFrontendResearchBrief } from "../../src/engine/persist"
 import { Instance } from "../../src/project/instance"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { Database } from "../../src/storage/db"
@@ -24,6 +25,7 @@ import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS } from "../../src/frontend-design/to
 import { generateWebCloneSkeletonProject } from "../../src/web-clone"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { validResearchBrief } from "../research/fixtures"
 
 describe("frontend-design prompt assembly", () => {
   test("core prompt pins visual HTML skeleton restoration workflow", async () => {
@@ -38,6 +40,20 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("static first-candidate metadata")
     expect(prompt).toContain("sourceDomIterationState.ts")
     expect(prompt).toContain("nextSourceDomReplacement")
+    expect(prompt).toContain("Visual skeleton drafting is screenshot-first")
+    expect(prompt).toContain("inspect desktop `web-clone-source/reference.png` and the current rendered skeleton screenshot")
+    expect(prompt).toContain("read only the direct source code/CSS/data evidence needed")
+    expect(prompt).toContain("Do not spend turns reading broad source-IR inventories")
+    expect(prompt).toContain("screenshot-derived visible page-region outline")
+    expect(prompt).toContain("Frontend Research Page Skeleton Blueprint")
+    expect(prompt).toContain("page information-architecture input")
+    expect(prompt).toContain("must record those conflicts instead of inventing, reordering, or demoting major sections")
+    expect(prompt).toContain("preserve its visible-flow order/count")
+    expect(prompt).toContain("Establish the page skeleton from `Frontend Research Page Skeleton Blueprint` when present")
+    expect(prompt).toContain("major content-section order/count")
+    expect(prompt).toContain("not the page skeleton order")
+    expect(prompt).toContain("The queue must not reorder the page")
+    expect(prompt).toContain("demote major source sections into nav/footer labels")
     expect(prompt).toContain("sourceMap")
     expect(prompt).toContain("generatedCleanupTargets")
     expect(prompt).toContain("verticalSliceSteps")
@@ -296,6 +312,65 @@ describe("frontend-design prompt assembly", () => {
     )
     expect(prompt).not.toContain("Do not call `create_frontend_skeleton_project` again")
   })
+
+  test("webpage rawproject prompts consume frontend_research page skeleton blueprint", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const taskID = "tsk_frontend_design_blueprint"
+    const request = "Clone https://www.tradingview.com/markets/world-economy/ into a visual HTML skeleton."
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          seedFrontendPromptTask(taskID)
+          const frontendResearchPaths = ProjectRuntimePaths.frontendResearchPaths("", taskID, "ses_frontend_design_blueprint")
+          const artifactID = persistTaskFrontendResearchBrief({
+            taskID,
+            brief: validResearchBrief(request, {
+              summary: "Frontend research owns page skeleton facts.",
+              metadata: {
+                research_session_id: "ses_frontend_design_blueprint",
+              },
+              bundle: {
+                full_markdown_path: `${frontendResearchPaths.relativeDir}/research-bundle.md`,
+                evidence_json_path: `${frontendResearchPaths.relativeDir}/evidence.json`,
+                citation_map_path: `${frontendResearchPaths.relativeDir}/citation-map.json`,
+              },
+              webpage_contract: frontendDesignPromptWebpageContract(),
+            }),
+            now: Date.now(),
+          })
+
+          const prompt = FrontendDesignTestHooks.buildUserPrompt({
+            title: "World economy replica",
+            request,
+            taskID,
+          })
+          const evidenceRef = `frontend_research:${artifactID}:ev_1`
+
+          expect(prompt).toContain("# Frontend Research Page Skeleton Blueprint")
+          expect(prompt).toContain(`"artifact_id": "${artifactID}"`)
+          expect(prompt).toContain('"page_skeleton_blueprint"')
+          expect(prompt).toContain('"visible_flow"')
+          expect(prompt).toContain('"region_count": 1')
+          expect(prompt).toContain('"major_surfaces"')
+          expect(prompt).toContain('"data_content_anchors"')
+          expect(prompt).toContain('"component_kind_hypotheses"')
+          expect(prompt).toContain('"hypothesis": "financial data table with tabs and filters"')
+          expect(prompt).toContain(evidenceRef)
+          expect(prompt).toContain(
+            "Frontend_design consumes this as the page information-architecture input and materializes it into visual-html-skeleton",
+          )
+          expect(prompt.indexOf("# Frontend Research Page Skeleton Blueprint")).toBeLessThan(
+            prompt.indexOf("# Visual HTML Skeleton Contract"),
+          )
+          expect(prompt).not.toContain('"webpage_contract"')
+        },
+      })
+    } finally {
+      await Instance.disposeAll()
+      await resetDatabase()
+    }
+  }, 30_000)
 
   test("visual HTML skeleton prompts keep static baseline below source evidence", () => {
     const prompt = FrontendDesignTestHooks.buildUserPrompt({
@@ -877,7 +952,7 @@ describe("frontend-design prompt assembly", () => {
         generationTool: "host-prepared:create_frontend_skeleton_project",
         warnings: [],
         visualIterationMatrix:
-          "desktop-reference 1366x768 (primary_reference, capture_viewport): Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement. mobile-review 390x844 (responsive_review, matching_reference, web-clone-source/reference-mobile.png): Capture and inspect a task-scoped mobile preview screenshot against web-clone-source/reference-mobile.png before claiming responsive parity. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use matching reference evidence when it exists, otherwise record the evidence gap.",
+          "desktop-reference 1366x768 (primary_reference, capture_viewport): Capture and inspect a task-scoped preview screenshot against web-clone-source/reference.png after each region replacement. wide-review 1920x1080 (responsive_review, default): Capture and inspect the root app at this viewport; use matching reference evidence when it exists, otherwise record the evidence gap.",
         compactEvidence: [
           "## source-ir/component-tree.json",
           '{"components":[{"name":"ProductPage"}]}',
@@ -915,8 +990,8 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("interaction-state visuals")
     expect(prompt).toContain("desktop-reference 1366x768")
     expect(prompt).toContain("capture_viewport")
-    expect(prompt).toContain("mobile-review 390x844")
-    expect(prompt).toContain("web-clone-source/reference-mobile.png")
+    expect(prompt).not.toContain("mobile-review")
+    expect(prompt).not.toContain("web-clone-source/reference-mobile.png")
     expect(prompt).toContain("wide-review 1920x1080")
     expect(prompt).toContain("source-region traceable visual restoration")
     expect(prompt).toContain("rawproject source nodes/regions/assets/reference screenshots")
@@ -1188,6 +1263,10 @@ describe("frontend-design prompt assembly", () => {
       expect(summary).toContain("NewsRegion: priority=high")
       expect(summary).toContain("firstReplacementStep: Render NewsList")
       expect(summary).toContain("Extraction rule")
+      expect(summary).toContain("Frontend Research Page Skeleton Blueprint")
+      expect(summary).toContain("per-region selection and repair metadata")
+      expect(summary).toContain("not the page information architecture")
+      expect(summary).not.toContain("should start from sourceDomIterationState.ts")
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
@@ -1367,7 +1446,6 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
   png.data.fill(255)
   const referenceBytes = PNG.sync.write(png)
   await fs.writeFile(path.join(sourcePackage, "reference.png"), referenceBytes)
-  await fs.writeFile(path.join(sourcePackage, "reference-mobile.png"), referenceBytes)
   await fs.writeFile(
     path.join(sourcePackage, "source-skeleton", "index.html"),
     `
@@ -1473,14 +1551,6 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
             height: 1,
             bytes: referenceBytes.length,
           },
-          mobileReference: {
-            path: "reference-mobile.png",
-            sha256: referenceSha256,
-            width: 1,
-            height: 1,
-            bytes: referenceBytes.length,
-            viewport: { width: 390, height: 844 },
-          },
         },
         files: [
           {
@@ -1489,12 +1559,6 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
             bytes: referenceBytes.length,
             source: "webpage-evidence/reference.png",
           },
-          {
-            path: "reference-mobile.png",
-            sha256: referenceSha256,
-            bytes: referenceBytes.length,
-            source: "webpage-evidence/reference-mobile.png",
-          },
         ],
       },
       null,
@@ -1502,6 +1566,74 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
     ),
   )
   return sourcePackage
+}
+
+function frontendDesignPromptWebpageContract(): NonNullable<ReturnType<typeof validResearchBrief>["webpage_contract"]> {
+  return {
+    source_url: "https://www.tradingview.com/markets/world-economy/",
+    reference_image_evidence_ids: ["ev_1"],
+    functional_surfaces: [
+      {
+        id: "surface_world_economy_table",
+        title: "World economy market table",
+        user_visible_behavior: "Shows the primary economy table and filters in the first-page flow.",
+        component_kind_hypothesis: "financial data table with tabs and filters",
+        required_interactions: ["Table tabs and filters remain visible and clickable."],
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    visual_layout: [
+      {
+        id: "layout_desktop_world_economy",
+        viewport: "desktop",
+        region: "Header, page title, tabs, and market table in source order",
+        layout_contract: "The first viewport preserves the TradingView world economy page section order.",
+        spacing_and_alignment: "Dense financial-table spacing and column alignment match the reference screenshot.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    style_requirements: [
+      {
+        id: "style_table_density",
+        token_or_selector: "market table density",
+        requirement: "Preserve compact financial table typography, borders, and row rhythm.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    interaction_states: [
+      {
+        id: "state_tab_selected",
+        component: "Market tab",
+        state: "selected",
+        behavior: "Selected tab state remains visually distinct from inactive tabs.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    data_content_inventory: [
+      {
+        id: "data_table_rows",
+        surface: "World economy market table",
+        content_contract: "Visible columns, labels, and representative rows are preserved.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    fidelity_acceptance: [
+      {
+        id: "accept_world_economy_first_viewport",
+        target: "Desktop first viewport",
+        criterion: "The skeleton preserves section order and financial-table density.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    fidelity_risks: [
+      {
+        id: "risk_dynamic_market_values",
+        risk: "Market values can change between captures.",
+        impact: "Use representative source data without changing the layout skeleton.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+  }
 }
 
 function seedFrontendPromptTask(taskID: string): void {
