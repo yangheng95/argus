@@ -25,6 +25,7 @@ import {
   setDirectory,
 } from "../../services/workspace"
 import { getHostTransport } from "../../services/host-transport"
+import { formatErrorDetails, notifyError } from "../../services/notify"
 import { t } from "../../utils/i18n"
 import { taskLifecycleStatusOrIdleLabel } from "../../utils/status-labels"
 import { Button } from "../ui/Button"
@@ -82,6 +83,30 @@ function activeTaskLabel(): string {
   return taskLifecycleStatusOrIdleLabel(status)
 }
 
+function menuActionErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function runTitlebarMenuAction(label: string, action: () => void | Promise<void>): void {
+  try {
+    void Promise.resolve(action()).catch((error) => {
+      notifyError({
+        id: `titlebar-menu:${label}`,
+        title: t("common.error"),
+        message: menuActionErrorMessage(error),
+        details: formatErrorDetails(error),
+      })
+    })
+  } catch (error) {
+    notifyError({
+      id: `titlebar-menu:${label}`,
+      title: t("common.error"),
+      message: menuActionErrorMessage(error),
+      details: formatErrorDetails(error),
+    })
+  }
+}
+
 function MenuItem(props: {
   children: any
   onClick: () => void | Promise<void>
@@ -102,7 +127,7 @@ function MenuItem(props: {
       data-testid={props.testid}
       title={tooltip()}
       aria-label={props.ariaLabel || tooltip()}
-      onSelect={() => void props.onClick()}
+      onSelect={() => runTitlebarMenuAction(tooltip() || "menu-item", props.onClick)}
     >
       <span class="titlebar-menubar-item-title">{props.children}</span>
       <Show when={props.meta}>
@@ -129,7 +154,7 @@ function MenuCheckboxItem(props: {
       title={props.description}
       aria-label={props.label}
       data-testid={props.testid}
-      onChange={(checked) => void props.onChange(checked)}
+      onChange={(checked) => runTitlebarMenuAction(props.label, () => props.onChange(checked))}
     >
       <span class="titlebar-menubar-checkbox-copy">
         <span class="titlebar-menubar-item-title">{props.label}</span>
@@ -160,7 +185,7 @@ function RecentDirectoryMenuItem(props: { dir: string; onClick: () => void | Pro
       type="button"
       class="titlebar-menubar-item titlebar-menubar-recent-item"
       title={props.dir}
-      onSelect={() => void props.onClick()}
+      onSelect={() => runTitlebarMenuAction(props.dir, props.onClick)}
     >
       <span class="titlebar-menubar-recent-name">{directoryLeaf(props.dir)}</span>
       <span class="titlebar-menubar-recent-path">{props.dir}</span>
@@ -181,7 +206,7 @@ function MenuRange(props: {
   onChange: (value: number) => void | Promise<void>
 }) {
   function commit(event: Event) {
-    void props.onChange(Number((event.target as HTMLInputElement).value))
+    runTitlebarMenuAction(props.label, () => props.onChange(Number((event.target as HTMLInputElement).value)))
   }
 
   return (
@@ -296,8 +321,12 @@ export function TitlebarMenubar() {
     closeMenu()
   }
 
-  function openDocumentation(id: "quickstart" | "sdk") {
-    void openDocumentationEntry(id, settingsStore.locale).finally(closeMenu)
+  async function openDocumentation(id: "quickstart" | "sdk") {
+    try {
+      await openDocumentationEntry(id, settingsStore.locale)
+    } finally {
+      closeMenu()
+    }
   }
 
   function openLogs() {
@@ -319,39 +348,42 @@ export function TitlebarMenubar() {
     await patchConfig({ experimental: { auto_confirm_proposed_tasks: enabled } })
   }
 
-  function setTheme(value: string) {
+  async function setTheme(value: string) {
     setSettingsStore("theme", value)
     applyTheme(value)
-    saveSettings()
+    await saveSettings()
   }
 
-  function setLocale(value: string) {
+  async function setLocale(value: string) {
     setSettingsStore("locale", value)
-    void syncAgentPromptLocale(value)
-    saveSettings()
+    await syncAgentPromptLocale(value)
+    await saveSettings()
   }
 
-  function setOpacityPercent(value: number) {
+  async function setOpacityPercent(value: number) {
     const next = sanitizeOpacity(value / 100)
     setSettingsStore("opacity", next)
     applyOpacity(next)
-    saveSettings()
+    await saveSettings()
   }
 
-  function setZoomPercent(value: number) {
+  async function setZoomPercent(value: number) {
     const next = sanitizeZoom(value / 100)
     setSettingsStore("zoom", next)
     applyZoom(next)
-    saveSettings()
+    await saveSettings()
   }
 
-  function resetLayout() {
+  async function resetLayout() {
     setSettingsStore({
       sidebarWidth: null,
       sidebarCollapsed: false,
     })
-    saveSettings()
-    closeMenu()
+    try {
+      await saveSettings()
+    } finally {
+      closeMenu()
+    }
   }
 
   function focusExecutorSelector() {
@@ -465,11 +497,27 @@ export function TitlebarMenubar() {
                       {settingsStore.directory || t("workspace.no_directory")}
                     </div>
                     <Show when={nativeCommands["workspace.pickDir"]}>
-                      <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
+                      <MenuItem
+                        onClick={async () => {
+                          try {
+                            await browseDirectory()
+                          } finally {
+                            closeMenu()
+                          }
+                        }}
+                      >
+                        {t("cwd.browse")}
+                      </MenuItem>
                     </Show>
                     <Show when={nativeCommands["open-path"]}>
                       <MenuItem
-                        onClick={() => void openDirectory().finally(closeMenu)}
+                        onClick={async () => {
+                          try {
+                            await openDirectory()
+                          } finally {
+                            closeMenu()
+                          }
+                        }}
                         disabled={!settingsStore.directory}
                       >
                         {t("cwd.open")}
@@ -492,7 +540,13 @@ export function TitlebarMenubar() {
                         {(dir) => (
                           <RecentDirectoryMenuItem
                             dir={dir}
-                            onClick={() => void setDirectory(dir).finally(closeMenu)}
+                            onClick={async () => {
+                              try {
+                                await setDirectory(dir)
+                              } finally {
+                                closeMenu()
+                              }
+                            }}
                           />
                         )}
                       </For>
@@ -651,9 +705,12 @@ export function TitlebarMenubar() {
                     </MenuItem>
                     <Show when={nativeCommands["devtools.toggle"]}>
                       <MenuItem
-                        onClick={() => {
-                          toggleDevtools()
-                          closeMenu()
+                        onClick={async () => {
+                          try {
+                            await toggleDevtools()
+                          } finally {
+                            closeMenu()
+                          }
                         }}
                         meta={t("titlebar.devtools_hint")}
                         testid="titlebar-help-devtools"
