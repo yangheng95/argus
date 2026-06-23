@@ -58,6 +58,10 @@ export function artifactExecutableName(os = process.platform): string {
   return os === "win32" || os.startsWith("windows") ? "opencorvus.exe" : "opencorvus"
 }
 
+export function artifactRipgrepExecutableName(os = process.platform): string {
+  return os === "win32" || os.startsWith("windows") ? "rg.exe" : "rg"
+}
+
 export interface ArtifactNodeRuntimeTarget {
   os: string
   arch: string

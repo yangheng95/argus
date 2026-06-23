@@ -34,6 +34,7 @@ import {
 } from "../../../script/package-linux-binary"
 import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
 import { copyRuntimeNodeModules } from "./build-runtime-node-modules"
+import { copyRipgrepRuntime, findExecutableOnPath } from "./build-runtime-binaries"
 import { cleanBuildDist } from "./build-clean"
 import { resolveModelsSnapshotData } from "./models-snapshot"
 
@@ -312,18 +313,6 @@ async function buildBrowserMcpNodeBundle(outdir: string) {
   await fs.promises.rename(path.join(outdir, "entry.js"), path.join(outdir, "browser.mjs"))
 }
 
-function findExecutableOnPath(name: string) {
-  const paths = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean)
-  const extensions =
-    process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean) : [""]
-  for (const dir of paths) {
-    for (const ext of extensions) {
-      const candidate = path.join(dir, name.endsWith(ext.toLowerCase()) || name.endsWith(ext) ? name : `${name}${ext}`)
-      if (fs.existsSync(candidate)) return candidate
-    }
-  }
-}
-
 async function copyBrowserMcpNodeRuntime(item: Target, outdir: string) {
   const nodeName = artifactBrowserMcpNodeExecutableName(item.os)
   const explicit = process.env.OPENCORVUS_BROWSER_MCP_NODE_BUILD_PATH?.trim()
@@ -443,6 +432,12 @@ try {
     }
     await copyRuntimeNodeModules(item, browserMcpRuntimeDir, dir)
     await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
+    await copyRipgrepRuntime({
+      target: item,
+      host: await detectArtifactNodeRuntimeHost(),
+      outdir: path.join(dir, "dist", name),
+      env: process.env,
+    })
 
     if (item.os === "win32") {
       const helper = await buildWindowsSupervisorHelper()

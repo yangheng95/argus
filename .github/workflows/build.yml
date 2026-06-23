@@ -450,8 +450,10 @@ jobs:
             src="/tmp/dist/opencorvus-${platform}"
             [[ -d "$src" ]] || continue
             mkdir -p "$platform"
-            find "$src" -maxdepth 1 -type f ! -name '*.map' -exec cp {} "$platform/" \;
+            cp -R "$src"/. "$platform/"
+            find "$platform" -type f -name '*.map' -delete
             chmod +x "$platform"/opencorvus* 2>/dev/null || true
+            chmod +x "$platform"/bin/rg* 2>/dev/null || true
           done
 
           mkdir -p overlay
