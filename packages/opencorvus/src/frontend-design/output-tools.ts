@@ -11,6 +11,7 @@ import { createHash } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+import { z } from "zod"
 import { BrowserRuntime } from "@/browser/runtime"
 import { runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
 import { requireRuntimePackage } from "@/runtime/package-require"
@@ -18,11 +19,22 @@ import {
   ColorSchema,
   ComponentSchema,
   FrontendTemplateFinalSchema,
+  FrontendTemplateBasicsToolInputSchema,
+  FrontendTemplateCompactItemToolInputSchema,
+  FrontendTemplateMarkdownSectionToolInputSchema,
+  FrontendTemplateStringItemToolInputSchema,
+  FrontendTemplateSubmitSchema,
   FrontendTemplateToolInputSchema,
+  FrontendProjectToolInputSchema,
   InteractionSchema,
   LayoutSchema,
   ResponsiveSchema,
   SpacingSchema,
+  ToolBaselineReplacementPlanItemSchema,
+  ToolComponentReusePlanItemSchema,
+  ToolImplementationPhaseOutcomeSchema,
+  ToolMaterialInventoryItemSchema,
+  ToolVisualValidationEvidenceSchema,
   TypographySchema,
   type FrontendTemplateFinal,
   type VisualSpec,
@@ -33,6 +45,8 @@ import { limitSummary, markdownList, requireReportString } from "@/agent/report"
 export type { FrontendTemplateFinal } from "./schema"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
+type FrontendTemplateToolInput = z.infer<typeof FrontendTemplateToolInputSchema>
+type FrontendTemplateDraft = Partial<FrontendTemplateToolInput>
 
 const StaticHtmlScreenshotScript = String.raw`
 const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
@@ -79,7 +93,9 @@ function decodePayload() {
 
 export interface FrontendTemplateOutputCollector {
   specs: VisualSpec[]
+  draft: FrontendTemplateDraft
   final?: FrontendTemplateFinal
+  semantic_error?: string
 }
 
 const VISUAL_ANCHOR_BUDGET = 80
@@ -93,7 +109,7 @@ const REQUIRED_IMPLEMENTATION_PHASES = [
 const artifactValidatedVisualFinals = new WeakSet<FrontendTemplateFinal>()
 
 function emptyCollector(): FrontendTemplateOutputCollector {
-  return { specs: [] }
+  return { specs: [], draft: {} }
 }
 
 function titleFromMarkdown(text: string): string | undefined {
@@ -391,6 +407,178 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
     normalized.frontend_project = frontendProject
   }
   return normalized
+}
+
+function hasText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0
+}
+
+function hasItems(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0
+}
+
+function arrayField<T>(draft: FrontendTemplateDraft, key: keyof FrontendTemplateToolInput): T[] {
+  const record = draft as Record<string, unknown>
+  const existing = record[key as string]
+  if (Array.isArray(existing)) return existing as T[]
+  const created: T[] = []
+  record[key as string] = created
+  return created
+}
+
+function upsertByStringKey<T extends Record<string, unknown>>(
+  items: T[],
+  item: T,
+  key: keyof T,
+): "registered" | "overwritten" {
+  const value = item[key]
+  const idx = items.findIndex((existing) => existing[key] === value)
+  if (idx >= 0) {
+    items[idx] = item
+    return "overwritten"
+  }
+  items.push(item)
+  return "registered"
+}
+
+function appendUniqueString(list: string[], value: string): "registered" | "already_registered" {
+  if (list.includes(value)) return "already_registered"
+  list.push(value)
+  return "registered"
+}
+
+function requiredImplementationPhaseMissingActions(draft: FrontendTemplateDraft): string[] {
+  if (draft.final_acceptance_mode !== "maintainable_replacement_required") return []
+  const covered = new Set((draft.implementation_phase_outcomes ?? []).map((item) => item.phase))
+  return REQUIRED_IMPLEMENTATION_PHASES.filter((phase) => !covered.has(phase)).map(
+    (phase) =>
+      `update_frontend_phase({ phase: "${phase}", id, title, deliverable, source_refs, acceptance })`,
+  )
+}
+
+function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector, autoIteration: boolean): string[] {
+  const draft = collector.draft
+  const actions: string[] = []
+
+  if (!hasText(draft.design_system) || !hasItems(draft.tech_stack) || !hasText(draft.final_acceptance_mode)) {
+    actions.push(
+      'update_frontend_basics({ design_system, tech_stack, final_acceptance_mode: "visual_baseline_allowed" | "maintainable_replacement_required" })',
+    )
+  }
+  if (!hasText(draft.frontend_template) && !hasItems(draft.frontend_template_sections)) {
+    actions.push(
+      'update_frontend_text({ section: "frontend_template", content }) or update_frontend_item({ target: "frontend_template_sections", item })',
+    )
+  }
+  if (!hasText(draft.fillable_modules) && !hasItems(draft.fillable_module_items)) {
+    actions.push(
+      'update_frontend_text({ section: "fillable_modules", content }) or update_frontend_item({ target: "fillable_module_items", item })',
+    )
+  }
+  if (!hasItems(draft.component_reuse_plan)) {
+    actions.push("update_frontend_component_reuse({ family_id, name, observed_surface, implementation_strategy, reuse_source, props_states, replacement_boundary, parity_guard, ... })")
+  }
+  if (!hasItems(draft.material_inventory_items)) {
+    actions.push("update_frontend_material({ title, detail, source_refs })")
+  }
+  if (!hasText(draft.visual_consistency_contract) && !hasItems(draft.visual_consistency_items)) {
+    actions.push(
+      'update_frontend_text({ section: "visual_consistency_contract", content }) or update_frontend_item({ target: "visual_consistency_items", item })',
+    )
+  }
+  if (!hasText(draft.ui_data_contract) && !hasItems(draft.ui_data_contract_items)) {
+    actions.push(
+      'update_frontend_text({ section: "ui_data_contract", content }) or update_frontend_item({ target: "ui_data_contract_items", item })',
+    )
+  }
+  if (!hasText(draft.completeness_review)) {
+    actions.push('update_frontend_text({ section: "completeness_review", content })')
+  }
+  if (!hasItems(draft.template_iteration_notes) || (autoIteration && (draft.template_iteration_notes?.length ?? 0) < 2)) {
+    actions.push("update_frontend_iteration_note({ value })")
+  }
+  actions.push(...requiredImplementationPhaseMissingActions(draft))
+  if (draft.frontend_project?.role === "visual_baseline_input" && !hasItems(draft.visual_validation_evidence)) {
+    actions.push("update_frontend_visual_evidence({ id, rendered_entrypoint, screenshot_artifact, source_reference_artifact, renderer, viewport, hashes, review_status, review_summary })")
+  }
+  return actions
+}
+
+function frontendTemplateStatus(collector: FrontendTemplateOutputCollector, autoIteration: boolean): string {
+  if (collector.final) return "FRONTEND_TEMPLATE_RESULT_STATUS: finalized"
+  const missing = frontendDraftMissingActions(collector, autoIteration)
+  const draft = collector.draft
+  const lines = [
+    `FRONTEND_TEMPLATE_RESULT_STATUS: ${missing.length > 0 ? "incomplete" : "ready_for_submit_validation"}`,
+    `registered: template_items=${draft.frontend_template_sections?.length ?? 0}, fillable_items=${draft.fillable_module_items?.length ?? 0}, component_reuse=${draft.component_reuse_plan?.length ?? 0}, material_items=${draft.material_inventory_items?.length ?? 0}, quality_items=${draft.quality_project_items?.length ?? 0}, visual_items=${draft.visual_consistency_items?.length ?? 0}, data_items=${draft.ui_data_contract_items?.length ?? 0}, phase_outcomes=${draft.implementation_phase_outcomes?.length ?? 0}, visual_evidence=${draft.visual_validation_evidence?.length ?? 0}, iteration_notes=${draft.template_iteration_notes?.length ?? 0}`,
+  ]
+  if (collector.semantic_error) lines.push(`last_validation_error: ${collector.semantic_error}`)
+  if (missing.length > 0) {
+    lines.push("next_required_update_calls:", markdownList(missing))
+  } else {
+    lines.push('next: call submit_frontend_template({ "final": true })')
+  }
+  return lines.join("\n")
+}
+
+async function submitFrontendTemplateDraft(input: {
+  collector: FrontendTemplateOutputCollector
+  rawInput: unknown
+  autoIteration: boolean
+  artifactRoot: string
+  artifactRootRelative?: string
+  workspaceRoot: string
+}): Promise<string> {
+  if (input.collector.final)
+    return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
+  const { fact_check_items } = FrontendTemplateSubmitSchema.parse(input.rawInput)
+  const missing = frontendDraftMissingActions(input.collector, input.autoIteration)
+  if (missing.length > 0) {
+    input.collector.semantic_error = "frontend template fragments are incomplete"
+    return [
+      "MISSING_FRONTEND_TEMPLATE_RESULT: finalizer kept the collector open.",
+      "Call the listed update_* tools with the missing fragments, then call submit_frontend_template({ final: true }) again.",
+      markdownList(missing),
+    ].join("\n")
+  }
+
+  let final: FrontendTemplateFinal
+  try {
+    const parsed = FrontendTemplateToolInputSchema.parse(normalizeFrontendTemplateInput(input.collector.draft))
+    final = normalizeFrontendTemplateFinal(
+      FrontendTemplateFinalSchema.parse({
+        ...parsed,
+        fact_check_items,
+      }),
+    )
+    await assertFrontendTemplateFinal(final, {
+      artifactRoot: input.artifactRoot,
+      artifactRootRelative: input.artifactRootRelative,
+      workspaceRoot: input.workspaceRoot,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    input.collector.semantic_error = msg
+    return [
+      `Error: frontend template failed final validation: ${msg}`,
+      "Collector remains open. Correct the specific fragment with the matching update_* tool, or call inspect_frontend_result_status for current fragment counts.",
+    ].join("\n")
+  }
+  if (input.autoIteration && final.template_iteration_notes.length < 2) {
+    input.collector.semantic_error =
+      "assistant.auto_iteration=true requires at least two frontend template review-pass notes before submit_frontend_template."
+    return [
+      "MISSING_FRONTEND_TEMPLATE_RESULT: finalizer kept the collector open.",
+      input.collector.semantic_error,
+      "Call update_frontend_iteration_note({ value }) with the second review pass, then call submit_frontend_template({ final: true }) again.",
+    ].join("\n")
+  }
+  if (final.frontend_project.role === "visual_baseline_input") {
+    artifactValidatedVisualFinals.add(final)
+  }
+  input.collector.final = final
+  input.collector.semantic_error = undefined
+  return "OK: complete frontend design/replica contract submitted for orchestrator handoff."
 }
 
 export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCollector) {
@@ -1223,40 +1411,204 @@ export function createFrontendTemplateOutputTools(
       },
     }),
 
+    update_frontend_basics: tool({
+      description:
+        "Update the required top-level frontend result basics: design system, implementation stack hints, and final acceptance mode.",
+      inputSchema: FrontendTemplateBasicsToolInputSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = FrontendTemplateBasicsToolInputSchema.parse(rawInput)
+        collector.draft.design_system = input.design_system
+        collector.draft.tech_stack = input.tech_stack
+        collector.draft.final_acceptance_mode = input.final_acceptance_mode
+        collector.semantic_error = undefined
+        return "OK: frontend basics updated"
+      },
+    }),
+
+    update_frontend_text: tool({
+      description:
+        "Update one markdown/text section of the frontend result. Use compact, evidence-grounded prose; use update_frontend_item for repeatable rows.",
+      inputSchema: FrontendTemplateMarkdownSectionToolInputSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = FrontendTemplateMarkdownSectionToolInputSchema.parse(rawInput)
+        collector.draft[input.section] = input.content
+        collector.semantic_error = undefined
+        return `OK: frontend text section "${input.section}" updated`
+      },
+    }),
+
+    update_frontend_item: tool({
+      description:
+        "Update one compact frontend result item for template sections, fillable modules, quality project requirements, visual consistency, or UI data. Items are keyed by title.",
+      inputSchema: FrontendTemplateCompactItemToolInputSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = FrontendTemplateCompactItemToolInputSchema.parse(rawInput)
+        const items = arrayField<typeof input.item>(collector.draft, input.target)
+        const mode = upsertByStringKey(items, input.item, "title")
+        collector.semantic_error = undefined
+        return `OK: frontend item "${input.item.title}" ${mode} in ${input.target} (${items.length} total)`
+      },
+    }),
+
+    update_frontend_material: tool({
+      description:
+        "Update one material/asset inventory item. Include CSS/tokens, assets, data fixtures, text samples, icons, fonts, or dense resources needed for reproduction.",
+      inputSchema: ToolMaterialInventoryItemSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolMaterialInventoryItemSchema.parse(rawInput)
+        const items = arrayField<typeof input>(collector.draft, "material_inventory_items")
+        const mode = upsertByStringKey(items, input, "title")
+        collector.semantic_error = undefined
+        return `OK: frontend material "${input.title}" ${mode} (${items.length} total)`
+      },
+    }),
+
+    update_frontend_project: tool({
+      description:
+        "Update the concrete frontend project/skeleton output metadata, including role, root, source package, entrypoints, generation tool, and notes.",
+      inputSchema: FrontendProjectToolInputSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        collector.draft.frontend_project = FrontendProjectToolInputSchema.parse(rawInput)
+        collector.semantic_error = undefined
+        return `OK: frontend project updated (${collector.draft.frontend_project.role})`
+      },
+    }),
+
+    update_frontend_component_reuse: tool({
+      description:
+        "Update one structured component-family reuse plan item. Items are keyed by family_id.",
+      inputSchema: ToolComponentReusePlanItemSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolComponentReusePlanItemSchema.parse(rawInput)
+        const items = arrayField<typeof input>(collector.draft, "component_reuse_plan")
+        const mode = upsertByStringKey(items, input, "family_id")
+        collector.semantic_error = undefined
+        return `OK: component reuse "${input.family_id}" ${mode} (${items.length} total)`
+      },
+    }),
+
+    update_frontend_baseline: tool({
+      description:
+        "Update one source-region baseline replacement/evolution plan item. Items are keyed by boundary_id.",
+      inputSchema: ToolBaselineReplacementPlanItemSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolBaselineReplacementPlanItemSchema.parse(rawInput)
+        const items = arrayField<typeof input>(collector.draft, "baseline_replacement_plan")
+        const mode = upsertByStringKey(items, input, "boundary_id")
+        collector.semantic_error = undefined
+        return `OK: baseline replacement "${input.boundary_id}" ${mode} (${items.length} total)`
+      },
+    }),
+
+    update_frontend_phase: tool({
+      description:
+        "Update one maintainable-replacement implementation phase outcome. Required phases are keyed by phase.",
+      inputSchema: ToolImplementationPhaseOutcomeSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolImplementationPhaseOutcomeSchema.parse(rawInput)
+        const items = arrayField<typeof input>(collector.draft, "implementation_phase_outcomes")
+        const mode = upsertByStringKey(items, input, "phase")
+        collector.semantic_error = undefined
+        return `OK: implementation phase "${input.phase}" ${mode} (${items.length} total)`
+      },
+    }),
+
+    update_frontend_visual_evidence: tool({
+      description:
+        "Update one structured rendered screenshot validation evidence row for a visual HTML skeleton. Items are keyed by id.",
+      inputSchema: ToolVisualValidationEvidenceSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = ToolVisualValidationEvidenceSchema.parse(rawInput)
+        const items = arrayField<typeof input>(collector.draft, "visual_validation_evidence")
+        const mode = upsertByStringKey(items, input, "id")
+        collector.semantic_error = undefined
+        return `OK: visual validation evidence "${input.id}" ${mode} (${items.length} total)`
+      },
+    }),
+
+    update_frontend_iteration_note: tool({
+      description: "Update frontend review-pass notes. Repeated identical notes are ignored.",
+      inputSchema: FrontendTemplateStringItemToolInputSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = FrontendTemplateStringItemToolInputSchema.parse(rawInput)
+        const items = arrayField<string>(collector.draft, "template_iteration_notes")
+        const mode = appendUniqueString(items, input.value)
+        collector.semantic_error = undefined
+        return `OK: frontend iteration note ${mode} (${items.length} total)`
+      },
+    }),
+
+    update_frontend_reference: tool({
+      description: "Update one canonical reference artifact path/id used as evidence. Repeated identical references are ignored.",
+      inputSchema: FrontendTemplateStringItemToolInputSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = FrontendTemplateStringItemToolInputSchema.parse(rawInput)
+        const items = arrayField<string>(collector.draft, "reference_artifacts")
+        const mode = appendUniqueString(items, input.value)
+        collector.semantic_error = undefined
+        return `OK: frontend reference ${mode} (${items.length} total)`
+      },
+    }),
+
+    update_frontend_question: tool({
+      description: "Update one truly unobservable open question. Repeated identical questions are ignored.",
+      inputSchema: FrontendTemplateStringItemToolInputSchema,
+      execute: async (rawInput) => {
+        if (collector.final) return "Error: frontend template already submitted; collector is closed."
+        const input = FrontendTemplateStringItemToolInputSchema.parse(rawInput)
+        const items = arrayField<string>(collector.draft, "open_questions")
+        const mode = appendUniqueString(items, input.value)
+        collector.semantic_error = undefined
+        return `OK: frontend open question ${mode} (${items.length} total)`
+      },
+    }),
+
+    inspect_frontend_result_status: tool({
+      description:
+        "Inspect frontend result collector status after update_* calls. Use when submit_frontend_template reports missing fragments or validation errors.",
+      inputSchema: z.object({}).strict(),
+      execute: async () => frontendTemplateStatus(collector, autoIteration),
+    }),
+
     submit_frontend_template: tool({
       description:
-        "Submit the complete webpage-evidence-grounded frontend design/replica contract for downstream agents. " +
-        "Use this as the final action after visual evidence review and the frontend template review pass(es) required by assistant.auto_iteration; " +
-        "do not register rows or call more webpage evidence tools once this terminal tool is exposed.",
-      inputSchema: FrontendTemplateToolInputSchema,
-      execute: async (input) => {
-        if (collector.final)
-          return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
-        const final = normalizeFrontendTemplateFinal(
-          FrontendTemplateFinalSchema.parse(normalizeFrontendTemplateInput(input)),
-        )
-        await assertFrontendTemplateFinal(final, { artifactRoot, artifactRootRelative, workspaceRoot })
-        if (autoIteration && final.template_iteration_notes.length < 2) {
-          throw new Error(
-            "assistant.auto_iteration=true requires at least two frontend template review-pass notes before submit_frontend_template.",
-          )
-        }
-        if (final.frontend_project.role === "visual_baseline_input") {
-          artifactValidatedVisualFinals.add(final)
-        }
-        collector.final = final
-        return "OK: complete frontend design/replica contract submitted for orchestrator handoff."
-      },
+        "Finalize the frontend result after all update_* calls are complete. Call only with final=true; include fact_check_items only for unverified factual claims. If this reports missing fragments, call the listed update_* tools instead of retrying a giant payload.",
+      inputSchema: FrontendTemplateSubmitSchema,
+      execute: async (rawInput) =>
+        submitFrontendTemplateDraft({
+          collector,
+          rawInput,
+          autoIteration,
+          artifactRoot,
+          artifactRootRelative,
+          workspaceRoot,
+        }),
     }),
   }
 
   return {
     tools,
     getCollector(): FrontendTemplateOutputCollector {
-      return { specs: [...collector.specs], final: collector.final }
+      return { specs: [...collector.specs], draft: { ...collector.draft }, final: collector.final, semantic_error: collector.semantic_error }
     },
     buildReport() {
-      return buildFrontendTemplateReport({ specs: [...collector.specs], final: collector.final })
+      return buildFrontendTemplateReport({
+        specs: [...collector.specs],
+        draft: { ...collector.draft },
+        final: collector.final,
+        semantic_error: collector.semantic_error,
+      })
     },
     getSpecs(): VisualSpec[] {
       return [...collector.specs]

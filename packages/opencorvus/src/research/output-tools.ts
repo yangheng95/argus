@@ -283,6 +283,61 @@ function validateDraftForSubmit(draft: ResearchDraft): string | undefined {
   return undefined
 }
 
+function researchMissingActions(
+  collector: ResearchCollector,
+  options: { expectedWebpageSourceUrl?: string } = {},
+): string[] {
+  const actions: string[] = []
+  if (!collector.scope) actions.push("update_research_scope({ user_goal, deliverable_type, audience, explicit_non_goals, assumed_non_goals })")
+  if (!collector.summary) actions.push("update_research_summary({ summary })")
+  if (collector.bundle.full_markdown_sections.length === 0) {
+    actions.push("update_research_bundle_section({ title, evidence_ids, points })")
+  }
+  if (collector.bundle.evidence_notes.length === 0) {
+    actions.push("update_research_evidence_note({ evidence_id, observations, artifact_refs })")
+  }
+  if (collector.bundle.citation_map.length === 0) {
+    actions.push("update_research_citation({ claim_id, evidence_ids, pointer, usage })")
+  }
+  if (options.expectedWebpageSourceUrl && !collector.webpage_contract_source) {
+    actions.push(`update_webpage_contract_source({ source_url: "${options.expectedWebpageSourceUrl}", reference_image_evidence_ids })`)
+  }
+  if (collector.webpage_contract_source || options.expectedWebpageSourceUrl) {
+    if (collector.webpage_functional_surfaces.length === 0) {
+      actions.push("update_webpage_functional_surface({ id, title, user_visible_behavior, component_kind_hypothesis, required_interactions, evidence_ids })")
+    }
+    if (collector.webpage_visual_layout.length === 0) {
+      actions.push("update_webpage_visual_layout({ id, viewport, region, layout_contract, spacing_and_alignment, evidence_ids })")
+    }
+    if (collector.webpage_style_requirements.length === 0) {
+      actions.push("update_webpage_style_requirement({ id, token_or_selector, requirement, evidence_ids })")
+    }
+    if (collector.webpage_data_content_inventory.length === 0) {
+      actions.push("update_webpage_data_inventory({ id, surface, content_contract, evidence_ids })")
+    }
+    if (collector.webpage_fidelity_acceptance.length === 0) {
+      actions.push("update_webpage_fidelity_acceptance({ id, target, criterion, evidence_ids })")
+    }
+  }
+  return actions
+}
+
+function researchResultStatus(collector: ResearchCollector, options: { expectedWebpageSourceUrl?: string } = {}): string {
+  if (collector.finalized) return "RESEARCH_RESULT_STATUS: finalized"
+  const missing = researchMissingActions(collector, options)
+  const lines = [
+    `RESEARCH_RESULT_STATUS: ${missing.length > 0 ? "incomplete" : "ready_for_submit_validation"}`,
+    `registered: evidence=${collector.evidence_index.length}, facts=${collector.facts.length}, inferences=${collector.inferences.length}, problems=${collector.problem_statements.length}, needs=${collector.user_needs.length}, constraints=${collector.constraints.length}, outline=${collector.document_outline.length}, bundle_sections=${collector.bundle.full_markdown_sections.length}, evidence_notes=${collector.bundle.evidence_notes.length}, citations=${collector.bundle.citation_map.length}, webpage_functional_surfaces=${collector.webpage_functional_surfaces.length}, webpage_visual_layout=${collector.webpage_visual_layout.length}, webpage_style_requirements=${collector.webpage_style_requirements.length}, webpage_data_inventory=${collector.webpage_data_content_inventory.length}, webpage_fidelity_acceptance=${collector.webpage_fidelity_acceptance.length}`,
+  ]
+  if (collector.semantic_error) lines.push(`last_validation_error: ${collector.semantic_error}`)
+  if (missing.length > 0) {
+    lines.push("next_required_update_calls:", markdownList(missing))
+  } else {
+    lines.push('next: call submit_research_brief({ "final": true })')
+  }
+  return lines.join("\n")
+}
+
 function rejectFinalized(collector: ResearchCollector): string | undefined {
   return collector.finalized ? "Error: research brief already finalized; collector is closed." : undefined
 }
@@ -368,7 +423,7 @@ export function buildResearchReport(collector: ResearchCollector) {
 export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: string } = {}) {
   let collector = emptyCollector()
   const tools = {
-    set_research_scope: tool({
+    update_research_scope: tool({
       description: "Set the brief scope once before registering research items.",
       inputSchema: ResearchScopeSchema,
       execute: async (input) => {
@@ -379,7 +434,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    set_research_summary: tool({
+    update_research_summary: tool({
       description: "Set or replace the compact research summary.",
       inputSchema: z.object({ summary: z.string().min(1) }),
       execute: async ({ summary }) => {
@@ -390,7 +445,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_evidence: tool({
+    update_research_evidence: tool({
       description: "Register one evidence source. Call once per source or prepared artifact.",
       inputSchema: ResearchEvidenceRefSchema,
       execute: async (input) => {
@@ -402,7 +457,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_fact: tool({
+    update_research_fact: tool({
       description: "Register one source-backed fact.",
       inputSchema: ResearchFactSchema,
       execute: async (input) => {
@@ -414,7 +469,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_inference: tool({
+    update_research_inference: tool({
       description: "Register one inference based on registered fact IDs.",
       inputSchema: ResearchInferenceSchema,
       execute: async (input) => {
@@ -428,7 +483,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_problem: tool({
+    update_research_problem: tool({
       description: "Register one problem statement derived from the evidence.",
       inputSchema: ResearchProblemStatementSchema,
       execute: async (input) => {
@@ -442,7 +497,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_need: tool({
+    update_research_need: tool({
       description: "Register one user need derived from task and evidence.",
       inputSchema: ResearchUserNeedSchema,
       execute: async (input) => {
@@ -456,7 +511,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_constraint: tool({
+    update_research_constraint: tool({
       description: "Register one constraint derived from task and evidence.",
       inputSchema: ResearchConstraintSchema,
       execute: async (input) => {
@@ -470,7 +525,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_document_section: tool({
+    update_research_document_section: tool({
       description: "Register one downstream document-outline section.",
       inputSchema: ResearchDocumentSectionSchema,
       execute: async (input) => {
@@ -482,7 +537,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    set_webpage_contract_source: tool({
+    update_webpage_contract_source: tool({
       description: "Set webpage contract source URL and visual reference evidence IDs.",
       inputSchema: WebpageContractSourceInputSchema,
       execute: async (input) => {
@@ -500,7 +555,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_webpage_functional_surface: tool({
+    update_webpage_functional_surface: tool({
       description: "Register one webpage functional surface work packet.",
       inputSchema: ResearchWebpageFunctionalSurfaceSchema,
       execute: async (input) => {
@@ -512,7 +567,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_webpage_visual_layout: tool({
+    update_webpage_visual_layout: tool({
       description: "Register one webpage visual layout work packet.",
       inputSchema: ResearchWebpageVisualLayoutSchema,
       execute: async (input) => {
@@ -524,7 +579,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_webpage_style_requirement: tool({
+    update_webpage_style_requirement: tool({
       description: "Register one webpage style requirement work packet.",
       inputSchema: ResearchWebpageStyleRequirementSchema,
       execute: async (input) => {
@@ -536,7 +591,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_webpage_interaction_state: tool({
+    update_webpage_interaction_state: tool({
       description: "Register one webpage interaction-state work packet.",
       inputSchema: ResearchWebpageInteractionStateSchema,
       execute: async (input) => {
@@ -548,7 +603,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_webpage_data_inventory: tool({
+    update_webpage_data_inventory: tool({
       description: "Register one webpage data/content inventory work packet.",
       inputSchema: ResearchWebpageDataInventorySchema,
       execute: async (input) => {
@@ -560,7 +615,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_webpage_fidelity_acceptance: tool({
+    update_webpage_fidelity_acceptance: tool({
       description: "Register one webpage fidelity acceptance work packet.",
       inputSchema: ResearchWebpageAcceptanceCriterionSchema,
       execute: async (input) => {
@@ -572,7 +627,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_webpage_fidelity_risk: tool({
+    update_webpage_fidelity_risk: tool({
       description: "Register one webpage fidelity risk.",
       inputSchema: ResearchWebpageFidelityRiskSchema,
       execute: async (input) => {
@@ -584,7 +639,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_subpage_research_task: tool({
+    update_subpage_research_task: tool({
       description: "Register one independent subpage or same-page deep-state research task.",
       inputSchema: ResearchSubpageTaskSchema,
       execute: async (input) => {
@@ -596,7 +651,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_open_question: tool({
+    update_research_open_question: tool({
       description: "Register one open question.",
       inputSchema: ResearchOpenQuestionSchema,
       execute: async (input) => {
@@ -610,7 +665,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_bundle_section: tool({
+    update_research_bundle_section: tool({
       description: "Register one rendered research-bundle markdown section.",
       inputSchema: ResearchBundleMarkdownSectionSchema,
       execute: async (input) => {
@@ -620,7 +675,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_evidence_note: tool({
+    update_research_evidence_note: tool({
       description: "Register one structured evidence note for evidence.json.",
       inputSchema: ResearchBundleEvidenceNoteSchema,
       execute: async (input) => {
@@ -637,7 +692,7 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
-    register_research_citation: tool({
+    update_research_citation: tool({
       description: "Register one claim-to-evidence citation for citation-map.json.",
       inputSchema: ResearchBundleCitationEntrySchema,
       execute: async (input) => {
@@ -654,26 +709,48 @@ export function createResearchOutputTools(options: { expectedWebpageSourceUrl?: 
       },
     }),
 
+    inspect_research_result_status: tool({
+      description:
+        "Inspect research result collector status after update_* calls. Use when submit_research_brief reports missing fragments or validation errors.",
+      inputSchema: z.object({}).strict(),
+      execute: async () => researchResultStatus(collector, options),
+    }),
+
     submit_research_brief: tool({
       description:
-        "Finalize research after all register_* calls are complete. Call with final=true; include fact_check_items only for unverified factual claims.",
+        "Finalize research after all update_* calls are complete. Call with final=true; include fact_check_items only for unverified factual claims. If this reports missing fragments, call the listed update_* tools instead of retrying a giant payload.",
       inputSchema: ResearchFinalizeSchema,
       execute: async (rawInput) => {
         if (collector.finalized)
           return "Error: research brief already finalized; duplicate submit_research_brief ignored."
         const { fact_check_items } = ResearchFinalizeSchema.parse(rawInput)
+        const missing = researchMissingActions(collector, options)
+        if (missing.length > 0) {
+          collector.semantic_error = "research brief fragments are incomplete"
+          return [
+            "MISSING_RESEARCH_RESULT: finalizer kept the collector open.",
+            "Call the listed update_* tools with the missing fragments, then call submit_research_brief({ final: true }) again.",
+            markdownList(missing),
+          ].join("\n")
+        }
         let draft: ResearchDraft
         try {
           draft = assembleDraft(collector)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           collector.semantic_error = msg
-          return `Error: research brief is incomplete or malformed: ${msg}`
+          return [
+            `Error: research brief is incomplete or malformed: ${msg}`,
+            "Collector remains open. Correct the specific fragment with the matching update_* tool, or call inspect_research_result_status for current fragment counts.",
+          ].join("\n")
         }
         const validationError = validateDraftForSubmit(draft)
         if (validationError) {
           collector.semantic_error = validationError
-          return `Error: ${validationError}`
+          return [
+            `Error: ${validationError}`,
+            "Collector remains open. Correct the specific fragment with the matching update_* tool, or call inspect_research_result_status for current fragment counts.",
+          ].join("\n")
         }
         collector.draft = draft
         collector.fact_check_items = fact_check_items ?? []

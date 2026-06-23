@@ -78,45 +78,68 @@ test("agent output toolkits build explicit non-empty reports", async () => {
   )
 
   const design = createFrontendTemplateOutputTools()
-  await design.tools.submit_frontend_template.execute(
+  await design.tools.update_frontend_basics.execute(
     {
       design_system: "OpenCorvus overlay",
       tech_stack: ["Solid"],
       final_acceptance_mode: "visual_baseline_allowed",
-      frontend_template: "# Agent workflow report\nReadable cards and reports.",
-      fillable_modules: "Render report payloads directly.",
-      component_inventory: "Report card and popover components.",
-      component_reuse_plan: [
-        {
-          family_id: "comp-report-card",
-          name: "Report card",
-          observed_surface: "Overlay report card",
-          source_refs: ["packages/overlay/src/components/Card.tsx"],
-          implementation_strategy: "existing_project_component",
-          reuse_source: "packages/overlay/src/components/Card.tsx",
-          mature_library_candidates: [],
-          props_states: "summary, detail, expanded state",
-          replacement_boundary: "report card body",
-          parity_guard: "overlay report card remains compact and readable",
-        },
-      ],
-      material_inventory: "Trace report payload samples.",
-      material_inventory_items: [
-        {
-          title: "Trace payload samples",
-          detail: "Use trace report payload samples to verify report card rendering.",
-          source_refs: ["packages/overlay/src/components/Card.tsx"],
-        },
-      ],
-      visual_consistency_contract: "Keep cards compact and readable.",
-      ui_data_contract: "Consume trace report payloads.",
-      template_iteration_notes: ["Checked report cards.", "Checked popover scroll."],
-      completeness_review: "Complete for downstream implementation.",
-      reference_artifacts: [],
-      open_questions: [],
     },
     {} as any,
   )
+  await design.tools.update_frontend_text.execute(
+    { section: "frontend_template", content: "# Agent workflow report\nReadable cards and reports." },
+    {} as any,
+  )
+  await design.tools.update_frontend_text.execute(
+    { section: "fillable_modules", content: "Render report payloads directly." },
+    {} as any,
+  )
+  await design.tools.update_frontend_text.execute(
+    { section: "component_inventory", content: "Report card and popover components." },
+    {} as any,
+  )
+  await design.tools.update_frontend_component_reuse.execute(
+    {
+      family_id: "comp-report-card",
+      name: "Report card",
+      observed_surface: "Overlay report card",
+      source_refs: ["packages/overlay/src/components/Card.tsx"],
+      implementation_strategy: "existing_project_component",
+      reuse_source: "packages/overlay/src/components/Card.tsx",
+      mature_library_candidates: [],
+      props_states: "summary, detail, expanded state",
+      replacement_boundary: "report card body",
+      parity_guard: "overlay report card remains compact and readable",
+    },
+    {} as any,
+  )
+  await design.tools.update_frontend_text.execute(
+    { section: "material_inventory", content: "Trace report payload samples." },
+    {} as any,
+  )
+  await design.tools.update_frontend_material.execute(
+    {
+      title: "Trace payload samples",
+      detail: "Use trace report payload samples to verify report card rendering.",
+      source_refs: ["packages/overlay/src/components/Card.tsx"],
+    },
+    {} as any,
+  )
+  await design.tools.update_frontend_text.execute(
+    { section: "visual_consistency_contract", content: "Keep cards compact and readable." },
+    {} as any,
+  )
+  await design.tools.update_frontend_text.execute(
+    { section: "ui_data_contract", content: "Consume trace report payloads." },
+    {} as any,
+  )
+  await design.tools.update_frontend_iteration_note.execute({ value: "Checked report cards." }, {} as any)
+  await design.tools.update_frontend_iteration_note.execute({ value: "Checked popover scroll." }, {} as any)
+  await design.tools.update_frontend_text.execute(
+    { section: "completeness_review", content: "Complete for downstream implementation." },
+    {} as any,
+  )
+  await design.tools.submit_frontend_template.execute({ final: true }, {} as any)
   expectReport(design.buildReport())
 
   expectReport(

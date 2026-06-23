@@ -32,8 +32,8 @@ Deep research workflow:
 - Never call another agent yourself; subpage_research_tasks are advisory work items, not next-tool commands.
 
 Output contract:
-- Build the brief with small registration tools, then call submit_research_brief exactly once with final=true when finished.
-- Register scope, summary, evidence_index, facts, inferences, problem_statements, user_needs, constraints, document_outline, subpage_research_tasks, bundle sections, evidence notes, citation map, and open_questions before finalizing.
-- Do not submit raw markdown or JSON documents as string fields. Use register_research_bundle_section with short single-line points; split multiline notes into separate array items. The host will render those sections into research-bundle.md and serialize evidence_notes / citation_map into JSON files.
+- Build the brief with small `update_*` tools, then call submit_research_brief exactly once with final=true when finished. If finalization reports missing fragments, call the listed `update_*` tools instead of retrying a giant payload.
+- Update scope, summary, evidence_index, facts, inferences, problem_statements, user_needs, constraints, document_outline, subpage_research_tasks, bundle sections, evidence notes, citation map, and open_questions before finalizing.
+- Do not submit raw markdown or JSON documents as string fields. Use update_research_bundle_section with short single-line points; split multiline notes into separate array items. The host will render those sections into research-bundle.md and serialize evidence_notes / citation_map into JSON files.
 - Use fact_check_items only for factual claims in your own final report that you did not verify through tools.
 - Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes.

@@ -534,6 +534,79 @@ export const ToolVisualValidationEvidenceSchema = z.object({
   review_summary: z.string().min(1),
 }).strict()
 
+export const FrontendTemplateSubmitSchema = z
+  .object({
+    final: z.literal(true).describe("Explicit confirmation that all frontend template fragments are registered."),
+    fact_check_items: FactCheckItemListSchema.default([]),
+  })
+  .strict()
+
+export const FrontendTemplateBasicsToolInputSchema = z
+  .object({
+    design_system: z.string().min(1),
+    tech_stack: z.array(z.string().min(1)).min(1),
+    final_acceptance_mode: z.enum(["visual_baseline_allowed", "maintainable_replacement_required"]),
+  })
+  .strict()
+
+export const FrontendTemplateMarkdownSectionNameSchema = z.enum([
+  "frontend_template",
+  "fillable_modules",
+  "component_inventory",
+  "quality_project_contract",
+  "material_inventory",
+  "visual_consistency_contract",
+  "ui_data_contract",
+  "completeness_review",
+])
+
+export const FrontendTemplateMarkdownSectionToolInputSchema = z
+  .object({
+    section: FrontendTemplateMarkdownSectionNameSchema,
+    content: z.string().min(1),
+  })
+  .strict()
+
+export const FrontendTemplateCompactItemTargetSchema = z.enum([
+  "frontend_template_sections",
+  "fillable_module_items",
+  "quality_project_items",
+  "visual_consistency_items",
+  "ui_data_contract_items",
+])
+
+export const FrontendTemplateCompactItemToolInputSchema = z
+  .object({
+    target: FrontendTemplateCompactItemTargetSchema,
+    item: ToolCompactTemplateItemSchema,
+  })
+  .strict()
+
+export const FrontendProjectToolInputSchema = z
+  .object({
+    status: z.enum(["created", "not_created", "blocked"]).default("not_created"),
+    role: z
+      .enum(["source_baseline_input", "implementation_target", "visual_baseline_input", "blocked"])
+      .default("source_baseline_input"),
+    project_root: z.string().default(""),
+    source_package: z.string().default(""),
+    entrypoints: z
+      .array(z.string().min(1))
+      .default([])
+      .describe(
+        "Role-specific entrypoint paths. For role=implementation_target, every item must be a real project-root-relative file under project_root. For role=visual_baseline_input, name the visual-html-skeleton files and validation artifacts. Do not put .opencorvus report paths or prose here.",
+      ),
+    generation_tool: z.string().default(""),
+    notes: z.array(z.string().min(1)).default([]),
+  })
+  .strict()
+
+export const FrontendTemplateStringItemToolInputSchema = z
+  .object({
+    value: z.string().min(1),
+  })
+  .strict()
+
 export const FrontendTemplateToolInputSchema = z.object({
   design_system: z.string().min(1),
   tech_stack: z.array(z.string().min(1)).min(1),
@@ -550,24 +623,7 @@ export const FrontendTemplateToolInputSchema = z.object({
   implementation_phase_outcomes: z.array(ToolImplementationPhaseOutcomeSchema).default([]),
   material_inventory: z.string().default(""),
   material_inventory_items: z.array(ToolMaterialInventoryItemSchema).min(1),
-  frontend_project: z
-    .object({
-      status: z.enum(["created", "not_created", "blocked"]).default("not_created"),
-      role: z
-        .enum(["source_baseline_input", "implementation_target", "visual_baseline_input", "blocked"])
-        .default("source_baseline_input"),
-      project_root: z.string().default(""),
-      source_package: z.string().default(""),
-      entrypoints: z
-        .array(z.string().min(1))
-        .default([])
-        .describe(
-          "Role-specific entrypoint paths. For role=implementation_target, every item must be a real project-root-relative file under project_root. For role=visual_baseline_input, name the visual-html-skeleton files and validation artifacts. Do not put .opencorvus report paths or prose here.",
-        ),
-      generation_tool: z.string().default(""),
-      notes: z.array(z.string().min(1)).default([]),
-    })
-    .strict()
+  frontend_project: FrontendProjectToolInputSchema
     .default({
       status: "not_created",
       role: "source_baseline_input",

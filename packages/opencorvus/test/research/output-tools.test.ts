@@ -15,15 +15,15 @@ function callTool(tools: Record<string, any>, name: string, input: unknown): Pro
 
 async function registerMinimalBrief(kit = createResearchOutputTools()) {
   const { tools } = kit
-  await callTool(tools, "set_research_scope", {
+  await callTool(tools, "update_research_scope", {
     user_goal: "Prepare PRD input",
     deliverable_type: "prd",
     audience: "product",
     explicit_non_goals: [],
     assumed_non_goals: [],
   })
-  await callTool(tools, "set_research_summary", { summary: "Research summary." })
-  await callTool(tools, "register_research_evidence", {
+  await callTool(tools, "update_research_summary", { summary: "Research summary." })
+  await callTool(tools, "update_research_evidence", {
     id: "ev_1",
     kind: "web",
     pointer: "https://example.com",
@@ -33,43 +33,43 @@ async function registerMinimalBrief(kit = createResearchOutputTools()) {
     excerpt: "A compact excerpt.",
     volatile: false,
   })
-  await callTool(tools, "register_research_fact", { id: "fact_1", statement: "A fact.", evidence_ids: ["ev_1"] })
-  await callTool(tools, "register_research_inference", {
+  await callTool(tools, "update_research_fact", { id: "fact_1", statement: "A fact.", evidence_ids: ["ev_1"] })
+  await callTool(tools, "update_research_inference", {
     id: "inf_1",
     inference: "An inference.",
     based_on_fact_ids: ["fact_1"],
     confidence: "medium",
   })
-  await callTool(tools, "register_research_problem", { id: "prob_1", statement: "A problem.", fact_ids: ["fact_1"] })
-  await callTool(tools, "register_research_need", { id: "need_1", need: "A need.", fact_ids: ["fact_1"] })
-  await callTool(tools, "register_research_constraint", {
+  await callTool(tools, "update_research_problem", { id: "prob_1", statement: "A problem.", fact_ids: ["fact_1"] })
+  await callTool(tools, "update_research_need", { id: "need_1", need: "A need.", fact_ids: ["fact_1"] })
+  await callTool(tools, "update_research_constraint", {
     id: "con_1",
     constraint: "A constraint.",
     fact_ids: ["fact_1"],
   })
-  await callTool(tools, "register_research_document_section", {
+  await callTool(tools, "update_research_document_section", {
     id: "sec_1",
     title: "Section",
     purpose: "Purpose",
     evidence_ids: ["ev_1"],
   })
-  await callTool(tools, "register_research_open_question", {
+  await callTool(tools, "update_research_open_question", {
     id: "oq_1",
     question: "A question?",
     blocking: false,
     related_fact_ids: ["fact_1"],
   })
-  await callTool(tools, "register_research_bundle_section", {
+  await callTool(tools, "update_research_bundle_section", {
     title: "Evidence Index",
     evidence_ids: ["ev_1"],
     points: ['Quoted label: "Economy overview".'],
   })
-  await callTool(tools, "register_research_evidence_note", {
+  await callTool(tools, "update_research_evidence_note", {
     evidence_id: "ev_1",
     observations: ['The source says "GDP growth".'],
     artifact_refs: ["source-ir/content-model.json"],
   })
-  await callTool(tools, "register_research_citation", {
+  await callTool(tools, "update_research_citation", {
     claim_id: "fact_1",
     evidence_ids: ["ev_1"],
     pointer: "research-bundle.md#evidence-index",
@@ -80,11 +80,11 @@ async function registerMinimalBrief(kit = createResearchOutputTools()) {
 
 async function registerWebpageContract(kit: ReturnType<typeof createResearchOutputTools>) {
   const { tools } = kit
-  await callTool(tools, "set_webpage_contract_source", {
+  await callTool(tools, "update_webpage_contract_source", {
     source_url: "https://example.com/markets/world-economy/",
     reference_image_evidence_ids: [],
   })
-  await callTool(tools, "register_webpage_functional_surface", {
+  await callTool(tools, "update_webpage_functional_surface", {
     id: "surface_economic_trends",
     title: "Economic trends",
     user_visible_behavior: "Shows an inflation map, GDP growth list, and economic metric cards.",
@@ -92,7 +92,7 @@ async function registerWebpageContract(kit: ReturnType<typeof createResearchOutp
     required_interactions: ["Tab navigation remains selectable when evidence shows it."],
     evidence_ids: ["ev_1"],
   })
-  await callTool(tools, "register_webpage_visual_layout", {
+  await callTool(tools, "update_webpage_visual_layout", {
     id: "layout_desktop_economic_trends",
     viewport: "desktop",
     region: "Economic trends",
@@ -100,32 +100,32 @@ async function registerWebpageContract(kit: ReturnType<typeof createResearchOutp
     spacing_and_alignment: "Cards align to the source grid and keep extracted section spacing.",
     evidence_ids: ["ev_1"],
   })
-  await callTool(tools, "register_webpage_style_requirement", {
+  await callTool(tools, "update_webpage_style_requirement", {
     id: "style_cards",
     token_or_selector: ".card-_bHcdE9E",
     requirement: "Use source-backed card border, radius, padding, and typography.",
     evidence_ids: ["ev_1"],
   })
-  await callTool(tools, "register_webpage_interaction_state", {
+  await callTool(tools, "update_webpage_interaction_state", {
     id: "state_tabs_selected",
     component: "Overview tab",
     state: "selected",
     behavior: "Selected tab is visually distinct and uses the source tab style.",
     evidence_ids: ["ev_1"],
   })
-  await callTool(tools, "register_webpage_data_inventory", {
+  await callTool(tools, "update_webpage_data_inventory", {
     id: "data_gdp_growth",
     surface: "GDP growth table",
     content_contract: "Rows include country, GDP growth, nominal GDP, unit, and flag/logo.",
     evidence_ids: ["ev_1"],
   })
-  await callTool(tools, "register_webpage_fidelity_acceptance", {
+  await callTool(tools, "update_webpage_fidelity_acceptance", {
     id: "accept_first_viewport",
     target: "Desktop first viewport",
     criterion: "Screenshot contains source header, title, map, table, and cards in the same visual order.",
     evidence_ids: ["ev_1"],
   })
-  await callTool(tools, "register_webpage_fidelity_risk", {
+  await callTool(tools, "update_webpage_fidelity_risk", {
     id: "risk_runtime_css",
     risk: "Runtime-generated CSS selector dependencies may not survive semantic reshaping.",
     impact: "Visual fidelity can degrade if component structure diverges from source evidence.",
@@ -166,39 +166,53 @@ describe("research output tools", () => {
 
   test("submit_research_brief rejects incomplete collectors without finalizing", async () => {
     const kit = createResearchOutputTools()
-    await callTool(kit.tools, "set_research_summary", { summary: "Only a summary." })
+    await callTool(kit.tools, "update_research_summary", { summary: "Only a summary." })
 
     const result = await callTool(kit.tools, "submit_research_brief", { final: true })
 
-    expect(result).toContain("incomplete or malformed")
+    expect(result).toContain("MISSING_RESEARCH_RESULT")
+    expect(result).toContain("update_research_scope")
+    expect(result).toContain("update_research_bundle_section")
     expect(kit.getCollector().finalized).toBe(false)
     expect(kit.getCollector().draft).toBeUndefined()
   })
 
-  test("fact-reference registration tools reject unknown fact ids before final submit", async () => {
+  test("inspect_research_result_status reports missing update calls without finalizing", async () => {
+    const kit = createResearchOutputTools({ expectedWebpageSourceUrl: "https://example.com/markets/world-economy/" })
+    await callTool(kit.tools, "update_research_summary", { summary: "Only a summary." })
+
+    const status = await callTool(kit.tools, "inspect_research_result_status", {})
+
+    expect(status).toContain("RESEARCH_RESULT_STATUS: incomplete")
+    expect(status).toContain("update_research_scope")
+    expect(status).toContain("update_webpage_contract_source")
+    expect(kit.getCollector().finalized).toBe(false)
+  })
+
+  test("fact-reference update tools reject unknown fact ids before final submit", async () => {
     const cases = [
       {
-        tool: "register_research_inference",
+        tool: "update_research_inference",
         input: { id: "inf_bad", inference: "An inference.", based_on_fact_ids: ["risk_api_illusion", "fact_1"] },
         collectorKey: "inferences",
       },
       {
-        tool: "register_research_problem",
+        tool: "update_research_problem",
         input: { id: "prob_bad", statement: "A problem with stale risk ids.", fact_ids: ["risk_api_illusion", "fact_1"] },
         collectorKey: "problem_statements",
       },
       {
-        tool: "register_research_need",
+        tool: "update_research_need",
         input: { id: "need_bad", need: "A need with stale risk ids.", fact_ids: ["risk_api_illusion", "fact_1"] },
         collectorKey: "user_needs",
       },
       {
-        tool: "register_research_constraint",
+        tool: "update_research_constraint",
         input: { id: "constraint_bad", constraint: "A constraint.", fact_ids: ["risk_api_illusion", "fact_1"] },
         collectorKey: "constraints",
       },
       {
-        tool: "register_research_open_question",
+        tool: "update_research_open_question",
         input: { id: "question_bad", question: "An open question.", related_fact_ids: ["risk_api_illusion", "fact_1"] },
         collectorKey: "open_questions",
       },
@@ -206,7 +220,7 @@ describe("research output tools", () => {
 
     for (const item of cases) {
       const kit = createResearchOutputTools()
-      await callTool(kit.tools, "register_research_fact", {
+      await callTool(kit.tools, "update_research_fact", {
         id: "fact_1",
         statement: "A registered fact.",
         evidence_ids: ["ev_1"],
@@ -239,7 +253,7 @@ describe("research output tools", () => {
 
   test("bundle registration rejects embedded newlines before submit", () => {
     const kit = createResearchOutputTools()
-    const parsed = kit.tools.register_research_bundle_section.inputSchema.safeParse({
+    const parsed = kit.tools.update_research_bundle_section.inputSchema.safeParse({
       title: "Evidence Index",
       evidence_ids: ["ev_1"],
       points: ["This point contains an embedded newline\ninstead of a separate array item."],
@@ -265,7 +279,7 @@ describe("research output tools", () => {
       createResearchOutputTools({ expectedWebpageSourceUrl: "https://example.com/markets/world-economy/" }),
     )
 
-    const result = await callTool(kit.tools, "set_webpage_contract_source", {
+    const result = await callTool(kit.tools, "update_webpage_contract_source", {
       source_url: "https://example.com/other-page/",
       reference_image_evidence_ids: [],
     })
@@ -279,7 +293,7 @@ describe("research output tools", () => {
     const kit = await registerMinimalBrief()
 
     await expect(
-      callTool(kit.tools, "set_webpage_contract_source", {
+      callTool(kit.tools, "update_webpage_contract_source", {
         source_url: "file:///tmp/reference.html",
         reference_image_evidence_ids: [],
       }),
@@ -292,7 +306,7 @@ describe("research output tools", () => {
     const kit = await registerMinimalBrief()
 
     await expect(
-      callTool(kit.tools, "set_webpage_contract_source", {
+      callTool(kit.tools, "update_webpage_contract_source", {
         source_url: "https://example.com/markets/world-economy/",
         sourceUrl: "https://example.com/other-page/",
         reference_image_evidence_ids: [],
@@ -305,7 +319,7 @@ describe("research output tools", () => {
   test("submit_research_brief rejects webpage contract references to unknown evidence", async () => {
     const kit = await registerMinimalBrief()
     await registerWebpageContract(kit)
-    await callTool(kit.tools, "register_webpage_visual_layout", {
+    await callTool(kit.tools, "update_webpage_visual_layout", {
       id: "layout_desktop_economic_trends",
       viewport: "desktop",
       region: "Economic trends",
@@ -323,7 +337,7 @@ describe("research output tools", () => {
 
   test("submit_research_brief rejects cited subpage tasks with unknown evidence", async () => {
     const kit = await registerMinimalBrief()
-    await callTool(kit.tools, "register_subpage_research_task", {
+    await callTool(kit.tools, "update_subpage_research_task", {
       id: "subpage_1",
       parent_url: "https://example.com",
       url: "https://example.com/docs/api",
