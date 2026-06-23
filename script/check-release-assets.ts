@@ -2,7 +2,7 @@
 
 import fs from "fs"
 import path from "path"
-import { artifactExecutableName } from "../packages/opencorvus/script/build-artifact"
+import { artifactExecutableName, artifactRipgrepExecutableName } from "../packages/opencorvus/script/build-artifact"
 
 const args = process.argv.slice(2)
 const mode = args[0]
@@ -90,6 +90,7 @@ if (mode === "cli") {
     const ui = path.join(root, "ui")
     if (!exists(root)) throw new Error(`Missing CLI platform directory: ${root}`)
     requireFile(path.join(root, artifactExecutableName(platform)))
+    requireFile(path.join(root, "bin", artifactRipgrepExecutableName(platform)))
     requireUiBundle(ui)
     if (requireArchives) {
       const archive = platform.startsWith("linux")

@@ -92,8 +92,6 @@ if (!Script.preview) {
     "license=('MIT')",
     "provides=('opencorvus')",
     "conflicts=('opencorvus')",
-    "depends=('ripgrep')",
-    "",
     `source_aarch64=("\${pkgname}_\${pkgver}_aarch64.tar.gz::https://github.com/yangheng95/opencorvus/releases/download/v\${pkgver}\${_subver}/opencorvus-linux-arm64.tar.gz")`,
     `sha256sums_aarch64=('${arm64Sha}')`,
 
@@ -134,8 +132,6 @@ if (!Script.preview) {
     `  desc "The AI coding agent built for the terminal."`,
     `  homepage "https://github.com/yangheng95/opencorvus"`,
     `  version "${Script.version.split("-")[0]}"`,
-    "",
-    `  depends_on "ripgrep"`,
     "",
     "  on_macos do",
     "    if Hardware::CPU.intel?",

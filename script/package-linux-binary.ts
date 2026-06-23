@@ -5,10 +5,10 @@
  * This script must run on a Linux x64 host, including WSL. It builds the
  * overlay UI (User Interface), generates a temporary Bun file-embedding
  * module, compiles the native and baseline Linux overlay-server executables,
- * then copies the executable and required native runtime node_modules into a
- * bundle directory. The executable is not a standalone single-file artifact:
- * native packages such as sharp and Playwright must remain colocated in the
- * bundle directory.
+ * then copies the executable, packaged Ripgrep, and required native runtime
+ * node_modules into a bundle directory. The executable is not a standalone
+ * single-file artifact: native packages such as sharp, Playwright, and
+ * Ripgrep must remain colocated in the bundle directory.
  *
  * Output:
  *   packages/opencorvus/dist/binary/opencorvus-linux-x64/opencorvus-bundle.tar.gz

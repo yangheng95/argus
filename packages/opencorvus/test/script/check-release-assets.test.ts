@@ -47,8 +47,11 @@ async function runOverlayCheck(distDir: string, platform: string, args: string[]
 
 function seedPlatformDir(root: string, platform: string, binaryName = "opencorvus") {
   const dir = path.join(root, `opencorvus-${platform}`)
+  const rgName = platform.startsWith("windows") ? "rg.exe" : "rg"
+  fs.mkdirSync(path.join(dir, "bin"), { recursive: true })
   fs.mkdirSync(path.join(dir, "ui"), { recursive: true })
   fs.writeFileSync(path.join(dir, binaryName), "#!/usr/bin/env sh\nexit 0\n")
+  fs.writeFileSync(path.join(dir, "bin", rgName), "#!/usr/bin/env sh\nexit 0\n")
   fs.writeFileSync(path.join(dir, "ui", "index.html"), "<html></html>")
   fs.writeFileSync(path.join(dir, "ui", "app.abc.js"), "/* ui */")
   fs.writeFileSync(path.join(dir, "ui", "app.abc.css"), "/* ui */")
@@ -125,6 +128,17 @@ describe("check-release-assets cli --require-archives", () => {
     expect(res.ok).toBe(false)
     expect(res.stderr).toContain("Missing required file")
     expect(res.stderr).toContain("opencorvus")
+  })
+
+  test("rejects CLI platform directories without packaged ripgrep", async () => {
+    const dir = seedPlatformDir(workdir, "linux-x64")
+    fs.rmSync(path.join(dir, "bin", "rg"))
+
+    const res = await runCheck(workdir, [])
+
+    expect(res.ok).toBe(false)
+    expect(res.stderr).toContain("Missing required file")
+    expect(res.stderr).toContain(path.join("bin", "rg"))
   })
 
   test("validates every requested CLI variant archive", async () => {

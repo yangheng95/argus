@@ -12,13 +12,16 @@ import {
   artifactExternalModules,
   artifactHostCanProvideNodeRuntime,
   artifactPackageBaseName,
+  artifactRipgrepExecutableName,
   type ArtifactNodeRuntimeTarget,
+  type ArtifactNodeRuntimeHost,
   artifactRuntimeNodeModules,
   artifactRuntimeNodeModuleNames,
   artifactSourcemap,
   parseBuildFlavor,
 } from "../../script/build-artifact"
 import { copyRuntimeNodeModules } from "../../script/build-runtime-node-modules"
+import { copyRipgrepRuntime } from "../../script/build-runtime-binaries"
 
 function currentRuntimeTarget(): ArtifactNodeRuntimeTarget {
   const target: ArtifactNodeRuntimeTarget = { os: process.platform, arch: process.arch }
@@ -29,6 +32,15 @@ function currentRuntimeTarget(): ArtifactNodeRuntimeTarget {
 function currentBunCompileTarget(): string {
   const target = currentRuntimeTarget()
   return ["bun", target.os === "win32" ? "windows" : target.os, target.arch, target.abi].filter(Boolean).join("-")
+}
+
+function currentRuntimeHost(): ArtifactNodeRuntimeHost {
+  const target = currentRuntimeTarget()
+  return {
+    platform: target.os,
+    arch: target.arch,
+    linuxLibc: target.os === "linux" ? (target.abi ?? "glibc") : undefined,
+  }
 }
 
 describe("build-artifact", () => {
@@ -88,6 +100,59 @@ describe("build-artifact", () => {
       expect(source).toContain("artifactExecutableName(item.os)")
       expect(source).not.toContain("outfile: `dist/${name}/opencorvus`")
     }
+  })
+
+  test("ripgrep executable artifact name is platform-specific", () => {
+    expect(artifactRipgrepExecutableName("win32")).toBe("rg.exe")
+    expect(artifactRipgrepExecutableName("windows-x64")).toBe("rg.exe")
+    expect(artifactRipgrepExecutableName("linux")).toBe("rg")
+    expect(artifactRipgrepExecutableName("darwin")).toBe("rg")
+  })
+
+  test("build scripts copy ripgrep into the packaged runtime bin directory", async () => {
+    const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-ripgrep-runtime-"))
+    const sourceDir = await mkdtemp(resolve(tmpdir(), "opencorvus-ripgrep-source-"))
+    try {
+      const target = currentRuntimeTarget()
+      const source = resolve(sourceDir, artifactRipgrepExecutableName(target.os))
+      await writeFile(source, "")
+
+      const destination = await copyRipgrepRuntime({
+        target,
+        host: currentRuntimeHost(),
+        outdir,
+        env: {
+          PATH: sourceDir,
+          PATHEXT: ".EXE",
+        },
+      })
+
+      expect(destination).toBe(resolve(outdir, "bin", artifactRipgrepExecutableName(target.os)))
+      expect(existsSync(destination)).toBe(true)
+    } finally {
+      await rm(outdir, { recursive: true, force: true })
+      await rm(sourceDir, { recursive: true, force: true })
+    }
+  })
+
+  test("build scripts reject incompatible host ripgrep binaries", async () => {
+    await expect(
+      copyRipgrepRuntime({
+        target: { os: "linux", arch: "arm64" },
+        host: { platform: "win32", arch: "x64" },
+        outdir: resolve(tmpdir(), "unused-opencorvus-ripgrep-runtime"),
+        env: {},
+      }),
+    ).rejects.toThrow("Cannot copy ripgrep")
+  })
+
+  test("packaging scripts do not declare system ripgrep as a runtime dependency", () => {
+    const publishSource = readFileSync(resolve(import.meta.dir, "../../script/publish.ts"), "utf8")
+    const dockerfile = readFileSync(resolve(import.meta.dir, "../../Dockerfile"), "utf8")
+
+    expect(publishSource).not.toContain("depends=('ripgrep')")
+    expect(publishSource).not.toContain('depends_on "ripgrep"')
+    expect(dockerfile).not.toContain("  ripgrep")
   })
 
   test("package-local builds overlay-server sidecars before Docker overlay packaging", () => {

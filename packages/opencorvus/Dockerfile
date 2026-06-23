@@ -22,7 +22,6 @@ RUN apt-get update \
   libstdc++6 \
   nodejs \
   npm \
-  ripgrep \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
@@ -34,9 +33,11 @@ RUN rm -rf /opt/opencorvus \
   && mkdir -p /opt/opencorvus /var/lib/opencorvus /workspace \
   && tar -xzf /tmp/opencorvus-bundle.tar.gz -C /opt/opencorvus \
   && rm /tmp/opencorvus-bundle.tar.gz \
-  && chmod +x /opt/opencorvus/opencorvus /opt/opencorvus/browser-mcp-node/node /usr/local/bin/opencorvus-container-entrypoint \
+  && chmod +x /opt/opencorvus/opencorvus /opt/opencorvus/bin/rg /opt/opencorvus/browser-mcp-node/node /usr/local/bin/opencorvus-container-entrypoint \
   && chmod 0777 /var/lib/opencorvus /workspace \
   && /opt/opencorvus/opencorvus --version \
+  && test -x /opt/opencorvus/bin/rg \
+  && /opt/opencorvus/bin/rg --version \
   && test -x /opt/opencorvus/browser-mcp-node/node \
   && test -f /opt/opencorvus/browser-mcp-node/browser.mjs \
   && test -f /opt/opencorvus/browser-mcp-node/node_modules/playwright/index.js \

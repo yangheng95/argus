@@ -10,6 +10,7 @@ import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
 import { FileTime } from "@/file/time"
+import { Ripgrep } from "@/file/ripgrep"
 
 const READ_FILE_MAX_LINE_CHARS = 1200
 const INLINE_BASE64_DATA_URI_RE = /data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=_-]+)/g
@@ -276,9 +277,10 @@ export function createCodebaseTools(projectDir?: string) {
         const target = searchPath ? safePath(searchPath) : dir
         if (!target) return "Error: search path is outside the project boundary."
         try {
+          const rgPath = await Ripgrep.filepath()
           const proc = Bun.spawn(
             [
-              "rg",
+              rgPath,
               "--no-heading",
               "--line-number",
               "--max-columns",
@@ -304,8 +306,8 @@ export function createCodebaseTools(projectDir?: string) {
           const trimmed = sanitizeInlineDataUrisForPrompt(output.text.trim())
           if (!trimmed) return "No matches found."
           return output.limited ? `${trimmed}\n(limited to ${limit} results)` : trimmed
-        } catch {
-          return "No matches found (or ripgrep not available)."
+        } catch (e) {
+          return `Error searching code: ${e instanceof Error ? e.message : String(e)}`
         }
       },
     }),

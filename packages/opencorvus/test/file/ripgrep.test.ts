@@ -5,6 +5,13 @@ import { tmpdir } from "../fixture/fixture"
 import { Ripgrep } from "../../src/file/ripgrep"
 
 describe("file.ripgrep", () => {
+  test("engine codebase search uses the central ripgrep runtime resolver", async () => {
+    const source = await Bun.file(path.resolve(import.meta.dir, "../../src/engine/codebase-tools.ts")).text()
+
+    expect(source).toContain("await Ripgrep.filepath()")
+    expect(source).not.toContain('"rg",')
+  })
+
   test("defaults to include hidden", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

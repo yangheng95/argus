@@ -1,17 +1,10 @@
-import { which } from "@/util/which"
-// Ripgrep utility functions
 import path from "path"
-import { Global } from "../global"
 import fs from "fs/promises"
 import z from "zod"
-import { NamedError } from "@opencorvus-ai/util/error"
 import { lazy } from "../util/lazy"
-import { Filesystem } from "../util/filesystem"
 import { Process } from "../util/process"
-import { text } from "node:stream/consumers"
-
-import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
 import { Log } from "@/util/log"
+import { resolveRipgrepRuntime } from "@/runtime/ripgrep"
 
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })
@@ -91,141 +84,9 @@ export namespace Ripgrep {
   export type Begin = z.infer<typeof Begin>
   export type End = z.infer<typeof End>
   export type Summary = z.infer<typeof Summary>
-  const PLATFORM = {
-    "arm64-darwin": { platform: "aarch64-apple-darwin", extension: "tar.gz" },
-    "arm64-linux": {
-      platform: "aarch64-unknown-linux-gnu",
-      extension: "tar.gz",
-    },
-    "x64-darwin": { platform: "x86_64-apple-darwin", extension: "tar.gz" },
-    "x64-linux": { platform: "x86_64-unknown-linux-musl", extension: "tar.gz" },
-    "x64-win32": { platform: "x86_64-pc-windows-msvc", extension: "zip" },
-  } as const
-
-  export const ExtractionFailedError = NamedError.create(
-    "RipgrepExtractionFailedError",
-    z.object({
-      filepath: z.string(),
-      stderr: z.string(),
-    }),
-  )
-
-  export const UnsupportedPlatformError = NamedError.create(
-    "RipgrepUnsupportedPlatformError",
-    z.object({
-      platform: z.string(),
-    }),
-  )
-
-  export const DownloadFailedError = NamedError.create(
-    "RipgrepDownloadFailedError",
-    z.object({
-      url: z.string(),
-      status: z.number(),
-    }),
-  )
-
-  async function findFile(root: string, name: string): Promise<string | undefined> {
-    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
-    for (const entry of entries) {
-      const full = path.join(root, entry.name)
-      if (entry.isFile() && entry.name === name) return full
-      if (!entry.isDirectory()) continue
-      const nested = await findFile(full, name)
-      if (nested) return nested
-    }
-  }
-
   const state = lazy(async () => {
-    const system = which("rg")
-    if (system) {
-      const stat = await fs.stat(system).catch(() => undefined)
-      if (stat?.isFile()) return { filepath: system }
-      log.warn("bun.which returned invalid rg path", { filepath: system })
-    }
-    const filepath = path.join(Global.Path.bin, "rg" + (process.platform === "win32" ? ".exe" : ""))
-
-    if (!(await Filesystem.exists(filepath))) {
-      const platformKey = `${process.arch}-${process.platform}` as keyof typeof PLATFORM
-      const config = PLATFORM[platformKey]
-      if (!config) throw new UnsupportedPlatformError({ platform: platformKey })
-
-      const version = "14.1.1"
-      const filename = `ripgrep-${version}-${config.platform}.${config.extension}`
-      const url = `https://github.com/BurntSushi/ripgrep/releases/download/${version}/${filename}`
-
-      const response = await fetch(url)
-      if (!response.ok) throw new DownloadFailedError({ url, status: response.status })
-
-      const arrayBuffer = await response.arrayBuffer()
-      const archivePath = path.join(Global.Path.bin, filename)
-      await Filesystem.write(archivePath, Buffer.from(arrayBuffer))
-      if (config.extension === "tar.gz") {
-        const extractDir = await fs.mkdtemp(path.join(Global.Path.bin, "ripgrep-"))
-        const args = ["tar", "-xzf", archivePath, "-C", extractDir]
-
-        const proc = Process.spawn(args, {
-          cwd: Global.Path.bin,
-          stderr: "pipe",
-          stdout: "pipe",
-        })
-        const exit = await proc.exited
-        if (exit !== 0) {
-          const stderr = proc.stderr ? await text(proc.stderr) : ""
-          throw new ExtractionFailedError({
-            filepath,
-            stderr,
-          })
-        }
-        const extracted = await findFile(extractDir, "rg")
-        if (!extracted) {
-          throw new ExtractionFailedError({
-            filepath: archivePath,
-            stderr: "rg binary not found after tar extraction",
-          })
-        }
-        await fs.copyFile(extracted, filepath)
-        await fs.rm(extractDir, { recursive: true, force: true }).catch(() => {})
-      }
-      if (config.extension === "zip") {
-        const zipFileReader = new ZipReader(new BlobReader(new Blob([arrayBuffer])))
-        const entries = await zipFileReader.getEntries()
-        let rgEntry: any
-        for (const entry of entries) {
-          if (entry.filename.endsWith("rg.exe")) {
-            rgEntry = entry
-            break
-          }
-        }
-
-        if (!rgEntry) {
-          throw new ExtractionFailedError({
-            filepath: archivePath,
-            stderr: "rg.exe not found in zip archive",
-          })
-        }
-
-        const rgBlob = await rgEntry.getData(new BlobWriter())
-        if (!rgBlob) {
-          throw new ExtractionFailedError({
-            filepath: archivePath,
-            stderr: "Failed to extract rg.exe from zip archive",
-          })
-        }
-        await Filesystem.write(filepath, Buffer.from(await rgBlob.arrayBuffer()))
-        await zipFileReader.close()
-      }
-      await fs.unlink(archivePath)
-      if (!platformKey.endsWith("-win32")) {
-        await fs.chmod(filepath, 0o755).catch((error) => {
-          log.warn("failed to chmod ripgrep binary", { filepath, error })
-        })
-      }
-    }
-
-    return {
-      filepath,
-    }
+    const runtime = await resolveRipgrepRuntime()
+    return { filepath: runtime.filepath }
   })
 
   export async function filepath() {

@@ -84,10 +84,12 @@ describe("package-linux-binary", () => {
       await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "browser-mcp-node", "node_modules", "playwright"), {
         recursive: true,
       })
+      await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "bin"), { recursive: true })
       await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "node_modules", "sharp"), { recursive: true })
       await fs.promises.mkdir(path.join(artifact.sourceBundleDir, "ui"), { recursive: true })
       await fs.promises.writeFile(artifact.source, "")
       await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "package.json"), "{}")
+      await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "bin", "rg"), "")
       await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "node_modules", "sharp", "package.json"), "{}")
       await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "node"), "")
       await fs.promises.writeFile(path.join(artifact.sourceBundleDir, "browser-mcp-node", "browser.mjs"), "")
@@ -101,6 +103,7 @@ describe("package-linux-binary", () => {
 
       expect(fs.existsSync(artifact.output)).toBe(true)
       expect(fs.existsSync(path.join(artifact.bundleDir, "package.json"))).toBe(true)
+      expect(fs.existsSync(path.join(artifact.bundleDir, "bin", "rg"))).toBe(true)
       expect(fs.existsSync(path.join(artifact.bundleDir, "node_modules", "sharp", "package.json"))).toBe(true)
       expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "node"))).toBe(true)
       expect(fs.existsSync(path.join(artifact.bundleDir, "browser-mcp-node", "browser.mjs"))).toBe(true)
@@ -200,6 +203,9 @@ describe("package-linux-binary", () => {
     expect(dockerfile).toContain("libstdc++6")
     expect(dockerfile).toContain("nodejs")
     expect(dockerfile).toContain("npm")
+    expect(dockerfile).not.toContain("ripgrep")
+    expect(dockerfile).toContain("test -x /opt/opencorvus/bin/rg")
+    expect(dockerfile).toContain("/opt/opencorvus/bin/rg --version")
     expect(dockerfile).toContain("test -x /opt/opencorvus/browser-mcp-node/node")
     expect(dockerfile).toContain("test -f /opt/opencorvus/browser-mcp-node/browser.mjs")
     expect(dockerfile).not.toContain("test -f /opt/opencorvus/browser-mcp-node/stdio.mjs")
