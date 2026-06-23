@@ -1349,19 +1349,19 @@ const FrontendResearchReasonField = z
   .string()
   .min(1)
   .describe(
-    "Why frontend_research should publish source-backed webpage investigation packets now. Name the page scope and the downstream requirement/architect/build coverage need. This is not the frontend implementation template; use frontend_design for that.",
+    "Why frontend_research should publish source-backed webpage investigation packets now. Name the page scope and the downstream requirement/architect/build coverage need. This is not the frontend implementation template; use frontend_design for that. Do not use a new focus on an already-briefed source URL as a reason for a fresh frontend_research call.",
   )
 const FrontendResearchSourceUrlsField = z
   .array(z.string().min(1).refine(isHttpWebpageUrl, "frontend_research source_urls entries must be HTTP(S) webpage URLs"))
   .min(1)
   .max(1)
   .describe(
-    "Fresh frontend_research source page URLs. Use the plural field `source_urls`; do not send `url`, `source_url`, or frontend_design's `urls`. Provide exactly one HTTP(S) webpage URL per fresh call so the host prepares rendered evidence for that page and the agent partitions it into source-backed functional, visual, interaction, content, responsive, and fidelity work packets. Call frontend_research separately for additional pages.",
+    "Fresh frontend_research source page URLs. Use the plural field `source_urls`; do not send `url`, `source_url`, or frontend_design's `urls`. Provide exactly one HTTP(S) webpage URL per fresh call so the host prepares rendered evidence for that page and the agent partitions it into source-backed functional, visual, interaction, content, responsive, and fidelity work packets. Call frontend_research separately only for additional page URLs. Same URL plus a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope.",
   )
 const FrontendResearchFocusField = z
   .string()
   .optional()
-  .describe("Optional fresh-session focus for the frontend_research agent, such as a region, interaction, or coverage concern. Omit during continuation recovery.")
+  .describe("Optional fresh-session focus for the frontend_research agent on a not-yet-briefed source URL. Focus narrows the first brief only; it cannot turn an already-briefed source URL into a new source-page scope. Omit during continuation recovery.")
 
 const FrontendResearchInputSchema = z
   .object({})
@@ -5746,7 +5746,7 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL webpage/UI investigation publisher. Source-page-scoped brief producer: pass exactly one source page URL per fresh call, let the host prepare rendered evidence for that page, persist the brief, and call frontend_research separately for additional pages. Do not reuse frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after the same page scope's frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, risks, and the Page Skeleton Blueprint that frontend_design consumes as page information architecture. It persists a frontend_research_brief/webpage_contract artifact built from small update_* result tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+        "OPTIONAL webpage/UI investigation publisher. Source-page-scoped brief producer: pass exactly one source page URL per fresh call, let the host prepare rendered evidence for that page, persist the brief, and call frontend_research separately only for additional page URLs. Same URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope; consume the existing frontend_research_brief plus frontend_design handoff downstream instead of opening another frontend_research session. Do not reuse frontend_research as a repeated crawler, repair, retry, or implementation iteration tool after the same page scope's frontend_research_brief exists. When source URLs are supplied, the host prepares rendered webpage evidence before the frontend-research session; the agent then partitions that evidence into source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, risks, and the Page Skeleton Blueprint that frontend_design consumes as page information architecture. It persists a frontend_research_brief/webpage_contract artifact built from small update_* result tools, not a giant terminal payload. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: FrontendResearchInputSchema,
       execute: async ({ reason, source_urls, focus, continuation_artifact_id }) => {
         const task = requireTask(taskID)

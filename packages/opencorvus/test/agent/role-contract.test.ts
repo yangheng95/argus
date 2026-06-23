@@ -285,6 +285,9 @@ test("deep-research and frontend-design role descriptions keep document research
   expect(AgentRoleContract.description("frontend-research")).toContain(
     "do not reuse the same page scope as a repeatable crawler, repair, retry, or implementation iteration agent",
   )
+  expect(AgentRoleContract.description("frontend-research")).toContain(
+    "Same source URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same page scope",
+  )
 })
 
 test("public workflow docs and live prompt describe the current model only", async () => {

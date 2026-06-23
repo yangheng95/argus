@@ -99,6 +99,28 @@ materialize the visual template and source package, but it must not be invoked
 merely to discover page information architecture or raw webpage evidence before
 frontend-research publishes the blueprint.
 
+## Follow-up: Same-URL Focus Rerun
+
+Task `tsk_ef3d14bc0001Q7vgzoeDtiC7Of` reproduced the inverse ordering bug after
+frontend-research and frontend-design had both succeeded. The orchestrator
+created three fresh `frontend_research` children for the same URL at
+`2026-06-23T10:14:23Z` after reading the first brief's fidelity risks:
+
+- mobile/tablet viewport evidence
+- hover/focus/active state evidence
+- world-map SVG/path/tooltip evidence
+
+The orchestrator reasoning quoted the correct rule that existing
+frontend_research briefs should only be followed by frontend_research for
+additional source page URLs, then misclassified "same URL with a different
+focus" as a possible additional page scope. That is wrong: source-page scope is
+bounded by the source URL, not by focus text. A different viewport, interaction
+state, region, component, data question, fidelity risk, or missing-detail note
+for the same URL must be routed through requirements, architect, build,
+visual_qa, or integrity using the persisted frontend_research/frontend_design
+artifacts. It must not open another frontend_research session for the same
+source page.
+
 ## Acceptance
 
 - A non-stale frontend-research brief with webpage contract becomes visible to
@@ -113,3 +135,6 @@ frontend-research publishes the blueprint.
   visible in the design/build/visual QA projections.
 - Frontend-design continuation rejects a stale recovery artifact when the
   frontend-research Page Skeleton Blueprint changes.
+- Same source URL with a new focus, viewport, interaction state, region,
+  component, data question, fidelity risk, or missing-detail note is not treated
+  as an additional frontend_research page scope after a non-stale brief exists.

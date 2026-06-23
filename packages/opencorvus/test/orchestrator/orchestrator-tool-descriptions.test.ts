@@ -142,7 +142,11 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.deep_research.description).not.toContain("use `frontend_research` instead")
     expect(tools.frontend_research.description).toContain("webpage/UI investigation publisher")
     expect(tools.frontend_research.description).toContain("exactly one source page URL per fresh call")
-    expect(tools.frontend_research.description).toContain("call frontend_research separately for additional pages")
+    expect(tools.frontend_research.description).toContain("call frontend_research separately only for additional page URLs")
+    expect(tools.frontend_research.description).toContain(
+      "Same URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
+    )
+    expect(tools.frontend_research.description).toContain("consume the existing frontend_research_brief")
     expect(tools.frontend_research.description).toContain("host prepares rendered webpage evidence")
     expect(tools.frontend_research.description).toContain("partitions that evidence into source-backed work packets")
     expect(tools.frontend_research.description).toContain("Page Skeleton Blueprint")
@@ -196,6 +200,12 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(frontendResearchJsonSchema.properties?.source_urls?.description).toContain("do not send `url`")
     expect(frontendResearchJsonSchema.properties?.source_urls?.description).toContain(
       "exactly one HTTP(S) webpage URL per fresh call",
+    )
+    expect(frontendResearchJsonSchema.properties?.source_urls?.description).toContain(
+      "Same URL plus a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
+    )
+    expect(frontendResearchJsonSchema.properties?.focus?.description).toContain(
+      "Focus narrows the first brief only",
     )
 
     expect(Object.keys(tools.frontend_design.inputSchema!.shape)).toEqual([
