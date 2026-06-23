@@ -34,7 +34,7 @@ import { layoutTokenPx } from "../utils/layout-tokens"
  * so the shared drag logic stays layout-agnostic.
  */
 export interface PaneConfig {
-  /** Element whose clientWidth bounds the whole row. */
+  /** Element whose rendered width bounds the whole row. */
   bodyId: string
   /** Left (sidebar) resize handle element id. */
   leftHandleId: string
@@ -93,6 +93,17 @@ interface PaneResizeBounds {
   min: number
   max: number
   now: number
+  handleWidth: number
+}
+
+interface PaneGeometrySnapshot {
+  bodyRect: DOMRect
+  railMin: number
+  remainingContentMin: number
+  leftHandle: number
+  leftFixed: number
+  remainingFixed: number
+  defaultSidebarWidth: number
 }
 
 const pendingPaneHandleSemantics = new Map<PaneConfig, PaneState>()
@@ -132,12 +143,6 @@ export function paneHandleWidth(node: Element | null | undefined): number {
   return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-resizer-width")) || 0
 }
 
-function paneBodyWidth(config: PaneConfig): number {
-  const body = document.getElementById(config.bodyId) as HTMLElement | null
-  if (!body) throw new Error(`Pane body element not found: ${config.bodyId}`)
-  return body.clientWidth
-}
-
 function paneHandleElement(config: PaneConfig): HTMLElement | null {
   return document.getElementById(config.leftHandleId)
 }
@@ -152,16 +157,6 @@ function renderedControlWidth(id: string): number {
 
 function renderedControlWidthSum(ids: readonly string[]): number {
   return ids.reduce((sum, id) => sum + renderedControlWidth(id), 0)
-}
-
-function paneHandleEnabled(state: PaneState, config: PaneConfig): boolean {
-  const handle = paneHandleElement(config)
-  return !state.sidebarCollapsed && paneHandleWidth(handle) > 0
-}
-
-function paneResolvedSidebarWidth(state: PaneState, config: PaneConfig): number {
-  const widths = resolvedPaneWidths(state, config)
-  return widths.sidebar
 }
 
 /**
@@ -196,6 +191,34 @@ function readPaneWidthProperty(name: string): number {
   return Number.parseFloat(getComputedStyle(paneWidthStyleScope()).getPropertyValue(name))
 }
 
+function readPaneGeometrySnapshot(config: PaneConfig): PaneGeometrySnapshot | null {
+  const body = document.getElementById(config.bodyId)
+  if (!body) return null
+  const bodyRect = body.getBoundingClientRect()
+  const remainingContentMin = config.remainingMinWidth()
+  if (!Number.isFinite(remainingContentMin) || remainingContentMin <= 0) {
+    throw new Error("Pane remaining minimum width must be a positive finite number.")
+  }
+  return {
+    bodyRect,
+    railMin: layoutTokenPx("--ui-rail-min-width"),
+    remainingContentMin,
+    leftHandle: paneHandleWidth(paneHandleElement(config)),
+    leftFixed: renderedControlWidthSum(config.leftFixedControlIds),
+    remainingFixed: renderedControlWidthSum(config.remainingFixedControlIds),
+    defaultSidebarWidth: defaultRailWidth(config),
+  }
+}
+
+function paneSidebarMax(geometry: PaneGeometrySnapshot): number {
+  const total = geometry.bodyRect.width - geometry.leftHandle - geometry.leftFixed
+  return Math.max(geometry.railMin, total - geometry.remainingFixed - geometry.remainingContentMin)
+}
+
+function resolveSidebarWidthFromGeometry(state: PaneState, geometry: PaneGeometrySnapshot): number {
+  return clampNumber(state.sidebarWidth ?? geometry.defaultSidebarWidth, geometry.railMin, paneSidebarMax(geometry))
+}
+
 /**
  * Compute the final sidebar width after overflow clamping.
  */
@@ -205,74 +228,37 @@ export function resolvedPaneWidths(
 ): {
   sidebar: number
 } {
-  const panelWidth = paneBodyWidth(config)
-  const railMin = layoutTokenPx("--ui-rail-min-width")
-  const remainingContentMin = config.remainingMinWidth()
-  if (!Number.isFinite(remainingContentMin) || remainingContentMin <= 0) {
-    throw new Error("Pane remaining minimum width must be a positive finite number.")
-  }
-
-  const leftHandle = paneHandleWidth(paneHandleElement(config))
-  const leftFixed = renderedControlWidthSum(config.leftFixedControlIds)
-  const remainingFixed = renderedControlWidthSum(config.remainingFixedControlIds)
-  const total = panelWidth - leftHandle - leftFixed
-  const railMax = Math.max(railMin, total - remainingFixed - remainingContentMin)
-  const sidebar = clampNumber(state.sidebarWidth ?? defaultRailWidth(config), railMin, railMax)
+  const geometry = readPaneGeometrySnapshot(config)
+  if (!geometry) throw new Error(`Pane body element not found: ${config.bodyId}`)
+  const sidebar = resolveSidebarWidthFromGeometry(state, geometry)
   return { sidebar: Math.round(sidebar) }
 }
 
 function paneResizeBounds(state: PaneState, config: PaneConfig): PaneResizeBounds | null {
-  const panelBody = document.getElementById(config.bodyId)
-  const bodyRect = panelBody?.getBoundingClientRect()
-  if (!bodyRect) return null
-
-  const railMin = layoutTokenPx("--ui-rail-min-width")
-  const now = paneResolvedSidebarWidth(state, config)
-  let max = bodyRect.width
-  for (let index = 0; index < 6; index += 1) {
-    const next = paneResolvedSidebarWidth(
-      {
-        ...state,
-        sidebarWidth: max,
-      },
-      config,
-    )
-    if (Math.abs(next - max) <= 1) {
-      max = next
-      break
-    }
-    max = next
-  }
-  max = Math.min(
-    max,
-    paneResolvedSidebarWidth(
-      {
-        ...state,
-        sidebarWidth: max,
-      },
-      config,
-    ),
-  )
-  max = Math.max(railMin, max)
+  const geometry = readPaneGeometrySnapshot(config)
+  if (!geometry) return null
+  const max = Math.max(geometry.railMin, paneSidebarMax(geometry))
+  const now = resolveSidebarWidthFromGeometry(state, geometry)
   return {
-    bodyRect,
-    min: Math.round(railMin),
+    bodyRect: geometry.bodyRect,
+    min: Math.round(geometry.railMin),
     max: Math.round(max),
-    now: Math.round(clampNumber(now, railMin, max)),
+    now: Math.round(clampNumber(now, geometry.railMin, max)),
+    handleWidth: Math.round(geometry.leftHandle),
   }
 }
 
 function renderPaneHandleSemantics(state: PaneState, config: PaneConfig): void {
   const handle = paneHandleElement(config)
   if (!handle) return
-  const enabled = paneHandleEnabled(state, config)
+  const bounds = state.sidebarCollapsed ? null : paneResizeBounds(state, config)
+  const enabled = !state.sidebarCollapsed && !!bounds && bounds.handleWidth > 0
   handle.hidden = state.sidebarCollapsed
   handle.dataset.disabled = String(!enabled)
   handle.tabIndex = enabled ? 0 : -1
   if (config.leftControls.length) handle.setAttribute("aria-controls", config.leftControls.join(" "))
   else handle.removeAttribute("aria-controls")
-  const bounds = enabled ? paneResizeBounds(state, config) : null
-  if (!bounds) {
+  if (!enabled || !bounds) {
     handle.removeAttribute("aria-valuemin")
     handle.removeAttribute("aria-valuemax")
     handle.removeAttribute("aria-valuenow")
@@ -409,9 +395,9 @@ function resizePaneByKeyboard(
   config: PaneConfig,
 ): void {
   const state = callbacks.getState()
-  if (!paneHandleEnabled(state, config)) return
+  if (state.sidebarCollapsed) return
   const bounds = paneResizeBounds(state, config)
-  if (!bounds) return
+  if (!bounds || bounds.handleWidth <= 0) return
   const step = Math.round(24 * currentUIScale())
   let next = bounds.now
   if (event.key === "ArrowLeft") {

@@ -330,7 +330,7 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(workspaceCss).not.toContain(".chat-plugin-activity")
   expect(workspaceCss).not.toContain(".chat-plugin-outlet")
   expect(workspaceCss).toContain('.center-workbench-view[data-open="true"][data-selected="true"]')
-  expect(workspaceCss).toContain("flex: 0 0 min(60vh, calc(480px * var(--ui-scale)))")
+  expect(workspaceCss).toContain("flex: 0 0 min(calc(var(--ui-overlay-shell-height) * 0.6), calc(480px * var(--ui-scale)))")
   expect(css).toContain("container: browser-preview / inline-size")
   expect(css).toContain(".browser-preview-command-surface")
   expect(css).toContain(".browser-preview-controls")

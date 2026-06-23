@@ -398,7 +398,7 @@ export function FileChangesView(props: FileChangesViewProps) {
     <div class="file-changes-view">
       <Show when={props.showHeading}>
         <div class="file-changes-view__heading">
-          <Icon name="file-document" />
+          <Icon name="file-document" class="file-changes-view__heading-icon" />
           <span>{t("section.files")}</span>
         </div>
       </Show>

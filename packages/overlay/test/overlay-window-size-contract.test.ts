@@ -65,12 +65,14 @@ describe("overlay window and pane size contract", () => {
     expect(tokens).toContain(
       "--ui-overlay-min-aspect-ratio: calc(var(--ui-overlay-min-width-units) / var(--ui-overlay-min-height-units))",
     )
+    expect(base).toContain("--ui-overlay-shell-height: min(")
     expect(base).toContain("width: 100vw")
     expect(base).toContain("min-width: var(--ui-overlay-min-width)")
     expect(base).toContain("min-height: var(--ui-overlay-min-height)")
     expect(base).toContain(
-      "height: min(100vh, calc(100vw * var(--ui-overlay-min-height-units) / var(--ui-overlay-min-width-units)))",
+      "calc(100vw * var(--ui-overlay-min-height-units) / var(--ui-overlay-min-width-units))",
     )
+    expect(base).toContain("height: var(--ui-overlay-shell-height)")
     expect(base).toContain("container: overlay-shell / inline-size")
     expect(workspace).toContain("@container overlay-shell (width < 1120px)")
     expect(activity).toContain("@container overlay-shell (width < 1120px)")
@@ -104,6 +106,19 @@ describe("overlay window and pane size contract", () => {
     expect(offenders).toEqual([])
   })
 
+  test("surface height clamps use the legal overlay shell instead of raw viewport height", () => {
+    const offenders = readStyleFiles()
+      .filter(({ file }) => file !== path.join("src", "styles", "cascade", "base.css"))
+      .flatMap(({ file, source }) =>
+        Array.from(source.matchAll(/\b\d+(?:\.\d+)?vh\b/g)).map((match) => ({
+          file,
+          unit: match[0],
+        })),
+      )
+
+    expect(offenders).toEqual([])
+  })
+
   test("pane and center workbench minimums are token-owned", () => {
     const pane = readOverlay("src/services/pane.ts")
     const main = readOverlay("src/main.tsx")
@@ -111,6 +126,7 @@ describe("overlay window and pane size contract", () => {
     const theme = readOverlay("src/services/theme.ts")
     const layoutFrame = readOverlay("src/utils/overlay-layout-frame.ts")
     const layoutTokens = readOverlay("src/utils/layout-tokens.ts")
+    const dialog = readOverlay("src/components/primitives/Dialog.tsx")
 
     expect(pane).toContain('import { layoutTokenPx } from "../utils/layout-tokens"')
     expect(pane).toContain('layoutTokenPx("--ui-rail-min-width")')
@@ -118,8 +134,11 @@ describe("overlay window and pane size contract", () => {
     expect(pane).toContain('leftFixedControlIds: ["solidLeftActivityToolbar"]')
     expect(pane).toContain('remainingFixedControlIds: ["solidRightActivityToolbar"]')
     expect(pane).toContain("remainingMinWidth: defaultPanelRemainingMinWidth")
-    expect(pane).toContain("const total = panelWidth - leftHandle - leftFixed")
-    expect(pane).toContain("total - remainingFixed - remainingContentMin")
+    expect(pane).toContain("function readPaneGeometrySnapshot(config: PaneConfig): PaneGeometrySnapshot | null")
+    expect(pane).toContain("const total = geometry.bodyRect.width - geometry.leftHandle - geometry.leftFixed")
+    expect(pane).toContain("total - geometry.remainingFixed - geometry.remainingContentMin")
+    expect(pane).not.toContain("function paneResolvedSidebarWidth")
+    expect(pane).not.toContain("for (let index = 0; index < 6; index += 1)")
     expect(pane).not.toContain('layoutTokenPx("--ui-chat-priority-width")')
     expect(pane).not.toContain('layoutTokenPx("--ui-sections-width")')
     expect(pane).not.toContain("120 * scale")
@@ -140,6 +159,9 @@ describe("overlay window and pane size contract", () => {
     expect(layoutTokens).toContain("return `${scale}|${containerInlineSize.toFixed(3)}`")
     expect(layoutTokens).toContain("const signature = tokenSignature(root, document.body)")
     expect(layoutTokens).not.toContain("width: window.innerWidth")
+    expect(dialog).toContain("const shellRect = document.body.getBoundingClientRect()")
+    expect(dialog).not.toContain("window.innerWidth")
+    expect(dialog).not.toContain("window.innerHeight")
     expect(workspace).toContain("max(var(--ui-workbench-panel-min-width), calc(50cqw))")
     expect(workspace).not.toContain("max(calc(280px * var(--ui-scale)), calc(50cqw))")
     expect(workspace).not.toContain("calc(50vw)")

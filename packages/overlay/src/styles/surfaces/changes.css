@@ -16,7 +16,7 @@
   font-weight: var(--ui-font-weight-strong);
 }
 
-.file-changes-view__heading .oc-icon {
+.file-changes-view__heading-icon {
   flex: none;
   color: var(--accent);
 }
@@ -386,7 +386,7 @@
 }
 
 .change-inline-diff {
-  max-height: min(46vh, calc(420px * var(--ui-scale)));
+  max-height: min(calc(var(--ui-overlay-shell-height) * 0.46), calc(420px * var(--ui-scale)));
   overflow: auto;
   border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 50%, transparent);
   background: var(--surface-inset);

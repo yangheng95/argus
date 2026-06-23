@@ -467,7 +467,7 @@
     calc(100cqw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)))
   );
   box-sizing: border-box;
-  max-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(88px * var(--ui-scale))));
+  max-height: min(calc(620px * var(--ui-scale)), calc(var(--ui-overlay-shell-height) - calc(88px * var(--ui-scale))));
   overflow: auto;
   display: grid;
   gap: calc(6px * var(--ui-scale));
@@ -500,7 +500,7 @@
     left: calc(12px * var(--ui-scale));
     right: calc(12px * var(--ui-scale));
     width: calc(100cqw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)));
-    max-height: calc(100vh - var(--ui-titlebar-height) - calc(24px * var(--ui-scale)));
+    max-height: calc(var(--ui-overlay-shell-height) - var(--ui-titlebar-height) - calc(24px * var(--ui-scale)));
   }
 }
 
@@ -757,7 +757,7 @@
     left: calc(12px * var(--ui-scale));
     right: calc(12px * var(--ui-scale));
     width: calc(100cqw - calc(24px * var(--ui-scale)));
-    max-height: calc(100vh - calc(var(--ui-titlebar-height) + calc(44px * var(--ui-scale))));
+    max-height: calc(var(--ui-overlay-shell-height) - calc(var(--ui-titlebar-height) + calc(44px * var(--ui-scale))));
   }
 
   .titlebar-menubar-panel[data-menu="help"] {

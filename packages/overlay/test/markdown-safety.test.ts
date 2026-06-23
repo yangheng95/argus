@@ -55,10 +55,27 @@ test("rendered markdown anchors expose tokenized focus-visible chrome", () => {
   expect(MARKDOWN_CSS).toMatch(
     /\.msg-text a:focus-visible,\s*\.md-content a:focus-visible\s*\{[\s\S]*color:\s*var\(--accent-hover\);[\s\S]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/,
   )
-  expect(MARKDOWN_CSS).toMatch(
-    /\.md-link:focus-visible\s*\{[\s\S]*color:\s*var\(--accent-hover\);[\s\S]*outline:\s*var\(--oc-border-width\) solid var\(--accent\);/,
-  )
-  expect(MARKDOWN_CSS).not.toMatch(/(?:\.msg-text a|\.md-content a|\.md-link):focus-visible\s*\{[\s\S]*outline:\s*none/)
+  expect(MARKDOWN_CSS).not.toMatch(/(?:\.msg-text a|\.md-content a):focus-visible\s*\{[\s\S]*outline:\s*none/)
+  expect(MARKDOWN_CSS).not.toMatch(/\.md-link\b/)
+})
+
+test("rendered markdown no longer emits or styles retired class selectors", () => {
+  const html = renderMarkdown("# Title\n\nParagraph with [link](https://example.com).\n\n- item\n\n```ts\nconst x = 1\n```")
+  const retiredClassNames = ["md-h1", "md-h2", "md-h3", "md-p", "md-break", "md-code-block", "md-inline-code", "md-list", "md-link"]
+  for (const className of retiredClassNames) {
+    expect(html).not.toContain(`class="${className}"`)
+  }
+  for (const selector of [
+    /\.md-h[1-6]\b/,
+    /\.md-p\b/,
+    /\.md-break\b/,
+    /\.md-code-block\b/,
+    /\.md-inline-code\b/,
+    /\.md-list\b/,
+    /\.md-link\b/,
+  ]) {
+    expect(MARKDOWN_CSS).not.toMatch(selector)
+  }
 })
 
 test("renderMarkdown uses bounded bare urls and routes them to browser preview", () => {
