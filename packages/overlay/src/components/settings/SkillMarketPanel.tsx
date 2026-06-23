@@ -311,6 +311,13 @@ function skillSourceRoot(item: SkillItem): string {
   return roots.find((root) => location.includes(`/${root}/`) || location.includes(`${root}/`)) || ""
 }
 
+function matrixAgentTrack(agent: Pick<AgentSkillRow, "name">, compact: boolean): string {
+  const minPx = compact ? 104 : 132
+  const minCh = Math.max(compact ? 14 : 16, agent.name.length + (compact ? 4 : 6))
+  const max = compact ? "max-content" : "1fr"
+  return `minmax(max(calc(${minPx}px * var(--ui-scale)), ${minCh}ch), ${max})`
+}
+
 // ── Extension Settings Panels ──
 
 type ExtensionPanelMode = "skill" | "mcp" | "skill-market"
@@ -436,10 +443,14 @@ function ExtensionSettingsPanel(props: {
       })) as AgentSkillRow[]
   })
   const matrixGridTemplate = createMemo(() => {
+    const compact = props.compact === true
+    const skillColumn = compact
+      ? "minmax(calc(180px * var(--ui-scale)), calc(260px * var(--ui-scale)))"
+      : "minmax(calc(240px * var(--ui-scale)), calc(360px * var(--ui-scale)))"
     const agentColumns = agentRows()
-      .map((agent) => `minmax(${Math.max(14, agent.name.length + 4)}ch, max-content)`)
+      .map((agent) => matrixAgentTrack(agent, compact))
       .join(" ")
-    return `minmax(calc(180px * var(--ui-scale)), calc(260px * var(--ui-scale))) ${agentColumns}`.trim()
+    return `${skillColumn} ${agentColumns}`.trim()
   })
   const mcp = createMemo((): Record<string, McpItem> => ({ ...(appStore.mcp as Record<string, McpItem>) }))
   const market = createMemo((): MarketItem[] => [...(appStore.skillMarket as MarketItem[])])
@@ -932,7 +943,11 @@ function ExtensionSettingsPanel(props: {
             </div>
           </Show>
           <div class="extension-settings-body">
-            <div class="agent-skill-matrix" data-unmounted={mounts()?.unmounted_count ? "true" : "false"}>
+            <div
+              class="agent-skill-matrix"
+              data-compact={props.compact ? "true" : "false"}
+              data-unmounted={mounts()?.unmounted_count ? "true" : "false"}
+            >
               <div class="agent-skill-matrix__summary">
                 <strong>{t("skill.mount.matrix")}</strong>
                 <Show when={mounts()?.unmounted_count}>
