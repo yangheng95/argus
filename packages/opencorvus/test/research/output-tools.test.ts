@@ -451,6 +451,37 @@ describe("research output tools", () => {
     expect(result).toContain("subpage_research_task subpage_1.evidence_ids")
   })
 
+  test("submit_research_brief reports every invalid subpage evidence reference in one result", async () => {
+    const kit = await registerMinimalBrief()
+    await callTool(kit.tools, "update_subpage_research_task", {
+      id: "sub_mobile_viewport",
+      parent_url: "https://example.com",
+      url: "https://example.com/mobile",
+      title: "Mobile viewport",
+      reason: "Needs mobile evidence.",
+      suggested_focus: "Capture mobile layout.",
+      evidence_ids: ["fr_mobile_evidence"],
+    })
+    await callTool(kit.tools, "update_subpage_research_task", {
+      id: "sub_header_detail",
+      parent_url: "https://example.com",
+      url: "https://example.com/header",
+      title: "Header detail",
+      reason: "Needs header evidence.",
+      suggested_focus: "Capture header states.",
+      evidence_ids: ["fr_header_surface"],
+    })
+
+    const result = await callTool(kit.tools, "submit_research_brief", { final: true })
+
+    expect(result).toContain("failed semantic validation")
+    expect(result).toContain("subpage_research_task sub_mobile_viewport.evidence_ids")
+    expect(result).toContain("fr_mobile_evidence")
+    expect(result).toContain("subpage_research_task sub_header_detail.evidence_ids")
+    expect(result).toContain("fr_header_surface")
+    expect(kit.getCollector().finalized).toBe(false)
+  })
+
   test("buildResearchBriefFromDraft computes source digest after schema defaults are applied", async () => {
     const kit = await registerMinimalBrief()
     await callTool(kit.tools, "submit_research_brief", { final: true })
