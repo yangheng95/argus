@@ -1187,6 +1187,12 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("not repeatable repair tools")
     expect(normalized).toContain("do not rerun frontend_research for that same page")
     expect(normalized).toContain("additional source page URLs that still need their own prepared evidence")
+    expect(normalized).toContain(
+      "Same source URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
+    )
+    expect(normalized).toContain(
+      "A new focus such as mobile viewport, hover state, map detail, data question, region, component, or fidelity risk on the same source URL is not an additional source page",
+    )
     expect(normalized).toContain("Page Skeleton Blueprint")
     expect(normalized).toContain("the `frontend_research` tool path prepares rendered webpage evidence")
     expect(normalized).toContain(
@@ -1232,7 +1238,10 @@ describe("core prompt hygiene", () => {
     )
     expect(orchestratorTools).toContain("Source-page-scoped brief producer")
     expect(orchestratorTools).toContain("Page Skeleton Blueprint that frontend_design consumes as page information architecture")
-    expect(orchestratorTools).toContain("call frontend_research separately for additional pages")
+    expect(orchestratorTools).toContain("call frontend_research separately only for additional page URLs")
+    expect(orchestratorTools).toContain(
+      "Same URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same source-page scope",
+    )
     expect(orchestratorTools).not.toContain("dispatch once for the relevant webpage investigation scope")
   })
 
