@@ -267,3 +267,63 @@ though ARIA claimed the pane was legal.
 - Rechecked timing boundaries: this change only changes math inputs and does
   not add a resize listener, synchronous reveal, or duplicate persisted width
   source.
+
+## Follow-up 2026-06-23: Layout Token Container Signature
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Independent explorer audit 2026-06-23 | `layoutTokenPx()` cache invalidates only on `--ui-scale`, while `--ui-rail-width` depends on `22cqw`. |
+| `2026-06-22-overlay-viewport-size-contract.md` | Pane and center workbench dimensions must resolve from CSS layout tokens, not hardcoded JS constants. |
+| `2026-06-23-overlay-compact-legal-frame-query.md` | Descendant width clamps intentionally use `cqw` so they follow the legal overlay container instead of raw viewport width. |
+| `2026-06-23-pane-chrome-reserve` | Default rail width feeds the left pane solver and must stay current after legal window resize. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Token resolver | `layout-tokens.ts#tokenSignature()` returns only `--ui-scale`. | Include the overlay container inline size in the cache signature. |
+| Cqw token | `--ui-rail-width: clamp(..., 22cqw, ...)` is consumed by `defaultRailWidth()`. | Keep this token as the single default rail source; do not mirror the clamp in JS. |
+| Fixed-min tokens | `--ui-rail-min-width`, `--ui-chat-min-width`, and `--ui-workbench-panel-min-width` depend on scale only today. | They may invalidate more often, but still resolve through the same helper. |
+| Resize path | Window resize schedules pane layout through RAF. | No new listener is needed; the existing layout pass re-reads tokens with the corrected signature. |
+
+### Fix Plan
+
+1. Extend `layoutTokenPx()` cache signature from scale-only to
+   scale-plus-container-inline-size.
+2. Use the body legal layout width because `body` is the `overlay-shell`
+   container and can be wider than `window.innerWidth` in illegal narrow browser
+   fixtures.
+3. Add static contract tests for the resolver so the cache cannot regress to
+   scale-only or raw viewport width.
+4. Run focused tests, typecheck, browser resize visual coverage, self-review,
+   commit, and push.
+
+### Acceptance
+
+- `layoutTokenPx("--ui-rail-width")` cannot reuse a cached value after the
+  overlay shell width changes.
+- The resolver still reads CSS tokens rather than duplicating token math in JS.
+- No additional resize listener, debounce, fallback token, or parallel default
+  rail source is introduced.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/pane-config.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts`.
+- Visual QA reviewed:
+  `.scratch/left-pane-resizer-desktop-resize.png`,
+  `.scratch/left-pane-resizer-restored-desktop-resize.png`, and
+  `.scratch/left-pane-resizer-illegal-narrow-legal-frame.png`.
+
+### Self Review
+
+- Rechecked `layout-tokens.ts`: the cache key now includes `--ui-scale` and
+  the body overlay-shell width, so `cqw` tokens invalidate when the legal
+  container width changes.
+- Rechecked source ownership: `defaultRailWidth()` still reads
+  `--ui-rail-width`; no JS copy of the CSS clamp was introduced.
+- Rechecked resize ownership: existing window resize RAF scheduling remains the
+  only path that re-renders pane layout after viewport changes.
