@@ -91,3 +91,94 @@ while assistive semantics reported a legal width.
 - Rechecked `ConfigDialogHost`; `sidebarStyle()` and `currentSidebarWidth()`
   share `configuredSidebarWidth()`.
 - No fallback width or second bounds source was introduced.
+
+## Follow-up 2026-06-23: Config Sidebar Pointermove Frame Owner
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Arendt read-only audit | Config sidebar pointermove still calls `setConfigSidebarWidth()` on every event and `configSidebarResizeBounds()` silently normalizes invalid scale to `1`. |
+| `2026-06-22-left-pane-drag-frame-coalescing.md` | Drag streams should coalesce high-frequency pointermove work per animation frame and flush the last pending point on pointerup. |
+| This spec | `setConfigSidebarWidth()` remains the single width writer; pointer and keyboard resize share clamp bounds. |
+| `layout-tokens.ts` | `currentUIScale()` is fail-fast and must not be rewrapped by helper-level scale fallbacks. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Pointermove hook | `ConfigDialogHost.useResizable()` calls `opts.onMove()` directly from the window `pointermove` listener. | Coalesce pending move deltas through a single RAF owner and flush on session end. |
+| Width write | `ConfigDialogHost.onMove()` calls `setConfigSidebarWidth(next)`. | Keep the single writer, but call it only from the frame owner. |
+| Scale helper | `configSidebarResizeBounds(scale)` maps invalid scales to `1`. | Throw on non-positive or non-finite scale, matching `currentUIScale()`. |
+| Missing DOM width | `currentSidebarWidth()` still has `220 * currentUIScale()` when `#configSidebar` is unavailable. | Use the legal bounds source instead of an arbitrary fallback width. |
+| Browser test | `config-dialog-resizer.test.ts` covers keyboard and semantics but not pointermove bursts. | Add a burst probe that records sidebar width writes during input events and before/after RAF. |
+
+### Root Cause
+
+The 2026-06-22 single-source repair guarded illegal persisted widths, but it
+left the high-frequency pointer stream synchronous. Every pointermove computed
+and wrote a new sidebar width immediately, so a drag burst could issue many
+Solid store writes in one task. The helper also hid invalid scale inputs by
+normalizing them to `1`, which reintroduced a silent fallback path below the
+fail-fast UI scale owner.
+
+### Fix Plan
+
+1. Change `useResizable()` to retain only the latest pointer delta and process
+   it once per animation frame.
+2. Flush the pending pointer delta before pointerup/pointercancel cleanup so
+   the final width is not lost.
+3. Make `configSidebarResizeBounds()` throw on invalid scale instead of
+   returning scale `1`.
+4. Replace the DOM-missing `220 * currentUIScale()` path with the legal minimum
+   from `resizeBounds()`.
+5. Extend static and browser tests for coalescing, no input-event width writes,
+   and fail-fast scale behavior.
+
+### Acceptance
+
+- A pointermove burst does not write `#configSidebar` width during the input
+  event task.
+- The burst produces at most one width mutation in the next animation frame.
+- Pointerup flushes a pending final width before ending the resize session.
+- Invalid config sidebar scale throws instead of using `1`.
+- No second width writer, arbitrary fallback width, or compatibility branch is
+  introduced.
+
+### Implementation
+
+- `useResizable()` now stores the latest pointer delta and schedules one
+  animation-frame move callback instead of calling `onMove()` directly from
+  window `pointermove`.
+- Resize cleanup flushes the pending pointer delta before removing listeners,
+  so pointerup/pointercancel cannot lose the final width.
+- `configSidebarResizeBounds()` now throws for non-positive or non-finite scale
+  values instead of silently normalizing them to `1`.
+- `currentSidebarWidth()` no longer computes `220 * currentUIScale()` when the
+  DOM width is unavailable; it returns the legal minimum from
+  `configSidebarResizeBounds()`.
+- The browser resizer test instruments style writes during a 30-event
+  pointermove burst, then asserts no input-event writes and one frame-owned
+  sidebar style commit.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/config-panel-sizing.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/config-dialog-resizer.test.ts`.
+
+### Visual QA
+
+- Reviewed `.scratch/config-dialog-resizer.png`; the settings dialog sidebar,
+  separator, content fields, and footer overlay remain visually coherent after
+  the frame-coalesced resize path.
+
+### Self Review
+
+- Rechecked `ConfigDialogHost.tsx`: `pointermove` now only updates pending
+  delta and schedules RAF; `setConfigSidebarWidth()` is called from the frame
+  owner or pointerup flush.
+- Rechecked `config-sidebar-resizer.ts`: invalid scale no longer falls back to
+  `1`.
+- Rechecked fallback removal: no `220 * currentUIScale()` path remains in the
+  settings sidebar width logic.

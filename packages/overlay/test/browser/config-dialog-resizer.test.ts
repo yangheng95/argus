@@ -172,6 +172,144 @@ test(
         (previous) => document.querySelector<HTMLElement>("#configSidebar")!.getBoundingClientRect().width > previous,
         before,
       )
+      const dragBurst = await page.evaluate(async () => {
+        const resizer = document.querySelector<HTMLElement>("#configResizer")
+        const sidebar = document.querySelector<HTMLElement>("#configSidebar")
+        if (!resizer || !sidebar) throw new Error("Config dialog resize fixture is missing")
+        type StyleSet = { frameDepth: number; inputDepth: number; property: string; value: string }
+        const record = {
+          frameDepth: 0,
+          inputDepth: 0,
+          sets: [] as StyleSet[],
+        }
+        const originalRaf = window.requestAnimationFrame.bind(window)
+        const originalSetProperty = CSSStyleDeclaration.prototype.setProperty
+        const originalSetAttribute = Element.prototype.setAttribute
+        const captureSet = (property: string, value: unknown) => {
+          record.sets.push({
+            frameDepth: record.frameDepth,
+            inputDepth: record.inputDepth,
+            property,
+            value: String(value),
+          })
+        }
+        const observer = new MutationObserver(() => {
+          captureSet("style", sidebar.getAttribute("style") || "")
+        })
+        try {
+          CSSStyleDeclaration.prototype.setProperty = function (property: string, value: string | null, priority?: string) {
+            if (this === sidebar.style && (property === "width" || property === "min-width")) {
+              captureSet(property, value)
+            }
+            return originalSetProperty.call(this, property, value, priority)
+          }
+          Element.prototype.setAttribute = function (name: string, value: string) {
+            if (this === sidebar && name === "style") captureSet("style", value)
+            return originalSetAttribute.call(this, name, value)
+          }
+          observer.observe(sidebar, { attributes: true, attributeFilter: ["style"] })
+          window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+            originalRaf((time) => {
+              record.frameDepth += 1
+              try {
+                callback(time)
+              } finally {
+                record.frameDepth -= 1
+              }
+            })) as typeof window.requestAnimationFrame
+          const pointer = resizer.getBoundingClientRect()
+          const startX = pointer.left + pointer.width / 2
+          const startY = pointer.top + pointer.height / 2
+          resizer.dispatchEvent(
+            new PointerEvent("pointerdown", {
+              bubbles: true,
+              button: 0,
+              cancelable: true,
+              clientX: startX,
+              clientY: startY,
+              pointerId: 11,
+              pointerType: "mouse",
+            }),
+          )
+          record.sets = []
+          record.inputDepth += 1
+          try {
+            for (let index = 0; index < 30; index += 1) {
+              window.dispatchEvent(
+                new PointerEvent("pointermove", {
+                  bubbles: true,
+                  clientX: startX + 80 + index,
+                  clientY: startY,
+                  pointerId: 11,
+                  pointerType: "mouse",
+                }),
+              )
+            }
+            await Promise.resolve()
+          } finally {
+            await Promise.resolve()
+            record.inputDepth -= 1
+          }
+          const afterMoves = record.sets.slice()
+          await new Promise<void>((resolve) => originalRaf(() => originalRaf(() => resolve())))
+          await Promise.resolve()
+          const afterFrame = record.sets.slice()
+          record.sets = []
+          record.inputDepth += 1
+          try {
+            window.dispatchEvent(
+              new PointerEvent("pointermove", {
+                bubbles: true,
+                clientX: startX + 130,
+                clientY: startY,
+                pointerId: 11,
+                pointerType: "mouse",
+              }),
+            )
+            window.dispatchEvent(
+              new PointerEvent("pointerup", {
+                bubbles: true,
+                clientX: startX + 130,
+                clientY: startY,
+                pointerId: 11,
+                pointerType: "mouse",
+              }),
+            )
+          } finally {
+            await Promise.resolve()
+            record.inputDepth -= 1
+          }
+          const afterPointerUpFlush = record.sets.slice()
+          return {
+            afterFrame,
+            afterMoves,
+            afterPointerUpFlush,
+            finalWidth: sidebar.getBoundingClientRect().width,
+            handleActive: resizer.dataset.active || "",
+          }
+        } finally {
+          observer.disconnect()
+          window.requestAnimationFrame = originalRaf
+          CSSStyleDeclaration.prototype.setProperty = originalSetProperty
+          Element.prototype.setAttribute = originalSetAttribute
+        }
+      })
+      assert.deepEqual(dragBurst.afterMoves, [], `pointermove burst should not write width synchronously: ${JSON.stringify(dragBurst)}`)
+      const frameWidthSets = dragBurst.afterFrame.filter((entry) => entry.property === "width")
+      const frameMinWidthSets = dragBurst.afterFrame.filter((entry) => entry.property === "min-width")
+      const frameStyleSets = dragBurst.afterFrame.filter((entry) => entry.property === "style")
+      assert.equal(frameWidthSets.length, 1, `pointermove burst should write one width in RAF: ${JSON.stringify(dragBurst)}`)
+      assert.equal(frameMinWidthSets.length, 1, `pointermove burst should write one min-width in RAF: ${JSON.stringify(dragBurst)}`)
+      assert.equal(frameStyleSets.length, 1, `pointermove burst should produce one sidebar style mutation: ${JSON.stringify(dragBurst)}`)
+      assert.ok(
+        dragBurst.afterFrame.every((entry) => entry.inputDepth === 0),
+        `pointermove burst writes must run outside the input event: ${JSON.stringify(dragBurst)}`,
+      )
+      assert.ok(
+        dragBurst.afterPointerUpFlush.some((entry) => entry.inputDepth > 0),
+        `pointerup should flush the final pending width before cleanup: ${JSON.stringify(dragBurst)}`,
+      )
+      assert.equal(dragBurst.handleActive, "")
       const notifications = await page.evaluate(() =>
         Array.from(document.querySelectorAll<HTMLElement>('.app-notification[role="alert"]')).map((node) =>
           node.textContent?.replace(/\s+/g, " ").trim(),

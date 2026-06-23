@@ -9,11 +9,13 @@ export type ConfigSidebarResizeBounds = {
 }
 
 export function configSidebarResizeBounds(scale: number): ConfigSidebarResizeBounds {
-  const normalizedScale = Number.isFinite(scale) && scale > 0 ? scale : 1
+  if (!Number.isFinite(scale) || scale <= 0) {
+    throw new Error(`Config sidebar resize scale must be a positive finite number: ${scale}`)
+  }
   return {
-    min: CONFIG_SIDEBAR_MIN_WIDTH * normalizedScale,
-    max: CONFIG_SIDEBAR_MAX_WIDTH * normalizedScale,
-    step: CONFIG_SIDEBAR_KEYBOARD_STEP * normalizedScale,
+    min: CONFIG_SIDEBAR_MIN_WIDTH * scale,
+    max: CONFIG_SIDEBAR_MAX_WIDTH * scale,
+    step: CONFIG_SIDEBAR_KEYBOARD_STEP * scale,
   }
 }
 

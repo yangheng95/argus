@@ -87,6 +87,10 @@ describe("config panel sizing", () => {
   test("config sidebar keyboard resize clamps to the same bounds", () => {
     const bounds = configSidebarResizeBounds(2)
     expect(bounds).toEqual({ min: 280, max: 640, step: 32 })
+    expect(() => configSidebarResizeBounds(0)).toThrow("Config sidebar resize scale must be a positive finite number")
+    expect(() => configSidebarResizeBounds(Number.NaN)).toThrow(
+      "Config sidebar resize scale must be a positive finite number",
+    )
     expect(clampConfigSidebarWidth(100, bounds)).toBe(280)
     expect(clampConfigSidebarWidth(700, bounds)).toBe(640)
     expect(nextConfigSidebarKeyboardWidth(400, "ArrowLeft", bounds)).toBe(368)
@@ -106,7 +110,18 @@ describe("config panel sizing", () => {
     expect(CONFIG_DIALOG_TSX).toContain("return clampConfigSidebarWidth(width, resizeBounds())")
     expect(CONFIG_DIALOG_TSX).toContain("const width = configuredSidebarWidth()")
     expect(CONFIG_DIALOG_TSX).toContain("if (width != null) return width")
+    expect(CONFIG_DIALOG_TSX).toContain("return resizeBounds().min")
+    expect(CONFIG_DIALOG_TSX).not.toContain("220 * currentUIScale()")
     expect(CONFIG_DIALOG_TSX).not.toContain('const width = dialogStore.config.sidebarWidth\n    if (typeof width === "number"')
+  })
+
+  test("config sidebar pointer drag is frame coalesced", () => {
+    expect(CONFIG_DIALOG_TSX).toContain("let pendingMove:")
+    expect(CONFIG_DIALOG_TSX).toContain("requestAnimationFrame")
+    expect(CONFIG_DIALOG_TSX).toContain("flushPendingMove()")
+    expect(CONFIG_DIALOG_TSX).toContain("pendingMove = {\n        dx: moveEvent.clientX - startX")
+    expect(CONFIG_DIALOG_TSX).toContain("schedulePendingMove()")
+    expect(CONFIG_DIALOG_TSX).not.toContain("opts.onMove(moveEvent.clientX - startX")
   })
 
   test("settings panels keep a flat borderless owner surface", () => {
