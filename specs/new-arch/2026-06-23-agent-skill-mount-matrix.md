@@ -1,0 +1,236 @@
+# Agent Skill Mount Matrix
+
+Date: 2026-06-23
+Status: Initial design
+
+## Task
+
+Design a skill management and mount system where installed skills form a pool, and each
+agent has an explicit mounted skill set. The overlay must show the per-agent skill
+configuration matrix and support manually assigning skills from the pool to agent mount
+areas.
+
+## Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| `AGENTS.md` | No fallback, no hidden gates, no double source, no hidden skill prompt injection, inspect existing plans before edits. |
+| `2026-05-21-remove-stage-skill-injection.md` | Skills must be visible workflows loaded through the `skill` tool. Stage-based hidden injection must not return. |
+| `2026-05-21-orchestrator-skill-loop-provider-error-fuse.md` | Orchestrator must not inherit generic skill policy; specialist agents own task-specific skill loading. |
+| `2026-06-08-frontend-agents-skill-tool.md` | Prompt visibility and runtime tool transport must agree; frontend agents get `skill` through exact runtime toolkits where needed. |
+| `2026-06-10-skill-expiry-duplicates.md` | Discovery is the single source for expiry and duplicate metadata; overlay consumes server evidence. |
+| `2026-06-10-external-skill-directory-parity.md` | `.claude`, `.agents`, `.codex`, and `.opencorvus` skill roots are one discovery pool. |
+| `2026-06-17-skill-mcp-panel-single-source.md` | Skill/MCP panels render from shared store data, not panel-local copies. |
+| `2026-06-16-prompt-profile-expert-squad-switching.md` | Use one backend-owned profile/compiler source for cross-agent configuration; do not mutate many per-agent fields to simulate a profile. |
+| `2026-06-22-prompt-profile-task-session-owner.md` | Selected task/session scope must not silently fall back to project scope while the root session is unresolved. |
+
+## Current State
+
+| Surface | Evidence | Finding |
+| --- | --- | --- |
+| Discovery | `packages/opencorvus/src/skill/skill.ts` | `Skill.all()` returns one global pool from builtins, external roots, config paths, and URLs. `Skill.Info.agents` exists but is skill-authored metadata, not operator mount state. |
+| Install/manage | `packages/opencorvus/src/skill/manager.ts`, `src/server/routes/skill.ts` | `/skill/installed` exposes installed pool metadata and global skill permission policy. It has no per-agent mount shape. |
+| Prompt injection | `packages/opencorvus/src/session/system.ts` | `SystemPrompt.skills()` lists every compatible, non-denied skill when the agent can call `skill`; no mount matrix participates. |
+| Runtime tool | `packages/opencorvus/src/tool/skill.ts` | `SkillTool` independently filters the global pool by permission, platform, frontmatter `agents`, and `required_tools`. This duplicates prompt filtering logic. |
+| Turn composition | `packages/opencorvus/src/session/loop.ts` | A model turn resolves tools, then renders `SystemPrompt.skills(agent, availableToolNames)`. The skill policy and `SkillTool` are not fed by a shared resolved skill surface. |
+| Agent registry | `packages/opencorvus/src/agent/agent.ts` | Tool surfaces decide whether `skill` exists at all. Orchestrator and Mission intentionally exclude `skill`; requirements, architect, frontend-design, frontend-research, visual-qa, intent-analysis, build can expose it through their surfaces. |
+| Config | `packages/opencorvus/src/config/config.ts` | `skills` only stores paths and URLs. Session overlay deliberately excludes permission/tools/MCP; it currently has no skill mount field. |
+| Overlay | `packages/overlay/src/components/settings/SkillMarketPanel.tsx` | The Skills panel installs/removes/opens skill sources and imports dropped files. It is not an agent-skill matrix. |
+| Existing matrix peer | `packages/overlay/src/components/settings/AgentModelsPanel.tsx` | Per-agent settings already support project/session scope and grouped agent rows; this is the closest UI pattern to reuse. |
+
+## Root Cause
+
+The product has a skill pool but no operator-owned mount relation. Runtime behavior is
+derived from global discovery, global skill permission, agent tool include/exclude lists,
+and skill-authored metadata. That means different agents can see the same installed skill
+unless the skill author or hard-coded tool rules happen to exclude them. The overlay can
+only manage the pool, so it cannot show or edit the real agent-specific skill surface.
+
+## Decision
+
+Introduce a first-class backend-owned **Agent Skill Mount** source. Discovery remains the
+skill pool. Mounts define which pool entries are visible to each agent. The same resolved
+mount surface feeds both the model-visible Skill Policy and the `skill` tool search/load
+results.
+
+Conceptual config shape:
+
+```ts
+skill_mounts: {
+  agents: Record<string, string[]>
+}
+```
+
+Rules:
+
+- Installed skills are not automatically visible to every agent.
+- Built-in defaults are materialized as explicit `skill_mounts`, not inferred at runtime.
+- External/user-installed skills start unmounted until the operator mounts them.
+- `Skill.Info.agents` becomes a compatibility constraint and search hint, never an
+  automatic mount source.
+- `required_tools` remains a compatibility constraint; a skill cannot be mounted to an
+  agent whose effective tool surface cannot satisfy it.
+- Global `permission.skill` remains the trust/approval policy. A denied skill is not
+  loadable even if mounted, and the matrix must show that conflict as server evidence.
+- Orchestrator and Mission remain non-skill agents unless their tool surface is
+  deliberately changed by a separate design.
+
+## Runtime Surface
+
+Create one resolver, for example `AgentSkillMount.resolve(input)`, used by all skill
+consumers:
+
+```ts
+type ResolvedAgentSkillSurface = {
+  agent: string
+  scope: "project" | "session"
+  tool_available: boolean
+  skills: Array<{
+    name: string
+    mounted: true
+    enabled: boolean
+    reason?: "permission_denied" | "platform_incompatible" | "missing_required_tool" | "agent_incompatible"
+    location: string
+  }>
+}
+```
+
+The model turn should resolve this once from:
+
+1. session-owned agent identity;
+2. effective config, including project config plus root-session overlay when present;
+3. resolved tool IDs for that exact model turn;
+4. current skill pool metadata.
+
+Then:
+
+- `SystemPrompt.skills()` renders only `surface.skills` where `enabled === true`.
+- `SkillTool` searches and loads only the same enabled surface.
+- Tool-call metadata records agent, skill name, mount scope, and skill location.
+- Unknown mounted skill names, unknown agent ids, or invalid compatibility are hard
+  errors surfaced before the model call, not silently ignored.
+
+This eliminates the current double filtering between `session/system.ts` and
+`tool/skill.ts`.
+
+## API Shape
+
+Keep existing pool APIs:
+
+- `GET /skill`
+- `GET /skill/installed`
+- `POST /skill/install`
+- `POST /skill/import-file`
+- `POST /skill/remove`
+- `POST /skill/policy`
+
+Add a read projection for the matrix:
+
+- `GET /skill/mounts?sessionID=...`
+
+Response should include:
+
+- `skills[]`: installed pool entries with trust, risk, duplicate locations, policy.
+- `agents[]`: known agents, descriptions, mode, hidden/native flags, skill-tool availability.
+- `matrix[]`: one row per agent with mounted skill names and server-derived disabled reasons.
+- `project_mounts` and optional `session_mounts`, so overlay can show origin without guessing.
+
+For writes, use one typed mutation layer that persists only to config/session overlay:
+
+- project scope writes `skill_mounts.agents`.
+- session scope writes the same shape through root-session config overlay.
+- the mutation validates agent id, skill name, skill-tool availability, platform, and
+  required tool compatibility before saving.
+
+The persistence source remains config/session metadata. A dedicated route may perform the
+typed validation, but it must not create another storage location.
+
+## Overlay Matrix
+
+Add a new settings section, likely sibling to Skills/MCP, named Agent Skills.
+
+Layout:
+
+- Left pane: skill pool with search, source/trust/risk/duplicate/policy badges.
+- Right pane: grouped agent mount areas, reusing the Agent Models grouping pattern.
+- Each mounted skill is a compact chip with open/details/remove controls.
+- Drag a skill from the pool to an agent mount area to mount it.
+- Drag a mounted chip out or use its remove icon to unmount it.
+- Keyboard-accessible mount/unmount buttons must use the same mutation path as drag.
+- Conflict states are server-derived: denied policy, incompatible platform, missing required
+  tool, agent frontmatter mismatch, or agent cannot call `skill`.
+
+Implementation guidance:
+
+- Use existing Solid/Kobalte primitives for tabs, selects, buttons, tooltips, and rows.
+- Do not hand-roll a large fragile drag state machine. If drag becomes more than simple
+  HTML drag/drop, choose a Solid-compatible accessible DnD primitive during implementation
+  and wrap it in a small local component.
+- For large skill pools, use the existing `virtua` dependency to virtualize the pool and
+  matrix lists.
+- The current `SkillMarketPanel` should remain the pool install/import surface; do not mix
+  install source management and per-agent mounting into one component.
+
+## Session And Message Handling
+
+Skill mounts affect prompt and tool availability, so they must follow task/session
+ownership rules:
+
+- Project matrix edits affect future project-effective turns.
+- Selected task/session matrix edits require a resolved root session id.
+- While a selected task root session is unresolved, overlay must not request or display a
+  project matrix as if it were task-effective.
+- Child sessions inherit the root session mount overlay through existing effective config
+  resolution.
+- A running model turn uses the turn-scoped resolved skill surface; mid-turn matrix edits
+  affect the next turn, not the already-built prompt/tool surface.
+- Skill load tool results remain visible normal tool messages. No synthetic messages or
+  model-only skill bodies are introduced.
+
+## Migration And Retirement
+
+Implementation should retire, not preserve, the current broad skill visibility behavior:
+
+- Replace `SystemPrompt.skills()` direct `Skill.all()` filtering with the mount resolver.
+- Replace `SkillTool` direct global filtering with the same resolved surface.
+- Keep `Skill.Info.agents` only as metadata/compatibility.
+- Keep `/skill/installed` as the installed pool view.
+- Remove tests that assert "all compatible skills are visible to every skill-capable
+  agent" and replace them with mount-specific assertions.
+
+## Required Tests
+
+Backend:
+
+- Config schema accepts `skill_mounts.agents` and rejects malformed shapes.
+- Matrix route returns installed skills, agents, effective mounts, and disabled reasons.
+- Unknown skill in config fails with a clear error.
+- Mounted skill appears in `SystemPrompt.skills()` for that agent only.
+- Unmounted skill cannot be searched or loaded by `SkillTool`.
+- Prompt policy and `SkillTool` use the same resolved surface.
+- Orchestrator and Mission do not receive skill policy or skill tool through mounts.
+- Session overlay mount changes affect only that root session.
+- No selected-task unresolved fallback to project matrix.
+
+Overlay:
+
+- Agent Skills panel renders pool + agent matrix from `/skill/mounts`.
+- Drag/drop mount and button mount call the same mutation helper.
+- Unmount updates the row without creating panel-local state drift.
+- Denied or incompatible mounted skills render server-provided disabled reasons.
+- Existing Skills panel still renders installed pool and import/delete behavior from
+  `appStore.skills`.
+
+Visual:
+
+- Capture the new matrix panel in project scope and selected-session scope.
+- Verify dense lists do not overlap or resize unexpectedly at compact overlay widths.
+
+## Non-Goals
+
+- Do not reintroduce stage skill injection.
+- Do not auto-detect skills from user text or keywords.
+- Do not let skill mounts change agent tools, MCP servers, model, workflow, routing, or
+  orchestrator dispatch.
+- Do not hide skill loading in synthetic messages.
+- Do not use prompt-only instructions to simulate enforcement.
