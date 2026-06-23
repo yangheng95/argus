@@ -1327,3 +1327,96 @@ calculation in `services/theme.ts`.
 - Rechecked historical specs: the compact legal-frame query note is superseded,
   and the viewport-size note no longer cites `--ui-breakpoint-xl` as an active
   source.
+
+## Follow-up 2026-06-23: Browser Preview Live Image Scroll Rect
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| Aquinas read-only audit | Browser preview live input uses a cached image rect; horizontal center workbench reveal/scroll changes viewport coordinates without resizing the image. |
+| `2026-06-23-center-workbench-frame-phase-split.md` | Reveal scroll and measurement work must stay out of input-event handlers. |
+| `browser-preview-live-input-batch.test.ts` | Existing browser coverage already rejects `getBoundingClientRect()` reads inside live input events. |
+| `workspace.css` | `.center-workbench-body` owns horizontal overflow for multiple legal-width panels. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Live image bind/load | `BrowserPreviewPanel.tsx` schedules rect measurement when the live image binds, loads, or resizes. | Keep as existing owner for image size changes. |
+| Center workbench horizontal scroll | `.center-workbench-body` scrolls when several legal-width panels are open or revealed. | Register the live image against that scroll container and schedule a rect measurement on scroll. |
+| Live input events | `livePoint()` consumes the cached rect and schedules a measurement only if missing. | Keep input events read-free; do not call `getBoundingClientRect()` from pointer/wheel handlers. |
+| Tests | `browser-preview-live-input-batch.test.ts` already drives a live preview and records input-event rect reads. | Extend it with a forced horizontal scroll/reveal case and assert submitted coordinates match the post-scroll visual center. |
+
+### Root Cause
+
+The live screenshot rect is viewport-relative. ResizeObserver covers image size
+changes, but a horizontal scroll of the center workbench changes the image's
+viewport `left/top` without changing the image dimensions. After reveal or
+manual horizontal scroll, `livePoint()` can therefore map a click using the old
+rect while still correctly avoiding a synchronous layout read in the input
+event.
+
+### Fix Plan
+
+1. Track the `.center-workbench-body` scroll container for the live image.
+2. On scroll, schedule the existing `measureLiveImageRectOnFrame` scheduler.
+3. Remove that scroll listener when the live image disconnects.
+4. Extend the browser live-input test to force center workbench horizontal
+   overflow, scroll the browser panel, wait for the scheduled measurement, and
+   verify click coordinates against the visual image center.
+5. Re-run focused static/browser tests, inspect the BrowserPreview screenshot,
+   self-review, commit, and push.
+
+### Acceptance
+
+- Live browser input coordinates update after horizontal center workbench
+  scroll/reveal.
+- Pointer and wheel handlers still perform no live screenshot layout reads.
+- Rect measurement remains RAF-scheduled through the existing owner.
+- No fallback rect, duplicate coordinate mapper, hidden evidence capture, or
+  second browser-preview target source is introduced.
+
+### Implementation
+
+- `BrowserPreviewPanel` now receives the center workbench scroll owner from
+  `main.tsx` and fails fast if the live image is mounted without that owner.
+- Live image bind/disconnect now attaches and removes one passive scroll
+  listener on `.center-workbench-body`; the listener only schedules the existing
+  RAF rect measurement.
+- Live frame scope changes increment the request sequence, so stale live frame
+  responses cannot keep the panel loading or write an image for an old target.
+- Browser preview live frame service-side pre-decode was removed. The rendered
+  `<img>` is the only decode owner, and its existing `onError` path owns decode
+  failures.
+- Open center workbench views now use `flex-shrink: 0` with
+  `--ui-workbench-panel-min-width`, so multi-panel overflow scrolls instead of
+  crushing a panel below the legal token width.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/browser-preview-panel.test.ts packages/overlay/test/browser-preview-live-point.test.ts packages/overlay/test/browser-preview-service.test.ts packages/overlay/test/workspace-surface-consistency.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/browser-preview-live-input-batch.test.ts`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+
+### Visual QA
+
+- Reviewed `.scratch/browser-preview-live-input-batch.png`: the Browser Preview
+  panel remains nonblank after multi-panel horizontal scroll, and its rendered
+  width stays at or above `--ui-workbench-panel-min-width`.
+- The scrolled visual-center click submits desktop viewport-center coordinates
+  after the scheduled rect update, proving the visible image rect, not a stale
+  pre-scroll rect, owns input mapping.
+
+### Self Review
+
+- Rechecked `BrowserPreviewPanel.tsx`: pointer and wheel handlers still use the
+  cached rect and do not call `getBoundingClientRect()` inside the input event.
+- Rechecked the service: no live frame decoder hook, `Image.decode()`,
+  `createImageBitmap()`, or `new Image()` remains in `browser-preview.ts`.
+- Rechecked cleanup: no temporary trace variables or trace files remain in
+  overlay source or tests.
+- Rechecked size legality: this round adds no second aspect-ratio source; the
+  existing generated overlay frame remains the aspect owner, while open
+  workbench panels keep the token-owned minimum width.

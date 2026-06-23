@@ -46,6 +46,7 @@ export interface BrowserPreviewPanelProps {
   active: () => boolean
   directory: () => string
   refreshKey: () => unknown
+  scrollElement: () => HTMLElement | null
   taskID: () => string | undefined
   onReady?: (target: BrowserPreviewTarget) => void
 }
@@ -318,6 +319,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   let pendingLiveInputScopeKey = ""
   let pendingLiveInputs: BrowserPreviewLiveInput[] = []
   let liveImageElement: HTMLImageElement | null = null
+  let liveImageScrollElement: HTMLElement | null = null
   let liveImageRect: BrowserPreviewLiveImageRect | undefined
   let liveImageRectScopeKey = ""
   let liveImageResizeObserver: ResizeObserver | null = null
@@ -356,6 +358,8 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const disconnectLiveImageElement = () => {
     liveImageResizeObserver?.disconnect()
     liveImageResizeObserver = null
+    liveImageScrollElement?.removeEventListener("scroll", scheduleLiveImageRectMeasure)
+    liveImageScrollElement = null
     liveImageElement = null
     clearLiveImageRect()
   }
@@ -366,8 +370,15 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
       return
     }
     liveImageResizeObserver?.disconnect()
+    liveImageScrollElement?.removeEventListener("scroll", scheduleLiveImageRectMeasure)
+    const scrollElement = props.scrollElement()
+    if (!scrollElement) {
+      throw new Error("Browser preview live image must mount inside the center workbench scroll body.")
+    }
     liveImageElement = element
+    liveImageScrollElement = scrollElement
     clearLiveImageRect()
+    liveImageScrollElement.addEventListener("scroll", scheduleLiveImageRectMeasure, { passive: true })
     if (typeof ResizeObserver !== "undefined") {
       liveImageResizeObserver = new ResizeObserver(scheduleLiveImageRectMeasure)
       liveImageResizeObserver.observe(element)
@@ -426,11 +437,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     return key
   })
 
-  const isCurrentLiveScope = (scope: NonNullable<ReturnType<typeof liveScope>>) => {
-    const current = liveScope()
-    return Boolean(current && browserPreviewLiveScopeKey(current) === browserPreviewLiveScopeKey(scope))
-  }
-
   const loadLiveFrame = async (scope: NonNullable<ReturnType<typeof liveScope>>, inputs?: BrowserPreviewLiveInput[]) => {
     const sequence = ++liveFrameRequestSequence
     setLiveLoading(true)
@@ -443,13 +449,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         URL.revokeObjectURL(next)
         return
       }
-      if (!isCurrentLiveScope(scope)) {
-        URL.revokeObjectURL(next)
-        return
-      }
       replaceLiveImageUrl(scope, next)
     } catch (error) {
-      if (sequence === liveFrameRequestSequence && isCurrentLiveScope(scope)) {
+      if (sequence === liveFrameRequestSequence) {
         setLiveError(error instanceof Error ? error.message : String(error))
         clearLiveImageUrl()
         if (error instanceof ApiError && error.status === 404) {
@@ -457,7 +459,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
         }
       }
     } finally {
-      if (sequence === liveFrameRequestSequence && isCurrentLiveScope(scope)) setLiveLoading(false)
+      if (sequence === liveFrameRequestSequence) {
+        setLiveLoading(false)
+      }
     }
   }
 
@@ -574,6 +578,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const scope = liveScope()
     const key = scope ? browserPreviewLiveScopeKey(scope) : undefined
     if (previous !== key) {
+      liveFrameRequestSequence += 1
       clearPendingLiveInputs()
       clearLiveImageUrl()
       setLiveError("")

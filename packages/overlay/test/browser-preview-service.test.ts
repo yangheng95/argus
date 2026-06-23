@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
 import {
-  __setBrowserPreviewLiveFrameDecoderForTest,
   captureTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewEvidenceCaptureObjectUrl,
   loadTaskBrowserPreviewEvidence,
@@ -17,15 +16,7 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 
 const SAVED_DIRECTORY = "D:/workspace/app"
 const TASK_ID = "tsk_browserpreviewservice0001"
-const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10] as const
-const VALID_PNG_BYTES = new Uint8Array([...PNG_SIGNATURE, 0])
-
-async function decodePreviewLiveFrameForTest(blob: Blob): Promise<void> {
-  const bytes = new Uint8Array(await blob.arrayBuffer())
-  if (bytes.length < PNG_SIGNATURE.length || PNG_SIGNATURE.some((byte, index) => bytes[index] !== byte)) {
-    throw new Error("Browser preview live screenshot failed to decode.")
-  }
-}
+const LIVE_FRAME_BYTES = new Uint8Array([1, 2, 3, 4, 5, 6, 7])
 
 function fakePreviewTransport(capture: (req: TransportRequest) => void): HostTransport {
   return {
@@ -76,12 +67,10 @@ function fakePreviewTransport(capture: (req: TransportRequest) => void): HostTra
 
 beforeEach(() => {
   configure({ serverUrl: "http://127.0.0.1:7878", directory: SAVED_DIRECTORY })
-  __setBrowserPreviewLiveFrameDecoderForTest(decodePreviewLiveFrameForTest)
 })
 
 afterEach(() => {
   __setHostTransportForTest(undefined)
-  __setBrowserPreviewLiveFrameDecoderForTest(undefined)
   configure({ directory: "" })
 })
 
@@ -290,7 +279,7 @@ test("browser preview service loads persisted evidence screenshot bytes through 
         status: 200,
         ok: true,
         headers: { "content-type": "image/png" },
-        body: VALID_PNG_BYTES as T,
+        body: LIVE_FRAME_BYTES as T,
       }
     },
   })
@@ -321,7 +310,7 @@ test("browser preview service loads interactive live snapshot bytes through Host
         status: 200,
         ok: true,
         headers: { "content-type": "image/png" },
-        body: VALID_PNG_BYTES as T,
+        body: LIVE_FRAME_BYTES as T,
       }
     },
   })
@@ -348,7 +337,7 @@ test("browser preview service loads interactive live snapshot bytes through Host
   })
 })
 
-test("browser preview service rejects corrupt live snapshot bytes before returning an object URL", async () => {
+test("browser preview service leaves live frame decoding to the rendered image owner", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest({
     ...fakePreviewTransport((req) => {
@@ -360,20 +349,20 @@ test("browser preview service rejects corrupt live snapshot bytes before returni
         status: 200,
         ok: true,
         headers: { "content-type": "image/png" },
-        body: new Uint8Array([1, 2, 3, 4, 5, 6, 7]) as T,
+        body: LIVE_FRAME_BYTES as T,
       }
     },
   })
 
-  await expect(
-    loadTaskBrowserPreviewLiveSnapshotObjectUrl({
-      taskID: TASK_ID,
-      directory: SAVED_DIRECTORY,
-      targetID: "art_previewtarget000000000001",
-      viewportID: "desktop",
-    }),
-  ).rejects.toThrow("Browser preview live screenshot failed to decode.")
+  const objectUrl = await loadTaskBrowserPreviewLiveSnapshotObjectUrl({
+    taskID: TASK_ID,
+    directory: SAVED_DIRECTORY,
+    targetID: "art_previewtarget000000000001",
+    viewportID: "desktop",
+  })
 
+  expect(objectUrl).toStartWith("blob:")
+  URL.revokeObjectURL(objectUrl)
   expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/live/snapshot`)
   expect(captured?.method).toBe("POST")
   expect(captured?.responseKind).toBe("binary")
@@ -444,7 +433,7 @@ test("browser preview service sends live inputs without URL bodies", async () =>
         status: 200,
         ok: true,
         headers: { "content-type": "image/png" },
-        body: VALID_PNG_BYTES as T,
+        body: LIVE_FRAME_BYTES as T,
       }
     },
   })

@@ -81,6 +81,15 @@ function activityDiagnostics(value: unknown) {
   const source = value as Record<string, unknown>
   const out: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(source)) {
+    if (key === "requestLog" && Array.isArray(item)) {
+      const meaningful = item.filter(
+        (entry) =>
+          typeof entry !== "string" ||
+          (!/^GET \/task(?:\/[^/]+)?\/events(?:\?|$)/.test(entry) && !/^POST \/log$/.test(entry)),
+      )
+      out[key] = { length: meaningful.length, last: meaningful.at(-1) }
+      continue
+    }
     out[key] = Array.isArray(item) ? { length: item.length, last: item.at(-1) } : item
   }
   return out
@@ -97,15 +106,28 @@ async function waitForPageState(
   for (;;) {
     if (await page.evaluate(predicate)) return
     const signature = JSON.stringify({
-      page: await page.evaluate(() => ({
-        text: document.body.textContent?.slice(0, 1600) || "",
-        centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open || "",
-        browserActive: document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active || "",
-        stageStatus:
-          document.querySelector<HTMLElement>(
-            "[data-ui='browser-preview-live'], [data-ui='browser-preview-live-error'], [data-ui='browser-preview-target-load-failed'], [data-ui='browser-preview-target-failed']",
-          )?.dataset.status || "",
-      })),
+      page: await page.evaluate(() => {
+        const image = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+        return {
+          centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open || "",
+          browserActive: document.querySelector<HTMLElement>("#centerWorkbenchBrowser")?.dataset.active || "",
+          stage:
+            document.querySelector<HTMLElement>(".browser-preview-stage")?.textContent?.replace(/\s+/g, " ").trim() ??
+            "",
+          liveLoading: !!document.querySelector<HTMLElement>('[data-ui="browser-preview-live-loading"]'),
+          liveImage: image
+            ? {
+                complete: image.complete,
+                naturalHeight: image.naturalHeight,
+                naturalWidth: image.naturalWidth,
+              }
+            : null,
+          stageStatus:
+            document.querySelector<HTMLElement>(
+              "[data-ui='browser-preview-live'], [data-ui='browser-preview-live-error'], [data-ui='browser-preview-target-load-failed'], [data-ui='browser-preview-target-failed']",
+            )?.dataset.status || "",
+        }
+      }),
       diagnostics: activityDiagnostics(diagnostics()),
     })
     if (signature !== previousSignature) {
@@ -170,6 +192,28 @@ async function clickBrowserPreviewViewport(page: OverlayPage, viewportID: "deskt
   }, selector)
 }
 
+const rightActivityOpenPredicates: Record<"browser" | "explorer" | "inspector" | "screenshots", () => boolean> = {
+  browser: () => document.querySelector<HTMLElement>('[data-workbench-view="browser"]')?.dataset.open === "true",
+  explorer: () => document.querySelector<HTMLElement>('[data-workbench-view="explorer"]')?.dataset.open === "true",
+  inspector: () => document.querySelector<HTMLElement>('[data-workbench-view="inspector"]')?.dataset.open === "true",
+  screenshots: () => document.querySelector<HTMLElement>('[data-workbench-view="screenshots"]')?.dataset.open === "true",
+}
+
+async function openRightActivity(
+  page: OverlayPage,
+  activity: "browser" | "explorer" | "inspector" | "screenshots",
+  diagnostics: () => unknown,
+) {
+  const selector = `[data-ui="side-activity-button"][data-side="right"][data-activity="${activity}"]`
+  await page.waitForSelector(selector, { visible: true })
+  const isOpen = await page.evaluate(
+    (value) => document.querySelector<HTMLElement>(`[data-workbench-view="${value}"]`)?.dataset.open === "true",
+    activity,
+  )
+  if (!isOpen) await page.click(selector)
+  await waitForPageState(page, rightActivityOpenPredicates[activity], `${activity} right activity open`, diagnostics)
+}
+
 async function installLiveInputLayoutProbe(page: OverlayPage) {
   await page.evaluate(() => {
     const win = window as any
@@ -232,6 +276,84 @@ function assertNoLiveInputEventLayoutReads(summary: LiveInputLayoutProbeSummary,
     summary.inputEventRectReads,
     0,
     `${label}: live input event handler read screenshot layout: ${JSON.stringify(summary.events)}`,
+  )
+}
+
+async function forceBrowserPreviewHorizontalScroll(page: OverlayPage, diagnostics: () => unknown) {
+  await page.setViewport({ width: 1280, height: 900 })
+  await openRightActivity(page, "screenshots", diagnostics)
+  await openRightActivity(page, "inspector", diagnostics)
+  await openRightActivity(page, "explorer", diagnostics)
+  await openRightActivity(page, "browser", diagnostics)
+  return await page.evaluate(async () => {
+    const body = document.querySelector<HTMLElement>(".center-workbench-body")
+    const image = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+    if (!body || !image) throw new Error("Browser preview scroll fixture is missing")
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+    const before = image.getBoundingClientRect()
+    const maxScroll = body.scrollWidth - body.clientWidth
+    if (maxScroll < 120) throw new Error(`Browser preview scroll fixture needs overflow, maxScroll=${maxScroll}`)
+    body.scrollLeft = Math.min(maxScroll, body.scrollLeft + 120)
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+    const after = image.getBoundingClientRect()
+    return {
+      afterLeft: after.left,
+      beforeLeft: before.left,
+      deltaLeft: after.left - before.left,
+      imageWidth: after.width,
+      maxScroll,
+      scrollLeft: body.scrollLeft,
+      visible: after.right > 0 && after.left < window.innerWidth,
+    }
+  })
+}
+
+async function dispatchLiveClickAtVisualCenter(page: OverlayPage) {
+  return await page.evaluate(() => {
+    const frame = document.querySelector<HTMLElement>(".browser-preview-live-frame")
+    const image = document.querySelector<HTMLImageElement>('[data-ui="browser-preview-live-screenshot"]')
+    if (!frame || !image) throw new Error("Browser preview live frame is missing")
+    const probe = (window as any).__browserPreviewLiveInputLayoutProbe
+    probe?.reset()
+    const rect = image.getBoundingClientRect()
+    const clientX = rect.left + rect.width / 2
+    const clientY = rect.top + rect.height / 2
+    probe?.enterInputEvent()
+    try {
+      frame.focus()
+      frame.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          button: 0,
+          cancelable: true,
+          clientX,
+          clientY,
+          pointerId: 7,
+          pointerType: "mouse",
+        }),
+      )
+    } finally {
+      probe?.exitInputEvent()
+    }
+    return { clientX, clientY, height: rect.height, left: rect.left, top: rect.top, width: rect.width }
+  })
+}
+
+function assertCenteredLiveClickInput(
+  body: unknown,
+  viewport: { width: number; height: number },
+  label: string,
+) {
+  const inputs = (body as { inputs?: Array<{ kind?: string; x?: number; y?: number }> }).inputs ?? []
+  const click = inputs.find((input) => input.kind === "click")
+  assert.ok(click, `${label}: expected click input in ${JSON.stringify(body)}`)
+  assert.ok(
+    Math.abs(Number(click.x) - viewport.width / 2) <= 2,
+    `${label}: expected x near ${viewport.width / 2}, got ${JSON.stringify(click)}`,
+  )
+  assert.ok(
+    Math.abs(Number(click.y) - viewport.height / 2) <= 2,
+    `${label}: expected y near ${viewport.height / 2}, got ${JSON.stringify(click)}`,
   )
 }
 
@@ -418,6 +540,8 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     if (path === "/channel") return json([])
     if (path === "/executor") return json([])
     if (path === "/agent") return json([])
+    if (path === "/file") return json([])
+    if (path === "/find/file") return json([])
     if (path === "/skill/installed" || path === "/skill") return json([])
     if (path === "/skill/market") return json([])
     if (path === "/mcp") return json({})
@@ -597,6 +721,26 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
       .reduce((total, input) => total + Number(input.deltaY || 0), 0)
     assert.equal(burstWheelDelta, wheelEventCount * 10)
 
+    const scrollMetrics = await forceBrowserPreviewHorizontalScroll(page, () => ({
+      liveInputBodies,
+      liveSnapshotBodies,
+      requestLog,
+    }))
+    assert.ok(scrollMetrics.visible, `browser preview live image should remain visible after scroll: ${JSON.stringify(scrollMetrics)}`)
+    assert.ok(
+      Math.abs(scrollMetrics.deltaLeft) > 40,
+      `browser preview scroll should move the live image viewport rect: ${JSON.stringify(scrollMetrics)}`,
+    )
+    const beforeScrolledClickCount = liveInputBodies.length
+    await dispatchLiveClickAtVisualCenter(page)
+    assertNoLiveInputEventLayoutReads(await liveInputLayoutProbeSummary(page), "scrolled visual-center live click")
+    await waitForFixtureActivity(
+      () => liveInputBodies.length > beforeScrolledClickCount,
+      "scrolled visual-center live click",
+      () => ({ requestLog, liveInputBodies, scrollMetrics }),
+    )
+    assertCenteredLiveClickInput(liveInputBodies.at(-1), viewports[0], "scrolled visual-center live click")
+
     await waitForPageState(
       page,
       () => {
@@ -610,9 +754,30 @@ test("browser preview live surface batches input and coalesces wheel bursts", as
     assert.ok(panel)
     const screenshot = await panel.screenshot()
     writeFileSync(SCREENSHOT_PATH, screenshot)
+    const panelMetrics = await page.evaluate(() => {
+      const panelElement = document.querySelector<HTMLElement>(".browser-preview-panel")
+      const tokenProbe = document.createElement("div")
+      tokenProbe.style.position = "absolute"
+      tokenProbe.style.visibility = "hidden"
+      tokenProbe.style.width = "var(--ui-workbench-panel-min-width)"
+      document.body.append(tokenProbe)
+      const minWidth = tokenProbe.getBoundingClientRect().width
+      tokenProbe.remove()
+      return {
+        minWidth,
+        width: panelElement?.getBoundingClientRect().width ?? 0,
+      }
+    })
     const metadata = await sharp(screenshot).metadata()
     const stats = await sharp(screenshot).stats()
-    assert.ok((metadata.width || 0) >= 500)
+    assert.ok(
+      panelMetrics.width >= panelMetrics.minWidth - 1,
+      `browser preview panel width should stay legal: ${JSON.stringify(panelMetrics)}`,
+    )
+    assert.ok(
+      (metadata.width || 0) >= panelMetrics.minWidth - 1,
+      `browser preview screenshot width should stay legal: ${JSON.stringify({ metadata, panelMetrics })}`,
+    )
     assert.ok((metadata.height || 0) >= 300)
     const colorRange = stats.channels.slice(0, 3).reduce((total, channel) => total + channel.max - channel.min, 0)
     assert.ok(colorRange > 80, `live input batch screenshot should be nonblank, color range ${colorRange}`)
