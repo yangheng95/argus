@@ -2,11 +2,13 @@ import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-test("ConversationAgentRail reads workflow through the projection and renders a chronological strip", () => {
+test("ConversationAgentRail reads hydrated workflow records and renders a chronological strip", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
-  expect(source).toContain("buildAgentWorkflow(")
-  expect(source).toContain("mergeAgentRecords")
   expect(source).toContain("conversationAgentRecordsForSource(boardStore.selectedSource)")
+  expect(source).not.toContain("buildAgentWorkflow(")
+  expect(source).not.toContain("mergeAgentRecords")
+  expect(source).not.toContain("orderedReachableCardIDs()")
+  expect(source).not.toContain("Object.values(cardTreeStore.cards).find")
   expect(source).toContain("Index")
   expect(source).not.toContain("compactAgentWorkflowLanesForNarrowRail")
   expect(source).not.toContain("LaneAvatarStack")
@@ -156,7 +158,8 @@ test("ConversationAgentRail does not poll task trace for a removed expanded surf
   expect(source).not.toContain("fetchTaskTrace")
   expect(source).not.toContain("invalidateTraceCache")
   expect(source).not.toContain("createResource")
-  expect(source).toContain("traceEvents: []")
+  expect(source).not.toContain("traceEvents")
+  expect(source).not.toContain("buildAgentWorkflow")
 })
 
 test("ConversationAgentRail does not use streamed card text as workflow summary input", () => {

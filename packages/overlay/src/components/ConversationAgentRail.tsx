@@ -6,9 +6,8 @@ import { setCardExpanded } from "../store/conversation-ui"
 import { conversationCardContainsMessage, loadConversationHistoryUntilCard } from "../services/conversation"
 import { requestConversationCardScroll } from "../services/conversation-scroll"
 import { notifyWarning } from "../services/notify"
-import { buildAgentWorkflow, type AgentWorkflowRecord, type AgentWorkflowStatus } from "../utils/agent-workflow"
-import { mergeAgentRecords } from "../utils/agent-workflow-records"
-import { orderedReachableCardIDs } from "../utils/card-tree"
+import type { AgentWorkflowRecord, AgentWorkflowStatus } from "../utils/agent-workflow"
+import { parentIDChainForCard } from "../utils/card-tree"
 import { stageAccent } from "../utils/card-color"
 import { Avatar, avatarRole } from "./Avatar"
 import { Button } from "./ui/Button"
@@ -34,17 +33,7 @@ function compactLabel(record: AgentWorkflowRecord): string {
 }
 
 function parentIDsForCard(cardID: string): string[] {
-  const parents: string[] = []
-  let current = cardID
-  const seen = new Set<string>()
-  while (current && !seen.has(current)) {
-    seen.add(current)
-    const parent = Object.values(cardTreeStore.cards).find((card) => card.childIDs?.includes(current))
-    if (!parent) break
-    parents.unshift(parent.id)
-    current = parent.id
-  }
-  return parents
+  return parentIDChainForCard(cardID)
 }
 
 function describeRecord(record: AgentWorkflowRecord, selector?: string): string {
@@ -232,18 +221,7 @@ function AgentRailRow(props: {
 }
 
 export function ConversationAgentRail() {
-  const projection = createMemo(() => {
-    const liveProjection = buildAgentWorkflow({
-      cards: cardTreeStore.cards,
-      order: orderedReachableCardIDs(),
-      traceEvents: [],
-    })
-    return {
-      ...liveProjection,
-      records: mergeAgentRecords(conversationAgentRecordsForSource(boardStore.selectedSource), liveProjection.records),
-    }
-  })
-  const records = createMemo(() => projection().records)
+  const records = createMemo(() => conversationAgentRecordsForSource(boardStore.selectedSource))
   const hasRecords = createMemo(() => records().length > 0)
 
   return (
