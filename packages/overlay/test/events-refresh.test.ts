@@ -19,6 +19,7 @@ const { resetWriter } = await import("../src/services/tree-writer")
 const { cardTreeStore } = await import("../src/store/card-tree")
 const { sessionConfigRefreshToken } = await import("../src/services/config")
 const { configure } = await import("../src/services/api")
+const { registerConversationSourceDirectory } = await import("../src/services/conversation")
 const { HOST_CAPABILITIES, __setHostTransportForTest } = await import("../src/services/host-transport")
 const { resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor")
 
@@ -112,7 +113,13 @@ async function waitForRequestCount(requests: unknown[], count: number): Promise<
 }
 
 function selectTaskForTest(taskID: string): void {
-  setBoardStore("selectedSource", taskID ? { kind: "task", id: taskID } : null)
+  if (!taskID) {
+    setBoardStore("selectedSource", null)
+    return
+  }
+  const source = { kind: "task" as const, id: taskID, directory: CONFIG_REFRESH_DIRECTORY }
+  registerConversationSourceDirectory(source, CONFIG_REFRESH_DIRECTORY)
+  setBoardStore("selectedSource", source)
 }
 
 afterEach(() => {
@@ -125,6 +132,7 @@ afterEach(() => {
   setBoardStore("board", null)
   setBoardStore("boardSyncPending", false)
   setBoardStore("taskSequence", 0)
+  setBoardStore("tasksError", "")
   setAppStore({
     config: null,
     providerCatalog: null,
@@ -564,7 +572,9 @@ test("message delta with missing tree prerequisites triggers selected-task recov
 
   await waitForStreamCount(streams, 1)
   expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
-  expect(streams).toEqual([{ path: "task/tsk_refresh/events", query: { after_live: "0" } }])
+  expect(streams).toEqual([
+    { path: "task/tsk_refresh/events", query: { directory: CONFIG_REFRESH_DIRECTORY, after_live: "0" } },
+  ])
 })
 
 test("board-owned run progress still schedules board refresh", () => {
@@ -838,7 +848,12 @@ test("selected task sequence gap triggers recovery without advancing cursor", as
 
   expect(boardStore.taskSequence).toBe(5)
   await waitForStreamCount(streams, 1)
-  expect(streams).toEqual([{ path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } }])
+  expect(streams).toEqual([
+    {
+      path: "task/tsk_refresh/events",
+      query: { directory: CONFIG_REFRESH_DIRECTORY, after: "5", after_live: "0" },
+    },
+  ])
   expect(boardStore.taskSequence).toBe(5)
 })
 
@@ -867,7 +882,12 @@ test("production dispatch gates sequence gap before tree writer prerequisites ca
 
   expect(boardStore.taskSequence).toBe(5)
   await waitForStreamCount(streams, 1)
-  expect(streams).toEqual([{ path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } }])
+  expect(streams).toEqual([
+    {
+      path: "task/tsk_refresh/events",
+      query: { directory: CONFIG_REFRESH_DIRECTORY, after: "5", after_live: "0" },
+    },
+  ])
   expect(boardStore.taskSequence).toBe(5)
 })
 
@@ -903,7 +923,12 @@ test("task-list notification does not advance visible cursor before per-task pay
 
   expect(boardStore.taskSequence).toBe(5)
   await waitForStreamCount(streams, 1)
-  expect(streams).toEqual([{ path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } }])
+  expect(streams).toEqual([
+    {
+      path: "task/tsk_refresh/events",
+      query: { directory: CONFIG_REFRESH_DIRECTORY, after: "5", after_live: "0" },
+    },
+  ])
   expect(boardStore.taskSequence).toBe(5)
 })
 
@@ -922,7 +947,12 @@ test("task-list selected sequence gap triggers selected-task recovery", async ()
 
   expect(boardStore.taskSequence).toBe(5)
   await waitForStreamCount(streams, 1)
-  expect(streams).toEqual([{ path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } }])
+  expect(streams).toEqual([
+    {
+      path: "task/tsk_refresh/events",
+      query: { directory: CONFIG_REFRESH_DIRECTORY, after: "5", after_live: "0" },
+    },
+  ])
   expect(boardStore.taskSequence).toBe(5)
 })
 
@@ -956,6 +986,49 @@ test("task-list lifecycle notifications still reload global tasks", async () => 
 
   await new Promise((resolve) => setTimeout(resolve, 650))
   expect(paths).toEqual(["global/tasks"])
+})
+
+test("task-list notification refresh failures stay out of runtime unhandled rejection toasts", async () => {
+  const paths: string[] = []
+  const consoleErrors: unknown[][] = []
+  const originalConsoleError = console.error
+  console.error = (...args: unknown[]) => {
+    consoleErrors.push(args)
+  }
+  __setHostTransportForTest({
+    kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      paths.push(req.path)
+      throw new Error("signal timed out")
+    },
+    openStream() {
+      throw new Error("openStream not used")
+    },
+    async native() {
+      throw new Error("native not used")
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} }
+    },
+  })
+
+  try {
+    handleTaskListNotification({
+      type: "task.completed",
+      taskID: "tsk_sidebar_refresh_timeout",
+      sequence: 8,
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 650))
+  } finally {
+    console.error = originalConsoleError
+  }
+
+  expect(paths).toEqual(["global/tasks"])
+  expect(boardStore.tasksError).toBe("signal timed out")
+  expect(consoleErrors).toHaveLength(1)
+  expect(consoleErrors[0]?.[0]).toBe("[task-list-sse] task refresh failed")
 })
 
 test("task-list reloads are single-flight across refresh triggers", async () => {
