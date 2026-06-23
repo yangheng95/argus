@@ -112,7 +112,7 @@ export function FilePart(props: {
 // path renders on the first tick without a spinner flash.
 
 function AuthedImage(props: { url: string; alt: string }) {
-  const [objectUrl] = createResource(() => props.url, fetchResourceAsObjectUrl, {
+  const [objectUrl] = createResource(() => props.url, (raw) => fetchResourceAsObjectUrl(raw), {
     initialValue: peekResourceObjectUrl(props.url),
   })
 
@@ -130,7 +130,7 @@ function AuthedImage(props: { url: string; alt: string }) {
 }
 
 function AuthedVideo(props: { url: string; name: string; mime: string }) {
-  const [objectUrl] = createResource(() => props.url, fetchResourceAsObjectUrl, {
+  const [objectUrl] = createResource(() => props.url, (raw) => fetchResourceAsObjectUrl(raw), {
     initialValue: peekResourceObjectUrl(props.url),
   })
   return (
@@ -150,7 +150,7 @@ function AuthedVideo(props: { url: string; name: string; mime: string }) {
 }
 
 function AuthedAudio(props: { url: string; name: string; mime: string }) {
-  const [objectUrl] = createResource(() => props.url, fetchResourceAsObjectUrl, {
+  const [objectUrl] = createResource(() => props.url, (raw) => fetchResourceAsObjectUrl(raw), {
     initialValue: peekResourceObjectUrl(props.url),
   })
   return (
@@ -170,7 +170,7 @@ function AuthedAudio(props: { url: string; name: string; mime: string }) {
 }
 
 function AuthedPdf(props: { url: string; name: string }) {
-  const [objectUrl] = createResource(() => props.url, fetchResourceAsObjectUrl, {
+  const [objectUrl] = createResource(() => props.url, (raw) => fetchResourceAsObjectUrl(raw), {
     initialValue: peekResourceObjectUrl(props.url),
   })
   return (

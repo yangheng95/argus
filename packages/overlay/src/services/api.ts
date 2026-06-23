@@ -5,8 +5,8 @@
 // Internally everything HTTP-shaped routes through `HostTransport.request`
 // so this module stays usable identically under both the Tauri overlay
 // and the VS Code webview (plan-vscode-extension.md §5.1, §11). Public
-// signatures (apiUrl, apiHeaders, apiJson, fetchResourceAsObjectUrl) are
-// unchanged so existing callers keep working without edits.
+// callers (apiUrl, apiHeaders, apiJson, fetchResourceAsObjectUrl) stay on the
+// same chokepoint so existing surfaces keep working without host-specific code.
 
 import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol"
 import { DEFAULT_SERVER } from "./default-server"
@@ -423,7 +423,14 @@ const BLOB_CACHE_MAX = 256
 // hop). 64 is twice typical viewport thumbnail count, plenty.
 const BLOB_INFLIGHT_MAX = 64
 const blobCache = new Map<string, string>()
-const blobInFlight = new Map<string, Promise<string>>()
+interface BlobInFlightEntry {
+  readonly controller: AbortController
+  readonly promise: Promise<string>
+  consumers: number
+  settled: boolean
+}
+
+const blobInFlight = new Map<string, BlobInFlightEntry>()
 const blobInFlightWaiters: Array<() => void> = []
 
 function touchCache(raw: string, url: string): void {
@@ -447,10 +454,41 @@ function evictToFitOne(): void {
   }
 }
 
-async function reserveInFlightSlot(): Promise<void> {
+function resourceAbortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("Resource request aborted", "AbortError")
+}
+
+function resourceAbandonedReason(): DOMException {
+  return new DOMException("Resource request has no active consumers", "AbortError")
+}
+
+async function reserveInFlightSlot(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw resourceAbortReason(signal)
   if (blobInFlight.size < BLOB_INFLIGHT_MAX) return
-  return new Promise<void>((resolve) => {
-    blobInFlightWaiters.push(resolve)
+  return new Promise<void>((resolve, reject) => {
+    let settled = false
+    let onAbort: (() => void) | undefined
+    const cleanup = () => {
+      if (signal && onAbort) signal.removeEventListener("abort", onAbort)
+    }
+    const complete = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve()
+    }
+    if (signal) {
+      onAbort = () => {
+        if (settled) return
+        settled = true
+        const index = blobInFlightWaiters.indexOf(complete)
+        if (index >= 0) blobInFlightWaiters.splice(index, 1)
+        cleanup()
+        reject(resourceAbortReason(signal))
+      }
+      signal.addEventListener("abort", onAbort, { once: true })
+    }
+    blobInFlightWaiters.push(complete)
   })
 }
 
@@ -489,20 +527,34 @@ export function peekResourceObjectUrl(raw: string): string | undefined {
  * traffic. Throws on network / HTTP errors — no fallback to the raw URL,
  * since that would silently mask origin / auth mistakes.
  */
-export async function fetchResourceAsObjectUrl(raw: string): Promise<string> {
+export async function fetchResourceAsObjectUrl(
+  raw: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<string> {
+  const signal = options.signal
+  if (signal?.aborted) throw resourceAbortReason(signal)
   const cached = blobCache.get(raw)
   if (cached) {
     touchCache(raw, cached)
     return cached
   }
-  const inFlight = blobInFlight.get(raw)
-  if (inFlight) return inFlight
+  let inFlight = blobInFlight.get(raw)
+  if (!inFlight) {
+    inFlight = createBlobInFlightEntry(raw)
+    blobInFlight.set(raw, inFlight)
+  }
+  return consumeBlobInFlightEntry(inFlight, signal)
+}
 
+function createBlobInFlightEntry(raw: string): BlobInFlightEntry {
+  const controller = new AbortController()
+  let slotReserved = false
   const pending = (async () => {
     // audit-2026-04-29 W2-P4 — bound concurrent fetches so a render
     // burst of 1000 thumbnails doesn't queue 1000 in-flight promises
     // each holding a closure over the transport request.
-    await reserveInFlightSlot()
+    await reserveInFlightSlot(controller.signal)
+    slotReserved = true
     const transport = getHostTransport()
     try {
       // Resource URLs may already be absolute (server-relative paths
@@ -510,7 +562,7 @@ export async function fetchResourceAsObjectUrl(raw: string): Promise<string> {
       // file: URLs short-circuit to plain fetch since transport can't
       // proxy arbitrary external schemes).
       if (/^(?:data|blob|file):/i.test(raw)) {
-        const res = await fetch(raw)
+        const res = await fetch(raw, { signal: controller.signal })
         if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`)
         const blob = await res.blob()
         const objectUrl = URL.createObjectURL(blob)
@@ -521,7 +573,7 @@ export async function fetchResourceAsObjectUrl(raw: string): Promise<string> {
       if (/^https?:/i.test(raw)) {
         // External web image — webview CSP already restricts these
         // sources (plan §19.2.1); plain fetch is the right path.
-        const res = await fetch(raw)
+        const res = await fetch(raw, { signal: controller.signal })
         if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`)
         const blob = await res.blob()
         const objectUrl = URL.createObjectURL(blob)
@@ -534,6 +586,7 @@ export async function fetchResourceAsObjectUrl(raw: string): Promise<string> {
         path,
         method: "GET",
         responseKind: "binary",
+        signal: controller.signal,
       })
       if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`)
       const ct = res.headers["content-type"] || res.headers["Content-Type"] || "application/octet-stream"
@@ -543,14 +596,65 @@ export async function fetchResourceAsObjectUrl(raw: string): Promise<string> {
       blobCache.set(raw, objectUrl)
       return objectUrl
     } finally {
-      releaseInFlightSlot()
+      if (slotReserved) releaseInFlightSlot()
     }
   })()
 
-  blobInFlight.set(raw, pending)
-  try {
-    return await pending
-  } finally {
-    blobInFlight.delete(raw)
+  const entry: BlobInFlightEntry = { controller, promise: pending, consumers: 0, settled: false }
+  pending.then(
+    () => {
+      entry.settled = true
+      blobInFlight.delete(raw)
+    },
+    () => {
+      entry.settled = true
+      blobInFlight.delete(raw)
+    },
+  )
+  return entry
+}
+
+function consumeBlobInFlightEntry(
+  entry: BlobInFlightEntry,
+  signal: AbortSignal | undefined,
+): Promise<string> {
+  if (signal?.aborted) return Promise.reject(resourceAbortReason(signal))
+  entry.consumers += 1
+  let released = false
+  const releaseConsumer = () => {
+    if (released) return
+    released = true
+    entry.consumers = Math.max(0, entry.consumers - 1)
+    if (entry.consumers === 0 && !entry.settled && !entry.controller.signal.aborted) {
+      entry.controller.abort(resourceAbandonedReason())
+    }
   }
+
+  if (!signal) {
+    return entry.promise.finally(releaseConsumer)
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const cleanup = () => {
+      signal.removeEventListener("abort", onAbort)
+    }
+    const onAbort = () => {
+      cleanup()
+      releaseConsumer()
+      reject(resourceAbortReason(signal))
+    }
+    signal.addEventListener("abort", onAbort, { once: true })
+    entry.promise.then(
+      (value) => {
+        cleanup()
+        releaseConsumer()
+        resolve(value)
+      },
+      (error) => {
+        cleanup()
+        releaseConsumer()
+        reject(error)
+      },
+    )
+  })
 }

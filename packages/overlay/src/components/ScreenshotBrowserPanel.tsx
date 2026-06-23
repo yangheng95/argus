@@ -81,13 +81,27 @@ function ScreenshotVirtualItem(props: CustomItemComponentProps) {
 function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
   let thumbnailHost: HTMLDivElement | undefined
   let cancelQueuedLoad: (() => void) | undefined
+  let thumbnailLoadController: AbortController | undefined
   const [loadAllowed, setLoadAllowed] = createSignal(false)
   const sourceError = createMemo(() =>
     loadAllowed() && !isStoredAttachmentUrl(props.item.src) ? t("screenshots.thumbnail_invalid_source") : "",
   )
   const [objectUrl] = createResource(
     () => (loadAllowed() && !sourceError() ? props.item.src : null),
-    (url: string | null) => (url ? (peekResourceObjectUrl(url) ?? fetchResourceAsObjectUrl(url)) : null),
+    async (url: string | null) => {
+      thumbnailLoadController?.abort(new DOMException("Screenshot thumbnail source changed", "AbortError"))
+      thumbnailLoadController = undefined
+      if (!url) return null
+      const cached = peekResourceObjectUrl(url)
+      if (cached) return cached
+      const controller = new AbortController()
+      thumbnailLoadController = controller
+      try {
+        return await fetchResourceAsObjectUrl(url, { signal: controller.signal })
+      } finally {
+        if (thumbnailLoadController === controller) thumbnailLoadController = undefined
+      }
+    },
   )
   const src = () => (loadAllowed() && !sourceError() ? objectUrl() : null)
   const thumbnailError = () => sourceError() || (objectUrl.error ? t("screenshots.thumbnail_load_failed") : "")
@@ -110,6 +124,8 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
     observer.observe(thumbnailHost)
     onCleanup(() => {
       cancelQueuedLoad?.()
+      thumbnailLoadController?.abort(new DOMException("Screenshot thumbnail unmounted", "AbortError"))
+      thumbnailLoadController = undefined
       observer.disconnect()
     })
   })
