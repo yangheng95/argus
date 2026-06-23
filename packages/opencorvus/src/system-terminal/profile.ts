@@ -198,8 +198,7 @@ export namespace TerminalProfile {
   function isGitForWindowsBashPath(command: string): boolean {
     const normalized = command.replace(/\\/g, "/").toLowerCase()
     return (
-      normalized.includes("/git/") &&
-      (normalized.endsWith("/bin/bash.exe") || normalized.endsWith("/usr/bin/bash.exe"))
+      normalized.includes("/git/") && (normalized.endsWith("/bin/bash.exe") || normalized.endsWith("/usr/bin/bash.exe"))
     )
   }
 
@@ -350,7 +349,9 @@ export namespace TerminalProfile {
     for (const definition of systemProfileDefinitions(options)) {
       const command = definition.commands
         .map(options.resolveCommand)
-        .find((resolved) => !!resolved && (!definition.acceptResolvedCommand || definition.acceptResolvedCommand(resolved)))
+        .find(
+          (resolved) => !!resolved && (!definition.acceptResolvedCommand || definition.acceptResolvedCommand(resolved)),
+        )
       if (!command) continue
       profiles[definition.id] = {
         label: definition.label,

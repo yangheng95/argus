@@ -102,7 +102,8 @@ export namespace SystemPrompt {
     agent: Agent.Info,
     input?: { availableToolNames?: Iterable<string>; surface?: SkillMount.ResolvedAgentSkillSurface },
   ): Promise<string | undefined> {
-    const surface = input?.surface ?? (await SkillMount.resolve({ agent, availableToolNames: input?.availableToolNames }))
+    const surface =
+      input?.surface ?? (await SkillMount.resolve({ agent, availableToolNames: input?.availableToolNames }))
     const compatible = surface.skills.filter((skill) => skill.enabled)
     if (compatible.length === 0) return
 

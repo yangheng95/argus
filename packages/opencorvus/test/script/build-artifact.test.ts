@@ -277,7 +277,10 @@ describe("build-artifact", () => {
       resolve(import.meta.dir, "../../src/frontend-design/visual-region-binding-tool.ts"),
       "utf8",
     )
-    const attachmentStoreSource = readFileSync(resolve(import.meta.dir, "../../src/storage/attachment-store.ts"), "utf8")
+    const attachmentStoreSource = readFileSync(
+      resolve(import.meta.dir, "../../src/storage/attachment-store.ts"),
+      "utf8",
+    )
 
     expect(watcherSource).not.toContain('from "@parcel/watcher/wrapper"')
     expect(watcherSource).not.toContain("@parcel/watcher-${process.platform}")

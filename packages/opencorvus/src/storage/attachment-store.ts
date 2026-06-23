@@ -616,12 +616,7 @@ export namespace AttachmentStore {
   }
 
   function hasNodeErrorCode(error: unknown, code: string): boolean {
-    return (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      (error as { code?: unknown }).code === code
-    )
+    return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === code
   }
 
   /** Render a markdown bullet list of staged attachment paths for the
