@@ -125,6 +125,11 @@ The model turn should resolve this once from:
 Then:
 
 - `SystemPrompt.skills()` renders only `surface.skills` where `enabled === true`.
+- The rendered Skill Policy must name the enabled mounted skills as the current
+  agent's mounted skill surface and instruct the agent to inspect that list before
+  planning or tool use. It may include metadata and loading instructions, but it
+  must not inline full `SKILL.md` bodies; full skill content is loaded only through
+  the visible `skill` tool call.
 - `SkillTool` searches and loads only the same enabled surface.
 - Tool-call metadata records agent, skill name, mount scope, and skill location.
 - Unknown mounted skill names, unknown agent ids, or invalid compatibility are hard
