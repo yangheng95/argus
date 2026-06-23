@@ -210,6 +210,20 @@ function reportOverlayRuntimeError(scope: string, error: unknown): void {
   })
 }
 
+function runMainAsync(scope: string, action: () => void | Promise<void>): void {
+  try {
+    void Promise.resolve(action()).catch((error) => {
+      reportOverlayRuntimeError(scope, error)
+    })
+  } catch (error) {
+    reportOverlayRuntimeError(scope, error)
+  }
+}
+
+function persistMainSettings(scope: string): void {
+  runMainAsync(scope, () => saveSettings())
+}
+
 window.addEventListener(
   "error",
   (event) => {
@@ -345,38 +359,38 @@ function activateCodingAssistantSessionList(): void {
   abortCodingAssistantActivation()
   setMissionLauncherActive(false)
   setAssistantLauncherActive(false)
-  if (isMissionSessionSource()) void selectTask("")
+  if (isMissionSessionSource()) runMainAsync("task.deselect-mission-session", () => selectTask(""))
   const controller = new AbortController()
   codingAssistantActivationController = controller
   bumpWorkspaceEpoch()
   resetCenterWorkbenchToFocusedPanel("assistant")
   setSelectedLeftActivity("assistant")
   setSelectedLeftPanelActivity("assistant")
-  void (async () => {
-    await loadCodingAssistantSessions({ signal: controller.signal })
-    if (controller.signal.aborted) throw controller.signal.reason
-    const selectedID = codingAssistantStore.selectedSessionID
-    const session =
-      (selectedID ? codingAssistantStore.sessions.find((item) => item.id === selectedID) : undefined) ??
-      codingAssistantStore.sessions[0]
-    if (session?.id) {
-      setAssistantLauncherActive(false)
-      await selectCodingAssistantSession({
-        sessionID: session.id,
-        directory: String(session.directory || ""),
-        signal: controller.signal,
-      })
-    } else {
-      setAssistantLauncherActive(true)
-    }
-  })()
-    .catch((error) => {
+  runMainAsync("coding-assistant.sessions", async () => {
+    try {
+      await loadCodingAssistantSessions({ signal: controller.signal })
+      if (controller.signal.aborted) throw controller.signal.reason
+      const selectedID = codingAssistantStore.selectedSessionID
+      const session =
+        (selectedID ? codingAssistantStore.sessions.find((item) => item.id === selectedID) : undefined) ??
+        codingAssistantStore.sessions[0]
+      if (session?.id) {
+        setAssistantLauncherActive(false)
+        await selectCodingAssistantSession({
+          sessionID: session.id,
+          directory: String(session.directory || ""),
+          signal: controller.signal,
+        })
+      } else {
+        setAssistantLauncherActive(true)
+      }
+    } catch (error) {
       if (isAbortError(error)) return
-      reportOverlayRuntimeError("coding-assistant.sessions", error)
-    })
-    .finally(() => {
+      throw error
+    } finally {
       if (codingAssistantActivationController === controller) codingAssistantActivationController = null
-    })
+    }
+  })
 }
 
 function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
@@ -502,7 +516,7 @@ function selectLeftActivity(activity: LeftActivity): void {
   setAssistantLauncherActive(false)
   setMissionLauncherActive(false)
   if (boardStore.selectedSource?.kind === "session" && (activity !== "mission" || isCodingAssistantSource())) {
-    void selectTask("")
+    runMainAsync("task.deselect-session-source", () => selectTask(""))
   }
   if (focusedLeftActivityOwnsPrimaryPanel(activity)) {
     resetCenterWorkbenchToFocusedPanel(activity)
@@ -525,7 +539,7 @@ function selectMissionTask(taskID: string, directory?: string): void {
   resetCenterWorkbenchToFocusedPanel("tasks")
   setSelectedLeftActivity("tasks")
   setSelectedLeftPanelActivity("tasks")
-  void selectTask(taskID, { directory })
+  runMainAsync("task.select-mission-task", () => selectTask(taskID, { directory }))
 }
 
 function openTaskLauncher(): void {
@@ -535,7 +549,7 @@ function openTaskLauncher(): void {
   resetCenterWorkbenchToFocusedPanel("tasks")
   setSelectedLeftActivity("tasks")
   setSelectedLeftPanelActivity("tasks")
-  void selectTask("")
+  runMainAsync("task.open-launcher-deselect", () => selectTask(""))
   queueMicrotask(() => {
     document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
   })
@@ -548,7 +562,7 @@ function openMissionLauncher(): void {
   setSelectedLeftActivity("mission")
   setSelectedLeftPanelActivity("mission")
   setMissionLauncherActive(true)
-  void selectTask("")
+  runMainAsync("mission.open-launcher-deselect", () => selectTask(""))
   queueMicrotask(() => {
     document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
   })
@@ -562,7 +576,7 @@ function openCodingAssistantLauncher(): void {
   resetCenterWorkbenchToFocusedPanel("assistant")
   setSelectedLeftActivity("assistant")
   setSelectedLeftPanelActivity("assistant")
-  void selectTask("")
+  runMainAsync("coding-assistant.open-launcher-deselect", () => selectTask(""))
   queueMicrotask(() => {
     document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")?.focus()
   })
@@ -600,7 +614,7 @@ function focusInitialRestoredTaskWorkspace(): void {
 
 function selectTaskFromTaskList(taskID: string, directory?: string): void {
   if (activeTaskID() !== taskID) focusTaskPanel()
-  void selectTask(taskID, { directory })
+  runMainAsync("task.select-from-list", () => selectTask(taskID, { directory }))
 }
 
 function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
@@ -849,7 +863,7 @@ document.addEventListener(
     const path = link.getAttribute("data-file-path")
     if (!path) return
     ev.preventDefault()
-    void openPathInSelectedEditor(path)
+    runMainAsync("workspace.open-file-link", () => openPathInSelectedEditor(path))
   },
   listenerOpts,
 )
@@ -867,7 +881,7 @@ document.addEventListener(
     const canOpenExternalUrl = getHostTransport().capabilities.nativeCommands["open-url"]
     if (!previewUrl && !canOpenExternalUrl) return
     ev.preventDefault()
-    void (async () => {
+    runMainAsync("browser-preview.open-url", async () => {
       try {
         if (previewUrl && openBrowserPreviewFromMessage()) return
         if (!canOpenExternalUrl) return
@@ -881,7 +895,7 @@ document.addEventListener(
           details: formatErrorDetails(error),
         })
       }
-    })()
+    })
   },
   listenerOpts,
 )
@@ -918,7 +932,7 @@ document.addEventListener(
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
-    void (async () => {
+    runMainAsync("markdown.copy-code", async () => {
       try {
         await navigator.clipboard.writeText(decoded)
         flash(t("markdown.copied"))
@@ -926,7 +940,7 @@ document.addEventListener(
         console.error("[md-copy] clipboard write failed", err)
         flash(t("markdown.copy_failed"))
       }
-    })()
+    })
   },
   listenerOpts,
 )
@@ -943,12 +957,12 @@ window.addEventListener(
 function installGlobalBridges(): void {
   ;(window as any).renderMarkdown = renderMarkdown
   ;(window as any).persistOverlaySettings = async () => {
-    saveSettings()
+    await saveSettings()
   }
   ;(window as any).stepZoom = (delta: number) => {
     const next = stepZoom(delta)
     setSettingsStore("zoom", next)
-    saveSettings()
+    persistMainSettings("settings.persist-step-zoom")
   }
   // Test hook: snapshot the current card tree as a flat JSON shape. Used by
   // Playwright / integration tests to read the live store-backed tree.
@@ -1142,9 +1156,11 @@ if (taskListEl) {
     () => (
       <TaskList
         onSelectTask={selectTaskFromTaskList}
-        onDeleteTask={(taskID) => void deleteTask(taskID)}
-        onCancelTask={(taskID) => void cancelTask(taskID)}
-        onRenameTask={(taskID, title) => void renameTask(taskID, title)}
+        onDeleteTask={(taskID) => runMainAsync("task.delete-from-list", () => deleteTask(taskID).then(() => undefined))}
+        onCancelTask={(taskID) => runMainAsync("task.cancel-from-list", () => cancelTask(taskID))}
+        onRenameTask={async (taskID, title) => {
+          await renameTask(taskID, title)
+        }}
       />
     ),
     taskListEl,
@@ -1174,12 +1190,18 @@ if (codingAssistantListEl) {
         onSelectSession={(session) => {
           setAssistantLauncherActive(false)
           resetCenterWorkbenchToFocusedPanel("assistant")
-          void selectCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") }).catch((error) => {
+          void selectCodingAssistantSession({
+            sessionID: session.id,
+            directory: String(session.directory || ""),
+          }).catch((error) => {
             reportOverlayRuntimeError("coding-assistant.select", error)
           })
         }}
         onRenameSession={(session, title) =>
-          void renameCodingAssistantSession({ sessionID: session.id, directory: String(session.directory || "") }, title)
+          void renameCodingAssistantSession(
+            { sessionID: session.id, directory: String(session.directory || "") },
+            title,
+          )
             .then((ok) => {
               if (!ok) throw new Error("Coding assistant rename failed")
             })
@@ -1240,17 +1262,17 @@ if (missionListEl) {
 function retrySelectedTask(): void {
   const id = activeTaskID()
   if (!id) return
-  void retryTask(id)
+  runMainAsync("task.retry-selected", () => retryTask(id))
 }
 
 function replanSelectedTask(): void {
   const id = activeTaskID()
-  if (id) void replanTask(id)
+  if (id) runMainAsync("task.replan-selected", () => replanTask(id))
 }
 
 function cancelSelectedTask(): void {
   const id = activeTaskID()
-  if (id) void cancelTask(id)
+  if (id) runMainAsync("task.cancel-selected", () => cancelTask(id))
 }
 
 function editGoal(goalId: string, title: string, detail: string): void {
@@ -1259,7 +1281,7 @@ function editGoal(goalId: string, title: string, detail: string): void {
 
 function deleteGoal(goalId: string): void {
   if (!goalId || !activeTaskID()) return
-  void (async () => {
+  runMainAsync("goal.delete", async () => {
     try {
       await panelMessage(`Delete goal ${goalId}.`, {
         goalID: goalId,
@@ -1269,7 +1291,7 @@ function deleteGoal(goalId: string): void {
     } catch (e) {
       console.error("Failed to delete goal", e)
     }
-  })()
+  })
 }
 
 // ── Mount: ChatComposer ──
@@ -1445,7 +1467,9 @@ if (composerEl) {
           // interrupt is an explicit action on the task row's CancelButton so a
           // stray composer stop never tears down the underlying task.
           if (messageStore.chatRequest) {
-            void stopChatRequest({ remote: false })
+            runMainAsync("chat.stop-local", async () => {
+              await stopChatRequest({ remote: false })
+            })
           }
         }}
       />
@@ -1461,12 +1485,14 @@ if (btnTerminateRun) {
   btnTerminateRun.addEventListener("click", () => {
     // If there's an active chat request (SSE stream), stop it first
     if (messageStore.chatRequest) {
-      void stopChatRequest()
+      runMainAsync("chat.stop-remote", async () => {
+        await stopChatRequest()
+      })
       return
     }
     // Otherwise cancel the active task
     const taskID = activeTaskID()
-    if (taskID) void cancelTask(taskID)
+    if (taskID) runMainAsync("task.cancel-terminate-button", () => cancelTask(taskID))
   })
 }
 
@@ -1669,7 +1695,7 @@ disposers.push(
     })
 
     createEffect(() => {
-      void setLocale(settingsStore.locale)
+      runMainAsync("locale.apply-settings", () => setLocale(settingsStore.locale))
     })
 
     // Chat header usage strip — card-tree-stats maintains the aggregate so
@@ -1833,12 +1859,10 @@ disposers.push(
         sections.hidden = false
       }
 
-      schedulePaneLayout(
-        {
-          sidebarCollapsed,
-          sidebarWidth: settingsStore.sidebarWidth,
-        }
-      )
+      schedulePaneLayout({
+        sidebarCollapsed,
+        sidebarWidth: settingsStore.sidebarWidth,
+      })
     })
 
     // Task status header + elapsed timer moved to <TaskStatusHeader/> component
@@ -1863,7 +1887,7 @@ const paneCallbacks = {
     setSettingsStore({
       ...(sidebarWidth != null ? { sidebarWidth } : {}),
     })
-    saveSettings()
+    persistMainSettings("settings.persist-pane-width")
   },
 }
 initPaneResizers(paneCallbacks, PANEL_PANE_CONFIG)
@@ -1942,10 +1966,7 @@ disposers.push(() => {
   pendingCenterWorkbenchPanelResizeClientX = null
 })
 
-function updateCenterWorkbenchPanelWeights(
-  metrics: CenterWorkbenchPanelResizeBaseline,
-  rawLeftWidth: number,
-): void {
+function updateCenterWorkbenchPanelWeights(metrics: CenterWorkbenchPanelResizeBaseline, rawLeftWidth: number): void {
   const leftWidth = clampCenterWorkbenchResizeWidth(metrics.range, rawLeftWidth)
   const leftWeight = metrics.totalWeight * (leftWidth / metrics.totalWidth)
   const rightWeight = metrics.totalWeight - leftWeight
@@ -1981,7 +2002,7 @@ function resizeCenterWorkbenchPanelByKeyboard(event: KeyboardEvent, leftPanel: C
   }
   event.preventDefault()
   updateCenterWorkbenchPanelWeights(metrics, leftWidth)
-  saveSettings()
+  persistMainSettings("settings.persist-center-workbench-keyboard")
 }
 
 function stopCenterWorkbenchPanelResize(): void {
@@ -1990,7 +2011,7 @@ function stopCenterWorkbenchPanelResize(): void {
   applyPendingCenterWorkbenchPanelResize()
   centerWorkbenchPanelResize = null
   delete document.body.dataset.centerWorkbenchPanelResizing
-  saveSettings()
+  persistMainSettings("settings.persist-center-workbench-resize")
 }
 
 for (const separator of document.querySelectorAll<HTMLElement>("[data-center-workbench-separator]")) {
@@ -2032,7 +2053,7 @@ window.addEventListener(
   (e: KeyboardEvent) => {
     if (e.key === "F12") {
       e.preventDefault()
-      void toggleDevtools()
+      runMainAsync("devtools.toggle", () => toggleDevtools())
     }
   },
   listenerOpts,
@@ -2046,11 +2067,12 @@ function applyWindowResize(): void {
 const applyWindowResizeOnFrame = createAnimationFrameScheduler(applyWindowResize)
 disposers.push(() => applyWindowResizeOnFrame.cancel())
 window.addEventListener("resize", applyWindowResizeOnFrame.schedule, listenerOpts)
-if (window.visualViewport) window.visualViewport.addEventListener("resize", applyWindowResizeOnFrame.schedule, listenerOpts)
+if (window.visualViewport)
+  window.visualViewport.addEventListener("resize", applyWindowResizeOnFrame.schedule, listenerOpts)
 window.addEventListener(
   "blur",
   () => {
-    void cancelPaneResize(paneCallbacks)
+    runMainAsync("pane.cancel-resize", () => cancelPaneResize(paneCallbacks))
     stopCenterWorkbenchPanelResize()
   },
   listenerOpts,
@@ -2087,7 +2109,7 @@ if (import.meta.env.DEV) {
 // ── Init ──
 
 ;(window as any).__overlayInitSettled = false
-void (async () => {
+runMainAsync("initApp", async () => {
   try {
     ensureOverlayAppHost()
     await initApp({
@@ -2100,7 +2122,11 @@ void (async () => {
   } catch (error) {
     reportOverlayRuntimeError("initApp", error)
   } finally {
-    await waitForLogDrain()
+    try {
+      await waitForLogDrain()
+    } catch (error) {
+      console.error("[initApp] failed to drain overlay logs", error)
+    }
     ;(window as any).__overlayInitSettled = true
   }
-})()
+})

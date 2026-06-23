@@ -115,7 +115,7 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     if (deps.currentTaskID() !== deps.taskID) return
     deps.scheduleRetry(() => {
       if (deps.currentTaskID() !== deps.taskID) return
-      void performSseReconnect(deps)
+      observeSseReconnect("scheduled-retry", performSseReconnect(deps))
     }, deps.retryDelayMs)
     return
   }
@@ -126,6 +126,18 @@ export async function performSseReconnect(deps: SseReconnectDeps): Promise<void>
     source: "sse-reconnect",
     durationMs: Date.now() - startedAt,
     resumeSequence: nextSequence,
+  })
+}
+
+function observeSseReconnect(owner: string, promise: Promise<void>): void {
+  void promise.catch((error) => {
+    AppLog.error("sse", `unhandled reconnect owner failure: ${owner}`, {
+      error: formatErrorDetails(error),
+      notificationID: `sse:reconnect-owner:${owner}`,
+      notificationTitle: "Live stream reconnect failed",
+      notificationMessage: error instanceof Error ? error.message : String(error),
+      notificationDetails: formatErrorDetails(error),
+    })
   })
 }
 
@@ -186,30 +198,33 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
     if (sseRetryTimer) clearTimeout(sseRetryTimer)
     sseRetryTimer = setTimeout(() => {
       sseRetryTimer = null
-      void performSseReconnect({
-        taskID: source.id,
-        directory,
-        after,
-        currentTaskID: () => activeTaskID(),
-        resumeAfter: () => boardStore.taskSequence,
-        restart: startSSE,
-        replayLive: liveReplayExpiredClose ? false : replayLive,
-        afterRestart: liveReplayExpiredClose
-          ? (restartedTaskID) => {
-              void mergeLatestConversationTail(restartedTaskID, { directory }).catch((error) => {
-                if (error instanceof DOMException && error.name === "AbortError") return
-                console.error("[sse] live replay gap tail merge failed", error)
-              })
-            }
-          : undefined,
-        scheduleRetry: (fn, ms) => {
-          sseRetryTimer = setTimeout(() => {
-            sseRetryTimer = null
-            fn()
-          }, ms)
-        },
-        retryDelayMs: RECONNECT_DELAY_MS,
-      })
+      observeSseReconnect(
+        "stream-close",
+        performSseReconnect({
+          taskID: source.id,
+          directory,
+          after,
+          currentTaskID: () => activeTaskID(),
+          resumeAfter: () => boardStore.taskSequence,
+          restart: startSSE,
+          replayLive: liveReplayExpiredClose ? false : replayLive,
+          afterRestart: liveReplayExpiredClose
+            ? (restartedTaskID) => {
+                void mergeLatestConversationTail(restartedTaskID, { directory }).catch((error) => {
+                  if (error instanceof DOMException && error.name === "AbortError") return
+                  console.error("[sse] live replay gap tail merge failed", error)
+                })
+              }
+            : undefined,
+          scheduleRetry: (fn, ms) => {
+            sseRetryTimer = setTimeout(() => {
+              sseRetryTimer = null
+              fn()
+            }, ms)
+          },
+          retryDelayMs: RECONNECT_DELAY_MS,
+        }),
+      )
     }, RECONNECT_DELAY_MS)
   }
   const handle = transport.openStream(

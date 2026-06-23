@@ -87,10 +87,20 @@ export const [notificationStore, setNotificationStore] = createStore<{ items: Ap
 })
 
 async function logNotificationDiagnostic(message: string, error: unknown): Promise<void> {
-  const { AppLog } = await import("../utils/log")
-  AppLog.warn("notify", message, {
-    message,
-    details: formatErrorDetails(error),
+  try {
+    const { AppLog } = await import("../utils/log")
+    AppLog.warn("notify", message, {
+      message,
+      details: formatErrorDetails(error),
+    })
+  } catch (logError) {
+    console.warn("[notify] failed to write notification diagnostic", { message, error, logError })
+  }
+}
+
+function observeNotifyBackground(owner: string, promise: Promise<unknown>): void {
+  void promise.catch((error) => {
+    void logNotificationDiagnostic(`${owner} failed`, error)
   })
 }
 
@@ -449,7 +459,7 @@ export function routeNotification(event: RoutedNotificationEvent): void {
     taskID,
     centerHistory: true,
   })
-  void sendDesktopIfAllowed(event, taskID, title, body)
+  observeNotifyBackground("desktop notification dispatch", sendDesktopIfAllowed(event, taskID, title, body))
 }
 
 export type BadgeAckKey =
@@ -532,8 +542,8 @@ function pushBadgeProjection(count: number): void {
   queueMicrotask(() => {
     badgePushQueued = false
     const next = pendingBadgeCount
-    void setDockBadge(next)
-    void setTrayAttention(next > 0)
+    observeNotifyBackground("dock badge projection", setDockBadge(next))
+    observeNotifyBackground("tray attention projection", setTrayAttention(next > 0))
   })
 }
 
