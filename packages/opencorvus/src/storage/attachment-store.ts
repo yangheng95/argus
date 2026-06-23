@@ -1,7 +1,6 @@
 import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
-import sharp from "sharp"
 import { SCREENSHOT_BROWSER_THUMBNAIL_VARIANT as SHARED_SCREENSHOT_BROWSER_THUMBNAIL_VARIANT } from "@opencorvus-ai/transport-protocol"
 import { Project } from "@/project/project"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
@@ -9,6 +8,9 @@ import { Database, eq } from "@/storage/db"
 import { PartTable, SessionTable } from "@/session/session.sql"
 import { EngineTaskTable } from "@/engine/engine.sql"
 import { Log } from "@/util/log"
+import { requireRuntimePackage } from "@/runtime/package-require"
+
+const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
 // Map MIME types to the canonical file extension used when we lay attachments
 // down inside a project's .opencorvus/r attachment blob store. The list only
