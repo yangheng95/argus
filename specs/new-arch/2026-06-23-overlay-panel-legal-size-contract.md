@@ -497,3 +497,89 @@ closed-form expression once fixed chrome widths are known.
   fixed-point loop.
 - Rechecked dead CSS: Markdown retired class selectors and the `.oc-icon`
   heading selector now have negative tests so they cannot silently return.
+
+## Follow-up 2026-06-23: CSS Shell Height Minimum Floor
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User feedback 2026-06-23 | Illegal aspect ratios and too-small panels are not acceptable; the legal minimum panel frame must be enforced at runtime. |
+| Euclid read-only audit | CSS `--ui-overlay-shell-height` still computes from raw `100vw` before the native minimum width floor, so descendants can see a smaller height than the body legal frame. |
+| `overlay-layout-frame.ts` | The JS legal frame computes `width = max(viewport.width, minimum.width)` and `height = max(minimum.height, min(viewport.height, width / aspect))`. |
+| `2026-06-23-overlay-legal-shell-height` | `base.css` is the only raw viewport-height owner; child surfaces must consume the shell token instead of raw `vh`. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| CSS shell height owner | `base.css` defines `--ui-overlay-shell-height: min(100vh, calc(100vw * min-height / min-width))`. | Add a shell inline-size token with the same native minimum width floor before deriving shell height. |
+| JS legal frame | `constrainOverlayLayoutFrame()` already applies the minimum width before deriving height. | Keep unchanged and mirror its formula in CSS. |
+| Child surface clamps | Dialog, cmdk, workspace, settings, messages, changes, field, composer, conversation, and titlebar consume `--ui-overlay-shell-height`. | Fix the token value once; do not add per-surface height exceptions. |
+| Browser legal-frame tests | `side-activity-toolbar-browser.test.ts` already probes illegal narrow viewports. | Add a probe proving the resolved shell-height token equals body height and remains at least the overlay minimum. |
+| Static contract tests | `overlay-window-size-contract.test.ts` currently checks for raw formula fragments. | Update it to require the minimum-floor shell-width/height formula. |
+
+### Root Cause
+
+The body itself has `min-width` and `min-height`, but the custom property that
+descendant panels consume was computed from raw `100vw`. In illegal narrow or
+tall browser fixtures, descendants could therefore size compact panels from a
+height smaller than the legal body frame. This is a contract split between the
+CSS shell token and `overlay-layout-frame.ts`.
+
+### Fix Plan
+
+1. Add `--ui-overlay-shell-width: max(100vw, var(--ui-overlay-min-width))` to
+   the body shell owner.
+2. Define `--ui-overlay-shell-height` as the JS legal-frame mirror:
+   `max(min-height, min(100vh, shell-width / min-aspect))`.
+3. Update static guards to require this formula and keep raw `vh`/`vw` ownership
+   in `base.css` only.
+4. Extend browser legal-frame coverage for illegal narrow viewports so the
+   resolved shell-height token equals the rendered body height.
+5. Run focused tests, visual QA, self-review, commit, and push.
+
+### Acceptance
+
+- Descendant panels consuming `--ui-overlay-shell-height` cannot see a height
+  below the legal overlay minimum frame.
+- CSS and JS legal frame formulas share the same minimum width floor and aspect
+  derivation.
+- No fallback height, duplicate panel-size source, compact-layout gate, or
+  per-surface exception is introduced.
+
+### Implementation
+
+- `base.css` now defines `--ui-overlay-shell-width` as
+  `max(100vw, var(--ui-overlay-min-width))`.
+- `--ui-overlay-shell-height` now mirrors `constrainOverlayLayoutFrame()`:
+  minimum height floor first, then raw viewport height capped by legal shell
+  width divided by the minimum aspect ratio.
+- `overlay-window-size-contract.test.ts` now rejects the old raw-`100vw`
+  height derivation.
+- `side-activity-toolbar-browser.test.ts` now resolves the shell-height token
+  in illegal narrow viewport fixtures and asserts it equals the rendered body
+  height while staying above the overlay minimum height.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/overlay-window-size-contract.test.ts packages/overlay/test/overlay-layout-frame.test.ts packages/overlay/test/workspace-surface-consistency.test.ts --timeout 30000`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/side-activity-toolbar-browser.test.ts`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/center-workbench-separator-browser.test.ts`.
+- Visual QA reviewed:
+  `.scratch/side-activity-toolbar-illegal-narrow-legal-frame.png`,
+  `.scratch/center-workbench-three-panel-min-width-1120.png`, and
+  `.scratch/center-workbench-illegal-tall-aspect-frame.png`.
+
+### Self Review
+
+- Rechecked shell ownership: raw `100vh`/`100vw` remain in `base.css`, the
+  existing legal shell owner, and child surfaces still consume the same shell
+  token rather than a second height source.
+- Rechecked formula parity: CSS now applies the native minimum width before
+  deriving height, matching `constrainOverlayLayoutFrame()`.
+- Rechecked browser evidence: illegal narrow viewports keep the right toolbar
+  vertical inside the legal 1120px canvas, and illegal tall viewports keep the
+  overlay content aspect-clamped instead of expanding child panels to the raw
+  viewport height.

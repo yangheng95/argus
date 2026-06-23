@@ -824,9 +824,21 @@ test(
           overlayMinProbe.style.position = "fixed"
           overlayMinProbe.style.visibility = "hidden"
           overlayMinProbe.style.width = "var(--ui-overlay-min-width)"
-          document.body.appendChild(overlayMinProbe)
+          const overlayMinHeightProbe = document.createElement("div")
+          overlayMinHeightProbe.style.position = "fixed"
+          overlayMinHeightProbe.style.visibility = "hidden"
+          overlayMinHeightProbe.style.height = "var(--ui-overlay-min-height)"
+          const shellHeightProbe = document.createElement("div")
+          shellHeightProbe.style.position = "fixed"
+          shellHeightProbe.style.visibility = "hidden"
+          shellHeightProbe.style.height = "var(--ui-overlay-shell-height)"
+          document.body.append(overlayMinProbe, overlayMinHeightProbe, shellHeightProbe)
           const overlayMinWidth = overlayMinProbe.getBoundingClientRect().width
+          const overlayMinHeight = overlayMinHeightProbe.getBoundingClientRect().height
+          const shellHeightToken = shellHeightProbe.getBoundingClientRect().height
           overlayMinProbe.remove()
+          overlayMinHeightProbe.remove()
+          shellHeightProbe.remove()
           const buttons = Array.from(
             toolbarMount.querySelectorAll<HTMLElement>('[data-ui="side-activity-button"][data-side="right"]'),
           )
@@ -873,9 +885,12 @@ test(
             toolbarHeight: toolbarRect.height,
             panelBodyWidth: panelBodyRect.width,
             bodyWidth: document.body.getBoundingClientRect().width,
+            bodyHeight: document.body.getBoundingClientRect().height,
             workspaceWidth: workspaceRect.width,
             viewportWidth: window.innerWidth,
             overlayMinWidth,
+            overlayMinHeight,
+            shellHeightToken,
             clippedButtons,
             hitMisses,
           }
@@ -897,6 +912,14 @@ test(
         illegalDesktopToolbarLayout.panelBodyWidth >= illegalDesktopToolbarLayout.overlayMinWidth - 1,
         JSON.stringify(illegalDesktopToolbarLayout),
       )
+      assert.ok(
+        illegalDesktopToolbarLayout.shellHeightToken >= illegalDesktopToolbarLayout.overlayMinHeight - 1,
+        JSON.stringify(illegalDesktopToolbarLayout),
+      )
+      assert.ok(
+        Math.abs(illegalDesktopToolbarLayout.shellHeightToken - illegalDesktopToolbarLayout.bodyHeight) <= 1,
+        JSON.stringify(illegalDesktopToolbarLayout),
+      )
       assert.ok(illegalDesktopToolbarLayout.toolbarWidth <= 48, JSON.stringify(illegalDesktopToolbarLayout))
       assert.deepEqual(illegalDesktopToolbarLayout.clippedButtons, [], JSON.stringify(illegalDesktopToolbarLayout))
 
@@ -914,6 +937,14 @@ test(
       )
       assert.ok(
         illegalNarrowToolbarLayout.panelBodyWidth >= illegalNarrowToolbarLayout.overlayMinWidth - 1,
+        JSON.stringify(illegalNarrowToolbarLayout),
+      )
+      assert.ok(
+        illegalNarrowToolbarLayout.shellHeightToken >= illegalNarrowToolbarLayout.overlayMinHeight - 1,
+        JSON.stringify(illegalNarrowToolbarLayout),
+      )
+      assert.ok(
+        Math.abs(illegalNarrowToolbarLayout.shellHeightToken - illegalNarrowToolbarLayout.bodyHeight) <= 1,
         JSON.stringify(illegalNarrowToolbarLayout),
       )
       assert.ok(illegalNarrowToolbarLayout.toolbarWidth <= 48, JSON.stringify(illegalNarrowToolbarLayout))

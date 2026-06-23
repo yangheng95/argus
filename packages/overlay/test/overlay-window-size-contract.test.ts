@@ -65,12 +65,14 @@ describe("overlay window and pane size contract", () => {
     expect(tokens).toContain(
       "--ui-overlay-min-aspect-ratio: calc(var(--ui-overlay-min-width-units) / var(--ui-overlay-min-height-units))",
     )
-    expect(base).toContain("--ui-overlay-shell-height: min(")
+    expect(base).toContain("--ui-overlay-shell-width: max(100vw, var(--ui-overlay-min-width))")
+    expect(base).toContain("--ui-overlay-shell-height: max(")
+    expect(base).toContain("var(--ui-overlay-min-height)")
     expect(base).toContain("width: 100vw")
     expect(base).toContain("min-width: var(--ui-overlay-min-width)")
     expect(base).toContain("min-height: var(--ui-overlay-min-height)")
     expect(base).toContain(
-      "calc(100vw * var(--ui-overlay-min-height-units) / var(--ui-overlay-min-width-units))",
+      "var(--ui-overlay-shell-width) * var(--ui-overlay-min-height-units) /",
     )
     expect(base).toContain("height: var(--ui-overlay-shell-height)")
     expect(base).toContain("container: overlay-shell / inline-size")
