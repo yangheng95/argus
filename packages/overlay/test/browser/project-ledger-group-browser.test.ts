@@ -10,6 +10,7 @@ import { startBrowserFixture } from "./http-fixture.ts"
 await ensureOverlayDist()
 
 const PROJECT_DIR = "D:/ledger/workspace"
+const PROJECT_NAME = "Ledger Renamed Project"
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -44,6 +45,11 @@ function taskItem(index: number, directory = PROJECT_DIR): any {
         created,
         updated: created + 10,
       },
+    },
+    project: {
+      id: "project-ledger-browser",
+      name: PROJECT_NAME,
+      worktree: directory,
     },
   }
 }
@@ -112,7 +118,8 @@ async function verifyProjectGroup(
     activity: "tasks" | "mission" | "assistant"
     groupSelector: string
     expectedCount: string
-    expectedDelete: boolean
+    expectedName?: string
+    expectedProjectActions: boolean
     screenshot: string
   },
 ) {
@@ -125,10 +132,15 @@ async function verifyProjectGroup(
   const openState = await page.$eval(input.groupSelector, (node) => {
     const group = node as HTMLElement
     const heading = group.querySelector<HTMLButtonElement>('[data-ui="project-group-toggle"]')
+    const copyButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-copy"]')
+    const renameButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-rename"]')
     const deleteButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-delete"]')
+    const actions = group.querySelector<HTMLElement>(".project-group-actions")
     const body = group.querySelector<HTMLElement>(".project-group-body")
     const headingControls = heading?.getAttribute("aria-controls") ?? ""
     const headingRect = heading?.getBoundingClientRect()
+    const copyRect = copyButton?.getBoundingClientRect()
+    const renameRect = renameButton?.getBoundingClientRect()
     const deleteRect = deleteButton?.getBoundingClientRect()
     return {
       tag: group.tagName,
@@ -139,6 +151,25 @@ async function verifyProjectGroup(
       headingVariant: heading?.dataset.variant ?? "",
       headingSize: heading?.dataset.size ?? "",
       headingTone: heading?.dataset.tone ?? "",
+      actionsExists: !!actions,
+      copyExists: !!copyButton,
+      copyInsideToggle: !!heading?.querySelector('[data-ui="project-group-copy"]'),
+      copyTag: copyButton?.tagName ?? "",
+      copyVariant: copyButton?.dataset.variant ?? "",
+      copySize: copyButton?.dataset.size ?? "",
+      copyTone: copyButton?.dataset.tone ?? "",
+      copyChrome: copyButton?.dataset.chrome ?? "",
+      copyLabel: copyButton?.getAttribute("aria-label") ?? "",
+      copyAfterToggle: !!headingRect && !!copyRect && copyRect.left >= headingRect.right - 0.5,
+      renameExists: !!renameButton,
+      renameInsideToggle: !!heading?.querySelector('[data-ui="project-group-rename"]'),
+      renameTag: renameButton?.tagName ?? "",
+      renameVariant: renameButton?.dataset.variant ?? "",
+      renameSize: renameButton?.dataset.size ?? "",
+      renameTone: renameButton?.dataset.tone ?? "",
+      renameChrome: renameButton?.dataset.chrome ?? "",
+      renameLabel: renameButton?.getAttribute("aria-label") ?? "",
+      renameAfterCopy: !!copyRect && !!renameRect && renameRect.left >= copyRect.right - 0.5,
       deleteExists: !!deleteButton,
       deleteInsideToggle: !!heading?.querySelector('[data-ui="project-group-delete"]'),
       deleteTag: deleteButton?.tagName ?? "",
@@ -151,11 +182,12 @@ async function verifyProjectGroup(
       deletePressed: deleteButton?.getAttribute("aria-pressed") ?? "",
       deleteVisible: !!deleteButton && deleteButton.getClientRects().length > 0,
       deleteWidth: deleteRect?.width ?? 0,
-      deleteAfterToggle: !!headingRect && !!deleteRect && deleteRect.left >= headingRect.right - 0.5,
+      deleteAfterRename: !!renameRect && !!deleteRect && deleteRect.left >= renameRect.right - 0.5,
       headingExpanded: heading?.getAttribute("aria-expanded") ?? "",
       headingControls,
       headingLabel: heading?.getAttribute("aria-label") ?? "",
       headingTabIndex: heading?.tabIndex ?? null,
+      name: group.querySelector<HTMLElement>(".project-group-name")?.textContent?.trim() ?? "",
       count: group.querySelector<HTMLElement>(".project-group-count")?.textContent?.trim() ?? "",
       bodyID: body?.id ?? "",
       bodyMatchesControls:
@@ -172,9 +204,28 @@ async function verifyProjectGroup(
   assert.equal(openState.headingVariant, "ghost")
   assert.equal(openState.headingSize, "mini")
   assert.equal(openState.headingTone, "neutral")
-  assert.equal(openState.deleteExists, input.expectedDelete)
+  assert.equal(openState.actionsExists, true)
+  assert.equal(openState.copyExists, input.expectedProjectActions)
+  assert.equal(openState.copyInsideToggle, false)
+  assert.equal(openState.renameExists, input.expectedProjectActions)
+  assert.equal(openState.renameInsideToggle, false)
+  assert.equal(openState.deleteExists, input.expectedProjectActions)
   assert.equal(openState.deleteInsideToggle, false)
-  if (input.expectedDelete) {
+  if (input.expectedProjectActions) {
+    assert.equal(openState.copyTag, "BUTTON")
+    assert.equal(openState.copyVariant, "ghost")
+    assert.equal(openState.copySize, "icon")
+    assert.equal(openState.copyTone, "neutral")
+    assert.equal(openState.copyChrome, "icon-action")
+    assert.match(openState.copyLabel, /Copy project directory/)
+    assert.equal(openState.copyAfterToggle, true)
+    assert.equal(openState.renameTag, "BUTTON")
+    assert.equal(openState.renameVariant, "ghost")
+    assert.equal(openState.renameSize, "icon")
+    assert.equal(openState.renameTone, "neutral")
+    assert.equal(openState.renameChrome, "icon-action")
+    assert.match(openState.renameLabel, /Rename project/)
+    assert.equal(openState.renameAfterCopy, true)
     assert.equal(openState.deleteTag, "BUTTON")
     assert.equal(openState.deleteClass, "oc-button")
     assert.equal(openState.deleteVariant, "ghost")
@@ -185,12 +236,13 @@ async function verifyProjectGroup(
     assert.equal(openState.deletePressed, "false")
     assert.equal(openState.deleteVisible, true)
     assert.ok(openState.deleteWidth >= 20)
-    assert.equal(openState.deleteAfterToggle, true)
+    assert.equal(openState.deleteAfterRename, true)
   }
   assert.equal(openState.headingExpanded, "true")
   assert.ok(openState.headingControls.length > 0)
   assert.ok(openState.headingLabel.length > 0)
   assert.equal(openState.headingTabIndex, 0)
+  if (input.expectedName) assert.equal(openState.name, input.expectedName)
   assert.equal(openState.count, input.expectedCount)
   assert.equal(openState.bodyID, openState.headingControls)
   assert.equal(openState.bodyMatchesControls, true)
@@ -416,21 +468,22 @@ test(
         activity: "tasks",
         groupSelector: "#leftPanelTasks .project-group",
         expectedCount: "2",
-        expectedDelete: true,
+        expectedName: PROJECT_NAME,
+        expectedProjectActions: true,
         screenshot: "project-ledger-group-tasks.png",
       })
       await verifyProjectGroup(page, {
         activity: "mission",
         groupSelector: '[data-ui="mission-project-group"]',
         expectedCount: "2",
-        expectedDelete: false,
+        expectedProjectActions: false,
         screenshot: "project-ledger-group-mission.png",
       })
       await verifyProjectGroup(page, {
         activity: "assistant",
         groupSelector: '[data-ui="coding-assistant-project-group"]',
         expectedCount: "2",
-        expectedDelete: false,
+        expectedProjectActions: false,
         screenshot: "project-ledger-group-coding-assistant.png",
       })
       await page.setViewport({ width: 390, height: 720 })
@@ -438,7 +491,8 @@ test(
         activity: "tasks",
         groupSelector: "#leftPanelTasks .project-group",
         expectedCount: "2",
-        expectedDelete: true,
+        expectedName: PROJECT_NAME,
+        expectedProjectActions: true,
         screenshot: "project-ledger-group-tasks-mobile.png",
       })
 

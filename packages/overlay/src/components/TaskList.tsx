@@ -8,7 +8,8 @@ import { buildTaskTree, flattenGroup as flattenGroupPure, type TaskTreeEntry, ty
 import { settingsStore } from "../store/settings"
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue"
 import { downloadTaskProjectArchive } from "../services/task"
-import { deleteProject } from "../services/workspace"
+import { deleteProject, renameProject } from "../services/workspace"
+import { showAppDialog } from "../services/app-dialog"
 import {
   notifyError,
   notifySuccess,
@@ -105,6 +106,11 @@ function projectDirectoryOf(item: any): string {
   // Pending tasks have no server-assigned directory yet; attribute them to the
   // currently active project so the user sees them grouped correctly.
   return settingsStore.directory || ""
+}
+
+function projectNameOf(item: any): string {
+  const name = item?.project?.name
+  return typeof name === "string" ? name.trim() : ""
 }
 
 // ── DeleteButton (two-step inline confirm) ──
@@ -745,16 +751,17 @@ export function TaskList(props: TaskListProps) {
   // creation-time stream. Lifecycle changes must not move rows between
   // "active" and "recent" sections. Top-level items only — nested children
   // are appended below their parent by `flattenGroup` instead.
-  type Group = { directory: string; latest: number; items: any[] }
+  type Group = { directory: string; projectName: string; latest: number; items: any[] }
   const grouped = createMemo<Group[]>(() => {
     const byDir = new Map<string, Group>()
     for (const item of tree().topLevelItems) {
       const dir = projectDirectoryOf(item)
       let g = byDir.get(dir)
       if (!g) {
-        g = { directory: dir, latest: 0, items: [] }
+        g = { directory: dir, projectName: "", latest: 0, items: [] }
         byDir.set(dir, g)
       }
+      if (!g.projectName) g.projectName = projectNameOf(item)
       g.items.push(item)
       const created = taskCreatedAt(item)
       if (created > g.latest) g.latest = created
@@ -937,6 +944,61 @@ export function TaskList(props: TaskListProps) {
     }
   }
 
+  async function handleCopyProject(directory: string): Promise<void> {
+    const target = String(directory || "").trim()
+    const noticeID = `project:copy:${projectDirectoryKey(target)}`
+    try {
+      if (!target) throw new Error("Project directory is required")
+      if (!navigator.clipboard?.writeText) throw new Error(t("project.copy_clipboard_unavailable"))
+      await navigator.clipboard.writeText(target)
+      notifySuccess({
+        id: noticeID,
+        title: t("project.copy_success_title"),
+        message: t("project.copy_success", { directory: target }),
+      })
+    } catch (err) {
+      notifyError({
+        id: noticeID,
+        title: t("project.copy_failed_title"),
+        message: t("project.copy_failed", { error: err instanceof Error ? err.message : String(err) }),
+        details: formatErrorDetails(err),
+      })
+    }
+  }
+
+  async function handleRenameProject(directory: string, currentName: string): Promise<void> {
+    const target = String(directory || "").trim()
+    const noticeID = `project:rename:${projectDirectoryKey(target)}`
+    try {
+      if (!target) throw new Error("Project directory is required")
+      const dialog = await showAppDialog({
+        title: t("project.rename_dialog_title"),
+        input: true,
+        inputLabel: t("project.rename_input_label"),
+        inputValue: currentName,
+        cancel: true,
+        okLabel: t("project.rename_confirm"),
+      })
+      if (!dialog.confirmed) return
+      const nextName = String(dialog.value || "").trim()
+      if (!nextName || nextName === currentName.trim()) return
+      const result = await renameProject(target, nextName)
+      notifySuccess({
+        id: noticeID,
+        title: t("project.rename_success_title"),
+        message: t("project.rename_success", { name: result.name }),
+      })
+      await loadTasks()
+    } catch (err) {
+      notifyError({
+        id: noticeID,
+        title: t("project.rename_failed_title"),
+        message: t("project.rename_failed", { error: err instanceof Error ? err.message : String(err) }),
+        details: formatErrorDetails(err),
+      })
+    }
+  }
+
   return (
     <div class="task-list-panel">
       <Show when={showSearch() && (allItems().length > 4 || searchQuery())}>
@@ -1023,9 +1085,12 @@ export function TaskList(props: TaskListProps) {
             return (
               <ProjectLedgerGroup
                 directory={group.directory}
+                projectName={group.projectName}
                 count={group.items.length}
                 collapsed={collapsed()}
                 onToggle={() => directoryCollapse.toggle(group.directory)}
+                onCopyProject={handleCopyProject}
+                onRenameProject={handleRenameProject}
                 onDeleteProject={handleDeleteProject}
               >
                 <TaskSection

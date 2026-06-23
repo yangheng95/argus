@@ -10,6 +10,7 @@ import {
   deleteProject,
   pickDirectory,
   pickFiles,
+  renameProject,
   setWorkspaceDirectory,
   syncActiveDirectoryApiContext,
 } from "../src/services/workspace"
@@ -350,6 +351,55 @@ describe("workspace active directory", () => {
       kind: "settings.save",
       payload: expect.objectContaining({ directory: undefined }),
     })
+  })
+
+  test("renameProject sends a project-scoped PATCH and confirms the returned name", async () => {
+    const requests: TransportRequest[] = []
+    __setHostTransportForTest({
+      kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
+      async request(req) {
+        requests.push(req)
+        if (req.path === "project/current" && req.method === "PATCH") {
+          return {
+            status: 200,
+            ok: true,
+            headers: {},
+            body: {
+              id: "prj_rename_current",
+              worktree: "D:/repo/current",
+              name: "Renamed Project",
+              sandboxes: [],
+              time: { created: 1, updated: 2 },
+            },
+          }
+        }
+        return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+      },
+      openStream() {
+        return { close: () => undefined }
+      },
+      async native() {
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe: () => undefined }
+      },
+    } satisfies HostTransport)
+    configure({ directory: "D:/repo/current" })
+
+    const result = await renameProject("D:/repo/current", "  Renamed Project  ")
+
+    expect(result).toEqual({
+      projectID: "prj_rename_current",
+      directory: "D:/repo/current",
+      name: "Renamed Project",
+    })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.path).toBe("project/current")
+    expect(requests[0]?.method).toBe("PATCH")
+    expect(requests[0]?.query?.directory).toBe("D:/repo/current")
+    expect(requests[0]?.body).toEqual({ kind: "json", value: { name: "Renamed Project" } })
   })
 
   test("manual applyDirectory clears selected task state before reloading the new project", async () => {

@@ -890,6 +890,14 @@
   min-width: 0;
 }
 
+.project-group-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(2px * var(--ui-scale));
+  min-width: 0;
+}
+
 .project-group .oc-button[data-ui="project-group-toggle"] {
   --oc-button-height: calc(26px * var(--ui-scale));
   --oc-button-padding-x: calc(6px * var(--ui-scale));
@@ -918,6 +926,8 @@
   --oc-button-color: var(--text-soft);
 }
 
+.project-group .oc-button[data-ui="project-group-copy"],
+.project-group .oc-button[data-ui="project-group-rename"],
 .project-group .oc-button[data-ui="project-group-delete"] {
   --oc-button-height: calc(24px * var(--ui-scale));
   --oc-button-padding-x: 0;
@@ -932,6 +942,14 @@
   min-height: calc(24px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   flex: 0 0 auto;
+}
+
+.project-group .oc-button[data-ui="project-group-copy"]:hover,
+.project-group .oc-button[data-ui="project-group-copy"]:focus-visible,
+.project-group .oc-button[data-ui="project-group-rename"]:hover,
+.project-group .oc-button[data-ui="project-group-rename"]:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  --oc-button-color: var(--text-strong);
 }
 
 .project-group .oc-button[data-ui="project-group-delete"]:hover,

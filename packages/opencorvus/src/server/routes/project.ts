@@ -43,6 +43,10 @@ const CleanupCandidates = z.object({
   worktreeGCCandidates: WorktreeGCCandidate.array(),
 })
 
+const CurrentProjectUpdateInput = z.object({
+  name: z.string().trim().min(1),
+})
+
 export const ProjectRoutes = lazy(() =>
   new Hono()
     .get(
@@ -109,6 +113,32 @@ export const ProjectRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await deleteCurrentProject())
+      },
+    )
+    .patch(
+      "/current",
+      describeRoute({
+        summary: "Update current project",
+        description: "Rename the currently active project record. The source directory on disk is not renamed.",
+        operationId: "project.current.update",
+        responses: {
+          200: {
+            description: "Updated current project information",
+            content: {
+              "application/json": {
+                schema: resolver(Project.Info),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("json", CurrentProjectUpdateInput),
+      async (c) => {
+        const body = c.req.valid("json")
+        const project = await Project.update({ projectID: Instance.project.id, name: body.name })
+        await Instance.refresh()
+        return c.json(project)
       },
     )
     .post(

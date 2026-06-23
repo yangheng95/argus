@@ -56,6 +56,12 @@ export interface DeleteProjectResult {
   deletedActive: boolean
 }
 
+export interface RenameProjectResult {
+  projectID: string
+  directory: string
+  name: string
+}
+
 // IDE means Integrated Development Environment; these IDs are the public
 // choices surfaced by the workspace UI and handled by the native host.
 export const PROJECT_EDITORS: ProjectEditor[] = [
@@ -384,6 +390,35 @@ export async function deleteProject(directory: string): Promise<DeleteProjectRes
   removeRecentDirectory(target)
   if (deletedActive) closeProject()
   return parsed
+}
+
+function parseRenameProjectResult(value: any, expectedName: string): RenameProjectResult {
+  if (!value || typeof value !== "object") throw new Error("renameProject: server returned an invalid project payload")
+  if (typeof value.id !== "string" || !value.id) throw new Error("renameProject: server response is missing project id")
+  if (typeof value.worktree !== "string" || !value.worktree) {
+    throw new Error("renameProject: server response is missing project directory")
+  }
+  if (typeof value.name !== "string" || value.name !== expectedName) {
+    throw new Error("renameProject: server response did not confirm the project name")
+  }
+  return {
+    projectID: value.id,
+    directory: value.worktree,
+    name: value.name,
+  }
+}
+
+export async function renameProject(directory: string, name: string): Promise<RenameProjectResult> {
+  const target = String(directory || "").trim()
+  if (!target) throw new Error("renameProject: directory is required")
+  const nextName = String(name || "").trim()
+  if (!nextName) throw new Error("renameProject: name is required")
+  const result = await apiJson(directoryScopedPath("project/current", target, "renameProject"), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: nextName }),
+  })
+  return parseRenameProjectResult(result, nextName)
 }
 
 // ── enterEmptyWorkspace ──
