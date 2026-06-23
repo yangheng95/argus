@@ -46,6 +46,17 @@ async function leftPaneState(page: OverlayPage) {
     const separator = node as HTMLElement
     const sidebar = document.querySelector<HTMLElement>("#sidebar")!
     const chat = document.querySelector<HTMLElement>("#chatSection")!
+    const tokenPx = (name: string) => {
+      const probe = document.createElement("div")
+      probe.style.position = "absolute"
+      probe.style.visibility = "hidden"
+      probe.style.pointerEvents = "none"
+      probe.style.width = `var(${name})`
+      document.body.appendChild(probe)
+      const width = probe.getBoundingClientRect().width
+      probe.remove()
+      return width
+    }
     const style = getComputedStyle(separator)
     const min = separator.getAttribute("aria-valuemin")
     const max = separator.getAttribute("aria-valuemax")
@@ -67,6 +78,7 @@ async function leftPaneState(page: OverlayPage) {
       focused: document.activeElement === separator,
       sidebarWidth: Math.round(sidebar.getBoundingClientRect().width),
       chatWidth: Math.round(chat.getBoundingClientRect().width),
+      chatMinWidth: Math.round(tokenPx("--ui-chat-min-width")),
     }
   })
 }
@@ -77,6 +89,8 @@ async function leftPaneMaxContract(page: OverlayPage) {
   return await page.$eval("#leftPaneResizer", (node) => {
     const separator = node as HTMLElement
     const panelBody = document.querySelector<HTMLElement>("#panelBody")!
+    const leftToolbar = document.querySelector<HTMLElement>("#solidLeftActivityToolbar")!
+    const rightToolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!
     const tokenPx = (name: string) => {
       const probe = document.createElement("div")
       probe.style.position = "absolute"
@@ -91,11 +105,15 @@ async function leftPaneMaxContract(page: OverlayPage) {
     const max = separator.getAttribute("aria-valuemax")
     const separatorWidth = separator.getBoundingClientRect().width
     const panelWidth = panelBody.getBoundingClientRect().width
+    const leftToolbarWidth = leftToolbar.getBoundingClientRect().width
+    const rightToolbarWidth = rightToolbar.getBoundingClientRect().width
     const chatMin = tokenPx("--ui-chat-min-width")
     const railMin = tokenPx("--ui-rail-min-width")
     return {
       maxValue: max === null ? null : Number(max),
-      expectedMaxWithoutRetiredRightPane: Math.round(Math.max(railMin, panelWidth - separatorWidth - chatMin)),
+      expectedMaxWithActivityChromeReserve: Math.round(
+        Math.max(railMin, panelWidth - separatorWidth - leftToolbarWidth - rightToolbarWidth - chatMin),
+      ),
     }
   })
 }
@@ -420,8 +438,8 @@ test(
       assert.equal(initial.tabIndex, 0)
       assert.ok(initial.minValue! < initial.maxValue!)
       assert.ok(
-        Math.abs(initial.maxValue! - initialMaxContract.expectedMaxWithoutRetiredRightPane) <= 2,
-        `left pane max should not reserve retired right pane width: ${JSON.stringify({
+        Math.abs(initial.maxValue! - initialMaxContract.expectedMaxWithActivityChromeReserve) <= 2,
+        `left pane max should reserve activity toolbar chrome before chat minimum: ${JSON.stringify({
           initial,
           initialMaxContract,
         })}`,
@@ -462,6 +480,10 @@ test(
         (state) => state.nowValue !== null && state.maxValue !== null && state.nowValue >= state.maxValue - 2,
       )
       assert.ok(atMax.sidebarWidth >= atMax.maxValue! - 2)
+      assert.ok(
+        atMax.chatWidth >= atMax.chatMinWidth - 2,
+        `left pane max left chat below its token minimum: ${JSON.stringify(atMax)}`,
+      )
 
       const afterMoveBurst = await page.$eval("#leftPaneResizer", (node) => {
         const probe = (window as any).__paneDragProbe
