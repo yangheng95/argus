@@ -132,15 +132,14 @@ function clampNumber(value: number, min: number, max: number): number {
 
 /**
  * Return the rendered width of a pane resize handle element.
- * Falls back to the --ui-resizer-width CSS custom property.
  */
 export function paneHandleWidth(node: Element | null | undefined): number {
   if (!node) return 0
   const style = getComputedStyle(node as HTMLElement)
   if (style.display === "none" || style.visibility === "hidden") return 0
   const width = node.getBoundingClientRect().width
-  if (width > 0) return width
-  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-resizer-width")) || 0
+  if (width <= 0) throw new Error("Pane resize handle must render a positive width.")
+  return width
 }
 
 function paneHandleElement(config: PaneConfig): HTMLElement | null {

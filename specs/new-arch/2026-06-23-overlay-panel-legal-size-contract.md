@@ -996,3 +996,71 @@ would reintroduce the exact live resize feedback loop the project retired.
   `tauri::WindowEvent::Resized` correction path was introduced.
 - Rechecked scope: no macOS/Linux dependency, unverified native hook, fallback
   path, or live `set_size()` resize loop was added.
+
+## Follow-up 2026-06-23: Pane Handle Width Single Source
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| User feedback 2026-06-23 | Minimum panel width is a legality constraint; illegal sizes must be rejected instead of hidden behind alternate values. |
+| `2026-06-22-pane-semantics-layout-frame.md` | `services/pane.ts` owns pane layout and handle semantics; do not add another pane writer. |
+| This spec | Pane legal max reserves fixed left and right toolbar chrome from the same solver. |
+| Static grep | `paneHandleWidth()` is consumed only by `readPaneGeometrySnapshot()`, which feeds `resolvedPaneWidths()` and `paneResizeBounds()`. |
+
+### Call Point Inventory
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Pane resize handle CSS | `.pane-resizer` has `flex: 0 0 var(--ui-resizer-width)` and `min-width: var(--ui-resizer-width)`. | Keep CSS as the only rendered handle width source. |
+| Pane service handle measurement | `paneHandleWidth()` read `getBoundingClientRect().width`, then read `--ui-resizer-width` when the rendered width was not positive. | Remove the token fallback; a visible handle that renders at zero width is an invalid layout contract. |
+| Pane layout solver | `readPaneGeometrySnapshot()` uses `paneHandleWidth()` for both pane max and ARIA range. | Keep the single solver and let invalid handle geometry fail instead of inventing a second value. |
+| Tests | `pane-config.test.ts` already pins pane ownership and geometry inputs. | Extend it to reject the retired token fallback and require the positive rendered-width assertion. |
+
+### Root Cause
+
+`paneHandleWidth()` had two sources for one physical width: the rendered DOM
+rectangle and the `--ui-resizer-width` token. The token already owns the CSS
+layout, so reading it again after a zero rendered width hides broken pane
+geometry and lets resize math proceed with a value the browser did not
+actually render.
+
+### Fix Plan
+
+1. Remove the `--ui-resizer-width` runtime fallback from `paneHandleWidth()`.
+2. Throw when a visible pane handle renders with a non-positive width.
+3. Add static coverage rejecting the fallback string and requiring the
+   positive-width assertion.
+4. Re-run focused pane tests, overlay typecheck, the real left-pane browser
+   test, screenshot review, self-review, commit, and push.
+
+### Acceptance
+
+- Pane resize handle width has one source: the rendered `.pane-resizer` box.
+- A visible zero-width handle fails fast instead of continuing with a duplicate
+  token value.
+- Pane layout and ARIA semantics remain owned by `services/pane.ts`; no second
+  writer, fallback width, resize gate, or alternate layout path is introduced.
+
+### Verification
+
+- PASS: `bun test packages/overlay/test/pane-config.test.ts packages/overlay/test/overlay-window-size-contract.test.ts --timeout 30000`.
+- PASS: `bun run --cwd packages/overlay typecheck`.
+- PASS: `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/left-pane-resizer-browser.test.ts`.
+- Visual QA reviewed:
+  `.scratch/left-pane-resizer-accessibility.png`,
+  `.scratch/left-pane-resizer-desktop-resize.png`,
+  `.scratch/left-pane-resizer-illegal-narrow-legal-frame.png`, and
+  `.scratch/left-pane-resizer-restored-desktop-resize.png`.
+
+### Self Review
+
+- Rechecked `paneHandleWidth()`; it now consumes only the rendered handle
+  rectangle and rejects visible zero-width handles.
+- Rechecked `pane-config.test.ts`; it rejects reintroducing the
+  `--ui-resizer-width` runtime fallback string.
+- Rechecked the browser screenshots; legal desktop layout, illegal narrow legal
+  frame, and restored desktop resize states keep the left pane, chat area, and
+  right toolbar coherent.
+- Rechecked scope: no second pane writer, compatibility path, resize gate, or
+  alternate layout source was added.
