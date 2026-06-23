@@ -91,7 +91,8 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain('apiJson(memoryPath("panel/knowledge/memory/search", directory)')
     expect(source).toContain("memoryPath(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, currentDirectory())")
     expect(source).toContain("if (errorMessage()) return errorMessage()")
-    expect(source).toContain("if (!isActive() && !props.compact) return")
+    expect(source).toContain("if (!isActive()) return")
+    expect(source).not.toContain("if (!isActive() && !props.compact) return")
   })
 
   test("extension loaders surface request failures instead of rewriting stores to empty values", () => {
