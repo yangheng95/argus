@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { ServeRuntimeMemoryMetrics } from "../../src/runtime/memory-metrics"
+import { expectNoProcessErrors } from "../fixture/process-errors"
 
 describe("serve runtime memory metrics", () => {
   test("parses configurable interval with explicit disable values", () => {
@@ -86,5 +87,26 @@ describe("serve runtime memory metrics", () => {
     handle.stop()
     expect(handle.intervalMs).toBe(0)
     expect(logged).toEqual([])
+  })
+
+  test("metrics logger failures do not leak process errors", async () => {
+    await expectNoProcessErrors(async () => {
+      const handle = ServeRuntimeMemoryMetrics.start({
+        intervalMs: 10,
+        logger: {
+          info() {
+            throw new Error("info failed")
+          },
+          warn() {
+            throw new Error("warn failed")
+          },
+        },
+      })
+      try {
+        await Bun.sleep(30)
+      } finally {
+        handle.stop()
+      }
+    })
   })
 })

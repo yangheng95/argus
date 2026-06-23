@@ -71,7 +71,7 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
   let shutdownPromise: Promise<void> | null = null
   const requestShutdown = (trigger: string) => {
     if (shutdownPromise) return shutdownPromise
-    shutdownPromise = (async () => {
+    const shutdown = (async () => {
       const reason = `Server shutdown: ${trigger}`
       console.log(`[serve] shutdown requested via ${trigger}`)
       try {
@@ -98,11 +98,17 @@ export async function handleServeCommand(args: ArgumentsCamelCase<ServeOptions>)
           console.error("[serve] server.stop timeout, escalating:", SERVE_STOP_TIMEOUT_MILLISECONDS)
         },
       })
-    })().finally(() => {
-      clearServerShutdownHandler(requestShutdown)
-      setTimeout(() => process.exit(0), 0)
-    })
-    return shutdownPromise
+    })()
+    shutdownPromise = shutdown
+    void shutdown
+      .finally(() => {
+        clearServerShutdownHandler(requestShutdown)
+        setTimeout(() => process.exit(0), 0)
+      })
+      .catch((error) => {
+        console.error("[serve] shutdown failed:", error)
+      })
+    return shutdown
   }
   registerServerShutdownHandler(requestShutdown)
 

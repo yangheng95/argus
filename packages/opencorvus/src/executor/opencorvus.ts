@@ -11,6 +11,9 @@ import { createEventQueue } from "@/util/event-queue"
 import { EngineConfig } from "@/engine/config"
 import { mapSessionBusEvent } from "@/protocol/session-mirror"
 import { cancelSessionPromptByID } from "@/engine/cancellation-scope"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "opencorvus-executor" })
 
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -152,7 +155,19 @@ export namespace OpencorvusExecutor {
     const handler = (msg: { payload: any }) => {
       const event = msg.payload
       if (!event || typeof event.type !== "string") return
-      const next = mapSessionBusEvent(event, input)
+      let next: z.infer<typeof EventResult> | undefined
+      try {
+        next = mapSessionBusEvent(event, input)
+      } catch (error) {
+        log.warn("executor event mapping failed", {
+          goalID: input.goalID,
+          sessionID: input.sessionID,
+          queueTaskID: input.queueTaskID,
+          eventType: event.type,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        return
+      }
       if (!next) return
       const target = queue
       if (target) {

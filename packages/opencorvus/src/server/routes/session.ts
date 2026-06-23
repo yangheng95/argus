@@ -39,6 +39,11 @@ import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@
 
 const log = Log.create({ service: "server" })
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
 async function applySessionPromptRouteOverlay(sessionID: string, prompt: Omit<SessionPrompt.PromptInput, "sessionID">) {
   const session = await getActiveProjectSession(sessionID)
   if (isRightSidebarCodingAssistantSession(session)) {
@@ -418,19 +423,49 @@ export const SessionRoutes = lazy(() =>
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
+          let heartbeat: ReturnType<typeof setInterval> | undefined
+          let stopProtocol = () => {}
+          let stopMirror = () => {}
+          let finishStream = () => {}
+          let closed = false
+          const cleanup = (input?: { closeStream?: boolean; error?: unknown }) => {
+            if (closed) return
+            closed = true
+            if (heartbeat) clearInterval(heartbeat)
+            stopMirror()
+            stopProtocol()
+            if (input?.error) {
+              log.warn("session event stream write failed", {
+                sessionID,
+                error: errorMessage(input.error),
+              })
+            }
+            if (input?.closeStream) stream.close()
+            finishStream()
+          }
+          const finished = new Promise<void>((resolve) => {
+            finishStream = resolve
+          })
           let writes = Promise.resolve()
           const writeData = (data: string) => {
-            writes = writes.then(() => stream.writeSSE({ data }))
+            writes = writes
+              .then(() => {
+                if (closed) return
+                return stream.writeSSE({ data })
+              })
+              .catch((error) => {
+                cleanup({ closeStream: true, error })
+              })
             return writes
           }
-          const stopProtocol = ProtocolStore.subscribeEvents(
+          stopProtocol = ProtocolStore.subscribeEvents(
             (event) => {
               if (event.sessionID !== sessionID) return
               void writeData(JSON.stringify(protocolSessionEvent(event)))
             },
             { sessionID },
           )
-          const stopMirror = subscribeSessionMirror(sessionID)
+          stopMirror = subscribeSessionMirror(sessionID)
           await writeData(
             JSON.stringify({
               event_id: `session-connected-${Date.now()}`,
@@ -443,7 +478,11 @@ export const SessionRoutes = lazy(() =>
               payload: { sessionID },
             }),
           )
-          const heartbeat = setInterval(() => {
+          if (closed) {
+            await writes
+            return
+          }
+          heartbeat = setInterval(() => {
             const now = Date.now()
             void writeData(
               JSON.stringify({
@@ -458,14 +497,10 @@ export const SessionRoutes = lazy(() =>
               }),
             )
           }, 10_000)
-          await new Promise<void>((resolve) => {
-            stream.onAbort(() => {
-              clearInterval(heartbeat)
-              stopMirror()
-              stopProtocol()
-              resolve()
-            })
+          stream.onAbort(() => {
+            cleanup()
           })
+          await finished
           await writes
         })
       },

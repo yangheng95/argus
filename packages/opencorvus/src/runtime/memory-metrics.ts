@@ -93,16 +93,27 @@ export namespace ServeRuntimeMemoryMetrics {
       try {
         logger.info("runtime.memory.metrics", await collect())
       } catch (error) {
-        logger.warn("runtime.memory.metrics.failed", {
-          error: error instanceof Error ? error.message : String(error),
-        })
+        try {
+          logger.warn("runtime.memory.metrics.failed", {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        } catch (warnError) {
+          console.warn(
+            `[runtime.memory.metrics] logger.warn failed: ${
+              warnError instanceof Error ? warnError.message : String(warnError)
+            }`,
+          )
+        }
       }
     }
+    const emitObserved = () => {
+      void emit().catch(() => {})
+    }
     const timer = setInterval(() => {
-      void emit()
+      emitObserved()
     }, intervalMs)
     timer.unref()
-    void emit()
+    emitObserved()
     return {
       intervalMs,
       stop() {

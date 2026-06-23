@@ -38,13 +38,17 @@ export namespace BrowserMCPNodeLauncher {
       await terminateChildTree(child, signal)
     }
     const sigint = () => {
-      void terminate("SIGINT").finally(() => process.exit(130))
+      void terminate("SIGINT")
+        .catch((error) => logLauncherError("SIGINT terminate failed", error))
+        .finally(() => process.exit(130))
     }
     const sigterm = () => {
-      void terminate("SIGTERM").finally(() => process.exit(143))
+      void terminate("SIGTERM")
+        .catch((error) => logLauncherError("SIGTERM terminate failed", error))
+        .finally(() => process.exit(143))
     }
     const stdinClosed = () => {
-      void terminate("SIGTERM")
+      void terminate("SIGTERM").catch((error) => logLauncherError("stdin close terminate failed", error))
     }
     process.once("SIGINT", sigint)
     process.once("SIGTERM", sigterm)
@@ -137,7 +141,11 @@ export namespace BrowserMCPNodeLauncher {
         })
         killer.once("exit", () => resolve())
         killer.once("error", () => {
-          child.kill(signal)
+          try {
+            child.kill(signal)
+          } catch (error) {
+            logLauncherError("taskkill fallback failed", error)
+          }
           resolve()
         })
       })
@@ -147,13 +155,21 @@ export namespace BrowserMCPNodeLauncher {
     try {
       process.kill(-pid, signal)
     } catch {
-      child.kill(signal)
+      try {
+        child.kill(signal)
+      } catch (error) {
+        logLauncherError("process group terminate fallback failed", error)
+      }
     }
     const force = setTimeout(() => {
       try {
         process.kill(-pid, "SIGKILL")
       } catch {
-        child.kill("SIGKILL")
+        try {
+          child.kill("SIGKILL")
+        } catch (error) {
+          logLauncherError("process group force kill fallback failed", error)
+        }
       }
     }, 2_000)
     force.unref()
@@ -191,5 +207,9 @@ export namespace BrowserMCPNodeLauncher {
       .access(file)
       .then(() => true)
       .catch(() => false)
+  }
+
+  function logLauncherError(message: string, error: unknown) {
+    console.error(`[browser-mcp-launcher] ${message}: ${error instanceof Error ? error.message : String(error)}`)
   }
 }

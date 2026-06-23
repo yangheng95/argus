@@ -335,11 +335,18 @@ export namespace LSP {
       const task = schedule(server, root, root + server.id)
       s.spawning.set(root + server.id, task)
 
-      task.finally(() => {
-        if (s.spawning.get(root + server.id) === task) {
-          s.spawning.delete(root + server.id)
-        }
-      })
+      void task
+        .finally(() => {
+          if (s.spawning.get(root + server.id) === task) {
+            s.spawning.delete(root + server.id)
+          }
+        })
+        .catch((error) => {
+          log.warn("lsp spawn cleanup failed", {
+            serverID: server.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
 
       const client = await task
       if (!client) continue

@@ -424,10 +424,12 @@ export const BashTool = Tool.define("bash", async () => {
         const readinessMs = Math.min(timeout, BASH_BACKGROUND_READINESS_MAX_MS)
         await new Promise<void>((resolve) => {
           const timer = setTimeout(resolve, readinessMs)
-          supervisor.exited.finally(() => {
-            clearTimeout(timer)
-            resolve()
-          })
+          void supervisor.exited
+            .finally(() => {
+              clearTimeout(timer)
+              resolve()
+            })
+            .catch(() => undefined)
         })
         const resultMetadata: string[] = [
           `bash tool returned while command continues running in background (pid=${supervisor.pid ?? "unknown"})`,

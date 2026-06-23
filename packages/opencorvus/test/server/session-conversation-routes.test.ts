@@ -45,6 +45,17 @@ describe("session conversation routes", () => {
     await resetDatabase()
   })
 
+  test("session event stream owns write failures", async () => {
+    const source = await Bun.file(new URL("../../src/server/routes/session.ts", import.meta.url)).text()
+    const eventsStart = source.indexOf('"/:sessionID/events"')
+    const sessionGetStart = source.indexOf('"/:sessionID"', eventsStart + 1)
+    const eventsRoute = source.slice(eventsStart, sessionGetStart)
+
+    expect(eventsRoute).toContain("cleanup({ closeStream: true, error })")
+    expect(eventsRoute).toContain("await finished")
+    expect(eventsRoute).toContain("if (closed) return")
+  })
+
   test("GET /session/:sessionID/conversation hydrates mission session conversation shape", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

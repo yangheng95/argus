@@ -7,6 +7,9 @@ import { sessionGoalID, sessionRole } from "@/orchestrator/task-event"
 import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { Database, eq } from "@/storage/db"
 import { MessageTable } from "@/session/session.sql"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "session-mirror" })
 
 export type SessionBusEvent = {
   type: string
@@ -279,8 +282,19 @@ export function subscribeSessionMirror(sessionID: string): () => void {
   const handler = (envelope: { payload?: SessionBusEvent }) => {
     const event = envelope.payload
     if (!event || typeof event.type !== "string" || !event.properties) return
-    void mirrorSessionBusEvent(event, sessionID)
+    void mirrorSessionBusEvent(event, sessionID).catch((error) => {
+      log.warn("session mirror event failed", {
+        sessionID,
+        eventType: event.type,
+        error: errorMessage(error),
+      })
+    })
   }
   GlobalBus.on("event", handler)
   return () => GlobalBus.off("event", handler)
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
 }

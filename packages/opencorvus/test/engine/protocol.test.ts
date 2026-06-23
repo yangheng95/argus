@@ -30,12 +30,13 @@ function seedTask() {
       .insert(ProjectTable)
       .values({
         id: projectID,
-        worktree: process.cwd(),
+        worktree: tmp.path,
         name: "Protocol Test",
         sandboxes: "[]",
         time_created: now,
         time_updated: now,
       })
+      .onConflictDoNothing()
       .run(),
   )
   Database.use((db) =>
@@ -56,19 +57,42 @@ function seedTask() {
 }
 
 beforeEach(async () => {
+  await Instance.disposeAll()
   await resetDatabase()
   tmp = await tmpdir()
-  projectID = `project_protocol_${Date.now()}`
-  taskID = `tsk_${Date.now().toString(16)}ProtocolTest`
-  seedTask()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      projectID = Instance.project.id
+      taskID = `tsk_${Date.now().toString(16)}ProtocolTest`
+      seedTask()
+    },
+  })
 })
 
 afterEach(async () => {
+  await Instance.disposeAll()
   await resetDatabase()
   await tmp?.[Symbol.asyncDispose]?.()
 })
 
 describe("orchestrator protocol", () => {
+  test("orchestrator SSE streams own write failures", async () => {
+    const source = await Bun.file(new URL("../../src/server/routes/orchestrator.ts", import.meta.url)).text()
+    const taskListStart = source.indexOf('"/task/events"')
+    const taskRouteStart = source.indexOf('"/task/:taskID"', taskListStart)
+    const taskEventsStart = source.indexOf('"/task/:taskID/events"')
+    const conversationStart = source.indexOf('"/task/:taskID/conversation"', taskEventsStart)
+    const taskList = source.slice(taskListStart, taskRouteStart)
+    const taskEvents = source.slice(taskEventsStart, conversationStart)
+
+    for (const section of [taskList, taskEvents]) {
+      expect(section).toContain("cleanup({ closeStream: true, error })")
+      expect(section).toContain("await finished")
+      expect(section).toContain("if (closed) return")
+    }
+  })
+
   test("stamps notify metadata onto per-task and task-list protocol events", () => {
     const event = {
       id: "pev_notify",
@@ -796,11 +820,11 @@ describe("orchestrator protocol", () => {
           resolvedRole: "user",
           channel: "main",
           part: {
-            resolvedRole: "user",
-            channel: "main",
             messageID: rootMessageID,
           },
         })
+        expect(partEvent?.payload?.part?.resolvedRole).toBeUndefined()
+        expect(partEvent?.payload?.part?.channel).toBeUndefined()
       },
     })
   })

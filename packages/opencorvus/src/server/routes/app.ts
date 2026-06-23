@@ -46,6 +46,12 @@ import { closeBrowserPreviewLiveSessions } from "@/browser-preview/live"
 import { Event as ServerEvent, payload as serverEventPayload } from "../event"
 
 const log = Log.create({ service: "server" })
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
 const LogReadResponse = z.object({
   directory: z.string(),
   path: z.string(),
@@ -544,32 +550,48 @@ export function AppRoutes(root: Hono) {
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
-          stream.writeSSE({
-            data: JSON.stringify(serverEventPayload(ServerEvent.Connected, {})),
+          let heartbeat: ReturnType<typeof setInterval> | undefined
+          let unsub = () => {}
+          let finishStream = () => {}
+          let closed = false
+          const cleanup = (input?: { closeStream?: boolean; error?: unknown }) => {
+            if (closed) return
+            closed = true
+            if (heartbeat) clearInterval(heartbeat)
+            unsub()
+            if (input?.error) {
+              log.warn("event stream write failed", { error: errorMessage(input.error) })
+            }
+            if (input?.closeStream) stream.close()
+            finishStream()
+          }
+          const finished = new Promise<void>((resolve) => {
+            finishStream = resolve
           })
-          const unsub = Bus.subscribeAll(async (event) => {
-            await stream.writeSSE({
-              data: JSON.stringify(event),
+          const writeData = (data: string) => {
+            if (closed) return Promise.resolve()
+            return stream.writeSSE({ data }).catch((error) => {
+              cleanup({ closeStream: true, error })
             })
+          }
+          await writeData(JSON.stringify(serverEventPayload(ServerEvent.Connected, {})))
+          if (closed) return
+          unsub = Bus.subscribeAll((event) => {
+            void writeData(JSON.stringify(event))
             if (event.type === Bus.InstanceDisposed.type) {
-              stream.close()
+              cleanup({ closeStream: true })
             }
           })
 
-          const heartbeat = setInterval(() => {
-            stream.writeSSE({
-              data: JSON.stringify(serverEventPayload(ServerEvent.Heartbeat, {})),
-            })
+          heartbeat = setInterval(() => {
+            void writeData(JSON.stringify(serverEventPayload(ServerEvent.Heartbeat, {})))
           }, 10_000)
 
-          await new Promise<void>((resolve) => {
-            stream.onAbort(() => {
-              clearInterval(heartbeat)
-              unsub()
-              resolve()
-              log.info("event disconnected")
-            })
+          stream.onAbort(() => {
+            cleanup()
+            log.info("event disconnected")
           })
+          await finished
         })
       },
     )

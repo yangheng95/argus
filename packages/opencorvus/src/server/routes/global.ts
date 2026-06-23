@@ -27,6 +27,11 @@ import {
 
 const log = Log.create({ service: "server" })
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
 function badRequest(message: string) {
   return {
     success: false as const,
@@ -130,31 +135,47 @@ export const GlobalRoutes = lazy(() =>
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
-          stream.writeSSE({
-            data: JSON.stringify(globalEnvelope("global", ServerEvent.Connected, {})),
+          let heartbeat: ReturnType<typeof setInterval> | undefined
+          let finishStream = () => {}
+          let closed = false
+          const cleanup = (input?: { closeStream?: boolean; error?: unknown }) => {
+            if (closed) return
+            closed = true
+            if (heartbeat) clearInterval(heartbeat)
+            GlobalBus.off("event", handler)
+            if (input?.error) {
+              log.warn("global event stream write failed", { error: errorMessage(input.error) })
+            }
+            if (input?.closeStream) stream.close()
+            finishStream()
+          }
+          const finished = new Promise<void>((resolve) => {
+            finishStream = resolve
           })
-          async function handler(event: any) {
-            await stream.writeSSE({
-              data: JSON.stringify(event),
+          let handler = (_event: any) => {}
+          const writeData = (data: string) => {
+            if (closed) return Promise.resolve()
+            return stream.writeSSE({ data }).catch((error) => {
+              cleanup({ closeStream: true, error })
             })
           }
+          handler = (event: any) => {
+            void writeData(JSON.stringify(event))
+          }
+          await writeData(JSON.stringify(globalEnvelope("global", ServerEvent.Connected, {})))
+          if (closed) return
           GlobalBus.on("event", handler)
 
           // Send heartbeat every 10s to prevent stalled proxy streams.
-          const heartbeat = setInterval(() => {
-            stream.writeSSE({
-              data: JSON.stringify(globalEnvelope("global", ServerEvent.Heartbeat, {})),
-            })
+          heartbeat = setInterval(() => {
+            void writeData(JSON.stringify(globalEnvelope("global", ServerEvent.Heartbeat, {})))
           }, 10_000)
 
-          await new Promise<void>((resolve) => {
-            stream.onAbort(() => {
-              clearInterval(heartbeat)
-              GlobalBus.off("event", handler)
-              resolve()
-              log.info("global event disconnected")
-            })
+          stream.onAbort(() => {
+            cleanup()
+            log.info("global event disconnected")
           })
+          await finished
         })
       },
     )

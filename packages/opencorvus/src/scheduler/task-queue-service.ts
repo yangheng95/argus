@@ -292,7 +292,18 @@ export namespace TaskQueueService {
       running = execute(task, (nextCleanup) => {
         cleanup = nextCleanup
       })
-        .catch((error) => fail(task, error))
+        .catch((error) => {
+          try {
+            fail(task, error)
+          } catch (failError) {
+            log.error("task failure handler failed", {
+              id: task.id,
+              sessionID: task.session_id,
+              originalError: message(error),
+              error: message(failError),
+            })
+          }
+        })
         .finally(() => {
           if (current.inFlight.get(task.id)?.promise === running) {
             current.inFlight.delete(task.id)
@@ -503,7 +514,7 @@ export namespace TaskQueueService {
       return
     }
     log.info("task completed", { id: task.id, sessionID: task.session_id })
-    Bus.publish(TaskQueueEvent.Completed, { queueTaskID: task.id, sessionID: task.session_id })
+    publishTaskQueueCompleted(task.id, task.session_id)
     requestDrain("task completed")
   }
 
@@ -612,9 +623,24 @@ export namespace TaskQueueService {
   }
 
   function publishTerminalTaskError(sessionID: string, text: string) {
-    Bus.publish(Session.Event.Error, {
+    void Bus.publish(Session.Event.Error, {
       sessionID,
       error: new NamedError.Unknown({ message: text }).toObject(),
+    }).catch((error) => {
+      log.warn("terminal task error publish failed", {
+        sessionID,
+        error: message(error),
+      })
+    })
+  }
+
+  function publishTaskQueueCompleted(queueTaskID: string, sessionID: string) {
+    void Bus.publish(TaskQueueEvent.Completed, { queueTaskID, sessionID }).catch((error) => {
+      log.warn("task queue completed publish failed", {
+        queueTaskID,
+        sessionID,
+        error: message(error),
+      })
     })
   }
 

@@ -132,7 +132,7 @@ export const SidecarCommand = cmd({
     let watchdog: { stop: () => void } | undefined
     const requestShutdown = (trigger: string) => {
       if (shutdownPromise) return shutdownPromise
-      shutdownPromise = (async () => {
+      const shutdown = (async () => {
         log.info("shutdown requested", { trigger })
         try {
           watchdog?.stop()
@@ -159,11 +159,17 @@ export const SidecarCommand = cmd({
         try {
           lock.release()
         } catch {}
-      })().finally(() => {
-        clearServerShutdownHandler(requestShutdown)
-        setTimeout(() => process.exit(0), 0)
-      })
-      return shutdownPromise
+      })()
+      shutdownPromise = shutdown
+      void shutdown
+        .finally(() => {
+          clearServerShutdownHandler(requestShutdown)
+          setTimeout(() => process.exit(0), 0)
+        })
+        .catch((error) => {
+          log.error("shutdown failed", { error: String(error) })
+        })
+      return shutdown
     }
     registerServerShutdownHandler(requestShutdown)
 

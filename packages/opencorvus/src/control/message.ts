@@ -13,6 +13,7 @@ import { ControlTimeline } from "./timeline"
 import { Bus } from "@/bus"
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
+import { EngineService } from "@/task-api"
 
 const log = Log.create({ service: "control-message" })
 const ResultSchema = z.toJSONSchema(ControlMessageResult)
@@ -160,10 +161,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
   } finally {
     for (const unsub of unsubs) unsub()
     if (shouldRemoveSession(control)) {
-      // Best-effort cleanup in finally — if the session was already removed
-      // (concurrent teardown) we move on; any real failure surfaces in the
-      // log but does not mask the main-branch result.
-      await Session.remove(control!.info.id).catch((err) =>
+      await EngineService.deleteSession(control!.info.id).catch((err) =>
         log.warn("panel control session remove failed", { error: String(err) }),
       )
       log.info("panel control session removed", {

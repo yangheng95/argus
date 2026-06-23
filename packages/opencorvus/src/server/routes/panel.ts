@@ -8,6 +8,9 @@ import { PanelCapabilityQuery, PanelCapabilityResponse, panelCapabilities } from
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { sessionIDsForTask } from "@/engine/store"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "server.routes.panel" })
 
 function projectId() {
   return Instance.project.id
@@ -87,12 +90,28 @@ export function PanelRoutes() {
           c.header("X-Accel-Buffering", "no")
           c.header("X-Content-Type-Options", "nosniff")
           return streamSSE(c, async (stream) => {
+            let closed = false
+            let writes = Promise.resolve()
+            const writeData = (event: unknown) => {
+              writes = writes
+                .then(() => {
+                  if (closed) return
+                  return stream.writeSSE({ data: JSON.stringify(event) })
+                })
+                .catch((error) => {
+                  closed = true
+                  log.warn("panel message stream write failed", {
+                    error: error instanceof Error ? error.message : String(error),
+                  })
+                  stream.close()
+                })
+              return writes
+            }
             const result = await ControlMessage.handleStream(input, (event) => {
-              stream.writeSSE({ data: JSON.stringify(event) })
+              void writeData(event)
             })
-            await stream.writeSSE({
-              data: JSON.stringify({ type: "done", result }),
-            })
+            await writes
+            await writeData({ type: "done", result })
           })
         },
       )

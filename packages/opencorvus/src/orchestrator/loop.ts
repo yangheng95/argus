@@ -138,9 +138,13 @@ export async function runTaskLoop(input: { taskID: string; event?: OrchestratorE
   taskLoopChain.set(input.taskID, next)
   // Clean up only if we're still the tail — a later call may have chained
   // on top of `next` before it resolved, and that one must stay in the map.
-  next.finally(() => {
-    if (taskLoopChain.get(input.taskID) === next) taskLoopChain.delete(input.taskID)
-  })
+  void next
+    .finally(() => {
+      if (taskLoopChain.get(input.taskID) === next) taskLoopChain.delete(input.taskID)
+    })
+    .catch((error) => {
+      log.warn("task loop cleanup failed", { taskID: input.taskID, error: error instanceof Error ? error.message : String(error) })
+    })
   return next
 }
 

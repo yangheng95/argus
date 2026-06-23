@@ -798,20 +798,24 @@ export const diffPerfText = (sessionId: string, snap: PerfSnap, toolName: string
   return parts.length > 0 ? `[perf/${toolName}] ${parts.join("; ")}` : null
 }
 
-setInterval(async () => {
-  const cutoff = Date.now() - SESSION_TIMEOUT_MS
-  for (const [id, session] of sessions) {
-    if (session.lastActive < cutoff) {
-      await destroySession(id).catch(() => {})
-      log(`session expired  ${id}  idle=${Math.round(SESSION_TIMEOUT_MS / 60000)}min`)
+setInterval(() => {
+  void (async () => {
+    const cutoff = Date.now() - SESSION_TIMEOUT_MS
+    for (const [id, session] of sessions) {
+      if (session.lastActive < cutoff) {
+        await destroySession(id).catch(() => {})
+        log(`session expired  ${id}  idle=${Math.round(SESSION_TIMEOUT_MS / 60000)}min`)
+      }
     }
-  }
-  for (const [id, profile] of profiles) {
-    if (profile.sessionIds.size === 0 && profile.expiresAt && profile.expiresAt <= Date.now()) {
-      await closeProfile(id)
-      log(`profile expired  ${id}`)
+    for (const [id, profile] of profiles) {
+      if (profile.sessionIds.size === 0 && profile.expiresAt && profile.expiresAt <= Date.now()) {
+        await closeProfile(id)
+        log(`profile expired  ${id}`)
+      }
     }
-  }
+  })().catch((error) => {
+    log(`session cleanup failed  ${error instanceof Error ? error.message : String(error)}`)
+  })
 }, 60_000).unref()
 
 export const shutdownBrowserSessions = async () => {
@@ -825,13 +829,17 @@ export const shutdownBrowserSessions = async () => {
   browserLaunch = null
 }
 process.on("exit", () => {
-  browser?.close()
+  void browser?.close().catch(() => {})
 })
 process.on("SIGINT", async () => {
-  await shutdownBrowserSessions()
+  await shutdownBrowserSessions().catch((error) => {
+    log(`SIGINT shutdown failed  ${error instanceof Error ? error.message : String(error)}`)
+  })
   process.exit(0)
 })
 process.on("SIGTERM", async () => {
-  await shutdownBrowserSessions()
+  await shutdownBrowserSessions().catch((error) => {
+    log(`SIGTERM shutdown failed  ${error instanceof Error ? error.message : String(error)}`)
+  })
   process.exit(0)
 })
