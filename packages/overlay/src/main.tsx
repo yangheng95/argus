@@ -748,17 +748,21 @@ function renderCenterWorkbenchPanelSeparators(): void {
 
 function renderCenterWorkbenchPanelLayout(): void {
   renderCenterWorkbenchPanelWeights()
-  renderCenterWorkbenchPanelSeparators()
+  renderCenterWorkbenchPanelMeasurementsOnFrame.schedule()
 }
 
-function renderCenterWorkbenchPanelLayoutAndReveal(): void {
-  renderCenterWorkbenchPanelLayout()
+function renderCenterWorkbenchPanelMeasurementsAndReveal(): void {
+  renderCenterWorkbenchPanelSeparators()
   revealPendingCenterWorkbenchPanel()
 }
 
-const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayoutAndReveal)
+const renderCenterWorkbenchPanelMeasurementsOnFrame = createAnimationFrameScheduler(
+  renderCenterWorkbenchPanelMeasurementsAndReveal,
+)
+const renderCenterWorkbenchPanelLayoutOnFrame = createAnimationFrameScheduler(renderCenterWorkbenchPanelLayout)
 disposers.push(() => {
   renderCenterWorkbenchPanelLayoutOnFrame.cancel()
+  renderCenterWorkbenchPanelMeasurementsOnFrame.cancel()
   pendingCenterWorkbenchRevealPanel = null
 })
 
@@ -1749,7 +1753,7 @@ disposers.push(
 
     createEffect(() => {
       centerWorkbenchPanelWeightsSignature()
-      untrack(renderCenterWorkbenchPanelLayout)
+      renderCenterWorkbenchPanelLayoutOnFrame.schedule()
     })
 
     createEffect(() => {

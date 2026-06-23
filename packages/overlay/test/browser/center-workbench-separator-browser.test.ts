@@ -130,7 +130,7 @@ async function installCenterWorkbenchResizeInstrumentation(page: OverlayPage) {
     let activeFrameID = 0
     let frameDepth = 0
     let nextFrameID = 1
-    const resizeStyleNames = new Set(["--ui-scale", "--ui-sidebar-width"])
+    const resizeStyleNames = new Set(["--ui-scale", "--ui-sidebar-width", "--center-workbench-panel-grow"])
     win.__centerWorkbenchResizeEvents = []
     win.__centerWorkbenchResizePhase = "idle"
     window.requestAnimationFrame = function requestAnimationFrameWithCenterWorkbenchProbe(callback) {
@@ -195,9 +195,11 @@ async function beginCenterWorkbenchResizeInstrumentation(page: OverlayPage) {
 
 async function collectCenterWorkbenchResizeEvents(page: OverlayPage) {
   return await page.evaluate<CenterWorkbenchResizeEvent[]>(async () => {
-    await new Promise<void>((resolveFrame) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame()))
-    })
+    for (let frame = 0; frame < 4; frame += 1) {
+      await new Promise<void>((resolveFrame) => {
+        requestAnimationFrame(() => resolveFrame())
+      })
+    }
     const win = window as any
     win.__centerWorkbenchResizePhase = "idle"
     return Array.from(win.__centerWorkbenchResizeEvents ?? [])
@@ -377,8 +379,11 @@ test(
         visible: true,
       })
       await installCenterWorkbenchResizeInstrumentation(page)
+      await beginCenterWorkbenchResizeInstrumentation(page)
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
       await page.waitForSelector("#centerWorkbenchSeparatorWorkflow:not([hidden])", { visible: true })
+      const inspectorOpenEvents = await collectCenterWorkbenchResizeEvents(page)
+      assertCenterWorkbenchResizeReadsAreDeferred(inspectorOpenEvents, "inspector toolbar open")
 
       const initial = await separatorState(page)
       assert.equal(initial.hidden, false)
@@ -392,8 +397,11 @@ test(
       assert.ok(initial.nowValue! <= initial.maxValue!)
       assert.ok(Math.abs(initial.workflowWidth - initial.inspectorWidth) <= 2)
 
+      await beginCenterWorkbenchResizeInstrumentation(page)
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="screenshots"]')
       await page.waitForSelector("#centerWorkbenchScreenshots[data-open='true']", { visible: true })
+      const screenshotsOpenEvents = await collectCenterWorkbenchResizeEvents(page)
+      assertCenterWorkbenchResizeReadsAreDeferred(screenshotsOpenEvents, "screenshots toolbar open")
       const threePanelLayout = await threeCenterWorkbenchPanelLayout(page)
       assertThreeCenterWorkbenchPanelMinWidths(threePanelLayout, "1280x760 three-panel layout")
       await mkdir(resolve(".scratch"), { recursive: true })
