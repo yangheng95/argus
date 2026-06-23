@@ -817,6 +817,8 @@
   "screenshots.count": "{{count}} screenshots",
   "screenshots.empty": "Screenshots from task messages and tool results will appear here.",
   "screenshots.group_count": "{{count}}",
+  "screenshots.thumbnail_invalid_source": "Invalid source",
+  "screenshots.thumbnail_load_failed": "Load failed",
   "screenshots.title": "Screenshots",
   "explorer.search_placeholder": "Search files",
   "explorer.drop_upload_title": "Drop files to upload",

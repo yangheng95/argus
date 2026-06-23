@@ -556,6 +556,22 @@
   cursor: default;
 }
 
+.screenshot-browser__thumb-error {
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  cursor: default;
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad-dim) 72%, var(--surface-inset));
+  font-size: var(--ui-font-tiny);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.screenshot-browser__thumb-error span {
+  max-width: calc(100% - calc(12px * var(--ui-scale)));
+  overflow-wrap: anywhere;
+}
+
 .screenshot-browser__thumb-trigger .screenshot-browser__thumb-image {
   width: 100%;
   min-width: 100%;

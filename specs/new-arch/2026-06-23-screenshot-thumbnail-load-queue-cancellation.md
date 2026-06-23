@@ -107,3 +107,69 @@ thumbnail loads after a fast close/reopen or resize churn.
   sidebar width clamp double source, left header action primitive ownership,
   pane resizer dead `::before` CSS, warm-cache thumbnail decode gating, and
   screenshot column geometry source consolidation.
+
+## Follow-up 2026-06-23: Warm-Cache Thumbnail Decode Gating
+
+### Recall
+
+| Source | Constraint carried forward |
+| --- | --- |
+| `2026-06-22-screenshot-browser-open-jank.md` | Screenshot browser rows derive from the card tree, render through `virtua/solid`, and visible thumbnails must enter the load path through the lazy queue. |
+| `2026-06-22-screenshot-browser-thumbnail-decode-budget.md` | Thumbnail fetch/decode remains off the toolbar-open critical path; the browser benchmark samples RAF gaps and long tasks. |
+| This file | Cancelled thumbnail jobs must be physically removed from the queue, and the queue starts at most one thumbnail load per RAF frame. |
+| Godel read-only audit | Warm cache hits currently seed `createResource` through `initialValue`, so cached blob URLs can render before `loadAllowed()` and bypass the per-frame queue. |
+
+### Call Point Inventory
+
+| Call point | Current evidence | Decision |
+| --- | --- | --- |
+| `ScreenshotBrowserPanel.tsx` `ScreenshotThumbnail` | Authenticated screenshots call `peekResourceObjectUrl(props.item.src)` as the resource `initialValue`. | Remove the eager `initialValue`; read warm cache only after `loadAllowed()` is true. |
+| `ScreenshotBrowserPanel.tsx` `src()` | Authenticated screenshots return `objectUrl()` regardless of `loadAllowed()`. | Require `loadAllowed()` before exposing any authenticated or raw URL to `PreviewableImage`. |
+| `ScreenshotBrowserPanel.tsx` URL branch | The component still has a non-authenticated `resolveResourceUrl` path even though `screenshot-browser.ts` filters screenshot items through `/attachment/<project>/<name>`. | Remove the raw URL branch; screenshot thumbnails use only stored attachment URLs and object URLs. |
+| `ScreenshotBrowserPanel.tsx` error branch | `<Show when={!objectUrl.error}>` hides failed thumbnails as an empty slot. | Render an explicit same-size error placeholder for invalid sources or load failures. |
+| `services/api.ts` `peekResourceObjectUrl` | The API comment recommends `initialValue` for flicker-free first render. | Clarify that staged/lazy renderers must not use the peek to bypass their reveal gate. |
+| `screenshot-browser-panel.test.ts` | Static contract only checks that `peekResourceObjectUrl` is present. | Add guards that screenshot browser has no cache-backed `initialValue` and that `src()` remains gated by `loadAllowed()`. |
+| `screenshot-browser-panel-browser.test.ts` | The browser benchmark opens, scrolls, closes, and reopens 120 screenshots, but does not prove warm-cache images wait for RAF permission. | Prewarm cache on the first open, instrument image insertions per RAF on reopen, and assert warm-cache insertion spans multiple frames. |
+
+### Root Cause
+
+The queue fix removed cancelled jobs, but cached authenticated screenshots still
+had a second reveal path. `peekResourceObjectUrl` populated the Solid resource
+before the thumbnail's IntersectionObserver callback had queued a load job. On
+reopen, warm-cache thumbnails could therefore mount `PreviewableImage`
+instances immediately, shifting decode work back into the toolbar-open frame.
+
+The component also kept a raw URL rendering branch after the collector had
+already made `/attachment/...` the source contract. That was a compatibility
+path, not a required screenshot input. When the object URL failed, the panel hid
+the thumbnail slot instead of showing the broken source, which made attachment
+problems harder to locate.
+
+### Fix Plan
+
+1. Remove the cache-backed `initialValue` from screenshot thumbnails.
+2. Resolve cached object URLs inside the resource fetcher after `loadAllowed()`
+   flips true, preserving cache reuse without a second reveal path.
+3. Gate authenticated `src()` by `loadAllowed()` so no blob URL reaches
+   `PreviewableImage` before the per-frame queue permits it.
+4. Remove the non-attachment `resolveResourceUrl` path from screenshot
+   thumbnails.
+5. Add a same-size explicit error placeholder for invalid sources and object URL
+   load failures.
+6. Update the `peekResourceObjectUrl` comment to distinguish immediate-preview
+   callers from staged/lazy callers.
+7. Extend static and browser tests for warm-cache reopen behavior.
+8. Re-run focused tests, browser visual QA, self-review, commit, and push.
+
+### Acceptance
+
+- Warm-cache screenshots still use the shared blob cache and do not refetch
+  visible cached thumbnails on reopen.
+- Cached screenshot thumbnails do not expose an image `src` until their queued
+  load job runs.
+- Screenshot thumbnails no longer support a raw URL/`resolveResourceUrl` branch.
+- Invalid or failed thumbnails show a visible same-size error state instead of
+  disappearing.
+- Warm-cache image insertion on reopen is spread across multiple RAF frames and
+  remains below the existing open long-task/RAF-gap budget.
+- Browser screenshots for open, reopen, and narrow layout remain visually valid.

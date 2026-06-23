@@ -6,10 +6,11 @@ import { createAnimationFrameScheduler } from "../utils/animation-frame"
 import {
   buildScreenshotBrowserRows,
   groupScreenshotBrowserItems,
+  isStoredAttachmentUrl,
   type ScreenshotBrowserItem,
   type ScreenshotBrowserRow,
 } from "../utils/screenshot-browser"
-import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
+import { fetchResourceAsObjectUrl, peekResourceObjectUrl } from "../services/api"
 import { fullStampWithRelative } from "../utils/time"
 import { t } from "../utils/i18n"
 import { roleLabel } from "../utils/message"
@@ -55,10 +56,6 @@ function enqueueScreenshotThumbnailLoad(load: () => void): () => void {
   }
 }
 
-function needsAuthedFetch(url: string): boolean {
-  return url.startsWith("/")
-}
-
 function ScreenshotVirtualWindow(props: CustomContainerComponentProps) {
   const setRef = (node: HTMLDivElement) => {
     if (typeof props.ref === "function") props.ref(node)
@@ -85,13 +82,15 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
   let thumbnailHost: HTMLDivElement | undefined
   let cancelQueuedLoad: (() => void) | undefined
   const [loadAllowed, setLoadAllowed] = createSignal(false)
-  const authed = () => needsAuthedFetch(props.item.src)
-  const [objectUrl] = createResource(
-    () => (authed() && loadAllowed() ? props.item.src : null),
-    (url: string | null) => (url ? fetchResourceAsObjectUrl(url) : null),
-    { initialValue: authed() ? (peekResourceObjectUrl(props.item.src) ?? null) : null },
+  const sourceError = createMemo(() =>
+    loadAllowed() && !isStoredAttachmentUrl(props.item.src) ? t("screenshots.thumbnail_invalid_source") : "",
   )
-  const src = () => (authed() ? objectUrl() : loadAllowed() ? resolveResourceUrl(props.item.src) : null)
+  const [objectUrl] = createResource(
+    () => (loadAllowed() && !sourceError() ? props.item.src : null),
+    (url: string | null) => (url ? (peekResourceObjectUrl(url) ?? fetchResourceAsObjectUrl(url)) : null),
+  )
+  const src = () => (loadAllowed() && !sourceError() ? objectUrl() : null)
+  const thumbnailError = () => sourceError() || (objectUrl.error ? t("screenshots.thumbnail_load_failed") : "")
 
   onMount(() => {
     if (!thumbnailHost) throw new Error("Screenshot thumbnail host was not mounted")
@@ -117,7 +116,20 @@ function ScreenshotThumbnail(props: { item: ScreenshotBrowserItem }) {
 
   return (
     <div ref={thumbnailHost} class="screenshot-browser__thumb-slot">
-      <Show when={!objectUrl.error}>
+      <Show
+        when={!thumbnailError()}
+        fallback={
+          <div
+            class="screenshot-browser__thumb-trigger screenshot-browser__thumb-error"
+            role="img"
+            aria-label={thumbnailError()}
+            title={thumbnailError()}
+          >
+            <Icon name="status-failed" size={16} />
+            <span>{thumbnailError()}</span>
+          </div>
+        }
+      >
         <Show
           when={src()}
           fallback={<div class="screenshot-browser__thumb-trigger screenshot-browser__thumb-placeholder" aria-hidden="true" />}
