@@ -443,9 +443,9 @@
   }
 }
 
-/* Viewport reflow: at narrow viewports the send button drops onto its
-   own row, so the textarea takes the entire first row. */
-@media (max-width: 760px) {
+/* Composer container reflow: at narrow composer widths the send button
+   drops onto its own row, so the textarea takes the entire first row. */
+@container (max-width: 760px) {
   /* breakpoint: --ui-breakpoint-md */
   .chat-compose-row {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -641,7 +641,7 @@
    compact one-row composer layouts. */
 .executor-popover {
   min-width: 100%;
-  width: min(calc(420px * var(--ui-scale)), calc(100vw - 24px));
+  width: min(calc(420px * var(--ui-scale)), calc(100cqw - 24px));
   max-height: calc(360px * var(--ui-scale));
   overflow-y: auto;
   background: var(--executor-menu-bg);

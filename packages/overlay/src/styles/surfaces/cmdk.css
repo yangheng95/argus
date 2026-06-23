@@ -28,7 +28,7 @@
 .cmdk-panel {
   top: 12vh;
   transform: translateX(-50%);
-  width: min(calc(640px * var(--ui-scale)), calc(100vw - calc(64px * var(--ui-scale))));
+  width: min(calc(640px * var(--ui-scale)), calc(100cqw - calc(64px * var(--ui-scale))));
   max-height: 60vh;
   display: flex;
   flex-direction: column;

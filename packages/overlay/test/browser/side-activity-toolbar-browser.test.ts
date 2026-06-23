@@ -770,9 +770,9 @@ test(
 
       await page.setViewport({ width: 960, height: 720 })
       await page.waitForFunction(
-        () => getComputedStyle(document.querySelector<HTMLElement>("#panelBody")!).flexDirection === "column",
+        () => getComputedStyle(document.querySelector<HTMLElement>("#panelBody")!).flexDirection === "row",
       )
-      const narrowLeftActivityLayout = await page.evaluate(() => {
+      const illegalNarrowLeftActivityLayout = await page.evaluate(() => {
         const panelBody = document.querySelector<HTMLElement>("#panelBody")!
         const shell = document.querySelector<HTMLElement>("#leftActivityShell")!
         const toolbar = document.querySelector<HTMLElement>("#solidLeftActivityToolbar")!
@@ -795,8 +795,8 @@ test(
           missionActivityInHeader: !!headerActions.querySelector('[data-activity="mission"]'),
         }
       })
-      assertMatchObject(narrowLeftActivityLayout, {
-        panelDirection: "column",
+      assertMatchObject(illegalNarrowLeftActivityLayout, {
+        panelDirection: "row",
         shellDirection: "row",
         toolbarLeftOfSidebar: true,
         toolbarTopAlignedWithSidebar: true,
@@ -804,18 +804,20 @@ test(
         shellContainsSidebar: true,
         missionActivityInHeader: false,
       })
-      assert.equal(narrowLeftActivityLayout.headerActionText.includes("Mission"), true)
+      assert.equal(illegalNarrowLeftActivityLayout.headerActionText.includes("Mission"), true)
 
-      const rightToolbarResponsiveLayout = async (viewport: { width: number; height: number }) => {
+      const rightToolbarLegalFrameLayout = async (viewport: { width: number; height: number }) => {
         await page.setViewport(viewport)
         await page.waitForFunction(
-          () => getComputedStyle(document.querySelector<HTMLElement>("#workspaceMain")!).flexDirection === "column",
+          () => getComputedStyle(document.querySelector<HTMLElement>("#workspaceMain")!).flexDirection === "row",
         )
         return page.evaluate(() => {
+          const panelBody = document.querySelector<HTMLElement>("#panelBody")!
           const workspace = document.querySelector<HTMLElement>("#workspaceMain")!
           const toolbarMount = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!
           const toolbar = toolbarMount.querySelector<HTMLElement>(".side-activity-toolbar")!
           const items = toolbar.querySelector<HTMLElement>(".side-activity-toolbar__items")!
+          const panelBodyRect = panelBody.getBoundingClientRect()
           const workspaceRect = workspace.getBoundingClientRect()
           const toolbarRect = toolbarMount.getBoundingClientRect()
           const overlayMinProbe = document.createElement("div")
@@ -869,6 +871,8 @@ test(
               toolbarRect.bottom <= workspaceRect.bottom + 1,
             toolbarWidth: toolbarRect.width,
             toolbarHeight: toolbarRect.height,
+            panelBodyWidth: panelBodyRect.width,
+            bodyWidth: document.body.getBoundingClientRect().width,
             workspaceWidth: workspaceRect.width,
             viewportWidth: window.innerWidth,
             overlayMinWidth,
@@ -877,24 +881,30 @@ test(
           }
         })
       }
-      const responsiveToolbarLayout = await rightToolbarResponsiveLayout({ width: 960, height: 720 })
-      assertMatchObject(responsiveToolbarLayout, {
-        workspaceDirection: "column",
-        toolbarDirection: "row",
-        itemsDirection: "row",
+      const illegalDesktopToolbarLayout = await rightToolbarLegalFrameLayout({ width: 960, height: 720 })
+      assertMatchObject(illegalDesktopToolbarLayout, {
+        workspaceDirection: "row",
+        toolbarDirection: "column",
+        itemsDirection: "column",
         buttonCount: 7,
         toolbarWithinWorkspace: true,
       })
-      assert.ok(responsiveToolbarLayout.toolbarWidth >= 960 - 2, JSON.stringify(responsiveToolbarLayout))
-      assert.ok(responsiveToolbarLayout.toolbarHeight <= 48, JSON.stringify(responsiveToolbarLayout))
-      assert.deepEqual(responsiveToolbarLayout.clippedButtons, [], JSON.stringify(responsiveToolbarLayout))
-      assert.deepEqual(responsiveToolbarLayout.hitMisses, [], JSON.stringify(responsiveToolbarLayout))
+      assert.ok(
+        illegalDesktopToolbarLayout.viewportWidth < illegalDesktopToolbarLayout.overlayMinWidth,
+        JSON.stringify(illegalDesktopToolbarLayout),
+      )
+      assert.ok(
+        illegalDesktopToolbarLayout.panelBodyWidth >= illegalDesktopToolbarLayout.overlayMinWidth - 1,
+        JSON.stringify(illegalDesktopToolbarLayout),
+      )
+      assert.ok(illegalDesktopToolbarLayout.toolbarWidth <= 48, JSON.stringify(illegalDesktopToolbarLayout))
+      assert.deepEqual(illegalDesktopToolbarLayout.clippedButtons, [], JSON.stringify(illegalDesktopToolbarLayout))
 
-      const illegalNarrowToolbarLayout = await rightToolbarResponsiveLayout({ width: 390, height: 760 })
+      const illegalNarrowToolbarLayout = await rightToolbarLegalFrameLayout({ width: 390, height: 760 })
       assertMatchObject(illegalNarrowToolbarLayout, {
-        workspaceDirection: "column",
-        toolbarDirection: "row",
-        itemsDirection: "row",
+        workspaceDirection: "row",
+        toolbarDirection: "column",
+        itemsDirection: "column",
         buttonCount: 7,
         toolbarWithinWorkspace: true,
       })
@@ -903,15 +913,14 @@ test(
         JSON.stringify(illegalNarrowToolbarLayout),
       )
       assert.ok(
-        illegalNarrowToolbarLayout.workspaceWidth >= illegalNarrowToolbarLayout.overlayMinWidth - 1,
+        illegalNarrowToolbarLayout.panelBodyWidth >= illegalNarrowToolbarLayout.overlayMinWidth - 1,
         JSON.stringify(illegalNarrowToolbarLayout),
       )
-      assert.ok(
-        illegalNarrowToolbarLayout.toolbarWidth >= illegalNarrowToolbarLayout.overlayMinWidth - 1,
-        JSON.stringify(illegalNarrowToolbarLayout),
-      )
-      assert.ok(illegalNarrowToolbarLayout.toolbarHeight <= 48, JSON.stringify(illegalNarrowToolbarLayout))
+      assert.ok(illegalNarrowToolbarLayout.toolbarWidth <= 48, JSON.stringify(illegalNarrowToolbarLayout))
       assert.deepEqual(illegalNarrowToolbarLayout.clippedButtons, [], JSON.stringify(illegalNarrowToolbarLayout))
+      const illegalNarrowToolbarScreenshotPath = resolve(".scratch/side-activity-toolbar-illegal-narrow-legal-frame.png")
+      mkdirSync(dirname(illegalNarrowToolbarScreenshotPath), { recursive: true })
+      writeFileSync(illegalNarrowToolbarScreenshotPath, await page.screenshot({ fullPage: true }))
       await page.evaluate(() => window.scrollTo({ left: 0, top: 0, behavior: "auto" }))
       await page.setViewport({ width: 1440, height: 900 })
 

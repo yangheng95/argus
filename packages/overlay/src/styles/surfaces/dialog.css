@@ -206,7 +206,7 @@
 
 .app-dialog-form--decision {
   width: calc(100% - calc(32px * var(--ui-scale)));
-  max-width: min(calc(520px * var(--ui-scale)), calc(100vw - calc(32px * var(--ui-scale))));
+  max-width: min(calc(520px * var(--ui-scale)), calc(100cqw - calc(32px * var(--ui-scale))));
   padding: 0;
   gap: 0;
   overflow: hidden;
@@ -361,7 +361,7 @@
 }
 
 /* Matches --ui-breakpoint-sm; media queries cannot consume var(). */
-@media (max-width: 520px) {
+@container overlay-shell (width < 520px) {
   .app-dialog-decision__choices {
     grid-template-columns: 1fr;
   }

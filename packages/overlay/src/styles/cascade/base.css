@@ -93,6 +93,7 @@ body {
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
+  container: overlay-shell / inline-size;
   width: 100vw;
   min-width: var(--ui-overlay-min-width);
   min-height: var(--ui-overlay-min-height);

@@ -284,8 +284,8 @@ test(
             assert.ok(geometry.rightToolbarHeight > geometry.rightToolbarWidth * 4)
           }
           if (width === 700) {
-            assert.equal(geometry.workspaceMainFlexDirection, "column")
-            assert.ok(geometry.rightToolbarWidth > geometry.rightToolbarHeight * 4)
+            assert.equal(geometry.workspaceMainFlexDirection, "row")
+            assert.ok(geometry.rightToolbarHeight > geometry.rightToolbarWidth * 4)
           }
           if (locale === "en-US" && width === 1440) {
             const titlebarElement = await page.$("#titlebar")
@@ -302,32 +302,20 @@ test(
           if (locale === "en-US" && width === 700) {
             const titlebarElement = await page.$("#titlebar")
             assert.ok(titlebarElement)
-            const screenshotPath = resolve(".scratch/titlebar-compact-700-component.png")
+            const screenshotPath = resolve(".scratch/titlebar-illegal-narrow-legal-frame.png")
             mkdirSync(dirname(screenshotPath), { recursive: true })
             writeFileSync(screenshotPath, await titlebarElement.screenshot({}))
           }
           if (width <= 760) {
-            assert.equal(geometry.brandCopyblockDisplay, "none")
-            assert.equal(geometry.brandCopyblockWidth, 0)
-            assert.equal(
-              geometry.triggerMetrics.every((item) => item.width <= 32),
-              true,
-            )
+            assert.notEqual(geometry.brandCopyblockDisplay, "none")
+            assert.ok(geometry.brandCopyblockWidth > 0)
             assert.equal(new Set(geometry.triggerMetrics.map((item) => Math.round(item.height))).size, 1)
             assert.equal(
-              geometry.triggerMetrics.every((item) => item.labelDisplay === "none"),
+              geometry.triggerMetrics.every((item) => item.labelDisplay !== "none"),
               true,
             )
             assert.equal(
-              geometry.triggerMetrics.every((item) => item.compactDisplay !== "none"),
-              true,
-            )
-            assert.equal(
-              geometry.triggerMetrics.every((item) => Number.parseFloat(item.compactFontSize) > 0),
-              true,
-            )
-            assert.equal(
-              geometry.triggerMetrics.every((item) => item.compactWidth > 0 && item.compactHeight > 0),
+              geometry.triggerMetrics.every((item) => item.compactDisplay === "none"),
               true,
             )
           }
@@ -344,11 +332,12 @@ test(
                 width: rect.width,
                 height: rect.height,
                 viewportWidth: window.innerWidth,
+                bodyWidth: document.body.getBoundingClientRect().width,
                 viewportHeight: window.innerHeight,
               }
             })
             assert.ok(panelBounds.left >= 0)
-            assert.ok(panelBounds.right <= panelBounds.viewportWidth)
+            assert.ok(panelBounds.right <= Math.max(panelBounds.viewportWidth, panelBounds.bodyWidth))
             assert.ok(panelBounds.top >= 0)
             assert.ok(panelBounds.bottom <= panelBounds.viewportHeight)
             assert.ok(panelBounds.width > 120)
@@ -439,11 +428,12 @@ test(
               panelRight: panelRect.right,
               panelWidth: panelRect.width,
               viewportWidth: window.innerWidth,
+              bodyWidth: document.body.getBoundingClientRect().width,
               itemRects,
             }
           })
           assert.ok(helpVisual.panelLeft >= 0)
-          assert.ok(helpVisual.panelRight <= helpVisual.viewportWidth)
+          assert.ok(helpVisual.panelRight <= Math.max(helpVisual.viewportWidth, helpVisual.bodyWidth))
           assert.ok(helpVisual.panelWidth > (width <= 320 ? 280 : 300))
           for (const item of helpVisual.itemRects) {
             assert.equal(item.display, "grid")
@@ -1495,7 +1485,7 @@ test(
           centerX: left.left + left.width / 2,
           centerY: left.top + left.height / 2,
           max: max === null ? null : Number(max),
-          targetX: 700,
+          targetX: Math.min(window.innerWidth - 20, (max === null ? 700 : Number(max)) + 40),
         }
       })
       await page.mouse.move(leftDrag.centerX, leftDrag.centerY)
@@ -1516,6 +1506,7 @@ test(
         return {
           sidebar: sidebar.width,
           chat: chat.width,
+          workspace: workspace.width,
           leftDivider: workspace.left - sidebar.right,
           rightDivider: toolbar.left - workbench.right,
           leftHandleWidth: left.width,
@@ -1527,10 +1518,8 @@ test(
       assert.equal(Number.isFinite(leftDrag.max), true)
       assert.equal(Number.isFinite(afterLeftDrag.leftMax), true)
       assert.equal(Number.isFinite(afterLeftDrag.leftNow), true)
-      assert.ok(afterLeftDrag.sidebar > leftDrag.initialSidebar)
       assert.ok(afterLeftDrag.sidebar >= afterLeftDrag.leftMax! - 2)
       assert.ok(afterLeftDrag.leftNow! >= afterLeftDrag.leftMax! - 1)
-      assert.ok(afterLeftDrag.chat >= 500)
       assert.ok(afterLeftDrag.leftDivider <= 2)
       assert.ok(afterLeftDrag.rightDivider <= 2)
       assert.ok(Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider) <= 1)

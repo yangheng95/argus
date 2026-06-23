@@ -2041,7 +2041,8 @@ describe("overlay architecture guards", () => {
     expect(conversationSurface).toMatch(
       /\.conversation-virtual-item > \.card,\n\.conversation-virtual-item > \.interaction-card/,
     )
-    expect(conversationSurface).toMatch(/@media \(max-width: 900px\)/)
+    expect(conversationSurface).toMatch(/@container chat-workbench \(width < 900px\)/)
+    expect(conversationSurface).not.toContain("@media (max-width: 900px)")
   })
 
   test("conversation chat-empty task-children are owned by surfaces/conversation.css", () => {
@@ -2096,7 +2097,8 @@ describe("overlay architecture guards", () => {
     }
 
     expect(composerSurface).toMatch(/@container \(max-width: 520px\)/)
-    expect(composerSurface).toMatch(/@media \(max-width: 760px\)\s*\{\s*\/\* breakpoint: --ui-breakpoint-md \*\//)
+    expect(composerSurface).toMatch(/@container \(max-width: 760px\)\s*\{\s*\/\* breakpoint: --ui-breakpoint-md \*\//)
+    expect(composerSurface).not.toContain("@media (max-width: 760px)")
     expect(composerSurface).toMatch(/\.chat-send-icon svg\s*\{/)
     expect(styles).not.toMatch(/(^|\n)\.chat-send-icon svg\s*\{/)
   })
@@ -2881,8 +2883,11 @@ describe("overlay architecture guards", () => {
   })
 
   test("narrow overlay layout keeps non-chat panes scrollable", () => {
+    const base = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/cascade/base.css")))
     const workspace = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
-    const narrowStart = workspace.indexOf("@media (width < 1120px)")
+    expect(base).toContain("container: overlay-shell / inline-size")
+    expect(workspace).not.toContain("@media (width < 1120px)")
+    const narrowStart = workspace.indexOf("@container overlay-shell (width < 1120px)")
     expect(narrowStart).toBeGreaterThan(-1)
     const narrow = workspace.slice(narrowStart)
 

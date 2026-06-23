@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File | Title |
 | --- | --- |
+| [2026-06-23-overlay-compact-legal-frame-query.md](2026-06-23-overlay-compact-legal-frame-query.md) | Overlay Compact Legal Frame Query |
 | [2026-06-23-conversation-hydrate-global-message-budget.md](2026-06-23-conversation-hydrate-global-message-budget.md) | Conversation Hydrate Global Message Budget |
 | [2026-06-23-screenshot-top-level-incremental-index.md](2026-06-23-screenshot-top-level-incremental-index.md) | Screenshot Top Level Incremental Index |
 | [2026-06-23-task-list-row-directory-selection.md](2026-06-23-task-list-row-directory-selection.md) | Task List Row Directory Selection |

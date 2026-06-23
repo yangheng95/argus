@@ -708,21 +708,16 @@ function centerWorkbenchPanelResizeMetrics(
   }
 }
 
-function centerWorkbenchShowsAdjacentPanels(): boolean {
-  return !window.matchMedia("(max-width: 520px)").matches
-}
-
 function renderCenterWorkbenchPanelSeparators(): void {
   const panels = orderedCenterWorkbenchPanels()
   const views = getCenterWorkbenchViews()
   const separators = getCenterWorkbenchSeparators()
-  const showsAdjacentPanels = centerWorkbenchShowsAdjacentPanels()
   for (const panel of CENTER_WORKBENCH_PANEL_ORDER) {
     const separator = separators[panel]
     if (!separator) continue
     const rightPanel = centerWorkbenchRightPanel(panel, panels)
     const metrics = rightPanel ? centerWorkbenchPanelResizeMetrics(panel, panels) : null
-    const enabled = !!rightPanel && !!metrics && showsAdjacentPanels
+    const enabled = !!rightPanel && !!metrics
     separator.hidden = !enabled
     separator.dataset.disabled = String(!enabled)
     separator.tabIndex = enabled ? 0 : -1
