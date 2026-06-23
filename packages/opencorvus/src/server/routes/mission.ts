@@ -30,7 +30,7 @@ import { isModelReference } from "@/provider/model-ref"
 import { Config } from "@/config/config"
 import { buildMissionProjectArchive, ProjectArchiveUnsupportedProjectError } from "@/engine/task-project-archive"
 import { EngineService } from "@/task-api"
-import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
 import { errors } from "../error"
 
@@ -368,6 +368,10 @@ export function MissionRoutes() {
         }
         try {
           cancelSessionPromptInScope({
+            session,
+            handle: "mission.abort",
+          })
+          await awaitSessionPromptFinishedInScope({
             session,
             handle: "mission.abort",
           })

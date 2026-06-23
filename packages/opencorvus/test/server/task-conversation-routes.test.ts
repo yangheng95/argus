@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import fs from "node:fs/promises"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Event } from "../../src/engine/model"
@@ -14,6 +14,7 @@ import { Session } from "../../src/session"
 import { MessageTable, PartTable } from "../../src/session/session.sql"
 import { SessionStatus } from "../../src/session/status"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SessionPromptState } from "../../src/session/prompt/state"
 import { Message } from "../../src/session/message"
 import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { Database } from "../../src/storage/db"
@@ -1722,6 +1723,90 @@ describe("task conversation routes", () => {
           },
         })
         expect(SessionStatus.get(build.id)).toEqual({ type: "streaming" })
+      },
+    })
+  })
+
+  test("POST /task/:taskID/session/:sessionID/cancel cancels descendant prompt states before success", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "task root",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "build",
+        })
+        const descendant = await Session.create({
+          kind: "build",
+          parentID: build.id,
+          title: "build descendant",
+        })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "cancel build subtree",
+              request: "cancel build subtree",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const aborts = new Map<string, AbortSignal>()
+        for (const sessionID of [build.id, descendant.id]) {
+          const abort = SessionPromptState.start(sessionID, tmp.path)
+          expect(abort).toBeDefined()
+          aborts.set(sessionID, abort!)
+          SessionStatus.set(sessionID, { type: "streaming" })
+        }
+        const cancelled: string[] = []
+        spyOn(SessionPrompt, "cancel").mockImplementation((sessionID, directory) => {
+          const result = SessionPromptState.cancel(sessionID, directory)
+          cancelled.push(sessionID)
+          const abort = aborts.get(sessionID)
+          if (abort) queueMicrotask(() => SessionPromptState.finish(sessionID, abort, directory))
+          return result
+        })
+
+        try {
+          const response = await app.request(`/task/${taskID}/session/${build.id}/cancel`, {
+            method: "POST",
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          })
+
+          expect(response.status).toBe(200)
+          expect(await response.json()).toMatchObject({
+            task_id: taskID,
+            session_id: build.id,
+            cancelled: true,
+          })
+          expect(cancelled).toEqual([descendant.id, build.id])
+          expect(SessionPromptState.isActive(build.id, tmp.path)).toBe(false)
+          expect(SessionPromptState.isActive(descendant.id, tmp.path)).toBe(false)
+        } finally {
+          for (const [sessionID, abort] of aborts) {
+            SessionPromptState.finish(sessionID, abort, tmp.path)
+          }
+        }
       },
     })
   })

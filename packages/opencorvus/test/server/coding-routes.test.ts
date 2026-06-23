@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { SessionStatus } from "../../src/session/status"
@@ -10,9 +10,13 @@ import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS } from "../../src/coding-assistant/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { installControlModel } from "../workspace/mock-control-model"
+
+const PROMPT_ASYNC_TEST_CONFIG = { model: "mock-control/control" } as const
 
 describe("coding assistant routes", () => {
   afterEach(async () => {
+    mock.restore()
     await resetDatabase()
   })
 
@@ -426,7 +430,8 @@ describe("coding assistant routes", () => {
   })
 
   test("canonical prompt_async enables project team tools for right sidebar sessions", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: PROMPT_ASYNC_TEST_CONFIG })
+    installControlModel()
 
     await Instance.provide({
       directory: tmp.path,
@@ -464,7 +469,8 @@ describe("coding assistant routes", () => {
   })
 
   test("right sidebar prompt overlay overrides agent, tool, prompt, and source spoofing", async () => {
-    await using tmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true, config: PROMPT_ASYNC_TEST_CONFIG })
+    installControlModel()
 
     await Instance.provide({
       directory: tmp.path,

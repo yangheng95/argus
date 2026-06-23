@@ -35,7 +35,7 @@ import {
   isRightSidebarCodingAssistantSession,
 } from "@/coding-assistant/session"
 import { SessionAgentIdentity } from "@/session/agent-identity"
-import { cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import { awaitSessionPromptFinishedInScope, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
 
 const log = Log.create({ service: "server" })
 
@@ -735,6 +735,7 @@ export const SessionRoutes = lazy(() =>
           reason: "session aborted",
           source: "session.prompt_async",
         })
+        await awaitSessionPromptFinishedInScope({ session, handle: "session.abort" })
         return c.json(true)
       },
     )

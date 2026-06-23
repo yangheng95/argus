@@ -16,6 +16,8 @@ export namespace SessionPrompt {
   export const cancel = (sessionID: string, directory?: string) => {
     return SessionPromptState.cancel(sessionID, directory)
   }
+  export const isActive = SessionPromptState.isActive
+  export const waitForFinish = SessionPromptState.waitForFinish
 
   export const {
     LoopInput,
