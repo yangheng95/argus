@@ -122,6 +122,55 @@ mounted_agents:
     }
   })
 
+  test("execute without name fuzzy-searches skill title and content", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".opencorvus", "skill", "semantic-workflow")
+        await Bun.write(
+          path.join(skillDir, "SKILL.md"),
+          `---
+name: semantic-workflow
+description: General workflow with neutral metadata.
+mounted_agents:
+  - build
+---
+
+# Evidence Contract
+
+Use viewport parity ledger notes and DOM affordance analysis before implementation.
+`,
+        )
+      },
+    })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const build = await Agent.get("build")
+          expect(build).toBeDefined()
+          const tool = await SkillTool.init({ agent: build })
+          const ctx: Tool.Context = { ...baseCtx, ask: async () => {} }
+
+          const titleResult = await tool.execute({ query: "evdnc cntrct" }, ctx)
+          expect(titleResult.metadata.names).toContain("semantic-workflow")
+          expect(titleResult.output).toContain("<title>Evidence Contract</title>")
+
+          const contentResult = await tool.execute({ query: "viewprt ledgr" }, ctx)
+          expect(contentResult.metadata.names).toContain("semantic-workflow")
+          expect(contentResult.output).not.toContain("DOM affordance analysis")
+          expect(contentResult.output).not.toContain("<skill_content")
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
   test("uses the turn-scoped resolved surface for prompt and tool search", async () => {
     await using tmp = await tmpdir({
       git: true,

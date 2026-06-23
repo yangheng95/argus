@@ -348,8 +348,25 @@ mounted_agents:
       const prompt = await SystemPrompt.skills(requirements!)
       expect(prompt).toContain("### Mounted Skills")
       expect(prompt).toContain("already mounted for this agent in the current turn")
+      expect(prompt).toContain("The `skill` tool can search mounted skills")
+      expect(prompt).toContain("fuzzy-search mounted skill titles and SKILL.md contents")
       expect(prompt).toContain("Before planning or tool use")
       expect(prompt).toContain("tool-skill")
+    },
+  })
+})
+
+test("skill policy still advertises search when no enabled skills are mounted", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requirements = await Agent.get("requirements")
+      expect(requirements).toBeDefined()
+
+      const prompt = await SystemPrompt.skills(requirements!, { availableToolNames: ["skill"] })
+      expect(prompt).toContain("The `skill` tool can search mounted skills")
+      expect(prompt).toContain("- none: No enabled skills are currently mounted for this agent in this turn.")
     },
   })
 })
