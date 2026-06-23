@@ -661,6 +661,18 @@ function isCenterWorkbenchPanel(value: string | undefined): value is CenterWorkb
   return CENTER_WORKBENCH_PANEL_ORDER.includes(value as CenterWorkbenchPanel)
 }
 
+function readCenterWorkbenchPanelGeometrySnapshot(
+  panels = orderedCenterWorkbenchPanels(untrack(centerWorkbenchPanels)),
+): CenterWorkbenchPanelGeometrySnapshot {
+  const views = getCenterWorkbenchViews()
+  const rects: Partial<Record<CenterWorkbenchPanel, DOMRect>> = {}
+  for (const panel of panels) {
+    const body = views[panel]
+    if (body) rects[panel] = body.getBoundingClientRect()
+  }
+  return { rects, views }
+}
+
 function getCenterWorkbenchSeparators(): Partial<Record<CenterWorkbenchPanel, HTMLElement>> {
   const separators: Partial<Record<CenterWorkbenchPanel, HTMLElement>> = {}
   for (const separator of document.querySelectorAll<HTMLElement>("[data-center-workbench-separator]")) {
@@ -686,15 +698,15 @@ function centerWorkbenchPanelMinWidth(totalWidth: number): number {
 function centerWorkbenchPanelResizeMetrics(
   leftPanel: CenterWorkbenchPanel,
   panels = orderedCenterWorkbenchPanels(untrack(centerWorkbenchPanels)),
+  geometry = readCenterWorkbenchPanelGeometrySnapshot(panels),
 ): CenterWorkbenchPanelResizeMetrics | null {
   const rightPanel = centerWorkbenchRightPanel(leftPanel, panels)
   if (!rightPanel) return null
-  const views = getCenterWorkbenchViews()
-  const leftBody = views[leftPanel]
-  const rightBody = views[rightPanel]
-  if (!leftBody || !rightBody) return null
-  const leftRect = leftBody.getBoundingClientRect()
-  const rightRect = rightBody.getBoundingClientRect()
+  const leftBody = geometry.views[leftPanel]
+  const rightBody = geometry.views[rightPanel]
+  const leftRect = geometry.rects[leftPanel]
+  const rightRect = geometry.rects[rightPanel]
+  if (!leftBody || !rightBody || !leftRect || !rightRect) return null
   const totalWidth = leftRect.width + rightRect.width
   if (totalWidth <= 0) return null
   const minWidth = centerWorkbenchPanelMinWidth(totalWidth)
@@ -715,13 +727,13 @@ function centerWorkbenchPanelResizeMetrics(
 
 function renderCenterWorkbenchPanelSeparators(): void {
   const panels = orderedCenterWorkbenchPanels()
-  const views = getCenterWorkbenchViews()
+  const geometry = readCenterWorkbenchPanelGeometrySnapshot(panels)
   const separators = getCenterWorkbenchSeparators()
   for (const panel of CENTER_WORKBENCH_PANEL_ORDER) {
     const separator = separators[panel]
     if (!separator) continue
     const rightPanel = centerWorkbenchRightPanel(panel, panels)
-    const metrics = rightPanel ? centerWorkbenchPanelResizeMetrics(panel, panels) : null
+    const metrics = rightPanel ? centerWorkbenchPanelResizeMetrics(panel, panels, geometry) : null
     const enabled = !!rightPanel && !!metrics
     separator.hidden = !enabled
     separator.dataset.disabled = String(!enabled)
@@ -733,8 +745,8 @@ function renderCenterWorkbenchPanelSeparators(): void {
       separator.removeAttribute("aria-valuenow")
       continue
     }
-    const leftControlID = views[panel]?.id
-    const rightControlID = views[rightPanel]?.id
+    const leftControlID = geometry.views[panel]?.id
+    const rightControlID = geometry.views[rightPanel]?.id
     if (leftControlID && rightControlID) separator.setAttribute("aria-controls", `${leftControlID} ${rightControlID}`)
     else separator.removeAttribute("aria-controls")
     const min = Math.round(metrics.range.minWidth)
@@ -1850,6 +1862,11 @@ interface CenterWorkbenchPanelResizeMetrics {
   totalWidth: number
   totalWeight: number
   range: CenterWorkbenchResizeRange
+}
+
+interface CenterWorkbenchPanelGeometrySnapshot {
+  views: Record<CenterWorkbenchPanel, HTMLElement | null>
+  rects: Partial<Record<CenterWorkbenchPanel, DOMRect>>
 }
 
 interface CenterWorkbenchPanelResize {
