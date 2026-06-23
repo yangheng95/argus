@@ -1267,27 +1267,27 @@ async function buildSystemParts(
     ctx.push("")
   }
 
-  // ── Acceptance trajectory ──
-  // Source of truth for iteration history is engine_iteration (Arbiter-owned).
+  // ── Iteration trajectory ──
+  // Source of truth for iteration history is engine_iteration (metric-owned).
   // We render the last few iterations' snapshots + the latest rework signal
   // (verdict summary + issues) so the assistant sees both the aggregated
-  // signal AND the concrete acceptance-agent feedback for the most recent round.
+  // signal AND the concrete review feedback for the most recent round.
   // The orchestrator decides next steps from this rendered snapshot directly;
-  // per-metric details live on the acceptance sub-agent session, not in an
+  // per-metric details live on persisted review/evaluation rows, not in an
   // orchestrator tool surface.
   const iterationHistory = readHistForPrompt(task.id)
   if (iterationHistory.length > 0) {
     const RENDER_RECENT = 3
     const tail = iterationHistory.slice(-RENDER_RECENT)
-    ctx.push("## Acceptance Trajectory")
+    ctx.push("## Iteration Trajectory")
     ctx.push(`${iterationHistory.length} prior iteration(s). Last ${tail.length}:`)
     for (const it of tail) {
       ctx.push(
         `  - iter ${it.iteration}: arbiter=${it.arbiter_verdict}, S_k=${it.aggregate_score.toFixed(3)} (Δ=${it.delta_vs_prev.toFixed(3)}), blocking_unmet=${it.blocking_unmet_count}, open_ce=${it.open_counterexamples}, novelty=${it.novelty_score}`,
       )
     }
-    // Latest acceptance feedback comes from the most recent
-    // acceptance-review-verdict artifact on the task. Shown only when the
+    // Latest review feedback comes from the most recent
+    // review-verdict artifact on the task. Shown only when the
     // most recent verdict was a rejection — per spec there is no trigger
     // enum steering this block, it is derived from persistent artifacts.
     const { findLatestAcceptanceVerdictArtifact } = await import("@/engine/store")
@@ -1296,7 +1296,7 @@ async function buildSystemParts(
     const latest = latestVerdictPayload.verdict === "rejected" ? latestVerdictPayload : undefined
     if (latest) {
       ctx.push("")
-      ctx.push("### Latest acceptance-agent feedback")
+      ctx.push("### Latest review feedback")
       const summary = typeof latest.summary === "string" ? latest.summary : ""
       if (summary) ctx.push(`Summary: ${summary}`)
       const details = Array.isArray(latest.rejection_details)
@@ -1321,7 +1321,7 @@ async function buildSystemParts(
     }
     ctx.push("")
     ctx.push(
-      "You decide what to do next from the trajectory + latest acceptance feedback above: " +
+      "You decide what to do next from the trajectory + latest review feedback above: " +
         "patch code, modify/add goals, adjust scope — based on where the loop is stuck.",
     )
     ctx.push("")
@@ -1345,12 +1345,12 @@ async function buildSystemParts(
     ctx.push(renderWorkflowPrompt(workflow, workflowState, task.id))
   }
 
-  // Run context — acceptance + eval results for the current active run (if
+  // Run context — delivery + evaluation results for the current active run (if
   // any). Rendered on every wake from persistent DB state so the orchestrator
   // sees latest results without depending on a trigger enum to deliver them.
   // The yielded summary is framed as a sub-agent-protocol message with the
   // same per-message ceiling as a tool return; full content stays in the
-  // acceptance / evaluation rows referenced via the pointer.
+  // delivery / evaluation rows referenced via the pointer.
   const activeRunID = findActiveRunForTask(task.id)?.id
   if (activeRunID) {
     const acceptance = findAcceptanceByRun(activeRunID)

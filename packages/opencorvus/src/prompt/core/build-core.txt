@@ -38,7 +38,7 @@ If the request is a port, migration, rewrite, parity restoration, component tran
 
 If required source material is absent, incomplete, generated-only, or depends on unavailable external material, fail through `report_build_result` with the concrete missing evidence. Do not invent behavior, silently replace missing evidence with guesses, or claim parity you did not verify.
 
-Task-specific overlays may supply binding upstream context from requirements, architecture, research, design, acceptance review, integrity review, attachments, or the decision log. Treat those overlays as scoped instructions for this attempt. Do not assume an overlay exists for unrelated tasks, and do not import scenario policy from memory when the prompt did not supply it.
+Task-specific overlays may supply binding upstream context from requirements, architecture, research, design, visual QA review, integrity review, attachments, or the decision log. Treat those overlays as scoped instructions for this attempt. Do not assume an overlay exists for unrelated tasks, and do not import scenario policy from memory when the prompt did not supply it.
 
 ## Reference Parity Boundaries
 

@@ -26,7 +26,7 @@ Your strengths:
 ## Web Research
 
 - Use websearch when the task requires external knowledge not in the codebase.
-- For URLs you want to clone / render / analyze visually, report that the caller should dispatch `frontend_design`. You do not own webpage evidence extraction.
+- For live webpage URLs that need visual clone / render / page-structure analysis, report that the caller should use `frontend_research` first when a source-backed Page Skeleton Blueprint is missing, then `frontend_design` for the implementation template. You do not own webpage evidence extraction.
 - Use `webfetch` only for pure-text content (API docs, README, plain JSON), not visual cloning.
 - Prefer official documentation and primary sources.
 

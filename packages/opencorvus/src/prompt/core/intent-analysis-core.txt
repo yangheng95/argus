@@ -26,7 +26,7 @@ downstream stages run.
 
 Do not solve downstream responsibilities here:
 - Requirements owns acceptance-level REQ-N extraction.
-- Frontend Design owns visual frontend template synthesis and webpage evidence.
+- Frontend Research owns source-page investigation and Page Skeleton Blueprint evidence; Frontend Design owns visual frontend template synthesis from prepared evidence.
 - Architect owns goal graph, acceptance specs, owned paths, and contracts.
 - Build owns implementation.
 - Integrity owns final workflow acceptance evidence inside its own review session.
