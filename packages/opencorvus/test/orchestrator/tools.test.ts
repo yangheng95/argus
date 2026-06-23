@@ -5538,7 +5538,7 @@ describe("orchestrator tools", () => {
             .where(eq(EngineTaskTable.id, taskID))
             .run(),
         )
-        spyOn(Config, "get").mockResolvedValue({ experimental: { confirm_proposed_tasks: true } } as any)
+        spyOn(Config, "get").mockResolvedValue({ experimental: { auto_confirm_proposed_tasks: false } } as any)
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,
@@ -5640,7 +5640,7 @@ describe("orchestrator tools", () => {
         const text = toolText(result)
         const pending = await Question.list()
 
-        expect(text).toContain("Follow-up task created without user confirmation")
+        expect(text).toContain("Follow-up task created automatically")
         expect(text).toContain("tsk_completed_followup")
         expect(pending).toHaveLength(0)
         expect(createSpy).toHaveBeenCalledTimes(1)
@@ -5699,7 +5699,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("propose_task does not create a follow-up task when the user declines", async () => {
+  test("propose_task does not create a follow-up task when auto-confirm is disabled and the user declines", async () => {
     const now = Date.now()
     const stamp = now.toString(16)
     const projectID = `project_decline_${stamp}`
@@ -5746,7 +5746,7 @@ describe("orchestrator tools", () => {
             .where(eq(EngineTaskTable.id, taskID))
             .run(),
         )
-        spyOn(Config, "get").mockResolvedValue({ experimental: { confirm_proposed_tasks: true } } as any)
+        spyOn(Config, "get").mockResolvedValue({ experimental: { auto_confirm_proposed_tasks: false } } as any)
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,

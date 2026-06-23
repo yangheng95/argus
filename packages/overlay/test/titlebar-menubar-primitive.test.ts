@@ -116,7 +116,7 @@ describe("TitlebarMenubar primitive ownership", () => {
     expect(SOURCE).toContain("checked={props.checked}")
     expect(SOURCE).toContain("onChange={(checked) => void props.onChange(checked)}")
     expect(SOURCE).toContain('testid="titlebar-auto-question"')
-    expect(SOURCE).toContain('testid="titlebar-confirm-proposed-tasks"')
+    expect(SOURCE).toContain('testid="titlebar-auto-confirm-proposed-tasks"')
     expect(SOURCE).not.toContain('class="titlebar-menubar-toggle"')
     expect(SOURCE).not.toContain('type="checkbox"')
     expect(CSS).not.toContain(".titlebar-menubar-toggle")

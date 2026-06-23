@@ -414,8 +414,8 @@ contract.
   A pass verdict completes the task. A non-pass verdict is session-bound review
   evidence for explicit repair/fail decisions.
 - `propose_task`: inheriting follow-up task creation. It follows
-  `experimental.confirm_proposed_tasks` (default false: create directly;
-  true: ask the user first). Use it proactively when execution evidence,
+  `experimental.auto_confirm_proposed_tasks` (default true: create directly;
+  false: ask the user first). Use it proactively when execution evidence,
   artifact state, integrity history, or the obvious product path shows valuable
   separate follow-up work: supplemental features, deeper implementation detail,
   quality hardening, tests, docs, operations, performance, or project
@@ -540,8 +540,8 @@ implementation-depth passes, detail completion, project-hardening suggestions,
 test/doc/ops improvements, or out-of-contract capabilities. Base the proposal
 on concrete execution results, artifacts, integrity findings, or an explicit
 next-path observation; do not invent speculative wishlist work. If visual QA returns a `follow_up_task`, translate that evidence into this proposal. It creates
-according to `experimental.confirm_proposed_tasks`: default false creates
-directly; true asks the user for confirmation first. Do not create separate
+according to `experimental.auto_confirm_proposed_tasks`: default true creates
+directly; false asks the user for confirmation first. Do not create separate
 work through any other tool.
 
 ## Clarification
