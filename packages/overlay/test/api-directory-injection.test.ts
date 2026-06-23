@@ -220,6 +220,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
     ]) {
       expect(routeRequiresProjectDirectory(path)).toBe(true)
     }
+    expect(routeRequiresProjectDirectory("project/current", "DELETE")).toBe(true)
     expect(routeRequiresProjectDirectory("task/abc", "GET")).toBe(true)
     expect(routeRequiresProjectDirectory("task/abc/conversation", "POST")).toBe(true)
   })
@@ -339,6 +340,21 @@ describe("apiUrl directory injection (W2-V31)", () => {
 
       expect(captured?.path).toBe("mission/m-alpha")
       expect(captured?.query?.directory).toBe("/mission-row-project")
+    })
+
+    test("apiJson injects directory into project delete", async () => {
+      let captured: TransportRequest | undefined
+      __setHostTransportForTest(
+        fakeTransport((req) => {
+          captured = req
+        }),
+      )
+
+      await apiJson("project/current", { method: "DELETE" })
+
+      expect(captured?.path).toBe("project/current")
+      expect(captured?.method).toBe("DELETE")
+      expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
     })
 
     test("apiJson does not inject directory into task record delete", async () => {

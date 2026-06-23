@@ -8,6 +8,7 @@ import { buildTaskTree, flattenGroup as flattenGroupPure, type TaskTreeEntry, ty
 import { settingsStore } from "../store/settings"
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue"
 import { downloadTaskProjectArchive } from "../services/task"
+import { deleteProject } from "../services/workspace"
 import {
   notifyError,
   notifySuccess,
@@ -542,10 +543,7 @@ function TaskRow(props: {
           {taskListMeta(props.item)}
         </small>
         <Show when={hasActions()}>
-          <div
-            class="task-row-actions"
-            onKeyDown={rowActions.closeActionsFromKeyboardEvent}
-          >
+          <div class="task-row-actions" onKeyDown={rowActions.closeActionsFromKeyboardEvent}>
             <Show when={canStartNow()}>
               <StartNowButton
                 id={id()}
@@ -918,6 +916,27 @@ export function TaskList(props: TaskListProps) {
     }
   }
 
+  async function handleDeleteProject(directory: string): Promise<void> {
+    const target = String(directory || "").trim()
+    const noticeID = `project:delete:${projectDirectoryKey(target)}`
+    try {
+      const result = await deleteProject(target)
+      notifySuccess({
+        id: noticeID,
+        title: t("project.delete_success_title"),
+        message: t("project.delete_success", { directory: result.directory }),
+      })
+      if (!result.deletedActive) await loadTasks()
+    } catch (err) {
+      notifyError({
+        id: noticeID,
+        title: t("project.delete_failed_title"),
+        message: t("project.delete_failed", { error: err instanceof Error ? err.message : String(err) }),
+        details: formatErrorDetails(err),
+      })
+    }
+  }
+
   return (
     <div class="task-list-panel">
       <Show when={showSearch() && (allItems().length > 4 || searchQuery())}>
@@ -973,7 +992,11 @@ export function TaskList(props: TaskListProps) {
             <Show
               when={boardStore.tasksLoaded}
               fallback={
-                <LedgerLoadingStatus label={t("common.loading")} class="task-list-skeleton" dataUi="task-list-loading" />
+                <LedgerLoadingStatus
+                  label={t("common.loading")}
+                  class="task-list-skeleton"
+                  dataUi="task-list-loading"
+                />
               }
             >
               <div class="empty-hint">
@@ -1003,6 +1026,7 @@ export function TaskList(props: TaskListProps) {
                 count={group.items.length}
                 collapsed={collapsed()}
                 onToggle={() => directoryCollapse.toggle(group.directory)}
+                onDeleteProject={handleDeleteProject}
               >
                 <TaskSection
                   entries={entries()}

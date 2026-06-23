@@ -7,14 +7,41 @@ import {
   activeDirectory,
   applyDirectory,
   closeProject,
+  deleteProject,
   pickDirectory,
   pickFiles,
   setWorkspaceDirectory,
   syncActiveDirectoryApiContext,
 } from "../src/services/workspace"
 import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse"
-import { __setHostTransportForTest, HOST_CAPABILITIES, type HostTransport } from "../src/services/host-transport"
+import {
+  __setHostTransportForTest,
+  HOST_CAPABILITIES,
+  type HostTransport,
+  type TransportRequest,
+} from "../src/services/host-transport"
 import { activeTaskID } from "../src/store/board"
+
+function installLocalStorageForTest(): void {
+  const data = new Map<string, string>()
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem(key: string) {
+        return data.get(key) ?? null
+      },
+      setItem(key: string, value: string) {
+        data.set(key, String(value))
+      },
+      removeItem(key: string) {
+        data.delete(key)
+      },
+      clear() {
+        data.clear()
+      },
+    },
+  })
+}
 
 describe("workspace active directory", () => {
   afterEach(() => {
@@ -49,6 +76,7 @@ describe("workspace active directory", () => {
       memoryFiles: [],
       promptEntries: [],
     })
+    if (typeof localStorage !== "undefined") localStorage.removeItem("oc_recent_directories")
   })
 
   test("uses selected task directory when settings directory is empty", () => {
@@ -95,6 +123,7 @@ describe("workspace active directory", () => {
         if (req.path === "config") return { status: 200, ok: true, headers: {}, body: { model: "" } }
         if (req.path === "channel") return { status: 200, ok: true, headers: {}, body: [] }
         if (req.path === "skill/installed") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "skill/mounts") return { status: 200, ok: true, headers: {}, body: {} }
         if (req.path === "mcp") return { status: 200, ok: true, headers: {}, body: {} }
         if (req.path === "path") return { status: 200, ok: true, headers: {}, body: { directory: "D:/repo/next" } }
         if (req.path === "vcs") return { status: 200, ok: true, headers: {}, body: { branch: "main" } }
@@ -253,6 +282,76 @@ describe("workspace active directory", () => {
     expect(closeCalls).toBe(1)
   })
 
+  test("deleteProject sends a project-scoped DELETE and closes the active project", async () => {
+    const requests: TransportRequest[] = []
+    const nativeCommands: unknown[] = []
+    __setHostTransportForTest({
+      kind: "browser",
+      capabilities: HOST_CAPABILITIES.browser,
+      async request(req) {
+        requests.push(req)
+        if (req.path === "project/current" && req.method === "DELETE") {
+          return {
+            status: 200,
+            ok: true,
+            headers: {},
+            body: {
+              ok: true,
+              projectID: "prj_delete_current",
+              directory: "D:/repo/current",
+              deletedTaskCount: 3,
+            },
+          }
+        }
+        return { status: 404, ok: false, headers: {}, body: { error: `unhandled ${req.path}` } }
+      },
+      openStream() {
+        return { close: () => undefined }
+      },
+      async native(command) {
+        nativeCommands.push(command)
+        return true
+      },
+      subscribeUiCommand() {
+        return { unsubscribe: () => undefined }
+      },
+    } satisfies HostTransport)
+    configure({ directory: "D:/repo/current" })
+    setSettingsStore({
+      directory: "D:/repo/current",
+      savedDirectory: "D:/repo/current",
+      workspaceTaskID: "task_current",
+      workspaceDirectory: "D:/repo/current",
+    })
+    setBoardStore({
+      selectedSource: { kind: "task", id: "task_current", directory: "D:/repo/current" },
+      board: { task: { id: "task_current", directory: "D:/repo/current" } },
+      tasks: [{ task: { id: "task_current", directory: "D:/repo/current" } }],
+    })
+    installLocalStorageForTest()
+    localStorage.setItem("oc_recent_directories", JSON.stringify(["D:/repo/current", "D:/repo/other"]))
+
+    const result = await deleteProject("D:/repo/current")
+
+    expect(result).toEqual({
+      ok: true,
+      projectID: "prj_delete_current",
+      directory: "D:/repo/current",
+      deletedTaskCount: 3,
+      deletedActive: true,
+    })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.path).toBe("project/current")
+    expect(requests[0]?.method).toBe("DELETE")
+    expect(requests[0]?.query?.directory).toBe("D:/repo/current")
+    expect(activeDirectory()).toBe("")
+    expect(JSON.parse(localStorage.getItem("oc_recent_directories") || "[]")).toEqual(["D:/repo/other"])
+    expect(nativeCommands).toContainEqual({
+      kind: "settings.save",
+      payload: expect.objectContaining({ directory: undefined }),
+    })
+  })
+
   test("manual applyDirectory clears selected task state before reloading the new project", async () => {
     const requests: string[] = []
     __setHostTransportForTest({
@@ -271,6 +370,7 @@ describe("workspace active directory", () => {
         if (req.path === "config") return { status: 200, ok: true, headers: {}, body: { model: "" } }
         if (req.path === "channel") return { status: 200, ok: true, headers: {}, body: [] }
         if (req.path === "skill/installed") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "skill/mounts") return { status: 200, ok: true, headers: {}, body: {} }
         if (req.path === "mcp") return { status: 200, ok: true, headers: {}, body: {} }
         if (req.path === "path") {
           return { status: 200, ok: true, headers: {}, body: { directory: "D:/repo/next" } }
@@ -328,7 +428,14 @@ describe("workspace active directory", () => {
   })
 
   test("native pickers preserve cancel but reject malformed host payloads", async () => {
-    const nativeResponses: unknown[] = [null, "D:/picked", undefined, ["D:/a", "D:/b"], { path: "D:/bad" }, ["D:/ok", 123]]
+    const nativeResponses: unknown[] = [
+      null,
+      "D:/picked",
+      undefined,
+      ["D:/a", "D:/b"],
+      { path: "D:/bad" },
+      ["D:/ok", 123],
+    ]
     __setHostTransportForTest({
       kind: "browser",
       capabilities: HOST_CAPABILITIES.browser,

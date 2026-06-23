@@ -882,6 +882,14 @@
   border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 74%, transparent);
 }
 
+.project-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(3px * var(--ui-scale));
+  min-width: 0;
+}
+
 .project-group .oc-button[data-ui="project-group-toggle"] {
   --oc-button-height: calc(26px * var(--ui-scale));
   --oc-button-padding-x: calc(6px * var(--ui-scale));
@@ -908,6 +916,34 @@
 .project-group .oc-button[data-ui="project-group-toggle"]:hover,
 .project-group .oc-button[data-ui="project-group-toggle"]:focus-visible {
   --oc-button-color: var(--text-soft);
+}
+
+.project-group .oc-button[data-ui="project-group-delete"] {
+  --oc-button-height: calc(24px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-bg: transparent;
+  --oc-button-color: color-mix(in srgb, var(--text-muted) 82%, transparent);
+  --oc-button-shadow: none;
+
+  width: calc(24px * var(--ui-scale));
+  min-width: calc(24px * var(--ui-scale));
+  height: calc(24px * var(--ui-scale));
+  min-height: calc(24px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+  flex: 0 0 auto;
+}
+
+.project-group .oc-button[data-ui="project-group-delete"]:hover,
+.project-group .oc-button[data-ui="project-group-delete"]:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--bad) 9%, transparent);
+  --oc-button-color: var(--bad);
+}
+
+.project-group .oc-button[data-ui="project-group-delete"][data-confirm="true"] {
+  --oc-button-bg: color-mix(in srgb, var(--bad) 13%, transparent);
+  --oc-button-color: var(--bad);
+  box-shadow: none;
 }
 
 .project-group-icon {
@@ -968,6 +1004,25 @@
   line-height: calc(17px * var(--ui-scale));
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+.project-group-delete-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.project-group-delete-icon[data-icon="confirm"] {
+  display: none;
+}
+
+.oc-button[data-ui="project-group-delete"][data-confirm="true"] .project-group-delete-icon[data-icon="delete"] {
+  display: none;
+}
+
+.oc-button[data-ui="project-group-delete"][data-confirm="true"] .project-group-delete-icon[data-icon="confirm"] {
+  display: inline-flex;
 }
 
 .project-group-body {

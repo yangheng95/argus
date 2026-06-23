@@ -321,12 +321,14 @@ describe("route directory policy", () => {
       "/config/proxy/test",
       "/config/prompt-profile",
       "/file/upload",
+      "/project/current",
       "/session/session_123/conversation",
       "/mission/wake",
       "/task/abc/browser-preview?targetID=art_1",
     ]) {
       expect(routeRequiresProjectDirectory(path)).toBe(true)
     }
+    expect(routeRequiresProjectDirectory("/project/current", "DELETE")).toBe(true)
     expect(routeRequiresProjectDirectory("/task/abc", "GET")).toBe(true)
     expect(routeRequiresProjectDirectory("/task/abc/conversation", "POST")).toBe(true)
   })

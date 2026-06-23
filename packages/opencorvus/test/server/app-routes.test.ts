@@ -28,9 +28,12 @@ describe("app routes", () => {
 
     expect(paths["/global/health"]?.get).toBeDefined()
     expect(paths["/project/current"]?.get).toBeDefined()
+    expect(paths["/project/current"]?.delete).toBeDefined()
     expect(paths["/goal-run/{goalRunID}/acceptance"]?.get).toBeDefined()
     expect(paths["/task/{taskID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"]).toBeDefined()
-    expect(paths["/mission/{missionID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"]).toBeDefined()
+    expect(
+      paths["/mission/{missionID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"],
+    ).toBeDefined()
   })
 
   test("Server.openapi documents task operator model context conflict errors", async () => {
@@ -51,13 +54,12 @@ describe("app routes", () => {
     const spec = await Server.openapi()
     const paths = spec.paths ?? {}
     const queryParameterNames = (operation: { parameters?: Array<{ name?: string; in?: string }> } | undefined) =>
-      (operation?.parameters ?? [])
-        .filter((parameter) => parameter.in === "query")
-        .map((parameter) => parameter.name)
+      (operation?.parameters ?? []).filter((parameter) => parameter.in === "query").map((parameter) => parameter.name)
     const directoryParameterNames = (operation: { parameters?: Array<{ name?: string; in?: string }> } | undefined) =>
       queryParameterNames(operation).filter((name) => name === "directory")
 
     expect(directoryParameterNames(paths["/project/current"]?.get)).toEqual(["directory"])
+    expect(directoryParameterNames(paths["/project/current"]?.delete)).toEqual(["directory"])
     expect(directoryParameterNames(paths["/task/{taskID}/browser-preview"]?.get)).toEqual(["directory"])
     expect(directoryParameterNames(paths["/task/{taskID}/browser-preview/evidence/{evidenceID}"]?.get)).toEqual([
       "directory",
