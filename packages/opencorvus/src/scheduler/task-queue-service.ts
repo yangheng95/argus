@@ -80,6 +80,9 @@ export namespace TaskQueueService {
   type InFlightTask = {
     promise: Promise<void>
     cleanup: () => void
+    sessionID: string
+    source: string
+    cancellationReason?: string
   }
 
   const state = lazyInstanceState(() => ({
@@ -137,7 +140,10 @@ export namespace TaskQueueService {
     }
   }
 
-  export async function executePrompt(raw: { sessionID: string; prompt: unknown; source?: string }) {
+  export async function executePrompt(
+    raw: { sessionID: string; prompt: unknown; source?: string },
+    hooks?: { beforeLoop?: () => void | Promise<void> },
+  ) {
     const input = z
       .object({
         sessionID: Identifier.schema("session"),
@@ -149,13 +155,18 @@ export namespace TaskQueueService {
       applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt)),
       { queueSource: input.source },
     )
-    return SessionPrompt.prompt({
+    const promptInput = {
       sessionID: input.sessionID,
       ...prompt,
-    })
+    }
+    if (hooks) return SessionPrompt.prompt(promptInput, hooks)
+    return SessionPrompt.prompt(promptInput)
   }
 
-  export async function executeCompaction(raw: z.input<typeof ExecuteCompactionInput>) {
+  export async function executeCompaction(
+    raw: z.input<typeof ExecuteCompactionInput>,
+    hooks?: { beforeLoop?: () => void | Promise<void> },
+  ) {
     const input = ExecuteCompactionInput.parse(raw)
     const session = await Session.get(input.sessionID)
     const source = await compactionSource(input.sessionID, input.sourceUserMessageID)
@@ -171,10 +182,13 @@ export namespace TaskQueueService {
     return SessionContext.provide(session, () =>
       Instance.provide({
         directory: session.directory,
-        fn: () =>
-          SessionPrompt.loop(
+        fn: async () => {
+          const beforeLoop = hooks?.beforeLoop?.()
+          if (beforeLoop) await beforeLoop
+          return SessionPrompt.loop(
             input.auto ? { sessionID: input.sessionID } : { sessionID: input.sessionID, result_mode: "summary" },
-          ),
+          )
+        },
       }),
     )
   }
@@ -290,11 +304,11 @@ export namespace TaskQueueService {
   }
 
   export function cancelSessionPrompts(input: { sessionIDs: string[]; reason?: string; source?: string }): number {
-    const sessionIDs = [...new Set(input.sessionIDs.map((id) => String(id || "").trim()).filter(Boolean))]
+    const sessionIDs = normalizeSessionIDs(input.sessionIDs)
     if (sessionIDs.length === 0) return 0
     const now = Date.now()
     const reason = input.reason || "task cancelled"
-    return Database.use((db) => {
+    const cancelled = Database.use((db) => {
       const where: SQL[] = [
         inArray(TaskQueueTable.session_id, sessionIDs),
         inArray(TaskQueueTable.status, ["queued", "running"]),
@@ -313,6 +327,56 @@ export namespace TaskQueueService {
         .all()
       return rows.length
     })
+    requestInFlightCancellation({ sessionIDs, reason, source: input.source })
+    return cancelled
+  }
+
+  export async function awaitSessionPromptsIdle(input: { sessionIDs: string[]; source?: string }) {
+    const sessionIDs = normalizeSessionIDs(input.sessionIDs)
+    if (sessionIDs.length === 0) return
+    if (!Instance.current()) return
+    const sessions = new Set(sessionIDs)
+    while (true) {
+      const running = [...state().inFlight.values()]
+        .filter((task) => sessions.has(task.sessionID))
+        .filter((task) => !input.source || task.source === input.source)
+        .map((task) => task.promise)
+      if (running.length === 0) return
+      await Promise.all(running)
+    }
+  }
+
+  function normalizeSessionIDs(sessionIDs: string[]) {
+    return [...new Set(sessionIDs.map((id) => String(id || "").trim()).filter(Boolean))]
+  }
+
+  function requestInFlightCancellation(input: { sessionIDs: string[]; reason: string; source?: string }) {
+    if (!Instance.current()) return
+    const sessions = new Set(input.sessionIDs)
+    const liveSessions = Database.use((db) =>
+      db
+        .select({
+          id: SessionTable.id,
+          directory: SessionTable.directory,
+        })
+        .from(SessionTable)
+        .where(inArray(SessionTable.id, input.sessionIDs))
+        .all(),
+    )
+    const directoryBySession = new Map(liveSessions.map((session) => [session.id, session.directory]))
+    for (const task of state().inFlight.values()) {
+      if (!sessions.has(task.sessionID)) continue
+      if (input.source && task.source !== input.source) continue
+      task.cancellationReason = input.reason
+      task.cleanup()
+      const directory = directoryBySession.get(task.sessionID)
+      if (directory) SessionPrompt.cancel(task.sessionID, directory)
+    }
+  }
+
+  function assertInFlightNotCancelled(task: typeof TaskQueueTable.$inferSelect, inFlight: InFlightTask) {
+    if (!inFlight.cancellationReason) return
+    throw new Error(inFlight.cancellationReason || `queue task ${task.id} cancelled`)
   }
 
   function requestDrain(reason: string) {
@@ -371,11 +435,15 @@ export namespace TaskQueueService {
     }
     if (list.length === 0) return []
     const started = list.map((task) => {
-      let cleanup = () => {}
       let running!: Promise<void>
-      running = execute(task, (nextCleanup) => {
-        cleanup = nextCleanup
-      })
+      const inFlight: InFlightTask = {
+        promise: Promise.resolve(),
+        cleanup: () => {},
+        sessionID: task.session_id,
+        source: task.source,
+      }
+      current.inFlight.set(task.id, inFlight)
+      running = execute(task, inFlight)
         .catch((error) => {
           try {
             fail(task, error)
@@ -393,10 +461,7 @@ export namespace TaskQueueService {
             current.inFlight.delete(task.id)
           }
         })
-      current.inFlight.set(task.id, {
-        promise: running,
-        cleanup,
-      })
+      inFlight.promise = running
       return running
     })
     return started
@@ -523,7 +588,7 @@ export namespace TaskQueueService {
     )
   }
 
-  async function execute(task: typeof TaskQueueTable.$inferSelect, registerCleanup: (cleanup: () => void) => void) {
+  async function execute(task: typeof TaskQueueTable.$inferSelect, inFlight: InFlightTask) {
     const metadata = RawTaskMetadata.safeParse(task.metadata)
     if (!metadata.success) {
       throw new Error("invalid queue metadata")
@@ -564,21 +629,34 @@ export namespace TaskQueueService {
       cleaned = true
       GlobalBus.off("event", handler)
     }
-    registerCleanup(cleanup)
+    inFlight.cleanup = cleanup
+    assertInFlightNotCancelled(task, inFlight)
     try {
       if (metadata.data.kind === "session_prompt") {
-        await executePrompt({
-          sessionID: task.session_id,
-          prompt: metadata.data.input,
-          source: "task-queue-service",
-        })
+        await executePrompt(
+          {
+            sessionID: task.session_id,
+            prompt: metadata.data.input,
+            source: "task-queue-service",
+          },
+          {
+            beforeLoop: () => assertInFlightNotCancelled(task, inFlight),
+          },
+        )
       } else if (metadata.data.kind === "session_wake") {
-        await executeSessionWake(task.session_id)
-      } else {
-        await executeCompaction({
-          sessionID: task.session_id,
-          ...StoredCompactionInput.parse(metadata.data.input),
+        await executeSessionWake(task.session_id, {
+          beforeLoop: () => assertInFlightNotCancelled(task, inFlight),
         })
+      } else {
+        await executeCompaction(
+          {
+            sessionID: task.session_id,
+            ...StoredCompactionInput.parse(metadata.data.input),
+          },
+          {
+            beforeLoop: () => assertInFlightNotCancelled(task, inFlight),
+          },
+        )
       }
     } finally {
       cleanup()
@@ -607,12 +685,16 @@ export namespace TaskQueueService {
     requestDrain("task completed")
   }
 
-  async function executeSessionWake(sessionID: string) {
+  async function executeSessionWake(sessionID: string, hooks?: { beforeLoop?: () => void | Promise<void> }) {
     const session = await Session.get(sessionID)
     return SessionContext.provide(session, () =>
       Instance.provide({
         directory: session.directory,
-        fn: () => SessionPrompt.loop({ sessionID }),
+        fn: async () => {
+          const beforeLoop = hooks?.beforeLoop?.()
+          if (beforeLoop) await beforeLoop
+          return SessionPrompt.loop({ sessionID })
+        },
       }),
     )
   }

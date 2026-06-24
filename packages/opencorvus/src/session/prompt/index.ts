@@ -1,6 +1,5 @@
 import { clearRewindCursorForSession } from "@/engine/rewind"
 import { PermissionNext } from "@/permission/next"
-import { fn } from "@/util/fn"
 import { Instance } from "../../project/instance"
 import { Session } from ".."
 import { SessionCommand } from "../command-exec"
@@ -41,7 +40,11 @@ export namespace SessionPrompt {
   export type PromptInput = PromptInputType
   export const resolvePromptParts = resolvePromptPartsImpl
 
-  export const prompt = fn(PromptInput, async (input) => {
+  type PromptRuntimeHooks = {
+    beforeLoop?: () => void | Promise<void>
+  }
+
+  async function runPrompt(input: PromptInputType, hooks?: PromptRuntimeHooks) {
     const session = await Session.get(input.sessionID)
     await clearRewindCursorForSession(session.id)
     return SessionContext.provide(session, async () => {
@@ -65,10 +68,20 @@ export namespace SessionPrompt {
         return message
       }
 
+      const beforeLoop = hooks?.beforeLoop?.()
+      if (beforeLoop) await beforeLoop
       return Instance.provide({
         directory: session.directory,
         fn: () => loop({ sessionID: input.sessionID }),
       })
     })
-  })
+  }
+
+  export const prompt = Object.assign(
+    (input: PromptInputType, hooks?: PromptRuntimeHooks) => runPrompt(PromptInput.parse(input), hooks),
+    {
+      force: (input: PromptInputType, hooks?: PromptRuntimeHooks) => runPrompt(input, hooks),
+      schema: PromptInput,
+    },
+  )
 }

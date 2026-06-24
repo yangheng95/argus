@@ -19,6 +19,14 @@ function result() {
   } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
 }
 
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 async function createSourceUserMessage(sessionID: string, text = "compact source") {
   const info = await Session.updateMessage({
     id: Identifier.ascending("message"),
@@ -47,6 +55,14 @@ async function waitForQueueStatus(id: string, status: string) {
   }
   const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
   throw new Error(`queue task ${id} did not reach ${status}; current=${row?.status ?? "missing"}`)
+}
+
+async function waitUntil(fn: () => boolean, label: string) {
+  for (let i = 0; i < 50; i += 1) {
+    if (fn()) return
+    await Bun.sleep(10)
+  }
+  throw new Error(`timed out waiting for ${label}`)
 }
 
 describe("scheduler.task-queue-service", () => {
@@ -818,6 +834,71 @@ describe("scheduler.task-queue-service", () => {
     })
 
     expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("cancelSessionPrompts stops claimed in-flight wake before it starts a loop", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const releaseGet = deferred()
+    let getBlocked = false
+    let sessionID = ""
+    const originalGet = Session.get
+    const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(result() as never)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        sessionID = session.id
+        const get = spyOn(Session, "get").mockImplementation((async (id: string) => {
+          if (id === sessionID && !getBlocked) {
+            getBlocked = true
+            await releaseGet.promise
+          }
+          return originalGet(id)
+        }) as never)
+        const now = Date.now()
+        const id = "task_claimed_cancel_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id,
+              session_id: sessionID,
+              prompt: "claimed wake",
+              priority: "normal",
+              status: "queued",
+              source: "test",
+              metadata: {
+                kind: "session_wake",
+                messageID: Identifier.ascending("message"),
+                input: { parts: [{ type: "text", text: "claimed wake" }] },
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        const run = TaskQueueService.runNow()
+        await waitForQueueStatus(id, "running")
+        await waitUntil(() => getBlocked, "claimed wake Session.get")
+        const cancelled = TaskQueueService.cancelSessionPrompts({
+          sessionIDs: [sessionID],
+          reason: "task cancelled",
+        })
+        releaseGet.resolve()
+        await run
+
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(cancelled).toBe(1)
+        expect(row).toMatchObject({
+          status: "failed",
+          error_message: "task cancelled",
+        })
+        expect(loop).toHaveBeenCalledTimes(0)
+        expect(get).toHaveBeenCalled()
+      },
+    })
   })
 
   test("with concurrency=1 skips blocked session and executes another eligible session", async () => {

@@ -5,8 +5,10 @@ import { Identifier } from "../../src/id/id"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Orchestrator } from "../../src/orchestrator/agent"
 import { Instance } from "../../src/project/instance"
+import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { SessionTable } from "../../src/session/session.sql"
 import { Database, eq } from "../../src/storage/db"
 import { EngineService } from "../../src/task-api"
@@ -155,6 +157,74 @@ describe("deleteTask running task settlement", () => {
       releaseLoop.resolve()
       await loopPromise
     }
+  })
+
+  test("waits for task-owned in-flight queue wake before physically deleting rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const releaseQueue = deferred()
+    const { taskID, sessionID } = await createActiveTask(tmp.path, "delete while queue wake is still active")
+    const queueTaskID = Identifier.ascending("task")
+    const now = Date.now()
+    let queueWakeStarted = false
+
+    const loop = spyOn(SessionPrompt, "loop").mockImplementation((async () => {
+      queueWakeStarted = true
+      await releaseQueue.promise
+      return { info: {} as never, parts: [] } as Awaited<ReturnType<typeof SessionPrompt.loop>>
+    }) as never)
+
+    Database.use((db) =>
+      db
+        .insert(TaskQueueTable)
+        .values({
+          id: queueTaskID,
+          session_id: sessionID,
+          prompt: "queued wake",
+          priority: "normal",
+          status: "queued",
+          source: "test",
+          metadata: {
+            kind: "session_wake",
+            messageID: Identifier.ascending("message"),
+            input: { parts: [{ type: "text", text: "queued wake" }] },
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+
+    let queueRun!: Promise<void>
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        queueRun = TaskQueueService.runNow()
+        await waitUntil(() => queueWakeStarted, "queued wake start")
+      },
+    })
+
+    await expectNoProcessErrors(async () => {
+      const deletePromise = EngineService.deleteTask(taskID, {
+        cleanupTimeoutMs: 2_000,
+        taskLoopIdleTimeoutMs: 2_000,
+      })
+      await Bun.sleep(50)
+
+      expect(taskRow(taskID)?.id).toBe(taskID)
+      expect(sessionRow(sessionID)?.id).toBe(sessionID)
+      expect(queueRow(queueTaskID)).toMatchObject({
+        status: "failed",
+        error_message: "task cancelled",
+      })
+
+      releaseQueue.resolve()
+      await queueRun
+      await deletePromise
+    })
+
+    expect(loop).toHaveBeenCalledTimes(1)
+    expect(taskRow(taskID)).toBeUndefined()
+    expect(sessionRow(sessionID)).toBeUndefined()
   })
 
   test("cancelTask marks task-owned queued prompts failed", async () => {
