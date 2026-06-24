@@ -23313,17 +23313,6 @@
             }
           }
         },
-        "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
         "x-codeSamples": [
           {
             "lang": "js",
@@ -23609,15 +23598,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "path",
             "name": "taskID",
@@ -24148,15 +24128,6 @@
         },
         "parameters": [
           {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
             "name": "taskID",
             "schema": {
@@ -24346,15 +24317,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "path",
             "name": "taskID",
@@ -25435,15 +25397,6 @@
         },
         "parameters": [
           {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
             "name": "taskID",
             "schema": {
@@ -25563,15 +25516,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "path",
             "name": "taskID",
@@ -29098,15 +29042,6 @@
         },
         "parameters": [
           {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
             "name": "taskID",
             "schema": {
@@ -30969,15 +30904,6 @@
         },
         "parameters": [
           {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
             "name": "taskID",
             "schema": {
@@ -31081,15 +31007,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "path",
             "name": "taskID",
@@ -31272,15 +31189,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "path",
             "name": "taskID",
@@ -31495,15 +31403,6 @@
         },
         "parameters": [
           {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
             "name": "taskID",
             "schema": {
@@ -31692,15 +31591,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "in": "path",
             "name": "taskID",

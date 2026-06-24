@@ -47,6 +47,183 @@ describe("project-scope middleware: directory required", () => {
     expect(body.data.message).toContain("?directory=")
   })
 
+  test("task record read routes work without ?directory=", async () => {
+    const now = Date.now()
+    const taskID = Identifier.ascending("task")
+    const sessionID = Identifier.ascending("session")
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: "project-task-read-record",
+          name: "Task read record project",
+          worktree: "C:/missing/task-read-record-project",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: "project-task-read-record",
+          slug: "task-read-record-session",
+          directory: "C:/missing/task-read-record-project",
+          title: "Task read record session",
+          version: "0.0.1",
+          kind: "root",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: "project-task-read-record",
+          session_id: sessionID,
+          source: "api",
+          title: "Task read project task",
+          request: "read stale record",
+          priority: "normal",
+          kind: "workflow",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    const app = Server.App()
+    for (const suffix of ["", "/status", "/board", "/progress", "/brief", "/transcript", "/runs", "/interactions", "/bindings"]) {
+      const response = await app.request(`/task/${taskID}${suffix}`, { method: "GET" })
+      expect(response.status, `GET /task/:taskID${suffix}`).toBe(200)
+      await response.text()
+    }
+  })
+
+  test("task operator model context resolves from task record without ?directory=", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        model: "test/base",
+        agent: {
+          orchestrator: {
+            model: "test/orchestrator",
+          },
+        },
+      },
+    })
+    const app = Server.App()
+    const configResponse = await app.request("/config", {
+      headers: { "x-opencorvus-directory": tmp.path },
+    })
+    expect(configResponse.status).toBe(200)
+
+    const project = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.worktree, tmp.path)).get())
+    expect(project).toBeDefined()
+
+    const now = Date.now()
+    const taskID = Identifier.ascending("task")
+    const sessionID = Identifier.ascending("session")
+    Database.use((db) => {
+      db.insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: project!.id,
+          slug: "task-operator-model-context-session",
+          directory: tmp.path,
+          title: "Task operator model context session",
+          version: "0.0.1",
+          kind: "root",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: project!.id,
+          session_id: sessionID,
+          source: "api",
+          title: "Task operator model context",
+          request: "resolve model context",
+          priority: "normal",
+          kind: "workflow",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    const response = await app.request(`/task/${taskID}/operator-model-context`, { method: "GET" })
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      taskID,
+      sessionID,
+      agent: "orchestrator",
+      model: {
+        providerID: "test",
+        modelID: "orchestrator",
+      },
+    })
+  })
+
+  test("task event stream connects without ?directory=", async () => {
+    const now = Date.now()
+    const taskID = Identifier.ascending("task")
+    const sessionID = Identifier.ascending("session")
+    Database.use((db) => {
+      db.insert(ProjectTable)
+        .values({
+          id: "project-task-events-record",
+          name: "Task events record project",
+          worktree: "C:/missing/task-events-record-project",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: "project-task-events-record",
+          slug: "task-events-record-session",
+          directory: "C:/missing/task-events-record-project",
+          title: "Task events record session",
+          version: "0.0.1",
+          kind: "root",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: "project-task-events-record",
+          session_id: sessionID,
+          source: "api",
+          title: "Task events project task",
+          request: "stream stale record",
+          priority: "normal",
+          kind: "workflow",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+    })
+
+    const app = Server.App()
+    const response = await app.request(`/task/${taskID}/events`, { method: "GET" })
+    expect(response.status).toBe(200)
+    const reader = response.body?.getReader()
+    expect(reader).toBeDefined()
+    const first = await reader!.read()
+    const text = new TextDecoder().decode(first.value)
+    expect(text).toContain("task.connected")
+    await reader!.cancel()
+  })
+
   test("record-level DELETE /task/:taskID works without ?directory=", async () => {
     const now = Date.now()
     const taskID = Identifier.ascending("task")

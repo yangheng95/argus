@@ -15,6 +15,10 @@ type I18n = {
   title_zh: string
   auth_en_lead: string
   auth_zh_lead: string
+  directory_scope_en_heading: string
+  directory_scope_zh_heading: string
+  directory_scope_en_lead: string
+  directory_scope_zh_lead: string
   generated_lead_en: string
   generated_lead_zh: string
   section_endpoints_en: string
@@ -136,6 +140,8 @@ function render(groups: Group[], i18n: I18n, lang: Lang): string {
     : "HTTP API reference--auto-generated from the generated OpenAPI spec."
   const generated = isZh ? i18n.generated_lead_zh : i18n.generated_lead_en
   const auth = isZh ? i18n.auth_zh_lead : i18n.auth_en_lead
+  const directoryScopeHeading = isZh ? i18n.directory_scope_zh_heading : i18n.directory_scope_en_heading
+  const directoryScopeLead = isZh ? i18n.directory_scope_zh_lead : i18n.directory_scope_en_lead
   const sec = isZh ? i18n.section_endpoints_zh : i18n.section_endpoints_en
   const m = isZh ? i18n.method_zh : i18n.method_en
   const p = isZh ? i18n.path_zh : i18n.path_en
@@ -154,6 +160,10 @@ function render(groups: Group[], i18n: I18n, lang: Lang): string {
   lines.push(`## Authentication`)
   lines.push("")
   lines.push(auth)
+  lines.push("")
+  lines.push(`## ${directoryScopeHeading}`)
+  lines.push("")
+  lines.push(directoryScopeLead)
   lines.push("")
   lines.push(`## ${sec}`)
   lines.push("")

@@ -6337,17 +6337,10 @@ export class List extends HeyApiClient {
    *
    * Pure change-notification SSE for the task list sidebar. Emits `{type, taskID, sequence}` when a persisted task aggregate event changes the task-list projection. Conversation stream/status chunks belong to /task/:taskID/events and are intentionally not sent here. Notify-worthy events also carry `notificationDetails` for copyable diagnostics. No replay — clients call /task separately to fetch the refreshed list.
    */
-  public events<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+  public events<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).sse.get<TaskListEventsResponses, unknown, ThrowOnError>({
       url: "/task/events",
       ...options,
-      ...params,
     })
   }
 }
@@ -7114,21 +7107,10 @@ export class Task extends HeyApiClient {
   public get<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskGetResponses, TaskGetErrors, ThrowOnError>({
       url: "/task/{taskID}",
       ...options,
@@ -7144,21 +7126,10 @@ export class Task extends HeyApiClient {
   public status<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskStatusResponses, TaskStatusErrors, ThrowOnError>({
       url: "/task/{taskID}/status",
       ...options,
@@ -7204,21 +7175,10 @@ export class Task extends HeyApiClient {
   public bindings<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskBindingsResponses, unknown, ThrowOnError>({
       url: "/task/{taskID}/bindings",
       ...options,
@@ -7232,21 +7192,10 @@ export class Task extends HeyApiClient {
   public progress<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskProgressResponses, TaskProgressErrors, ThrowOnError>({
       url: "/task/{taskID}/progress",
       ...options,
@@ -7260,21 +7209,10 @@ export class Task extends HeyApiClient {
   public events<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).sse.get<TaskEventsResponses, unknown, ThrowOnError>({
       url: "/task/{taskID}/events",
       ...options,
@@ -7318,21 +7256,10 @@ export class Task extends HeyApiClient {
   public brief<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskBriefResponses, TaskBriefErrors, ThrowOnError>({
       url: "/task/{taskID}/brief",
       ...options,
@@ -7346,21 +7273,10 @@ export class Task extends HeyApiClient {
   public board<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskBoardResponses, TaskBoardErrors, ThrowOnError>({
       url: "/task/{taskID}/board",
       ...options,
@@ -7374,21 +7290,10 @@ export class Task extends HeyApiClient {
   public transcript<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskTranscriptResponses, TaskTranscriptErrors, ThrowOnError>({
       url: "/task/{taskID}/transcript",
       ...options,
@@ -7404,21 +7309,10 @@ export class Task extends HeyApiClient {
   public operatorModelContext<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<
       TaskOperatorModelContextResponses,
       TaskOperatorModelContextErrors,
@@ -7436,21 +7330,10 @@ export class Task extends HeyApiClient {
   public runs<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskRunsResponses, TaskRunsErrors, ThrowOnError>({
       url: "/task/{taskID}/runs",
       ...options,
@@ -7464,21 +7347,10 @@ export class Task extends HeyApiClient {
   public interactions<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
-      directory?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "taskID" }] }])
     return (options?.client ?? this.client).get<TaskInteractionsResponses, TaskInteractionsErrors, ThrowOnError>({
       url: "/task/{taskID}/interactions",
       ...options,

@@ -45,6 +45,8 @@ Raw HTTP clients may also send the equivalent header:
 x-opencorvus-directory: D:\repo\my-project
 ```
 
+Single-task record reads are keyed by `taskID` and do not need a project directory. Use `directory` for project-scoped routes such as `GET /tasks`, `POST /task`, task write routes, browser preview routes, and `GET /task/{taskID}/project-archive`.
+
 When `OPENCORVUS_SERVER_PASSWORD` is set, requests need HTTP Basic Auth. The default username is `opencorvus`; `OPENCORVUS_SERVER_USERNAME` overrides it.
 
 The SDK appends the directory query parameter on project-scoped routes and handles Basic Auth:
@@ -112,6 +114,12 @@ const status = await client.task.status({ taskID })
 
 if (status.error) throw status.error
 console.log(status.data.status, status.data.progress.percent)
+```
+
+Raw HTTP status reads do not need `directory`:
+
+```bash
+curl http://127.0.0.1:7878/task/task_.../status
 ```
 
 The response has two status layers:

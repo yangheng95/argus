@@ -9,6 +9,10 @@ description: "HTTP API 参考--由生成的 OpenAPI 规格自动生成。"
 
 设置 `OPENCORVUS_SERVER_PASSWORD` 后，全部端点受保护。客户端必须使用 HTTP Basic Auth：用户名为 `OPENCORVUS_SERVER_USERNAME`，未设置时默认为 `opencorvus`；密码为 `OPENCORVUS_SERVER_PASSWORD`。
 
+## 目录作用域
+
+OpenAPI 只会给项目作用域操作标注 `directory` query 参数。单个 Task 记录读取以 `taskID` 为主键，不需要 `directory`：`GET /task/{taskID}`、`/status`、`/board`、`/progress`、`/events`、`/brief`、`/transcript`、`/runs`、`/interactions`、`/bindings`、`/operator-model-context` 以及 Task conversation 读取路由。项目任务列表、创建 Task、Task 写操作、browser preview 路由和项目归档下载仍属于项目作用域。
+
 ## 端点列表
 
 ### Global
