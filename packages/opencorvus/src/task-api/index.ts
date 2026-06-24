@@ -98,7 +98,7 @@ import {
   requestSessionPromptSubtreeCancellation,
 } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
-import { listLiveOrchestratorToolOwnership } from "@/engine/tool-ownership"
+import { requestTaskAgentLifecycleCancellation } from "@/engine/task-agent-lifecycle"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
 import { Orchestrator } from "@/orchestrator/agent"
@@ -1908,18 +1908,16 @@ export namespace EngineService {
     // Abort Orchestrator and any in-progress pipeline stage
     Orchestrator.abort(taskID)
     abortTaskPipeline(taskID)
-    const promptCancellation = task.session_id
-      ? await requestSessionPromptSubtreeCancellation({
-          sessionID: task.session_id,
-          projectID: task.project_id,
-          taskID,
-        })
-      : { sessionIDs: [], cancelledSessions: [], failures: [] }
+    const lifecycle = await requestTaskAgentLifecycleCancellation({
+      task,
+      reason: "task cancelled",
+      handle: "task-api.cancel-task",
+    })
     TaskQueueService.cancelSessionPrompts({
-      sessionIDs: promptCancellation.sessionIDs,
+      sessionIDs: lifecycle.sessionIDs,
       reason: "task cancelled",
     })
-    const liveOwnerships = listLiveOrchestratorToolOwnership(taskID)
+    const liveOwnerships = lifecycle.ownerships
     if (liveOwnerships.length > 0) {
       const { abortLiveOrchestratorToolOwnership } = await import("@/engine/writer")
       await withTimeout(
@@ -2006,8 +2004,8 @@ export namespace EngineService {
       )
     }
     await assertSessionPromptSubtreeFinished({
-      sessions: promptCancellation.cancelledSessions,
-      failures: promptCancellation.failures,
+      sessions: lifecycle.cancelledSessions,
+      failures: lifecycle.cancellationFailures,
       taskID,
       inactivityTimeoutMs: options?.promptSettleInactivityMs,
     })

@@ -5,8 +5,10 @@ import {
   insertOrchestratorToolOwnershipArtifact,
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
+import { createAgentCoordinationRequest, findAgentCoordinationRequest } from "../../src/engine/agent-coordination"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -34,6 +36,8 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
     let messageID = ""
     let partID = ""
     let childID = ""
+    let queueTaskID = ""
+    let coordinationRequestID = ""
     let descendantID = ""
     let descendantAbort: AbortSignal | undefined
 
@@ -51,6 +55,7 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
           title: "cancel child",
         })
         childID = child.id
+        queueTaskID = Identifier.ascending("task")
         const descendant = await Session.create({
           kind: "frontend-research",
           parentID: child.id,
@@ -130,6 +135,36 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
           payload: ownership,
           now,
         })
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id: queueTaskID,
+              session_id: childID,
+              prompt: "queued detached child prompt",
+              priority: "normal",
+              status: "queued",
+              source: "test",
+              metadata: {
+                kind: "session_prompt",
+                input: { parts: [{ type: "text", text: "queued detached child prompt" }] },
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        const request = createAgentCoordinationRequest({
+          taskID,
+          sessionID: childID,
+          agent: "frontend-research",
+          messageID: Identifier.ascending("message"),
+          summary: "child needs cancellation",
+          details: "task cancellation must cancel pending worker coordination",
+          blocking: true,
+          requestedDecision: "cancel",
+        })
+        coordinationRequestID = request.payload.request_id
       },
     })
 
@@ -151,6 +186,12 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
     expect(cancelled).toContain(descendantID)
     expect(SessionPromptState.isActive(descendantID, tmp.path)).toBe(false)
     expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
+    const queueRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, queueTaskID)).get())
+    expect(queueRow?.status).toBe("failed")
+    expect(queueRow?.error_message).toBe("task cancelled")
+    expect(findAgentCoordinationRequest({ taskID, requestID: coordinationRequestID })?.payload.status).toBe(
+      "cancelled",
+    )
     const part = (await Message.parts(messageID)).find((item) => item.id === partID)
     expect(part?.type).toBe("tool")
     if (part?.type !== "tool") throw new Error("expected tool part")
