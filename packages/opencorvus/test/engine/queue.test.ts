@@ -849,11 +849,11 @@ describe("engine queue", () => {
         })
 
         await dispatchTaskLoop({ taskID: queuedID, event: { note: "queued wake retained until start" } })
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1 })
+        expect(queuedTaskEventStats(queuedID)).toMatchObject({ tasks: 1 })
 
         await EngineService.cancelTask(queuedID)
 
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 0 })
+        expect(queuedTaskEventStats(queuedID)).toMatchObject({ tasks: 0 })
         expect(taskStatus(queuedID)).toBe("cancelled")
       },
     })
@@ -902,7 +902,7 @@ describe("engine queue", () => {
   })
 
   test(
-    "operator message wake to a terminal task is ignored even with an active same-cwd task",
+    "operator message wake to a terminal task queues it behind an active same-cwd task",
     async () => {
       await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
 
@@ -953,10 +953,11 @@ describe("engine queue", () => {
           })
           await new Promise((resolve) => setTimeout(resolve, 0))
 
-          expect(result).toBe("ignored")
+          expect(result).toBe("queued")
           expect(taskStatus(activeID)).toBe("active")
-          expect(taskStatus(terminalID)).toBe("completed")
-          expect(findTask(terminalID)?.time_completed).not.toBeNull()
+          expect(taskStatus(terminalID)).toBe("queued")
+          expect(findTask(terminalID)?.time_completed).toBeNull()
+          expect(directoryQueueSnapshot(tmp.path).queuedTaskIDs).toContain(terminalID)
           expect(runTaskLoop).not.toHaveBeenCalled()
         },
       })

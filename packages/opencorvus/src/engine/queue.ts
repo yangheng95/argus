@@ -24,6 +24,7 @@ import type { OrchestratorEvent } from "@/orchestrator/agent"
 import { Identifier } from "@/id/id"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
+import { openTaskForOperatorWake } from "./task-message-open"
 import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
 
 const log = Log.create({ service: "engine.queue" })
@@ -54,7 +55,17 @@ export function discardQueuedTaskEvent(taskID: string): void {
   discardPendingQueuedOperatorWakes(taskID)
 }
 
-export function queuedTaskEventStats() {
+export function queuedTaskEventStats(taskID?: string) {
+  if (taskID) {
+    const events = queuedTaskEvents.get(taskID) ?? []
+    if (events.length === 0 || !findTask(taskID)) queuedTaskEvents.delete(taskID)
+    const volatileCount = queuedTaskEvents.get(taskID)?.length ?? 0
+    const durableCount = pendingQueuedOperatorWakeTaskIDs().filter((id) => id === taskID).length
+    return {
+      tasks: volatileCount + durableCount > 0 ? 1 : 0,
+      events: volatileCount + durableCount,
+    }
+  }
   for (const [taskID, events] of queuedTaskEvents) {
     if (events.length === 0 || !findTask(taskID)) queuedTaskEvents.delete(taskID)
   }
@@ -172,6 +183,13 @@ function takeQueuedTaskEvent(taskID: string): OrchestratorEvent | undefined {
     queuedTaskEvents.delete(taskID)
   }
   return next?.event
+}
+
+function peekQueuedTaskEvent(taskID: string): OrchestratorEvent | undefined {
+  const volatile = queuedTaskEvents.get(taskID)?.[0]
+  const durable = findNextPendingQueuedOperatorWake(taskID)
+  if (durable && (!volatile || durable.timeCreated < volatile.timeQueued)) return durable.event
+  return volatile?.event
 }
 
 function findNextPendingQueuedOperatorWake(taskID: string):
@@ -430,6 +448,19 @@ export async function drainQueuedTaskEventIfUnowned(taskID: string): Promise<boo
   const liveOwners = listLiveOrchestratorToolOwnership(taskID)
   if (liveOwners.length > 0) return false
 
+  if (isTaskTerminal(task)) {
+    const queuedEvent = peekQueuedTaskEvent(taskID)
+    if (!queuedEvent) return false
+    if (!isOperatorWakeEvent(queuedEvent)) {
+      takeQueuedTaskEvent(taskID)
+      log.info("discarded queued passive wake for terminal task", { taskID, status: deriveTaskStatus(task) })
+      return hasQueuedTaskEvent(taskID) ? drainQueuedTaskEventIfUnowned(taskID) : false
+    }
+    await openTaskForOperatorWake(task, "Queued operator wake reopened terminal task")
+    await advanceQueue(cwd)
+    return !hasQueuedTaskEvent(taskID)
+  }
+
   if (isTaskQueued(task)) {
     await advanceQueue(cwd)
     return !hasQueuedTaskEvent(taskID)
@@ -685,13 +716,14 @@ export function listOrphanedActiveInProject(projectID: string): TaskRow[] {
  * Idempotent: calling advanceQueue multiple times for the same cwd is safe.
  * The atomic claim ensures only one call will actually start a loop.
  */
-export async function advanceQueue(cwd: string): Promise<void> {
-  if (!cwd) return
+export async function advanceQueue(cwd: string): Promise<TaskRow | undefined> {
+  if (!cwd) return undefined
   await convergeDeadOwnerActiveTasksForCwd(cwd)
   const claimed = claimNextForCwd(cwd)
-  if (!claimed) return
+  if (!claimed) return undefined
   const event = takeQueuedTaskEvent(claimed.id)
   await startLoopForTask(claimed, event, cwd)
+  return claimed
 }
 
 async function convergeDeadOwnerActiveTasksForCwd(cwd: string): Promise<void> {
@@ -723,12 +755,16 @@ export async function dispatchTaskLoop(input: {
   let task = findTask(input.taskID)
   if (!task) return "ignored"
   if (isTaskTerminal(task)) {
-    log.info("dispatchTaskLoop: ignoring terminal task wake", {
-      taskID: task.id,
-      status: deriveTaskStatus(task),
-      note: input.event?.note,
-    })
-    return "ignored"
+    if (isOperatorWakeEvent(input.event)) {
+      task = await openTaskForOperatorWake(task, "Operator wake reopened terminal task")
+    } else {
+      log.info("dispatchTaskLoop: ignoring terminal task wake", {
+        taskID: task.id,
+        status: deriveTaskStatus(task),
+        note: input.event?.note,
+      })
+      return "ignored"
+    }
   }
   const cwd = taskCwd(task.id)
   if (!cwd) {
@@ -741,8 +777,8 @@ export async function dispatchTaskLoop(input: {
   }
   if (isTaskQueued(task)) {
     if (input.event) enqueueTaskEvent(task.id, input.event)
-    await advanceQueue(cwd)
-    return "started"
+    const claimed = await advanceQueue(cwd)
+    return claimed?.id === task.id ? "started" : "queued"
   }
 
   const liveOwners = listLiveOrchestratorToolOwnership(task.id)

@@ -73,7 +73,7 @@ import {
   startQueuedTaskInCwd,
   taskCwd,
 } from "@/engine/queue"
-import { reopenActiveRunForOperatorWake } from "@/engine/task-message-open"
+import { openTaskForOperatorWake, reopenActiveRunForOperatorWake } from "@/engine/task-message-open"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import {
   updateGoal as updateGoalRow,
@@ -686,15 +686,8 @@ async function appendAndWakeTaskOperatorMessage(input: {
     },
     { taskID: input.taskID, source: "service.message" },
   )
-  if (isTaskTerminal(task)) {
-    return {
-      task: requireTaskInCurrentProject(input.taskID),
-      userMessage,
-      resumed: false,
-      wakeStatus: "not_woken",
-    }
-  }
-  await reopenActiveRunForOperatorWake(task, "Operator message reopened blocked run")
+  const wakeTask = await openTaskForOperatorWake(task, "Operator message reopened task")
+  await reopenActiveRunForOperatorWake(wakeTask, "Operator message reopened blocked run")
 
   const dispatchResult = await dispatchTaskLoop({
     taskID: input.taskID,
@@ -2206,11 +2199,9 @@ export namespace EngineService {
         })
         .run(),
     )
-    if (isTaskTerminal(task)) {
-      return { resumed: false, status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string }
-    }
-    await reopenActiveRunForOperatorWake(task, "Operator note reopened blocked run")
-    void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
+    const wakeTask = await openTaskForOperatorWake(task, "Operator note reopened task")
+    await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")
+    void dispatchTaskLoop({ taskID: wakeTask.id, event: { note: OrchestratorEventNote.retry(task) } })
     return { resumed: true, status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string }
   }
 

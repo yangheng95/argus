@@ -284,13 +284,13 @@ describe("queued wake ownership drain", () => {
           event: { note: "queued behind live ownership" },
         })
         expect(result).toBe("queued")
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1 })
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 1 })
 
         release!()
         await holdLoop
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1 })
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 1 })
 
         completeOrchestratorToolOwnership({
           taskID,
@@ -300,7 +300,7 @@ describe("queued wake ownership drain", () => {
         })
         await waitForMockCalls(runTaskLoop, 2)
 
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 0 })
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 0 })
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
           taskID,
           event: { note: "queued behind live ownership" },
@@ -398,7 +398,7 @@ describe("queued wake ownership drain", () => {
           }),
         ).toBe("queued")
         expect(runTaskLoop).not.toHaveBeenCalled()
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1, events: 2 })
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 1, events: 2 })
         expect(queuedOperatorWakePayloads(taskID).map((payload) => payload.event.operatorIntent?.kind)).toEqual([
           "retry",
           "replan",
@@ -537,13 +537,13 @@ describe("queued wake ownership drain", () => {
         })
         expect(first).toBe("queued")
         expect(second).toBe("queued")
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1, events: 2 })
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 1, events: 2 })
 
         release!()
         await holdLoop
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 1, events: 2 })
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 1, events: 2 })
 
         completeOrchestratorToolOwnership({
           taskID,
@@ -553,7 +553,7 @@ describe("queued wake ownership drain", () => {
         })
         await waitForMockCalls(runTaskLoop, 3)
 
-        expect(queuedTaskEventStats()).toMatchObject({ tasks: 0, events: 0 })
+        expect(queuedTaskEventStats(taskID)).toMatchObject({ tasks: 0, events: 0 })
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
           taskID,
           event: {

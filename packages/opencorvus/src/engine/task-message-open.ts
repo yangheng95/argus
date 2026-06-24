@@ -1,6 +1,21 @@
 import { isLiveRunStatus } from "./catalog"
 import { findActiveRunForTask, findPendingInteractions, type RunRow, type TaskRow } from "./store"
-import { updateRun } from "./state"
+import { updateRun, updateTask } from "./state"
+import { isTaskTerminal } from "./task-status"
+
+export async function openTaskForOperatorWake(
+  task: TaskRow,
+  summary = "Operator message reopened task",
+): Promise<TaskRow> {
+  if (!isTaskTerminal(task)) return task
+  const metadata =
+    task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+      ? { ...(task.metadata as Record<string, unknown>) }
+      : {}
+  delete metadata.cancelled
+  delete metadata.interrupted
+  return updateTask(task, { status: "queued", error: null, metadata }, summary)
+}
 
 export async function reopenActiveRunForOperatorWake(
   task: TaskRow,
