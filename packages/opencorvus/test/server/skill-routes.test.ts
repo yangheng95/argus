@@ -641,6 +641,76 @@ describe("skill routes", () => {
     })
   }, 20000)
 
+  test("GET /skill/mounts exposes integrity as mountable and allows integrity preview skill mounts", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Filesystem.write(
+          path.join(dir, ".opencorvus", "skill", "integrity-preview-review", "SKILL.md"),
+          [
+            "---",
+            "name: integrity-preview-review",
+            "description: Integrity preview review workflow.",
+            "required_tools:",
+            "  - browser_preview_bind_local_module",
+            "agents:",
+            "  - integrity",
+            "---",
+            "",
+            "Use browser preview evidence for integrity review.",
+          ].join("\n"),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const initial = await app.request("/skill/mounts", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(initial.status).toBe(200)
+        const initialBody = (await initial.json()) as {
+          agents: Array<{ name: string; skill_tool_available: boolean }>
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+        }
+        expect(initialBody.agents).toContainEqual(expect.objectContaining({ name: "integrity", skill_tool_available: true }))
+        expect(initialBody.skills.find((entry) => entry.name === "integrity-preview-review")?.mounted_agents).toEqual([])
+
+        const mounted = await app.request("/skill/mount", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "integrity",
+            skill: "integrity-preview-review",
+          }),
+        })
+        expect(mounted.status).toBe(200)
+        const body = (await mounted.json()) as {
+          skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
+          matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
+        }
+        expect(body.skills.find((entry) => entry.name === "integrity-preview-review")?.mounted_agents).toEqual(["integrity"])
+        expect(body.skills.find((entry) => entry.name === "integrity-preview-review")?.unmounted).toBe(false)
+        expect(body.matrix.find((row) => row.agent === "integrity")?.mounted).toContainEqual(
+          expect.objectContaining({ name: "integrity-preview-review", enabled: true }),
+        )
+
+        const yaml = await Filesystem.readText(
+          path.join(tmp.path, ".opencorvus", "skill", "integrity-preview-review", "SKILL.md"),
+        )
+        expect(yaml).toContain("mounted_agents:")
+        expect(yaml).toContain("- integrity")
+      },
+    })
+  })
+
   test("GET /skill/mounts rejects SKILL.md mounted_agents with unknown agent names", async () => {
     await using tmp = await tmpdir({
       git: true,

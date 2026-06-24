@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
 import { IntegrityTestHooks } from "../../src/integrity/team-agent"
-import { INTEGRITY_PREVIEW_TOOL_IDS, loadIntegrityPreviewToolInfos } from "../../src/integrity/static-tools"
+import {
+  INTEGRITY_DECLARED_TOOL_IDS,
+  INTEGRITY_PREVIEW_TOOL_IDS,
+  loadIntegrityPreviewToolInfos,
+} from "../../src/integrity/static-tools"
 import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
 import { tmpdir } from "../fixture/fixture"
@@ -70,10 +74,10 @@ describe("integrity browser preview tool surface", () => {
       fn: async () => {
         const agent = await Agent.get("integrity")
         expect(agent).toBeDefined()
-        expect(agent?.tools?.include).toEqual([...INTEGRITY_PREVIEW_TOOL_IDS])
+        expect(agent?.tools?.include).toEqual([...INTEGRITY_DECLARED_TOOL_IDS])
 
         const registryTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent)
-        expect(registryTools.map((item) => item.id).sort()).toEqual([...INTEGRITY_PREVIEW_TOOL_IDS].sort())
+        expect(registryTools.map((item) => item.id).sort()).toEqual([...INTEGRITY_DECLARED_TOOL_IDS].sort())
 
         const kit = await IntegrityTestHooks.createSingleSessionIntegrityToolKit({
           collector: {},
@@ -83,6 +87,7 @@ describe("integrity browser preview tool surface", () => {
 
         const toolInfos = await loadIntegrityPreviewToolInfos()
         expect(toolInfos.map((info) => info.id)).toEqual([...INTEGRITY_PREVIEW_TOOL_IDS])
+        expect(toolInfos.map((info) => info.id)).not.toContain("skill")
 
         for (const info of toolInfos) {
           const initialized = await info.init()

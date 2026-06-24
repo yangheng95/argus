@@ -3396,9 +3396,9 @@ export class Provider extends HeyApiClient {
   }
 
   /**
-   * Refresh the models.dev registry snapshot
+   * Refresh the provider model registry
    *
-   * Pulls api.json from the configured registry URL and persists it to the per-instance cache; subsequent provider/model lookups use the new data. The CLI runtime never refreshes implicitly — UI button, `opencorvus models --refresh`, and this route are the three explicit entry points.
+   * Pulls api.json from the configured registry URL, refreshes configured live provider catalogs such as Hexin, and persists the result to the per-instance cache; subsequent provider/model lookups use the new data. The CLI runtime never refreshes implicitly — UI button, `opencorvus models --refresh`, and this route are the three explicit entry points.
    */
   public refresh<ThrowOnError extends boolean = false>(
     parameters?: {

@@ -468,4 +468,77 @@ Collect source webpage evidence.
       process.env.OPENCORVUS_TEST_HOME = home
     }
   })
+
+  test("integrity can search and load mounted preview-compatible skills through the canonical skill tool", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const allowedSkillDir = path.join(dir, ".opencorvus", "skill", "integrity-acceptance")
+        await Bun.write(
+          path.join(allowedSkillDir, "SKILL.md"),
+          `---
+name: integrity-acceptance
+description: Integrity preview acceptance workflow.
+required_tools:
+  - browser_preview_bind_local_module
+agents:
+  - integrity
+mounted_agents:
+  - integrity
+---
+
+# Integrity Acceptance
+
+Use browser preview evidence to audit the delivered surface.
+`,
+        )
+
+        const blockedSkillDir = path.join(dir, ".opencorvus", "skill", "integrity-extraction")
+        await Bun.write(
+          path.join(blockedSkillDir, "SKILL.md"),
+          `---
+name: integrity-extraction
+description: Workflow requiring unavailable extraction tooling.
+required_tools:
+  - webpage_extract
+mounted_agents:
+  - integrity
+---
+
+# Integrity Extraction
+
+This should stay unavailable to integrity.
+`,
+        )
+      },
+    })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const integrity = await Agent.get("integrity")
+          expect(integrity).toBeDefined()
+
+          const integritySkill = await SkillTool.init({ agent: integrity })
+          const ctx: Tool.Context = { ...baseCtx, agent: "integrity", ask: async () => {} }
+
+          const result = await integritySkill.execute({ query: "integrity" }, ctx)
+          expect(result.output).toContain("<name>integrity-acceptance</name>")
+          expect(result.output).not.toContain("<name>integrity-extraction</name>")
+
+          const loaded = await integritySkill.execute({ name: "integrity-acceptance" }, ctx)
+          expect(loaded.output).toContain('<skill_content name="integrity-acceptance">')
+          await expect(integritySkill.execute({ name: "integrity-extraction" }, ctx)).rejects.toThrow(
+            'Skill "integrity-extraction" not found or not allowed',
+          )
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
 })
