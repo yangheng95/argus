@@ -51,6 +51,14 @@ rg -n "ProjectLedgerGroup|project-group-delete|deleteProject|Project.update|PATC
 | i18n | `packages/overlay/src/i18n/en-US.json`, `zh-CN.json` | Add project copy/rename labels and notification text. |
 | Browser visual | `packages/overlay/test/browser/project-ledger-group-browser.test.ts` | Verify task project groups show copy/rename/delete while Mission/Coding Assistant groups do not, and screenshot desktop/mobile. |
 
+## Visual Repair 2026-06-24
+
+The first copy/rename/delete implementation used 24px action buttons beside a
+26px project header. Three 24px buttons read as oversized standalone controls
+and dominated the compact ledger row. The project action slot must be compact:
+18px square hit visuals with 10px icons, while preserving accessible button
+labels and keyboard focus through the existing button primitive.
+
 ## Acceptance
 
 1. Task ledger project groups show copy, rename, and delete as distinct
@@ -64,5 +72,8 @@ rg -n "ProjectLedgerGroup|project-group-delete|deleteProject|Project.update|PATC
 5. Renamed project names render from `ProjectTable.name`; directory remains
    visible through tooltip/parent context and remains the request-routing key.
 6. Source directories are not renamed or copied.
-7. Static, unit, OpenAPI, route-policy, typecheck, and browser visual checks
+7. Project action buttons stay visually subordinate to the project header:
+   18px square visual slots, compact spacing, and no text overlap on desktop
+   or mobile.
+8. Static, unit, OpenAPI, route-policy, typecheck, and browser visual checks
    pass.

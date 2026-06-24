@@ -158,7 +158,7 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
                 runProjectAction(`copy:${props.directory}`, () => props.onCopyProject?.(props.directory))
               }}
             >
-              <Icon name="copy" size={12} />
+              <Icon name="copy" size={10} />
             </Button>
           </Show>
           <Show when={canRenameProject()}>
@@ -179,7 +179,7 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
                 )
               }}
             >
-              <Icon name="edit" size={12} />
+              <Icon name="edit" size={10} />
             </Button>
           </Show>
           <Show when={canDeleteProject()}>
@@ -199,12 +199,12 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
               }}
               confirmChildren={
                 <span class="project-group-delete-icon" data-icon="confirm" aria-hidden="true">
-                  <Icon name="check" size={12} />
+                  <Icon name="check" size={10} />
                 </span>
               }
             >
               <span class="project-group-delete-icon" data-icon="delete" aria-hidden="true">
-                <Icon name="delete" size={12} />
+                <Icon name="delete" size={10} />
               </span>
             </ArmedConfirmButton>
           </Show>

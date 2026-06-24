@@ -64,6 +64,9 @@ describe("project delete button", () => {
     expect(PROJECT_LEDGER_GROUP).toContain("data-project-delete={props.directory}")
     expect(PROJECT_LEDGER_GROUP).toContain('title={t("project.copy_button_title")}')
     expect(PROJECT_LEDGER_GROUP).toContain('title={t("project.rename_button_title")}')
+    expect(PROJECT_LEDGER_GROUP).toContain('<Icon name="copy" size={10} />')
+    expect(PROJECT_LEDGER_GROUP).toContain('<Icon name="edit" size={10} />')
+    expect(PROJECT_LEDGER_GROUP).toContain('<Icon name="delete" size={10} />')
     expect(PROJECT_LEDGER_GROUP).toContain('label={t("project.delete_button_title")}')
     expect(PROJECT_LEDGER_GROUP).toContain('armedDescription={t("armed_confirm.project.delete"')
     expect(PROJECT_LEDGER_GROUP).toContain("function runProjectAction")
@@ -120,6 +123,10 @@ describe("project delete button", () => {
   test("sidebar CSS reserves a stable project-group action slot", () => {
     expect(SIDEBAR_CSS).toMatch(/\.project-group-head\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/)
     expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*display:\s*flex;/)
+    expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*gap:\s*calc\(1px \* var\(--ui-scale\)\);/)
+    expect(SIDEBAR_CSS).toMatch(
+      /\.project-group-actions\s*\{[^}]*padding-inline-end:\s*calc\(2px \* var\(--ui-scale\)\);/,
+    )
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-copy"]')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-rename"]')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-delete"]')
@@ -127,6 +134,9 @@ describe("project delete button", () => {
     expect(SIDEBAR_CSS).toMatch(
       /\.project-group \.oc-button\[data-ui="project-group-toggle"\]\s*\{[^}]*grid-template-columns:\s*calc\(18px \* var\(--ui-scale\)\) minmax\(0, 1fr\) auto calc\(16px \* var\(--ui-scale\)\);/,
     )
+    expect(SIDEBAR_CSS).toContain("--oc-button-height: calc(18px * var(--ui-scale));")
+    expect(SIDEBAR_CSS).toContain("width: calc(18px * var(--ui-scale));")
+    expect(SIDEBAR_CSS).toContain("min-width: calc(18px * var(--ui-scale));")
     expect(SIDEBAR_CSS).toContain('.project-group-delete-icon[data-icon="confirm"]')
     expect(SIDEBAR_CSS).toContain('.oc-button[data-ui="project-group-delete"][data-confirm="true"]')
   })
