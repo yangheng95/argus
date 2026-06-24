@@ -40,6 +40,8 @@ export const LEGACY_DUPLICATE_TOOL_ID_REPLACEMENTS = {
   read_file: "read",
   find_files: "glob",
   list_directory: "list",
+  memory_search: "memory",
+  memory_get: "memory",
 } as const
 
 export const LEGACY_DUPLICATE_TOOL_ID_SET = new Set<string>(Object.keys(LEGACY_DUPLICATE_TOOL_ID_REPLACEMENTS))

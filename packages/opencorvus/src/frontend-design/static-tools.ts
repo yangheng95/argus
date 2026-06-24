@@ -7,8 +7,7 @@ export const FRONTEND_DESIGN_STATIC_TOOL_IDS = [
   "glob",
   "search_code",
   "list",
-  "memory_search",
-  "memory_get",
+  "memory",
   "skill",
   "url_screenshot",
   "create_frontend_skeleton_project",
@@ -32,8 +31,7 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "glob",
   "search_code",
   "list",
-  "memory_search",
-  "memory_get",
+  "memory",
   "skill",
   "url_screenshot",
   "create_frontend_skeleton_project",
@@ -68,8 +66,7 @@ export const FRONTEND_DESIGN_CONTEXT_TOOL_IDS = [
   "glob",
   "search_code",
   "list",
-  "memory_search",
-  "memory_get",
+  "memory",
 ] as const
 
 export const FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS = [

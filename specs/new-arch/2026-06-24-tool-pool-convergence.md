@@ -18,8 +18,8 @@ is not a UI-only or registry-only refactor.
   agent/runtime definition domain; they are not duplicated as near-synonym
   global tools.
 - Legacy duplicate skill requirements such as `read_file`, `find_files`, and
-  `list_directory` fail loudly instead of being mapped, ignored, or treated as
-  compatibility aliases.
+  `list_directory`, `memory_search`, and `memory_get` fail loudly instead of
+  being mapped, ignored, or treated as compatibility aliases.
 
 ### Goal
 
@@ -104,9 +104,10 @@ type ToolPoolAssignment = {
    as global tools.
 8. Duplicate semantic tool names are not allowed. Stage-runtime scoped
    implementations must use the same canonical tool IDs as registry tools:
-   `read`, `glob`, `search_code`, and `list`. They may bind a narrower
-   workdir/evidence root or a scoped implementation behind that ID, but they
-   must not expose `read_file`, `find_files`, or `list_directory`.
+   `read`, `glob`, `search_code`, `list`, and `memory`. They may bind a
+   narrower workdir/evidence root or a scoped implementation behind that ID,
+   but they must not expose `read_file`, `find_files`, `list_directory`,
+   `memory_search`, or `memory_get`.
 
 ### Pool Semantics
 
@@ -132,6 +133,8 @@ semantically the same as a registry tool. Examples:
 | `find_files`           | `glob`         | Same file discovery capability; scoped implementation binds the stage workdir and uses `pattern` / `path`.    |
 | `list_directory`       | `list`         | Same directory listing capability; scoped implementation binds the stage workdir and uses `path` / `ignore`.  |
 | `search_code`          | `search_code`  | Already canonical; scoped implementation may bind the stage workdir.                                          |
+| `memory_search`        | `memory`       | Same memory search capability; scoped implementation exposes read-only `search` action.                       |
+| `memory_get`           | `memory`       | Same memory read capability; scoped implementation exposes read-only `get` action.                            |
 
 If a future private tool is not semantically the same as a global registry tool,
 its name must show the boundary, for example `evidence_read` or
@@ -149,9 +152,9 @@ its name must show the boundary, for example `evidence_read` or
   from the canonical pool contract.
 - `Agent.Info.tools` is a projection from `AgentToolPool`, not an independent
   editable source for built-in agents.
-- Stage-runtime context tools no longer expose `read_file`, `find_files`, or
-  `list_directory`; they expose scoped `read`, `glob`, `search_code`, and
-  `list`.
+- Stage-runtime context tools no longer expose `read_file`, `find_files`,
+  `list_directory`, `memory_search`, or `memory_get`; they expose scoped
+  `read`, `glob`, `search_code`, `list`, and read-only `memory`.
 - `SkillMount.agentCanUseSkillTool()` and required-tool checks use
   `AgentToolPool`, not include/exclude.
 - Skill definitions and compatibility checks use canonical tool IDs. If an

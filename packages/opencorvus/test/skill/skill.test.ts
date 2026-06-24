@@ -77,33 +77,40 @@ Instructions here.
   })
 })
 
-test("rejects legacy duplicate tool IDs in skill required_tools", async () => {
-  await using tmp = await tmpdir({
-    git: true,
-    init: async (dir) => {
-      const skillDir = path.join(dir, ".claude", "skills", "legacy-tool-skill")
-      await Bun.write(
-        path.join(skillDir, "SKILL.md"),
-        `---
-name: legacy-tool-skill
+for (const fixture of [
+  { legacy: "read_file", canonical: "read" },
+  { legacy: "memory_search", canonical: "memory" },
+] as const) {
+  test(`rejects legacy duplicate tool ID ${fixture.legacy} in skill required_tools`, async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".claude", "skills", `legacy-${fixture.legacy}-skill`)
+        await Bun.write(
+          path.join(skillDir, "SKILL.md"),
+          `---
+name: legacy-${fixture.legacy}-skill
 description: Invalid legacy tool ID fixture.
 required_tools:
-  - read_file
+  - ${fixture.legacy}
 ---
 
 # Legacy Tool Skill
 `,
-      )
-    },
-  })
+        )
+      },
+    })
 
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await expect(Skill.all()).rejects.toThrow(/read_file is a legacy duplicate tool ID; use canonical tool ID read/)
-    },
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Skill.all()).rejects.toThrow(
+          new RegExp(`${fixture.legacy} is a legacy duplicate tool ID; use canonical tool ID ${fixture.canonical}`),
+        )
+      },
+    })
   })
-})
+}
 
 test("returns skill directories from Skill.dirs", async () => {
   await using tmp = await tmpdir({

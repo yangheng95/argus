@@ -25,8 +25,7 @@ export namespace AgentToolPool {
     "web_clone_source_audit",
   ] as const
 
-  const STAGE_CONTEXT_GLOBAL_TOOL_IDS = ["read", "glob", "search_code", "list"] as const
-  const STAGE_CONTEXT_PRIVATE_TOOL_IDS = ["memory_search", "memory_get"] as const
+  const STAGE_CONTEXT_GLOBAL_TOOL_IDS = ["read", "glob", "search_code", "list", "memory"] as const
 
   const ORCHESTRATOR_PRIVATE_TOOL_IDS = [
     "build",
@@ -195,16 +194,13 @@ export namespace AgentToolPool {
     }),
     requirements: pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "websearch", "skill", "todoread", "todowrite"],
-      private: STAGE_CONTEXT_PRIVATE_TOOL_IDS,
     }),
     architect: pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "websearch", "skill", "todoread", "todowrite"],
-      private: STAGE_CONTEXT_PRIVATE_TOOL_IDS,
     }),
     "frontend-design": fromVisibleToolIDs(FRONTEND_DESIGN_STATIC_TOOL_IDS),
     "intent-analysis": pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "skill", "todoread", "todowrite"],
-      private: STAGE_CONTEXT_PRIVATE_TOOL_IDS,
     }),
     integrity: fromVisibleToolIDs(INTEGRITY_DECLARED_TOOL_IDS),
     "fact-check": pool({
@@ -216,16 +212,13 @@ export namespace AgentToolPool {
         "todoread",
         "todowrite",
       ],
-      private: STAGE_CONTEXT_PRIVATE_TOOL_IDS,
     }),
     "deep-research": pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "webfetch", "external_code_search", "todoread", "todowrite"],
-      private: STAGE_CONTEXT_PRIVATE_TOOL_IDS,
     }),
     "frontend-research": pool({ global: ["skill"] }),
     "goal-workload-analyst": pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "todoread", "todowrite"],
-      private: STAGE_CONTEXT_PRIVATE_TOOL_IDS,
     }),
   }
 
