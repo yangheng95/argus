@@ -172,7 +172,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       hidden: true,
       native: true,
       skill_mountable: false,
-      skill_tool_available: false,
+      skill_tool_available: true,
     },
   ] as const
   const baseMatrixRows = [

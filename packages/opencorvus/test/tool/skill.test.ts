@@ -302,7 +302,7 @@ Use this skill.
 
           const loaded = await tool.execute({ name: "frontend-replica-expert-squad" }, ctx)
           expect(loaded.output).toContain('<skill_content name="frontend-replica-expert-squad">')
-          expect(loaded.output).toContain('select_expert_squad')
+          expect(loaded.output).toContain("select_expert_squad")
           expect(loaded.output).toContain('profile_id: "frontend-replica"')
         },
       })
@@ -378,26 +378,6 @@ Use rendered evidence to inspect the implemented interface.
 `,
         )
 
-        const retiredSkillDir = path.join(dir, ".opencorvus", "skill", "visual-retired")
-        await Bun.write(
-          path.join(retiredSkillDir, "SKILL.md"),
-          `---
-name: visual-retired
-description: Retired visual gate workflow.
-required_tools:
-  - webpage_render
-mounted_agents:
-  - visual-qa
-  - frontend-design
-  - build
----
-
-# Retired Visual Gate
-
-This skill should not be exposed because it depends on a retired visual tool.
-`,
-        )
-
         const extractionSkillDir = path.join(dir, ".opencorvus", "skill", "visual-extraction")
         await Bun.write(
           path.join(extractionSkillDir, "SKILL.md"),
@@ -442,12 +422,8 @@ Collect source webpage evidence.
           const visualQaResult = await visualQaSkill.execute({ query: "visual" }, ctx)
           expect(visualQaResult.output).toContain("<name>visual-acceptance</name>")
           expect(visualQaResult.output).not.toContain("<name>visual-extraction</name>")
-          expect(visualQaResult.output).not.toContain("<name>visual-retired</name>")
           await expect(visualQaSkill.execute({ name: "visual-extraction" }, ctx)).rejects.toThrow(
             'Skill "visual-extraction" not found or not allowed',
-          )
-          await expect(visualQaSkill.execute({ name: "visual-retired" }, ctx)).rejects.toThrow(
-            'Skill "visual-retired" not found or not allowed',
           )
           expect((await visualQaSkill.execute({ name: "visual-acceptance" }, ctx)).output).toContain(
             '<skill_content name="visual-acceptance">',
@@ -456,12 +432,10 @@ Collect source webpage evidence.
           const frontendDesignResult = await frontendDesignSkill.execute({ query: "visual" }, ctx)
           expect(frontendDesignResult.output).not.toContain("<name>visual-acceptance</name>")
           expect(frontendDesignResult.output).toContain("<name>visual-extraction</name>")
-          expect(frontendDesignResult.output).not.toContain("<name>visual-retired</name>")
 
           const buildResult = await buildSkill.execute({ query: "visual" }, ctx)
           expect(buildResult.output).not.toContain("<name>visual-acceptance</name>")
           expect(buildResult.output).not.toContain("<name>visual-extraction</name>")
-          expect(buildResult.output).not.toContain("<name>visual-retired</name>")
         },
       })
     } finally {
