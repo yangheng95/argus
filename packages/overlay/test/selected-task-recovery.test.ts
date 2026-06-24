@@ -170,6 +170,211 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
   ])
 })
 
+test("selected task run.output conversion updates the agent rail with the message card", () => {
+  resetWriter()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_live_executor" })
+  setBoardStore("taskSequence", 12)
+
+  expect(
+    routeSSEEvent({
+      type: "run.output",
+      taskID: "tsk_live_executor",
+      event_id: "evt_executor_output",
+      sequence: 13,
+      timestamp: 1_776_000_300_000,
+      summary: "executor output",
+      properties: {
+        taskID: "tsk_live_executor",
+        runID: "run_executor",
+        sessionID: "ses_executor_live",
+        text: "Executor streamed output.",
+      },
+    }),
+  ).toBe(true)
+
+  const cardID = "executor:session:ses_executor_live:message:executor:msg:run_executor"
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_executor_live"])
+  expect(conversationAgentStore.records[0]?.stage).toBe("executor")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
+})
+
+test("selected task run.progress conversion updates the agent rail with the message card", () => {
+  resetWriter()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_live_tool" })
+  setBoardStore("taskSequence", 20)
+
+  expect(
+    routeSSEEvent({
+      type: "run.progress",
+      taskID: "tsk_live_tool",
+      event_id: "evt_tool_call",
+      sequence: 21,
+      timestamp: 1_776_000_400_000,
+      summary: "Read file",
+      properties: {
+        type: "tool_call",
+        taskID: "tsk_live_tool",
+        runID: "run_tool",
+        sessionID: "ses_tool_live",
+        sourceID: "call_read",
+        name: "read",
+        input: { path: "README.md" },
+      },
+    }),
+  ).toBe(true)
+
+  const cardID = "executor:session:ses_tool_live:message:executor:msg:run_tool"
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_tool_live"])
+  expect(conversationAgentStore.records[0]?.stage).toBe("executor")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
+})
+
+test("selected task part-first message updates the agent rail with the materialized card", () => {
+  resetWriter()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_part_first" })
+  setBoardStore("taskSequence", 30)
+  setBoardStore("board", {
+    snapshotVersion: "board:part-first",
+    task: {
+      id: "tsk_part_first",
+      sessionID: "ses_root",
+      status: "active",
+      request: "part first",
+      time: { created: 1_776_000_490_000 },
+      attachments: [],
+    },
+  })
+
+  expect(
+    routeSSEEvent({
+      type: "message.part.updated",
+      taskID: "tsk_part_first",
+      sequence: 31,
+      emittedAt: 1_776_000_500_000,
+      properties: {
+        taskID: "tsk_part_first",
+        channel: "build",
+        resolvedRole: "build",
+        parentSessionID: "ses_root",
+        part: {
+          id: "part_before_message",
+          messageID: "msg_before_message",
+          sessionID: "ses_part_first",
+          type: "text",
+          text: "Part arrived before message metadata.",
+        },
+      },
+    }),
+  ).toBe(true)
+
+  const cardID = "build:session:ses_part_first:message:msg_before_message"
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_part_first"])
+  expect(conversationAgentStore.records[0]?.stage).toBe("build")
+  expect(conversationAgentStore.records[0]?.status).toBe("running")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
+
+  expect(
+    routeSSEEvent({
+      type: "message.updated",
+      taskID: "tsk_part_first",
+      sequence: 32,
+      properties: {
+        info: {
+          id: "msg_before_message",
+          sessionID: "ses_part_first",
+          role: "assistant",
+          resolvedRole: "build",
+          channel: "build",
+          agent: "build",
+          parentSessionID: "ses_root",
+          time: { created: 1_776_000_499_000, completed: 1_776_000_501_000 },
+        },
+      },
+    }),
+  ).toBe(true)
+
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_part_first"])
+  expect(conversationAgentStore.records[0]?.status).toBe("completed")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
+})
+
+test("selected task session.status updates an existing rail record without creating lifecycle-only records", () => {
+  resetWriter()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_status" })
+  setBoardStore("taskSequence", 40)
+  setBoardStore("board", {
+    snapshotVersion: "board:status",
+    task: {
+      id: "tsk_status",
+      sessionID: "ses_root",
+      status: "active",
+      request: "status",
+      time: { created: 1_776_000_590_000 },
+      attachments: [],
+    },
+  })
+
+  expect(
+    routeSSEEvent({
+      type: "session.status",
+      taskID: "tsk_status",
+      sequence: 41,
+      emittedAt: 1_776_000_600_000,
+      properties: {
+        taskID: "tsk_status",
+        sessionID: "ses_status_only",
+        channel: "frontend-research",
+        resolvedRole: "frontend-research",
+        parentSessionID: "ses_root",
+        status: { type: "streaming" },
+      },
+    }),
+  ).toBe(true)
+  expect(conversationAgentStore.records).toEqual([])
+
+  expect(
+    routeSSEEvent({
+      type: "message.updated",
+      taskID: "tsk_status",
+      sequence: 42,
+      properties: {
+        info: {
+          id: "msg_status",
+          sessionID: "ses_status",
+          role: "assistant",
+          resolvedRole: "frontend-design",
+          channel: "frontend-design",
+          agent: "frontend-design",
+          parentSessionID: "ses_root",
+          time: { created: 1_776_000_601_000 },
+        },
+      },
+    }),
+  ).toBe(true)
+  expect(conversationAgentStore.records[0]?.status).toBe("running")
+
+  expect(
+    routeSSEEvent({
+      type: "session.status",
+      taskID: "tsk_status",
+      sequence: 43,
+      emittedAt: 1_776_000_602_000,
+      properties: {
+        taskID: "tsk_status",
+        sessionID: "ses_status",
+        status: { type: "terminal", reason: "error", message: "failed" },
+      },
+    }),
+  ).toBe(true)
+
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_status"])
+  expect(conversationAgentStore.records[0]?.status).toBe("error")
+  expect(conversationAgentStore.records[0]?.completedAt).toBe(1_776_000_602_000)
+})
+
 test("selected-task recovery advances the live cursor for non-message selected events", async () => {
   const streams: StreamOpenRequest[] = []
   __setHostTransportForTest(

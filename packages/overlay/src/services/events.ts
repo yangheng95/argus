@@ -4,7 +4,11 @@
 // message events and routed to cardTreeStore — no separate executorStore.
 
 import { boardStore, scheduleBoard, loadTasks, setTaskSequence, activeTaskID, activeSessionID } from "../store/board"
-import { applyLiveConversationAgentMessageUpdated } from "../store/conversation-agents"
+import {
+  applyLiveConversationAgentMessageUpdated,
+  applyLiveConversationAgentPartUpdated,
+  applyLiveConversationAgentSessionStatus,
+} from "../store/conversation-agents"
 import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init"
 import { markSessionConfigStale } from "./config"
 import { applyEvent as applyTreeWriterEvent, hasProjectedPart } from "./tree-writer"
@@ -17,6 +21,19 @@ import { markSelectedLiveEventConsumed } from "./selected-stream-cursor"
 // visible hot path.
 function writeToTree(event: any): void {
   applyTreeWriterEvent(event)
+}
+
+function writeSelectedMessageToTree(event: any, sourceEvent: any = event): void {
+  writeToTree(event)
+  const sourceKey = selectedConversationAgentSourceKey(sourceEvent)
+  if (!sourceKey) return
+  if (event?.type === "message.updated") {
+    applyLiveConversationAgentMessageUpdated(sourceKey, event)
+    return
+  }
+  if (event?.type === "message.part.updated") {
+    applyLiveConversationAgentPartUpdated(sourceKey, event)
+  }
 }
 
 function isMessageStreamEvent(type: string): boolean {
@@ -563,15 +580,11 @@ export function routeSSEEvent(event: any): boolean {
     // attach this event, selected-task recovery reopens the live stream with
     // the current persisted/live cursors; it must not clear cardTreeStore.
     try {
-      writeToTree(event)
+      writeSelectedMessageToTree(event)
     } catch (error) {
       if (!isMessageWriterPrerequisiteError(error)) throw error
       scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`)
       return true
-    }
-    if (type === "message.updated") {
-      const sourceKey = selectedConversationAgentSourceKey(event)
-      if (sourceKey) applyLiveConversationAgentMessageUpdated(sourceKey, event)
     }
     advanceHandledSelectedTaskSequence(event)
     markHandledSelectedLiveEvent(event)
@@ -609,6 +622,14 @@ export function routeSSEEvent(event: any): boolean {
   // Project the event into cardTreeStore before router-specific side effects so
   // a writer crash surfaces with the original event context intact.
   writeToTree(event)
+
+  if (type === "session.status") {
+    const sourceKey = selectedConversationAgentSourceKey(event)
+    if (sourceKey) applyLiveConversationAgentSessionStatus(sourceKey, event)
+    advanceHandledSelectedTaskSequence(event)
+    markHandledSelectedLiveEvent(event)
+    return true
+  }
 
   // Replay buffer expiry is loud. Do not full-refresh the loaded transcript:
   // that clears cardTreeStore and causes the observed scroll jump.
@@ -666,7 +687,7 @@ export function routeSSEEvent(event: any): boolean {
     // Convert executor events (Codex/Claude-Code CodingEventInfo) to standard messages
     const messages = convertExecutorEventToMessages(event, properties)
     for (const msg of messages) {
-      writeToTree(msg)
+      writeSelectedMessageToTree(msg, event)
     }
     advanceHandledSelectedTaskSequence(event)
     markHandledSelectedLiveEvent(event)
@@ -681,7 +702,7 @@ export function routeSSEEvent(event: any): boolean {
       text: typeof properties.text === "string" ? properties.text : event.summary || "",
     })
     for (const msg of messages) {
-      writeToTree(msg)
+      writeSelectedMessageToTree(msg, event)
     }
     advanceHandledSelectedTaskSequence(event)
     markHandledSelectedLiveEvent(event)

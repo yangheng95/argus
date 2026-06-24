@@ -146,6 +146,7 @@ test("task conversation hydrate registers task directory from the hydrated board
           timeline: [],
           events: [],
           view: { sessions: [] },
+          agentView: { sessions: [] },
           eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 10 },
           history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
           lastSequence: 0,
@@ -159,6 +160,51 @@ test("task conversation hydrate registers task directory from the hydrated board
   expect(captured?.query?.directory).toBeUndefined()
   expect(captured?.query?.tail_limit).toBe("1")
   expect(conversationSourceDirectory({ kind: "task", id: "tsk_deep_link" })).toBe(TEST_DIRECTORY)
+})
+
+test("task conversation hydrate requires explicit agentView", async () => {
+  resetWriter()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_missing_agent_view" })
+
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      if (req.path !== "task/tsk_missing_agent_view/conversation") {
+        throw new Error(`unexpected request path: ${req.path}`)
+      }
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: {
+          board: {
+            snapshotVersion: "board:missing-agent-view",
+            task: {
+              id: "tsk_missing_agent_view",
+              status: "active",
+              request: "missing agent view",
+              sessionID: "ses_root",
+              directory: TEST_DIRECTORY,
+              time: { created: 1_776_000_000_000 },
+              attachments: [],
+            },
+            goalWorkflows: [],
+            interactions: [],
+          },
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { sessions: [] },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 10 },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+          lastSequence: 0,
+        },
+      }
+    }),
+  )
+
+  await expect(hydrateTaskConversation("tsk_missing_agent_view", { tailLimit: 1 })).rejects.toThrow(
+    "conversation payload agentView must be an object",
+  )
 })
 
 test("hydration replay projects persisted executor output into the card tree", () => {
@@ -243,6 +289,7 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
             timeline: [],
             events: [],
             view: { sessions: [] },
+            agentView: { sessions: [] },
             eventReplay: { cursor: 1, latestSequence: 2, complete: false, limit: 10 },
             lastSequence: 1,
           },

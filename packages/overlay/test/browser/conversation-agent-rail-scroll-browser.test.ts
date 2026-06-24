@@ -19,6 +19,11 @@ const ASSISTANT_SCREENSHOT_PATH = resolve(
   "conversation-agent-rail-scroll-browser",
   "rail-coding-assistant.png",
 )
+const CHAT_PANE_SCREENSHOT_PATH = resolve(
+  ".scratch",
+  "conversation-agent-rail-scroll-browser",
+  "chat-pane-after-locate.png",
+)
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -435,6 +440,16 @@ test("ConversationAgentRail keeps horizontal drag scrolling after primitive butt
     await page.click('.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]')
     const clickCount = await page.evaluate(() => (window as any).__agentRailClickCount || 0)
     assert.equal(clickCount, 1, "plain click must still reach the locate button")
+    const locatedCardID = "architect:session:ses_agent_rail_01:message:msg_agent_rail_01"
+    await page.waitForSelector(`[data-card-id="${locatedCardID}"]`, { visible: true, timeout: 15_000 })
+    await page.waitForSelector(`[data-card-id="${locatedCardID}"].conversation-agent-target--pulse`, {
+      visible: true,
+      timeout: 15_000,
+    })
+    const chatPane = await page.$("#chatMessagePane")
+    assert.ok(chatPane, "chat pane should exist for full rail/card screenshot review")
+    mkdirSync(dirname(CHAT_PANE_SCREENSHOT_PATH), { recursive: true })
+    writeFileSync(CHAT_PANE_SCREENSHOT_PATH, await chatPane.screenshot({}))
 
     const dragStart = await page.$$eval(
       '.conversation-agent-rail .oc-button[data-ui="conversation-agent-rail-locate"]',

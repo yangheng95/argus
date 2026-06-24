@@ -22,10 +22,13 @@ import {
   type TransportRequest,
 } from "../src/services/host-transport"
 import { setBoardStore, type BoardSource } from "../src/store/board"
+import { cardTreeStore } from "../src/store/card-tree"
 import { messageStore } from "../src/store/messages"
+import { conversationAgentStore, resetConversationAgentView } from "../src/store/conversation-agents"
 import { setSettingsStore } from "../src/store/settings"
 import { resetSelectedLiveCursor } from "../src/services/selected-stream-cursor"
 import { selectTask } from "../src/services/task"
+import { resetWriter } from "../src/services/tree-writer"
 import { setLocale, setLocaleData } from "../src/utils/i18n"
 import { AppLog, waitForLogDrain } from "../src/utils/log"
 import { clearNotifications, notificationStore } from "../src/services/notify"
@@ -315,6 +318,8 @@ describe("startSSE stream error handling", () => {
     setBoardStore("board", null)
     setBoardStore("taskSwitching", false)
     setSettingsStore("directory", "")
+    resetWriter()
+    resetConversationAgentView()
   })
 
   test("stream error closes the handle so sequence-only reconnect can run from onClose", () => {
@@ -349,6 +354,70 @@ describe("startSSE stream error handling", () => {
 
       expect(messageStore.sseConnected).toBe(false)
       expect(closeCalls).toBe(1)
+
+      stopSSE()
+      dispose()
+    })
+  })
+
+  test("closed selected-task stream ignores late message events after task switch", () => {
+    createRoot((dispose) => {
+      const handlers: StreamHandlers[] = []
+      const transport = {
+        kind: "tauri",
+        capabilities: HOST_CAPABILITIES.tauri,
+        request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
+        openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
+          handlers.push(h)
+          return {
+            close() {},
+          }
+        },
+        native: async () => null,
+        subscribeUiCommand: () => ({ unsubscribe() {} }),
+      } satisfies HostTransport
+
+      __setHostTransportForTest(transport)
+      setBoardStore("selectedSource", { kind: "task", id: "tsk_old" })
+      startSSE({ kind: "task", id: "tsk_old" }, 0, { directory: TEST_DIRECTORY })
+      expect(handlers).toHaveLength(1)
+
+      setBoardStore("selectedSource", { kind: "task", id: "tsk_new" })
+      setBoardStore("board", {
+        snapshotVersion: "board:new",
+        task: {
+          id: "tsk_new",
+          sessionID: "ses_new_root",
+          status: "active",
+          request: "new task",
+          time: { created: 1_776_000_699_000 },
+          attachments: [],
+        },
+      })
+      startSSE({ kind: "task", id: "tsk_new" }, 0, { directory: TEST_DIRECTORY })
+      expect(handlers).toHaveLength(2)
+
+      handlers[0]!.onEvent(
+        JSON.stringify({
+          type: "message.updated",
+          taskID: "tsk_old",
+          sequence: 1,
+          properties: {
+            info: {
+              id: "msg_old_late",
+              sessionID: "ses_old_late",
+              role: "assistant",
+              resolvedRole: "assistant",
+              channel: "assistant",
+              agent: "assistant",
+              time: { created: 1_776_000_700_000 },
+            },
+          },
+        }),
+      )
+
+      expect(cardTreeStore.cards["assistant:session:ses_old_late:message:msg_old_late"]).toBeUndefined()
+      expect(conversationAgentStore.records).toEqual([])
 
       stopSSE()
       dispose()

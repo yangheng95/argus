@@ -238,10 +238,12 @@ export function startSSE(source: BoardSource, after = 0, options: SseStartOption
     },
     {
       onOpen: () => {
+        if (handle !== sseHandle) return
         setSseConnected(true)
         armWatchdog(handle)
       },
       onEvent: (data) => {
+        if (handle !== sseHandle) return
         armWatchdog(handle)
         // Per 07-panel-reactivity.md constraint 1 and root CLAUDE.md rule 1:
         // tree-writer's `let it crash` is meaningless if onEvent silently
