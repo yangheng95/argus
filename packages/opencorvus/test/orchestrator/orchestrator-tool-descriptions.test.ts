@@ -25,11 +25,11 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   })
 
   test("propose_task describes inheriting evidence-backed follow-up work", () => {
-    expect(tools.propose_task.description).toContain("terminal parent-task handoff evidence")
+    expect(tools.propose_task.description).toContain("concrete current-task evidence")
     expect(tools.propose_task.description).toContain("artifact state")
-    expect(tools.propose_task.description).toContain("Create at most one follow-up task")
-    expect(tools.propose_task.description).toContain("only from terminal parent-task handoff evidence")
-    expect(tools.propose_task.description).toContain("cannot be completed safely inside the ended parent task")
+    expect(tools.propose_task.description).toContain("Create at most one inheriting child task")
+    expect(tools.propose_task.description).toContain("active workflow contract is fundamentally wrong")
+    expect(tools.propose_task.description).toContain("instead of rerunning requirements/plan/executor")
     expect(tools.propose_task.description).toContain("original user request never authorised")
   })
 
@@ -59,9 +59,22 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
   test("wait description excludes internal live build polling", () => {
     expect(tools.wait.description).toContain("Never use wait for live build completion")
     expect(tools.wait.description).toContain("terminal refill polling")
-    expect(tools.steer_subagent.description).toContain("park this orchestrator wake")
-    expect(tools.steer_subagent.description).toContain("not wait-tool polling")
-    expect(tools.steer_subagent.description).not.toContain("decide between waiting")
+  })
+
+  test("removed child-session steering tool is not exposed", () => {
+    expect(tools[["steer", "subagent"].join("_")]).toBeUndefined()
+  })
+
+  test("expert-squad tools are scheduler-owned visible skill loading", () => {
+    expect(tools.select_expert_squad.description).toContain("active expert squad prompt profile")
+    expect(tools.select_expert_squad.description).toContain("root session config overlay")
+    expect(tools.select_expert_squad.description).toContain("does not dispatch work")
+    expect(tools.select_expert_squad.description).toContain("infer the profile from keywords")
+
+    expect(tools.skill.description).toContain("Scheduler-only")
+    expect(tools.skill.description).toContain("mounted Orchestrator expert-squad skills")
+    expect(tools.skill.description).toContain("before calling select_expert_squad")
+    expect(tools.skill.description).toContain("never use it to load production, research, report, or implementation skills")
   })
 
   test("build schema rejects misspelled goal scope instead of stripping it into direct build", () => {
@@ -432,17 +445,7 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.browser_preview.inputSchema!.safeParse({ url: "http://127.0.0.1:5173/" }).success).toBe(false)
   })
 
-  test("subagent control tools expose goal_run_id as its own field", () => {
-    expect(tools.steer_subagent.description).not.toContain("backward compatibility")
-    expect(tools.steer_subagent.description).not.toContain("via session_id")
-    expect(Object.keys(tools.steer_subagent.inputSchema!.shape)).toEqual([
-      "session_id",
-      "goal_id",
-      "goal_run_id",
-      "message",
-      "reason",
-    ])
-
+  test("subagent cancellation tool exposes goal_run_id as its own field", () => {
     expect(tools.cancel_subagent.description).not.toContain("backward compatibility")
     expect(tools.cancel_subagent.description).not.toContain("via session_id")
     expect(Object.keys(tools.cancel_subagent.inputSchema!.shape)).toEqual([

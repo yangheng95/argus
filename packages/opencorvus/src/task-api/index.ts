@@ -1028,7 +1028,7 @@ export namespace EngineService {
     // Phase-7: no aggressive startup recovery. Live build attempts and
     // terminal refill facts are durable; orphan runs surface via describe.ts
     // `run_orphan` on the next wake and the orchestrator LLM decides whether
-    // to retry / restart_from_stage / drop. OS-level cleanup (worktrees,
+    // to retry / re-dispatch / fail_task / drop. OS-level cleanup (worktrees,
     // processes) is owned by the ownership registry, not by a recovery
     // function.
   }

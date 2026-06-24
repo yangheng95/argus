@@ -257,7 +257,7 @@ describe("frontend-design prompt assembly", () => {
     expect(parts[0]?.type).toBe("text")
     expect(parts[0]?.text).toContain("stored for provenance but are not inlined")
     expect(parts[0]?.text).toContain("Use the task-runtime webpage evidence and webpage evidence tools")
-    expect(parts[0]?.text).toContain("assistant.auto_iteration=false")
+    expect(parts[0]?.text).toContain("do at least two frontend template review passes")
     expect(parts[0]?.text).not.toContain("webpage_extract")
     expect(parts[0]?.text).not.toContain("webpage_compile")
     expect(parts[0]?.text).not.toContain("webpage_analyze")
@@ -858,18 +858,8 @@ describe("frontend-design prompt assembly", () => {
     expect(iterationState.remainingSourceDebt).toEqual(["FooterRegion"])
   })
 
-  test("terminal frontend template submit tool accepts bounded review notes when auto iteration is off", async () => {
+  test("terminal frontend template submit tool requires two review notes", async () => {
     const kit = createFrontendTemplateOutputTools()
-    await updatePromptTestFrontendResult(kit, ["bounded inventory and implementation review complete"])
-    await (kit.tools.submit_frontend_template as any).execute({ final: true }, {})
-
-    const collector = kit.getCollector()
-    expect(collector.final?.visual_consistency_contract).toBe("visual consistency contract")
-    expect(collector.final?.template_iteration_notes).toHaveLength(1)
-  })
-
-  test("terminal frontend template submit tool requires two review notes when auto iteration is on", async () => {
-    const kit = createFrontendTemplateOutputTools({ autoIteration: true })
     const submit = kit.tools.submit_frontend_template as any
 
     await updatePromptTestFrontendResult(kit, ["pass 1 inventory complete"])
@@ -929,10 +919,10 @@ describe("frontend-design prompt assembly", () => {
       }),
     ).toBe(false)
 
-    const prompt = FrontendDesignTestHooks.buildUserPrompt(
-      { title: "Text page", request: "Build a docs landing page from this written brief." },
-      false,
-    )
+    const prompt = FrontendDesignTestHooks.buildUserPrompt({
+      title: "Text page",
+      request: "Build a docs landing page from this written brief.",
+    })
 
     expect(prompt).toContain("Text-only frontend_design turn")
     expect(prompt).toContain("Produce the public frontend_design report directly from the textual brief")
@@ -941,7 +931,6 @@ describe("frontend-design prompt assembly", () => {
   test("host-prepared prompt embeds compact evidence and requires bounded evidence inspection", () => {
     const prompt = FrontendDesignTestHooks.buildUserPrompt(
       { title: "Reference page", request: "clone https://example.com/product" },
-      false,
       {
         status: "created",
         projectRoot: "frontend-design-skeleton",

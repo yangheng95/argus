@@ -35,7 +35,6 @@ import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { taskPrimaryProjectRoot } from "@/project/task-runtime-root"
 import { deriveUrlSignals } from "@/engine/task-signals"
-import { EngineConfig } from "@/engine/config"
 import { renderFrontendResearchDesignPromptSection } from "@/research/prompt-section"
 import type { AgentSessionContinuation } from "@/engine/stage-continuation"
 import { createAiSdkToolFromInfo } from "@/tool/ai-sdk-adapter"
@@ -180,7 +179,6 @@ export namespace FrontendDesignAgent {
   }
 
   export async function analyze(input: AnalyzeInput): Promise<Result & { sessionID: string }> {
-    const autoIteration = (await EngineConfig.get()).auto_iteration === true
     const processTrace = createFrontendProcessTrace()
     await configureFrontendProcessTracePersistence(input.taskID, processTrace)
     const contextTools = createFrontendDesignContextTools()
@@ -205,7 +203,6 @@ export namespace FrontendDesignAgent {
     const processTraceToolKit = createFrontendProcessTraceTools(processTrace)
     const frontendRuntimePaths = input.taskID ? frontendDesignPathsForTask(input.taskID) : undefined
     const outputToolKit = createFrontendTemplateOutputTools({
-      autoIteration,
       artifactRoot: frontendRuntimePaths?.absoluteDir ?? Instance.worktree,
       artifactRootRelative: frontendRuntimePaths?.relativeDir,
       workspaceRoot: Instance.worktree,
@@ -241,7 +238,7 @@ export namespace FrontendDesignAgent {
 
     const out = await runAgentSession({
       kind: "frontend-design",
-      core: withFactCheckRegistration([FRONTEND_DESIGN_CORE, renderAutoIterationMode(autoIteration)].join("\n\n")),
+      core: withFactCheckRegistration([FRONTEND_DESIGN_CORE, renderFrontendReviewDiscipline()].join("\n\n")),
       sessionTitle: `Frontend design: ${input.title}`,
       parentSessionID: input.parentSessionID,
       taskID: input.taskID,
@@ -259,8 +256,8 @@ export namespace FrontendDesignAgent {
         getCollector: () => outputToolKit.getCollector(),
         buildReport: () => appendFrontendProcessTrace(outputToolKit.buildReport(), processTrace),
       },
-      buildUserPrompt: () => buildUserPrompt(input, autoIteration, hostPreparedFrontendProject),
-      buildUserParts: () => buildPromptParts(input, autoIteration, hostPreparedFrontendProject),
+      buildUserPrompt: () => buildUserPrompt(input, hostPreparedFrontendProject),
+      buildUserParts: () => buildPromptParts(input, hostPreparedFrontendProject),
       terminalTool: {
         toolName: "submit_frontend_template",
         isSatisfied: (collector: FrontendTemplateOutputCollector) => !!collector.final,
@@ -383,10 +380,9 @@ async function buildPromptParts(
       source?: string
     }>
   },
-  autoIteration = false,
   hostPreparedFrontendProject?: HostPreparedFrontendProject,
 ) {
-  const text = buildUserPrompt(input, autoIteration, hostPreparedFrontendProject)
+  const text = buildUserPrompt(input, hostPreparedFrontendProject)
   const hasLiveHttpUrl = hasNonFigmaHttpUrl(input.request)
   const inlineAttachments = (input.attachments ?? []).filter((attachment) =>
     shouldInlineFrontendDesignAttachment(attachment, hasLiveHttpUrl),
@@ -418,13 +414,11 @@ function isTextOnlyNoVisualSource(input: {
   )
 }
 
-function renderAutoIterationMode(autoIteration: boolean): string {
+function renderFrontendReviewDiscipline(): string {
   return [
-    "## Auto Iteration Mode",
-    autoIteration
-      ? "- assistant.auto_iteration=true: perform at least two frontend template review passes before handoff when visual evidence is available."
-      : "- assistant.auto_iteration=false: perform one bounded frontend template review pass before handoff; do not loop through additional frontend template revisions automatically.",
-    "- In both modes, acquire missing webpage evidence at most once per source and finalize through `submit_frontend_template`.",
+    "## Frontend Review Discipline",
+    "- Perform at least two frontend template review passes before handoff when visual evidence is available: first check page inventory and visual/evidence coverage, then check downstream implementation feasibility for requirements, architect, build, visual_qa, and integrity.",
+    "- Acquire missing webpage evidence at most once per source and finalize through `submit_frontend_template` after the review notes name what was checked, what was corrected, and what remains blocked.",
   ].join("\n")
 }
 
@@ -435,7 +429,6 @@ function buildUserPrompt(
     attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
     taskID?: string
   },
-  autoIteration = false,
   hostPreparedFrontendProject?: HostPreparedFrontendProject,
 ): string {
   const runtimePaths = input.taskID ? ProjectRuntimePaths.frontendDesignPaths("", input.taskID) : undefined
@@ -541,9 +534,7 @@ function buildUserPrompt(
       `For visual webpage URLs, first check the task-runtime evidence at \`${webpageEvidenceRef}/prd-evidence-summary.md\`, \`${webpageEvidenceRef}/source-ir/component-tree.json\`, \`${webpageEvidenceRef}/source-ir/content-model.json\`, \`${webpageEvidenceRef}/source-ir/layout-map.json\`, \`${webpageEvidenceRef}/source-ir/style-tokens.json\`, \`${webpageEvidenceRef}/source-ir/interaction-hints.json\`, \`${webpageEvidenceRef}/source-ir/interaction-state-snapshots.json\`, \`${webpageEvidenceRef}/source-skeleton/critical.css\`, \`${webpageEvidenceRef}/visual-surface-candidates.json\`, and the task-runtime source package \`${sourcePackageRef}/implementation-blueprint.md\` when present. Use \`${webpageEvidenceRef}/source-skeleton/index.html\` only as raw evidence for exact hierarchy/source ids or missing text. ` +
       "Use webpage evidence tools only if those files are missing or stale — not `webfetch`, not dynamic skills, and not screenshot-only analysis. " +
       "After evidence exists, stop acquiring and read the named source artifacts before finalizing; never inline raw extraction JSON or stored URL screenshot base64 into the frontend template prompt. " +
-      (autoIteration
-        ? "Because assistant.auto_iteration=true, do at least two frontend template review passes before `submit_frontend_template`: first check page inventory and visual coverage, then check downstream frontend replica implementability. "
-        : "Because assistant.auto_iteration=false, do one bounded frontend template review pass before `submit_frontend_template`; report remaining gaps in completeness_review/open_questions instead of looping automatically. ") +
+      "Before `submit_frontend_template`, do at least two frontend template review passes: first check page inventory and visual coverage, then check downstream frontend replica implementability. Report remaining gaps in completeness_review/open_questions with exact evidence instead of looping blindly. " +
       `For webpage replicas, after the task-runtime source package \`${sourcePackageRef}/\` exists, call \`create_frontend_skeleton_project\` to create the high-fidelity skeleton evidence project at \`${skeletonProjectRef}/\` before \`submit_frontend_template\`. ` +
       `Pass \`${skeletonProjectRef}\` as the skeleton outputDir, or omit outputDir so the tool uses that default. Do not pass \`web-clone-target\`, \`${visualSkeletonRef}\`, or any target app root to \`create_frontend_skeleton_project\`. ` +
       "When the handoff asks for VisualRegionBinding, call `create_visual_region_coordinate_atlas` before bbox authoring, call `create_visual_region_binding_package` before final submit, use its real PNG crop artifacts as the only source_reference_artifact values, and include the atlas plus bbox overlay/contact sheet as visual proof that the region cuts are correct. " +

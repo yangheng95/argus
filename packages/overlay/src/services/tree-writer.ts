@@ -245,7 +245,7 @@ const knownGoalIDs = new Set<string>()
 /** goalID → the current attempt's goal_run id. Refreshed from
  *  board.goalWorkflows on every rebuild. Used to scope step/phase card
  *  ids so each attempt (retry / acceptance_rework / modify_contract /
- *  restart_stage) gets its own cards instead of mutating the prior
+ *  manual_retry) gets its own cards instead of mutating the prior
  *  attempt's cards in-place. A missing entry means the goal has no
  *  dispatched run yet — we fall back to the pseudo-id `"pre"` so the
  *  pre-dispatch stub cards (none today, but future-proof) still have a
@@ -675,7 +675,7 @@ function createSessionCardNode(
 /** Per-goal executor step card. Each goal has exactly one goal-scope step
  *  per attempt (see workflow.ts — the `build` step, labelled "Executor",
  *  is the only `scope: "goal"` entry in the pipeline). Every new attempt
- *  (retry / acceptance_rework / modify_contract / restart_stage) creates
+ *  (retry / acceptance_rework / modify_contract / manual_retry) creates
  *  a fresh goal_run; the run id is baked into the card id so the prior
  *  attempt's cards survive as frozen history rather than being mutated
  *  by new messages. Goal title, decomposition index (#N), and description

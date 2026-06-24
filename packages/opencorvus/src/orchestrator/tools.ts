@@ -27,13 +27,7 @@ import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { createDecisionLog } from "@/decision-log"
 import { EngineService } from "@/task-api"
-import {
-  canReceiveDirectAgentSessionControl,
-  BuildSessionDirectReplyError,
-  SessionRuntimeContractMissingError,
-  ReplyTargetEnvelopeMissingError,
-  InvalidReplyTargetKindError,
-} from "./direct-reply"
+import { canReceiveDirectAgentSessionControl } from "./direct-reply"
 import { sessionGoalID, sessionRole, taskIDForSession } from "./task-event"
 import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
@@ -127,7 +121,7 @@ import {
   type TaskRow,
 } from "@/engine/store"
 import { goalStatusByID } from "@/engine/describe"
-import { isLiveGoalRunStatus } from "@/engine/catalog"
+import { isLiveGoalRunStatus, isLiveRunStatus } from "@/engine/catalog"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
@@ -164,7 +158,6 @@ import {
   runContractAudit,
   type ContractAuditCriteriaResult,
 } from "@/acceptance/contract-audit"
-import { isLiveRunStatus, restartStagePlan, type RestartStage } from "./scheduler"
 import {
   isOrchestratorNoDecisionObservationToolName,
   ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY,
@@ -1550,7 +1543,7 @@ function factCheckContinuationFromArtifact(input: { taskID: string; artifactID: 
   return { continuation, normalizedStageInput: parsed.data }
 }
 
-function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string; goalRunID?: string }): {
+function resolveSubagentControlTarget(input: { taskID: string; sessionID?: string; goalID?: string; goalRunID?: string }): {
   sessionID: string
   source: string
   goalRunID?: string
@@ -1562,11 +1555,11 @@ function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?
     }
     const goalRun = findLatestTipGoalRun(input.goalID)
     if (!goalRun) {
-      throw new Error(`goal ${input.goalID} has no goal_run yet; dispatch build before steering it.`)
+      throw new Error(`goal ${input.goalID} has no goal_run yet; dispatch build before controlling it.`)
     }
     if (!goalRun.session_id) {
       throw new Error(
-        `goal ${input.goalID} latest goal_run ${goalRun.id} has no child session_id yet; wait for the build session to start or finalize the stale attempt before steering it.`,
+        `goal ${input.goalID} latest goal_run ${goalRun.id} has no child session_id yet; wait for the build session to start or finalize the stale attempt before controlling it.`,
       )
     }
     return {
@@ -1583,7 +1576,7 @@ function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?
     }
     if (!goalRun.session_id) {
       throw new Error(
-        `goal_run ${input.goalRunID} has no child session_id yet; wait for the build session to start or finalize the stale attempt before steering it.`,
+        `goal_run ${input.goalRunID} has no child session_id yet; wait for the build session to start or finalize the stale attempt before controlling it.`,
       )
     }
     return {
@@ -2194,6 +2187,15 @@ export function createOrchestratorTools(input: {
     }
   }
 
+  function goalDependencyDispatchState(goalID: string): string {
+    const status = goalStatusByID(goalID)
+    const rows = listGoalRunsByGoal(goalID)
+    const supersededIDs = new Set(rows.flatMap((row) => (row.supersede_of ? [row.supersede_of] : [])))
+    const tip = rows.find((row) => !supersededIDs.has(row.id))
+    if (tip?.superseded_reason) return `needs_redispatch(${tip.superseded_reason}; status=${status})`
+    return status
+  }
+
   async function publishGateArtifactResult(input: {
     acceptanceID: string
     runID: string
@@ -2420,9 +2422,9 @@ export function createOrchestratorTools(input: {
 
     Database.transaction((db) => {
       // Single-active-plan invariant: retire every prior active plan for this
-      // task before inserting the new one. Without this, restart_from_stage
-      // (executor) → second createExecutionRunRecord call would leave two rows
-      // with status='active' / version=1; findActivePlanForTask's
+      // task before inserting the new one. Without this, a second
+      // createExecutionRunRecord call would leave two rows with
+      // status='active' / version=1; findActivePlanForTask's
       // `ORDER BY version DESC LIMIT 1` then returns whichever rowid wins the
       // tie (typically the older row, whose goals were re-pointed to the new
       // plan), and the board loads zero goals.
@@ -3151,100 +3153,6 @@ export function createOrchestratorTools(input: {
   // integrity itself. spec architecture-rework-loosening-plan-2026-05-06.md
   // (B12 / B13 / B14).
 
-  async function restartTaskFromStage(stage: RestartStage, reason: string) {
-    const task = requireTask(taskID)
-    const activePlanAtStart = findActivePlanForTask(task.id)
-    const activeSpecAtStart = findActiveSpecForTask(task.id)
-    const plan = restartStagePlan(stage, Boolean(activePlanAtStart))
-    const now = Date.now()
-    const runError = `restart_from_stage(${stage}): ${reason}`
-    const { EnginePlanVersionTable, EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
-    const { abortLiveExecutionForTask, createRun } = await import("@/engine/writer")
-    const { deleteTaskGoals } = await import("@/engine/persist")
-
-    const aborted = await abortLiveExecutionForTask({
-      taskID,
-      reason: runError,
-      includeGoalRuns: plan.retireGoalRuns,
-    })
-    const retiredGoalRuns = aborted.goalRuns
-    const retiredRuns = aborted.runs
-
-    let resetGoals = 0
-    let deletedGoals = 0
-    let freshRun: { id: string } | null = null
-
-    if (plan.resetGoalStatuses) {
-      const { resetTaskGoalsToPending } = await import("@/engine/persist")
-      const result = resetTaskGoalsToPending({
-        taskID,
-        reason: runError,
-        now,
-      })
-      resetGoals = result.total
-    }
-
-    Database.transaction((db) => {
-      if (plan.deleteGoals) {
-        deletedGoals = deleteTaskGoals(db, taskID).deletedGoals
-      }
-
-      if (plan.clearPlan) {
-        // Single-active-plan invariant: retire every active plan for this
-        // task, not just the row findActivePlanForTask returned. If a prior
-        // bug left multiple rows with status='active', narrowing supersede
-        // to one id would leave the others lingering and reproduce the
-        // empty-board symptom on the next read.
-        supersedePriorActivePlansForTask(db, { taskID, now })
-      }
-
-      if (plan.clearSpec && activeSpecAtStart) {
-        db.update(EngineSpecSnapshotTable)
-          .set({ status: "superseded", time_updated: now })
-          .where(eq(EngineSpecSnapshotTable.id, activeSpecAtStart.id))
-          .run()
-      }
-    })
-
-    if (plan.queueFreshRun && activePlanAtStart) {
-      const executor = task.executor
-      freshRun = createRun({
-        taskID,
-        planVersionID: activePlanAtStart.id,
-        sessionID: task.session_id ?? null,
-        executor,
-        status: "queued",
-        phase: "dispatch",
-        metadata: { restart_stage: stage },
-        summary: `restart_from_stage(${stage}): fresh run queued`,
-        now,
-      })
-    }
-
-    const currentTask = requireTask(taskID)
-    await updateTask(
-      currentTask,
-      {
-        status: "active",
-        error: null,
-      },
-      `restart_from_stage(${stage})`,
-    )
-    const freshRunID = freshRun?.id ?? null
-
-    const detail = [
-      deletedGoals > 0 ? `${deletedGoals} goal(s) deleted` : null,
-      resetGoals > 0 ? `${resetGoals} goal(s) reset to pending` : null,
-      retiredGoalRuns > 0 ? `${retiredGoalRuns} goal_run(s) aborted` : null,
-      retiredRuns > 0 ? `${retiredRuns} run(s) aborted` : null,
-      freshRunID ? `fresh queued run=${freshRunID}` : null,
-    ]
-      .filter(Boolean)
-      .join(", ")
-
-    return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} Candidate continuation fact: ${plan.nextAction}.`
-  }
-
   // Agents that need to ask the user a question do so directly via
   // `Question.ask`. Workflow steps never pause for input here.
 
@@ -3252,7 +3160,6 @@ export function createOrchestratorTools(input: {
     "question",
     "propose_task",
     "inject_operator_message",
-    "steer_subagent",
     "cancel_subagent",
   ])
 
@@ -3381,7 +3288,7 @@ export function createOrchestratorTools(input: {
     }),
     skill: tool({
       description:
-        "Search or load mounted Orchestrator skills. The session loop replaces this placeholder with the canonical turn-scoped SkillTool before the model can call it.",
+        "Scheduler-only search/load surface for mounted Orchestrator expert-squad skills. Use it to inspect request-matched squad guidance before calling select_expert_squad; never use it to load production, research, report, or implementation skills. The session loop replaces this placeholder with the canonical turn-scoped SkillTool before the model can call it.",
       inputSchema: z
         .object({
           query: z.string().optional(),
@@ -3406,8 +3313,8 @@ export function createOrchestratorTools(input: {
         "guess.\n" +
         "SKIP WHEN: a previous `requirements` result already succeeded and the active " +
         "spec snapshot still matches the current user scope; call `architect` next. " +
-        'Only rerun after an operator scope change, `restart_from_stage("requirements")`, ' +
-        "or concrete evidence that the active REQ snapshot is invalid.\n" +
+        "Only rerun after an operator scope change or concrete evidence that the active REQ snapshot is invalid. " +
+        "If the workflow contract is fundamentally wrong after execution has begun, create a separate inheriting workflow task with `propose_task` instead of rerunning earlier stages in place.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and integrity has enough " +
         "signal in the request and build evidence to verify. Frontend evidence tools are available candidates when the full task context " +
@@ -3701,7 +3608,7 @@ export function createOrchestratorTools(input: {
         "  - The request explicitly asks for layout/frontend design as implementation input",
         "For live webpage clones that need source-backed page information architecture, call frontend_research first when the Page Skeleton Blueprint is missing; do not use frontend_design merely to materialize raw webpage evidence or discover page structure.",
         "",
-        "The frontend-design agent must follow assistant.auto_iteration: one bounded frontend template review pass when disabled, at least two review passes when enabled.",
+        "The frontend-design agent must complete at least two frontend template review passes: evidence/template completeness, then downstream implementation feasibility.",
         "The full frontend template plus visual_consistency_contract and iteration/completeness review is persisted",
         "into the decision log from the same frontend-design run. Optional task.design_specs rows may exist as anchors, but the",
         "decision-log frontend template is authoritative. The decision log also includes evidence_source_manifest,",
@@ -5310,7 +5217,7 @@ export function createOrchestratorTools(input: {
         "- verdict=clean → proceed.\n" +
         "- verdict=minor_corrections → quote corrections in your next user-facing " +
         "message, proceed.\n" +
-        "- verdict=needs_orchestrator_action → invoke modify_goal / restart_from_stage / " +
+        "- verdict=needs_orchestrator_action → invoke modify_goal / propose_task / " +
         "fail_task per the corrected[i].recommended_action.\n" +
         "- verdict=inconclusive → retry fact_check or proceed with a caveat note.",
       inputSchema: FactCheckInputSchema,
@@ -5562,8 +5469,8 @@ export function createOrchestratorTools(input: {
         "blocker again with the standalone `question` tool.\n\n" +
         "USE WHEN: terse request, ambiguous scope, multiple plausible intent classes " +
         "(feature vs refactor vs bug-fix), the user's intent might silently mislead " +
-        "downstream stages, OR re-entering after operator_message / refine / " +
-        "restart_from_stage that may have shifted scope. If it returns " +
+        "downstream stages, OR re-entering after operator_message / refine evidence " +
+        "that may have shifted scope. If it returns " +
         "`clarified_user_request`, use that clarified request before spending " +
         "budget on requirements / architect / build. If the operator dismisses " +
         "the follow-up questions, do not invent clarified scope.\n" +
@@ -6317,7 +6224,7 @@ export function createOrchestratorTools(input: {
                 sections.push(
                   `- terminal report hint: retry this goal with explicit report_build_result(files_changed[]) instructions. ` +
                     `Any retained files under .opencorvus/r are diagnostic worktree evidence, not primary workspace pollution; ` +
-                    `do not restart_from_stage solely because those diagnostic files exist.`,
+                    `do not open a new workflow task solely because those diagnostic files exist.`,
                 )
               }
             }
@@ -6563,130 +6470,10 @@ export function createOrchestratorTools(input: {
       },
     }),
 
-    steer_subagent: tool({
-      description:
-        "Send a scoped steering message to a child agent session and wake that session, OR — for a live build child — return a read-only activity snapshot (status, last_activity_at, age_ms, ownership when available). " +
-        "Build sessions cannot accept injected steering; the snapshot lets you distinguish healthy live progress from cancel_subagent mode='recover_stale'. Healthy live build progress means park this orchestrator wake, not wait-tool polling. " +
-        "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly.",
-      inputSchema: z
-        .object({
-          session_id: z.string().min(1).optional().describe("Child agent session id to steer."),
-          goal_id: z
-            .string()
-            .min(1)
-            .optional()
-            .describe("Goal id to steer. Host resolves it to the latest live goal_run and child session."),
-          goal_run_id: z
-            .string()
-            .min(1)
-            .optional()
-            .describe("Live goal_run id whose child session should be inspected or steered."),
-          message: z.string().min(1).describe("Natural-language steering/status-check message for that sub-agent"),
-          reason: z.string().describe("Why this sub-agent must be contacted before retrying"),
-        })
-        .refine((value) => !!value.session_id || !!value.goal_id || !!value.goal_run_id, {
-          message: "steer_subagent requires session_id, goal_id, or goal_run_id",
-          path: ["session_id"],
-        }),
-      execute: async ({ session_id, goal_id, goal_run_id, message, reason }) => {
-        const target = resolveSteerTarget({
-          taskID,
-          sessionID: session_id,
-          goalID: goal_id,
-          goalRunID: goal_run_id,
-        })
-        const { kind } = assertDirectReplySessionOwnership({
-          taskID,
-          sessionID: target.sessionID,
-        })
-        if (kind === "build") {
-          const liveOwner =
-            (target.goalRunID ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: target.goalRunID }) : undefined) ??
-            findLiveBuildOwnershipBySession({ taskID, sessionID: target.sessionID })
-          const targetGoalRun = target.goalRunID
-            ? findGoalRun(target.goalRunID)
-            : listGoalRunsForTask(taskID).find((row) => row.session_id === target.sessionID)
-          const liveGoalRun =
-            targetGoalRun &&
-            targetGoalRun.task_id === taskID &&
-            targetGoalRun.session_id === target.sessionID &&
-            isLiveGoalRunStatus(targetGoalRun.status)
-              ? targetGoalRun
-              : undefined
-          if (liveOwner || liveGoalRun) {
-            const status = SessionStatus.get(target.sessionID)
-            const activity = SessionStatus.getActivity(target.sessionID)
-            const lastActivityAt = activity?.last_activity_at
-            const ageMs = typeof lastActivityAt === "number" ? Math.max(0, Date.now() - lastActivityAt) : "n/a"
-            return [
-              `Activity snapshot for live build child session ${target.sessionID}:`,
-              `  child_session_id=${target.sessionID}`,
-              `  status=${status.type}`,
-              `  last_activity_at=${lastActivityAt ?? "n/a"}`,
-              `  age_ms=${ageMs}`,
-              `  owner_tool_part=${liveOwner?.payload.tool_part_id ?? "n/a"}`,
-              `  owner_ownership=${liveOwner?.ownershipID ?? "n/a"}`,
-              `  goal_run=${target.goalRunID ?? liveOwner?.payload.goal_run_id ?? liveGoalRun?.id ?? "n/a"}`,
-              `Reason recorded: ${reason}`,
-              'Note: build sessions cannot accept injected steering messages. If this snapshot shows healthy live progress, stop this wake and let terminal goal refill facts wake the next decision; do not call wait to poll it. If age_ms is large AND status indicates no progress, call cancel_subagent with mode="recover_stale".',
-            ].join("\n")
-          }
-          return (
-            `Error: steer_subagent cannot generically steer build session ${target.sessionID}.` +
-            " Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead." +
-            ` Reason received: ${reason}`
-          )
-        }
-        // The reply route turns these conditions into NamedError that
-        // ApiError would surface as 4xx/410 to overlay. Inside the
-        // orchestrator's own tool call the same errors throw as
-        // execution errors and the AI SDK would relay them as opaque
-        // tool failures — denying the model the actionable guidance
-        // the build-kind branch above already gives. Catch the named
-        // subclasses we know about and return human-readable next-step
-        // text instead, matching the build-kind branch's contract.
-        // codex review round 2 — minor.
-        try {
-          const result = await EngineService.replyAgentSession(taskID, target.sessionID, { message })
-          return `Steered sub-agent session ${result.session_id}. source=${target.source}. message=${result.message_id}. Reason: ${reason}`
-        } catch (err) {
-          if (BuildSessionDirectReplyError.isInstance(err)) {
-            return (
-              `Error: steer_subagent refused to inject into session ${target.sessionID}: ${err.data.message}` +
-              ` Use build({ goalID, request }) for a fresh stage-attempt runtime contract instead.` +
-              ` Reason received: ${reason}`
-            )
-          }
-          if (SessionRuntimeContractMissingError.isInstance(err)) {
-            return (
-              `Error: steer_subagent could not reach session ${target.sessionID} — ${err.data.message}` +
-              ` The session's in-memory runtime contract is no longer present (reason=${err.data.reason}).` +
-              ` Re-dispatch the parent goal/stage to reinstate the runtime contract before attempting to steer again.` +
-              ` Reason received: ${reason}`
-            )
-          }
-          if (ReplyTargetEnvelopeMissingError.isInstance(err)) {
-            return (
-              `Error: steer_subagent could not reach session ${target.sessionID} — ${err.data.message}` +
-              ` Wait for the agent to issue its first turn before attempting to steer it.` +
-              ` Reason received: ${reason}`
-            )
-          }
-          if (InvalidReplyTargetKindError.isInstance(err)) {
-            return (
-              `Error: steer_subagent refused session ${target.sessionID}: ${err.data.message}` +
-              ` Reason received: ${reason}`
-            )
-          }
-          throw err
-        }
-      },
-    }),
-
     cancel_subagent: tool({
       description:
         "Abort a specific child agent session, or recover a stale live-owned build via mode='recover_stale'. " +
-        "This is the session-level resume rung: cancel the child, then explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal or restart_from_stage. " +
+        "This is the session-level resume rung: cancel the child, then explicitly re-dispatch the SAME goal or stage under the SAME contract before escalating to modify_goal, architect, propose_task, fail_task, or question. " +
         "You may pass session_id directly, goal_id for the latest live attempt, or goal_run_id directly.",
       inputSchema: z
         .object({
@@ -6716,7 +6503,7 @@ export function createOrchestratorTools(input: {
           path: ["session_id"],
         }),
       execute: async ({ session_id, goal_id, goal_run_id, mode, reason }) => {
-        const target = resolveSteerTarget({
+        const target = resolveSubagentControlTarget({
           taskID,
           sessionID: session_id,
           goalID: goal_id,
@@ -6789,22 +6576,6 @@ export function createOrchestratorTools(input: {
           `${abortedFact} If you still need work from it, re-dispatch the same stage/goal under the same contract explicitly.`
         )
       },
-    }),
-
-    restart_from_stage: tool({
-      description:
-        "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo requirements/plan from scratch. `plan` fully regenerates the goal decomposition while keeping requirements intact — use it after repeated per-goal retry has failed to converge.",
-      inputSchema: z.object({
-        stage: z
-          .enum(["requirements", "plan", "executor"])
-          .describe(
-            "`requirements`: re-elicit requirements; deletes spec + plan + goals. " +
-              "`plan`: keep requirements; delete plan + goals so the architect fully re-decomposes from scratch. " +
-              "`executor`: keep requirements + plan + goals; reset goal statuses so the executor re-runs each goal.",
-          ),
-        reason: z.string().describe("Why restarting from this stage"),
-      }),
-      execute: async ({ stage, reason }) => restartTaskFromStage(stage, reason),
     }),
 
     refine: tool({
@@ -7010,12 +6781,11 @@ export function createOrchestratorTools(input: {
 
     propose_task: tool({
       description:
-        "Create one polished inheriting follow-up task candidate from terminal parent-task handoff evidence. " +
+        "Create one polished inheriting engine task from concrete current-task evidence. " +
         "This is the orchestrator's ONLY new-engine-task creation path: it follows `experimental.auto_confirm_proposed_tasks`, " +
-        "creating directly by default and asking the user first only when auto-confirm is disabled. Do not use this for normal workflow progress, do not use it " +
-        "instead of build/integrity on the current task, and do not call generic `task` or control-plane `panel`. " +
-        "Create at most one follow-up task for the parent task, and only from terminal parent-task handoff evidence after the current task has ended. " +
-        "Use propose_task only when terminal execution evidence, artifact state, integrity history, or final visual QA evidence names separate inheriting work that cannot be completed safely inside the ended parent task. " +
+        "creating directly by default and asking the user first only when auto-confirm is disabled. Do not call generic `task` or control-plane `panel`. " +
+        "Create at most one inheriting child task for the parent task. Use it when execution evidence, artifact state, integrity history, visual QA evidence, or operator scope change proves separate inheriting work is required. " +
+        "Workflow tasks do not rewind earlier stages in place: when the active workflow contract is fundamentally wrong and cannot be repaired by modify_goal, architect, or targeted build inside the current task, create a new inheriting workflow task instead of rerunning requirements/plan/executor. " +
         "Use it when failed visual_qa evidence includes follow_up_task for unrepairable production blockers; translate that request into the inheriting task instead of ending with the failed report. " +
         "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
       inputSchema: z.object({
@@ -7051,21 +6821,6 @@ export function createOrchestratorTools(input: {
       }),
       execute: async ({ title, request, reason, priority, queue, kind }) => {
         const task = requireTask(taskID)
-        const parentStatus = deriveTaskStatus(task)
-        if (parentStatus === "queued" || parentStatus === "active") {
-          return SubAgentProtocol.yieldResult({
-            headline: "Follow-up task was not created because the parent task is not terminal.",
-            summary:
-              "Child engine tasks can only be created from terminal parent-task handoff evidence. Keep this work inside the current task with architect, modify_goal, build, question, integrity, or fail_task.",
-            fields: [
-              ["parent_task_id", taskID],
-              ["parent_status", parentStatus],
-              ["proposal", title],
-              ["reason", reason],
-            ],
-            pointer: `current task ${taskID}; no new task was created`,
-          })
-        }
         const existingChildren = findChildrenOfTask(taskID)
         if (existingChildren.length > 0) {
           return SubAgentProtocol.yieldResult({
@@ -7355,7 +7110,7 @@ export function createOrchestratorTools(input: {
             )
           }
           const dependencyBlockers = (Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : [])
-            .map((depID) => ({ depID, status: goalStatusByID(depID) }))
+            .map((depID) => ({ depID, status: goalDependencyDispatchState(depID) }))
             .filter((dep) => dep.status !== "passed")
           if (dependencyBlockers.length > 0) {
             if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
@@ -8411,7 +8166,7 @@ export function createOrchestratorTools(input: {
               `${factBlock}\n\n` +
               `### Next step\n` +
               `Read the build report and the worktree facts above. Cross-check the LLM's files_changed/commit_ref against the worktree facts; if they disagree, factor that into your next call. ` +
-              `When terminal goal refill facts appear, choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
+              `When terminal goal refill facts appear, choose build({goalID}) / modify_goal / architect / propose_task / fail_task / question from the build evidence and task context; route product, dependency, git-worktree, port, and toolchain blockers to the responsible same-task owner instead of passively waiting for sibling builds. ` +
               `For frontend/browser-visible work, run \`visual_qa\` only once near task completion after all blocking build work is terminal and before final task acceptance. If visual_qa returns accepted=false with follow_up_task, call \`propose_task\` from that evidence only at terminal handoff instead of ending passively. ` +
               `Call \`integrity\` as the final workflow gate after all blocking builds are terminal; visual_qa and integrity are peer review agents, not replacements for each other. Before final acceptance, use integrity earlier only when integrated evidence raises a real question about requirement mining or system integrity.`
             )
@@ -8448,7 +8203,7 @@ export function createOrchestratorTools(input: {
               `### Next step\n` +
               `This build is now running asynchronously. Do not call wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
               `If no next dispatchable, failed, or refill facts exist, stop this wake; terminal goal refill will wake the next decision. ` +
-              `When a goal reaches terminal status, the next task snapshot will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from those facts. ` +
+              `When a goal reaches terminal status, the next task snapshot will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / propose_task / fail_task / question from those facts. ` +
               `Call integrity only after all blocking builds are terminal.`
             )
           }
