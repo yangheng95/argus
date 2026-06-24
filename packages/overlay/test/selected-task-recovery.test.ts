@@ -72,6 +72,7 @@ function conversationPayload(taskID: string, transcript: any[] = [], view = { se
       snapshotVersion: `board:${taskID}`,
       task: {
         id: taskID,
+        directory: TEST_DIRECTORY,
         sessionID: `ses_${taskID}`,
         status: "active",
         request: "tail repair",
