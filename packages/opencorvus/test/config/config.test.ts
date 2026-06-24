@@ -454,6 +454,7 @@ test("handles agent configuration", async () => {
             model: "test/model",
             temperature: 0.7,
             description: "test agent",
+            skill_mountable: true,
           },
         },
       })
@@ -468,8 +469,10 @@ test("handles agent configuration", async () => {
           model: "test/model",
           temperature: 0.7,
           description: "test agent",
+          skill_mountable: true,
         }),
       )
+      expect(config.agent?.["test_agent"]?.options).not.toHaveProperty("skill_mountable")
     },
   })
 })
@@ -579,6 +582,7 @@ test("loads agents from .opencorvus/agents (plural)", async () => {
         `---
 model: test/model
 mode: subagent
+skill_mountable: true
 ---
 Helper agent prompt`,
       )
@@ -603,8 +607,10 @@ Nested agent prompt`,
         name: "helper",
         model: "test/model",
         mode: "subagent",
+        skill_mountable: true,
         prompt: "Helper agent prompt",
       })
+      expect(config.agent?.["helper"]?.options).not.toHaveProperty("skill_mountable")
 
       expect(config.agent?.["nested/child"]).toMatchObject({
         name: "nested/child",

@@ -569,6 +569,10 @@ export type AgentConfig = {
    * Additional instructions appended after a code-owned stage-agent core prompt.
    */
   prompt_append?: string
+  /**
+   * Whether this agent may receive operator-managed skill mounts. Custom agents default false; built-in agents must match their canonical role contract.
+   */
+  skill_mountable?: boolean
   disable?: boolean
   /**
    * Description of when to use the agent
@@ -2421,6 +2425,8 @@ export type Agent = {
   topP?: number
   temperature?: number
   color?: string
+  archetype?: "host" | "worker"
+  skill_mountable?: boolean
   permission?: PermissionRuleset
   model?: {
     modelID: string
@@ -7479,6 +7485,7 @@ export type SkillMountsResponses = {
       mode: "subagent" | "primary" | "all"
       native?: boolean
       hidden?: boolean
+      skill_mountable: boolean
       skill_tool_available: boolean
     }>
     matrix: Array<{
@@ -7577,6 +7584,7 @@ export type SkillMountResponses = {
       mode: "subagent" | "primary" | "all"
       native?: boolean
       hidden?: boolean
+      skill_mountable: boolean
       skill_tool_available: boolean
     }>
     matrix: Array<{
@@ -7675,6 +7683,7 @@ export type SkillUnmountResponses = {
       mode: "subagent" | "primary" | "all"
       native?: boolean
       hidden?: boolean
+      skill_mountable: boolean
       skill_tool_available: boolean
     }>
     matrix: Array<{
@@ -7784,6 +7793,7 @@ export type SkillImportAndMountResponses = {
       mode: "subagent" | "primary" | "all"
       native?: boolean
       hidden?: boolean
+      skill_mountable: boolean
       skill_tool_available: boolean
     }>
     matrix: Array<{

@@ -729,6 +729,12 @@ export namespace Config {
         .string()
         .optional()
         .describe("Additional instructions appended after a code-owned stage-agent core prompt."),
+      skill_mountable: z
+        .boolean()
+        .optional()
+        .describe(
+          "Whether this agent may receive operator-managed skill mounts. Custom agents default false; built-in agents must match their canonical role contract.",
+        ),
       disable: z.boolean().optional(),
       description: z.string().optional().describe("Description of when to use the agent"),
       mode: z.enum(["subagent", "primary", "all"]).optional(),
@@ -767,6 +773,7 @@ export namespace Config {
         "variant",
         "prompt",
         "prompt_append",
+        "skill_mountable",
         "description",
         "temperature",
         "top_p",
@@ -1677,6 +1684,13 @@ export namespace Config {
             code: "custom",
             path: ["agent", agentID],
             message: `config.agent.${agentID} prompt configuration is not editable.`,
+          })
+        }
+        if (role && agentConfig.skill_mountable !== undefined && agentConfig.skill_mountable !== role.skillMountable) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["agent", agentID, "skill_mountable"],
+            message: `config.agent.${agentID}.skill_mountable must stay ${role.skillMountable} to match the canonical role contract.`,
           })
         }
       }

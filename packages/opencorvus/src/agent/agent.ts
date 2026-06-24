@@ -66,6 +66,8 @@ export namespace Agent {
       topP: z.number().optional(),
       temperature: z.number().optional(),
       color: z.string().optional(),
+      archetype: z.enum(["host", "worker"]).optional(),
+      skill_mountable: z.boolean().optional(),
       // Permission ruleset — consumed only by SessionProcessor / SessionPrompt
       // flow (build / spec / plan / general / explore / compaction / title).
       // Stage agents dispatched through SessionPrompt (orchestrator / requirements /
@@ -722,6 +724,8 @@ export namespace Agent {
           mode: "all",
           permission: nonDesignPermissions(),
           options: {},
+          archetype: "worker",
+          skill_mountable: false,
           native: false,
         }
       if (value.name !== undefined && value.name !== key) {
@@ -737,6 +741,7 @@ export namespace Agent {
       if (promptConfigMode === "override") item.prompt = value.prompt ?? item.prompt
       if (promptConfigMode === "append") item.promptAppend = value.prompt_append ?? item.promptAppend
       item.description = value.description ?? item.description
+      item.skill_mountable = value.skill_mountable ?? item.skill_mountable
       item.temperature = value.temperature ?? item.temperature
       item.topP = value.top_p ?? item.topP
       item.mode = value.mode ?? item.mode
@@ -758,6 +763,16 @@ export namespace Agent {
           )
         }
       }
+    }
+
+    for (const [id, contract] of Object.entries(AgentRoleContract.all) as Array<
+      [AgentRoleID, (typeof AgentRoleContract.all)[AgentRoleID]]
+    >) {
+      const item = result[id]
+      if (!item) continue
+      item.description = item.description ?? contract.description
+      item.archetype = contract.archetype
+      item.skill_mountable = contract.skillMountable
     }
 
     return result

@@ -218,6 +218,25 @@ test("right sidebar coding assistant is a hidden full-function primary agent", a
   })
 }, 30_000)
 
+test("role contract metadata is projected onto registered agents", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const integrity = await Agent.get("integrity")
+      const orchestrator = await Agent.get("orchestrator")
+      const codingAssistant = await Agent.get("coding-assistant")
+
+      expect(integrity?.archetype).toBe("worker")
+      expect(integrity?.skill_mountable).toBe(true)
+      expect(orchestrator?.archetype).toBe("host")
+      expect(orchestrator?.skill_mountable).toBe(false)
+      expect(codingAssistant?.archetype).toBe("worker")
+      expect(codingAssistant?.skill_mountable).toBe(false)
+    },
+  })
+})
+
 test("explore agent limits exposed tools without permission denials", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -779,9 +798,7 @@ test("integrity agent exposes the shared preview repair registry tools", async (
       expect(integrity?.hidden).toBe(true)
       expect(integrity?.tools).toEqual({ include: [...INTEGRITY_DECLARED_TOOL_IDS] })
       expect(integrity?.tools?.include).toContain("skill")
-      expect(integrity?.tools?.include).toEqual(
-        expect.arrayContaining([...INTEGRITY_PREVIEW_TOOL_IDS, "skill"]),
-      )
+      expect(integrity?.tools?.include).toEqual(expect.arrayContaining([...INTEGRITY_PREVIEW_TOOL_IDS, "skill"]))
     },
   })
 })
@@ -807,6 +824,7 @@ test("custom agent from config creates new agent", async () => {
         my_custom_agent: {
           model: "openai/gpt-4",
           description: "My custom agent",
+          skill_mountable: true,
           temperature: 0.5,
           top_p: 0.9,
         },
@@ -824,6 +842,7 @@ test("custom agent from config creates new agent", async () => {
       expect(custom?.temperature).toBe(0.5)
       expect(custom?.topP).toBe(0.9)
       expect(custom?.native).toBe(false)
+      expect(custom?.skill_mountable).toBe(true)
       expect(custom?.mode).toBe("all")
     },
   })

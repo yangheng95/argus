@@ -12,30 +12,11 @@ export const PromptProfileIDSchema = z
     PROMPT_PROFILE_ID_PATTERN,
     "prompt profile id must use lowercase letters, digits, and single hyphens, and must start with a letter.",
   )
+const USER_PROFILE_TARGETS = AgentRoleContract.promptProfileTargets("user")
+const BUILT_IN_ONLY_PROFILE_TARGETS = AgentRoleContract.promptProfileTargets("builtin")
+const ALL_PROFILE_TARGETS = AgentRoleContract.promptProfileTargets()
 
-const USER_PROFILE_TARGETS = [
-  "coding",
-  "coding-assistant",
-  "build",
-  "visual-qa",
-  "general",
-  "explore",
-  "mission",
-  "requirements",
-  "architect",
-  "frontend-design",
-  "intent-analysis",
-  "fact-check",
-  "deep-research",
-  "frontend-research",
-  "goal-workload-analyst",
-] as const
-
-const BUILT_IN_ONLY_PROFILE_TARGETS = ["orchestrator", "integrity"] as const
-
-export type PromptProfileTargetID =
-  | (typeof USER_PROFILE_TARGETS)[number]
-  | (typeof BUILT_IN_ONLY_PROFILE_TARGETS)[number]
+export type PromptProfileTargetID = AgentRoleID
 
 export const PromptProfileDefinitionSchema = z
   .object({
@@ -129,7 +110,7 @@ type ConfigLike = {
 
 const userTargetSet = new Set<string>(USER_PROFILE_TARGETS)
 const builtInOnlyTargetSet = new Set<string>(BUILT_IN_ONLY_PROFILE_TARGETS)
-const allTargetSet = new Set<string>([...USER_PROFILE_TARGETS, ...BUILT_IN_ONLY_PROFILE_TARGETS])
+const allTargetSet = new Set<string>(ALL_PROFILE_TARGETS)
 
 export namespace PromptProfile {
   export const builtIns: Record<string, PromptProfileDefinition> = {
@@ -279,19 +260,12 @@ export namespace PromptProfile {
     },
   }
 
-  export const targets: PromptProfileTargetCatalogEntry[] = [
-    ...USER_PROFILE_TARGETS,
-    ...BUILT_IN_ONLY_PROFILE_TARGETS,
-  ].map((targetID) => ({
+  export const targets: PromptProfileTargetCatalogEntry[] = [...ALL_PROFILE_TARGETS].map((targetID) => ({
     id: targetID,
     label: targetID,
-    description:
-      AgentRoleContract.all[targetID as AgentRoleID]?.description ??
-      (builtInOnlyTargetSet.has(targetID)
-        ? `Built-in runtime prompt target ${targetID}.`
-        : `Prompt profile target ${targetID}.`),
-    editable: userTargetSet.has(targetID) && !builtInOnlyTargetSet.has(targetID),
-    built_in_only: builtInOnlyTargetSet.has(targetID),
+    description: AgentRoleContract.description(targetID),
+    editable: AgentRoleContract.promptProfileTargetMode(targetID) === "user",
+    built_in_only: AgentRoleContract.promptProfileTargetMode(targetID) === "builtin",
   }))
 
   export function catalog(config: ConfigLike): Record<string, PromptProfileDefinition> {

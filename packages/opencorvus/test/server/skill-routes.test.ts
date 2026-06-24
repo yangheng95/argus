@@ -674,11 +674,18 @@ describe("skill routes", () => {
         })
         expect(initial.status).toBe(200)
         const initialBody = (await initial.json()) as {
-          agents: Array<{ name: string; skill_tool_available: boolean }>
+          agents: Array<{ name: string; skill_mountable: boolean; skill_tool_available: boolean }>
           skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
         }
-        expect(initialBody.agents).toContainEqual(expect.objectContaining({ name: "integrity", skill_tool_available: true }))
-        expect(initialBody.skills.find((entry) => entry.name === "integrity-preview-review")?.mounted_agents).toEqual([])
+        expect(initialBody.agents).toContainEqual(
+          expect.objectContaining({ name: "integrity", skill_mountable: true, skill_tool_available: true }),
+        )
+        expect(initialBody.agents).toContainEqual(
+          expect.objectContaining({ name: "orchestrator", skill_mountable: false, skill_tool_available: true }),
+        )
+        expect(initialBody.skills.find((entry) => entry.name === "integrity-preview-review")?.mounted_agents).toEqual(
+          [],
+        )
 
         const mounted = await app.request("/skill/mount", {
           method: "POST",
@@ -696,7 +703,9 @@ describe("skill routes", () => {
           skills: Array<{ name: string; mounted_agents: string[]; unmounted: boolean }>
           matrix: Array<{ agent: string; mounted: Array<{ name: string; enabled: boolean }> }>
         }
-        expect(body.skills.find((entry) => entry.name === "integrity-preview-review")?.mounted_agents).toEqual(["integrity"])
+        expect(body.skills.find((entry) => entry.name === "integrity-preview-review")?.mounted_agents).toEqual([
+          "integrity",
+        ])
         expect(body.skills.find((entry) => entry.name === "integrity-preview-review")?.unmounted).toBe(false)
         expect(body.matrix.find((row) => row.agent === "integrity")?.mounted).toContainEqual(
           expect.objectContaining({ name: "integrity-preview-review", enabled: true }),
@@ -707,6 +716,51 @@ describe("skill routes", () => {
         )
         expect(yaml).toContain("mounted_agents:")
         expect(yaml).toContain("- integrity")
+      },
+    })
+  })
+
+  test("POST /skill/mount rejects operator-managed mounts for non-mountable agents", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Filesystem.write(
+          path.join(dir, ".opencorvus", "skill", "orchestrator-manual", "SKILL.md"),
+          [
+            "---",
+            "name: orchestrator-manual",
+            "description: Manual orchestrator mount should stay rejected.",
+            "---",
+            "",
+            "This skill must not be operator-mounted to orchestrator.",
+          ].join("\n"),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/skill/mount", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "orchestrator",
+            skill: "orchestrator-manual",
+          }),
+        })
+
+        expect(response.status).toBe(500)
+        const body = (await response.json()) as { data?: { message?: string } }
+        expect(body.data?.message).toContain("does not allow operator-managed skill mounts")
+        const yaml = await Filesystem.readText(
+          path.join(tmp.path, ".opencorvus", "skill", "orchestrator-manual", "SKILL.md"),
+        )
+        expect(yaml).not.toContain("mounted_agents:")
       },
     })
   })

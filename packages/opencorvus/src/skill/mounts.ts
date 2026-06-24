@@ -43,6 +43,7 @@ export namespace SkillMount {
     mode: z.enum(["subagent", "primary", "all"]),
     native: z.boolean().optional(),
     hidden: z.boolean().optional(),
+    skill_mountable: z.boolean(),
     skill_tool_available: z.boolean(),
   })
   export type AgentEntry = z.infer<typeof AgentEntry>
@@ -174,6 +175,7 @@ export namespace SkillMount {
         mode: agent.mode,
         native: agent.native,
         hidden: agent.hidden,
+        skill_mountable: agentSkillMountable(agent),
         skill_tool_available: agentCanUseSkillTool(agent),
       })),
       matrix: rows,
@@ -206,6 +208,9 @@ export namespace SkillMount {
       SkillManager.previewImportFile(input.import),
     ])
     if (!agent) throw new Error(`Unknown agent: ${input.agent}`)
+    if (!agentSkillMountable(agent)) {
+      throw new Error(`Agent ${input.agent} does not allow operator-managed skill mounts.`)
+    }
     if (!agentCanUseSkillTool(agent)) {
       throw new Error(`Agent ${input.agent} cannot mount skills because it does not expose the skill tool.`)
     }
@@ -239,6 +244,9 @@ export namespace SkillMount {
       Skill.all(),
     ])
     if (!agent) throw new Error(`Unknown agent: ${input.agent}`)
+    if (!agentSkillMountable(agent)) {
+      throw new Error(`Agent ${input.agent} does not allow operator-managed skill mounts.`)
+    }
     assertKnownMountedAgents(initialSkills, agents)
     let skills = initialSkills
     let byName = skillByName(skills)
@@ -343,6 +351,10 @@ export namespace SkillMount {
     if (include) return include.includes("skill")
     if (agent.tools?.exclude?.includes("skill")) return false
     return !PermissionNext.disabled(["skill"], agent.permission).has("skill")
+  }
+
+  export function agentSkillMountable(agent: Pick<Agent.Info, "skill_mountable">): boolean {
+    return agent.skill_mountable === true
   }
 
   function disabledReason(
