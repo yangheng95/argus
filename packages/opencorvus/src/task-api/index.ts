@@ -21,7 +21,7 @@ import { ProtocolStore } from "@/protocol/store"
 import { EngineProtocol } from "@/engine/protocol"
 import { clearRewindCursor } from "@/engine/rewind"
 import { ensureGitignore } from "@/engine/git"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Worktree } from "@/worktree"
 import { Question } from "@/question"
@@ -67,6 +67,7 @@ import {
   directoryQueueSnapshot,
   drainPendingQueuedOperatorWakes,
   dispatchTaskLoop,
+  listOrphanedActiveInProject,
   reorderQueuedTasksForCwd,
   startQueuedTaskInCwd,
   taskCwd,
@@ -650,7 +651,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
   const wakeTask = await reactivateTaskForOperatorWake(task, "Operator message reactivated task")
   await reopenActiveRunForOperatorWake(wakeTask, "Operator message reopened blocked run")
 
-  void dispatchTaskLoop({
+  const dispatchResult = await dispatchTaskLoop({
     taskID: input.taskID,
     event: {
       note: OrchestratorEventNote.operatorMessage({
@@ -666,6 +667,9 @@ async function appendAndWakeTaskOperatorMessage(input: {
       },
     },
   })
+  if (dispatchResult === "ignored") {
+    throw new Error(`Task ${input.taskID} operator message was recorded, but the orchestrator wake was ignored.`)
+  }
 
   return {
     task: requireTaskInCurrentProject(input.taskID),
@@ -997,6 +1001,11 @@ type FileRef = {
 type FileRefColumn = "attachments" | "system_artifacts"
 
 export namespace EngineService {
+  const restartMessageState = lazyInstanceState(() => ({
+    restartMessagesChecked: false,
+    restartMessagesRunning: false,
+  }))
+
   export function init() {
     const current = orchestratorState()
     if (!current.booted) {
@@ -1011,6 +1020,7 @@ export namespace EngineService {
       interval: ORCHESTRATOR_POLL_INTERVAL_MS,
       scope: "instance",
       run: async () => {
+        await appendRestartMessagesForActiveTasks()
         await EngineRuntime.monitorRuns(hooks())
         await drainPendingQueuedOperatorWakes()
       },
@@ -1021,6 +1031,31 @@ export namespace EngineService {
     // to retry / restart_from_stage / drop. OS-level cleanup (worktrees,
     // processes) is owned by the ownership registry, not by a recovery
     // function.
+  }
+
+  async function appendRestartMessagesForActiveTasks(): Promise<void> {
+    const state = restartMessageState()
+    if (state.restartMessagesChecked || state.restartMessagesRunning) return
+    state.restartMessagesRunning = true
+    try {
+      const tasks = listOrphanedActiveInProject(Instance.project.id)
+      state.restartMessagesChecked = true
+      const failures: string[] = []
+      for (const task of tasks) {
+        await appendAndWakeTaskOperatorMessage({
+          taskID: task.id,
+          text: "重启",
+          source: "server_restart",
+        }).catch((error) => {
+          failures.push(`${task.id}: ${error instanceof Error ? error.message : String(error)}`)
+        })
+      }
+      if (failures.length > 0) {
+        throw new Error(`Failed to append restart messages for active tasks: ${failures.join("; ")}`)
+      }
+    } finally {
+      state.restartMessagesRunning = false
+    }
   }
 
   export async function createTask(raw: z.input<typeof CreateTaskInput>) {
