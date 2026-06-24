@@ -1,6 +1,6 @@
 我需要复刻网页：<https://www.tradingview.com/markets/world-economy/>
 
-这是一个多阶段前端实现任务。目标不是复刻 TradingView 的品牌视觉，而是在保留 TradingView 页面信息架构、模块顺序、布局密度、响应式行为和交互语义的前提下，使用 AInvest 设计系统、AInvest tokens 和 AInvest 组件实现一个生产可合入页面。
+这是一个前端复刻任务（只发布一轮任务，禁止创建子任务和重复执行含architect之前的agent！）。。目标不是复刻 TradingView 的品牌视觉，而是在保留 TradingView 页面信息架构、模块顺序、布局密度、响应式行为和交互语义的前提下，使用 AInvest 设计系统、AInvest tokens 和 AInvest 组件实现一个生产可合入页面。
 
 核心原则：
 
@@ -9,8 +9,6 @@
 - 不要求复刻 TradingView 的品牌色、字体、控件皮肤或视觉风格。
 - 禁止用图片、截图、静态 SVG 或占位内容冒充真实页面实现。
 - 禁止 fallback/兜底逻辑。如果组件库缺口阻塞实现，必须标记为 `[阻塞]`，说明证据、影响范围和需要补齐的组件能力，不得私自手写 primitive 绕过。
-
-如果当前目录不存在模板文件夹，则需要将 `nova-vibecoding-template` 文件夹中的代码复制到当前项目中
 
 ## 模板准备
 
@@ -67,7 +65,7 @@ PRD 必须包含：
 - region 对应实现文件计划
 - 不确定项和 `[阻塞]` 项
 
-## 阶段 2：模块级设计方案
+## 阶段 2：模块级设计方案 （注意此阶段 Architect 需分解 > 20 goals）
 
 实现前必须输出模块级设计方案。每个 region 必须说明：
 

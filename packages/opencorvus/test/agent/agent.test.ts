@@ -14,7 +14,7 @@ import {
 } from "../../src/frontend-design/tools/ids"
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "../../src/frontend-design/static-tools"
 import { VISUAL_QA_STATIC_TOOL_IDS } from "../../src/visual-qa/static-tools"
-import { INTEGRITY_PREVIEW_TOOL_IDS } from "../../src/integrity/static-tools"
+import { INTEGRITY_DECLARED_TOOL_IDS, INTEGRITY_PREVIEW_TOOL_IDS } from "../../src/integrity/static-tools"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
@@ -599,7 +599,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
-      expect(integrity?.tools?.include).toEqual([...INTEGRITY_PREVIEW_TOOL_IDS])
+      expect(integrity?.tools?.include).toEqual([...INTEGRITY_DECLARED_TOOL_IDS])
       expect(await Agent.get("acceptance")).toBeUndefined()
     },
   })
@@ -777,7 +777,11 @@ test("integrity agent exposes the shared preview repair registry tools", async (
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
       expect(integrity?.hidden).toBe(true)
-      expect(integrity?.tools).toEqual({ include: [...INTEGRITY_PREVIEW_TOOL_IDS] })
+      expect(integrity?.tools).toEqual({ include: [...INTEGRITY_DECLARED_TOOL_IDS] })
+      expect(integrity?.tools?.include).toContain("skill")
+      expect(integrity?.tools?.include).toEqual(
+        expect.arrayContaining([...INTEGRITY_PREVIEW_TOOL_IDS, "skill"]),
+      )
     },
   })
 })

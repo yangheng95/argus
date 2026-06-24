@@ -7022,6 +7022,10 @@ export type ProviderRefreshResponses = {
   200: {
     ok: boolean
     fetchedAt?: number
+    hexin?: {
+      count: number
+      ids: Array<string>
+    }
     error?: string
   }
 }

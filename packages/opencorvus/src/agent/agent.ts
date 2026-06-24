@@ -39,7 +39,7 @@ import {
   WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS,
 } from "@/frontend-design/tools/ids"
 import { VISUAL_QA_STATIC_TOOL_IDS } from "@/visual-qa/static-tools"
-import { INTEGRITY_PREVIEW_TOOL_IDS } from "@/integrity/static-tools"
+import { INTEGRITY_DECLARED_TOOL_IDS } from "@/integrity/static-tools"
 
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
@@ -590,8 +590,10 @@ export namespace Agent {
         description: AgentRoleContract.description("integrity"),
         prompt: INTEGRITY_RUNTIME_PROMPT,
         steps: 1000,
-        // Verdict and acceptance tools are injected per run; preview repair tools are the shared task-scoped runtime surface.
-        tools: { include: [...INTEGRITY_PREVIEW_TOOL_IDS] },
+        // Verdict and acceptance tools are injected per run; the declared surface
+        // keeps preview repair tools plus the canonical skill tool so integrity
+        // sessions share the same mounted-skill contract as other specialists.
+        tools: { include: [...INTEGRITY_DECLARED_TOOL_IDS] },
         options: {},
         mode: "primary",
         native: true,
