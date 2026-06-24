@@ -41743,12 +41743,12 @@
           "prompt_profile": {
             "description": "Active prompt profile and optional project-defined profile overlays.",
             "default": {
-              "active": "frontend"
+              "active": "frontend-replica"
             },
             "type": "object",
             "properties": {
               "active": {
-                "default": "frontend",
+                "default": "frontend-replica",
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64,
