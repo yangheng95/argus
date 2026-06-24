@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test"
 import path from "node:path"
-import { isTreeWriterKnownEventType } from "../src/services/event-policy"
+import {
+  isBoardInvalidatingEventType,
+  isTreeWriterKnownEventType,
+  isTreeWriterPassThroughEventType,
+} from "../src/services/event-policy"
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 const { applyEvent, resetWriter } = await import("../src/services/tree-writer")
@@ -30,6 +34,18 @@ test("retired bogus event types remain unknown", () => {
   expect(isTreeWriterKnownEventType("interaction.created")).toBe(false)
   expect(isTreeWriterKnownEventType("acceptance.gate.rejected")).toBe(false)
   expect(isTreeWriterKnownEventType("acceptance.review.completed")).toBe(false)
+})
+
+test("agent coordination events are visible pass-through board invalidations", () => {
+  for (const type of [
+    "agent.coordination.requested",
+    "agent.coordination.responded",
+    "agent.coordination.cancelled",
+  ]) {
+    expect(isTreeWriterKnownEventType(type)).toBe(true)
+    expect(isTreeWriterPassThroughEventType(type)).toBe(true)
+    expect(isBoardInvalidatingEventType(type)).toBe(true)
+  }
 })
 
 test("declared non-card control events are explicit tree-writer no-ops", () => {
