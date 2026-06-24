@@ -582,6 +582,7 @@ export const InjectMessageInput = z.object({
 export const TaskMessageResult = z.object({
   kind: z.enum(["goal", "plan", "note"]),
   message: z.string(),
+  wake_status: z.enum(["started", "queued", "not_woken"]),
   should_resume: z.boolean(),
   /** The persisted user `Message` row + parts the server just wrote.
    *  Returned so the overlay can insert the real message into its store

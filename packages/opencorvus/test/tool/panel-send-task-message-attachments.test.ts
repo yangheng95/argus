@@ -55,6 +55,7 @@ describe("panel.send_task_message attachment forwarding", () => {
         const handleSpy = spyOn(EngineService, "handleTaskMessage").mockResolvedValue({
           kind: "note",
           message: "ok",
+          wake_status: "not_woken",
           should_resume: false,
           user_message: { info: { id: "msg" } as never, parts: [] },
         })
@@ -131,6 +132,7 @@ describe("panel.send_task_message attachment forwarding", () => {
         const handleSpy = spyOn(EngineService, "handleTaskMessage").mockResolvedValue({
           kind: "note",
           message: "never",
+          wake_status: "not_woken",
           should_resume: false,
           user_message: { info: { id: "msg" } as never, parts: [] },
         })

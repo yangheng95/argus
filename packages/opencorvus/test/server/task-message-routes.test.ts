@@ -322,7 +322,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "retry through message" })
@@ -454,7 +454,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "profile message" })
@@ -520,7 +520,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "empty task message" })
@@ -646,7 +646,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "resume envelope" })
@@ -1141,7 +1141,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "attachment message" })
@@ -1627,7 +1627,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         let resumeCalls = 0
         ExecutorRegistry.register("opencorvus", {
           capabilities: () => ({

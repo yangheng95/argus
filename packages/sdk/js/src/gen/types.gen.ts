@@ -13915,6 +13915,7 @@ export type TaskMessageResponses = {
   200: {
     kind: "goal" | "plan" | "note"
     message: string
+    wake_status: "started" | "queued" | "not_woken"
     should_resume: boolean
     user_message?: {
       info: unknown
