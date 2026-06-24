@@ -9,6 +9,10 @@ description: "HTTP API reference--auto-generated from the generated OpenAPI spec
 
 All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clients must use HTTP Basic Auth with username `OPENCORVUS_SERVER_USERNAME` or the default `opencorvus`, and password = `OPENCORVUS_SERVER_PASSWORD`.
 
+## Directory Scope
+
+OpenAPI marks project-scoped operations with a `directory` query parameter. These task record routes are keyed by `taskID` and do not require `directory`: `GET /task/{taskID}`, `/status`, `/board`, `/progress`, `/events`, `/brief`, `/transcript`, `/runs`, `/interactions`, `/bindings`, `/operator-model-context`, and task conversation read routes. Project lists, task creation, task writes, browser preview routes, and project archive downloads remain project-scoped.
+
 ## Endpoints
 
 ### Global

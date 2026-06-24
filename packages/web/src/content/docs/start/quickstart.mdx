@@ -34,6 +34,7 @@ bun run dev:overlay   # from repo root
 ```bash
 curl -X POST http://127.0.0.1:7878/task \
   -H "content-type: application/json" \
+  -H "x-opencorvus-directory: $PWD" \
   -d '{
     "request": "Add unit tests for src/foo.ts covering happy path and 2 error paths."
   }'
@@ -53,15 +54,15 @@ On failure, `replan.triggered` or `retry.triggered` fire, then execution resumes
 
 ## 5. Task endpoints
 
-| endpoint                  | purpose                  |
-| ------------------------- | ------------------------ |
-| `GET /tasks`              | list all tasks           |
-| `GET /task/<id>`          | task state               |
-| `GET /task/<id>/board`    | Kanban view              |
-| `POST /task/<id>/message` | append follow-up         |
-| `POST /task/<id>/retry`   | retry with same plan     |
-| `POST /task/<id>/replan`  | discard plan and re-plan |
-| `POST /task/<id>/cancel`  | cancel                   |
+| endpoint                  | purpose                  | directory |
+| ------------------------- | ------------------------ | --------- |
+| `GET /tasks`              | list project tasks       | required  |
+| `GET /task/<id>`          | task state               | not needed |
+| `GET /task/<id>/board`    | Kanban view              | not needed |
+| `POST /task/<id>/message` | append follow-up         | required  |
+| `POST /task/<id>/retry`   | retry with same plan     | required  |
+| `POST /task/<id>/replan`  | discard plan and re-plan | required  |
+| `POST /task/<id>/cancel`  | cancel                   | required  |
 
 ## 6. Via Slack
 

@@ -213,8 +213,7 @@ console.log(task.progress.percent)
 curl：
 
 ```bash
-curl "http://127.0.0.1:7878/task/task_.../status" \
-  -H "x-opencorvus-directory: D:\repo\my-project"
+curl "http://127.0.0.1:7878/task/task_.../status"
 ```
 
 你主要看这些字段：
@@ -478,7 +477,9 @@ await client.mission.delete({ missionID })
 
 ## 目录和认证
 
-所有项目作用域接口都要带项目目录。推荐在 SDK client 上统一传：
+项目作用域接口要带项目目录，例如 `GET /tasks`、`POST /task`、Task 写操作、browser preview 路由和 `GET /task/{taskID}/project-archive`。单个 Task 记录读取以 `taskID` 为主键，不需要目录，例如 `GET /task/{taskID}/status`、`GET /task/{taskID}/board`、`GET /task/{taskID}/events`。
+
+推荐在 SDK client 上统一传目录；SDK 只会给项目作用域请求追加 `directory` query：
 
 ```typescript
 const client = createOpenCorvusClient({
@@ -497,10 +498,10 @@ const client = createOpenCorvusClient({
 也可以用 query：
 
 ```text
-http://127.0.0.1:7878/task/task_.../status?directory=D:\repo\my-project
+http://127.0.0.1:7878/tasks?directory=D:\repo\my-project
 ```
 
-SDK 会把 `directory` 作为 query 参数加到项目作用域请求上；`x-opencorvus-directory` 是裸 HTTP 调用时可用的等价方式。
+`x-opencorvus-directory` 是裸 HTTP 调用时可用的等价方式。
 
 设置了 `OPENCORVUS_SERVER_PASSWORD` 时：
 
