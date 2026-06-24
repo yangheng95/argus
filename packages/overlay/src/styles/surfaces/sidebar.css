@@ -883,6 +883,7 @@
 }
 
 .project-group-head {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -891,12 +892,35 @@
 }
 
 .project-group-actions {
+  position: absolute;
+  inset-inline-end: calc(2px * var(--ui-scale));
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: calc(1px * var(--ui-scale));
-  padding-inline-end: calc(2px * var(--ui-scale));
   min-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--ui-duration-base),
+    visibility var(--ui-duration-base);
+}
+
+.project-group[data-project-actions="true"]:hover .project-group-actions,
+.project-group[data-project-actions="true"]:focus-within .project-group-actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.project-group[data-project-actions="true"]:hover .project-group-count,
+.project-group[data-project-actions="true"]:hover .project-group-chevron,
+.project-group[data-project-actions="true"]:focus-within .project-group-count,
+.project-group[data-project-actions="true"]:focus-within .project-group-chevron {
+  opacity: 0;
 }
 
 .project-group .oc-button[data-ui="project-group-toggle"] {
@@ -943,6 +967,13 @@
   min-height: calc(18px * var(--ui-scale));
   border-radius: calc(3px * var(--ui-scale));
   flex: 0 0 auto;
+}
+
+.project-group .oc-button[data-ui="project-group-copy"] > svg,
+.project-group .oc-button[data-ui="project-group-rename"] > svg,
+.project-group-delete-icon > svg {
+  width: calc(10px * var(--ui-scale));
+  height: calc(10px * var(--ui-scale));
 }
 
 .project-group .oc-button[data-ui="project-group-copy"]:hover,

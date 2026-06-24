@@ -105,9 +105,15 @@ export function ProjectLedgerGroup(props: ProjectLedgerGroupProps) {
   const canCopyProject = () => !!props.onCopyProject && !!props.directory.trim()
   const canRenameProject = () => !!props.onRenameProject && !!props.directory.trim()
   const canDeleteProject = () => !!props.onDeleteProject && !!props.directory.trim()
+  const hasProjectActions = () => canCopyProject() || canRenameProject() || canDeleteProject()
 
   return (
-    <section class={className()} data-ui={props.dataUi} data-collapsed={props.collapsed ? "true" : undefined}>
+    <section
+      class={className()}
+      data-ui={props.dataUi}
+      data-collapsed={props.collapsed ? "true" : undefined}
+      data-project-actions={hasProjectActions() ? "true" : undefined}
+    >
       <div class="project-group-head">
         <Button
           type="button"
