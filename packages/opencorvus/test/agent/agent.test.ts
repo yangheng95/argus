@@ -3,6 +3,7 @@ import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
+import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { Config } from "../../src/config/config"
 import { PermissionNext } from "../../src/permission/next"
 import { SystemPrompt } from "../../src/session/system"
@@ -28,6 +29,10 @@ afterEach(async () => {
 function evalPerm(agent: Agent.Info | undefined, permission: string): PermissionNext.Action | undefined {
   if (!agent) return undefined
   return PermissionNext.evaluate(permission, "*", agent.permission).action
+}
+
+function visibleToolIDs(agent: Agent.Info | undefined): Set<string> {
+  return AgentToolPool.visibleToolIDs(agent?.tools)
 }
 
 test("returns default native agents when no config", async () => {
@@ -80,9 +85,10 @@ test("build agent has correct default properties", async () => {
       expect(evalPerm(build, "skill")).toBe("allow")
       expect(evalPerm(build, "todoread")).toBe("allow")
       expect(evalPerm(build, "todowrite")).toBe("allow")
-      expect(build?.tools?.exclude).not.toContain("skill")
-      expect(build?.tools?.exclude).toContain("web_clone_prepare_context")
-      expect(build?.tools?.exclude).toContain("web_clone_generate_source_project")
+      const visible = visibleToolIDs(build)
+      expect(visible.has("skill")).toBe(true)
+      expect(visible.has("web_clone_prepare_context")).toBe(false)
+      expect(visible.has("web_clone_generate_source_project")).toBe(false)
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, build)
       const ids = new Set(tools.map((tool) => tool.id))
@@ -116,16 +122,17 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(evalPerm(visualQa, "browser_preview_compare_regions")).toBe("allow")
       expect(evalPerm(visualQa, "browser_preview_compare_scroll_slices")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
-      expect(visualQa?.tools?.include).toEqual([...VISUAL_QA_STATIC_TOOL_IDS])
-      expect(visualQa?.tools?.include).not.toContain("webpage_extract")
-      expect(visualQa?.tools?.include).toContain("browser_preview")
-      expect(visualQa?.tools?.include).toContain("browser_preview_bind_local_module")
-      expect(visualQa?.tools?.include).toContain("browser_preview_compare_regions")
-      expect(visualQa?.tools?.include).toContain("browser_preview_compare_scroll_slices")
-      expect(visualQa?.tools?.include).not.toContain("webpage_render")
-      expect(visualQa?.tools?.include).not.toContain("webpage_evaluate")
-      expect(visualQa?.tools?.include).not.toContain("webpage_vision_judge")
-      expect(visualQa?.tools?.include).toContain("skill")
+      const visible = visibleToolIDs(visualQa)
+      expect([...visible].sort()).toEqual([...VISUAL_QA_STATIC_TOOL_IDS].sort())
+      expect(visible.has("webpage_extract")).toBe(false)
+      expect(visible.has("browser_preview")).toBe(true)
+      expect(visible.has("browser_preview_bind_local_module")).toBe(true)
+      expect(visible.has("browser_preview_compare_regions")).toBe(true)
+      expect(visible.has("browser_preview_compare_scroll_slices")).toBe(true)
+      expect(visible.has("webpage_render")).toBe(false)
+      expect(visible.has("webpage_evaluate")).toBe(false)
+      expect(visible.has("webpage_vision_judge")).toBe(false)
+      expect(visible.has("skill")).toBe(true)
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
       const ids = new Set(tools.map((tool) => tool.id))
@@ -206,7 +213,7 @@ test("right sidebar coding assistant is a hidden full-function primary agent", a
       expect(evalPerm(agent, "skill")).toBe("allow")
       expect(evalPerm(agent, "todoread")).toBe("allow")
       expect(evalPerm(agent, "todowrite")).toBe("allow")
-      expect(agent?.tools?.exclude).not.toContain("panel")
+      expect(visibleToolIDs(agent).has("panel")).toBe(true)
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent!)
       const ids = new Set(tools.map((tool) => tool.id))
@@ -245,15 +252,16 @@ test("explore agent limits exposed tools without permission denials", async () =
       const explore = await Agent.get("explore")
       expect(explore).toBeDefined()
       expect(explore?.mode).toBe("subagent")
-      expect(explore?.tools?.include).not.toContain("edit")
-      expect(explore?.tools?.include).not.toContain("write")
+      const visible = visibleToolIDs(explore)
+      expect(visible.has("edit")).toBe(false)
+      expect(visible.has("write")).toBe(false)
       expect(evalPerm(explore, "edit")).toBe("allow")
       expect(evalPerm(explore, "write")).toBe("allow")
       // BUG① regression: explore is a research subagent — webfetch alone
       // (fetch a known URL, bot-blocked on search/scholar) is not enough; it
       // must also resolve `websearch`.
-      expect(explore?.tools?.include).toContain("websearch")
-      expect(explore?.tools?.include).toContain("webfetch")
+      expect(visible.has("websearch")).toBe(true)
+      expect(visible.has("webfetch")).toBe(true)
       const exploreTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, explore)
       expect(exploreTools.map((t) => t.id)).toContain("websearch")
     },
@@ -290,9 +298,10 @@ test("general agent exposes subtask dispatch without allowing self-recursion", a
       expect(general?.hidden).toBeUndefined()
       expect(general?.prompt).toBeDefined()
       expect(general?.prompt).toContain("You are")
-      expect(general?.tools?.exclude).not.toContain("task")
-      expect(general?.tools?.exclude).toContain("todoread")
-      expect(general?.tools?.exclude).toContain("todowrite")
+      const visible = visibleToolIDs(general)
+      expect(visible.has("task")).toBe(true)
+      expect(visible.has("todoread")).toBe(false)
+      expect(visible.has("todowrite")).toBe(false)
       expect(PermissionNext.evaluate("task", "explore", general!.permission).action).toBe("allow")
       expect(PermissionNext.evaluate("task", "general", general!.permission).action).toBe("deny")
       expect(evalPerm(general, "todoread")).toBe("allow")
@@ -311,20 +320,21 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
     fn: async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
-      expect(orchestrator?.tools?.include).toContain("steer_subagent")
-      expect(orchestrator?.tools?.include).toContain("cancel_subagent")
-      expect(orchestrator?.tools?.include).toContain("propose_task")
-      expect(orchestrator?.tools?.include).toContain("add_goal")
-      expect(orchestrator?.tools?.include).toContain("select_expert_squad")
-      expect(orchestrator?.tools?.include).toContain("browser_preview")
-      expect(orchestrator?.tools?.include).not.toContain("browser_preview_bind_local_module")
-      expect(orchestrator?.tools?.include).not.toContain("browser_preview_compare_regions")
-      expect(orchestrator?.tools?.include).toContain("wait")
-      expect(orchestrator?.tools?.include).not.toContain("panel")
-      expect(orchestrator?.tools?.include).not.toContain("task")
-      expect(orchestrator?.tools?.include).toContain("skill")
-      expect(orchestrator?.tools?.include).not.toContain("task_report")
-      expect(orchestrator?.tools?.include).not.toContain("memory")
+      const visible = visibleToolIDs(orchestrator)
+      expect(visible.has("steer_subagent")).toBe(true)
+      expect(visible.has("cancel_subagent")).toBe(true)
+      expect(visible.has("propose_task")).toBe(true)
+      expect(visible.has("add_goal")).toBe(true)
+      expect(visible.has("select_expert_squad")).toBe(true)
+      expect(visible.has("browser_preview")).toBe(true)
+      expect(visible.has("browser_preview_bind_local_module")).toBe(false)
+      expect(visible.has("browser_preview_compare_regions")).toBe(false)
+      expect(visible.has("wait")).toBe(true)
+      expect(visible.has("panel")).toBe(false)
+      expect(visible.has("task")).toBe(false)
+      expect(visible.has("skill")).toBe(true)
+      expect(visible.has("task_report")).toBe(false)
+      expect(visible.has("memory")).toBe(false)
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, orchestrator)
       expect(tools.map((tool) => tool.id)).not.toContain("panel")
@@ -423,8 +433,8 @@ mounted_agents:
       const requirements = await Agent.get("requirements")
       expect(requirements).toBeDefined()
 
-      expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read_file"] })).toBeUndefined()
-      expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read_file", "skill"] })).toContain(
+      expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read"] })).toBeUndefined()
+      expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read", "skill"] })).toContain(
         "tool-skill",
       )
     },
@@ -456,7 +466,7 @@ mounted_agents:
       for (const name of ["frontend-design", "frontend-research"] as const) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
-        expect(agent?.tools?.include).toContain("skill")
+        expect(visibleToolIDs(agent).has("skill")).toBe(true)
         expect(await SystemPrompt.skills(agent!, { availableToolNames: ["skill"] })).toContain("frontend-skill")
 
         const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent!)
@@ -495,10 +505,10 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
     directory: tmp.path,
     fn: async () => {
       const baseReadonly = [
-        "read_file",
-        "find_files",
+        "read",
+        "glob",
         "search_code",
-        "list_directory",
+        "list",
         "memory_search",
         "memory_get",
         "skill",
@@ -528,10 +538,11 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       for (const name of webResearchStageAgents) {
         const agent = await Agent.get(name)
         expect(agent).toBeDefined()
-        expect(agent?.tools?.include?.sort()).toEqual([...allowedWebResearch].sort())
-        expect(agent?.tools?.include).toContain("websearch")
+        const visible = visibleToolIDs(agent)
+        expect([...visible].sort()).toEqual([...allowedWebResearch].sort())
+        expect(visible.has("websearch")).toBe(true)
         for (const tool of forbidden) {
-          expect(agent?.tools?.include).not.toContain(tool)
+          expect(visible.has(tool)).toBe(false)
         }
       }
 
@@ -540,56 +551,60 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       // anti-pattern (2026-05-19). websearch is forbidden here.
       const intent = await Agent.get("intent-analysis")
       expect(intent).toBeDefined()
-      expect(intent?.tools?.include?.sort()).toEqual([...baseReadonly].sort())
+      const intentVisible = visibleToolIDs(intent)
+      expect([...intentVisible].sort()).toEqual([...baseReadonly].sort())
       for (const tool of [...forbidden, "websearch"]) {
-        expect(intent?.tools?.include).not.toContain(tool)
+        expect(intentVisible.has(tool)).toBe(false)
       }
 
       // frontend-design owns webpage evidence extraction (URL/Figma/pixels); generic
       // websearch is redundant with that chain and risks score loops.
       const design = await Agent.get("frontend-design")
-      expect(design?.tools?.include).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS])
-      expect(design?.tools?.include).toContain("url_screenshot")
-      expect(design?.tools?.include).not.toContain("webpage_render")
-      expect(design?.tools?.include).not.toContain("webpage_evaluate")
-      expect(design?.tools?.include).not.toContain("webpage_vision_judge")
-      expect(design?.tools?.include).toContain("skill")
-      expect(design?.tools?.include).not.toContain("websearch")
-      expect(design?.tools?.include).not.toContain("task")
+      const designVisible = visibleToolIDs(design)
+      expect([...designVisible].sort()).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS].sort())
+      expect(designVisible.has("url_screenshot")).toBe(true)
+      expect(designVisible.has("webpage_render")).toBe(false)
+      expect(designVisible.has("webpage_evaluate")).toBe(false)
+      expect(designVisible.has("webpage_vision_judge")).toBe(false)
+      expect(designVisible.has("skill")).toBe(true)
+      expect(designVisible.has("websearch")).toBe(false)
+      expect(designVisible.has("task")).toBe(false)
 
       const visualQa = await Agent.get("visual-qa")
       expect(visualQa).toBeDefined()
-      expect(visualQa?.tools?.include).toEqual([...VISUAL_QA_STATIC_TOOL_IDS])
-      expect(visualQa?.tools?.include).toContain("skill")
-      expect(visualQa?.tools?.include).toContain("browser_preview")
-      expect(visualQa?.tools?.include).toContain("browser_preview_bind_local_module")
-      expect(visualQa?.tools?.include).toContain("browser_preview_compare_regions")
-      expect(visualQa?.tools?.include).toContain("bash")
-      expect(visualQa?.tools?.include).not.toContain("webpage_render")
-      expect(visualQa?.tools?.include).not.toContain("webpage_evaluate")
-      expect(visualQa?.tools?.include).not.toContain("webpage_vision_judge")
-      expect(visualQa?.tools?.include).not.toContain("webpage_extract")
-      expect(visualQa?.tools?.include).not.toContain("webpage_analyze")
-      expect(visualQa?.tools?.include).not.toContain("websearch")
-      expect(visualQa?.tools?.include).not.toContain("task")
+      const visualVisible = visibleToolIDs(visualQa)
+      expect([...visualVisible].sort()).toEqual([...VISUAL_QA_STATIC_TOOL_IDS].sort())
+      expect(visualVisible.has("skill")).toBe(true)
+      expect(visualVisible.has("browser_preview")).toBe(true)
+      expect(visualVisible.has("browser_preview_bind_local_module")).toBe(true)
+      expect(visualVisible.has("browser_preview_compare_regions")).toBe(true)
+      expect(visualVisible.has("bash")).toBe(true)
+      expect(visualVisible.has("webpage_render")).toBe(false)
+      expect(visualVisible.has("webpage_evaluate")).toBe(false)
+      expect(visualVisible.has("webpage_vision_judge")).toBe(false)
+      expect(visualVisible.has("webpage_extract")).toBe(false)
+      expect(visualVisible.has("webpage_analyze")).toBe(false)
+      expect(visualVisible.has("websearch")).toBe(false)
+      expect(visualVisible.has("task")).toBe(false)
 
       const deepResearch = await Agent.get("deep-research")
       expect(deepResearch).toBeDefined()
-      expect(deepResearch?.tools?.include?.sort()).toEqual(
+      const deepVisible = visibleToolIDs(deepResearch)
+      expect([...deepVisible].sort()).toEqual(
         [
           "external_code_search",
-          "find_files",
-          "list_directory",
+          "glob",
+          "list",
           "memory_get",
           "memory_search",
-          "read_file",
+          "read",
           "search_code",
           "todoread",
           "todowrite",
           "webfetch",
         ].sort(),
       )
-      expect(deepResearch?.tools?.include).not.toContain("websearch")
+      expect(deepVisible.has("websearch")).toBe(false)
       for (const tool of [
         "bash",
         "edit",
@@ -602,23 +617,24 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "propose_task",
         "skill",
       ]) {
-        expect(deepResearch?.tools?.include).not.toContain(tool)
+        expect(deepVisible.has(tool)).toBe(false)
       }
 
       const frontendResearch = await Agent.get("frontend-research")
       expect(frontendResearch).toBeDefined()
-      expect(frontendResearch?.tools?.include).toEqual(["skill"])
-      expect(frontendResearch?.tools?.include).toContain("skill")
-      expect(frontendResearch?.tools?.include).not.toContain("websearch")
-      expect(frontendResearch?.tools?.include).not.toContain("webfetch")
-      expect(frontendResearch?.tools?.include).not.toContain("read_file")
-      expect(frontendResearch?.tools?.include).not.toContain("search_code")
-      expect(frontendResearch?.tools?.include).not.toContain("task")
-      expect(frontendResearch?.tools?.include).not.toContain("build")
+      const researchVisible = visibleToolIDs(frontendResearch)
+      expect([...researchVisible]).toEqual(["skill"])
+      expect(researchVisible.has("skill")).toBe(true)
+      expect(researchVisible.has("websearch")).toBe(false)
+      expect(researchVisible.has("webfetch")).toBe(false)
+      expect(researchVisible.has("read")).toBe(false)
+      expect(researchVisible.has("search_code")).toBe(false)
+      expect(researchVisible.has("task")).toBe(false)
+      expect(researchVisible.has("build")).toBe(false)
 
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
-      expect(integrity?.tools?.include).toEqual([...INTEGRITY_DECLARED_TOOL_IDS])
+      expect([...visibleToolIDs(integrity)].sort()).toEqual([...INTEGRITY_DECLARED_TOOL_IDS].sort())
       expect(await Agent.get("acceptance")).toBeUndefined()
     },
   })
@@ -629,7 +645,7 @@ test("deep-research agent tool config cannot reopen executor surfaces", async ()
     config: {
       agent: {
         "deep-research": {
-          tools: { include: ["bash"] },
+          tools: { global: ["bash"] },
         },
       },
     },
@@ -660,7 +676,7 @@ test("fixed evidence agents cannot be disabled or tool-overridden", async () => 
   await using factCheckTmp = await tmpdir({
     config: {
       agent: {
-        "fact-check": { tools: { include: ["bash"] } },
+        "fact-check": { tools: { global: ["bash"] } },
       },
     },
   })
@@ -674,7 +690,7 @@ test("fixed evidence agents cannot be disabled or tool-overridden", async () => 
   await using frontendResearchTmp = await tmpdir({
     config: {
       agent: {
-        "frontend-research": { tools: { include: ["bash"] } },
+        "frontend-research": { tools: { global: ["bash"] } },
       },
     },
   })
@@ -695,7 +711,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
     fn: async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
-      const include = orchestrator?.tools?.include ?? []
+      const visible = visibleToolIDs(orchestrator)
       for (const tool of [
         "propose_task",
         "fail_task",
@@ -710,28 +726,28 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         "wait",
         "skill",
       ]) {
-        expect(include).toContain(tool)
+        expect(visible.has(tool)).toBe(true)
       }
-      expect(include).toContain("integrity")
-      expect(include).toContain("browser_preview")
-      expect(include).toContain("deep_research")
-      expect(include).not.toContain("research")
-      expect(include).toContain("frontend_research")
-      expect(include).not.toContain("deliver")
-      expect(include).not.toContain("publish_acceptance")
+      expect(visible.has("integrity")).toBe(true)
+      expect(visible.has("browser_preview")).toBe(true)
+      expect(visible.has("deep_research")).toBe(true)
+      expect(visible.has("research")).toBe(false)
+      expect(visible.has("frontend_research")).toBe(true)
+      expect(visible.has("deliver")).toBe(false)
+      expect(visible.has("publish_acceptance")).toBe(false)
       expect(orchestrator?.prompt).toContain("propose_task")
     },
   })
 })
 
-test("orchestrator include list covers every self-built orchestrator tool", async () => {
+test("orchestrator tool pool covers every self-built orchestrator tool", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
-      const include = new Set(orchestrator?.tools?.include ?? [])
+      const visible = visibleToolIDs(orchestrator)
       const { tools } = createOrchestratorTools({
         taskID: "tsk_orchestrator_tool_surface_audit",
         agentSessionID: "ses_orchestrator_tool_surface_audit",
@@ -741,7 +757,7 @@ test("orchestrator include list covers every self-built orchestrator tool", asyn
       expect(Object.keys(tools)).not.toContain("browser_preview_compare_regions")
 
       for (const toolName of Object.keys(tools)) {
-        expect(include.has(toolName), `${toolName} is implemented but hidden from the orchestrator agent`).toBe(true)
+        expect(visible.has(toolName), `${toolName} is implemented but hidden from the orchestrator agent`).toBe(true)
       }
     },
   })
@@ -780,7 +796,7 @@ test("compaction agent exposes no tools while permissions default to allow", asy
       const compaction = await Agent.get("compaction")
       expect(compaction).toBeDefined()
       expect(compaction?.hidden).toBe(true)
-      expect(compaction?.tools).toEqual({ include: [] })
+      expect(compaction?.tools).toEqual({ global: [], private: [] })
       expect(evalPerm(compaction, "bash")).toBe("allow")
       expect(evalPerm(compaction, "edit")).toBe("allow")
       expect(evalPerm(compaction, "read")).toBe("allow")
@@ -796,23 +812,23 @@ test("integrity agent exposes the shared preview repair registry tools", async (
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
       expect(integrity?.hidden).toBe(true)
-      expect(integrity?.tools).toEqual({ include: [...INTEGRITY_DECLARED_TOOL_IDS] })
-      expect(integrity?.tools?.include).toContain("skill")
-      expect(integrity?.tools?.include).toEqual(expect.arrayContaining([...INTEGRITY_PREVIEW_TOOL_IDS, "skill"]))
+      expect([...visibleToolIDs(integrity)].sort()).toEqual([...INTEGRITY_DECLARED_TOOL_IDS].sort())
+      expect(visibleToolIDs(integrity).has("skill")).toBe(true)
+      expect([...visibleToolIDs(integrity)]).toEqual(expect.arrayContaining([...INTEGRITY_PREVIEW_TOOL_IDS, "skill"]))
     },
   })
 })
 
-test("orchestrator include list excludes dead tool references", async () => {
+test("orchestrator tool pool excludes dead tool references", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
-      // Dead tool names in the include list mislead readers and prompt drafts
+      // Dead tool names in the pool contract mislead readers and prompt drafts
       // into thinking the orchestrator can call tools that are not mounted.
-      expect(orchestrator?.tools?.include).not.toContain("retired_metric_probe")
+      expect(visibleToolIDs(orchestrator).has("retired_metric_probe")).toBe(false)
     },
   })
 })
@@ -1158,21 +1174,22 @@ test("frontend-design advertises url_screenshot and omits webfetch", async () =>
     directory: tmp.path,
     fn: async () => {
       const frontendDesign = await Agent.get("frontend-design")
-      expect(frontendDesign?.tools?.include).toContain("url_screenshot")
-      expect(frontendDesign?.tools?.include).toContain("bash")
-      expect(frontendDesign?.tools?.include).toContain("edit")
-      expect(frontendDesign?.tools?.include).toContain("write")
-      expect(frontendDesign?.tools?.include).toContain("apply_patch")
-      expect(frontendDesign?.tools?.include).toContain("create_frontend_skeleton_project")
-      expect(frontendDesign?.tools?.include).toContain("record_frontend_region_selection")
-      expect(frontendDesign?.tools?.include).toContain("record_frontend_replacement_result")
-      expect(frontendDesign?.tools?.include).toContain("web_clone_source_audit")
-      expect(frontendDesign?.tools?.include).not.toContain("webpage_render")
-      expect(frontendDesign?.tools?.include).not.toContain("webpage_evaluate")
-      expect(frontendDesign?.tools?.include).not.toContain("webpage_vision_judge")
-      expect(frontendDesign?.tools?.include).not.toContain("webfetch")
-      expect(frontendDesign?.tools?.include).not.toContain("todoread")
-      expect(frontendDesign?.tools?.include).not.toContain("todowrite")
+      const visible = visibleToolIDs(frontendDesign)
+      expect(visible.has("url_screenshot")).toBe(true)
+      expect(visible.has("bash")).toBe(true)
+      expect(visible.has("edit")).toBe(true)
+      expect(visible.has("write")).toBe(true)
+      expect(visible.has("apply_patch")).toBe(true)
+      expect(visible.has("create_frontend_skeleton_project")).toBe(true)
+      expect(visible.has("record_frontend_region_selection")).toBe(true)
+      expect(visible.has("record_frontend_replacement_result")).toBe(true)
+      expect(visible.has("web_clone_source_audit")).toBe(true)
+      expect(visible.has("webpage_render")).toBe(false)
+      expect(visible.has("webpage_evaluate")).toBe(false)
+      expect(visible.has("webpage_vision_judge")).toBe(false)
+      expect(visible.has("webfetch")).toBe(false)
+      expect(visible.has("todoread")).toBe(false)
+      expect(visible.has("todowrite")).toBe(false)
 
       const { createUrlScreenshotTool } = await import("../../src/frontend-design/url-screenshot-tool")
       expect(Object.keys(createUrlScreenshotTool())).toEqual(["url_screenshot"])
@@ -1187,8 +1204,8 @@ test("frontend-design statically declares webpage evidence and source refinement
     fn: async () => {
       const frontendDesign = await Agent.get("frontend-design")
       expect(frontendDesign).toBeDefined()
-      expect(frontendDesign?.tools?.include).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS])
-      const designToolIds = new Set(frontendDesign?.tools?.include ?? [])
+      const designToolIds = visibleToolIDs(frontendDesign)
+      expect([...designToolIds].sort()).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS].sort())
       for (const id of WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
       }
@@ -1212,7 +1229,7 @@ test("frontend-design rejects config-defined dynamic tool surface", async () => 
     config: {
       agent: {
         "frontend-design": {
-          tools: { include: ["read_file"] },
+          tools: { global: ["read"] },
         },
       },
     },
@@ -1231,7 +1248,7 @@ test("visual-qa rejects config-defined dynamic tool surface", async () => {
     config: {
       agent: {
         "visual-qa": {
-          tools: { include: ["read_file"] },
+          tools: { global: ["read"] },
         },
       },
     },

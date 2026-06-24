@@ -23,13 +23,13 @@ import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
 import DEEP_RESEARCH_CORE from "@/prompt/core/deep-research-core.txt"
 import FRONTEND_RESEARCH_CORE from "@/prompt/core/frontend-research-core.txt"
 import GOAL_WORKLOAD_ANALYST_CORE from "@/prompt/core/goal-workload-analyst-core.txt"
-import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "@/frontend-design/static-tools"
 import PROMPT_CODING from "./prompt/coding.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { AgentRoleContract, type AgentRoleID } from "./role-contract"
+import { AgentToolPool } from "./tool-pool-contract"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { entries, values as objectValues } from "@/util/object"
@@ -38,8 +38,6 @@ import {
   WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS,
   WEBPAGE_EVIDENCE_RETIRED_VISUAL_TOOL_IDS,
 } from "@/frontend-design/tools/ids"
-import { VISUAL_QA_STATIC_TOOL_IDS } from "@/visual-qa/static-tools"
-import { INTEGRITY_DECLARED_TOOL_IDS } from "@/integrity/static-tools"
 
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
@@ -88,9 +86,10 @@ export namespace Agent {
       steps: z.number().int().positive().optional(),
       tools: z
         .object({
-          include: z.array(z.string()).optional(),
-          exclude: z.array(z.string()).optional(),
+          global: z.array(z.string()).optional(),
+          private: z.array(z.string()).optional(),
         })
+        .strict()
         .optional(),
     })
     .meta({
@@ -101,7 +100,7 @@ export namespace Agent {
   async function buildState(cfg: Config.Info): Promise<Record<string, Info>> {
     // Debug-default permission policy: tools are accepted unless an operator
     // supplies an explicit `deny` or `ask` rule in config. Tool availability is
-    // still controlled separately by each agent's include/exclude list.
+    // controlled separately by the canonical AgentToolPool contract.
     const defaults = PermissionNext.fromConfig({
       "*": "allow",
       invalid: "allow",
@@ -152,7 +151,7 @@ export namespace Agent {
       coding: {
         name: "coding",
         description: AgentRoleContract.description("coding"),
-        tools: { exclude: ["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS] },
+        tools: AgentToolPool.assignment("coding"),
         options: {},
         prompt: PROMPT_CODING,
         permission: nonDesignPermissions(
@@ -168,7 +167,7 @@ export namespace Agent {
         name: "coding-assistant",
         description:
           "Right-sidebar coding assistant session. Uses the project conversation panel and executes tools based on configured permissions.",
-        tools: { exclude: ["task_report", "analytics", ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS] },
+        tools: AgentToolPool.assignment("coding-assistant"),
         options: {},
         prompt: PROMPT_CODING,
         permission: nonDesignPermissions(
@@ -185,17 +184,7 @@ export namespace Agent {
       build: {
         name: "build",
         description: AgentRoleContract.description("build"),
-        tools: {
-          exclude: [
-            "panel",
-            "task_report",
-            "analytics",
-            "web_clone_prepare_context",
-            "web_clone_generate_source_project",
-            "browser_preview_compare_scroll_slices",
-            ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS,
-          ],
-        },
+        tools: AgentToolPool.assignment("build"),
         options: {},
         prompt: BUILD_CORE,
         permission: nonDesignPermissions(
@@ -211,7 +200,7 @@ export namespace Agent {
       "visual-qa": {
         name: "visual-qa",
         description: AgentRoleContract.description("visual-qa"),
-        tools: { include: [...VISUAL_QA_STATIC_TOOL_IDS] },
+        tools: AgentToolPool.assignment("visual-qa"),
         options: {},
         prompt: VISUAL_QA_CORE,
         permission: visualQaPermissions(
@@ -231,17 +220,7 @@ export namespace Agent {
       general: {
         name: "general",
         description: AgentRoleContract.description("general"),
-        tools: {
-          exclude: [
-            "planner",
-            "panel",
-            "task_report",
-            "analytics",
-            "todoread",
-            "todowrite",
-            ...WEBPAGE_EVIDENCE_BLOCKED_TOOL_IDS,
-          ],
-        },
+        tools: AgentToolPool.assignment("general"),
         prompt: PROMPT_GENERAL,
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
@@ -258,19 +237,7 @@ export namespace Agent {
         name: "explore",
         permission: nonDesignPermissions(),
         description: AgentRoleContract.description("explore"),
-        tools: {
-          include: [
-            "read",
-            "glob",
-            "search_code",
-            "external_code_search",
-            "lsp",
-            "webfetch",
-            "websearch",
-            "panel",
-            "memory",
-          ],
-        },
+        tools: AgentToolPool.assignment("explore"),
         prompt: PROMPT_EXPLORE,
         options: {},
         mode: "subagent",
@@ -279,7 +246,7 @@ export namespace Agent {
       compaction: {
         name: "compaction",
         description: AgentRoleContract.description("compaction"),
-        tools: { include: [] as string[] },
+        tools: AgentToolPool.assignment("compaction"),
         mode: "primary",
         native: true,
         hidden: true,
@@ -290,7 +257,7 @@ export namespace Agent {
       title: {
         name: "title",
         description: AgentRoleContract.description("title"),
-        tools: { include: [] as string[] },
+        tools: AgentToolPool.assignment("title"),
         mode: "primary",
         options: {},
         native: true,
@@ -313,7 +280,7 @@ export namespace Agent {
       summary: {
         name: "summary",
         description: AgentRoleContract.description("summary"),
-        tools: { include: [] as string[] },
+        tools: AgentToolPool.assignment("summary"),
         mode: "primary",
         options: {},
         native: true,
@@ -322,7 +289,7 @@ export namespace Agent {
       control: {
         name: "control",
         description: AgentRoleContract.description("control"),
-        tools: { include: ["panel"] },
+        tools: AgentToolPool.assignment("control"),
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
             panel: "allow",
@@ -364,26 +331,7 @@ export namespace Agent {
         // reply_interaction / reject_interaction. Mission cannot
         // replan/update_goal/delete_goal or manage sessions through panel —
         // those belong to the orchestrator and the desktop panel_ui.
-        tools: {
-          include: [
-            "read",
-            "glob",
-            "search_code",
-            // `lsp` is experimental (flag-gated in the tool registry); it
-            // resolves only when OPENCORVUS_EXPERIMENTAL_LSP_TOOL is on, same
-            // as the explore agent. Directory listing is covered by `glob`.
-            "lsp",
-            "webfetch",
-            "websearch",
-            "mission_state",
-            "panel",
-            "memory",
-            "wait",
-            "todoread",
-            "todowrite",
-            "question",
-          ],
-        },
+        tools: AgentToolPool.assignment("mission"),
         permission: nonDesignPermissions(
           PermissionNext.fromConfig({
             read: "allow",
@@ -447,49 +395,7 @@ export namespace Agent {
         //   - sub-agent dispatch via the generic `task` tool — orchestrator uses
         //     the explicit `build` / `requirements` / etc. tools instead
         //   - control-plane `panel` — the gateway surface owns that boundary
-        tools: {
-          include: [
-            // dispatch
-            "build",
-            "select_expert_squad",
-            "requirements",
-            "deep_research",
-            "frontend_research",
-            "frontend_design",
-            "visual_qa",
-            "architect",
-            "workload_analysis",
-            "integrity",
-            "fact_check",
-            "propose_task",
-            "analyze_intent",
-            "explore",
-            "add_goal",
-            "modify_goal",
-            "refine",
-            "restart_from_stage",
-            "fail_task",
-            "cancel_task",
-            "retry_task",
-            "inject_operator_message",
-            "steer_subagent",
-            "cancel_subagent",
-            // observation (read-only views of task state)
-            "query_failed_goals",
-            "read_context",
-            "goal_report",
-            "analytics",
-            "browser_preview",
-            "bash",
-            "wait",
-            "skill",
-            // user interaction
-            "question",
-            // own bookkeeping
-            "todowrite",
-            "todoread",
-          ],
-        },
+        tools: AgentToolPool.assignment("orchestrator"),
         options: {},
         mode: "primary",
         native: true,
@@ -504,20 +410,7 @@ export namespace Agent {
         // todoread/todowrite expose the per-session private scratchpad so the
         // LLM can plan + check off steps; rule 23 says we don't infer plans
         // from internal state, the agent maintains its own.
-        tools: {
-          include: [
-            "read_file",
-            "find_files",
-            "search_code",
-            "list_directory",
-            "memory_search",
-            "memory_get",
-            "websearch",
-            "skill",
-            "todoread",
-            "todowrite",
-          ],
-        },
+        tools: AgentToolPool.assignment("requirements"),
         options: {},
         mode: "primary",
         native: true,
@@ -527,20 +420,7 @@ export namespace Agent {
         name: "architect",
         description: AgentRoleContract.description("architect"),
         prompt: ARCHITECT_CORE,
-        tools: {
-          include: [
-            "read_file",
-            "find_files",
-            "search_code",
-            "list_directory",
-            "memory_search",
-            "memory_get",
-            "websearch",
-            "skill",
-            "todoread",
-            "todowrite",
-          ],
-        },
+        tools: AgentToolPool.assignment("architect"),
         steps: 1000,
         options: {},
         mode: "primary",
@@ -557,9 +437,7 @@ export namespace Agent {
         // Webpage rawproject work makes frontend-design the owner of the
         // maintainable source project before Build handoff, so it also needs
         // file-edit, command, source-audit, and visual verification tools.
-        tools: {
-          include: [...FRONTEND_DESIGN_STATIC_TOOL_IDS],
-        },
+        tools: AgentToolPool.assignment("frontend-design"),
         options: {},
         mode: "primary",
         native: true,
@@ -569,19 +447,7 @@ export namespace Agent {
         name: "intent-analysis",
         description: AgentRoleContract.description("intent-analysis"),
         prompt: INTENT_ANALYSIS_CORE,
-        tools: {
-          include: [
-            "read_file",
-            "find_files",
-            "search_code",
-            "list_directory",
-            "memory_search",
-            "memory_get",
-            "skill",
-            "todoread",
-            "todowrite",
-          ],
-        },
+        tools: AgentToolPool.assignment("intent-analysis"),
         options: {},
         mode: "primary",
         native: true,
@@ -595,7 +461,7 @@ export namespace Agent {
         // Verdict and acceptance tools are injected per run; the declared surface
         // keeps preview repair tools plus the canonical skill tool so integrity
         // sessions share the same mounted-skill contract as other specialists.
-        tools: { include: [...INTEGRITY_DECLARED_TOOL_IDS] },
+        tools: AgentToolPool.assignment("integrity"),
         options: {},
         mode: "primary",
         native: true,
@@ -608,21 +474,7 @@ export namespace Agent {
         // Read-only retrieval surface. No edit/write/bash/git/merge_back —
         // fact-check verifies claims; it cannot mutate code or messages
         // (rule 15 single-channel). memory is search/get only (rule 5/6).
-        tools: {
-          include: [
-            "read_file",
-            "find_files",
-            "search_code",
-            "list_directory",
-            "websearch",
-            "webfetch",
-            "external_code_search",
-            "memory_search",
-            "memory_get",
-            "todoread",
-            "todowrite",
-          ],
-        },
+        tools: AgentToolPool.assignment("fact-check"),
         options: {},
         mode: "primary",
         native: true,
@@ -632,20 +484,7 @@ export namespace Agent {
         name: "deep-research",
         description: AgentRoleContract.description("deep-research"),
         prompt: DEEP_RESEARCH_CORE,
-        tools: {
-          include: [
-            "read_file",
-            "find_files",
-            "search_code",
-            "list_directory",
-            "memory_search",
-            "memory_get",
-            "webfetch",
-            "external_code_search",
-            "todoread",
-            "todowrite",
-          ],
-        },
+        tools: AgentToolPool.assignment("deep-research"),
         steps: 1000,
         options: {},
         mode: "primary",
@@ -656,9 +495,7 @@ export namespace Agent {
         name: "frontend-research",
         description: AgentRoleContract.description("frontend-research"),
         prompt: FRONTEND_RESEARCH_CORE,
-        tools: {
-          include: ["skill"],
-        },
+        tools: AgentToolPool.assignment("frontend-research"),
         steps: 1000,
         options: {},
         mode: "primary",
@@ -672,19 +509,8 @@ export namespace Agent {
         // Read-only goal-sizing reviewer + execution-inventory producer. Same
         // read-only surface as architect; no write/edit/bash — no implementation
         // pressure by construction (spec §0). Structured-output tools come from
-        // createGoalWorkloadOutputTools() and bypass this include filter.
-        tools: {
-          include: [
-            "read_file",
-            "find_files",
-            "search_code",
-            "list_directory",
-            "memory_search",
-            "memory_get",
-            "todoread",
-            "todowrite",
-          ],
-        },
+        // createGoalWorkloadOutputTools() and are outside the registry pool.
+        tools: AgentToolPool.assignment("goal-workload-analyst"),
         steps: 1000,
         options: {},
         mode: "primary",
@@ -694,23 +520,16 @@ export namespace Agent {
     }
 
     const fixedReadonlyAgents = new Set(["fact-check", "deep-research", "frontend-research"])
-    const fixedToolSurfaceAgents = new Set(["frontend-design", "visual-qa"])
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
+      const role = AgentRoleContract.all[key as AgentRoleID]
       if (fixedReadonlyAgents.has(key) && value.disable) {
         throw new Error(
           `config.agent.${key}.disable is not supported: ${key} is a fixed read-only evidence agent used by runtime contracts.`,
         )
       }
-      if (fixedReadonlyAgents.has(key) && value.tools !== undefined) {
+      if (role && value.tools !== undefined) {
         throw new Error(
-          `config.agent.${key}.tools is not supported: ${key} is a fixed read-only evidence agent. ` +
-            "Do not add or remove tools through config.",
-        )
-      }
-      if (fixedToolSurfaceAgents.has(key) && value.tools !== undefined) {
-        throw new Error(
-          `config.agent.${key}.tools is not supported: ${key} has a static tool surface. ` +
-            "Do not add or remove tools through config.",
+          `config.agent.${key}.tools is not supported: built-in agent tool pools are defined by the canonical AgentToolPool contract.`,
         )
       }
       if (value.disable) {
@@ -727,13 +546,13 @@ export namespace Agent {
           archetype: "worker",
           skill_mountable: false,
           native: false,
+          tools: AgentToolPool.customDefault(),
         }
       if (value.name !== undefined && value.name !== key) {
         throw new Error(`config.agent.${key}.name cannot rename the agent identity`)
       }
       if (value.model) item.model = Provider.parseModel(value.model)
       item.variant = value.variant ?? item.variant
-      const role = AgentRoleContract.all[key as AgentRoleID]
       const promptConfigMode = role?.promptConfigMode ?? "override"
       if (promptConfigMode === "append" && value.prompt !== undefined) {
         throw new Error(`config.agent.${key}.prompt is invalid for append-mode agents; use prompt_append`)
@@ -748,7 +567,7 @@ export namespace Agent {
       item.color = value.color ?? item.color
       item.hidden = value.hidden ?? item.hidden
       item.steps = value.steps ?? item.steps
-      item.tools = value.tools ?? item.tools
+      if (!role) item.tools = value.tools ? AgentToolPool.normalize(value.tools) : item.tools
       item.options = mergeDeep(item.options, value.options ?? {})
       // Stage agents (no built-in permission) ignore user-supplied permission
       // overrides — the field has no consumer for them. Adding it would mislead
@@ -773,6 +592,7 @@ export namespace Agent {
       item.description = item.description ?? contract.description
       item.archetype = contract.archetype
       item.skill_mountable = contract.skillMountable
+      item.tools = AgentToolPool.assignment(id)
     }
 
     return result

@@ -10,7 +10,7 @@
  *   `AttachmentStore.renderAttachmentInventory`'s textual ledger.
  *   Before this tool existed, the agent could see the URL but had no way to
  *   actually open it: `webfetch` requires http(s) and the attachment URLs
- *   are server-relative, and `read_file` only covers paths inside the
+ *   are server-relative, and `read` only covers paths inside the
  *   project worktree — not the per-project attachment store.
  *
  *   Without a dedicated reader, "here's a reference, now analyze it" forced

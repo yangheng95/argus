@@ -39,7 +39,7 @@ actually changes the contract.
 
 - **The raw user request** for this wake (typically short).
 - **An optional title / channel context.**
-- **Read-only codebase tools** — `read_file`, `find_files`, `search_code`, `list_directory`, `memory_search`, `memory_get`. Use them deliberately:
+- **Read-only codebase tools** — `read`, `glob`, `search_code`, `list`, `memory_search`, `memory_get`. Use them deliberately:
   - When the request names a file, module, or symbol → confirm it exists and read enough of it to ground complexity / ownership / framework assumptions.
   - When the request describes a behavior → search for the entry point or the symptom string to anchor scope before estimating complexity.
   - When the request is a re-entry on an in-progress task → check the decision log, prior acceptance feedback, and any artifacts the prior loop produced before forming a reading.

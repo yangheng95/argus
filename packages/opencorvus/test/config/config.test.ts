@@ -477,6 +477,50 @@ test("handles agent configuration", async () => {
   })
 })
 
+test("rejects legacy include/exclude tool fields for custom agents", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        agent: {
+          test_agent: {
+            description: "test agent",
+            tools: { include: ["read"] },
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow()
+    },
+  })
+})
+
+test("rejects agent-private tool fields for custom agents", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://opencorvus.ai/config.json",
+        agent: {
+          test_agent: {
+            description: "test agent",
+            tools: { private: ["browser_preview_compare_regions"] },
+          },
+        },
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Config.get()).rejects.toThrow(/private/)
+    },
+  })
+})
+
 test("treats agent variant as model-scoped setting (not provider option)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

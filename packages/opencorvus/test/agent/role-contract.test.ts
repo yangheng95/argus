@@ -4,6 +4,7 @@ import path from "node:path"
 import { Agent } from "../../src/agent/agent"
 import { PromptProfile } from "../../src/agent/prompt-profile"
 import { AgentRoleContract } from "../../src/agent/role-contract"
+import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { PromptCatalog } from "../../src/config/prompt-catalog"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
@@ -17,6 +18,10 @@ afterEach(async () => {
   Config.global.reset()
   await Instance.disposeAll()
 })
+
+function visibleToolIDs(agent: Agent.Info | undefined): Set<string> {
+  return AgentToolPool.visibleToolIDs(agent?.tools)
+}
 
 test("every role contract id has a matching registered agent (no silent missing registrations)", async () => {
   // Codex impl review round 3 §D — the original "if (!agent) continue"
@@ -176,10 +181,11 @@ test("mission uses coordination tools without generic subagent dispatch", async 
     directory: tmp.path,
     fn: async () => {
       const mission = await Agent.get("mission")
-      expect(mission?.tools?.include).toContain("panel")
-      expect(mission?.tools?.include).toContain("mission_state")
-      expect(mission?.tools?.include).toContain("wait")
-      expect(mission?.tools?.include).not.toContain("task")
+      const missionTools = visibleToolIDs(mission)
+      expect(missionTools.has("panel")).toBe(true)
+      expect(missionTools.has("mission_state")).toBe(true)
+      expect(missionTools.has("wait")).toBe(true)
+      expect(missionTools.has("task")).toBe(false)
       expect(PermissionNext.evaluate("panel", "*", mission?.permission).action).toBe("allow")
       expect(PermissionNext.evaluate("mission_state", "*", mission?.permission).action).toBe("allow")
       expect(PermissionNext.evaluate("wait", "*", mission?.permission).action).toBe("allow")
@@ -193,7 +199,7 @@ test("explore has read-only panel status tools available", async () => {
     directory: tmp.path,
     fn: async () => {
       const explore = await Agent.get("explore")
-      expect(explore?.tools?.include).toContain("panel")
+      expect(visibleToolIDs(explore).has("panel")).toBe(true)
       expect(PermissionNext.evaluate("panel", "*", explore?.permission).action).toBe("allow")
     },
   })

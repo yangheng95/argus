@@ -5,6 +5,7 @@ import {
   ORCHESTRATOR_WAIT_MIN_MS,
 } from "../../src/orchestrator/tools"
 import { Agent } from "../../src/agent/agent"
+import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { ToolRegistry } from "../../src/tool/registry"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -87,8 +88,8 @@ describe("createOrchestratorTools — wait wiring", () => {
       fn: async () => {
         const mission = await Agent.get("mission")
         const orchestrator = await Agent.get("orchestrator")
-        expect(mission?.tools?.include).toContain("wait")
-        expect(orchestrator?.tools?.include).toContain("wait")
+        expect(AgentToolPool.visibleToolIDs(mission?.tools).has("wait")).toBe(true)
+        expect(AgentToolPool.visibleToolIDs(orchestrator?.tools).has("wait")).toBe(true)
 
         const missionTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, mission)
         expect(missionTools.map((tool) => tool.id)).toContain("wait")

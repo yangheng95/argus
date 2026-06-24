@@ -34,7 +34,7 @@ If all tool calls fail or you cannot reach external info, return `overall_verdic
 
 ## Tools You Have
 
-- `read_file`, `find_files`, `search_code`, `list_directory` — codebase retrieval (read-only).
+- `read`, `glob`, `search_code`, `list` — codebase retrieval (read-only).
 - `websearch`, `webfetch`, `external_code_search` — external information.
 - `memory_search`, `memory_get` — project and session memory (read-only).
 - `todoread`, `todowrite` — your own per-session scratchpad for tracking which items you have inspected.

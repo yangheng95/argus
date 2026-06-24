@@ -1,11 +1,7 @@
 import type { Agent } from "@/agent/agent"
+import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
-import {
-  isWebpageEvidenceAcceptanceToolId,
-  isWebpageEvidenceAnalysisToolId,
-  isWebpageEvidenceRetiredVisualToolId,
-} from "@/frontend-design/tools/ids"
 import { PermissionNext } from "@/permission/next"
 import z from "zod"
 import { Skill } from "./skill"
@@ -48,7 +44,7 @@ export namespace SkillMount {
   })
   export type AgentEntry = z.infer<typeof AgentEntry>
 
-  export const PoolSkill = SkillManager.Installed.extend({
+  export const PoolSkill = SkillManager.Installed.safeExtend({
     mounted_agents: z.array(z.string()),
     unmounted: z.boolean(),
     warning: z.literal("unmounted").optional(),
@@ -347,9 +343,7 @@ export namespace SkillMount {
 
   export function agentCanUseSkillTool(agent: Agent.Info, availableToolNames?: ReadonlySet<string>): boolean {
     if (availableToolNames && !availableToolNames.has("skill")) return false
-    const include = agent.tools?.include
-    if (include) return include.includes("skill")
-    if (agent.tools?.exclude?.includes("skill")) return false
+    if (!AgentToolPool.hasTool(agent.tools, "skill")) return false
     return !PermissionNext.disabled(["skill"], agent.permission).has("skill")
   }
 
@@ -385,16 +379,8 @@ export namespace SkillMount {
     toolID: string,
     availableToolNames: ReadonlySet<string> | undefined,
   ): boolean {
-    if (isWebpageEvidenceRetiredVisualToolId(toolID)) return false
-    if (agent.name !== "frontend-design" && isWebpageEvidenceAnalysisToolId(toolID)) return false
-    if (agent.name !== "frontend-design" && agent.name !== "visual-qa" && isWebpageEvidenceAcceptanceToolId(toolID)) {
-      return false
-    }
     if (availableToolNames && !availableToolNames.has(toolID)) return false
-
-    const include = agent.tools?.include
-    if (include && include.length > 0 && !include.includes(toolID)) return false
-    if (agent.tools?.exclude?.includes(toolID)) return false
+    if (!AgentToolPool.hasTool(agent.tools, toolID)) return false
 
     const rule = PermissionNext.evaluate(toolID, "*", agent.permission)
     return rule.action !== "deny"

@@ -31,7 +31,7 @@ describe("agent context tools", () => {
   )
 
   // The shared set offers websearch, but each agent only receives it if its
-  // tools.include opts in (filterAgentTools is the include gate). Decision
+  // AgentToolPool assignment opts in. Decision
   // matrix locked 2026-05-19 after intent-analysis abused websearch ×8 at the
   // classification stage:
   //   requirements / architect  → keep  (durable greenfield tech decisions)
@@ -101,7 +101,7 @@ describe("agent context tools", () => {
           expect(Object.keys(tools).sort()).toEqual([])
           expect("websearch" in tools).toBe(false)
           expect("webfetch" in tools).toBe(false)
-          expect("read_file" in tools).toBe(false)
+          expect("read" in tools).toBe(false)
           expect("search_code" in tools).toBe(false)
         },
       })

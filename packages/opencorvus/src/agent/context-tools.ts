@@ -1,7 +1,7 @@
 /**
  * Shared context tools for stage agents.
  *
- * Extends basic codebase tools (read_file, find_files, search_code, list_directory)
+ * Extends basic codebase tools (read, glob, search_code, list)
  * with project knowledge tools (memory) and external research (web search).
  *
  * This gives requirements / architect / frontend-design style agents access to:
@@ -22,7 +22,7 @@ import { Instance } from "@/project/instance"
  *   Critical for eval tasks where the workspace is in a subdirectory.
  *
  * Includes:
- * - 4 codebase tools: read_file, find_files, search_code, list_directory
+ * - 4 codebase tools: read, glob, search_code, list
  * - 2 memory tools: memory_search, memory_get
  * Network retrieval tools such as websearch and webfetch are registry tools.
  * Do not add same-name runtime extras here, because extras are merged after

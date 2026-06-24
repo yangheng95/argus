@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Agent } from "../../src/agent/agent"
+import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { FrontendDesignAgent } from "../../src/frontend-design/agent"
 import { createFrontendSkeletonProjectTool } from "../../src/frontend-design/skeleton-project-tool"
@@ -10,7 +11,6 @@ import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
-import { ToolRegistry } from "../../src/tool/registry"
 import { WebClonePrepareContextTool } from "../../src/tool/web-clone-prepare-context"
 import { loadBenchmarkEnv } from "../../script/benchmark/env"
 import { runHtmlSkeletonWorkflowCheck } from "../../script/benchmark/html-skeleton-workflow-check"
@@ -406,10 +406,8 @@ describe("web clone source project E2E", () => {
             sourcePackageDir: webpageEvidenceDir,
             outputDir: targetProjectDir,
           })
-          const toolIds = await ToolRegistry.ids()
-          expect(toolIds).toContain("web_clone_prepare_context")
           const frontendDesign = await Agent.get("frontend-design")
-          const frontendDesignToolIds = new Set(frontendDesign?.tools?.include ?? [])
+          const frontendDesignToolIds = AgentToolPool.visibleToolIDs(frontendDesign?.tools)
           expect(frontendDesignToolIds.has("create_frontend_skeleton_project")).toBe(true)
           expect(frontendDesignToolIds.has("record_frontend_region_selection")).toBe(true)
           recordTraceEvent(trace, {

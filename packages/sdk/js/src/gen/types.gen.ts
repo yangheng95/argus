@@ -596,11 +596,10 @@ export type AgentConfig = {
   steps?: number
   permission?: PermissionConfig
   /**
-   * Tool adapter: whitelist (include) or blacklist (exclude) of tool IDs visible to this agent
+   * Global registry tool selection for custom agents. Agent-private tools are defined only by native role/runtime contracts.
    */
   tools?: {
-    include?: Array<string>
-    exclude?: Array<string>
+    global?: Array<string>
   }
   [key: string]:
     | unknown
@@ -624,8 +623,7 @@ export type AgentConfig = {
     | number
     | PermissionConfig
     | {
-        include?: Array<string>
-        exclude?: Array<string>
+        global?: Array<string>
       }
     | undefined
 }
@@ -2440,8 +2438,8 @@ export type Agent = {
   }
   steps?: number
   tools?: {
-    include?: Array<string>
-    exclude?: Array<string>
+    global?: Array<string>
+    private?: Array<string>
   }
 }
 
@@ -3314,73 +3312,6 @@ export type EventSessionCompacted = {
   }
 }
 
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
-  }
-}
-
-export type EventGoalReport = {
-  type: "goal.report"
-  properties: {
-    sessionID: string
-    report: {
-      /**
-       * Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.
-       */
-      files_changed: Array<{
-        path: string
-        /**
-         * What changed in this file and why. One or two sentences, concrete — not 'updated foo'.
-         */
-        summary: string
-      }>
-      /**
-       * Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.
-       */
-      checks_run?: Array<{
-        name: string
-        command: string
-        exit_code: number
-        /**
-         * Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.
-         */
-        output_excerpt?: string
-      }>
-      /**
-       * The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.
-       */
-      implementation_approach: string
-      /**
-       * Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.
-       */
-      design_decisions?: Array<{
-        /**
-         * The decision made, stated as a concrete claim.
-         */
-        choice: string
-        /**
-         * Alternatives that were considered and rejected. Empty array if none were weighed.
-         */
-        alternatives?: Array<string>
-        /**
-         * Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.
-         */
-        reason: string
-      }>
-      /**
-       * Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.
-       */
-      blockers?: Array<string>
-      /**
-       * Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.
-       */
-      followup_workload_guidance?: string
-    }
-  }
-}
-
 export type EventSessionCreated = {
   type: "session.created"
   properties: {
@@ -3414,6 +3345,13 @@ export type EventConfigChanged = {
   type: "config.changed"
   properties: {
     sessionID: string
+  }
+}
+
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
   }
 }
 
@@ -3534,13 +3472,12 @@ export type Event =
   | EventWorktreeFailed
   | EventTaskPlanUpdated
   | EventSessionCompacted
-  | EventFileEdited
-  | EventGoalReport
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
   | EventSessionDiff
   | EventConfigChanged
+  | EventFileEdited
   | EventWorkspaceReady
   | EventWorkspaceFailed
   | EventPtyCreated

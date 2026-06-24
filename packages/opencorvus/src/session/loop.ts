@@ -45,7 +45,7 @@ import { SessionProcessor } from "./processor"
 import { TaskTool } from "@/tool/task"
 import { SkillTool } from "@/tool/skill"
 import { Tool } from "@/tool/tool"
-import { SkillMount } from "@/skill/mounts"
+import type { SkillMount } from "@/skill/mounts"
 import { PermissionNext } from "@/permission/next"
 import { SessionStatus } from "./status"
 import { ensureTitle } from "./prompt/title"
@@ -2967,6 +2967,7 @@ export namespace SessionLoop {
 
     applyToolSwitches(tools, input.tools)
     const finalizeSkillSurface = async (availableToolNames: Iterable<string>) => {
+      const { SkillMount } = await import("@/skill/mounts")
       const surface = await SkillMount.resolve({
         agent: input.agent,
         config: input.config,

@@ -9,31 +9,18 @@ import { evaluateVisual, WEBPAGE_EVALUATE_PASS_SCORE } from "@/verification/visu
 import { runBrowserPreviewRegionComparisonCapture } from "./evidence-runner"
 import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
 import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs, persistBrowserPreviewEvidence } from "./persist"
+import { BrowserPreviewRegionBinding, BrowserPreviewRegionBox } from "./region-schema"
+import { resolveSourceReferencePath } from "./source-reference"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
 
-const SOURCE_REFERENCE_FILES = new Set(["reference.png"])
-
-export const BrowserPreviewSourceReferenceArtifactID = z.enum(["reference.png", "web-clone-source/reference.png"])
-export type BrowserPreviewSourceReferenceArtifactID = z.infer<typeof BrowserPreviewSourceReferenceArtifactID>
-
-export const BrowserPreviewRegionBox = z
-  .object({
-    x: z.number().finite().nonnegative(),
-    y: z.number().finite().nonnegative(),
-    width: z.number().finite().positive(),
-    height: z.number().finite().positive(),
-  })
-  .strict()
-export type BrowserPreviewRegionBox = z.infer<typeof BrowserPreviewRegionBox>
-
-export const BrowserPreviewRegionLocator = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("test-id"), value: z.string().min(1) }).strict(),
-  z.object({ kind: z.literal("data-oc-region"), value: z.string().min(1) }).strict(),
-  z.object({ kind: z.literal("role"), role: z.string().min(1), name: z.string().min(1) }).strict(),
-  z.object({ kind: z.literal("selector"), value: z.string().min(1), owner_file: z.string().min(1) }).strict(),
-])
-export type BrowserPreviewRegionLocator = z.infer<typeof BrowserPreviewRegionLocator>
+export {
+  BrowserPreviewRegionBinding,
+  BrowserPreviewRegionBox,
+  BrowserPreviewRegionLocator,
+  BrowserPreviewSourceReferenceArtifactID,
+} from "./region-schema"
+export { resolveSourceReferencePath } from "./source-reference"
 
 const BrowserPreviewImageSize = z
   .object({
@@ -78,33 +65,6 @@ const BrowserPreviewRouteDiagnostics = z
     screenshot_path: z.string().optional(),
   })
   .strict()
-
-export const BrowserPreviewRegionBinding = z
-  .object({
-    region_id: z.string().min(1),
-    viewport_id: BrowserPreviewViewportID,
-    state_id: z.string().min(1).default("default"),
-    region_scope: z.enum(["page-section", "card", "content", "title", "chart", "table", "control", "navigation"]),
-    source: z
-      .object({
-        reference_artifact_id: BrowserPreviewSourceReferenceArtifactID,
-        bbox: BrowserPreviewRegionBox,
-        semantic_role: z.string().min(1),
-        text_anchors: z.array(z.string().min(1)).default([]),
-        source_refs: z.array(z.string().min(1)).default([]),
-      })
-      .strict(),
-    implementation: z
-      .object({
-        route: z.string().min(1).default("/"),
-        locator: BrowserPreviewRegionLocator,
-        component_files: z.array(z.string().min(1)).default([]),
-      })
-      .strict(),
-    acceptance_refs: z.array(z.string().min(1)).default([]),
-  })
-  .strict()
-export type BrowserPreviewRegionBinding = z.infer<typeof BrowserPreviewRegionBinding>
 
 export const BrowserPreviewRegionComparisonRequest = z
   .object({
@@ -409,30 +369,6 @@ export async function compareBrowserPreviewRegions(
   const publicResult = normalizeRuntimePathRefs(input.projectRoot, result) as BrowserPreviewRegionComparisonResult
   await fs.writeFile(manifestPath, JSON.stringify(publicResult, null, 2), "utf8")
   return publicResult
-}
-
-export function resolveSourceReferencePath(input: {
-  projectRoot: string
-  taskID: string
-  referenceArtifactID: string
-}): string {
-  const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectRoot, input.taskID)
-  const normalized = input.referenceArtifactID.replaceAll("\\", "/").replace(/^\.?\//, "")
-  const relative =
-    normalized === "reference.png"
-      ? normalized
-      : normalized.startsWith("web-clone-source/")
-        ? normalized.slice("web-clone-source/".length)
-        : ""
-  if (!SOURCE_REFERENCE_FILES.has(relative)) {
-    throw new Error(`Source reference must resolve to web-clone-source/reference.png: ${input.referenceArtifactID}`)
-  }
-  const resolved = path.resolve(paths.sourcePackageAbsolute, relative)
-  const sourceRoot = path.resolve(paths.sourcePackageAbsolute)
-  if (!resolved.startsWith(sourceRoot + path.sep)) {
-    throw new Error(`Source reference escapes web-clone-source: ${input.referenceArtifactID}`)
-  }
-  return resolved
 }
 
 async function materializeRegionComparison(input: {
