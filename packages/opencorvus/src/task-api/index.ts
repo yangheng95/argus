@@ -213,6 +213,12 @@ async function provideTaskRootSessionInstance<T>(task: TaskRow, fn: () => Promis
   return Instance.provide({ directory: session.directory, fn })
 }
 
+async function provideActiveTaskRootSessionInstance<T>(task: TaskRow, fn: () => Promise<T>): Promise<T | undefined> {
+  if (Instance.current() || !task.session_id) return fn()
+  const session = await Session.getInProject({ sessionID: task.session_id, projectID: task.project_id })
+  return Instance.tryProvideActive({ directory: session.directory, fn })
+}
+
 async function awaitTaskLoopIdleForDelete(taskID: string, idleTimeoutMs: number): Promise<void> {
   const { awaitTaskLoopIdle } = await import("@/orchestrator/loop")
   try {
@@ -221,6 +227,27 @@ async function awaitTaskLoopIdleForDelete(taskID: string, idleTimeoutMs: number)
     throw createTaskCancellationIncomplete({
       taskID,
       handle: "task loop idle before delete",
+      cause,
+    })
+  }
+}
+
+async function awaitTaskQueuePromptsIdle(input: {
+  sessionIDs: string[]
+  timeoutMs: number
+  taskID?: string
+  handle: string
+}): Promise<void> {
+  try {
+    await withTimeout(
+      TaskQueueService.awaitSessionPromptsIdle({ sessionIDs: input.sessionIDs }),
+      input.timeoutMs,
+      input.handle,
+    )
+  } catch (cause) {
+    throw createTaskCancellationIncomplete({
+      taskID: input.taskID,
+      handle: input.handle,
       cause,
     })
   }
@@ -1922,10 +1949,19 @@ export namespace EngineService {
       reason: "task cancelled",
       handle: "task-api.cancel-task",
     })
+    const queueCancelledInCurrentInstance = Boolean(Instance.current())
     const queuedPromptCancellations = TaskQueueService.cancelSessionPrompts({
       sessionIDs: lifecycle.sessionIDs,
       reason: "task cancelled",
     })
+    if (!queueCancelledInCurrentInstance) {
+      await provideActiveTaskRootSessionInstance(task, async () => {
+        TaskQueueService.cancelSessionPrompts({
+          sessionIDs: lifecycle.sessionIDs,
+          reason: "task cancelled",
+        })
+      })
+    }
     const liveOwnerships = lifecycle.ownerships
     if (liveOwnerships.length > 0) {
       const { abortLiveOrchestratorToolOwnership } = await import("@/engine/writer")
@@ -1995,6 +2031,14 @@ export namespace EngineService {
         "Run aborted",
       )
     }
+    await provideActiveTaskRootSessionInstance(task, () =>
+      awaitTaskQueuePromptsIdle({
+        sessionIDs: lifecycle.sessionIDs,
+        timeoutMs: cleanupTimeoutMs,
+        taskID,
+        handle: "TaskQueueService.awaitSessionPromptsIdle",
+      }),
+    )
     await assertSessionPromptSubtreeFinished({
       sessions: lifecycle.cancelledSessions,
       failures: lifecycle.cancellationFailures,
@@ -2022,7 +2066,8 @@ export namespace EngineService {
           error instanceof Error ? error.message : String(error),
         ),
       }),
-      reason: "Task cancellation collected and cancelled every task-owned agent lifecycle handle before terminal status.",
+      reason:
+        "Task cancellation collected and cancelled every task-owned agent lifecycle handle before terminal status.",
     })
     await updateTask(
       task,
@@ -2049,10 +2094,33 @@ export namespace EngineService {
       handle: "EngineService.deleteSession",
     })
     const ids = requested.sessionIDs
+    const queueCancelledInCurrentInstance = Boolean(Instance.current())
     TaskQueueService.cancelSessionPrompts({
       sessionIDs: ids,
       reason: "session deleted",
     })
+    if (queueCancelledInCurrentInstance) {
+      await awaitTaskQueuePromptsIdle({
+        sessionIDs: ids,
+        timeoutMs: CANCEL_CLEANUP_TIMEOUT_MS,
+        handle: "EngineService.deleteSession.TaskQueueService.awaitSessionPromptsIdle",
+      })
+    } else {
+      await Instance.tryProvideActive({
+        directory: root.directory,
+        fn: async () => {
+          TaskQueueService.cancelSessionPrompts({
+            sessionIDs: ids,
+            reason: "session deleted",
+          })
+          await awaitTaskQueuePromptsIdle({
+            sessionIDs: ids,
+            timeoutMs: CANCEL_CLEANUP_TIMEOUT_MS,
+            handle: "EngineService.deleteSession.TaskQueueService.awaitSessionPromptsIdle",
+          })
+        },
+      })
+    }
     await assertSessionPromptSubtreeFinished({
       sessions: requested.cancelledSessions,
       failures: requested.failures,

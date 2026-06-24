@@ -28,6 +28,7 @@ type StateFactory = <S>(
 
 type InstanceApi = {
   provide<R>(input: { directory: string; init?: InstanceInit; fn: () => R }): Promise<R>
+  tryProvideActive<R>(input: { directory: string; fn: () => R }): Promise<R | undefined>
   forEachActive(input: { fn: () => void | Promise<void> }): Promise<void>
   readonly directory: string
   readonly worktree: string
@@ -148,6 +149,17 @@ export const Instance: InstanceApi = {
     } else if (input.init) {
       await context.provide(ctx, () => runContextInit(ctx, input.init))
     }
+    return context.provide(ctx, async () => {
+      return input.fn()
+    })
+  },
+  async tryProvideActive<R>(input: { directory: string; fn: () => R }): Promise<R | undefined> {
+    const directory = Filesystem.resolve(input.directory)
+    const existing = cache.get(directory)
+    if (!existing) return undefined
+    const ctx = await existing.catch(() => undefined)
+    if (!ctx) return undefined
+    if (cache.get(directory) !== existing) return undefined
     return context.provide(ctx, async () => {
       return input.fn()
     })
