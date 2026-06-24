@@ -1,10 +1,9 @@
 export const VISUAL_QA_CONTEXT_TOOL_IDS = [
-  "read_file",
-  "find_files",
+  "read",
+  "glob",
   "search_code",
-  "list_directory",
-  "memory_search",
-  "memory_get",
+  "list",
+  "memory",
 ] as const
 
 export const VISUAL_QA_IMPLEMENTATION_TOOL_IDS = [

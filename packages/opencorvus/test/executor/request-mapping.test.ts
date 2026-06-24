@@ -18,7 +18,7 @@ describe("executor request mapping", () => {
       cwd: "/repo",
       system: "stay concise",
       tools: [
-        { type: "function", name: "read_file", description: "Read a file", inputSchema: { type: "object" } },
+        { type: "function", name: "read", description: "Read a file", inputSchema: { type: "object" } },
         { type: "builtin", name: "web_search" },
       ],
     })
@@ -32,7 +32,7 @@ describe("executor request mapping", () => {
       tools: [
         {
           type: "function",
-          name: "read_file",
+          name: "read",
           description: "Read a file",
           parameters: { type: "object" },
         },
@@ -52,10 +52,14 @@ describe("executor request mapping", () => {
             { type: "response.output_text.delta", delta: "Hel" },
             {
               type: "response.output_item.added",
-              item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file" },
+              item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "read" },
             },
-            { type: "response.function_call_arguments.delta", item_id: "fc_1", delta: '{"path":"README.md"' },
-            { type: "response.function_call_arguments.done", item_id: "fc_1", arguments: '{"path":"README.md"}' },
+            { type: "response.function_call_arguments.delta", item_id: "fc_1", delta: '{"filePath":"README.md"' },
+            {
+              type: "response.function_call_arguments.done",
+              item_id: "fc_1",
+              arguments: '{"filePath":"README.md"}',
+            },
             { type: "response.completed", response: { id: "resp_1", output_text: "Hello" } },
           ])
         },
@@ -77,8 +81,8 @@ describe("executor request mapping", () => {
     })
     expect(out).toEqual([
       { type: "text_delta", text: "Hel" },
-      { type: "tool_delta", id: "call_1", name: "read_file", delta: '{"path":"README.md"' },
-      { type: "tool_call", id: "call_1", name: "read_file", input: '{"path":"README.md"}' },
+      { type: "tool_delta", id: "call_1", name: "read", delta: '{"filePath":"README.md"' },
+      { type: "tool_call", id: "call_1", name: "read", input: '{"filePath":"README.md"}' },
       { type: "done", sessionID: "resp_1", output: "Hello", meta: { id: "resp_1", output_text: "Hello" } },
     ])
   })
@@ -92,7 +96,7 @@ describe("executor request mapping", () => {
       system: "only touch tests",
       tools: [
         { type: "builtin", name: "Bash" },
-        { type: "function", name: "read_file" },
+        { type: "function", name: "read" },
       ],
     })
 

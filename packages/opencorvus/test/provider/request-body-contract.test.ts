@@ -179,7 +179,7 @@ describe("provider request-body contract", () => {
             {
               type: "tool-call",
               toolCallId: "toolu.bdrk.invalid",
-              toolName: "list_directory",
+              toolName: "list",
               input: { path: "." },
             },
           ],
@@ -190,7 +190,7 @@ describe("provider request-body contract", () => {
             {
               type: "tool-result",
               toolCallId: "toolu.bdrk.invalid",
-              toolName: "list_directory",
+              toolName: "list",
               output: { type: "text", value: "[dir] src" },
             },
           ],
@@ -254,7 +254,7 @@ describe("provider request-body contract", () => {
             {
               type: "tool-call",
               toolCallId: "call_1",
-              toolName: "list_directory",
+              toolName: "list",
               input: { path: "." },
             },
           ],
@@ -265,7 +265,7 @@ describe("provider request-body contract", () => {
             {
               type: "tool-result",
               toolCallId: "call_1",
-              toolName: "list_directory",
+              toolName: "list",
               output: { type: "text", value: "[dir] src" },
             },
           ],

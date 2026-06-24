@@ -12,9 +12,9 @@ import {
   BrowserPreviewRegionBinding,
   BrowserPreviewRegionBox,
   BrowserPreviewRegionLocator,
-  resolveSourceReferencePath,
   type BrowserPreviewSourceReferenceArtifactID,
-} from "./region-comparison"
+} from "./region-schema"
+import { resolveSourceReferencePath } from "./source-reference"
 import { browserPreviewViewportByID, type BrowserPreviewViewport, type BrowserPreviewViewportID } from "./viewport"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")

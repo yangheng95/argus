@@ -9,7 +9,7 @@
  *   - Each verified / corrected item carries ≥1 evidence pointer.
  *
  * The agent loop owns retrieval (read / search_code / glob / websearch /
- * webfetch / external_code_search / memory_search / memory_get); when
+ * webfetch / external_code_search / memory); when
  * inspection is done it calls this tool exactly once.
  */
 import { tool } from "ai"

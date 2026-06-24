@@ -163,7 +163,7 @@ Call `submit_requirements({ "final": true })` exactly once after all requirement
 
 - `submit_requirements({ "final": true })` — the terminal call that closes the session. Call exactly once after all requirements and decisions are registered.
 
-Codebase tools (read_file, find_files, search_code, …) are available for light exploration. Do NOT try to design goals from here.
+Codebase tools (read, glob, search_code, list, ...) are available for light exploration. Do NOT try to design goals from here.
 
 `websearch({ query })` is available for external knowledge the codebase cannot answer: current library/framework choices, API references, version-specific behavior, domain facts about named people/organizations/standards. Use it PROACTIVELY for greenfield requests and before recording a technical `register_decision` — verify what is current and recommended instead of assuming. Do not guess and `webfetch` URLs; search first.
 

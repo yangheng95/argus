@@ -8,7 +8,8 @@ import { Identifier } from "@/id/id"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { requireRuntimePackage } from "@/runtime/package-require"
 import { findBrowserPreviewTargetByID, normalizeRuntimePathRefs } from "./persist"
-import { BrowserPreviewSourceReferenceArtifactID, resolveSourceReferencePath } from "./region-comparison"
+import { BrowserPreviewSourceReferenceArtifactID } from "./region-schema"
+import { resolveSourceReferencePath } from "./source-reference"
 import { BrowserPreviewViewportID } from "./viewport"
 
 const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")

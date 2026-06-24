@@ -77,6 +77,7 @@ interface AgentSkillRow {
   mode: "subagent" | "primary" | "all"
   native?: boolean
   hidden?: boolean
+  skill_mountable: boolean
   skill_tool_available: boolean
   mounted: MountedSkillItem[]
 }
@@ -478,7 +479,7 @@ function ExtensionSettingsPanel(props: {
     if (!matrix) return []
     const rows = new Map(matrix.matrix.map((row) => [row.agent, row.mounted]))
     return matrix.agents
-      .filter((agent) => agent.skill_tool_available)
+      .filter((agent) => agent.skill_mountable && agent.skill_tool_available)
       .map((agent) => ({
         ...agent,
         mounted: rows.get(agent.name) ?? [],

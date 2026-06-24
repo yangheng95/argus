@@ -1,10 +1,10 @@
 /**
- * Filter a shared tool map through an agent's Agent.Info.tools include/exclude
- * list so users can restrict tool access per sub-agent via opencorvus.jsonc:
+ * Filter a shared tool map through an agent's Agent.Info.tools pool assignment
+ * so custom agents can restrict tool access via opencorvus.jsonc:
  *
  *   {
  *     "agent": {
- *       "architect": { "tools": { "exclude": ["websearch"] } }
+ *       "my-reviewer": { "tools": { "global": ["read", "glob", "search_code"] } }
  *     }
  *   }
  *
@@ -16,6 +16,7 @@
  */
 import { Agent } from "./agent"
 import { EffectiveConfig } from "@/config/effective"
+import { AgentToolPool } from "./tool-pool-contract"
 
 export async function filterAgentTools<T extends Record<string, unknown>>(
   tools: T,
@@ -28,12 +29,9 @@ export async function filterAgentTools<T extends Record<string, unknown>>(
   const agent = await Agent.get(agentName, { config: await EffectiveConfig.effective(opts) })
   const filter = agent?.tools
   if (!filter) return tools
-  const include = filter.include
-  const exclude = filter.exclude
+  const visible = AgentToolPool.visibleToolIDs(filter)
   const entries = Object.entries(tools).filter(([name]) => {
-    if (include && !include.includes(name)) return false
-    if (exclude?.includes(name)) return false
-    return true
+    return visible.has(name)
   })
   return Object.fromEntries(entries) as T
 }

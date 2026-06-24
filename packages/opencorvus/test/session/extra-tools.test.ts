@@ -490,9 +490,9 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
   })
 
   test("tool switches remove disabled tools and support all-tools disable", () => {
-    const namedTools = { bash: dummyTool(), skill: dummyTool(), read_file: dummyTool() }
+    const namedTools = { bash: dummyTool(), skill: dummyTool(), read: dummyTool() }
     SessionLoop.applyToolSwitches(namedTools, { bash: false })
-    expect(Object.keys(namedTools).sort()).toEqual(["read_file", "skill"])
+    expect(Object.keys(namedTools).sort()).toEqual(["read", "skill"])
 
     const allTools = { bash: dummyTool(), skill: dummyTool() }
     SessionLoop.applyToolSwitches(allTools, { "*": false })
@@ -632,7 +632,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
         })
 
         expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_research_brief"])
-        expect(resolved.read_file).toBeUndefined()
+        expect(resolved.read).toBeUndefined()
         expect(resolved.websearch).toBeUndefined()
         SessionLoop.clearSessionRuntimeContract(sessionID)
       },

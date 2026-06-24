@@ -77,6 +77,41 @@ Instructions here.
   })
 })
 
+for (const fixture of [
+  { legacy: "read_file", canonical: "read" },
+  { legacy: "memory_search", canonical: "memory" },
+] as const) {
+  test(`rejects legacy duplicate tool ID ${fixture.legacy} in skill required_tools`, async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const skillDir = path.join(dir, ".claude", "skills", `legacy-${fixture.legacy}-skill`)
+        await Bun.write(
+          path.join(skillDir, "SKILL.md"),
+          `---
+name: legacy-${fixture.legacy}-skill
+description: Invalid legacy tool ID fixture.
+required_tools:
+  - ${fixture.legacy}
+---
+
+# Legacy Tool Skill
+`,
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Skill.all()).rejects.toThrow(
+          new RegExp(`${fixture.legacy} is a legacy duplicate tool ID; use canonical tool ID ${fixture.canonical}`),
+        )
+      },
+    })
+  })
+}
+
 test("returns skill directories from Skill.dirs", async () => {
   await using tmp = await tmpdir({
     git: true,
@@ -282,7 +317,7 @@ description: Shared OpenCorvus plural skill.
   })
 })
 
-test("skips skills with missing frontmatter", async () => {
+test("rejects skills with missing frontmatter", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
@@ -300,8 +335,7 @@ Just some content without YAML frontmatter.
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
-      expect(nonBuiltinUnder(skills, tmp.path)).toEqual([])
+      await expect(Skill.all()).rejects.toThrow()
     },
   })
 })

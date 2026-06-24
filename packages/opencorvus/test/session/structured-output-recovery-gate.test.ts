@@ -42,7 +42,7 @@ describe("SessionLoop.shouldEnterStructuredOutputRecovery", () => {
 
   test("does NOT stamp when finish=tool-calls (model still in tool flow)", () => {
     // Integrity reviewer between two submit_*_verdict calls; build agent
-    // calling read_file/edit before merge_back. Both are normal in-flight
+    // calling read/edit before merge_back. Both are normal in-flight
     // states, not structured misses.
     expect(SessionLoop.shouldEnterStructuredOutputRecovery({ ...base, finish: "tool-calls" })).toBe(false)
   })

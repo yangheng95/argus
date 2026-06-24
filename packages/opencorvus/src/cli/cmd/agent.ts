@@ -15,7 +15,7 @@ import type { Argv } from "yargs"
 
 type AgentMode = "all" | "primary" | "subagent"
 
-const AVAILABLE_TOOLS = [
+export const AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS = [
   "bash",
   "read",
   "write",
@@ -27,7 +27,39 @@ const AVAILABLE_TOOLS = [
   "task",
   "todowrite",
   "todoread",
-]
+] as const
+
+type AgentCreateGlobalTool = (typeof AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS)[number]
+type AgentCreateFrontmatter = {
+  description: string
+  mode: AgentMode
+  tools?: { global: AgentCreateGlobalTool[] }
+}
+
+function normalizeAgentCreateToolSelection(selectedTools: readonly string[]): AgentCreateGlobalTool[] {
+  const available = new Set<string>(AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS)
+  const unknown = selectedTools.filter((tool) => !available.has(tool))
+  if (unknown.length > 0) {
+    throw new Error(`Unknown agent tool(s): ${[...new Set(unknown)].join(", ")}`)
+  }
+  return AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS.filter((tool) => selectedTools.includes(tool))
+}
+
+export function buildAgentCreateFrontmatter(input: {
+  description: string
+  mode: AgentMode
+  selectedTools: readonly string[]
+}): AgentCreateFrontmatter {
+  const selectedCanonicalTools = normalizeAgentCreateToolSelection(input.selectedTools)
+  const frontmatter: AgentCreateFrontmatter = {
+    description: input.description,
+    mode: input.mode,
+  }
+  if (selectedCanonicalTools.length < AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS.length) {
+    frontmatter.tools = { global: selectedCanonicalTools }
+  }
+  return frontmatter
+}
 
 const AgentCreateCommand = cmd({
   command: "create",
@@ -49,7 +81,7 @@ const AgentCreateCommand = cmd({
       })
       .option("tools", {
         type: "string",
-        describe: `comma-separated list of tools to enable (default: all). Available: "${AVAILABLE_TOOLS.join(", ")}"`,
+        describe: `comma-separated list of tools to enable (default: all). Available: "${AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS.join(", ")}"`,
       })
       .option("model", {
         type: "string",
@@ -131,15 +163,20 @@ const AgentCreateCommand = cmd({
         // Select tools
         let selectedTools: string[]
         if (cliTools !== undefined) {
-          selectedTools = cliTools ? cliTools.split(",").map((t) => t.trim()) : AVAILABLE_TOOLS
+          selectedTools = cliTools
+            ? cliTools
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean)
+            : [...AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS]
         } else {
           const result = await prompts.multiselect({
             message: "Select tools to enable (Space to toggle)",
-            options: AVAILABLE_TOOLS.map((tool) => ({
+            options: AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS.map((tool) => ({
               label: tool,
               value: tool,
             })),
-            initialValues: AVAILABLE_TOOLS,
+            initialValues: [...AGENT_CREATE_AVAILABLE_GLOBAL_TOOLS],
           })
           if (prompts.isCancel(result)) throw new UI.CancelledError()
           selectedTools = result
@@ -175,21 +212,11 @@ const AgentCreateCommand = cmd({
           mode = modeResult
         }
 
-        // Build tools config — exclude tools not selected
-        const excluded = AVAILABLE_TOOLS.filter((t) => !selectedTools.includes(t))
-
-        // Build frontmatter
-        const frontmatter: {
-          description: string
-          mode: AgentMode
-          tools?: { exclude: string[] }
-        } = {
+        const frontmatter = buildAgentCreateFrontmatter({
           description: generated.whenToUse,
           mode,
-        }
-        if (excluded.length > 0) {
-          frontmatter.tools = { exclude: excluded }
-        }
+          selectedTools,
+        })
 
         // Write file
         const content = matter.stringify(generated.systemPrompt, frontmatter)

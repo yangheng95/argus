@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { WebCloneGenerateSourceProjectTool } from "../../src/tool/web-clone-generate-source-project"
 import { WebCloneSourceAuditTool } from "../../src/tool/web-clone-source-audit"
@@ -19,14 +20,18 @@ const ctx = {
 }
 
 describe("tool.web_clone_generate_source_project", () => {
-  test("is registered as a normal build-consumable tool", async () => {
+  test("is exposed through owning agent-private tool pools", async () => {
     await using tmp = await tmpdir()
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const ids = await ToolRegistry.ids()
-        expect(ids).toContain("web_clone_generate_source_project")
+        const globalIDs = await ToolRegistry.ids()
+        expect(globalIDs).not.toContain("web_clone_generate_source_project")
+
+        const coding = await Agent.get("coding")
+        const codingTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, coding)
+        expect(codingTools.map((tool) => tool.id)).toContain("web_clone_generate_source_project")
       },
     })
   }, 30_000)
