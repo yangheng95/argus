@@ -8,7 +8,7 @@
  * stream-error capture, and abort propagation.
  *
  * Read-only by construction: the tool surface is the read-only context tools
- * (filtered by the agent's `tools.include`) plus the two structured-output tools.
+ * (filtered by the agent's tool pool assignment) plus the two structured-output tools.
  * No write / edit / bash — there is no implementation pressure, which is the
  * whole point (spec §0).
  */

@@ -138,6 +138,34 @@ describe("config prompt routes", () => {
     expect(JSON.stringify(nameParsed.error.issues)).toContain("config.agent.build.name cannot rename")
   })
 
+  test("PATCH /config rejects built-in skill_mountable drift from the canonical role contract", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/config", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: {
+              integrity: {
+                skill_mountable: false,
+              },
+            },
+          }),
+        })
+
+        expect(response.status).toBe(400)
+        expect(await response.text()).toContain("config.agent.integrity.skill_mountable must stay true")
+      },
+    })
+  })
+
   test("GET /config/prompt-profile returns full active profile catalog", async () => {
     await using tmp = await tmpdir({ git: true })
 

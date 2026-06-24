@@ -6,9 +6,10 @@ import { Tool } from "./tool"
 import { Skill } from "../skill"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
-import { SkillMount } from "@/skill/mounts"
+import type { SkillMount } from "@/skill/mounts"
 
 export const SkillTool = Tool.define("skill", async (ctx) => {
+  const { SkillMount } = await import("@/skill/mounts")
   const agent = ctx?.agent
   const surface = ctx?.skillSurface
     ? ctx.skillSurface
@@ -48,7 +49,9 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
     query: z
       .string()
       .optional()
-      .describe("Fuzzy search terms for mounted skill title, description, required_tools, agents, or SKILL.md content. Omit to list compatible skills."),
+      .describe(
+        "Fuzzy search terms for mounted skill title, description, required_tools, agents, or SKILL.md content. Omit to list compatible skills.",
+      ),
     name: z
       .string()
       .optional()

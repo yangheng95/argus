@@ -151,27 +151,22 @@ export function createCodebaseTools(projectDir?: string) {
   }
 
   return {
-    read_file: tool({
+    read: tool({
       description:
         "Read the contents of a file. Returns the file contents with line numbers. " +
         "Use this to understand code structure, conventions, and existing patterns. " +
-        "For large files, set start_line to continue from the next unread line instead of re-reading from line 1.",
+        "For large files, set offset to continue from the next unread line instead of re-reading from line 1.",
       inputSchema: z.object({
-        path: z.string().describe("File path relative to project root"),
-        start_line: z
+        filePath: z.string().describe("File path relative to the scoped project root"),
+        offset: z
           .number()
           .int()
           .positive()
           .optional()
           .describe("1-based line number to start reading from (default 1). Use to page through large files."),
-        max_lines: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe("Maximum lines to read (default 300). Use for large files."),
+        limit: z.number().int().positive().optional().describe("Maximum lines to read (default 300)."),
       }),
-      execute: async ({ path: filePath, start_line, max_lines }, options) => {
+      execute: async ({ filePath, offset, limit }, options) => {
         const abs = safePath(filePath)
         if (!abs) return "Error: path is outside the project boundary."
         const rawWebpageEvidenceArtifact = rawWebpageEvidenceArtifactReason(filePath)
@@ -187,21 +182,21 @@ export function createCodebaseTools(projectDir?: string) {
           // Refuse known binary signatures and NUL-heavy content — decoding
           // a PNG/JPG/zip as UTF-8 produces garbage that wastes LLM context
           // and sends agents chasing nonsense. Image-like inputs must flow
-          // via a vision channel, not read_file.
+          // via a vision channel, not read.
           const kind = detectBinaryKind(buf, filePath)
           if (kind) {
-            return `Error: ${filePath} is ${kind}. read_file returns text only; use a vision/multimodal channel or a dedicated binary tool.`
+            return `Error: ${filePath} is ${kind}. read returns text only; use a vision/multimodal channel or a dedicated binary tool.`
           }
           const content = buf.toString("utf-8")
           const sessionID = sessionIDFromOptions(options)
           if (sessionID) FileTime.read(sessionID, abs)
           const lines = content.split("\n")
-          const limit = max_lines ?? 300
-          const startIndex = Math.max(0, (start_line ?? 1) - 1)
+          const lineLimit = limit ?? 300
+          const startIndex = Math.max(0, (offset ?? 1) - 1)
           if (startIndex >= lines.length) {
-            return `Error: start_line ${start_line ?? 1} is past end of file (${lines.length} lines).`
+            return `Error: offset ${offset ?? 1} is past end of file (${lines.length} lines).`
           }
-          const slice = lines.slice(startIndex, startIndex + limit)
+          const slice = lines.slice(startIndex, startIndex + lineLimit)
           const numbered = slice
             .map((line, i) => {
               const safeLine = sanitizeInlineDataUrisForPrompt(line)
@@ -224,7 +219,7 @@ export function createCodebaseTools(projectDir?: string) {
             return (
               numbered +
               `\n... (${remaining} more lines, total ${lines.length}; ` +
-              `next chunk: read_file path="${filePath}" start_line=${startIndex + slice.length + 1} max_lines=${limit})`
+              `next chunk: read filePath="${filePath}" offset=${startIndex + slice.length + 1} limit=${lineLimit})`
             )
           }
           return numbered
@@ -234,22 +229,25 @@ export function createCodebaseTools(projectDir?: string) {
       },
     }),
 
-    find_files: tool({
+    glob: tool({
       description:
         "Find files matching a glob pattern. Returns file paths relative to project root. " +
         "Use this to discover project structure and find relevant source files.",
       inputSchema: z.object({
         pattern: z.string().describe("Glob pattern (e.g., 'src/**/*.ts', '*.json', 'test/**/*.test.ts')"),
-        max_results: z.number().optional().describe("Maximum results (default 80)"),
+        path: z.string().optional().describe("Directory path relative to the scoped project root"),
       }),
-      execute: async ({ pattern, max_results }) => {
-        const limit = max_results ?? 80
+      execute: async ({ pattern, path: searchPath }) => {
+        const limit = 80
+        const root = path.resolve(dir)
+        const cwd = searchPath ? safePath(searchPath) : root
+        if (!cwd) return "Error: path is outside the project boundary."
         try {
           const glob = new Bun.Glob(pattern)
           const files: string[] = []
-          for await (const file of glob.scan({ cwd: dir, dot: false })) {
+          for await (const file of glob.scan({ cwd, dot: false })) {
             if (file.includes("node_modules/") || file.includes(".git/")) continue
-            files.push(file)
+            files.push(path.relative(root, path.resolve(cwd, file)).replace(/\\/g, "/"))
             if (files.length >= limit) break
           }
           if (files.length === 0) return "No files found matching the pattern."
@@ -312,20 +310,22 @@ export function createCodebaseTools(projectDir?: string) {
       },
     }),
 
-    list_directory: tool({
+    list: tool({
       description:
         "List files and directories at a given path. " +
         "Use this to understand project layout and find relevant directories.",
       inputSchema: z.object({
         path: z.string().optional().describe("Directory path relative to project root (default: project root)"),
+        ignore: z.array(z.string()).optional().describe("Directory entry names to omit from the listing"),
       }),
-      execute: async ({ path: dirPath }) => {
+      execute: async ({ path: dirPath, ignore }) => {
         const abs = dirPath ? safePath(dirPath) : dir
         if (!abs) return "Error: path is outside the project boundary."
         try {
+          const ignored = new Set(ignore ?? [])
           const entries = fs.readdirSync(abs, { withFileTypes: true })
           const sorted = entries
-            .filter((e) => e.name !== "node_modules" && e.name !== ".git")
+            .filter((e) => e.name !== "node_modules" && e.name !== ".git" && !ignored.has(e.name))
             .sort((a, b) => {
               if (a.isDirectory() && !b.isDirectory()) return -1
               if (!a.isDirectory() && b.isDirectory()) return 1

@@ -8,7 +8,7 @@ describe("acceptance verdict schema", () => {
       summary: "Acceptance is missing required behavior.",
       tool_call_evidence: [
         {
-          tool: "read_file",
+          tool: "read",
           passed: true,
           detail: "inspected acceptance evidence",
         },
@@ -32,7 +32,7 @@ describe("acceptance verdict schema", () => {
         deferred_checks: null,
         tool_call_evidence: [
           {
-            tool: "read_file",
+            tool: "read",
             passed: true,
             detail: "inspected acceptance evidence",
           },
