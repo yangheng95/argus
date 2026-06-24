@@ -299,7 +299,7 @@ async function requireSessionTraceTaskInCurrentProject(sessionID: string): Promi
  * task cancelled.
  * Tests can override via CancelTaskOptions.
  */
-const CANCEL_ABORT_TIMEOUT_MS = 5_000
+export const CANCEL_ABORT_TIMEOUT_MS = 5_000
 
 /**
  * Per-call deadline for the abort writer pass. Worktree cleanup is no
@@ -307,7 +307,7 @@ const CANCEL_ABORT_TIMEOUT_MS = 5_000
  * worktree. Keep the bound because aborting live rows still must not block
  * the API forever.
  */
-const CANCEL_CLEANUP_TIMEOUT_MS = 60_000
+export const CANCEL_CLEANUP_TIMEOUT_MS = 60_000
 
 function missionTaskTitleInput(input: z.infer<typeof CreateTaskInput>):
   | {

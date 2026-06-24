@@ -1,7 +1,7 @@
 import path from "path"
 import fs from "fs/promises"
 import { $ } from "bun"
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Filesystem } from "../../src/util/filesystem"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
@@ -9,6 +9,7 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Database, eq } from "../../src/storage/db"
 import { EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { Identifier } from "../../src/id/id"
 import { Ownership } from "../../src/engine/ownership"
 import { Instance } from "../../src/project/instance"
 import { seedGoalRunAttemptWithWorkspace } from "../fixture/goal-run-attempt"
@@ -16,11 +17,44 @@ import { Project } from "../../src/project/project"
 import { ProjectTable } from "../../src/project/project.sql"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionTable } from "../../src/session/session.sql"
+import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
+import { TaskQueueService } from "../../src/scheduler/task-queue-service"
+import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { ControlMessageTable } from "../../src/control/control.sql"
 import { QuickNoteTable } from "../../src/quicknote/quicknote.sql"
 import { DecisionLogTable } from "../../src/decision-log/schema"
+import { expectNoProcessErrors } from "../fixture/process-errors"
 
 Log.init({ print: false })
+
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+async function waitUntil(fn: () => boolean, label: string) {
+  for (let i = 0; i < 500; i += 1) {
+    if (fn()) return
+    await Bun.sleep(10)
+  }
+  throw new Error(`Timed out waiting for ${label}`)
+}
+
+function projectRow(projectID: string) {
+  return Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, projectID)).get())
+}
+
+function sessionRow(sessionID: string) {
+  return Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get())
+}
+
+function queueRow(queueTaskID: string) {
+  return Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, queueTaskID)).get())
+}
 
 describe("project routes", () => {
   afterEach(async () => {
@@ -267,6 +301,110 @@ describe("project routes", () => {
     expect(
       Database.use((db) => db.select().from(QuickNoteTable).where(eq(QuickNoteTable.project_id, projectID)).all()),
     ).toHaveLength(0)
+  }, 30_000)
+
+  test("DELETE /project/current waits for non-task project queue wake before removing state", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const releaseQueue = deferred()
+    const sourceSentinel = path.join(tmp.path, "source-queue-sentinel.txt")
+    const runtimeSentinel = path.join(ProjectRuntimePaths.projectRuntimeRoot(tmp.path), "delete-queue-sentinel.txt")
+    let projectID = ""
+    let sessionID = ""
+    let queueTaskID = ""
+    let queueRun!: Promise<void>
+    let queueWakeStarted = false
+
+    const loop = spyOn(SessionPrompt, "loop").mockImplementation((async () => {
+      queueWakeStarted = true
+      await releaseQueue.promise
+      return { info: {} as never, parts: [] } as Awaited<ReturnType<typeof SessionPrompt.loop>>
+    }) as never)
+
+    await Bun.write(sourceSentinel, "keep-source")
+    await fs.mkdir(path.dirname(runtimeSentinel), { recursive: true })
+    await Bun.write(runtimeSentinel, "delete-runtime")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        projectID = Instance.project.id
+        const session = await Session.create({ kind: "assistant", title: "project delete queued wake" })
+        sessionID = session.id
+        queueTaskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values({
+              id: queueTaskID,
+              session_id: sessionID,
+              prompt: "project queued wake",
+              priority: "normal",
+              status: "queued",
+              source: "test",
+              metadata: {
+                kind: "session_wake",
+                messageID: Identifier.ascending("message"),
+                input: { parts: [{ type: "text", text: "project queued wake" }] },
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        queueRun = TaskQueueService.runNow()
+        await waitUntil(() => queueWakeStarted, "project queued wake start")
+      },
+    })
+
+    await expectNoProcessErrors(async () => {
+      const responsePromise = app.request("/project/current", {
+        method: "DELETE",
+        headers: {
+          "x-opencorvus-directory": tmp.path,
+        },
+      })
+      void responsePromise.catch(() => undefined)
+      try {
+        await waitUntil(() => {
+          const row = queueRow(queueTaskID)
+          return row?.status === "failed" || row === undefined
+        }, "project delete queue cancellation")
+
+        expect(projectRow(projectID)?.id).toBe(projectID)
+        expect(sessionRow(sessionID)?.id).toBe(sessionID)
+        expect(queueRow(queueTaskID)).toMatchObject({
+          status: "failed",
+          error_message: "project deleted",
+        })
+        expect(await Filesystem.exists(ProjectRuntimePaths.projectConfigRoot(tmp.path))).toBe(true)
+        expect(await Filesystem.exists(sourceSentinel)).toBe(true)
+
+        releaseQueue.resolve()
+        const response = await responsePromise
+        await queueRun
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({
+          ok: true,
+          projectID,
+          directory: tmp.path,
+          deletedTaskCount: 0,
+        })
+      } finally {
+        releaseQueue.resolve()
+        await responsePromise.catch(() => undefined)
+        await queueRun.catch(() => undefined)
+      }
+    })
+
+    expect(loop).toHaveBeenCalledTimes(1)
+    expect(await Filesystem.exists(sourceSentinel)).toBe(true)
+    expect(await Bun.file(sourceSentinel).text()).toBe("keep-source")
+    expect(await Filesystem.exists(ProjectRuntimePaths.projectConfigRoot(tmp.path))).toBe(false)
+    expect(projectRow(projectID)).toBeUndefined()
+    expect(sessionRow(sessionID)).toBeUndefined()
   }, 30_000)
 
   test("GET /project/current/worktrees marks live goal bindings and expired worktrees", async () => {
