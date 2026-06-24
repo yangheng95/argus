@@ -30,6 +30,13 @@ Log.init({ print: false })
 
 const routeTestConfig = { model: "test/model" } as const
 
+async function bootstrapProjectApp(app: ReturnType<typeof Server.App>, directory: string) {
+  const response = await app.request("/config", {
+    headers: { "x-opencorvus-directory": directory },
+  })
+  expect(response.status).toBe(200)
+}
+
 async function seedRootSession(sessionID: string, text = "initial request") {
   const info = {
     id: Identifier.ascending("message"),
@@ -191,6 +198,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "model context" })
@@ -263,6 +271,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "empty model context" })
@@ -312,6 +321,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -443,6 +453,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -508,6 +519,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -568,6 +580,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -632,6 +645,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -698,6 +712,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -870,6 +885,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -925,6 +941,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -975,6 +992,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -1037,6 +1055,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
         const { completedTaskID } = await seedActiveAndCompletedSameCwdTasks()
 
@@ -1075,6 +1094,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
         const { completedTaskID } = await seedActiveAndCompletedSameCwdTasks()
 
@@ -1121,6 +1141,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -1237,6 +1258,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const now = Date.now()
         const taskID = Identifier.ascending("task")
         const goalID = Identifier.ascending("goal")
@@ -1355,6 +1377,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const now = Date.now()
         const taskID = Identifier.ascending("task")
         let release: (() => void) | undefined
@@ -1452,6 +1475,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const now = Date.now()
         const taskID = Identifier.ascending("task")
         let release: (() => void) | undefined
@@ -1532,6 +1556,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
@@ -1600,6 +1625,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        await bootstrapProjectApp(app, tmp.path)
         const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         let resumeCalls = 0
         ExecutorRegistry.register("opencorvus", {
