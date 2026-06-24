@@ -1,11 +1,7 @@
 import type { Agent } from "@/agent/agent"
+import { AgentToolPool } from "@/agent/tool-pool-contract"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
-import {
-  isWebpageEvidenceAcceptanceToolId,
-  isWebpageEvidenceAnalysisToolId,
-  isWebpageEvidenceRetiredVisualToolId,
-} from "@/frontend-design/tools/ids"
 import { PermissionNext } from "@/permission/next"
 import z from "zod"
 import { Skill } from "./skill"
@@ -43,11 +39,12 @@ export namespace SkillMount {
     mode: z.enum(["subagent", "primary", "all"]),
     native: z.boolean().optional(),
     hidden: z.boolean().optional(),
+    skill_mountable: z.boolean(),
     skill_tool_available: z.boolean(),
   })
   export type AgentEntry = z.infer<typeof AgentEntry>
 
-  export const PoolSkill = SkillManager.Installed.extend({
+  export const PoolSkill = SkillManager.Installed.safeExtend({
     mounted_agents: z.array(z.string()),
     unmounted: z.boolean(),
     warning: z.literal("unmounted").optional(),
@@ -174,6 +171,7 @@ export namespace SkillMount {
         mode: agent.mode,
         native: agent.native,
         hidden: agent.hidden,
+        skill_mountable: agentSkillMountable(agent),
         skill_tool_available: agentCanUseSkillTool(agent),
       })),
       matrix: rows,
@@ -206,6 +204,9 @@ export namespace SkillMount {
       SkillManager.previewImportFile(input.import),
     ])
     if (!agent) throw new Error(`Unknown agent: ${input.agent}`)
+    if (!agentSkillMountable(agent)) {
+      throw new Error(`Agent ${input.agent} does not allow operator-managed skill mounts.`)
+    }
     if (!agentCanUseSkillTool(agent)) {
       throw new Error(`Agent ${input.agent} cannot mount skills because it does not expose the skill tool.`)
     }
@@ -239,6 +240,9 @@ export namespace SkillMount {
       Skill.all(),
     ])
     if (!agent) throw new Error(`Unknown agent: ${input.agent}`)
+    if (!agentSkillMountable(agent)) {
+      throw new Error(`Agent ${input.agent} does not allow operator-managed skill mounts.`)
+    }
     assertKnownMountedAgents(initialSkills, agents)
     let skills = initialSkills
     let byName = skillByName(skills)
@@ -339,10 +343,12 @@ export namespace SkillMount {
 
   export function agentCanUseSkillTool(agent: Agent.Info, availableToolNames?: ReadonlySet<string>): boolean {
     if (availableToolNames && !availableToolNames.has("skill")) return false
-    const include = agent.tools?.include
-    if (include) return include.includes("skill")
-    if (agent.tools?.exclude?.includes("skill")) return false
+    if (!AgentToolPool.hasTool(agent.tools, "skill")) return false
     return !PermissionNext.disabled(["skill"], agent.permission).has("skill")
+  }
+
+  export function agentSkillMountable(agent: Pick<Agent.Info, "skill_mountable">): boolean {
+    return agent.skill_mountable === true
   }
 
   function disabledReason(
@@ -373,16 +379,8 @@ export namespace SkillMount {
     toolID: string,
     availableToolNames: ReadonlySet<string> | undefined,
   ): boolean {
-    if (isWebpageEvidenceRetiredVisualToolId(toolID)) return false
-    if (agent.name !== "frontend-design" && isWebpageEvidenceAnalysisToolId(toolID)) return false
-    if (agent.name !== "frontend-design" && agent.name !== "visual-qa" && isWebpageEvidenceAcceptanceToolId(toolID)) {
-      return false
-    }
     if (availableToolNames && !availableToolNames.has(toolID)) return false
-
-    const include = agent.tools?.include
-    if (include && include.length > 0 && !include.includes(toolID)) return false
-    if (agent.tools?.exclude?.includes(toolID)) return false
+    if (!AgentToolPool.hasTool(agent.tools, toolID)) return false
 
     const rule = PermissionNext.evaluate(toolID, "*", agent.permission)
     return rule.action !== "deny"

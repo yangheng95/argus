@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { WebClonePrepareContextTool } from "../../src/tool/web-clone-prepare-context"
 import { ToolRegistry } from "../../src/tool/registry"
@@ -19,15 +20,19 @@ const ctx = {
 
 describe("tool.web_clone_prepare_context", () => {
   test(
-    "is registered as a host repair tool",
+    "is exposed through owning agent-private tool pools",
     async () => {
       await using tmp = await tmpdir()
 
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const ids = await ToolRegistry.ids()
-          expect(ids).toContain("web_clone_prepare_context")
+          const globalIDs = await ToolRegistry.ids()
+          expect(globalIDs).not.toContain("web_clone_prepare_context")
+
+          const coding = await Agent.get("coding")
+          const codingTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, coding)
+          expect(codingTools.map((tool) => tool.id)).toContain("web_clone_prepare_context")
         },
       })
     },

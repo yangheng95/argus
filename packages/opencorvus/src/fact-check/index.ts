@@ -26,7 +26,7 @@ const log = Log.create({ service: "fact-check-agent" })
 /** Maximum number of characters of target-message text injected into the
  *  fact-check user prompt.  Bounded because the message can be large
  *  (e.g. an architect goal graph dump) and an unbounded copy would blow
- *  the prompt budget. The fact-check agent has `read_file` etc. if it
+ *  the prompt budget. The fact-check agent has `read` etc. if it
  *  needs to inspect more.
  *
  *  Module-scope so buildFactCheckUserPrompt (also at module scope) can

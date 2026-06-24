@@ -162,6 +162,7 @@ test("left Skill, MCP, and Memory panels load from the active task directory", a
             mode: "primary",
             hidden: false,
             native: true,
+            skill_mountable: true,
             skill_tool_available: true,
           },
         ],

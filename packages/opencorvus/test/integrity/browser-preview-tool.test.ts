@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
+import { AgentToolPool } from "../../src/agent/tool-pool-contract"
 import { IntegrityTestHooks } from "../../src/integrity/team-agent"
 import {
   INTEGRITY_DECLARED_TOOL_IDS,
@@ -74,7 +75,7 @@ describe("integrity browser preview tool surface", () => {
       fn: async () => {
         const agent = await Agent.get("integrity")
         expect(agent).toBeDefined()
-        expect(agent?.tools?.include).toEqual([...INTEGRITY_DECLARED_TOOL_IDS])
+        expect([...AgentToolPool.visibleToolIDs(agent?.tools)].sort()).toEqual([...INTEGRITY_DECLARED_TOOL_IDS].sort())
 
         const registryTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent)
         expect(registryTools.map((item) => item.id).sort()).toEqual([...INTEGRITY_DECLARED_TOOL_IDS].sort())

@@ -14,6 +14,7 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
+import { SkillRequiredTools } from "./required-tools"
 import researchReportMd from "./builtin/research-report.md" with { type: "text" }
 import frontendReplicaExpertSquadMd from "./builtin/frontend-replica-expert-squad.md" with { type: "text" }
 import frontendAutomationDebugExpertSquadMd from "./builtin/frontend-automation-debug-expert-squad.md" with { type: "text" }
@@ -87,7 +88,7 @@ export namespace Skill {
     priority: z.number().optional().default(0),
     /** Descriptive tool hints for agents that load this skill. Empty or
      *  omitted = no tool hints. */
-    required_tools: z.array(z.string()).optional().default([]),
+    required_tools: SkillRequiredTools,
     /** Optional agent-name allow list. Empty or omitted means any compatible agent may load it. */
     agents: z.array(z.string()).optional().default([]),
     /** Explicit OpenCorvus mount list. Empty or omitted means this skill is in the pool but unavailable. */
@@ -330,7 +331,16 @@ export namespace Skill {
         mounted_agents: true,
         expires_at: true,
       }).safeParse(md.data)
-      if (!parsed.success) return
+      if (!parsed.success) {
+        throw new InvalidError(
+          {
+            path: match,
+            message: parsed.error.message,
+            issues: parsed.error.issues,
+          },
+          { cause: parsed.error },
+        )
+      }
       if (isExpired(parsed.data)) return
 
       dirs.add(path.dirname(match))
@@ -353,17 +363,17 @@ export namespace Skill {
     }
 
     const scanExternal = async (root: string, scope: "global" | "project") => {
-      return Glob.scan(EXTERNAL_SKILL_PATTERN, {
+      const matches = await Glob.scan(EXTERNAL_SKILL_PATTERN, {
         cwd: root,
         absolute: true,
         include: "file",
         dot: true,
         symlink: true,
+      }).catch((error) => {
+        log.error(`failed to scan ${scope} skills`, { dir: root, error })
+        throw error
       })
-        .then((matches) => Promise.all(matches.map(addSkill)))
-        .catch((error) => {
-          log.error(`failed to scan ${scope} skills`, { dir: root, error })
-        })
+      await Promise.all(matches.map(addSkill))
     }
 
     // Scan external skill directories (.claude/skills/, .agents/skills/, .codex/skills/, etc.)

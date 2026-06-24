@@ -9497,6 +9497,9 @@
                           "hidden": {
                             "type": "boolean"
                           },
+                          "skill_mountable": {
+                            "type": "boolean"
+                          },
                           "skill_tool_available": {
                             "type": "boolean"
                           }
@@ -9504,6 +9507,7 @@
                         "required": [
                           "name",
                           "mode",
+                          "skill_mountable",
                           "skill_tool_available"
                         ]
                       }
@@ -9877,6 +9881,9 @@
                           "hidden": {
                             "type": "boolean"
                           },
+                          "skill_mountable": {
+                            "type": "boolean"
+                          },
                           "skill_tool_available": {
                             "type": "boolean"
                           }
@@ -9884,6 +9891,7 @@
                         "required": [
                           "name",
                           "mode",
+                          "skill_mountable",
                           "skill_tool_available"
                         ]
                       }
@@ -10278,6 +10286,9 @@
                           "hidden": {
                             "type": "boolean"
                           },
+                          "skill_mountable": {
+                            "type": "boolean"
+                          },
                           "skill_tool_available": {
                             "type": "boolean"
                           }
@@ -10285,6 +10296,7 @@
                         "required": [
                           "name",
                           "mode",
+                          "skill_mountable",
                           "skill_tool_available"
                         ]
                       }
@@ -10679,6 +10691,9 @@
                           "hidden": {
                             "type": "boolean"
                           },
+                          "skill_mountable": {
+                            "type": "boolean"
+                          },
                           "skill_tool_available": {
                             "type": "boolean"
                           }
@@ -10686,6 +10701,7 @@
                         "required": [
                           "name",
                           "mode",
+                          "skill_mountable",
                           "skill_tool_available"
                         ]
                       }
@@ -40851,6 +40867,10 @@
             "description": "Additional instructions appended after a code-owned stage-agent core prompt.",
             "type": "string"
           },
+          "skill_mountable": {
+            "description": "Whether this agent may receive operator-managed skill mounts. Custom agents default false; built-in agents must match their canonical role contract.",
+            "type": "boolean"
+          },
           "disable": {
             "type": "boolean"
           },
@@ -40908,22 +40928,17 @@
             "$ref": "#/components/schemas/PermissionConfig"
           },
           "tools": {
-            "description": "Tool adapter: whitelist (include) or blacklist (exclude) of tool IDs visible to this agent",
+            "description": "Global registry tool selection for custom agents. Agent-private tools are defined only by native role/runtime contracts.",
             "type": "object",
             "properties": {
-              "include": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "exclude": {
+              "global": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": {}
@@ -46132,6 +46147,16 @@
           "color": {
             "type": "string"
           },
+          "archetype": {
+            "type": "string",
+            "enum": [
+              "host",
+              "worker"
+            ]
+          },
+          "skill_mountable": {
+            "type": "boolean"
+          },
           "permission": {
             "$ref": "#/components/schemas/PermissionRuleset"
           },
@@ -46174,19 +46199,20 @@
           "tools": {
             "type": "object",
             "properties": {
-              "include": {
+              "global": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
-              "exclude": {
+              "private": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               }
-            }
+            },
+            "additionalProperties": false
           }
         },
         "required": [
@@ -49677,168 +49703,6 @@
           "properties"
         ]
       },
-      "Event.file.edited": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "file.edited"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "file": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "file"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.report": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.report"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "report": {
-                "type": "object",
-                "properties": {
-                  "files_changed": {
-                    "description": "Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.",
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "path": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "summary": {
-                          "description": "What changed in this file and why. One or two sentences, concrete — not 'updated foo'.",
-                          "type": "string",
-                          "minLength": 1
-                        }
-                      },
-                      "required": [
-                        "path",
-                        "summary"
-                      ]
-                    }
-                  },
-                  "checks_run": {
-                    "description": "Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.",
-                    "default": [],
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "command": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "exit_code": {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        "output_excerpt": {
-                          "description": "Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "command",
-                        "exit_code"
-                      ]
-                    }
-                  },
-                  "implementation_approach": {
-                    "description": "The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.",
-                    "type": "string",
-                    "minLength": 40
-                  },
-                  "design_decisions": {
-                    "description": "Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.",
-                    "default": [],
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "choice": {
-                          "description": "The decision made, stated as a concrete claim.",
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "alternatives": {
-                          "description": "Alternatives that were considered and rejected. Empty array if none were weighed.",
-                          "default": [],
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "reason": {
-                          "description": "Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.",
-                          "type": "string",
-                          "minLength": 1
-                        }
-                      },
-                      "required": [
-                        "choice",
-                        "reason"
-                      ]
-                    }
-                  },
-                  "blockers": {
-                    "description": "Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.",
-                    "default": [],
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "followup_workload_guidance": {
-                    "description": "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.",
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "required": [
-                  "files_changed",
-                  "implementation_approach"
-                ]
-              }
-            },
-            "required": [
-              "sessionID",
-              "report"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.session.created": {
         "type": "object",
         "properties": {
@@ -49958,6 +49822,30 @@
             },
             "required": [
               "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.file.edited": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "file.edited"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "file"
             ]
           }
         },
@@ -50345,12 +50233,6 @@
             "$ref": "#/components/schemas/Event.session.compacted"
           },
           {
-            "$ref": "#/components/schemas/Event.file.edited"
-          },
-          {
-            "$ref": "#/components/schemas/Event.goal.report"
-          },
-          {
             "$ref": "#/components/schemas/Event.session.created"
           },
           {
@@ -50364,6 +50246,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.config.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.file.edited"
           },
           {
             "$ref": "#/components/schemas/Event.workspace.ready"
