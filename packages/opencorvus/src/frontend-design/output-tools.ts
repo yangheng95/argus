@@ -456,7 +456,7 @@ function requiredImplementationPhaseMissingActions(draft: FrontendTemplateDraft)
   )
 }
 
-function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector, autoIteration: boolean): string[] {
+function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector): string[] {
   const draft = collector.draft
   const actions: string[] = []
 
@@ -496,10 +496,7 @@ function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector,
   if (!hasText(draft.completeness_review)) {
     actions.push('update_frontend_text({ section: "completeness_review", content })')
   }
-  if (
-    !hasItems(draft.template_iteration_notes) ||
-    (autoIteration && (draft.template_iteration_notes?.length ?? 0) < 2)
-  ) {
+  if ((draft.template_iteration_notes?.length ?? 0) < 2) {
     actions.push("update_frontend_iteration_note({ value })")
   }
   actions.push(...requiredImplementationPhaseMissingActions(draft))
@@ -511,9 +508,9 @@ function frontendDraftMissingActions(collector: FrontendTemplateOutputCollector,
   return actions
 }
 
-function frontendTemplateStatus(collector: FrontendTemplateOutputCollector, autoIteration: boolean): string {
+function frontendTemplateStatus(collector: FrontendTemplateOutputCollector): string {
   if (collector.final) return "FRONTEND_TEMPLATE_RESULT_STATUS: finalized"
-  const missing = frontendDraftMissingActions(collector, autoIteration)
+  const missing = frontendDraftMissingActions(collector)
   const draft = collector.draft
   const lines = [
     `FRONTEND_TEMPLATE_RESULT_STATUS: ${missing.length > 0 ? "incomplete" : "ready_for_submit_validation"}`,
@@ -531,7 +528,6 @@ function frontendTemplateStatus(collector: FrontendTemplateOutputCollector, auto
 async function submitFrontendTemplateDraft(input: {
   collector: FrontendTemplateOutputCollector
   rawInput: unknown
-  autoIteration: boolean
   artifactRoot: string
   artifactRootRelative?: string
   workspaceRoot: string
@@ -539,7 +535,7 @@ async function submitFrontendTemplateDraft(input: {
   if (input.collector.final)
     return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
   const { fact_check_items } = FrontendTemplateSubmitSchema.parse(input.rawInput)
-  const missing = frontendDraftMissingActions(input.collector, input.autoIteration)
+  const missing = frontendDraftMissingActions(input.collector)
   if (missing.length > 0) {
     input.collector.semantic_error = "frontend template fragments are incomplete"
     return [
@@ -571,13 +567,13 @@ async function submitFrontendTemplateDraft(input: {
       "Collector remains open. Correct the specific fragment with the matching update_* tool, or call inspect_frontend_result_status for current fragment counts.",
     ].join("\n")
   }
-  if (input.autoIteration && final.template_iteration_notes.length < 2) {
+  if (final.template_iteration_notes.length < 2) {
     input.collector.semantic_error =
-      "assistant.auto_iteration=true requires at least two frontend template review-pass notes before submit_frontend_template."
+      "frontend template handoff requires at least two review-pass notes before submit_frontend_template."
     return [
       "MISSING_FRONTEND_TEMPLATE_RESULT: finalizer kept the collector open.",
       input.collector.semantic_error,
-      "Call update_frontend_iteration_note({ value }) with the second review pass, then call submit_frontend_template({ final: true }) again.",
+      "Call update_frontend_iteration_note({ value }) with the missing review pass, then call submit_frontend_template({ final: true }) again.",
     ].join("\n")
   }
   if (final.frontend_project.role === "visual_baseline_input") {
@@ -1285,13 +1281,11 @@ function buildRequirement(category: VisualSpecCategory, input: Record<string, un
 
 export function createFrontendTemplateOutputTools(
   options: {
-    autoIteration?: boolean
     artifactRoot?: string
     artifactRootRelative?: string
     workspaceRoot?: string
   } = {},
 ) {
-  const autoIteration = options.autoIteration === true
   const artifactRoot = path.resolve(options.artifactRoot ?? process.cwd())
   const artifactRootRelative = options.artifactRootRelative
   const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd())
@@ -1314,7 +1308,7 @@ export function createFrontendTemplateOutputTools(
       return (
         `VISUAL_ANCHOR_BUDGET_REACHED: ${VISUAL_ANCHOR_BUDGET} visual anchors are already registered. ` +
         "Stop registering per-item visual rows; consolidate remaining detail in frontend_template/fillable_modules/completeness_review/material_inventory/visual_consistency_contract/ui_data_contract, " +
-        "complete the frontend template review pass(es) required by assistant.auto_iteration, then call submit_frontend_template."
+        "complete the two frontend template review passes, then call submit_frontend_template."
       )
     }
     const spec: VisualSpec = {
@@ -1598,7 +1592,7 @@ export function createFrontendTemplateOutputTools(
       description:
         "Inspect frontend result collector status after update_* calls. Use when submit_frontend_template reports missing fragments or validation errors.",
       inputSchema: z.object({}).strict(),
-      execute: async () => frontendTemplateStatus(collector, autoIteration),
+      execute: async () => frontendTemplateStatus(collector),
     }),
 
     submit_frontend_template: tool({
@@ -1609,7 +1603,6 @@ export function createFrontendTemplateOutputTools(
         submitFrontendTemplateDraft({
           collector,
           rawInput,
-          autoIteration,
           artifactRoot,
           artifactRootRelative,
           workspaceRoot,

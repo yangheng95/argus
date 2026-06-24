@@ -1219,30 +1219,16 @@ async function buildSystemParts(
     }),
   })
   const ctx: string[] = []
-  const autoIteration = (await EngineConfig.get()).auto_iteration === true
-
-  // ── Auto iteration mode ──
-  // This is intentionally dynamic, not hard-coded into the static prompt, so
-  // flipping `assistant.auto_iteration` changes the next wake immediately.
-  ctx.push("## Auto Iteration Mode")
-  if (autoIteration) {
-    ctx.push(
-      "- assistant.auto_iteration=true: rejected acceptance reviews and failed terminal waves may queue same-task repair work automatically when evidence is concrete and not a repeated identical failure.",
-    )
-    ctx.push(
-      "- Route the repair to the responsible owner inside this task: product/toolchain/git-worktree blockers go to Build, graph/dependency contract blockers go to modify_goal or architect, then rerun the relevant verification/integrity gate.",
-    )
-    ctx.push(
-      "- Do not keep retrying a verification-only goal when its evidence proves a product, dependency, git, or toolchain blocker owned elsewhere; stop and ask only when the failure repeats or needs operator judgment.",
-    )
-  } else {
-    ctx.push(
-      "- assistant.auto_iteration=false: rejected acceptance reviews and failed terminal waves do not open host-side rework attempts or queue a new build loop by themselves.",
-    )
-    ctx.push(
-      "- The current reasoning turn still owns the next decision. Do not stop with a plain-text blocker when same-task repair is available; use the evidence to build, modify_goal, architect, ask a concrete external-only question, or fail the task.",
-    )
-  }
+  // ── Recovery discipline ──
+  // Rendered as one invariant instead of a configuration mode: the orchestrator
+  // reads facts and routes repair; it does not expose a retry-loop switch.
+  ctx.push("## Recovery Discipline")
+  ctx.push(
+    "- Rejected acceptance reviews and failed terminal waves require same-task diagnosis from the rendered facts. Route product, dependency, toolchain, git-worktree, preview, and browser-runner blockers to Build; route graph or dependency-contract blockers to modify_goal or architect; ask the operator only for external, destructive, or out-of-scope blockers.",
+  )
+  ctx.push(
+    "- Do not restart upstream merely because a Build attempt failed or a retained worktree contains partial files. Reuse `query_failed_goals`, build retry requests, modify_goal, or architect re-entry according to the proven owner, then rerun the relevant verification or integrity path.",
+  )
   ctx.push("")
 
   // ── Follow-up task context ──
@@ -1337,7 +1323,7 @@ async function buildSystemParts(
   // reflects reality, and when Phase 3 retires the cache field entirely,
   // this block keeps working unchanged.
   const snapshot = await describeTask(task.id)
-  ctx.push(renderTaskDescription(snapshot, { autoIteration }))
+  ctx.push(renderTaskDescription(snapshot))
 
   // ── Workflow guidance (injected as recommended path, not enforced) ──
   if (workflow && workflowState) {

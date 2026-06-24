@@ -881,10 +881,8 @@ function truncate(text: string, max: number): string {
 export function renderCollaborationClosure(
   desc: CollaborationClosureDesc | undefined,
   goals: GoalDesc[],
-  options: { autoIteration?: boolean } = {},
 ): string[] {
   if (!desc) return []
-  const autoIteration = options.autoIteration === true
 
   const lines: string[] = []
   const titleByID = new Map(goals.map((goal) => [goal.id, goal.title]))
@@ -913,15 +911,9 @@ export function renderCollaborationClosure(
     for (const goalID of desc.failed_goal_ids) {
       lines.push(`- ${goalID}: ${titleByID.get(goalID) ?? "untitled"}`)
     }
-    if (autoIteration) {
-      lines.push(
-        "assistant.auto_iteration=true: Failed goals stay inside the current collaboration closure. Read `query_failed_goals`, then retry `build({ goalID })` or apply `modify_goal` when the contract itself needs a point correction. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
-      )
-    } else {
-      lines.push(
-        "assistant.auto_iteration=false: no host-side retry loop is queued automatically, but the orchestrator turn still owns same-task recovery. Read `query_failed_goals`, then route repair through `build({ goalID, request })`, `modify_goal`, or `architect`; ask the operator only for external/destructive blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
-      )
-    }
+    lines.push(
+      "Failed goals stay inside the current collaboration closure. Read `query_failed_goals`, then route repair through `build({ goalID, request })`, `modify_goal`, or `architect` according to the proven owner; ask the operator only for external, destructive, or out-of-scope blockers. Do not restart upstream merely because a Build attempt failed or a failed worktree contains partial files.",
+    )
   }
 
   if (desc.dispatchable_goal_ids.length > 0) {
@@ -948,7 +940,7 @@ export function renderCollaborationClosure(
  * Render a TaskDesc as markdown suitable for direct injection into the
  * orchestrator's system prompt. LLM reads this instead of querying piecemeal.
  */
-export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?: boolean } = {}): string {
+export function renderTaskDescription(desc: TaskDesc): string {
   const lines: string[] = []
   lines.push(`## Task: ${desc.title} (${desc.status})`)
   lines.push(`Kind: ${desc.kind}`)
@@ -983,7 +975,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
     "No numeric run/fix budget is enforced by the host. Decide whether to continue, change strategy, ask the operator, or fail_task from the evidence above and below.",
   )
 
-  const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals, options)
+  const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals)
   if (closureLines.length > 0) {
     lines.push("")
     lines.push(...closureLines)

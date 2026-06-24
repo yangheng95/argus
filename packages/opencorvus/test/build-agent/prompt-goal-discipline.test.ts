@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { renderBuildAutoIterationMode } from "../../src/build/agent"
+import { renderBuildRepairDiscipline } from "../../src/build/agent"
 
 const promptPath = new URL("../../src/prompt/core/build-core.txt", import.meta.url)
 
@@ -32,19 +32,16 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("Expand outside `owned_paths` only when the real code path")
   })
 
-  test("renders current auto-iteration mode into build sessions", () => {
-    expect(renderBuildAutoIterationMode(false)).toContain("assistant.auto_iteration=false")
-    expect(renderBuildAutoIterationMode(false)).toContain("one focused product/implementation repair pass")
-    expect(renderBuildAutoIterationMode(false)).toContain("explicitly assigned stuck-state repair")
-    expect(renderBuildAutoIterationMode(false)).toContain(
-      "This bound does not apply to repo-local toolchain/pre-checker blockers",
-    )
-    expect(renderBuildAutoIterationMode(false)).toContain("until the exact required checker runs")
-    expect(renderBuildAutoIterationMode(true)).toContain("assistant.auto_iteration=true")
-    expect(renderBuildAutoIterationMode(true)).toContain("continue focused repair attempts")
-    expect(renderBuildAutoIterationMode(true)).toContain(
-      "dependency, toolchain, port, script, test, and worktree merge repairs",
-    )
+  test("renders static build repair discipline into build sessions", () => {
+    const discipline = renderBuildRepairDiscipline()
+
+    expect(discipline).toContain("## Build Repair Discipline")
+    expect(discipline).toContain("Repo-local dependency")
+    expect(discipline).toContain("node_modules-link")
+    expect(discipline).toContain("Continue concrete repairs in the same worktree")
+    expect(discipline).toContain("until the exact required checker runs and passes")
+    expect(discipline).toContain("Toolchain blockers are publish blockers")
+    expect(discipline).toContain("Do not call merge_back")
   })
 
   test("warns Windows builds to start Playwright through npm, not bun", async () => {
@@ -161,10 +158,15 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("rerun the exact required command")
     expect(normalized).toContain("do not bypass the required command with a lower-level executable")
     expect(normalized).toContain("as if product code failed")
-    expect(normalized).toContain("assistant.auto_iteration=false")
-    expect(normalized).toContain("does not shorten local toolchain repair")
+    expect(normalized).toContain("Local toolchain repair is part of Build ownership")
     expect(normalized).toContain("while concrete repair actions remain")
     expect(normalized).toContain("include the exhausted repair evidence")
+    expect(normalized).toContain("Toolchain blockers are also publish blockers")
+    expect(normalized).toContain("Do not call `merge_back` after project changes")
+    expect(normalized).toContain("when the required checker has not started")
+    expect(normalized).toContain("publish only after the checker evidence is green")
+    expect(normalized).toContain("Never call `merge_back` for changed project files")
+    expect(normalized).toContain("while required verification is blocked by local toolchain/pre-checker failure")
   })
 
   test("forbids committing OpenCorvus internal runtime paths as deliverables", async () => {
