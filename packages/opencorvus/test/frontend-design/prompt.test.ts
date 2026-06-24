@@ -965,7 +965,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(
       "Host-prepared means source evidence exists; it does not mean the frontend template or visual HTML skeleton is already designed",
     )
-    expect(prompt).toContain("Use `read_file`, `list_directory`, `find_files`, and `search_code`")
+    expect(prompt).toContain("Use `read`, `list`, `glob`, and `search_code`")
     expect(prompt).toContain("any existing frontend app constraints")
     expect(prompt).toContain("## source-ir/component-tree.json")
     expect(prompt).toContain("## source-ir/content-model.json")

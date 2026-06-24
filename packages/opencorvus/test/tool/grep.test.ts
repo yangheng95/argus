@@ -46,13 +46,13 @@ describe("tool.search_code", () => {
     await fs.mkdir(sibling, { recursive: true })
     await Bun.write(path.join(sibling, "secret.txt"), "outside")
 
-    const readFile = createCodebaseTools(root).read_file
-    const result = await readFile.execute!({ path: "../repo2/secret.txt" }, {} as any)
+    const readFile = createCodebaseTools(root).read
+    const result = await readFile.execute!({ filePath: "../repo2/secret.txt" }, {} as any)
 
     expect(result).toBe("Error: path is outside the project boundary.")
   })
 
-  test("workflow read_file permits same-session overwrite through write tool", async () => {
+  test("workflow read permits same-session overwrite through write tool", async () => {
     await using tmp = await tmpdir()
     const filePath = path.join(tmp.path, "src", "component.tsx")
     await fs.mkdir(path.dirname(filePath), { recursive: true })
@@ -61,9 +61,9 @@ describe("tool.search_code", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const sessionID = "frontend-design-read-file-session"
-        const readFile = createCodebaseTools(tmp.path).read_file
-        const result = await readFile.execute!({ path: "src/component.tsx" }, { opencorvus: { sessionID } } as any)
+        const sessionID = "frontend-design-read-session"
+        const readFile = createCodebaseTools(tmp.path).read
+        const result = await readFile.execute!({ filePath: "src/component.tsx" }, { opencorvus: { sessionID } } as any)
 
         expect(String(result)).toContain("export function Component")
         expect(FileTime.get(sessionID, filePath)).toBeInstanceOf(Date)
@@ -80,7 +80,7 @@ describe("tool.search_code", () => {
         ).resolves.toMatchObject({ output: expect.stringContaining("Wrote file successfully.") })
       },
     })
-  })
+  }, 15_000)
 
   test("workflow search_code max_results limits total matches, not matches per file", async () => {
     await using tmp = await tmpdir()

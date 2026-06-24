@@ -233,7 +233,7 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
       expect(Object.keys(tools)).toContain("inspect_integrity_evidence")
       expect(Object.keys(tools)).toContain("inspect_visual_evidence")
       expect(Object.keys(tools)).toContain("run_command")
-      expect(Object.keys(tools)).toContain("read_file")
+      expect(Object.keys(tools)).toContain("read")
       expect(Object.keys(tools)).toContain("search_code")
 
       const directories = await tools.inspect_integrity_evidence.execute!(

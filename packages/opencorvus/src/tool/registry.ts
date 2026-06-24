@@ -1,20 +1,4 @@
-import { QuestionTool } from "./question"
-import { BashTool } from "./bash"
-import { BrowserPreviewBindLocalModuleTool } from "./browser-preview-bind-local-module"
-import { BrowserPreviewCompareScrollSlicesTool } from "./browser-preview-compare-scroll-slices"
-import { BrowserPreviewCompareRegionsTool } from "./browser-preview-compare-regions"
-import { BrowserPreviewCompareScrollSlicesToolID } from "./browser-preview-tool-ids"
-import { BrowserPreviewTool } from "./browser-preview"
-import { EditTool } from "./edit"
-import { GlobTool } from "./glob"
-import { SearchCodeTool } from "./grep"
 import { createBatchTool } from "./batch"
-import { ReadTool } from "./read"
-import { TaskTool } from "./task"
-import { TodoReadTool, TodoWriteTool } from "./todo"
-import { WebFetchTool } from "./webfetch"
-import { WriteTool } from "./write"
-import { SkillTool } from "./skill"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
 import { Instance, lazyInstanceState } from "../project/instance"
@@ -23,35 +7,12 @@ import path from "path"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@opencorvus-ai/plugin"
 import z from "zod"
 import { Plugin } from "../plugin"
-import { WebSearchTool } from "./websearch"
-import { ExternalCodeSearchTool } from "./codesearch"
-import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
-import { LspTool } from "./lsp"
 import { Truncate } from "./truncation"
-
-import { AnalyticsTool } from "./analytics"
-import { ApplyPatchTool } from "./apply_patch"
-import { MemoryTool } from "./memory"
-import { ScheduleTool } from "./schedule"
-import { PlannerTool } from "./planner"
-import { PanelTool } from "./panel"
-import { MissionStateTool } from "./mission-state"
-import { WaitTool } from "./wait"
-import { TaskReportTool } from "./task-report"
-import { GoalReportTool } from "./goal-report"
-import { WebCloneGenerateSourceProjectTool } from "./web-clone-generate-source-project"
-import { WebClonePrepareContextTool } from "./web-clone-prepare-context"
-import { WebCloneSourceAuditTool } from "./web-clone-source-audit"
-import {
-  WebpageExtractTool,
-  WebpageCompileTool,
-  WebpageAnalyzeTool,
-  WebpageRuntimeStateTool,
-} from "@/frontend-design/tools"
-import { isWebpageEvidenceAnalysisToolId, isWebpageEvidenceToolId } from "@/frontend-design/tools/ids"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
+import { AgentToolPool } from "@/agent/tool-pool-contract"
+import { BATCH_TOOL_ID, builtInGlobalTools } from "./global-tools"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -121,50 +82,9 @@ export namespace ToolRegistry {
     custom.push(tool)
   }
 
-  async function all(config?: Config.Info): Promise<Tool.Info[]> {
+  async function all(): Promise<Tool.Info[]> {
     const custom = await state().then((x) => x.custom)
-    const cfg = config ?? (await Config.get())
-    const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
-
-    return [
-      ...(question ? [QuestionTool] : []),
-      BashTool,
-      BrowserPreviewTool,
-      BrowserPreviewBindLocalModuleTool,
-      BrowserPreviewCompareRegionsTool,
-      BrowserPreviewCompareScrollSlicesTool,
-      ReadTool,
-      GlobTool,
-      SearchCodeTool,
-      EditTool,
-      WriteTool,
-      TaskTool,
-      WebFetchTool,
-      TodoWriteTool,
-      TodoReadTool,
-      WebSearchTool,
-      ExternalCodeSearchTool,
-      SkillTool,
-      ApplyPatchTool,
-      MemoryTool,
-      ScheduleTool,
-      PlannerTool,
-      PanelTool,
-      MissionStateTool,
-      WaitTool,
-      TaskReportTool,
-      GoalReportTool,
-      WebClonePrepareContextTool,
-      WebCloneGenerateSourceProjectTool,
-      WebCloneSourceAuditTool,
-      AnalyticsTool,
-      WebpageExtractTool,
-      WebpageCompileTool,
-      WebpageAnalyzeTool,
-      WebpageRuntimeStateTool,
-      ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
-      ...custom,
-    ]
+    return [...(await builtInGlobalTools()), ...custom]
   }
 
   export async function ids() {
@@ -179,32 +99,14 @@ export namespace ToolRegistry {
     agent?: Agent.Info,
     config?: Config.Info,
   ) {
-    let items = await all(config)
+    let items = await all()
+    if (agent) items = [...items, ...(await AgentToolPool.privateRegistryTools(agent.name, agent.tools))]
 
-    // Agent tool adapter: filter by agent's declared tool set.
-    // frontend_design owns webpage evidence acquisition. Other agents consume
-    // prepared task-runtime evidence and public frontend_design handoff files
-    // instead of reopening URL/Figma/image extraction through registry tools.
-    if (agent?.name === "visual-qa") {
-      items = items.filter((t) => !isWebpageEvidenceAnalysisToolId(t.id))
-    } else if (agent?.name !== "frontend-design") {
-      items = items.filter((t) => !isWebpageEvidenceToolId(t.id))
-    }
-    if (agent?.name !== "visual-qa") {
-      items = items.filter((t) => t.id !== BrowserPreviewCompareScrollSlicesToolID)
-    }
-
-    if (agent?.tools?.include) {
-      const set = new Set(agent.tools.include)
-      items = items.filter((t) => set.has(t.id))
-    } else if (agent?.tools?.exclude) {
-      const set = new Set(agent.tools.exclude)
-      items = items.filter((t) => !set.has(t.id))
-    }
+    const visibleToolIDs = agent ? AgentToolPool.visibleToolIDs(agent.tools) : undefined
+    if (visibleToolIDs) items = items.filter((t) => visibleToolIDs.has(t.id))
 
     const batchToolAllowed =
-      config?.experimental?.batch_tool === true &&
-      (agent?.tools?.include ? agent.tools.include.includes("batch") : !agent?.tools?.exclude?.includes("batch"))
+      config?.experimental?.batch_tool === true && (!agent || AgentToolPool.hasTool(agent.tools, BATCH_TOOL_ID))
 
     const result = await Promise.all(
       items

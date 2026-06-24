@@ -1,8 +1,8 @@
 export const VISUAL_QA_CONTEXT_TOOL_IDS = [
-  "read_file",
-  "find_files",
+  "read",
+  "glob",
   "search_code",
-  "list_directory",
+  "list",
   "memory_search",
   "memory_get",
 ] as const
