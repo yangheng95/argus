@@ -1380,6 +1380,41 @@ export const Event = {
       summary: z.string(),
     }),
   ),
+  AgentCoordinationRequested: BusEvent.define(
+    "agent.coordination.requested",
+    z.object({
+      taskID: Identifier.schema("task"),
+      requestID: Identifier.schema("artifact"),
+      sessionID: Identifier.schema("session"),
+      agent: z.string(),
+      blocking: z.boolean(),
+      severity: z.enum(["info", "blocked", "failure"]),
+      summary: z.string(),
+    }),
+    { tier: 2 },
+  ),
+  AgentCoordinationResponded: BusEvent.define(
+    "agent.coordination.responded",
+    z.object({
+      taskID: Identifier.schema("task"),
+      requestID: Identifier.schema("artifact"),
+      responseID: Identifier.schema("artifact"),
+      sessionID: Identifier.schema("session"),
+      decision: z.enum(["continue", "cancel_worker", "redispatch", "fail_task", "ask_user"]),
+      summary: z.string(),
+    }),
+    { tier: 2 },
+  ),
+  AgentCoordinationCancelled: BusEvent.define(
+    "agent.coordination.cancelled",
+    z.object({
+      taskID: Identifier.schema("task"),
+      requestID: Identifier.schema("artifact"),
+      sessionID: Identifier.schema("session"),
+      summary: z.string(),
+    }),
+    { tier: 3 },
+  ),
 
   // ── MiniWorkflow events ──
   WorkflowSelected: BusEvent.define(
