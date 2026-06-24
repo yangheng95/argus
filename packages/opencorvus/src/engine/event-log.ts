@@ -33,6 +33,9 @@ const LOGGED_TYPES = new Set([
   "interaction.resolved",
   "acceptance.ready",
   "evaluation.completed",
+  "agent.coordination.requested",
+  "agent.coordination.responded",
+  "agent.coordination.cancelled",
 ])
 
 /** run.progress type values that are pure noise */
@@ -265,6 +268,12 @@ export namespace EngineEventLog {
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, verdict, status, summary })
         break
       }
+      case "agent.coordination.requested":
+      case "agent.coordination.responded":
+      case "agent.coordination.cancelled":
+        tl(ctx, `[${elapsed(ctx)}] A2A ${type.replace("agent.coordination.", "")}  ${summary}`)
+        nd(ctx, { at: now, elapsed_ms: ms, type, taskID, summary })
+        break
     }
   }
 

@@ -10,6 +10,7 @@ import path from "node:path"
 import fs from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { Session } from "@/session"
+import { SessionContext } from "@/session/context"
 import type { AgentReport } from "@/agent/report"
 import { FactCheckItemListSchema, type FactCheckReport } from "@/fact-check/schema"
 import { resolveAgentModel, resolveAgentModelRef, resolveConfiguredModelRef } from "@/agent/model"
@@ -136,6 +137,11 @@ import {
   type OrchestratorToolOwnershipRow,
 } from "@/engine/tool-ownership"
 import { Ownership } from "@/engine/ownership"
+import {
+  createAgentCoordinationResponse,
+  findAgentCoordinationRequest,
+  type AgentCoordinationRequestRow,
+} from "@/engine/agent-coordination"
 
 import {
   createWorkflowState,
@@ -1605,6 +1611,89 @@ function assertDirectReplySessionOwnership(input: { taskID: string; sessionID: s
     throw new Error(`Session ${input.sessionID} has kind "${kind}" and cannot receive direct agent control`)
   }
   return { kind }
+}
+
+function requirePendingAgentCoordinationRequest(input: {
+  taskID: string
+  requestID: string
+}): AgentCoordinationRequestRow {
+  const request = findAgentCoordinationRequest({
+    taskID: input.taskID,
+    requestID: input.requestID,
+  })
+  if (!request) {
+    throw new Error(`agent coordination request ${input.requestID} does not belong to task ${input.taskID}`)
+  }
+  if (request.payload.status !== "pending") {
+    throw new Error(`agent coordination request ${input.requestID} is ${request.payload.status}`)
+  }
+  return request
+}
+
+async function validateAgentCoordinationContinueTarget(input: {
+  taskID: string
+  request: AgentCoordinationRequestRow
+}) {
+  const session = await Session.get(input.request.payload.session_id)
+  const { kind } = assertDirectReplySessionOwnership({
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
+  const status = SessionStatus.get(input.request.payload.session_id)
+  if (status.type === "streaming" || status.type === "retry") {
+    throw new Error(
+      `agent coordination continue refused because session ${input.request.payload.session_id} is ${status.type}; answer later or cancel the worker explicitly.`,
+    )
+  }
+  if (status.type === "terminal") {
+    throw new Error(
+      `agent coordination continue refused because session ${input.request.payload.session_id} is terminal (${status.reason}); redispatch the worker under a visible tool call if more work is needed.`,
+    )
+  }
+  const model = await resolveAgentModelRef(input.request.payload.agent, {
+    taskID: input.taskID,
+    sessionID: input.request.payload.session_id,
+  })
+  const requiresRuntimeContract =
+    SessionPrompt.agentKindRequiresRuntimeContract(input.request.payload.agent) ||
+    SessionPrompt.agentKindRequiresRuntimeContract(kind)
+  const runtimeContract = SessionPrompt.validateSessionRuntimeContractForContinuation({
+    sessionID: input.request.payload.session_id,
+    sessionKind: kind,
+    expectedAgentKind: input.request.payload.agent,
+    expectedGoalID: input.request.payload.goal_id,
+    expectedGoalRunID: input.request.payload.goal_run_id,
+    expectedModel: {
+      providerID: model.providerID,
+      modelID: model.modelID,
+    },
+    expectedResultMode: "reply",
+    requireWorkerTurnDescriptor: requiresRuntimeContract && input.request.payload.agent !== "orchestrator",
+    requireRuntimeContract: requiresRuntimeContract,
+  })
+  return { session, kind, model, runtimeContract }
+}
+
+async function startAgentCoordinationContinuation(input: {
+  session: Awaited<ReturnType<typeof Session.get>>
+}): Promise<{ loopPromise: ReturnType<typeof SessionPrompt.loop> }> {
+  const loopPromise: ReturnType<typeof SessionPrompt.loop> = Promise.resolve(
+    SessionContext.provide(input.session, () =>
+      Instance.provide({
+        directory: input.session.directory,
+        fn: () => SessionPrompt.loop({ sessionID: input.session.id, resume_existing: true }),
+      }),
+    ),
+  ).then((result) => result)
+  const immediate = await Promise.race([
+    loopPromise.then(
+      () => ({ type: "settled" as const }),
+      (error) => ({ type: "failed" as const, error }),
+    ),
+    new Promise<{ type: "scheduled" }>((resolve) => setTimeout(() => resolve({ type: "scheduled" }), 0)),
+  ])
+  if (immediate.type === "failed") throw immediate.error
+  return { loopPromise }
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -3155,6 +3244,7 @@ export function createOrchestratorTools(input: {
     "question",
     "propose_task",
     "inject_operator_message",
+    "respond_agent_coordination",
     "cancel_subagent",
   ])
 
@@ -6483,6 +6573,223 @@ export function createOrchestratorTools(input: {
           message.attachmentSummary ? `\n${message.attachmentSummary}` : "",
         ].filter((line) => line.length > 0)
         return lines.join("\n")
+      },
+    }),
+
+    respond_agent_coordination: tool({
+      description:
+        "Answer one pending worker-to-orchestrator coordination request. This is the only orchestrator path for sending scheduler guidance back to a worker session; it requires request_id and writes visible request/response artifacts.",
+      inputSchema: z
+        .object({
+          request_id: z.string().min(1).describe("Pending agent_coordination_request artifact id."),
+          decision: z
+            .enum(["continue", "cancel_worker", "redispatch", "fail_task", "ask_user"])
+            .describe(
+              "continue appends a visible message to the requesting worker session after runtime-contract validation; cancel_worker aborts the requesting worker; redispatch/fail_task/ask_user record the decision and require the matching visible orchestrator action next.",
+            ),
+          message: z
+            .string()
+            .optional()
+            .describe("Visible guidance to append to the worker for decision=continue, or decision detail for audit."),
+          reason: z.string().min(1).describe("Why this is the correct scheduling decision."),
+        })
+        .strict(),
+      execute: async ({ request_id, decision, message, reason }, options) => {
+        const toolExecution = requireOrchestratorToolExecutionContext(options, "respond_agent_coordination")
+        const request = requirePendingAgentCoordinationRequest({ taskID, requestID: request_id })
+        const guidance = message?.trim()
+
+        if (decision === "continue") {
+          const target = await validateAgentCoordinationContinueTarget({ taskID, request })
+          const workerMessageText = [
+            "# Orchestrator Coordination Response",
+            "",
+            `request_id: ${request.payload.request_id}`,
+            `decision: ${decision}`,
+            `reason: ${reason.trim()}`,
+            "",
+            "## Original Worker Request",
+            request.payload.summary,
+            "",
+            request.payload.details,
+            "",
+            "## Guidance",
+            guidance && guidance.length > 0
+              ? guidance
+              : "Continue from the current task evidence and resolve the requested scheduling issue under the existing worker contract.",
+          ].join("\n")
+          const descriptor =
+            target.runtimeContract?.identity.workerTurnDescriptorID &&
+            target.runtimeContract.identity.workerTurnDescriptorHash
+              ? {
+                  id: target.runtimeContract.identity.workerTurnDescriptorID,
+                  hash: target.runtimeContract.identity.workerTurnDescriptorHash,
+                }
+              : undefined
+          const workerMessage = await SessionPrompt.prompt({
+            sessionID: request.payload.session_id,
+            messageID: Identifier.ascending("message"),
+            model: {
+              providerID: target.model.providerID,
+              modelID: target.model.modelID,
+            },
+            agent: request.payload.agent,
+            noReply: true,
+            extra: {
+              taskID,
+              source: "agent_coordination_response",
+              agentCoordination: {
+                requestID: request.payload.request_id,
+                decision,
+                reason,
+                blocking: request.payload.blocking,
+                requestedDecision: request.payload.requested_decision,
+              },
+              ...(descriptor ? { workerTurnDescriptor: descriptor } : {}),
+            },
+            parts: [
+              {
+                type: "text",
+                text: workerMessageText,
+                id: Identifier.ascending("part"),
+              },
+            ],
+          })
+          let continuation: { loopPromise: ReturnType<typeof SessionPrompt.loop> }
+          try {
+            continuation = await startAgentCoordinationContinuation({ session: target.session })
+          } catch (error) {
+            await Session.removeMessage({
+              sessionID: request.payload.session_id,
+              messageID: workerMessage.info.id,
+            }).catch((removeError) => {
+              log.error("agent coordination failed-continuation rollback failed", {
+                taskID,
+                requestID: request.payload.request_id,
+                sessionID: request.payload.session_id,
+                messageID: workerMessage.info.id,
+                error: removeError,
+              })
+            })
+            throw error
+          }
+          let response
+          try {
+            response = createAgentCoordinationResponse({
+              taskID,
+              requestID: request.payload.request_id,
+              orchestratorSessionID: toolExecution.orchestratorSessionID,
+              orchestratorMessageID: toolExecution.orchestratorMessageID,
+              decision,
+              reason,
+              ...(guidance ? { message: guidance } : {}),
+              workerMessageID: workerMessage.info.id,
+            })
+          } catch (error) {
+            await Session.removeMessage({
+              sessionID: request.payload.session_id,
+              messageID: workerMessage.info.id,
+            }).catch((removeError) => {
+              log.error("agent coordination response rollback failed", {
+                taskID,
+                requestID: request.payload.request_id,
+                sessionID: request.payload.session_id,
+                messageID: workerMessage.info.id,
+                error: removeError,
+              })
+            })
+            throw error
+          }
+
+          void continuation.loopPromise.catch((error) => {
+            log.error("agent coordination continue loop failed", {
+              taskID,
+              requestID: request.payload.request_id,
+              responseID: response.payload.response_id,
+              sessionID: target.session.id,
+              error,
+            })
+          })
+          return (
+            `Responded to coordination request ${request.payload.request_id} with continue. ` +
+            `Appended worker message ${workerMessage.info.id} and resumed session ${request.payload.session_id}.`
+          )
+        }
+
+        if (decision === "cancel_worker") {
+          const { kind } = assertDirectReplySessionOwnership({
+            taskID,
+            sessionID: request.payload.session_id,
+          })
+          const liveOwner =
+            (request.payload.goal_run_id
+              ? findLiveBuildOwnershipByGoalRun({ taskID, goalRunID: request.payload.goal_run_id })
+              : undefined) ?? findLiveBuildOwnershipBySession({ taskID, sessionID: request.payload.session_id })
+          let cancelSummary = ""
+          if (kind === "build" && liveOwner) {
+            cancelSummary = await cancelLiveOwnedBuild({
+              taskID,
+              sessionID: request.payload.session_id,
+              goalRunID: request.payload.goal_run_id,
+              owner: liveOwner,
+              reason,
+              reasonPrefix: "respond_agent_coordination",
+              originSite: "orchestrator.tools.respond-agent-coordination-cancel-worker",
+              metadata: {
+                agent_coordination_request_id: request.payload.request_id,
+                cancelled_live_build: true,
+              },
+            })
+          } else if (request.payload.goal_run_id) {
+            const aborted = await abortGoalRunExecution({
+              taskID,
+              goalRunID: request.payload.goal_run_id,
+              reason: `respond_agent_coordination: ${reason}`,
+            })
+            cancelSummary = ` goal_run ${request.payload.goal_run_id} ${aborted.goalRunAborted ? "aborted" : "unchanged"}.`
+          } else {
+            const aborted = await abortChildExecutionForSession({
+              taskID,
+              sessionID: request.payload.session_id,
+              reason: `respond_agent_coordination: ${reason}`,
+            })
+            cancelSummary = ` prompt_cancelled=${aborted.promptCancelled}; executor_abort=${aborted.executorAbortAttempted ? (aborted.executorAbortSucceeded ? "ok" : "failed") : "not-applicable"}.`
+          }
+          const response = createAgentCoordinationResponse({
+            taskID,
+            requestID: request.payload.request_id,
+            orchestratorSessionID: toolExecution.orchestratorSessionID,
+            orchestratorMessageID: toolExecution.orchestratorMessageID,
+            decision,
+            reason,
+            ...(guidance ? { message: guidance } : {}),
+          })
+          return (
+            `Responded to coordination request ${request.payload.request_id} with cancel_worker. ` +
+            `response=${response.payload.response_id}; session=${request.payload.session_id}; kind=${kind}.` +
+            cancelSummary
+          )
+        }
+
+        const response = createAgentCoordinationResponse({
+          taskID,
+          requestID: request.payload.request_id,
+          orchestratorSessionID: toolExecution.orchestratorSessionID,
+          orchestratorMessageID: toolExecution.orchestratorMessageID,
+          decision,
+          reason,
+          ...(guidance ? { message: guidance } : {}),
+        })
+        const nextAction =
+          decision === "redispatch"
+            ? "Call the appropriate worker tool in this same visible orchestrator turn if work must continue."
+            : decision === "fail_task"
+              ? "Call fail_task in this same visible orchestrator turn if the task must end as failed."
+              : "Call question in this same visible orchestrator turn if operator input is required."
+        return (
+          `Responded to coordination request ${request.payload.request_id} with ${decision}. ` +
+          `response=${response.payload.response_id}. ${nextAction}`
+        )
       },
     }),
 

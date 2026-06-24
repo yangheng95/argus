@@ -17,7 +17,7 @@ export const VISUAL_QA_IMPLEMENTATION_TOOL_IDS = [
   "apply_patch",
 ] as const
 
-export const VISUAL_QA_UTILITY_TOOL_IDS = ["skill"] as const
+export const VISUAL_QA_UTILITY_TOOL_IDS = ["skill", "request_orchestrator_decision"] as const
 
 export const VISUAL_QA_STATIC_TOOL_IDS = [
   ...VISUAL_QA_CONTEXT_TOOL_IDS,

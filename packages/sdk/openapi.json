@@ -48006,6 +48006,156 @@
           "properties"
         ]
       },
+      "Event.agent.coordination.requested": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "agent.coordination.requested"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "requestID": {
+                "type": "string",
+                "pattern": "^art.*"
+              },
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "blocking": {
+                "type": "boolean"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "blocked",
+                  "failure"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "requestID",
+              "sessionID",
+              "agent",
+              "blocking",
+              "severity",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.agent.coordination.responded": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "agent.coordination.responded"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "requestID": {
+                "type": "string",
+                "pattern": "^art.*"
+              },
+              "responseID": {
+                "type": "string",
+                "pattern": "^art.*"
+              },
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "decision": {
+                "type": "string",
+                "enum": [
+                  "continue",
+                  "cancel_worker",
+                  "redispatch",
+                  "fail_task",
+                  "ask_user"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "requestID",
+              "responseID",
+              "sessionID",
+              "decision",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.agent.coordination.cancelled": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "agent.coordination.cancelled"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "requestID": {
+                "type": "string",
+                "pattern": "^art.*"
+              },
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "requestID",
+              "sessionID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.workflow.selected": {
         "type": "object",
         "properties": {
@@ -50199,6 +50349,15 @@
           },
           {
             "$ref": "#/components/schemas/Event.message.injected"
+          },
+          {
+            "$ref": "#/components/schemas/Event.agent.coordination.requested"
+          },
+          {
+            "$ref": "#/components/schemas/Event.agent.coordination.responded"
+          },
+          {
+            "$ref": "#/components/schemas/Event.agent.coordination.cancelled"
           },
           {
             "$ref": "#/components/schemas/Event.workflow.selected"

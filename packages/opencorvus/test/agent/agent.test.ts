@@ -103,6 +103,7 @@ test("build agent has correct default properties", async () => {
       expect(evalPerm(build, "todowrite")).toBe("allow")
       const visible = visibleToolIDs(build)
       expect(visible.has("skill")).toBe(true)
+      expect(visible.has("request_orchestrator_decision")).toBe(true)
       expect(visible.has("web_clone_prepare_context")).toBe(false)
       expect(visible.has("web_clone_generate_source_project")).toBe(false)
 
@@ -208,6 +209,7 @@ test("coding agent owns direct assistant prompt", async () => {
       expect(coding?.hidden).toBeUndefined()
       expect(coding?.prompt).toBe(PROMPT_CODING)
       expect(await Agent.nativeDefaultPrompt("coding")).toBe(PROMPT_CODING)
+      expect(visibleToolIDs(coding).has("request_orchestrator_decision")).toBe(false)
     },
   })
 })
@@ -230,6 +232,7 @@ test("right sidebar coding assistant is a hidden full-function primary agent", a
       expect(evalPerm(agent, "todoread")).toBe("allow")
       expect(evalPerm(agent, "todowrite")).toBe("allow")
       expect(visibleToolIDs(agent).has("panel")).toBe(true)
+      expect(visibleToolIDs(agent).has("request_orchestrator_decision")).toBe(false)
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent!)
       const ids = new Set(tools.map((tool) => tool.id))
@@ -258,6 +261,10 @@ test("role contract metadata is projected onto registered agents", async () => {
       expect(codingAssistant?.skill_mountable).toBe(false)
     },
   })
+})
+
+test("custom default tool pool excludes task-scoped agent coordination", () => {
+  expect(AgentToolPool.customDefault().global).not.toContain("request_orchestrator_decision")
 })
 
 test("explore agent limits exposed tools without permission denials", async () => {
@@ -316,6 +323,7 @@ test("general agent exposes subtask dispatch without allowing self-recursion", a
       expect(general?.prompt).toContain("You are")
       const visible = visibleToolIDs(general)
       expect(visible.has("task")).toBe(true)
+      expect(visible.has("request_orchestrator_decision")).toBe(false)
       expect(visible.has("todoread")).toBe(false)
       expect(visible.has("todowrite")).toBe(false)
       expect(PermissionNext.evaluate("task", "explore", general!.permission).action).toBe("allow")
@@ -581,6 +589,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       const visualVisible = visibleToolIDs(visualQa)
       expect([...visualVisible].sort()).toEqual([...VISUAL_QA_STATIC_TOOL_IDS].sort())
       expect(visualVisible.has("skill")).toBe(true)
+      expect(visualVisible.has("request_orchestrator_decision")).toBe(true)
       expect(visualVisible.has("browser_preview")).toBe(true)
       expect(visualVisible.has("browser_preview_bind_local_module")).toBe(true)
       expect(visualVisible.has("browser_preview_compare_regions")).toBe(true)
@@ -603,6 +612,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
           "list",
           "memory",
           "read",
+          "request_orchestrator_decision",
           "search_code",
           "skill",
           "todoread",
@@ -628,8 +638,9 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       const frontendResearch = await Agent.get("frontend-research")
       expect(frontendResearch).toBeDefined()
       const researchVisible = visibleToolIDs(frontendResearch)
-      expect([...researchVisible]).toEqual(["skill"])
+      expect([...researchVisible].sort()).toEqual(["request_orchestrator_decision", "skill"].sort())
       expect(researchVisible.has("skill")).toBe(true)
+      expect(researchVisible.has("request_orchestrator_decision")).toBe(true)
       expect(researchVisible.has("websearch")).toBe(false)
       expect(researchVisible.has("webfetch")).toBe(false)
       expect(researchVisible.has("read")).toBe(false)
