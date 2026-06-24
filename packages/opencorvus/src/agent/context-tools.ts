@@ -24,13 +24,20 @@ import { Instance } from "@/project/instance"
  * Includes:
  * - 4 codebase tools: read, glob, search_code, list
  * - 1 scoped memory tool: memory
+ * - 1 skill marker tool: skill, rebound by SessionLoop to the turn-scoped mount surface
  * Network retrieval tools such as websearch and webfetch are registry tools.
- * Do not add same-name runtime extras here, because extras are merged after
- * registry tools by SessionLoop and would shadow permission/plugin wrappers.
+ * Do not add other same-name runtime extras here, because extras are merged
+ * after registry tools by SessionLoop and would shadow permission/plugin
+ * wrappers. The skill marker is the explicit exception: SessionLoop replaces
+ * it with the real mounted-skill tool before exposing tools to the model.
  */
 export function createAgentContextTools(taskWorkDir?: string) {
   const codebase = createCodebaseTools(taskWorkDir)
   const projectId = Instance.project.id
+  const skillMarkerInput = z.object({
+    query: z.string().optional(),
+    name: z.string().optional(),
+  })
 
   return {
     // --- Codebase exploration (inherited) ---
@@ -78,6 +85,15 @@ export function createAgentContextTools(taskWorkDir?: string) {
         const chunks = Memory.getChunksInProject({ fileId: params.fileId, projectId })
         const text = chunks.map((c) => c.content).join("\n\n")
         return `# ${file.title}\nKind: ${file.kind} | Scope: ${file.scope} | Source: ${file.source}\n\n${text}`
+      },
+    }),
+
+    skill: tool({
+      description:
+        "Search for or load a specialized mounted skill. This marker is rebound by SessionLoop.resolveTools to the current agent's turn-scoped skill surface before the model can call it.",
+      inputSchema: skillMarkerInput,
+      execute: async (_params: z.infer<typeof skillMarkerInput>): Promise<string> => {
+        throw new Error("skill context marker was not rebound by SessionLoop.resolveTools")
       },
     }),
   }

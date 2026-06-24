@@ -25,7 +25,7 @@ export namespace AgentToolPool {
     "web_clone_source_audit",
   ] as const
 
-  const STAGE_CONTEXT_GLOBAL_TOOL_IDS = ["read", "glob", "search_code", "list", "memory"] as const
+  const STAGE_CONTEXT_GLOBAL_TOOL_IDS = ["read", "glob", "search_code", "list", "memory", "skill"] as const
 
   const ORCHESTRATOR_PRIVATE_TOOL_IDS = [
     "build",
@@ -193,14 +193,14 @@ export namespace AgentToolPool {
       ],
     }),
     requirements: pool({
-      global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "websearch", "skill", "todoread", "todowrite"],
+      global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "websearch", "todoread", "todowrite"],
     }),
     architect: pool({
-      global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "websearch", "skill", "todoread", "todowrite"],
+      global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "websearch", "todoread", "todowrite"],
     }),
     "frontend-design": fromVisibleToolIDs(FRONTEND_DESIGN_STATIC_TOOL_IDS),
     "intent-analysis": pool({
-      global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "skill", "todoread", "todowrite"],
+      global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "todoread", "todowrite"],
     }),
     integrity: fromVisibleToolIDs(INTEGRITY_DECLARED_TOOL_IDS),
     "fact-check": pool({
@@ -250,71 +250,46 @@ export namespace AgentToolPool {
     return visibleToolIDs(input).has(toolID)
   }
 
+  export function canonicalToolIDs(): Set<string> {
+    const ids = new Set<string>(GLOBAL_TOOL_IDS)
+    for (const assignment of Object.values(roleAssignments)) {
+      for (const toolID of [...assignment.global, ...assignment.private]) ids.add(toolID)
+    }
+    return ids
+  }
+
+  type PrivateRegistryToolLoader = () => Promise<Tool.Info>
+
+  const privateRegistryToolLoaders: Record<string, PrivateRegistryToolLoader> = {
+    browser_preview_bind_local_module: async () =>
+      (await import("@/tool/browser-preview-bind-local-module")).BrowserPreviewBindLocalModuleTool,
+    browser_preview_compare_regions: async () =>
+      (await import("@/tool/browser-preview-compare-regions")).BrowserPreviewCompareRegionsTool,
+    browser_preview_compare_scroll_slices: async () =>
+      (await import("@/tool/browser-preview-compare-scroll-slices")).BrowserPreviewCompareScrollSlicesTool,
+    web_clone_prepare_context: async () =>
+      (await import("@/tool/web-clone-prepare-context")).WebClonePrepareContextTool,
+    web_clone_generate_source_project: async () =>
+      (await import("@/tool/web-clone-generate-source-project")).WebCloneGenerateSourceProjectTool,
+    web_clone_source_audit: async () => (await import("@/tool/web-clone-source-audit")).WebCloneSourceAuditTool,
+    webpage_extract: async () => (await import("@/frontend-design/tools/webpage-extract")).WebpageExtractTool,
+    webpage_compile: async () => (await import("@/frontend-design/tools/webpage-compile")).WebpageCompileTool,
+    webpage_analyze: async () => (await import("@/frontend-design/tools/webpage-analyze")).WebpageAnalyzeTool,
+    webpage_runtime_state: async () =>
+      (await import("@/frontend-design/tools/webpage-runtime-state")).WebpageRuntimeStateTool,
+  }
+
   export async function privateRegistryTools(
     agent: AgentRoleID | string,
     assignment?: Partial<ToolPoolAssignment>,
   ): Promise<Tool.Info[]> {
     const visible = visibleToolIDs(assignment ?? roleAssignments[agent as AgentRoleID])
-    const tools: Tool.Info[] = []
-
-    const add = (tool: Tool.Info) => {
-      if (visible.has(tool.id)) tools.push(tool)
-    }
-
-    if (
-      ["coding", "coding-assistant", "build", "general", "visual-qa", "integrity"].includes(agent) &&
-      (visible.has("browser_preview_bind_local_module") || visible.has("browser_preview_compare_regions"))
-    ) {
-      const [{ BrowserPreviewBindLocalModuleTool }, { BrowserPreviewCompareRegionsTool }] = await Promise.all([
-        import("@/tool/browser-preview-bind-local-module"),
-        import("@/tool/browser-preview-compare-regions"),
-      ])
-      add(BrowserPreviewBindLocalModuleTool)
-      add(BrowserPreviewCompareRegionsTool)
-    }
-
-    if (agent === "visual-qa" && visible.has("browser_preview_compare_scroll_slices")) {
-      const { BrowserPreviewCompareScrollSlicesTool } = await import("@/tool/browser-preview-compare-scroll-slices")
-      add(BrowserPreviewCompareScrollSlicesTool)
-    }
-
-    if (
-      ["coding", "coding-assistant", "general"].includes(agent) &&
-      (visible.has("web_clone_prepare_context") || visible.has("web_clone_generate_source_project"))
-    ) {
-      const [{ WebClonePrepareContextTool }, { WebCloneGenerateSourceProjectTool }] = await Promise.all([
-        import("@/tool/web-clone-prepare-context"),
-        import("@/tool/web-clone-generate-source-project"),
-      ])
-      add(WebClonePrepareContextTool)
-      add(WebCloneGenerateSourceProjectTool)
-    }
-
-    if (["coding", "coding-assistant", "build", "general", "frontend-design"].includes(agent)) {
-      const { WebCloneSourceAuditTool } = await import("@/tool/web-clone-source-audit")
-      add(WebCloneSourceAuditTool)
-    }
-
-    if (
-      agent === "frontend-design" &&
-      (visible.has("webpage_extract") ||
-        visible.has("webpage_compile") ||
-        visible.has("webpage_analyze") ||
-        visible.has("webpage_runtime_state"))
-    ) {
-      const [{ WebpageExtractTool }, { WebpageCompileTool }, { WebpageAnalyzeTool }, { WebpageRuntimeStateTool }] =
-        await Promise.all([
-          import("@/frontend-design/tools/webpage-extract"),
-          import("@/frontend-design/tools/webpage-compile"),
-          import("@/frontend-design/tools/webpage-analyze"),
-          import("@/frontend-design/tools/webpage-runtime-state"),
-        ])
-      add(WebpageExtractTool)
-      add(WebpageCompileTool)
-      add(WebpageAnalyzeTool)
-      add(WebpageRuntimeStateTool)
-    }
-
-    return tools
+    const tools = await Promise.all(
+      [...visible].map(async (toolID) => {
+        const load = privateRegistryToolLoaders[toolID]
+        return load ? load() : undefined
+      }),
+    )
+    return tools.filter((tool): tool is Tool.Info => Boolean(tool))
   }
 }

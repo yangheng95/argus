@@ -95,17 +95,20 @@ describe("agent context tools", () => {
   }
 
   test(
-    "frontend-research resolves no retrieval tools because host prepares rendered webpage evidence",
+    "frontend-research resolves only the skill marker because host prepares rendered webpage evidence",
     async () => {
       await Instance.provide({
         directory: process.cwd(),
         fn: async () => {
           const tools = await filterAgentTools(createAgentContextTools(), "frontend-research")
-          expect(Object.keys(tools).sort()).toEqual([])
+          expect(Object.keys(tools).sort()).toEqual(["skill"])
           expect("websearch" in tools).toBe(false)
           expect("webfetch" in tools).toBe(false)
           expect("read" in tools).toBe(false)
+          expect("glob" in tools).toBe(false)
+          expect("list" in tools).toBe(false)
           expect("search_code" in tools).toBe(false)
+          expect("memory" in tools).toBe(false)
         },
       })
     },

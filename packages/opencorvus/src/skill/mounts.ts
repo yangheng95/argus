@@ -142,6 +142,7 @@ export namespace SkillMount {
       : await Config.get()
     const [installed, agents] = await Promise.all([SkillManager.installed(), Agent.list({ config })])
     assertKnownMountedAgents(installed, agents)
+    const mountableAgents = agents.filter((agent) => agentSkillMountable(agent) && agentCanUseSkillTool(agent))
     const mountedAgents = mountedAgentsBySkill(installed)
     const pool = installed.map((skill) => {
       const agents = mountedAgents.get(skill.name) ?? []
@@ -153,7 +154,7 @@ export namespace SkillMount {
       }
     })
     const rows = await Promise.all(
-      agents.map(async (agent) => {
+      mountableAgents.map(async (agent) => {
         const surface = await resolve({ agent, config, sessionID: input?.sessionID, skills: installed, agents })
         return {
           agent: agent.name,
@@ -165,7 +166,7 @@ export namespace SkillMount {
     return Matrix.parse({
       scope,
       skills: pool,
-      agents: agents.map((agent) => ({
+      agents: mountableAgents.map((agent) => ({
         name: agent.name,
         description: agent.description,
         mode: agent.mode,
