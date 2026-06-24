@@ -91,6 +91,7 @@ import {
   markStageContinuationClaimFailed,
   markStageContinuationConsumed,
 } from "../../src/engine/stage-continuation"
+import { createAgentCoordinationRequest, findAgentCoordinationRequest } from "../../src/engine/agent-coordination"
 import { researchRequestHash, researchSourceDigest } from "../../src/research/schema"
 import { recordFactCheckAttempt } from "../../src/fact-check/persist"
 
@@ -3497,6 +3498,104 @@ describe("orchestrator tools", () => {
 
     expect(tools[["steer", "subagent"].join("_")]).toBeUndefined()
     expect(tools.cancel_subagent).toBeDefined()
+    expect(tools.respond_agent_coordination).toBeDefined()
+  })
+
+  test("respond_agent_coordination continue consumes a pending request and resumes the same worker session", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_agent_coordination_continue_${stamp}`
+    const taskID = `tsk_agent_coordination_continue_${stamp}`
+    const goalID = `gol_agent_coordination_continue_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "agent coordination continue",
+      taskTitle: "agent coordination continue",
+      request: "Worker asks the orchestrator to continue the same session",
+      goalTitle: "Coordinate worker",
+      goalSlug: "coordinate-worker",
+      objective: "Continue the worker from the existing session",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const loopSpy = spyOn(SessionPrompt, "loop").mockResolvedValue({
+          info: {
+            id: Identifier.ascending("message"),
+            role: "assistant",
+            sessionID: "unused",
+          },
+          parts: [],
+        } as any)
+        const parent = await Session.create({
+          kind: "root",
+          title: "agent coordination root",
+          metadata: { configOverlay: { model: "openai/gpt-5.5" } },
+        })
+        const worker = await Session.create({
+          kind: "assistant",
+          parentID: parent.id,
+          title: "agent coordination worker",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const request = createAgentCoordinationRequest({
+          taskID,
+          sessionID: worker.id,
+          agent: "coding",
+          messageID: Identifier.ascending("message"),
+          summary: "Need a routing decision",
+          details: "The worker has enough evidence but needs the orchestrator to confirm continuation.",
+          blocking: true,
+          requestedDecision: "continue this worker session",
+          severity: "blocked",
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(
+          await tools.respond_agent_coordination.execute(
+            {
+              request_id: request.payload.request_id,
+              decision: "continue",
+              message: "Continue with the current evidence and produce the requested finding.",
+              reason: "The worker requested scheduler confirmation and the same session remains valid.",
+            },
+            buildToolOptions("respond_agent_coordination"),
+          ),
+        )
+
+        expect(result).toContain(`Responded to coordination request ${request.payload.request_id} with continue`)
+        expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
+          "responded",
+        )
+        const messages: Message.WithParts[] = []
+        for await (const item of Message.stream(worker.id)) messages.push(item)
+        const responseUser = messages.find(
+          (item) =>
+            item.info.role === "user" &&
+            item.parts.some((part) => part.type === "text" && part.text.includes("Orchestrator Coordination Response")),
+        )
+        expect(responseUser).toBeDefined()
+        expect(responseUser?.parts.some((part) => part.type === "text" && part.text.includes(request.payload.summary))).toBe(
+          true,
+        )
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(loopSpy).toHaveBeenCalledWith({ sessionID: worker.id })
+      },
+    })
   })
 
   test("cancel_subagent aborts a live goal attempt by child session", async () => {
