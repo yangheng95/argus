@@ -34,6 +34,7 @@ import { ensureDefaultDirectory } from "./workspace"
 import { workspaceRestoreDirectory } from "../store/settings"
 import { selectTask } from "./task"
 import { installHostThemeHandshakeSubscription } from "./host-theme-handshake"
+import { currentTaskDeepLink, taskDeepLinkFromSearch } from "./task-deep-link"
 
 // ── Types ──
 
@@ -153,7 +154,7 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
   if (connected) {
     // 6. Load initial data
     const loaded = await loadInitialData()
-    if (loaded) await restoreInitialWorkspace()
+    if (loaded) await restoreInitialTaskSelection()
     await onConnected?.()
     if (loaded) startTaskListSSE()
   }
@@ -363,6 +364,16 @@ export function initialRestoreTaskID(
   if (options.selectRunningWhenUnmatched === false) return ""
   const running = list.find((item: any) => RESTORABLE_RUNNING_TASK_STATUSES.has(taskStatusFromItem(item)))
   return taskIDFromItem(running)
+}
+
+export async function restoreInitialTaskSelection(options: { search?: string } = {}): Promise<boolean> {
+  const deepLink = options.search === undefined ? currentTaskDeepLink() : taskDeepLinkFromSearch(options.search)
+  if (deepLink) {
+    await selectTask(deepLink.taskID)
+    bumpWorkspaceEpoch()
+    return true
+  }
+  return restoreInitialWorkspace()
 }
 
 /**
