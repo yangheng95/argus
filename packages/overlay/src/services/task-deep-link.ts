@@ -7,7 +7,8 @@ export class TaskDeepLinkError extends Error {
 }
 
 const TASK_ID_PARAM = "taskID"
-const UNSUPPORTED_TASK_PARAMS = new Set(["task", "taskId", "task_id", "directory"])
+const TASK_DIRECTORY_PARAM = "directory"
+const UNSUPPORTED_TASK_PARAMS = new Set(["task", "taskId", "task_id"])
 
 function normalizedSearch(search: string): string {
   return search.startsWith("?") ? search.slice(1) : search
@@ -29,6 +30,9 @@ export function taskDeepLinkFromSearch(search: string): TaskDeepLink | null {
   const taskID = canonicalValue(params, TASK_ID_PARAM)
 
   if (taskID === undefined) return null
+  if (params.has(TASK_DIRECTORY_PARAM)) {
+    throw new TaskDeepLinkError(`Unsupported task deep link parameter "${TASK_DIRECTORY_PARAM}"`)
+  }
   if (!taskID) throw new TaskDeepLinkError(`Task deep link parameter "${TASK_ID_PARAM}" must be non-empty`)
   return { taskID }
 }

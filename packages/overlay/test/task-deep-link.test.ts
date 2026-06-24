@@ -10,6 +10,7 @@ describe("task deep link parsing", () => {
 
   test("returns null when no task deep link parameters are present", () => {
     expect(taskDeepLinkFromSearch("?theme=dark")).toBeNull()
+    expect(taskDeepLinkFromSearch("?directory=C%3A%2Frepo%2Fapp")).toBeNull()
     expect(taskDeepLinkFromSearch("")).toBeNull()
   })
 

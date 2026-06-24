@@ -141,7 +141,7 @@ describe("initial workspace restore directory sync", () => {
   })
 
   test("uses persisted workspace restore when the URL has no task deep link", async () => {
-    await expect(restoreInitialTaskSelection({ search: "?theme=dark" })).resolves.toBe(true)
+    await expect(restoreInitialTaskSelection({ search: "?directory=D%3A%2Fprojects%2Fnew" })).resolves.toBe(true)
 
     expect(boardStore.selectedSource).toEqual({ kind: "task", id: "tsk_saved", directory: "D:/projects/new" })
   })

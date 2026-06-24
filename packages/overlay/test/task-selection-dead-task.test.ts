@@ -128,6 +128,8 @@ describe("task selection initial hydrate", () => {
         if (req.path === "config") return { status: 200, ok: true, headers: {}, body: { model: "" } }
         if (req.path === "channel") return { status: 200, ok: true, headers: {}, body: [] }
         if (req.path === "skill/installed") return { status: 200, ok: true, headers: {}, body: [] }
+        if (req.path === "skill/mounts")
+          return { status: 200, ok: true, headers: {}, body: { scope: "project", skills: [], agents: [], source: nextDirectory } }
         if (req.path === "mcp") return { status: 200, ok: true, headers: {}, body: {} }
         if (req.path === "path") return { status: 200, ok: true, headers: {}, body: { directory: nextDirectory } }
         if (req.path === "vcs") return { status: 200, ok: true, headers: {}, body: { branch: "main" } }
@@ -229,6 +231,7 @@ describe("task selection initial hydrate", () => {
       async request(req: any) {
         requested = true
         if (req.method === "DELETE" && req.path === "task/tsk_deleted") {
+          expect(req.query?.directory).toBeUndefined()
           expect(activeTaskID()).toBe("")
           return { status: 404, ok: false, headers: {}, body: { error: "missing" } }
         }
@@ -281,6 +284,7 @@ describe("task selection initial hydrate", () => {
       async request(req: any) {
         requests.push(`${req.method} ${req.path}`)
         if (req.method === "DELETE" && req.path === "task/tsk_refresh_fail") {
+          expect(req.query?.directory).toBeUndefined()
           expect(activeTaskID()).toBe("")
           return { status: 404, ok: false, headers: {}, body: { error: "missing" } }
         }
