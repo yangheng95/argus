@@ -41887,10 +41887,6 @@
             "description": "Assistant agent configuration — controls orchestration policy, requirements, architect, build, frontend-design, intent-analysis, and integrity review behavior",
             "type": "object",
             "properties": {
-              "auto_iteration": {
-                "description": "Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected acceptance reviews. Default false: acceptance rejection is reported and waits for operator follow-up.",
-                "type": "boolean"
-              },
               "requirements": {
                 "description": "Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts",
                 "type": "object",
@@ -42139,7 +42135,8 @@
                   ]
                 }
               }
-            }
+            },
+            "additionalProperties": false
           },
           "experimental": {
             "type": "object",

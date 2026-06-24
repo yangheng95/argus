@@ -435,9 +435,7 @@ export const FrontendTemplateFinalSchema = z
         "Host recorded the submitted maintainability contract after checking that the payload includes component reuse, source-region planning where needed, visual consistency, and UI data sections.",
       ])
       .describe(
-        "frontend template review-pass notes completed before handoff. One note is enough when assistant.auto_iteration=false; " +
-          "include at least two when assistant.auto_iteration=true. Each item must name what was checked, what was missing " +
-          "or corrected, and why the resulting frontend template is now safe for downstream agents.",
+        "At least two frontend template review-pass notes completed before handoff. Each item must name what was checked, what was missing or corrected, and why the resulting frontend template is now safe for downstream agents.",
       ),
     completeness_review: z
       .string()

@@ -574,4 +574,4 @@ questions when a targeted missing field is known.
 - Do not fabricate evidence, requirements, acceptance, tests, files, or user
   approvals.
 - When executor or tool errors occur, choose the next action from evidence and
-  Auto Iteration Mode; do not hide the error behind a new speculative path.
+  recovery discipline; do not hide the error behind a new speculative path.

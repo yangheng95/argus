@@ -51,22 +51,19 @@ describe("engineering-craft shared fragment", () => {
     expect(INTEGRITY_TEAM_CORE).not.toContain(HEADING)
   })
 
-  test("Build composes the craft fragment exactly once (both auto modes)", () => {
-    for (const autoIteration of [true, false]) {
-      const core = composeBuildCore(autoIteration)
-      expect(core).toContain(BUILD_CORE)
-      expect(core).toContain(SENTINEL)
-      expect(occurrences(core, HEADING)).toBe(1)
-      // craft sits between the role core and the dynamic auto-iteration mode.
-      expect(core).toContain("## Auto Iteration Mode")
-    }
+  test("Build composes the craft fragment exactly once", () => {
+    const core = composeBuildCore()
+    expect(core).toContain(BUILD_CORE)
+    expect(core).toContain(SENTINEL)
+    expect(occurrences(core, HEADING)).toBe(1)
+    expect(core).toContain("## Build Repair Discipline")
   })
 
   test("Build wires composeBuildCore into the live session core", () => {
     // Guard the single composition site so a refactor cannot bypass it.
     const buildAgentSrc = fs.readFileSync(path.join(import.meta.dir, "../../src/build/agent.ts"), "utf8")
     expect(buildAgentSrc).toContain('import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"')
-    expect(buildAgentSrc).toMatch(/core:\s*withFactCheckRegistration\(composeBuildCore\(autoIteration\)\)/)
+    expect(buildAgentSrc).toMatch(/core:\s*withFactCheckRegistration\(composeBuildCore\(\)\)/)
   })
 
   test("read-only Integrity team reviewer never carries the craft fragment", () => {

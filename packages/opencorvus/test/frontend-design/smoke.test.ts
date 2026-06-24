@@ -14,7 +14,6 @@ import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Server } from "../../src/server/server"
 import { FrontendDesignAgent } from "../../src/frontend-design/agent"
-import { EngineConfig } from "../../src/engine/config"
 import { loadBenchmarkEnv, resolveBenchmarkModel } from "../../script/benchmark/env"
 
 await loadBenchmarkEnv(import.meta.dir)
@@ -104,8 +103,7 @@ describe("frontend-design agent (real-LLM smoke)", () => {
           expect(typeof result.uiDataContract).toBe("string")
           expect(result.uiDataContract.length).toBeGreaterThan(0)
           expect(Array.isArray(result.templateIterationNotes)).toBe(true)
-          const expectedReviewNotes = (await EngineConfig.get()).auto_iteration === true ? 2 : 1
-          expect(result.templateIterationNotes.length).toBeGreaterThanOrEqual(expectedReviewNotes)
+          expect(result.templateIterationNotes.length).toBeGreaterThanOrEqual(2)
           expect(typeof result.completenessReview).toBe("string")
           expect(result.completenessReview.length).toBeGreaterThan(0)
           expect(Array.isArray(result.referenceArtifacts)).toBe(true)

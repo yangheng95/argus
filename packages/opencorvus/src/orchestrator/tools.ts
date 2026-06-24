@@ -3701,7 +3701,7 @@ export function createOrchestratorTools(input: {
         "  - The request explicitly asks for layout/frontend design as implementation input",
         "For live webpage clones that need source-backed page information architecture, call frontend_research first when the Page Skeleton Blueprint is missing; do not use frontend_design merely to materialize raw webpage evidence or discover page structure.",
         "",
-        "The frontend-design agent must follow assistant.auto_iteration: one bounded frontend template review pass when disabled, at least two review passes when enabled.",
+        "The frontend-design agent must complete at least two frontend template review passes: evidence/template completeness, then downstream implementation feasibility.",
         "The full frontend template plus visual_consistency_contract and iteration/completeness review is persisted",
         "into the decision log from the same frontend-design run. Optional task.design_specs rows may exist as anchors, but the",
         "decision-log frontend template is authoritative. The decision log also includes evidence_source_manifest,",

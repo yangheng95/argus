@@ -390,8 +390,6 @@ export namespace BuildAgent {
     existingSessionID?: string
     /** Explicit model override (provider / model). Skips `resolveAgentModel`. */
     model?: { providerID: string; modelID: string }
-    /** Overrides the engine auto-iteration prompt mode for bounded one-pass callers. */
-    autoIteration?: boolean
     /** False disables Model Context Protocol tools for bounded research-only callers. */
     includeMcpTools?: boolean
     /** True exposes only BuildAgent runtime tools for bounded special-purpose callers. */
@@ -524,7 +522,6 @@ export namespace BuildAgent {
    */
   export async function run(input: RunInput): Promise<RunOutput> {
     return AgentSemaphore.withSlot(input.task, async () => {
-      const autoIteration = input.autoIteration ?? (await EngineConfig.get()).auto_iteration === true
       // ── Worktree acquisition ─────────────────────────────────────────────
       // Happens OUTSIDE runAgentSession because the worktree is the
       // session's working directory — the runner needs it resolved before
@@ -924,7 +921,7 @@ export namespace BuildAgent {
       const runOpenCorvusBuildSession = async (continuation?: AgentSessionContinuation) =>
         await runAgentSession({
           kind: "build",
-          core: withFactCheckRegistration(composeBuildCore(autoIteration)),
+          core: withFactCheckRegistration(composeBuildCore()),
           sessionTitle: buildSessionTitle(input.target),
           sessionDirectory: worktreeDir!,
           existingSessionID: buildSession.id,
@@ -1216,11 +1213,12 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "ope
     "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
     "- Follow task-specific overlays in the user prompt when they are present. They are rendered from decision-log context and handoff artifacts for this attempt.",
     "- Run the acceptance commands from the prompt before claiming success.",
+    "- If a required frontend or build verification command fails before the checker starts because local dependencies, node_modules links, package binaries, scripts, ports, browser runners, preview targets, or worktree state are broken, repair that repo-local toolchain blocker in the same worktree and rerun the original command. Do not treat it as a terminal failure while concrete local repair actions remain.",
     "- Write shell commands for the actual platform and shell; on Windows/PowerShell use PowerShell-native commands instead of unverified Unix-only helpers such as head, sed, or grep.",
     "- On Windows, start Playwright only through Node Package Manager (`npm`), never through `bun`; Bun-started Playwright has a severe connection-timeout bug on Windows.",
     "- For any frontend project, each file-changing pass must open the task preview or task-scoped browser evidence route after edits and inspect the changed region plus surrounding layout context: parent container, adjacent components, spacing, typography, color, responsive framing, and local visual style.",
     "- Commit changes with a concrete commit message before finishing.",
-    "- If the dependency contract is missing, verification fails, or you cannot commit, finish with a concise failure summary and the exact blocker.",
+    "- If the dependency contract is missing, verification still fails after the checker runs, or you cannot commit, finish with a concise failure summary and the exact blocker.",
     "- Do not call OpenCorvus-only tools such as report_build_result or merge_back; the host will publish and synthesize the terminal BuildResult after your process exits.",
   ].join("\n")
 }
@@ -1562,21 +1560,20 @@ export function externalToolProtocolErrorMessage(input: {
   )
 }
 
-export function renderBuildAutoIterationMode(autoIteration: boolean): string {
+export function renderBuildRepairDiscipline(): string {
   return [
-    "## Auto Iteration Mode",
-    autoIteration
-      ? "- assistant.auto_iteration=true: after verification failures, continue focused repair attempts, including assigned dependency, toolchain, port, script, test, and worktree merge repairs, until every acceptance spec is satisfied or a concrete blocker remains."
-      : '- assistant.auto_iteration=false: make one focused product/implementation repair pass, including any explicitly assigned stuck-state repair in this worktree. This bound does not apply to repo-local toolchain/pre-checker blockers: continue concrete dependency, script, port, test-runner, browser-runner, and worktree-merge repairs until the exact required checker runs or the remaining blocker is external, destructive, or unowned by this task; only then report the exact owner/action blocker through report_build_result(status="failed").',
+    "## Build Repair Discipline",
+    '- Repo-local dependency, script, port, test-runner, browser-runner, preview, package-binary, node_modules-link, and worktree-merge blockers are build work. Continue concrete repairs in the same worktree until the exact required checker runs and passes, or the remaining blocker is external, destructive, or unowned by this task; only then report the exact owner/action blocker through report_build_result(status="failed").',
+    "- Toolchain blockers are publish blockers. Do not call merge_back while required verification is blocked by local toolchain/pre-checker failure.",
   ].join("\n")
 }
 
 /** Single composition point for the Build session core: role/mechanism core +
- * the shared engineering-craft fragment + the dynamic auto-iteration mode.
+ * the shared engineering-craft fragment + the static repair discipline.
  * Exported so the composition (and the single-source craft injection) is
  * directly assertable instead of grepping the call site (rule 9). */
-export function composeBuildCore(autoIteration: boolean): string {
-  return [BUILD_CORE, ENGINEERING_CRAFT, renderBuildAutoIterationMode(autoIteration)].join("\n\n")
+export function composeBuildCore(): string {
+  return [BUILD_CORE, ENGINEERING_CRAFT, renderBuildRepairDiscipline()].join("\n\n")
 }
 
 /**
@@ -1887,15 +1884,15 @@ async function runWithExternalProviderImpl(args: {
     })
   }
 
-  const orchCfg = await EngineConfig.get()
+  const engineConfig = await EngineConfig.get()
   const config = await EffectiveConfig.effective({ taskID: args.taskID, sessionID: args.existingSessionID })
   const buildAgent = await Agent.get("build", { config })
   const userAppend = buildAgent?.promptAppend
   const baseSystem = resolveOption<string>(options.system)
   const projectInstructions = await InstructionPrompt.system()
-  const systemWithAutoIteration = [
+  const systemWithRepairDiscipline = [
     baseSystem,
-    renderBuildAutoIterationMode(orchCfg.auto_iteration === true),
+    renderBuildRepairDiscipline(),
     ...projectInstructions,
   ]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
@@ -1903,7 +1900,7 @@ async function runWithExternalProviderImpl(args: {
   const composedSystem = BuildAgent.composeExternalCodingSystem({
     executor: args.executor,
     config,
-    baseSystem: systemWithAutoIteration,
+    baseSystem: systemWithRepairDiscipline,
     userAppend,
   })
 
@@ -1920,7 +1917,7 @@ async function runWithExternalProviderImpl(args: {
   // claude-code subprocesses receive the abort the same way they receive
   // a caller cancel — no new error surface, the existing catch maps the
   // AbortError to `errored` and the build returns status=failed.
-  const idleMs = orchCfg.activity.executor_events_idle_ms
+  const idleMs = engineConfig.activity.executor_events_idle_ms
   const gate = withStreamActivity({
     idleMs,
     signal: args.signal,

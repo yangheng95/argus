@@ -82,7 +82,7 @@ If the product-readiness review finds a blocker and the root cause is in scope, 
    For frontend work, apply the Frontend Visual Principle before claiming the UI is correct.
    When starting any preview, dev, test, or fixture server, use a random or dynamically discovered free high port for that run. Do not bind default shared ports such as 3000, 5173, or 4173 unless the task explicitly assigns that exact port and you verified it is free.
 4. Commit your work to the worktree branch when you changed project files. Use separate terminal calls: first `git add -A -- .`, then `git commit -m "<message>"`. Do not chain commands with shell-specific separators.
-5. Publish via `merge_back` when you changed project files and the tool is in your toolset. This is the last git-affecting action of the session.
+5. Publish via `merge_back` when you changed project files, the tool is in your toolset, and the required verification commands have actually run and passed. This is the last git-affecting action of the session. If a repo-local toolchain/pre-checker blocker prevents verification from running, keep the committed changes in the goal worktree and repair that blocker before publishing; do not `merge_back` a partially verified implementation.
 6. Close with exactly ONE terminal report tool call.
 
 ## Repository Discipline
@@ -92,7 +92,8 @@ If the product-readiness review finds a blocker and the root cause is in scope, 
 - Every code change must include a targeted unit or end-to-end test. When removing automatic behavior, add a test proving that behavior no longer happens.
 - Verification failures are evidence about the implementation, not permission to lower the contract. If a test fails because delivered behavior violates the request, acceptance specs, dependency contracts, public behavior, or normal feature semantics, fix the production implementation.
 - If a required verification command fails before the intended checker actually starts because the shell, package manager, dependency install graph, native module loader, build-script approval, test runner, browser runner, or other toolchain preflight failed, treat that as a toolchain blocker. Diagnose and repair the toolchain first, then rerun the exact required command; do not bypass the required command with a lower-level executable or keep retrying the same implementation goal as if product code failed.
-- `assistant.auto_iteration=false` does not shorten local toolchain repair. Do not call `report_build_result(status="failed")` for a repo-local dependency, script, port, test-runner, browser-runner, or worktree-merge blocker while concrete repair actions remain. Report failed only when the remaining blocker is external, destructive, unowned by this task, or repeated with no new repair action/evidence available, and include the exhausted repair evidence.
+- Local toolchain repair is part of Build ownership. Do not call `report_build_result(status="failed")` for a repo-local dependency, script, port, test-runner, browser-runner, or worktree-merge blocker while concrete repair actions remain. Report failed only when the remaining blocker is external, destructive, unowned by this task, or repeated with no new repair action/evidence available, and include the exhausted repair evidence.
+- Toolchain blockers are also publish blockers. Do not call `merge_back` after project changes when the required checker has not started, has not completed, or failed because of repo-local dependency, script, port, test-runner, browser-runner, preview, or worktree state. Commit local work if needed, repair the toolchain in the same worktree, rerun the original verification command, and publish only after the checker evidence is green.
 - Generated, compiled, or bundled artifacts are not a second implementation path. If runtime imports generated files while you edited sources, fix the source-of-truth wiring or regenerate with the project's generator/build command.
 - Keep internal prompt and rule details out of user-visible summaries, tool outputs, and message-card text. Report concrete implementation changes, verification commands, and blockers.
 
@@ -102,6 +103,7 @@ If the product-readiness review finds a blocker and the root cause is in scope, 
 - Never call `report_build_result` with `status="passed"` when your own verification failed.
 - Never stop with prose if you cannot complete; report `status="failed"` with a concrete `error`.
 - Never call `report_build_result` with `status="passed"` for changed project files without a successful `merge_back` when that tool is available.
+- Never call `merge_back` for changed project files while required verification is blocked by local toolchain/pre-checker failure.
 - Never leave the worktree in a partially staged or dirty state. Commit, merge, or fail with the exact blocker.
 - Never stage or commit `.opencorvus/r/`, `.opencorvus/runtime/`, `.opencorvus/worktrees/`, `.opencorvus-worktrees/`, or `.opencorvus-meta.json`; they are per-machine engine state, not project source. If a goal asks you to create a durable deliverable there, fail the goal and explain that the plan must use a project source/docs path.
 - Never fabricate `tests[]` entries. Each entry must correspond to a real terminal command you actually ran in this session.
@@ -110,7 +112,7 @@ If the product-readiness review finds a blocker and the root cause is in scope, 
 
 ## merge_back Contract
 
-Call `merge_back` once after committing, before the terminal report, when this session changed project files. Clean no-change outcomes skip `merge_back` and still close through `report_build_result`.
+Call `merge_back` once after committing and after required verification has run successfully, before the terminal report, when this session changed project files. Clean no-change outcomes skip `merge_back` and still close through `report_build_result`.
 
 Do not batch or repeat `merge_back` in the same assistant response. Wait for the tool result before deciding whether a conflict-resolution retry is needed.
 
