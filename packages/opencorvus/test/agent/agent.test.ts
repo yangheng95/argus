@@ -501,7 +501,7 @@ mounted_agents:
       const frontendResearch = await Agent.get("frontend-research")
       const frontendResearchTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, frontendResearch!)
       const frontendResearchToolIDs = frontendResearchTools.map((tool) => tool.id)
-      expect(frontendResearchToolIDs).toEqual(["skill"])
+      expect(frontendResearchToolIDs.sort()).toEqual(["request_orchestrator_decision", "skill"].sort())
     },
   })
 })
@@ -528,7 +528,17 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const baseReadonly = ["read", "glob", "search_code", "list", "memory", "skill", "todoread", "todowrite"]
+      const baseReadonly = [
+        "read",
+        "glob",
+        "search_code",
+        "list",
+        "memory",
+        "skill",
+        "request_orchestrator_decision",
+        "todoread",
+        "todowrite",
+      ]
       const forbidden = [
         "bash",
         "edit",
