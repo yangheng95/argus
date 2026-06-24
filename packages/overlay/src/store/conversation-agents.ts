@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import type { AgentWorkflowRecord } from "../utils/agent-workflow"
+import type { AgentWorkflowRecord, AgentWorkflowStatus } from "../utils/agent-workflow"
 import { normalizeAgentRole } from "../utils/message"
 import { goalStagePhaseID } from "../utils/workflow-step"
 import type { BoardSource } from "./board"
@@ -237,6 +237,22 @@ function liveStageFromMessageInfo(info: any): string | null {
   return stage === "user" ? null : stage
 }
 
+function liveEventProperties(event: any): any {
+  return event?.properties && typeof event.properties === "object" ? event.properties : event?.payload
+}
+
+function liveEventObservedAt(event: any): number {
+  const value = Number(event?.emittedAt || event?.emitted_at || event?.timestamp || event?.time?.emitted || 0)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+function livePartHasDisplay(part: any): boolean {
+  const type = String(part?.type || "")
+  if (!type || type === "step-start" || type === "step-finish" || type === "boundary") return false
+  if (type === "text" || type === "reasoning") return Boolean(String(part?.text || "").trim())
+  return true
+}
+
 function liveMessageRecordTarget(
   sessionID: string,
   messageID: string,
@@ -260,7 +276,7 @@ function liveMessageRecordTarget(
 export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string, event: any): void {
   const sourceKey = String(sourceKeyInput || "").trim()
   if (!sourceKey) throw new Error("conversation agent live view requires a source key")
-  const properties = event?.properties && typeof event.properties === "object" ? event.properties : event?.payload
+  const properties = liveEventProperties(event)
   const info = properties?.info
   if (!info || typeof info !== "object" || Array.isArray(info)) {
     throw new Error("conversation agent live view message.updated missing info")
@@ -304,13 +320,12 @@ export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string,
     })
   } else {
     const existing = nextRecords[index]!
-    const isLatest = observedAt >= existing.lastObservedAt
     nextRecords[index] = {
       ...existing,
       startedAt: Math.min(existing.startedAt, observedAt),
       lastObservedAt: Math.max(existing.lastObservedAt, nextObservedAt),
       ...(completed ? { completedAt: Math.max(existing.completedAt || 0, nextObservedAt) } : {}),
-      ...(isLatest
+      ...(nextObservedAt >= existing.lastObservedAt
         ? {
             parentSessionID,
             agentName: stage,
@@ -327,5 +342,114 @@ export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string,
   setConversationAgentStore({
     taskID: sourceKey,
     records: applyDepth(records),
+  })
+}
+
+export function applyLiveConversationAgentPartUpdated(sourceKeyInput: string, event: any): void {
+  const sourceKey = String(sourceKeyInput || "").trim()
+  if (!sourceKey) throw new Error("conversation agent live view requires a source key")
+  const properties = liveEventProperties(event)
+  const part = properties?.part
+  if (!part || typeof part !== "object" || Array.isArray(part)) return
+  if (!livePartHasDisplay(part)) return
+  const channel = String(properties?.channel || "").trim()
+  const resolvedRole = String(properties?.resolvedRole || "").trim()
+  if (!channel || !resolvedRole) return
+  const messageID = String(part.messageID || "")
+  const sessionID = String(part.sessionID || "")
+  if (!messageID || !sessionID) throw new Error("conversation agent live view part missing messageID/sessionID")
+  const stage = liveStageFromMessageInfo({ channel })
+  if (!stage) return
+  const observedAt = liveEventObservedAt(event)
+  if (!(observedAt > 0)) {
+    throw new Error("conversation agent live view message.part.updated missing emitted time")
+  }
+  const parentSessionID = String(properties.parentSessionID || "")
+  const goalID = String(properties.goalID || "")
+  const target = liveMessageRecordTarget(sessionID, messageID, stage, goalID)
+  const existingRecords = conversationAgentStore.taskID === sourceKey ? conversationAgentStore.records : []
+  const nextRecords = existingRecords.map((record) => ({ ...record }))
+  const index = nextRecords.findIndex((record) => record.sessionID === sessionID)
+  if (index === -1) {
+    nextRecords.push({
+      id: sessionID,
+      sessionID,
+      parentSessionID,
+      agentName: stage,
+      stage,
+      status: "running",
+      startedAt: observedAt,
+      lastObservedAt: observedAt,
+      attempts: 1,
+      depth: 0,
+      targetMessageID: messageID,
+      goalID: goalID || undefined,
+      ...target,
+    })
+  } else {
+    const existing = nextRecords[index]!
+    const isLatest = observedAt >= existing.lastObservedAt
+    nextRecords[index] = {
+      ...existing,
+      startedAt: Math.min(existing.startedAt, observedAt),
+      lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
+      ...(isLatest
+        ? {
+            parentSessionID,
+            agentName: stage,
+            stage,
+            status: existing.status === "pending" ? "running" : existing.status,
+            targetMessageID: messageID,
+            goalID: goalID || undefined,
+            ...target,
+          }
+        : {}),
+    }
+  }
+  const records = nextRecords.sort((left, right) => left.startedAt - right.startedAt)
+  setConversationAgentStore({
+    taskID: sourceKey,
+    records: applyDepth(records),
+  })
+}
+
+function liveAgentStatusFromSessionStatus(status: any): AgentWorkflowStatus {
+  const type = String(status?.type || "")
+  if (type === "streaming" || type === "retry") return "running"
+  if (type === "idle") return "idle"
+  if (type === "terminal") {
+    const reason = String(status?.reason || "")
+    if (reason === "error") return "error"
+    if (reason === "completed" || reason === "aborted") return "completed"
+  }
+  throw new Error(`conversation agent live view unknown session.status: ${JSON.stringify(status)}`)
+}
+
+export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, event: any): void {
+  const sourceKey = String(sourceKeyInput || "").trim()
+  if (!sourceKey) throw new Error("conversation agent live view requires a source key")
+  if (conversationAgentStore.taskID !== sourceKey) return
+  const properties = liveEventProperties(event)
+  const sessionID = String(properties?.sessionID || "")
+  if (!sessionID) throw new Error("conversation agent live view session.status missing sessionID")
+  const index = conversationAgentStore.records.findIndex((record) => record.sessionID === sessionID)
+  if (index === -1) return
+  const status = liveAgentStatusFromSessionStatus(properties?.status)
+  const observedAt = liveEventObservedAt(event)
+  if (!(observedAt > 0)) {
+    throw new Error("conversation agent live view session.status missing emitted time")
+  }
+  const nextRecords = conversationAgentStore.records.map((record) => ({ ...record }))
+  const existing = nextRecords[index]!
+  const terminal = status === "completed" || status === "error" || status === "skipped"
+  nextRecords[index] = {
+    ...existing,
+    status,
+    lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
+    ...(terminal ? { completedAt: Math.max(existing.completedAt || 0, observedAt) } : {}),
+  }
+  setConversationAgentStore({
+    taskID: sourceKey,
+    records: applyDepth(nextRecords),
   })
 }

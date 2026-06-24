@@ -369,7 +369,7 @@ export async function hydrateConversation(
     const timeline = requireArray(data?.timeline, "timeline")
     const events = requireArray(data?.events, "events")
     const view = requireObject(data?.view, "view")
-    const agentView = requireObject(data?.agentView ?? data?.view, "agentView")
+    const agentView = requireObject(data?.agentView, "agentView")
     const replay =
       source.kind === "task"
         ? parseEventReplay(data?.eventReplay)
@@ -455,7 +455,7 @@ export async function mergeLatestConversationTail(
     const timeline = requireArray(data?.timeline, "timeline")
     const events = requireArray(data?.events, "events")
     const view = requireObject(data?.view, "view")
-    const agentView = requireObject(data?.agentView ?? data?.view, "agentView")
+    const agentView = requireObject(data?.agentView, "agentView")
     const messageWatermark = parseMessageWatermark(data?.messageWatermark)
     const rewindCursor = parseRewindCursor((board as any).rewindCursor)
     requireNonnegativeInteger(data?.lastSequence, "lastSequence")
