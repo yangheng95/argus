@@ -102,6 +102,12 @@ function taskPath(taskID: string, suffix = ""): string {
   return taskScopedPath(taskID, taskOwningDirectory(taskID), suffix)
 }
 
+function taskRecordPath(taskID: string): string {
+  const id = String(taskID || "").trim()
+  if (!id) throw new Error("taskRecordPath requires a taskID")
+  return `task/${encodeURIComponent(id)}`
+}
+
 /**
  * Default chat request timeout: 10 minutes.
  */
@@ -356,7 +362,7 @@ export async function deleteTask(taskID: string): Promise<boolean> {
     await selectTask("")
   }
   try {
-    await apiJson(taskPath(taskID), {
+    await apiJson(taskRecordPath(taskID), {
       method: "DELETE",
     })
     await loadTasks()

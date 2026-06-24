@@ -84,3 +84,26 @@ task project.
 - `bun run --cwd packages/overlay typecheck`
 - `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/task-deep-link-browser.test.ts`
 - Visual evidence: `.scratch/task-deep-link-browser.png`
+
+## Regression Follow-up: Directory-Only URL Parameters
+
+User report on 2026-06-24: task operations in overlay became unusable, for
+example deleting tasks. The deep-link parser was rejecting `directory` anywhere
+in the page URL. That is too broad: `directory` is only a forbidden second task
+ownership source when a `taskID` deep link is present. A URL containing
+`?directory=...` without `taskID` is not a task deep link and must continue into
+normal persisted workspace restore and task operations.
+
+Additional acceptance:
+
+- `/ui/?directory=C%3A%2Frepo` is not treated as a task deep link.
+- `/ui/?taskID=tsk_xxx&directory=C%3A%2Frepo` remains rejected.
+- Browser coverage confirms a directory-only URL can initialize the overlay and
+  delete a task from the task list.
+
+Additional verification:
+
+- `bun test packages/overlay/test/task-deep-link.test.ts packages/overlay/test/initial-workspace-restore-directory-sync.test.ts packages/overlay/test/task-selection-dead-task.test.ts --timeout 30000`
+- `bun run --cwd packages/overlay typecheck`
+- `node packages/overlay/test/browser-runner.mjs packages/overlay/test/browser/task-deep-link-browser.test.ts`
+- Visual evidence: `.scratch/task-directory-url-delete-browser.png`
