@@ -715,8 +715,8 @@ export function findLatestTipGoalRun(goalID: string): GoalRunRow | undefined {
  * regardless of supersede status.
  *
  * Distinct semantic from {@link findLatestTipGoalRun}: the tip is "what is
- * the live attempt right now" (could be a fresh pending row created by
- * resetTaskGoalsToPending after a acceptance rejection). This helper answers
+ * the live attempt right now" (could be a fresh pending row created by a
+ * targeted retry after acceptance rejection). This helper answers
  * "what files have been merged / accepted into master for this goal so far"
  * — i.e. the most recent goal_run row whose acceptance row is non-null. The
  * tip and the latest-delivered run can diverge: a acceptance rejection
@@ -976,7 +976,7 @@ export function findLatestAcceptanceVerdictArtifactForAcceptance(acceptanceID: s
  * make any decision. `recordOrchestratorStreamError` (engine/persist.ts)
  * is the single writer; `describe.ts` is the single reader, surfacing
  * the rows into the orchestrator prompt so the LLM can decide
- * retry_task / restart_from_stage / fail_task on its next wake.
+ * retry_task / re-dispatch / propose_task / fail_task on its next wake.
  *
  * Filtered by `time_created >= sinceMs` so a long-running task's old
  * incidents don't follow it forever; the bench / orchestrator pass

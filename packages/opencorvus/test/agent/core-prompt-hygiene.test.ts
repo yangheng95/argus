@@ -161,6 +161,27 @@ describe("core prompt hygiene", () => {
     expect(orchestrator).toContain("appendNonExecutorSourceBoundary")
   })
 
+  test("orchestrator prompt owns request-based expert-squad scheduling through visible skills", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+
+    expect(text).toContain("## Expert Squad Scheduling")
+    expect(normalized).toContain(
+      "you own the expert-squad decision from the user request and current task evidence",
+    )
+    expect(normalized).toContain("Use the visible `skill` tool only to search or load mounted Orchestrator")
+    expect(normalized).toContain("call `select_expert_squad` with the named `profile_id`")
+    expect(normalized).toContain("before dispatching downstream specialists")
+    expect(normalized).toContain("frontend replica expert-squad skill")
+    expect(normalized).toContain("frontend automation debug expert-squad skill")
+    expect(normalized).toContain("Do not use host-side keyword classifiers")
+    expect(normalized).toContain("hidden skill injection")
+    expect(normalized).toContain("per-agent prompt mutation")
+    expect(normalized).toContain("fallback profile selection")
+    expect(normalized).toContain("never deliverable production")
+    expect(normalized).toContain("Do not load production, research, report, or implementation skills")
+  })
+
   test("fact-check core anti-recursion: no <fact-check> tag literal; fact_check_items only in NOT/forbid context", async () => {
     // Anti-recursion enforcement per specs/fact-check-agent-2026-05-25.md
     // §7.1 / codex impl review §6.  The fact-check agent must never be
@@ -1059,8 +1080,9 @@ describe("core prompt hygiene", () => {
     const normalized = text.replace(/\s+/g, " ")
     expect(normalized).toContain("After a successful `requirements` result, call `architect` next")
     expect(normalized).toContain("Do not call `requirements` again unless an operator message changed scope")
-    expect(normalized).toContain('`restart_from_stage("requirements")` was chosen')
-    expect(normalized).toContain("concrete task evidence proves the active REQ snapshot is invalid")
+    expect(normalized).toContain("concrete task evidence proves the active REQ snapshot is invalid before execution has begun")
+    expect(normalized).toContain("If execution has begun and the REQ snapshot is fundamentally wrong")
+    expect(normalized).toContain("use `propose_task` for a separate inheriting workflow task instead of rerunning requirements in place")
   })
 
   test("orchestrator prompt routes non-pass integrity fixes through explicit repair", async () => {

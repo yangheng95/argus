@@ -907,7 +907,7 @@ export namespace Orchestrator {
       // Per rule 23 we do NOT transition the task to `failed` here AND we
       // do NOT auto-rewake — both are state-machine reactions. The next
       // external wake re-enters processTask; the LLM reads the abort fact
-      // via describe and decides itself (retry, restart_from_stage,
+      // via describe and decides itself (retry, re-dispatch, propose_task,
       // fail_task, or ask the operator).
       if (streamErrors.length > 0) {
         const first = streamErrors[0]

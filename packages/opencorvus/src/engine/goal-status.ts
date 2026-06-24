@@ -87,16 +87,8 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
   // Tips are sorted desc by time_created (list() returns desc). The single
   // newest tip is the authoritative head — a retry that issued createGoalRun
   // is the new tip, and an old terminal row that was not yet superseded is
-  // the only tip if no retry happened. A terminal head with
-  // superseded_reason is not dependency-satisfying anymore; startNewAttempt
-  // uses that field as retry intent before the next goal_run exists.
+  // the only tip if no retry happened.
   const head = tips[0]!
-  if (
-    (head.status === "completed" || head.status === "failed" || head.status === "aborted") &&
-    head.superseded_reason
-  ) {
-    return "pending"
-  }
   return mapRunStatus(head.status as EngineGoalRunStatus)
 }
 

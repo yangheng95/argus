@@ -73,7 +73,7 @@ export const FactCheckCorrectedItemSchema = z.object({
   correction: z.string(),
   severity: z.enum(["minor", "material", "blocking"]),
   evidence: z.array(FactCheckEvidenceSchema).min(1),
-  recommended_action: z.enum(["accept_with_note", "modify_goal", "restart_from_stage", "fail_task"]),
+  recommended_action: z.enum(["accept_with_note", "modify_goal", "propose_task", "fail_task"]),
 })
 export type FactCheckCorrectedItem = z.infer<typeof FactCheckCorrectedItemSchema>
 

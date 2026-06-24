@@ -1185,45 +1185,6 @@ export function updateGoalWorkspace(input: {
 }
 
 /**
- * Batch reset every goal in a task back to the "pending" projection by:
- *  1. clearing any explicit cascade_state marker
- *  2. supersede-annotating any failed goal_run tip so deriveGoalStatus
- *     projects `pending` via the retry marker
- *  3. calling syncGoalStatus on each goal
- *
- * Caller (restart_from_stage) is responsible for having aborted live
- * goal_runs first via abortLiveExecutionForTask — this function only
- * handles the terminal-state remnants.
- */
-export function resetTaskGoalsToPending(input: { taskID: string; reason: string; now?: number }) {
-  const now = input.now ?? Date.now()
-  const goals = listGoals(input.taskID)
-  let supersededTips = 0
-  for (const goal of goals) {
-    const tip = findLatestTipGoalRun(goal.id)
-    // Any terminal tip (failed / aborted / completed) must be superseded so
-    // the goal is eligible for re-dispatch. `completed` was added when
-    // abortLiveExecutionForTask stopped flipping completed→aborted
-    // (catalog.ts resettable=false): restart_from_stage needs a way to
-    // invalidate prior success under a new run, and the supersede marker
-    // is now the sole mechanism.
-    const result = startNewAttempt({
-      goalID: goal.id,
-      reason: "restart_stage",
-      now,
-    })
-    if (result.supersededTipID) supersededTips++
-  }
-  log.info("reset task goals to pending", {
-    taskID: input.taskID,
-    reason: input.reason,
-    total: goals.length,
-    supersededTips,
-  })
-  return { total: goals.length, supersededTips }
-}
-
-/**
  * Mark every active plan_version for a task as superseded and discard the
  * plan_node rows that belonged to them. Single-source enforcement of the
  * "at most one active plan per task" invariant — the read side
@@ -1355,7 +1316,7 @@ function appendGoalRunArtifact(input: {
 /**
  * Open a new attempt for a goal — single entry-point for "this goal must
  * re-dispatch under a fresh attempt." Replaces the four ad-hoc paths
- * (build_retry / modify_goal / restart_from_stage / acceptance_rework)
+ * (build_retry / modify_goal / acceptance_rework)
  * that all expanded to the same supersede + sync sequence and drifted apart
  * over time.
  *
@@ -2437,7 +2398,7 @@ export function recordIntegrityAttempt(input: {
  * error and we do NOT auto-rewake from this artifact — both would be
  * state-machine reactions. The orchestrator reads the artifact via describe
  * on its next external wake and decides for itself whether to retry,
- * restart_from_stage, or fail_task.
+ * re-dispatch, propose a new task, or fail_task.
  */
 export function recordOrchestratorStreamError(input: {
   taskID: string
