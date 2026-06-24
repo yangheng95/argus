@@ -1567,7 +1567,7 @@ export function renderBuildAutoIterationMode(autoIteration: boolean): string {
     "## Auto Iteration Mode",
     autoIteration
       ? "- assistant.auto_iteration=true: after verification failures, continue focused repair attempts, including assigned dependency, toolchain, port, script, test, and worktree merge repairs, until every acceptance spec is satisfied or a concrete blocker remains."
-      : '- assistant.auto_iteration=false: make one focused repair/verification pass, including any explicitly assigned stuck-state repair in this worktree, then report the exact remaining owner/action blocker through report_build_result(status="failed") if failures remain.',
+      : '- assistant.auto_iteration=false: make one focused product/implementation repair pass, including any explicitly assigned stuck-state repair in this worktree. This bound does not apply to repo-local toolchain/pre-checker blockers: continue concrete dependency, script, port, test-runner, browser-runner, and worktree-merge repairs until the exact required checker runs or the remaining blocker is external, destructive, or unowned by this task; only then report the exact owner/action blocker through report_build_result(status="failed").',
   ].join("\n")
 }
 
