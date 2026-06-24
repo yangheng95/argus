@@ -1,7 +1,37 @@
 import { describe, expect, test } from "bun:test"
+import { spawnSync } from "child_process"
+import fs from "fs/promises"
+import os from "os"
+import path from "path"
 import { PassThrough } from "stream"
 import { Shell } from "../src/shell/shell"
 import { ProcessSupervisor } from "../src/shell/process-supervisor"
+
+function isProcessRunning(pid: number) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!isProcessRunning(pid)) return true
+    await Bun.sleep(25)
+  }
+  return !isProcessRunning(pid)
+}
+
+function killProcessTreeForTest(pid: number | undefined) {
+  if (!pid || !isProcessRunning(pid)) return
+  spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+    stdio: "ignore",
+    windowsHide: true,
+  })
+}
 
 describe("shell selection", () => {
   test("ignores powershell from SHELL on windows", () => {
@@ -248,4 +278,58 @@ describe("shell process supervisor contract", () => {
       restore()
     }
   })
+
+  test("windows helper dispose terminates the reported child process tree", async () => {
+    if (process.platform !== "win32") return
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-supervisor-test-"))
+    const cwd = path.join(root, "cwd")
+    const helperCmd = path.join(root, "helper.cmd")
+    const helperJs = path.join(root, "helper.js")
+    const childJs = path.join(root, "child.js")
+    await fs.mkdir(cwd)
+    await fs.writeFile(childJs, "setInterval(() => {}, 1000)\n", "utf8")
+    await fs.writeFile(
+      helperJs,
+      [
+        'const fs = require("fs")',
+        'const path = require("path")',
+        'const { spawn } = require("child_process")',
+        'const requestIndex = process.argv.indexOf("--request")',
+        "if (requestIndex < 0) process.exit(2)",
+        'const request = JSON.parse(fs.readFileSync(process.argv[requestIndex + 1], "utf8"))',
+        'const child = spawn(process.execPath, [path.join(__dirname, "child.js")], {',
+        "  cwd: request.cwd,",
+        '  stdio: "ignore",',
+        "  windowsHide: true,",
+        "})",
+        "child.unref()",
+        'fs.writeFileSync(request.pid_file, String(child.pid), "utf8")',
+        "setInterval(() => {}, 1000)",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+    await fs.writeFile(helperCmd, `@echo off\r\n"${process.execPath}" "${helperJs}" %*\r\n`, "utf8")
+
+    let childPid: number | undefined
+    const restore = ProcessSupervisor.setWindowsHelperResolverForTest(async () => helperCmd)
+    try {
+      const handle = await ProcessSupervisor.spawnShell({
+        command: "ignored-by-fake-helper",
+        shell: process.env.COMSPEC ?? "cmd.exe",
+        cwd,
+      })
+      childPid = handle.pid
+      expect(isProcessRunning(childPid)).toBe(true)
+
+      await handle.dispose()
+
+      expect(await waitForProcessExit(childPid)).toBe(true)
+    } finally {
+      restore()
+      killProcessTreeForTest(childPid)
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  }, 20_000)
 })

@@ -93,13 +93,44 @@ export namespace ProcessSupervisor {
     })
     const helperHandle = childHandle(proc, { cleanupProcessGroup: false })
     const pid = await waitForPidFile(pidPath, helperHandle.exited, opts.command)
+    let terminated = false
+    let disposed = false
+    const terminate = async () => {
+      if (terminated) return
+      terminated = true
+      let firstError: unknown
+      try {
+        await terminateWindowsProcessTree(pid)
+      } catch (error) {
+        firstError = error
+      }
+      try {
+        await helperHandle.terminate()
+      } catch (error) {
+        if (!firstError) firstError = error
+      }
+      if (firstError) throw firstError
+    }
+
+    const dispose = async () => {
+      if (disposed) return
+      disposed = true
+      let firstError: unknown
+      try {
+        await terminate()
+      } catch (error) {
+        firstError = error
+      }
+      await helperHandle.exited.catch(() => undefined)
+      await fs.rm(requestDir, { recursive: true, force: true }).catch(() => {})
+      if (firstError) throw firstError
+    }
+
     return {
       ...helperHandle,
       pid,
-      async dispose() {
-        await helperHandle.dispose()
-        await fs.rm(requestDir, { recursive: true, force: true }).catch(() => {})
-      },
+      terminate,
+      dispose,
     }
   }
 
@@ -178,6 +209,35 @@ export namespace ProcessSupervisor {
         process.kill(-pid, "SIGKILL")
       } catch {}
     } catch {}
+  }
+
+  function processIsRunning(pid: number) {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "EPERM"
+    }
+  }
+
+  async function waitForProcessExit(pid: number, timeoutMs: number) {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      if (!processIsRunning(pid)) return true
+      await Bun.sleep(20)
+    }
+    return !processIsRunning(pid)
+  }
+
+  async function terminateWindowsProcessTree(pid: number) {
+    if (!processIsRunning(pid)) return
+    const result = spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+      encoding: "utf8",
+      windowsHide: true,
+    })
+    if (await waitForProcessExit(pid, SIGKILL_TIMEOUT_MS)) return
+    const detail = [result.stderr, result.stdout].filter(Boolean).join("\n").trim()
+    throw new Error(detail || `Failed to terminate Windows supervised process tree ${pid}`)
   }
 
   async function waitForPidFile(pidPath: string, exited: Promise<number>, command: string): Promise<number> {
