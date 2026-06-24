@@ -34,8 +34,12 @@ describe("build agent goal execution discipline prompt", () => {
 
   test("renders current auto-iteration mode into build sessions", () => {
     expect(renderBuildAutoIterationMode(false)).toContain("assistant.auto_iteration=false")
-    expect(renderBuildAutoIterationMode(false)).toContain("one focused repair/verification pass")
+    expect(renderBuildAutoIterationMode(false)).toContain("one focused product/implementation repair pass")
     expect(renderBuildAutoIterationMode(false)).toContain("explicitly assigned stuck-state repair")
+    expect(renderBuildAutoIterationMode(false)).toContain(
+      "This bound does not apply to repo-local toolchain/pre-checker blockers",
+    )
+    expect(renderBuildAutoIterationMode(false)).toContain("until the exact required checker runs")
     expect(renderBuildAutoIterationMode(true)).toContain("assistant.auto_iteration=true")
     expect(renderBuildAutoIterationMode(true)).toContain("continue focused repair attempts")
     expect(renderBuildAutoIterationMode(true)).toContain(
@@ -157,6 +161,10 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("rerun the exact required command")
     expect(normalized).toContain("do not bypass the required command with a lower-level executable")
     expect(normalized).toContain("as if product code failed")
+    expect(normalized).toContain("assistant.auto_iteration=false")
+    expect(normalized).toContain("does not shorten local toolchain repair")
+    expect(normalized).toContain("while concrete repair actions remain")
+    expect(normalized).toContain("include the exhausted repair evidence")
   })
 
   test("forbids committing OpenCorvus internal runtime paths as deliverables", async () => {
