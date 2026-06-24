@@ -4,7 +4,7 @@ import { streamSSE } from "../sse"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { ControlTimeline } from "@/control/timeline"
-import { conversationMessageHasDisplay, projectConversationView } from "@/conversation/view"
+import { conversationMessageHasDisplay, projectConversationAgentView, projectConversationView } from "@/conversation/view"
 import {
   Artifact,
   AgentSessionCancelResult,
@@ -55,6 +55,7 @@ import {
   sessionGoalID,
   sessionParentID,
   sessionRole,
+  listTaskConversationAgentSessions,
   taskIDForSession,
   taskMessageWatermark,
   taskSession,
@@ -846,6 +847,7 @@ export const EngineRoutes = lazy(() =>
           loadTaskTranscript(taskID, { perSessionLimit: transcriptLimit }),
           Promise.resolve(ControlTimeline.list({ taskID })),
         ])
+        const agentSessions = listTaskConversationAgentSessions(taskID)
         const transcript = transcriptResult.transcript
         const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(
           items: T[],
@@ -885,7 +887,12 @@ export const EngineRoutes = lazy(() =>
           sinceTimestamp: history.hasMore ? history.oldestTimestamp : null,
         })
         const view = projectConversationView(board, historyWindow.transcript, eventPage.events)
-        const agentView = history.hasMore ? projectConversationView(board, filteredTranscript, eventPage.events) : view
+        const agentView = projectConversationAgentView(
+          board,
+          history.hasMore ? filteredTranscript : historyWindow.transcript,
+          eventPage.events,
+          agentSessions,
+        )
         return c.json({
           lastSequence: latestSequence,
           messageWatermark,

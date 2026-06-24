@@ -4,7 +4,7 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
 import { SessionStatus } from "@/session"
-import { conversationMessageHasDisplay, projectConversationView } from "@/conversation/view"
+import { conversationMessageHasDisplay, projectConversationAgentView, projectConversationView } from "@/conversation/view"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
@@ -377,13 +377,23 @@ export const SessionRoutes = lazy(() =>
           directory: session.directory ?? null,
         }
         const view = projectConversationView(board, transcript)
+        const agentView = projectConversationAgentView(board, transcript, [], [
+          {
+            sessionID: session.id,
+            stage: session.kind,
+            parentSessionID: session.parentID,
+            goalID: session.goalID,
+            timeCreated: session.time.created,
+            timeUpdated: session.time.updated,
+          },
+        ])
         return c.json({
           board,
           transcript,
           timeline: [],
           events: [],
           view,
-          agentView: view,
+          agentView,
           history: {
             oldestTimestamp: transcript[0]?.info?.time?.created ?? null,
             oldestMessageID: transcript[0]?.info?.id ?? null,

@@ -614,6 +614,7 @@ test("selected-task session status updates cards without board refresh", () => {
     properties: {
       taskID: "tsk_refresh",
       sessionID: "ses_refresh",
+      channel: "main",
       status: { type: "streaming" },
     },
   }

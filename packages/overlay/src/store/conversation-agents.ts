@@ -13,6 +13,9 @@ export interface ConversationAgentSessionView {
   lastDisplayMessageID?: string
   firstMessageTime: number
   lastMessageTime: number
+  firstObservedAt?: number
+  lastObservedAt?: number
+  status?: AgentWorkflowStatus
   placement?: "top_level" | "goal_phase" | "hidden" | "filtered" | string
   phase?: {
     stepID: string
@@ -92,45 +95,58 @@ function renderedTargetForPhaseSession(
   }
 }
 
-function agentRecordFromPhaseSession(session: ConversationAgentSessionView): AgentWorkflowRecord | null {
+function renderedTargetForSession(
+  session: ConversationAgentSessionView,
+  stage: string,
+): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID"> | null {
+  const phaseTarget = renderedTargetForPhaseSession(session)
+  if (phaseTarget) return phaseTarget
+  const messageID = String(session?.lastDisplayMessageID || "")
+  if (!messageID) return null
+  if (stage === "integrity") return { renderedCardID: `${stage}:session:${session.sessionID}` }
+  return { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
+}
+
+function agentRecordFromSession(session: ConversationAgentSessionView): AgentWorkflowRecord | null {
   const sessionID = String(session?.sessionID || "")
   const rawStage = String(session?.stage || "")
   const stage = normalizeAgentRole(rawStage)
-  const startedAt = Number(session?.firstMessageTime || 0)
+  const startedAt = Number(session?.firstObservedAt ?? session?.firstMessageTime ?? 0)
   if (
     !sessionID ||
     !stage ||
     stage === "user" ||
-    session?.placement !== "goal_phase" ||
+    session?.placement === "filtered" ||
     rawStage === "filtered" ||
     !(startedAt > 0)
   ) {
     return null
   }
-  const target = renderedTargetForPhaseSession(session)
-  if (!target) return null
-  const lastObservedAt = Math.max(startedAt, Number(session?.lastMessageTime || 0))
+  const target = renderedTargetForSession(session, stage)
+  const lastObservedAt = Math.max(startedAt, Number(session?.lastObservedAt ?? session?.lastMessageTime ?? 0))
+  const status = session.status || "pending"
+  const terminal = status === "completed" || status === "error" || status === "skipped"
   return {
     id: sessionID,
     sessionID,
     parentSessionID: String(session?.parentSessionID || ""),
     agentName: stage,
     stage,
-    status: "completed",
+    status,
     startedAt,
     lastObservedAt,
-    completedAt: lastObservedAt,
+    ...(terminal ? { completedAt: lastObservedAt } : {}),
     attempts: 1,
     depth: 0,
     targetMessageID: String(session?.lastDisplayMessageID || ""),
     goalID: session?.goalID,
     stepID: session?.phase?.stepID,
     phaseID: session?.phase?.phaseID,
-    ...target,
+    ...(target || {}),
   }
 }
 
-function agentRecordFromMessages(messages: ConversationAgentMessageView[]): AgentWorkflowRecord[] {
+function agentTargetRecordsFromMessages(messages: ConversationAgentMessageView[]): AgentWorkflowRecord[] {
   const bySession = new Map<string, AgentWorkflowRecord>()
   for (const message of messages) {
     const sessionID = String(message?.sessionID || "")
@@ -212,13 +228,27 @@ export function resetConversationAgentView(): void {
 }
 
 export function hydrateConversationAgentView(taskID: string, view: ConversationAgentView): void {
-  const messageBackedRecords = agentRecordFromMessages(Array.isArray(view?.messages) ? view.messages : [])
-  const messageBackedSessionIDs = new Set(messageBackedRecords.map((record) => record.sessionID))
-  const phaseOnlyRecords = (Array.isArray(view?.sessions) ? view.sessions : [])
-    .filter((session) => !messageBackedSessionIDs.has(String(session?.sessionID || "")))
-    .map(agentRecordFromPhaseSession)
+  const recordsBySession = new Map<string, AgentWorkflowRecord>()
+  const sessionRecords = (Array.isArray(view?.sessions) ? view.sessions : [])
+    .map(agentRecordFromSession)
     .filter((record): record is AgentWorkflowRecord => !!record)
-  const records = [...messageBackedRecords, ...phaseOnlyRecords].sort((left, right) => left.startedAt - right.startedAt)
+  for (const record of sessionRecords) recordsBySession.set(record.sessionID, { ...record })
+  for (const target of agentTargetRecordsFromMessages(Array.isArray(view?.messages) ? view.messages : [])) {
+    const existing = recordsBySession.get(target.sessionID)
+    if (!existing) continue
+    recordsBySession.set(target.sessionID, {
+      ...existing,
+      startedAt: Math.min(existing.startedAt, target.startedAt),
+      lastObservedAt: Math.max(existing.lastObservedAt, target.lastObservedAt),
+      targetMessageID: target.targetMessageID,
+      goalID: target.goalID || existing.goalID,
+      stepID: target.stepID || existing.stepID,
+      phaseID: target.phaseID || existing.phaseID,
+      cardID: target.cardID,
+      renderedCardID: target.renderedCardID,
+    })
+  }
+  const records = [...recordsBySession.values()].sort((left, right) => left.startedAt - right.startedAt)
   setConversationAgentStore({
     taskID,
     records: applyDepth(records),
@@ -300,43 +330,23 @@ export function applyLiveConversationAgentMessageUpdated(sourceKeyInput: string,
   const existingRecords = conversationAgentStore.taskID === sourceKey ? conversationAgentStore.records : []
   const nextRecords = existingRecords.map((record) => ({ ...record }))
   const index = nextRecords.findIndex((record) => record.sessionID === sessionID)
+  if (index === -1) return
   const nextObservedAt = completed ? Math.max(observedAt, completedAt) : observedAt
-  if (index === -1) {
-    nextRecords.push({
-      id: sessionID,
-      sessionID,
-      parentSessionID,
-      agentName: stage,
-      stage,
-      status: completed ? "completed" : "running",
-      startedAt: observedAt,
-      lastObservedAt: nextObservedAt,
-      ...(completed ? { completedAt: nextObservedAt } : {}),
-      attempts: 1,
-      depth: 0,
-      targetMessageID: messageID,
-      goalID: goalID || undefined,
-      ...target,
-    })
-  } else {
-    const existing = nextRecords[index]!
-    nextRecords[index] = {
-      ...existing,
-      startedAt: Math.min(existing.startedAt, observedAt),
-      lastObservedAt: Math.max(existing.lastObservedAt, nextObservedAt),
-      ...(completed ? { completedAt: Math.max(existing.completedAt || 0, nextObservedAt) } : {}),
-      ...(nextObservedAt >= existing.lastObservedAt
-        ? {
-            parentSessionID,
-            agentName: stage,
-            stage,
-            status: completed ? "completed" : "running",
-            targetMessageID: messageID,
-            goalID: goalID || undefined,
-            ...target,
-          }
-        : {}),
-    }
+  const existing = nextRecords[index]!
+  nextRecords[index] = {
+    ...existing,
+    startedAt: Math.min(existing.startedAt, observedAt),
+    lastObservedAt: Math.max(existing.lastObservedAt, nextObservedAt),
+    ...(nextObservedAt >= existing.lastObservedAt
+      ? {
+          parentSessionID,
+          agentName: stage,
+          stage,
+          targetMessageID: messageID,
+          goalID: goalID || undefined,
+          ...target,
+        }
+      : {}),
   }
   const records = nextRecords.sort((left, right) => left.startedAt - right.startedAt)
   setConversationAgentStore({
@@ -370,41 +380,23 @@ export function applyLiveConversationAgentPartUpdated(sourceKeyInput: string, ev
   const existingRecords = conversationAgentStore.taskID === sourceKey ? conversationAgentStore.records : []
   const nextRecords = existingRecords.map((record) => ({ ...record }))
   const index = nextRecords.findIndex((record) => record.sessionID === sessionID)
-  if (index === -1) {
-    nextRecords.push({
-      id: sessionID,
-      sessionID,
-      parentSessionID,
-      agentName: stage,
-      stage,
-      status: "running",
-      startedAt: observedAt,
-      lastObservedAt: observedAt,
-      attempts: 1,
-      depth: 0,
-      targetMessageID: messageID,
-      goalID: goalID || undefined,
-      ...target,
-    })
-  } else {
-    const existing = nextRecords[index]!
-    const isLatest = observedAt >= existing.lastObservedAt
-    nextRecords[index] = {
-      ...existing,
-      startedAt: Math.min(existing.startedAt, observedAt),
-      lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
-      ...(isLatest
-        ? {
-            parentSessionID,
-            agentName: stage,
-            stage,
-            status: existing.status === "pending" ? "running" : existing.status,
-            targetMessageID: messageID,
-            goalID: goalID || undefined,
-            ...target,
-          }
-        : {}),
-    }
+  if (index === -1) return
+  const existing = nextRecords[index]!
+  const isLatest = observedAt >= existing.lastObservedAt
+  nextRecords[index] = {
+    ...existing,
+    startedAt: Math.min(existing.startedAt, observedAt),
+    lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
+    ...(isLatest
+      ? {
+          parentSessionID,
+          agentName: stage,
+          stage,
+          targetMessageID: messageID,
+          goalID: goalID || undefined,
+          ...target,
+        }
+      : {}),
   }
   const records = nextRecords.sort((left, right) => left.startedAt - right.startedAt)
   setConversationAgentStore({
@@ -419,37 +411,83 @@ function liveAgentStatusFromSessionStatus(status: any): AgentWorkflowStatus {
   if (type === "idle") return "idle"
   if (type === "terminal") {
     const reason = String(status?.reason || "")
-    if (reason === "error") return "error"
+    if (reason === "error" || reason === "artifact_missing") return "error"
     if (reason === "completed" || reason === "aborted") return "completed"
   }
   throw new Error(`conversation agent live view unknown session.status: ${JSON.stringify(status)}`)
 }
 
+function liveSessionRecordTarget(
+  sessionID: string,
+  stage: string,
+  goalID: string,
+): Pick<AgentWorkflowRecord, "cardID" | "renderedCardID" | "stepID" | "phaseID"> | null {
+  const phase = goalID ? goalStagePhaseID(stage) : null
+  if (!phase) return null
+  const renderedCardID = `step:${goalID}:${phase.stepID}`
+  return {
+    cardID: `${renderedCardID}:phase:${phase.phaseID}`,
+    renderedCardID,
+    stepID: phase.stepID,
+    phaseID: phase.phaseID,
+  }
+}
+
 export function applyLiveConversationAgentSessionStatus(sourceKeyInput: string, event: any): void {
   const sourceKey = String(sourceKeyInput || "").trim()
   if (!sourceKey) throw new Error("conversation agent live view requires a source key")
-  if (conversationAgentStore.taskID !== sourceKey) return
   const properties = liveEventProperties(event)
   const sessionID = String(properties?.sessionID || "")
   if (!sessionID) throw new Error("conversation agent live view session.status missing sessionID")
-  const index = conversationAgentStore.records.findIndex((record) => record.sessionID === sessionID)
-  if (index === -1) return
+  const stage = liveStageFromMessageInfo(properties)
+  if (!stage) return
   const status = liveAgentStatusFromSessionStatus(properties?.status)
   const observedAt = liveEventObservedAt(event)
   if (!(observedAt > 0)) {
     throw new Error("conversation agent live view session.status missing emitted time")
   }
-  const nextRecords = conversationAgentStore.records.map((record) => ({ ...record }))
-  const existing = nextRecords[index]!
+  const existingRecords = conversationAgentStore.taskID === sourceKey ? conversationAgentStore.records : []
+  const nextRecords = existingRecords.map((record) => ({ ...record }))
+  const index = nextRecords.findIndex((record) => record.sessionID === sessionID)
   const terminal = status === "completed" || status === "error" || status === "skipped"
-  nextRecords[index] = {
-    ...existing,
-    status,
-    lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
-    ...(terminal ? { completedAt: Math.max(existing.completedAt || 0, observedAt) } : {}),
+  if (index === -1) {
+    const goalID = String(properties.goalID || "")
+    const target = liveSessionRecordTarget(sessionID, stage, goalID)
+    nextRecords.push({
+      id: sessionID,
+      sessionID,
+      parentSessionID: String(properties.parentSessionID || ""),
+      agentName: stage,
+      stage,
+      status,
+      startedAt: observedAt,
+      lastObservedAt: observedAt,
+      ...(terminal ? { completedAt: observedAt } : {}),
+      attempts: 1,
+      depth: 0,
+      targetMessageID: "",
+      goalID: goalID || undefined,
+      ...(target || {}),
+    })
+  } else {
+    const existing = nextRecords[index]!
+    const goalID = String(properties.goalID || existing.goalID || "")
+    const target = liveSessionRecordTarget(sessionID, stage, goalID)
+    nextRecords[index] = {
+      ...existing,
+      parentSessionID: String(properties.parentSessionID || existing.parentSessionID || ""),
+      agentName: stage,
+      stage,
+      status,
+      startedAt: Math.min(existing.startedAt, observedAt),
+      lastObservedAt: Math.max(existing.lastObservedAt, observedAt),
+      ...(terminal ? { completedAt: Math.max(existing.completedAt || 0, observedAt) } : {}),
+      goalID: goalID || undefined,
+      ...(target || {}),
+    }
   }
   setConversationAgentStore({
     taskID: sourceKey,
-    records: applyDepth(nextRecords),
+    records: applyDepth(nextRecords.sort((left, right) => left.startedAt - right.startedAt)),
   })
 }

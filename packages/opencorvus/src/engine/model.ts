@@ -970,6 +970,9 @@ export const TaskConversationSessionView = z.object({
   lastDisplayMessageID: z.string().optional(),
   firstMessageTime: z.number(),
   lastMessageTime: z.number(),
+  firstObservedAt: z.number().optional(),
+  lastObservedAt: z.number().optional(),
+  status: z.enum(["pending", "running", "idle", "completed", "error", "skipped"]).optional(),
   placement: z.enum(["top_level", "goal_phase", "hidden", "filtered"]),
   phase: TaskConversationPhaseLocation.optional(),
 })

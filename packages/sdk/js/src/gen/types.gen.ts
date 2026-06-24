@@ -5598,6 +5598,9 @@ export type SessionConversationResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        firstObservedAt?: number
+        lastObservedAt?: number
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
@@ -5629,6 +5632,9 @@ export type SessionConversationResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        firstObservedAt?: number
+        lastObservedAt?: number
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
@@ -12803,6 +12809,9 @@ export type TaskConversationResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        firstObservedAt?: number
+        lastObservedAt?: number
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
@@ -12834,6 +12843,9 @@ export type TaskConversationResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        firstObservedAt?: number
+        lastObservedAt?: number
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
@@ -12927,6 +12939,9 @@ export type TaskConversationSessionResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        firstObservedAt?: number
+        lastObservedAt?: number
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
@@ -13029,6 +13044,9 @@ export type TaskConversationHistoryResponses = {
         lastDisplayMessageID?: string
         firstMessageTime: number
         lastMessageTime: number
+        firstObservedAt?: number
+        lastObservedAt?: number
+        status?: "pending" | "running" | "idle" | "completed" | "error" | "skipped"
         placement: "top_level" | "goal_phase" | "hidden" | "filtered"
         phase?: {
           stepID: string
