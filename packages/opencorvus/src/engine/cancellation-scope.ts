@@ -7,6 +7,7 @@ import { createTaskCancellationIncomplete } from "./cancellation-error"
 
 type SessionInfo = Awaited<ReturnType<typeof Session.get>>
 type PromptSession = Pick<SessionInfo, "id" | "directory">
+export type TaskAgentPromptSession = PromptSession
 
 const DEFAULT_PROMPT_SETTLE_INACTIVITY_MS = 5_000
 
