@@ -201,8 +201,9 @@ orchestrate that team faithfully and explain each dispatch — not to improvise.
 After `architect` you typically call `workload_analysis`, an advisory,
 skippable read-only reviewer that flags oversized goals and writes per-goal
 briefs for `build`. Its `decomposition_concern` findings feed `modify_goal` /
-`architect` re-sizing; `read_context` exposes `workload_analyzed` /
-`workload_stale`. Do not thrash between `architect` and `workload_analysis`.
+`architect` re-sizing; the current task snapshot exposes
+`workload_analysis=not_run/current/stale`. Do not thrash between `architect`
+and `workload_analysis`.
 After a successful `architect` result has created pending goals and no build attempt exists yet,
 do not re-run `architect` just because implementation has not started; either dispatch current
 `workload_analysis`, or skip it with an evidence-backed reason and dispatch `build({ goalID })` for the first eligible pending goal.
@@ -405,13 +406,12 @@ contract.
   Playwright/browser setup, dynamic port selection, runtime/tool
   configuration, and unfinished MERGING state inside a goal worktree. Never
   use Build for repository investigation.
-- `read_context`: read one explicit narrow context scope. Use
-  `scope="goals"` for normal scheduler dispatch, refill facts, live run ids,
-  and ordered dispatchable/failed goals. Use `scope="evaluations"`,
-  `scope="deliveries"`, `scope="decisions"`, `scope="integrity_history"`,
-  `scope="research"`, or `scope="fact_checks"` only when that exact evidence
-  surface is required for the next decision. There is no full-state/default
-  read.
+- `read_context`: drill into persisted audit context that the current task
+  snapshot only references. Use only `scope="integrity_history"`,
+  `scope="fact_checks"`, or `scope="decisions"` when that exact audit surface
+  is required. Do not use it for normal scheduler refresh: task status, goal
+  ordering, live run ids, terminal refill facts, research summaries, and latest
+  run result are already rendered in the current task snapshot.
 - `query_failed_goals`: inspect failed goal evidence before retry/modify/fail.
 - `add_goal`: append one new executable goal when a real operator message or task evidence adds a concrete in-scope surface not covered by existing goals; requires full acceptance_specs and owned_paths. Use `modify_goal` for point fixes, `architect` for graph re-decomposition, and `propose_task` for separate follow-up scope.
 - `modify_goal`: correct a goal contract without rebuilding the whole graph.
@@ -458,7 +458,7 @@ contract.
 - `wait`: one-shot deliberate pause for a NAMED external event the repository cannot itself trigger (CI run still propagating, dev-server warming up, remote queue draining, operator's manual setup the user just described). Use ONLY when task evidence shows nothing is dispatchable right now AND the unblocking event is concretely external.
   NOT a polling primitive: never chain `wait` calls to re-inspect state on a fixed cadence; the orchestrator wakes on real external triggers (operator message, ownership recovery, scheduler tick). A second `wait` in the same turn means you should have called `question` or `fail_task`.
   Do not call `wait` for live build completion, live sibling goal completion, or terminal goal refill polling; those are internal engine facts, not external events.
-  NOT a substitute for `question`, `fail_task`, or `read_context`; after `wait` returns, refresh scheduler evidence with `read_context({scope:"goals"})` before the next dispatch.
+  NOT a substitute for `question`, `fail_task`, or a real workflow decision; after `wait` returns, decide from the refreshed task snapshot before the next dispatch.
 
 ## Integrity Correction
 
@@ -564,11 +564,12 @@ questions when a targeted missing field is known.
 - Explain your reasoning before each tool call.
 - Skip agents deliberately and say why when the skip matters.
 - After a `build` tool returns `started`, treat the child build as live
-  session evidence. Read context on terminal goal refill wakes and recompute
-  the graph from ordered dispatchable goals, failed goals, and live sibling
-  goal runs. If no dispatchable, failed, or refill fact exists and only live
-  child builds remain, stop this wake; terminal goal refill facts will wake the
-  next decision. Do not call `wait` to poll internal live build progress.
+  session evidence. On terminal goal refill wakes, use the current task
+  snapshot to recompute the graph from ordered dispatchable goals, failed
+  goals, and live sibling goal runs. If no dispatchable, failed, or refill fact
+  exists and only live child builds remain, stop this wake; terminal goal
+  refill facts will wake the next decision. Do not call `wait` to poll internal
+  live build progress.
 - User messages in Operator Notes are part of the current task context.
 - Do not fabricate evidence, requirements, acceptance, tests, files, or user
   approvals.

@@ -26,7 +26,6 @@ import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { createDecisionLog } from "@/decision-log"
 import { EngineService } from "@/task-api"
-import { EngineConfig } from "@/engine/config"
 import {
   canReceiveDirectAgentSessionControl,
   BuildSessionDirectReplyError,
@@ -114,8 +113,6 @@ import {
   findLatestIntegrityArtifactMissingStatus,
   findLatestTipGoalRun,
   findChildrenOfTask,
-  listResearchBriefArtifacts,
-  listFrontendResearchBriefArtifacts,
   findPlan,
   findRun,
   getGoalRetryCount,
@@ -125,17 +122,10 @@ import {
   listGoalRunsForTask,
   requireRun,
   requireTask,
-  type ResearchBriefArtifactRow,
   type RunRow,
   type TaskRow,
 } from "@/engine/store"
-import {
-  describeTask,
-  goalStatusByID,
-  renderCollaborationClosure,
-  renderGoal,
-  renderTerminalGoalRefillNotifications,
-} from "@/engine/describe"
+import { goalStatusByID } from "@/engine/describe"
 import { isLiveGoalRunStatus } from "@/engine/catalog"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
@@ -693,67 +683,14 @@ function continuationResultForTerminalFinalizerMiss(input: {
   })
 }
 
-async function appendResearchBriefContext(
-  output: ReadContextOutput,
-  title: string,
-  artifact: ResearchBriefArtifactRow | undefined,
-  request: string,
-) {
-  if (!artifact) return
-  const { researchBriefIsStale } = await import("@/research/staleness")
-  const stale = researchBriefIsStale({ request, brief: artifact.payload })
-  const brief = artifact.payload
-  const subpageResearchTasks = brief.subpage_research_tasks ?? []
-  const pointer = `research artifact ${artifact.id}; bundle ${brief.bundle.full_markdown_path}`
-  output.add(
-    `\n## ${title}`,
-    `- artifact: ${artifact.id}`,
-    `- session: ${brief.metadata.research_session_id}`,
-    `- stale: ${stale.stale ? "true" : "false"}`,
-    stale.reasons.length > 0
-      ? `- stale_reasons: ${readContextCompactList(stale.reasons, pointer, { listCap: 8, itemCap: 160 })}`
-      : "",
-    brief.webpage_contract ? `- source_url: ${brief.webpage_contract.source_url}` : "",
-    `- sources: ${brief.evidence_index.length}`,
-    `- facts: ${brief.facts.length}`,
-    `- subpage_research_tasks: ${subpageResearchTasks.length}`,
-    subpageResearchTasks.length > 0
-      ? `- subpage_research_task_refs: ${readContextCompactList(
-          subpageResearchTasks.map((item) => `${item.id}=${item.url}`),
-          pointer,
-          { listCap: 5, itemCap: 180, joiner: "; " },
-        )}`
-      : "",
-    `- blocking_open_questions: ${brief.open_questions.filter((item) => item.blocking).length}`,
-    `- bundle: ${readContextCompactList(
-      [brief.bundle.full_markdown_path, brief.bundle.evidence_json_path, brief.bundle.citation_map_path],
-      pointer,
-      { listCap: 3, itemCap: 220 },
-    )}`,
-    `- summary: ${readContextCompactInline(brief.summary, pointer, READ_CONTEXT_RESEARCH_SUMMARY_CHAR_CAP)}`,
-    `Research is advisory evidence only; it is not a workflow step or next-tool instruction.`,
-    { sectionCap: READ_CONTEXT_RESEARCH_BRIEF_CHAR_CAP, pointer },
-  )
-}
-
 export const READ_CONTEXT_OUTPUT_CHAR_BUDGET = SubAgentProtocol.HARD_CHAR_CAP
-const READ_CONTEXT_CLOSURE_CHAR_CAP = 1_500
-const READ_CONTEXT_REFILL_FACTS_CHAR_CAP = 2_000
-const READ_CONTEXT_GOAL_BLOCK_CHAR_CAP = 1_800
-const READ_CONTEXT_EVALUATION_BLOCK_CHAR_CAP = 900
-const READ_CONTEXT_EVALUATION_SUMMARY_CHAR_CAP = 300
-const READ_CONTEXT_EVALUATION_CHECK_EVIDENCE_CHAR_CAP = 200
 const READ_CONTEXT_ARTIFACT_STATUS_CHAR_CAP = 1_200
 const READ_CONTEXT_INTEGRITY_LATEST_CHAR_CAP = 3_200
 const READ_CONTEXT_INTEGRITY_REPORT_CHAR_CAP = 2_400
 const READ_CONTEXT_INTEGRITY_HISTORY_DEDICATED_CHAR_CAP = 16_000
 const READ_CONTEXT_DECISION_REVIEW_CHAR_CAP = 3_500
 const READ_CONTEXT_DECISION_GENERAL_CHAR_CAP = 5_500
-const READ_CONTEXT_RESEARCH_BRIEF_CHAR_CAP = 1_200
-const READ_CONTEXT_RESEARCH_SUMMARY_CHAR_CAP = 420
 const READ_CONTEXT_FACT_CHECK_ATTEMPT_CHAR_CAP = 500
-const READ_CONTEXT_DELIVERY_BLOCK_CHAR_CAP = 900
-const READ_CONTEXT_DELIVERY_SUMMARY_CHAR_CAP = 420
 
 type ReadContextAddOptions = {
   pointer: string
@@ -811,29 +748,6 @@ function readContextTrimText(text: string, pointer: string, cap: number): string
   if (marker.length >= cap) return `[read_context output budget reached; full detail: ${pointer}]`.slice(0, cap)
   const sliceLength = Math.max(0, cap - marker.length)
   return `${text.slice(0, sliceLength)}${marker}`
-}
-
-function readContextCompactInline(text: string, pointer: string, cap: number): string {
-  return readContextTrimText(text.replace(/\s+/g, " ").trim(), pointer, cap).replace(/\s+/g, " ").trim()
-}
-
-function readContextCompactList(
-  items: string[],
-  pointer: string,
-  options: { listCap: number; itemCap: number; joiner?: string },
-): string {
-  let truncatedItems = 0
-  const shown = items.slice(0, options.listCap).map((item) => {
-    const normalized = item.replace(/\s+/g, " ").trim()
-    if (normalized.length <= options.itemCap) return normalized
-    truncatedItems += 1
-    return `${normalized.slice(0, Math.max(0, options.itemCap - 3))}...`
-  })
-  const tails: string[] = []
-  if (items.length > options.listCap) tails.push(`+${items.length - options.listCap} more`)
-  if (truncatedItems > 0) tails.push(`${truncatedItems} truncated`)
-  const more = tails.length > 0 ? ` (${tails.join("; ")} at ${pointer})` : ""
-  return `${shown.join(options.joiner ?? ", ")}${more}`
 }
 
 type OrchestratorToolExecutionContext = {
@@ -5955,7 +5869,7 @@ export function createOrchestratorTools(input: {
               ["bundle_paths", Object.values(result.brief.bundle)],
             ],
             pointer:
-              `research_brief artifact ${artifactID}; read_context scope=research surfaces stale status and bundle paths. ` +
+              `research_brief artifact ${artifactID}; task snapshot surfaces stale status and bundle paths. ` +
               "This result is evidence only; choose the next tool from full task context.",
           })
         } catch (err) {
@@ -6107,7 +6021,7 @@ export function createOrchestratorTools(input: {
         if (unknownDeps.length > 0) {
           return (
             `add_goal: rejected because depends_on references unknown goal id(s): ${unknownDeps.join(", ")}. ` +
-            `Use durable engine_goal.id values from read_context scope=goals.`
+            `Use durable engine_goal.id values from the current task snapshot.`
           )
         }
 
@@ -6171,7 +6085,7 @@ export function createOrchestratorTools(input: {
             ["plan_node_id", added.planNodeID ?? "(no active plan node yet)"],
             ["depends_on", (goal.depends_on ?? []).join(", ") || "(none)"],
           ],
-          pointer: `read_context scope=goals; then build({ goalID: "${added.id}" }) when dependencies are passed`,
+          pointer: `current task snapshot; then build({ goalID: "${added.id}" }) when dependencies are passed`,
         })
       },
     }),
@@ -6368,125 +6282,20 @@ export function createOrchestratorTools(input: {
 
     read_context: tool({
       description:
-        "Read current task context through one explicit narrow scope. Use goals for normal scheduler dispatch; use evaluations, deliveries, decisions, integrity_history, research, or fact_checks only when that surface is needed for the next decision.",
+        "Drill into persisted audit context that is not already rendered in the scheduler prompt. Use only for integrity_history, fact_checks, or decisions evidence; do not use this as normal task-state refresh.",
       inputSchema: z.object({
         scope: z
-          .enum(["goals", "evaluations", "decisions", "deliveries", "integrity_history", "research", "fact_checks"])
-          .describe("Required narrow context surface to read"),
+          .enum(["decisions", "integrity_history", "fact_checks"])
+          .describe("Required persisted audit surface to drill into"),
       }),
       execute: async ({ scope }) => {
-        const task = requireTask(taskID)
+        requireTask(taskID)
         const output = createReadContextOutput()
-        const autoIteration = (await EngineConfig.get()).auto_iteration === true
-        // Source-level caps on read_context output. Rationale: this tool is
-        // called every orchestrator turn; tool results live forever in session
-        // history. Unbounded accumulation (every historical eval, every run's
-        // acceptance, every decision) was the dominant contributor to the
-        // orchestrator session growing from ~10K to 125K tokens across 16 turns.
-        // Caps below preserve the LATEST state per goal rather than history.
-        // The decision-log cap is the shared DECISION_LOG_PROMPT_LIMIT (single
-        // source — see decision-log/index.ts), consumed at the call site below.
-        if (scope === "goals") {
-          const desc = await describeTask(taskID)
-          const closureLines = renderCollaborationClosure(desc.collaboration_closure, desc.goals, { autoIteration })
-          if (closureLines.length > 0) {
-            output.add(closureLines.join("\n"), {
-              pointer: "read_context scope=goals",
-              sectionCap: READ_CONTEXT_CLOSURE_CHAR_CAP,
-            })
-          }
-          const terminalGoalRefillLines = renderTerminalGoalRefillNotifications(desc.recent_terminal_goal_refills)
-          if (terminalGoalRefillLines.length > 0) {
-            output.add(terminalGoalRefillLines.join("\n"), {
-              pointer: "read_context scope=goals terminal refill facts",
-              sectionCap: READ_CONTEXT_REFILL_FACTS_CHAR_CAP,
-            })
-          }
-          if (desc.goals.length === 0) {
-            output.add("## Goals (none authored yet)", { pointer: "read_context scope=goals" })
-          } else {
-            output.add(`## Goals (${desc.goals.length})`, { pointer: "read_context scope=goals" })
-            if (desc.active_bootstrap_goal_id) {
-              output.add(`Bootstrap-first goal: ${desc.active_bootstrap_goal_id}`, {
-                pointer: "read_context scope=goals",
-              })
-            }
-            let omittedGoals = 0
-            for (const g of desc.goals) {
-              const added = output.add(renderGoal(g).join("\n"), {
-                pointer: `read_context scope=goals goal=${g.id}`,
-                sectionCap: READ_CONTEXT_GOAL_BLOCK_CHAR_CAP,
-              })
-              if (!added) omittedGoals += 1
-            }
-            if (omittedGoals > 0) {
-              output.add(`- ${omittedGoals} goal blocks omitted by read_context output budget.`, {
-                pointer: "read_context scope=goals",
-              })
-            }
-          }
-        }
-
-        if (scope === "evaluations") {
-          const { findEvaluationsByTask, listGoalRunsForTask } = await import("@/engine/store")
-          const evals = findEvaluationsByTask(taskID) // desc by time_created
-          if (evals.length > 0) {
-            // Dedup to latest eval per underlying goal. Multiple evals for
-            // the same goal across retries only clutter — the latest verdict
-            // is what drives next decisions. goal_run_id → goal_id lookup
-            // avoids a SQL join by walking the task's goal_runs once.
-            const runToGoal = new Map<string, string>()
-            for (const gr of listGoalRunsForTask(taskID)) runToGoal.set(gr.id, gr.goal_id)
-            const seenGoals = new Set<string>()
-            const latestPerGoal: typeof evals = []
-            for (const e of evals) {
-              const goalID = e.goal_run_id ? runToGoal.get(e.goal_run_id) : undefined
-              const key = goalID ?? `__run:${e.goal_run_id ?? e.id}`
-              if (seenGoals.has(key)) continue
-              seenGoals.add(key)
-              latestPerGoal.push(e)
-            }
-            const omitted = evals.length - latestPerGoal.length
-            const header =
-              omitted > 0
-                ? `\n## Evaluations (latest ${latestPerGoal.length} of ${evals.length}; ${omitted} superseded omitted)`
-                : `\n## Evaluations (${latestPerGoal.length})`
-            output.add(header, { pointer: "read_context scope=evaluations" })
-            let omittedEvals = 0
-            for (const e of latestPerGoal) {
-              const lines = [
-                `- [${e.verdict}] ${readContextCompactInline(
-                  e.summary,
-                  "read_context scope=evaluations",
-                  READ_CONTEXT_EVALUATION_SUMMARY_CHAR_CAP,
-                )}`,
-              ]
-              const checks = e.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
-              if (checks) {
-                for (const c of checks.slice(0, 5)) {
-                  const evidence = c.evidence
-                    ? readContextCompactInline(
-                        c.evidence,
-                        "read_context scope=evaluations",
-                        READ_CONTEXT_EVALUATION_CHECK_EVIDENCE_CHAR_CAP,
-                      )
-                    : ""
-                  lines.push(`  - ${c.name}: ${c.status}${evidence ? ` — ${evidence}` : ""}`)
-                }
-              }
-              const added = output.add(lines.join("\n"), {
-                pointer: "read_context scope=evaluations",
-                sectionCap: READ_CONTEXT_EVALUATION_BLOCK_CHAR_CAP,
-              })
-              if (!added) omittedEvals += 1
-            }
-            if (omittedEvals > 0) {
-              output.add(`- ${omittedEvals} evaluation blocks omitted by read_context output budget.`, {
-                pointer: "read_context scope=evaluations",
-              })
-            }
-          }
-        }
+        // This tool intentionally excludes ordinary scheduler state. Current
+        // task/goal/research/active-run facts are rendered on every wake by
+        // renderTaskDescription() and the latest-run context block in
+        // orchestrator/agent.ts. Keeping those facts here would recreate a
+        // second task-state refresh path.
 
         if (scope === "integrity_history") {
           const activeSpec = findActiveSpecForTask(taskID)
@@ -6578,29 +6387,6 @@ export function createOrchestratorTools(input: {
             })
         }
 
-        if (scope === "research") {
-          const researchBriefs = listResearchBriefArtifacts(taskID).slice(0, 4)
-          for (const [index, artifact] of researchBriefs.entries()) {
-            await appendResearchBriefContext(
-              output,
-              researchBriefs.length === 1
-                ? "Deep Research Brief"
-                : `Deep Research Brief ${index + 1}/${researchBriefs.length}`,
-              artifact,
-              task.request,
-            )
-          }
-          const frontendResearchBriefs = listFrontendResearchBriefArtifacts(taskID).slice(0, 4)
-          for (const [index, artifact] of frontendResearchBriefs.entries()) {
-            await appendResearchBriefContext(
-              output,
-              `Frontend Research Brief ${index + 1}/${frontendResearchBriefs.length}`,
-              artifact,
-              task.request,
-            )
-          }
-        }
-
         if (scope === "fact_checks") {
           // Fact-check attempts (one-line per row) — specs/fact-check-agent-2026-05-25.md
           // §6.1.2 step 7. Integrity replay reads this same artifact stream
@@ -6631,63 +6417,6 @@ export function createOrchestratorTools(input: {
                   sectionCap: READ_CONTEXT_FACT_CHECK_ATTEMPT_CHAR_CAP,
                 },
               )
-            }
-          }
-        }
-
-        if (scope === "deliveries") {
-          const { listGoalRunsForTask, findAcceptanceByGoalRun } = await import("@/engine/store")
-          const goalRuns = listGoalRunsForTask(taskID) // desc by time_created
-          // Keep only the latest acceptance per goal. Previous runs' deliveries
-          // are historical noise once superseded; the orchestrator decides from
-          // current state, not acceptance history.
-          const seenGoals = new Set<string>()
-          const deliveries: Array<{
-            goalRunID: string
-            goalID: string
-            status: string
-            acceptance: ReturnType<typeof findAcceptanceByGoalRun>
-          }> = []
-          for (const gr of goalRuns) {
-            if (seenGoals.has(gr.goal_id)) continue
-            const acceptance = findAcceptanceByGoalRun(gr.id)
-            if (!acceptance) continue
-            seenGoals.add(gr.goal_id)
-            deliveries.push({ goalRunID: gr.id, goalID: gr.goal_id, status: gr.status, acceptance })
-          }
-          if (deliveries.length > 0) {
-            output.add(`\n## Deliveries (${deliveries.length} — latest per goal)`, {
-              pointer: "read_context scope=deliveries",
-            })
-            let omittedDeliveries = 0
-            for (const d of deliveries) {
-              const diffs = (d.acceptance!.result as any)?.diffs as Array<{ file: string }> | undefined
-              const lines = [
-                `- goal_run ${d.goalRunID} [${d.status}]: ${readContextCompactInline(
-                  d.acceptance!.summary,
-                  `acceptance for goal_run ${d.goalRunID}`,
-                  READ_CONTEXT_DELIVERY_SUMMARY_CHAR_CAP,
-                )}`,
-              ]
-              if (diffs?.length) {
-                lines.push(
-                  `  files: ${readContextCompactList(
-                    diffs.map((f) => f.file),
-                    `acceptance for goal_run ${d.goalRunID}`,
-                    { listCap: 12, itemCap: 180 },
-                  )}`,
-                )
-              }
-              const added = output.add(lines.join("\n"), {
-                pointer: `read_context scope=deliveries goal_run=${d.goalRunID}`,
-                sectionCap: READ_CONTEXT_DELIVERY_BLOCK_CHAR_CAP,
-              })
-              if (!added) omittedDeliveries += 1
-            }
-            if (omittedDeliveries > 0) {
-              output.add(`- ${omittedDeliveries} delivery blocks omitted by read_context output budget.`, {
-                pointer: "read_context scope=deliveries",
-              })
             }
           }
         }
@@ -7451,7 +7180,7 @@ export function createOrchestratorTools(input: {
                 "skip the prior goal_run.session_id reuse and dispatch this build into a brand-new build session " +
                 "with zero accumulated context. Use ONLY after a same-context retry approach is demonstrably " +
                 "stuck - typical evidence: (a) the goal has already failed >=2 times on this contract with the " +
-                'same root error class and `read_context({scope:"goals"})` shows the build session near or over its context cap; ' +
+                "same root error class and the current task snapshot shows the build session near or over its context cap; " +
                 "(b) `compaction` returned `nothing-to-compress` or `post-compaction-still-over`; (c) the prior " +
                 "session_id is unrecoverable (deletion / DB lineage gap). Burns the prior session's reasoning " +
                 "history - the goal contract (objective / acceptance_specs / owned_paths) is preserved by the " +
@@ -8668,7 +8397,7 @@ export function createOrchestratorTools(input: {
               `### Next step\n` +
               `This build is now running asynchronously. Do not call wait for sibling builds to finish before reacting to terminal goal refill facts. ` +
               `If no next dispatchable, failed, or refill facts exist, stop this wake; terminal goal refill will wake the next decision. ` +
-              `When a goal reaches terminal status, read_context({scope:"goals"}) will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from those facts. ` +
+              `When a goal reaches terminal status, the next task snapshot will surface refill evidence and ordered dispatchable goals; choose build({goalID}) / modify_goal / architect / fail_task / restart_from_stage from those facts. ` +
               `Call integrity only after all blocking builds are terminal.`
             )
           }
@@ -8826,7 +8555,7 @@ export function createOrchestratorTools(input: {
     wait: tool({
       description:
         WaitToolDescription +
-        ' In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or `read_context({scope:"goals"})` (refreshing scheduler evidence). Never use wait for live build completion, live sibling goal completion, or terminal refill polling. After wait returns, re-read scheduler evidence with `read_context({scope:"goals"})` before deciding the next dispatch.',
+        " In orchestrator context, wait is NOT a substitute for `question` (operator input required), `fail_task` (no responsible same-task repair), or a real workflow decision from the current task snapshot. Never use wait for live build completion, live sibling goal completion, or terminal refill polling. After wait returns, decide from the refreshed task snapshot before the next dispatch.",
       inputSchema: WaitToolParameters,
       execute: async ({ duration_ms, reason }) => {
         const result = await executeWait({
@@ -8836,7 +8565,7 @@ export function createOrchestratorTools(input: {
           taskID,
           logPhase: "orchestrator",
         })
-        return `${result.output} Re-read scheduler evidence with read_context({scope:"goals"}) before your next dispatch.`
+        return `${result.output} Decide from the refreshed task snapshot before your next dispatch.`
       },
     }),
   }

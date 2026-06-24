@@ -1151,7 +1151,8 @@ describe("core prompt hygiene", () => {
     )
     expect(normalized).toContain("do not re-run `architect` just because implementation has not started")
     expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
-    expect(normalized).toContain("Read context on terminal goal refill wakes")
+    expect(normalized).toContain("On terminal goal refill wakes, use the current task snapshot")
+    expect(normalized).not.toContain("Read context on terminal goal refill wakes")
     expect(normalized).toContain("Do not call `wait` for live build completion")
     expect(normalized).toContain("terminal goal refill polling; those are internal engine facts")
     expect(normalized).toContain("stop this wake; terminal goal refill facts will wake the next decision")
@@ -1161,6 +1162,22 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain(
       "Do not ask the operator whether to start work that the task contract already requires",
     )
+  })
+
+  test("orchestrator prompt scopes read_context to audit drilldown only", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+
+    expect(normalized).toContain(
+      "`read_context`: drill into persisted audit context that the current task snapshot only references",
+    )
+    expect(normalized).toContain('Use only `scope="integrity_history"`, `scope="fact_checks"`, or `scope="decisions"`')
+    expect(normalized).toContain("`workload_analysis=not_run/current/stale`")
+    expect(normalized).not.toContain('Use `scope="goals"`')
+    expect(normalized).not.toContain('scope="evaluations"')
+    expect(normalized).not.toContain('scope="deliveries"')
+    expect(normalized).not.toContain('scope="research"')
+    expect(normalized).not.toContain("`read_context` exposes `workload_analyzed`")
   })
 
   test("orchestrator prompt makes post-build integrity pass the terminal lifecycle path", async () => {
