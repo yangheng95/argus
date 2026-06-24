@@ -67,6 +67,7 @@ import {
   directoryQueueSnapshot,
   drainPendingQueuedOperatorWakes,
   dispatchTaskLoop,
+  type DispatchTaskLoopResult,
   listOrphanedActiveInProject,
   reorderQueuedTasksForCwd,
   startQueuedTaskInCwd,
@@ -172,6 +173,8 @@ import { SessionWake } from "@/session/wake"
 import { withTaskCreationOwnerLock } from "@/engine/task-creation-owner"
 
 const log = Log.create({ service: "assistant" })
+
+type TaskMessageWakeStatus = Extract<DispatchTaskLoopResult, "started" | "queued"> | "not_woken"
 
 export const TaskEmptyMessageError = NamedError.create(
   "TaskEmptyMessageError",
@@ -615,6 +618,7 @@ async function continueTaskMessage(
   return {
     mode: "scheduler" as const,
     resumed: wake.resumed,
+    wakeStatus: wake.wakeStatus,
     status: deriveTaskStatus(wake.task) as string,
     user_message: wake.userMessage,
   }
@@ -627,7 +631,12 @@ async function appendAndWakeTaskOperatorMessage(input: {
   attachmentSummary?: string
   source: string
   target?: TaskMessageTargetInput
-}): Promise<{ task: TaskRow; userMessage: { info: Message.User; parts: Message.Part[] }; resumed: boolean }> {
+}): Promise<{
+  task: TaskRow
+  userMessage: { info: Message.User; parts: Message.Part[] }
+  resumed: boolean
+  wakeStatus: TaskMessageWakeStatus
+}> {
   const task = requireTaskInCurrentProject(input.taskID)
   assertTaskOperatorMessageAccepted(task, input.text, input.attachments ?? [])
 
@@ -655,6 +664,7 @@ async function appendAndWakeTaskOperatorMessage(input: {
       task: requireTaskInCurrentProject(input.taskID),
       userMessage,
       resumed: false,
+      wakeStatus: "not_woken",
     }
   }
   await reopenActiveRunForOperatorWake(task, "Operator message reopened blocked run")
@@ -682,7 +692,8 @@ async function appendAndWakeTaskOperatorMessage(input: {
   return {
     task: requireTaskInCurrentProject(input.taskID),
     userMessage,
-    resumed: true,
+    resumed: dispatchResult === "started",
+    wakeStatus: dispatchResult,
   }
 }
 
@@ -2181,10 +2192,16 @@ export namespace EngineService {
     // user messages. Workbench notes are a separate note/constraint surface;
     // duplicating this text there would create a target-less second source.
     const note = await continueTaskMessage(taskID, input.text, input.source, attachmentRefs, input.target)
-    const message = note.resumed ? "Operator note recorded. Task wake dispatched." : "Operator note recorded."
+    const message =
+      note.wakeStatus === "started"
+        ? "Operator note recorded. Task wake dispatched."
+        : note.wakeStatus === "queued"
+          ? "Operator note recorded. Task wake queued behind active agent ownership."
+          : "Operator note recorded."
     return {
       kind: "note" as const,
       message,
+      wake_status: note.wakeStatus,
       should_resume: note.resumed,
       user_message: note.user_message,
     }

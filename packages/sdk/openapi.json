@@ -31632,6 +31632,14 @@
                     "message": {
                       "type": "string"
                     },
+                    "wake_status": {
+                      "type": "string",
+                      "enum": [
+                        "started",
+                        "queued",
+                        "not_woken"
+                      ]
+                    },
                     "should_resume": {
                       "type": "boolean"
                     },
@@ -31653,6 +31661,7 @@
                   "required": [
                     "kind",
                     "message",
+                    "wake_status",
                     "should_resume"
                   ]
                 }

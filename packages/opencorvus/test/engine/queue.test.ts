@@ -21,6 +21,7 @@ import {
   listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
 import { EngineService } from "../../src/task-api"
+import { Identifier } from "../../src/id/id"
 
 function taskStatus(id: string): string | undefined {
   const t = findTask(id)
@@ -39,6 +40,34 @@ async function waitForMockCalls(mockFn: { mock: { calls: unknown[] } }, count: n
     if (mockFn.mock.calls.length >= count) return
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
+}
+
+async function seedRootSession(sessionID: string, text = "initial request") {
+  const info = {
+    id: Identifier.ascending("message"),
+    sessionID,
+    role: "user" as const,
+    time: { created: Date.now() - 1_000 },
+    agent: "orchestrator",
+    model: {
+      providerID: "test-provider",
+      modelID: "test-model",
+    },
+  }
+  await Session.persistMessage({
+    info,
+    parts: [
+      {
+        id: Identifier.ascending("part"),
+        messageID: info.id,
+        sessionID,
+        type: "text",
+        text,
+        kind: "user_content",
+      },
+    ],
+    touchSessionID: sessionID,
+  })
 }
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
@@ -1323,6 +1352,146 @@ describe("engine queue", () => {
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID, event })
         expect(interruptTaskLoop).not.toHaveBeenCalled()
         expect(findGoalRun(goalRunID)?.status).toBe("running")
+      },
+    })
+  })
+
+  test("task message response reports queued wake while live ownership blocks scheduler start", async () => {
+    await using tmp = await tmpdir({ git: true, config: { model: "project/default" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({ kind: "root", title: "queued task message root" })
+        await seedRootSession(root.id)
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "task message queued behind live owner",
+              request: "operator task message must not pretend the scheduler already ran",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+
+        const goalID = Identifier.ascending("goal")
+        Database.use((db) =>
+          db
+            .insert(EngineGoalTable)
+            .values({
+              id: goalID,
+              task_id: taskID,
+              title: "Live build goal",
+              slug: "live-build-goal",
+              objective: "Keep active build ownership while recording an operator message.",
+              acceptance_specs: [],
+              owned_paths: [],
+              depends_on: [],
+              kind: "feature",
+              requirement_ids: [],
+              priority: "blocking",
+              source: "test",
+              order_index: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        const childSessionID = `ses_queue_message_result_${now}`
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: childSessionID,
+          now,
+        })
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: `ses_orchestrator_${now}`,
+          orchestratorMessageID: `msg_orchestrator_${now}`,
+          toolCallID: `cal_queue_message_result_${now}`,
+          toolPartID: `prt_queue_message_result_${now}`,
+          childSessionID,
+          scope: "goal",
+          goalID,
+          goalRunID,
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          goalRunID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+
+        const result = await EngineService.handleTaskMessage(taskID, {
+          text: "改成手机版布局 html",
+          source: "panel",
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result).toMatchObject({
+          kind: "note",
+          message: "Operator note recorded. Task wake queued behind active agent ownership.",
+          wake_status: "queued",
+          should_resume: false,
+        })
+        expect(runTaskLoop).not.toHaveBeenCalled()
+        const pendingWakeRows = Database.use((db) =>
+          db
+            .select({ label: EngineArtifactTable.label, payload: EngineArtifactTable.payload })
+            .from(EngineArtifactTable)
+            .where(eq(EngineArtifactTable.task_id, taskID))
+            .all()
+            .filter((row) => row.label === "pending" && (row.payload as { event?: unknown }).event),
+        )
+        expect(pendingWakeRows).toHaveLength(1)
+        expect(pendingWakeRows[0]?.payload).toMatchObject({
+          event: {
+            operatorMessage: {
+              text: "改成手机版布局 html",
+              source: "panel",
+              messageID: result.user_message.info.id,
+            },
+          },
+        })
+
+        const messages = await Session.messages({ sessionID: root.id })
+        expect(messages[messages.length - 1]?.info.id).toBe(result.user_message.info.id)
+        expect(messages[messages.length - 1]?.parts[0]).toMatchObject({
+          type: "text",
+          text: "改成手机版布局 html",
+        })
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 1,
+        })
+        await waitForMockCalls(runTaskLoop, 1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          event: {
+            operatorMessage: {
+              text: "改成手机版布局 html",
+              source: "panel",
+              messageID: result.user_message.info.id,
+            },
+          },
+        })
       },
     })
   })

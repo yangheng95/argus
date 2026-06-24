@@ -58,6 +58,7 @@ the host orchestrator and worker agents.
 | `TaskReportTool` | Emits `task.report` bus status for managed channel runtime. | Keep separate. It is status telemetry, not a scheduler decision request. |
 | `stage_continuation_request` | Durable request for finalizer-miss same-session recovery. | Keep narrow. Do not overload it for general A2A. The new A2A artifact should mirror its claim/consume auditability. |
 | `reopenActiveRunForOperatorWake` | Reopens blocked active task runs for operator messages when there is no pending interaction. | Keep for user messages. Do not use it to hide worker coordination. |
+| `appendAndWakeTaskOperatorMessage` / `TaskMessageResult` | A live-owner `dispatchTaskLoop()` result returns `queued`, but the task API currently collapses every non-ignored dispatch into `resumed=true` / "Task wake dispatched." | Return the real wake status: `started`, `queued`, or `not_woken`. `queued` must stay durable and visible, but must not be reported as an immediate scheduler response. |
 | `AgentToolPool` and `GLOBAL_TOOL_IDS` | Global/private tool pools still list old orchestrator tools and stage context tools. | Add canonical worker coordination tool to global pool only where workers need it; remove `steer_subagent` and `restart_from_stage` from orchestrator private pool when implementing the replacement. |
 | `engine/model.ts`, `engine/event-log.ts`, overlay event policy | No first-class A2A request/response events. | Add visible events for coordination requested/responded/cancelled and route them into trace/panel event streams. |
 | SDK/OpenAPI/server routes | No API for listing/observing coordination records outside artifacts/events. | Expose read-only projection only if existing task detail projection cannot surface events. Do not add a write route for hidden control. |
@@ -187,6 +188,20 @@ Unsolicited steering is not supported. A worker session can receive an
 orchestrator continuation message only through a pending request id or an
 explicit operator direct reply.
 
+### Operator Live Intervention Boundary
+
+`POST /task/:taskID/message` is task-root operator input. When a build or
+integrity child owns a live orchestrator tool call, that message is recorded and
+queued behind ownership; it must not be presented as an immediate scheduler
+response. Reversing the queue rule would reintroduce the 2026-06-13 regression
+where one operator note could abort unrelated live workers.
+
+Immediate intervention into an active worker requires an explicit target-scoped
+lifecycle action. That action may cancel and continue/redispatch the selected
+worker only through the same visible cancellation and continuation primitives
+used by A2A responses; it must not infer a target from free text or bulk-abort
+every live owner in the task.
+
 ## Event and Artifact Shape
 
 Add artifact kinds:
@@ -284,6 +299,8 @@ response events instead of silently treating them as consumed internals.
   task-owned active prompt/session/tool ownership/goal_run/run handle behind.
 - Workers can request orchestrator decisions through a visible artifact/event
   and the task orchestrator wakes from that request.
+- Operator task messages under live ownership expose `wake_status=queued` and
+  do not claim the scheduler has already responded.
 - Orchestrator responses are bound to a pending request id. There is no generic
   private steering channel.
 - Existing worker sessions are resumed when their runtime contract validates.
