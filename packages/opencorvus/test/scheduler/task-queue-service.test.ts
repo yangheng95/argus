@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Bus } from "../../src/bus"
+import { Identifier } from "../../src/id/id"
 import { Session } from "../../src/session"
+import { SessionControl } from "../../src/session/control"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Scheduler } from "../../src/scheduler"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
@@ -15,6 +17,26 @@ function result() {
     info: {} as never,
     parts: [],
   } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
+}
+
+async function createSourceUserMessage(sessionID: string, text = "compact source") {
+  const info = await Session.updateMessage({
+    id: Identifier.ascending("message"),
+    sessionID,
+    role: "user",
+    time: { created: Date.now() },
+    agent: "assistant",
+    model: { providerID: "test", modelID: "test-model" },
+  })
+  if (info.role !== "user") throw new Error(`expected user source message, got ${info.role}`)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    sessionID,
+    messageID: info.id,
+    type: "text",
+    text,
+  })
+  return info
 }
 
 async function waitForQueueStatus(id: string, status: string) {
@@ -162,6 +184,92 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt.mock.calls[0]?.[0]?.extra?.wake_reason).toEqual({
       source: "scheduler.task_queue",
       queueSource: "test",
+    })
+  })
+
+  test("executes automatic compaction through session control and default loop mode", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(result() as never)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const source = await createSourceUserMessage(session.id)
+        const beforeUsers = (await Session.messages({ sessionID: session.id }))
+          .filter((message) => message.info.role === "user")
+          .map((message) => message.info.id)
+
+        await TaskQueueService.executeCompaction({
+          sessionID: session.id,
+          sourceUserMessageID: source.id,
+          auto: true,
+          overflow: true,
+        })
+
+        const controls = SessionControl.pending(session.id)
+        expect(controls).toHaveLength(1)
+        expect(controls[0]).toMatchObject({
+          kind: "compaction_request",
+          payload: {
+            source_user_message_id: source.id,
+            overflow: true,
+          },
+        })
+        expect(loop).toHaveBeenCalledWith({ sessionID: session.id })
+
+        const afterUsers = (await Session.messages({ sessionID: session.id }))
+          .filter((message) => message.info.role === "user")
+          .map((message) => message.info.id)
+        expect(afterUsers).toEqual(beforeUsers)
+      },
+    })
+  })
+
+  test("queued manual compaction stores scheduler intent and drains through summary loop mode", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(result() as never)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const source = await createSourceUserMessage(session.id, "queued compact source")
+        const beforeUsers = (await Session.messages({ sessionID: session.id })).filter(
+          (message) => message.info.role === "user",
+        )
+
+        const id = TaskQueueService.enqueueCompaction({
+          sessionID: session.id,
+          sourceUserMessageID: source.id,
+          model: { providerID: "test", modelID: "test-model" },
+          priority: "high",
+          source: "test.compaction",
+          focus: "queued compact",
+        })
+        const created = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(created?.metadata).toMatchObject({
+          kind: "session_compaction",
+          input: {
+            sourceUserMessageID: source.id,
+            auto: false,
+            overflow: false,
+            model: { providerID: "test", modelID: "test-model" },
+            focus: "queued compact",
+          },
+        })
+        expect(created?.previous_summary).toBeNull()
+
+        const completed = await waitForQueueStatus(id, "completed")
+        expect(completed?.source).toBe("test.compaction")
+        expect(SessionControl.pending(session.id).map((control) => control.kind)).toEqual(["manual_summarize"])
+        expect(loop).toHaveBeenCalledWith({ sessionID: session.id, result_mode: "summary" })
+
+        const afterUsers = (await Session.messages({ sessionID: session.id })).filter(
+          (message) => message.info.role === "user",
+        )
+        expect(afterUsers.map((message) => message.info.id)).toEqual(beforeUsers.map((message) => message.info.id))
+      },
     })
   })
 

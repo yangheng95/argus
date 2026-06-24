@@ -12,10 +12,8 @@ import { Agent } from "@/agent/agent"
 import { PromptProfile } from "@/agent/prompt-profile"
 import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "../../session/prompt"
-import { SessionContext } from "@/session/context"
 import { Instance } from "@/project/instance"
 import { clearRewindCursorForSession } from "@/engine/rewind"
-import { SessionCompaction } from "../../session/compaction"
 import { CompactionHandoff } from "@/session/compaction-handoff"
 import { SessionSummary } from "@/session/summary"
 import { Message } from "../../session/message"
@@ -843,7 +841,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        const session = await getActiveProjectSession(sessionID)
+        await getActiveProjectSession(sessionID)
         await clearRewindCursorForSession(sessionID)
         const msgs = await Session.messages({ sessionID })
         let source: Message.User | undefined
@@ -858,9 +856,9 @@ export const SessionRoutes = lazy(() =>
         if (!source) {
           throw new Error(`Cannot compact session ${sessionID}: no real user message found`)
         }
-        await SessionCompaction.create({
+        const result = await TaskQueueService.executeCompaction({
           sessionID,
-          source,
+          sourceUserMessageID: source.id,
           model: {
             providerID: body.providerID,
             modelID: body.modelID,
@@ -868,9 +866,6 @@ export const SessionRoutes = lazy(() =>
           auto: body.auto,
           focus: body.focus,
         })
-        const result = await SessionContext.provide(session, () =>
-          SessionPrompt.loop({ sessionID, result_mode: "summary" }),
-        )
         return c.json(result.info.role === "assistant" && CompactionHandoff.isValidSummaryMessage(result.info))
       },
     )

@@ -23,6 +23,14 @@ function buildToolOptions(label = "artifact_missing") {
   } as any
 }
 
+function toolText(result: unknown): string {
+  if (typeof result === "string") return result
+  if (result && typeof result === "object" && typeof (result as { output?: unknown }).output === "string") {
+    return (result as { output: string }).output
+  }
+  throw new Error(`Expected string tool result, got ${JSON.stringify(result)}`)
+}
+
 function seedWorkflowTask(input: {
   taskID: string
   specID: string
@@ -144,17 +152,19 @@ describe("orchestrator integrity artifact_missing recovery", () => {
           agentSessionID: root.id,
           signal: new AbortController().signal,
         })
-        const context = await tools.read_context.execute({ scope: "integrity_history" }, {} as any)
+        const context = toolText(await tools.read_context.execute({ scope: "integrity_history" }, {} as any))
         expect(context).toContain("status: artifact_missing")
         expect(context).toContain("prior artifact is not the current result")
 
-        const blocked = await tools.build.execute(
-          {
-            goalID,
-            request: "Try to continue from stale review data",
-            reason: "Should be blocked by artifact_missing.",
-          },
-          buildToolOptions(),
+        const blocked = toolText(
+          await tools.build.execute(
+            {
+              goalID,
+              request: "Try to continue from stale review data",
+              reason: "Should be blocked by artifact_missing.",
+            },
+            buildToolOptions(),
+          ),
         )
         expect(blocked).toContain("blocked by integrity artifact_missing")
 
@@ -187,7 +197,7 @@ describe("orchestrator integrity artifact_missing recovery", () => {
         })
 
         expect(findLatestIntegrityArtifactMissingStatus(taskID)).toBeUndefined()
-        const recoveredContext = await tools.read_context.execute({ scope: "all" }, {} as any)
+        const recoveredContext = toolText(await tools.read_context.execute({ scope: "integrity_history" }, {} as any))
         expect(recoveredContext).not.toContain("status: artifact_missing")
         expect(recoveredContext).toContain("Recovered integrity report")
 

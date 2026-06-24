@@ -37,11 +37,36 @@ const RawTaskMetadata = z.discriminatedUnion("kind", [
     messageID: z.string(),
     input: z.unknown(),
   }),
+  z.object({
+    kind: z.literal("session_compaction"),
+    input: z.unknown(),
+  }),
 ])
 
 const EnqueuePromptInput = z.object({
   sessionID: Identifier.schema("session"),
   prompt: z.unknown(),
+  priority: z.enum(["high", "normal", "low"]).optional(),
+  source: z.string().optional(),
+})
+
+const CompactionModelRef = z.object({
+  providerID: z.string(),
+  modelID: z.string(),
+})
+
+const ExecuteCompactionInput = z.object({
+  sessionID: Identifier.schema("session"),
+  sourceUserMessageID: Identifier.schema("message"),
+  model: CompactionModelRef.optional(),
+  auto: z.boolean().optional().default(false),
+  overflow: z.boolean().optional().default(false),
+  focus: z.string().optional(),
+})
+
+const StoredCompactionInput = ExecuteCompactionInput.omit({ sessionID: true })
+
+const EnqueueCompactionInput = ExecuteCompactionInput.extend({
   priority: z.enum(["high", "normal", "low"]).optional(),
   source: z.string().optional(),
 })
@@ -130,6 +155,30 @@ export namespace TaskQueueService {
     })
   }
 
+  export async function executeCompaction(raw: z.input<typeof ExecuteCompactionInput>) {
+    const input = ExecuteCompactionInput.parse(raw)
+    const session = await Session.get(input.sessionID)
+    const source = await compactionSource(input.sessionID, input.sourceUserMessageID)
+    const { SessionCompaction } = await import("@/session/compaction")
+    await SessionCompaction.create({
+      sessionID: input.sessionID,
+      source,
+      model: input.model,
+      auto: input.auto,
+      overflow: input.overflow,
+      focus: input.focus,
+    })
+    return SessionContext.provide(session, () =>
+      Instance.provide({
+        directory: session.directory,
+        fn: () =>
+          SessionPrompt.loop(
+            input.auto ? { sessionID: input.sessionID } : { sessionID: input.sessionID, result_mode: "summary" },
+          ),
+      }),
+    )
+  }
+
   export function enqueuePrompt(raw: z.input<typeof EnqueuePromptInput>) {
     const input = EnqueuePromptInput.parse(raw)
     const id = Identifier.ascending("task")
@@ -159,6 +208,41 @@ export namespace TaskQueueService {
     )
     log.info("task queued", { id, sessionID: input.sessionID, source: input.source ?? "api" })
     requestDrain("enqueuePrompt")
+    return id
+  }
+
+  export function enqueueCompaction(raw: z.input<typeof EnqueueCompactionInput>) {
+    const input = EnqueueCompactionInput.parse(raw)
+    const id = Identifier.ascending("task")
+    const now = Date.now()
+    const payload = StoredCompactionInput.parse({
+      sourceUserMessageID: input.sourceUserMessageID,
+      model: input.model,
+      auto: input.auto,
+      overflow: input.overflow,
+      focus: input.focus,
+    })
+    Database.use((db) =>
+      db
+        .insert(TaskQueueTable)
+        .values({
+          id,
+          session_id: input.sessionID,
+          prompt: compactionPrompt(payload),
+          priority: input.priority ?? "normal",
+          status: "queued",
+          source: input.source ?? "api",
+          metadata: {
+            kind: "session_compaction",
+            input: payload,
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
+    )
+    log.info("compaction task queued", { id, sessionID: input.sessionID, source: input.source ?? "api" })
+    requestDrain("enqueueCompaction")
     return id
   }
 
@@ -488,8 +572,13 @@ export namespace TaskQueueService {
           prompt: metadata.data.input,
           source: "task-queue-service",
         })
-      } else {
+      } else if (metadata.data.kind === "session_wake") {
         await executeSessionWake(task.session_id)
+      } else {
+        await executeCompaction({
+          sessionID: task.session_id,
+          ...StoredCompactionInput.parse(metadata.data.input),
+        })
       }
     } finally {
       cleanup()
@@ -703,6 +792,22 @@ function stampTaskQueueWakeReason<T extends z.infer<ReturnType<typeof promptSche
       }),
     },
   }
+}
+
+async function compactionSource(sessionID: string, sourceUserMessageID: string): Promise<Message.User> {
+  const source = (await Session.messages({ sessionID })).find(
+    (message) => message.info.id === sourceUserMessageID,
+  )?.info
+  if (!source) throw new Error(`Compaction source message not found: ${sourceUserMessageID}`)
+  if (source.role !== "user") {
+    throw new Error(`Compaction source message ${sourceUserMessageID} is ${source.role}, not user`)
+  }
+  return source
+}
+
+function compactionPrompt(input: z.infer<typeof StoredCompactionInput>) {
+  const kind = input.auto ? "automatic compaction" : "manual summarize"
+  return input.focus ? `${kind}: ${input.focus}` : kind
 }
 
 type PromptPart = z.infer<ReturnType<typeof promptSchema>>["parts"][number]
