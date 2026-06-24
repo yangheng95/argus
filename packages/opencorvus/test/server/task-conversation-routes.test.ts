@@ -257,6 +257,81 @@ describe("task conversation routes", () => {
     })
   })
 
+  test("GET /task/:taskID/conversation agentView is seeded from session ledger without messages or status", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "ledger root",
+        })
+        const frontendResearch = await Session.create({
+          kind: "frontend-research",
+          parentID: root.id,
+          title: "ledger-only frontend research",
+        })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "ledger-only agent rail",
+              request: "ledger-only agent rail",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/conversation`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        if (response.status !== 200) {
+          throw new Error(await response.text())
+        }
+        const body = (await response.json()) as {
+          transcript?: unknown[]
+          view?: { sessions?: Array<{ sessionID?: string }> }
+          agentView?: {
+            sessions?: Array<{
+              sessionID?: string
+              stage?: string
+              parentSessionID?: string
+              messageIDs?: string[]
+              status?: string
+            }>
+          }
+        }
+
+        expect(body.transcript).toEqual([])
+        expect(body.view?.sessions).toEqual([])
+        expect(body.agentView?.sessions).toContainEqual(
+          expect.objectContaining({
+            sessionID: frontendResearch.id,
+            stage: "frontend-research",
+            parentSessionID: root.id,
+            messageIDs: [],
+            status: "pending",
+          }),
+        )
+      },
+    })
+  })
+
   test("GET /task/:taskID/conversation/session/:sessionID does not use full task transcript", async () => {
     const source = await fs.readFile(new URL("../../src/server/routes/orchestrator.ts", import.meta.url), "utf8")
     const routeStart = source.indexOf('"/task/:taskID/conversation/session/:sessionID"')

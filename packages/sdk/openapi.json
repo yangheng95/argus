@@ -4709,6 +4709,23 @@
                               "lastMessageTime": {
                                 "type": "number"
                               },
+                              "firstObservedAt": {
+                                "type": "number"
+                              },
+                              "lastObservedAt": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "running",
+                                  "idle",
+                                  "completed",
+                                  "error",
+                                  "skipped"
+                                ]
+                              },
                               "placement": {
                                 "type": "string",
                                 "enum": [
@@ -4848,6 +4865,23 @@
                               },
                               "lastMessageTime": {
                                 "type": "number"
+                              },
+                              "firstObservedAt": {
+                                "type": "number"
+                              },
+                              "lastObservedAt": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "running",
+                                  "idle",
+                                  "completed",
+                                  "error",
+                                  "skipped"
+                                ]
                               },
                               "placement": {
                                 "type": "string",
@@ -27552,6 +27586,23 @@
                               "lastMessageTime": {
                                 "type": "number"
                               },
+                              "firstObservedAt": {
+                                "type": "number"
+                              },
+                              "lastObservedAt": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "running",
+                                  "idle",
+                                  "completed",
+                                  "error",
+                                  "skipped"
+                                ]
+                              },
                               "placement": {
                                 "type": "string",
                                 "enum": [
@@ -27691,6 +27742,23 @@
                               },
                               "lastMessageTime": {
                                 "type": "number"
+                              },
+                              "firstObservedAt": {
+                                "type": "number"
+                              },
+                              "lastObservedAt": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "running",
+                                  "idle",
+                                  "completed",
+                                  "error",
+                                  "skipped"
+                                ]
                               },
                               "placement": {
                                 "type": "string",
@@ -28038,6 +28106,23 @@
                               },
                               "lastMessageTime": {
                                 "type": "number"
+                              },
+                              "firstObservedAt": {
+                                "type": "number"
+                              },
+                              "lastObservedAt": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "running",
+                                  "idle",
+                                  "completed",
+                                  "error",
+                                  "skipped"
+                                ]
                               },
                               "placement": {
                                 "type": "string",
@@ -28420,6 +28505,23 @@
                               },
                               "lastMessageTime": {
                                 "type": "number"
+                              },
+                              "firstObservedAt": {
+                                "type": "number"
+                              },
+                              "lastObservedAt": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "running",
+                                  "idle",
+                                  "completed",
+                                  "error",
+                                  "skipped"
+                                ]
                               },
                               "placement": {
                                 "type": "string",

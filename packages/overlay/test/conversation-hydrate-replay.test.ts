@@ -628,7 +628,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
   expect(requests.map((req) => req.path)).toEqual(["task/tsk_lazy/conversation", "task/tsk_lazy/conversation/history"])
 })
 
-test("history paging replays lifecycle-only frontend agent events without blank cards", async () => {
+test("history paging preserves lifecycle-only frontend agent rail records without blank cards", async () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_history" })
   const requests: TransportRequest[] = []
@@ -721,15 +721,7 @@ test("history paging replays lifecycle-only frontend agent events without blank 
               topLevelSessionIDs: ["ses_root"],
             },
             agentView: {
-              messages: [
-                {
-                  sessionID: "ses_root",
-                  stage: "assistant",
-                  messageID: "msg_lifecycle_latest",
-                  time: 1_776_000_030_900,
-                  placement: "top_level",
-                },
-              ],
+              messages: [],
               sessions: [
                 {
                   sessionID: "ses_frontend_lifecycle",
@@ -740,16 +732,8 @@ test("history paging replays lifecycle-only frontend agent events without blank 
                   lastMessageTime: 1_776_000_030_200,
                   placement: "top_level",
                 },
-                {
-                  sessionID: "ses_root",
-                  stage: "assistant",
-                  messageIDs: ["msg_lifecycle_latest"],
-                  firstMessageTime: 1_776_000_030_900,
-                  lastMessageTime: 1_776_000_030_900,
-                  placement: "top_level",
-                },
               ],
-              topLevelSessionIDs: ["ses_frontend_lifecycle", "ses_root"],
+              topLevelSessionIDs: ["ses_frontend_lifecycle"],
             },
             eventReplay: { cursor: 8, latestSequence: 8, complete: true, limit: 500 },
             history: {
@@ -802,7 +786,8 @@ test("history paging replays lifecycle-only frontend agent events without blank 
   await expect(
     hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1, directory: TEST_DIRECTORY }),
   ).resolves.toBe(8)
-  expect(conversationAgentStore.records.map((record) => record.sessionID)).not.toContain("ses_frontend_lifecycle")
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_frontend_lifecycle"])
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBeUndefined()
   expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
   await expect(loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_history")).resolves.toBe(false)
@@ -1299,7 +1284,7 @@ test("goal phase history can hydrate a build session directly by session id", as
   ])
 })
 
-test("session-scoped history replays lifecycle-only frontend agent events without blank cards", async () => {
+test("session-scoped history preserves lifecycle-only frontend agent rail records without blank cards", async () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_session" })
   const requests: TransportRequest[] = []
@@ -1392,15 +1377,7 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
               topLevelSessionIDs: ["ses_root"],
             },
             agentView: {
-              messages: [
-                {
-                  sessionID: "ses_root",
-                  stage: "assistant",
-                  messageID: "msg_lifecycle_session_latest",
-                  time: 1_776_000_040_900,
-                  placement: "top_level",
-                },
-              ],
+              messages: [],
               sessions: [
                 {
                   sessionID: "ses_frontend_session",
@@ -1411,16 +1388,8 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
                   lastMessageTime: 1_776_000_040_200,
                   placement: "top_level",
                 },
-                {
-                  sessionID: "ses_root",
-                  stage: "assistant",
-                  messageIDs: ["msg_lifecycle_session_latest"],
-                  firstMessageTime: 1_776_000_040_900,
-                  lastMessageTime: 1_776_000_040_900,
-                  placement: "top_level",
-                },
               ],
-              topLevelSessionIDs: ["ses_frontend_session", "ses_root"],
+              topLevelSessionIDs: ["ses_frontend_session"],
             },
             eventReplay: { cursor: 7, latestSequence: 7, complete: true, limit: 500 },
             history: {
@@ -1473,7 +1442,8 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
   await expect(
     hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1, directory: TEST_DIRECTORY }),
   ).resolves.toBe(7)
-  expect(conversationAgentStore.records.map((record) => record.sessionID)).not.toContain("ses_frontend_session")
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_frontend_session"])
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBeUndefined()
   expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
   await expect(loadConversationSessionHistory("ses_frontend_session", "tsk_lifecycle_session")).resolves.toBe(true)

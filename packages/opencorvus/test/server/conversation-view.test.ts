@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { conversationMessageHasDisplay, projectConversationView } from "../../src/conversation/view"
+import { conversationMessageHasDisplay, projectConversationAgentView, projectConversationView } from "../../src/conversation/view"
 
 test("projectConversationView classifies top-level, hidden, and goal-phase sessions", () => {
   const board = {
@@ -197,6 +197,146 @@ test("projectConversationView keeps lifecycle-only events out of display session
   expect(view.topLevelSessionIDs).toEqual([])
   expect(view.sessions).toEqual([])
   expect(view.messages).toEqual([])
+})
+
+test("projectConversationAgentView includes ledger-only execution sessions", () => {
+  const view = projectConversationAgentView({}, [], [], [
+    {
+      sessionID: "ses_frontend_research_created",
+      stage: "frontend-research",
+      parentSessionID: "ses_orchestrator",
+      timeCreated: 1_776_000_009_000,
+      timeUpdated: 1_776_000_009_500,
+    },
+  ])
+
+  expect(view.topLevelSessionIDs).toEqual([])
+  expect(view.messages).toEqual([])
+  expect(view.sessions).toEqual([
+    expect.objectContaining({
+      sessionID: "ses_frontend_research_created",
+      stage: "frontend-research",
+      parentSessionID: "ses_orchestrator",
+      messageIDs: [],
+      firstObservedAt: 1_776_000_009_000,
+      lastObservedAt: 1_776_000_009_500,
+      status: "pending",
+      placement: "top_level",
+    }),
+  ])
+})
+
+test("projectConversationAgentView uses lifecycle status only to update ledger sessions", () => {
+  const view = projectConversationAgentView(
+    {},
+    [],
+    [
+      {
+        type: "session.status",
+        emittedAt: 1_776_000_010_000,
+        payload: {
+          sessionID: "ses_frontend_research_failed",
+          channel: "frontend-research",
+          parentSessionID: "ses_orchestrator",
+          status: {
+            type: "terminal",
+            reason: "error",
+            error: "page evidence preparation failed",
+          },
+        },
+      },
+    ],
+    [
+      {
+        sessionID: "ses_frontend_research_failed",
+        stage: "frontend-research",
+        parentSessionID: "ses_orchestrator",
+        timeCreated: 1_776_000_009_000,
+        timeUpdated: 1_776_000_009_500,
+      },
+    ],
+  )
+
+  expect(view.topLevelSessionIDs).toEqual([])
+  expect(view.messages).toEqual([])
+  expect(view.sessions).toEqual([
+    expect.objectContaining({
+      sessionID: "ses_frontend_research_failed",
+      stage: "frontend-research",
+      parentSessionID: "ses_orchestrator",
+      messageIDs: [],
+      firstObservedAt: 1_776_000_009_000,
+      lastObservedAt: 1_776_000_010_000,
+      status: "error",
+      placement: "top_level",
+    }),
+  ])
+})
+
+test("projectConversationAgentView ignores orphan lifecycle status as rail existence", () => {
+  const view = projectConversationAgentView(
+    {},
+    [],
+    [
+      {
+        type: "session.status",
+        emittedAt: 1_776_000_010_000,
+        payload: {
+          sessionID: "ses_orphan_status",
+          channel: "frontend-research",
+          parentSessionID: "ses_orchestrator",
+          status: { type: "streaming" },
+        },
+      },
+    ],
+    [],
+  )
+
+  expect(view.sessions).toEqual([])
+  expect(view.messages).toEqual([])
+})
+
+test("projectConversationAgentView ignores non-status events for rail lifecycle ordering", () => {
+  const view = projectConversationAgentView(
+    {},
+    [],
+    [
+      {
+        type: "run.output",
+        payload: {
+          sessionID: "ses_frontend_research_created",
+          channel: "frontend-research",
+        },
+      },
+      {
+        type: "session.status",
+        emittedAt: 1_776_000_010_000,
+        payload: {
+          sessionID: "ses_frontend_research_created",
+          channel: "frontend-research",
+          parentSessionID: "ses_orchestrator",
+          status: { type: "streaming" },
+        },
+      },
+    ],
+    [
+      {
+        sessionID: "ses_frontend_research_created",
+        stage: "frontend-research",
+        parentSessionID: "ses_orchestrator",
+        timeCreated: 1_776_000_009_000,
+        timeUpdated: 1_776_000_009_500,
+      },
+    ],
+  )
+
+  expect(view.sessions).toEqual([
+    expect.objectContaining({
+      sessionID: "ses_frontend_research_created",
+      lastObservedAt: 1_776_000_010_000,
+      status: "running",
+    }),
+  ])
 })
 
 test("conversationMessageHasDisplay rejects envelope-only and control-only messages", () => {

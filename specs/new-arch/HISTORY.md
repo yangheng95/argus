@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                                   | Title                               |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| [2026-06-25-agent-rail-execution-ledger-source.md](2026-06-25-agent-rail-execution-ledger-source.md)   | Agent Rail Execution Ledger Source  |
 | [2026-06-25-agent-rail-converted-message-stream.md](2026-06-25-agent-rail-converted-message-stream.md) | Agent Rail Converted Message Stream |
 
 ## 2026-06-24

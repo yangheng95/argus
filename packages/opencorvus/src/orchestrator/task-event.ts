@@ -48,6 +48,15 @@ const goalIDCache = new LRU<string, string | null>(LRU_LIMIT)
 const parentCache = new LRU<string, string | null>(LRU_LIMIT)
 const taskIDCache = new LRU<string, string>(LRU_LIMIT)
 
+export interface ConversationAgentSessionLedgerRow {
+  sessionID: string
+  stage: SessionKind
+  parentSessionID?: string
+  goalID?: string
+  timeCreated: number
+  timeUpdated: number
+}
+
 function readSessionRow(sessionID: string) {
   return Database.use((db) =>
     db
@@ -200,6 +209,43 @@ export function taskMessageWatermark(taskID: string): number {
     `),
   )
   return Math.max(0, Number(row?.watermark ?? 0) || 0)
+}
+
+export function listTaskConversationAgentSessions(taskID: string): ConversationAgentSessionLedgerRow[] {
+  const rows = Database.use((db) =>
+    db.all<{
+      sessionID: string
+      stage: SessionKind
+      parentSessionID: string | null
+      goalID: string | null
+      timeCreated: number
+      timeUpdated: number
+    }>(sql`
+      WITH RECURSIVE session_tree(id) AS (
+        SELECT session_id FROM engine_task WHERE id = ${taskID}
+        UNION ALL
+        SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
+      )
+      SELECT
+        s.id AS sessionID,
+        s.kind AS stage,
+        s.parent_id AS parentSessionID,
+        s.goal_id AS goalID,
+        s.time_created AS timeCreated,
+        s.time_updated AS timeUpdated
+      FROM session s
+      JOIN session_tree st ON st.id = s.id
+      ORDER BY s.time_created, s.id
+    `),
+  )
+  return rows.map((row) => ({
+    sessionID: row.sessionID,
+    stage: row.stage,
+    parentSessionID: row.parentSessionID ?? undefined,
+    goalID: row.goalID ?? undefined,
+    timeCreated: row.timeCreated,
+    timeUpdated: row.timeUpdated,
+  }))
 }
 
 function eventSession(properties: Record<string, unknown>) {

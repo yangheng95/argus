@@ -161,7 +161,6 @@ describe("session conversation routes", () => {
         })
         expect(body.timeline).toEqual([])
         expect(body.events).toEqual([])
-        expect(body.agentView).toEqual(body.view)
         expect(body.transcript).toHaveLength(4)
         expect(body.transcript[0].info.channel).toBe("main")
         expect(body.transcript[0].info.resolvedRole).toBe("user")
@@ -178,6 +177,13 @@ describe("session conversation routes", () => {
           [user2.id, "user"],
           [mission2.id, "mission"],
         ])
+        expect(body.agentView.sessions).toContainEqual(
+          expect.objectContaining({
+            sessionID: session.id,
+            stage: "mission",
+            status: "pending",
+          }),
+        )
       },
     })
   })

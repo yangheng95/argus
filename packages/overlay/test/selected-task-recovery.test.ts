@@ -66,6 +66,12 @@ function fakeTransport(opts: {
 }
 
 function conversationPayload(taskID: string, transcript: any[] = [], view = { sessions: [] as any[] }) {
+  const viewRecord = view as any
+  const agentView = {
+    topLevelSessionIDs: Array.isArray(viewRecord.topLevelSessionIDs) ? viewRecord.topLevelSessionIDs : [],
+    sessions: Array.isArray(viewRecord.sessions) ? viewRecord.sessions : [],
+    messages: Array.isArray(viewRecord.messages) ? viewRecord.messages : [],
+  }
   return {
     lastSequence: 5,
     board: {
@@ -88,7 +94,7 @@ function conversationPayload(taskID: string, transcript: any[] = [], view = { se
     eventReplay: { cursor: 5, latestSequence: 5, complete: true, limit: 500, sinceTimestamp: null },
     history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view,
-    agentView: view,
+    agentView,
   }
 }
 
@@ -135,6 +141,20 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
       attachments: [],
     },
   })
+  expect(
+    routeSSEEvent({
+      type: "session.status",
+      task_id: "tsk_live",
+      emittedAt: 1_776_000_199_000,
+      properties: {
+        taskID: "tsk_live",
+        sessionID: "ses_live",
+        channel: "assistant",
+        resolvedRole: "assistant",
+        status: { type: "streaming" },
+      },
+    }),
+  ).toBe(true)
 
   expect(
     routeSSEEvent({
@@ -170,17 +190,32 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
   ])
 })
 
-test("selected task run.output conversion updates the agent rail with the message card", () => {
+test("selected task run.output conversion attaches a message card target to an execution rail record", () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_live_executor" })
   setBoardStore("taskSequence", 12)
+  expect(
+    routeSSEEvent({
+      type: "session.status",
+      taskID: "tsk_live_executor",
+      sequence: 13,
+      emittedAt: 1_776_000_299_000,
+      properties: {
+        taskID: "tsk_live_executor",
+        sessionID: "ses_executor_live",
+        channel: "executor",
+        resolvedRole: "executor",
+        status: { type: "streaming" },
+      },
+    }),
+  ).toBe(true)
 
   expect(
     routeSSEEvent({
       type: "run.output",
       taskID: "tsk_live_executor",
       event_id: "evt_executor_output",
-      sequence: 13,
+      sequence: 14,
       timestamp: 1_776_000_300_000,
       summary: "executor output",
       properties: {
@@ -199,17 +234,32 @@ test("selected task run.output conversion updates the agent rail with the messag
   expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
 })
 
-test("selected task run.progress conversion updates the agent rail with the message card", () => {
+test("selected task run.progress conversion attaches a message card target to an execution rail record", () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_live_tool" })
   setBoardStore("taskSequence", 20)
+  expect(
+    routeSSEEvent({
+      type: "session.status",
+      taskID: "tsk_live_tool",
+      sequence: 21,
+      emittedAt: 1_776_000_399_000,
+      properties: {
+        taskID: "tsk_live_tool",
+        sessionID: "ses_tool_live",
+        channel: "executor",
+        resolvedRole: "executor",
+        status: { type: "streaming" },
+      },
+    }),
+  ).toBe(true)
 
   expect(
     routeSSEEvent({
       type: "run.progress",
       taskID: "tsk_live_tool",
       event_id: "evt_tool_call",
-      sequence: 21,
+      sequence: 22,
       timestamp: 1_776_000_400_000,
       summary: "Read file",
       properties: {
@@ -231,7 +281,7 @@ test("selected task run.progress conversion updates the agent rail with the mess
   expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
 })
 
-test("selected task part-first message updates the agent rail with the materialized card", () => {
+test("selected task part-first message attaches the materialized card to an execution rail record", () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_part_first" })
   setBoardStore("taskSequence", 30)
@@ -246,12 +296,28 @@ test("selected task part-first message updates the agent rail with the materiali
       attachments: [],
     },
   })
+  expect(
+    routeSSEEvent({
+      type: "session.status",
+      taskID: "tsk_part_first",
+      sequence: 31,
+      emittedAt: 1_776_000_499_000,
+      properties: {
+        taskID: "tsk_part_first",
+        sessionID: "ses_part_first",
+        channel: "build",
+        resolvedRole: "build",
+        parentSessionID: "ses_root",
+        status: { type: "streaming" },
+      },
+    }),
+  ).toBe(true)
 
   expect(
     routeSSEEvent({
       type: "message.part.updated",
       taskID: "tsk_part_first",
-      sequence: 31,
+      sequence: 32,
       emittedAt: 1_776_000_500_000,
       properties: {
         taskID: "tsk_part_first",
@@ -280,7 +346,7 @@ test("selected task part-first message updates the agent rail with the materiali
     routeSSEEvent({
       type: "message.updated",
       taskID: "tsk_part_first",
-      sequence: 32,
+      sequence: 33,
       properties: {
         info: {
           id: "msg_before_message",
@@ -297,11 +363,31 @@ test("selected task part-first message updates the agent rail with the materiali
   ).toBe(true)
 
   expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_part_first"])
-  expect(conversationAgentStore.records[0]?.status).toBe("completed")
+  expect(conversationAgentStore.records[0]?.status).toBe("running")
   expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
+
+  expect(
+    routeSSEEvent({
+      type: "session.status",
+      taskID: "tsk_part_first",
+      sequence: 34,
+      emittedAt: 1_776_000_502_000,
+      properties: {
+        taskID: "tsk_part_first",
+        sessionID: "ses_part_first",
+        channel: "build",
+        resolvedRole: "build",
+        parentSessionID: "ses_root",
+        status: { type: "terminal", reason: "completed" },
+      },
+    }),
+  ).toBe(true)
+
+  expect(conversationAgentStore.records[0]?.status).toBe("completed")
+  expect(conversationAgentStore.records[0]?.completedAt).toBe(1_776_000_502_000)
 })
 
-test("selected task session.status updates an existing rail record without creating lifecycle-only records", () => {
+test("selected task session.status creates an execution rail record without a blank card", () => {
   resetWriter()
   setBoardStore("selectedSource", { kind: "task", id: "tsk_status" })
   setBoardStore("taskSequence", 40)
@@ -333,7 +419,11 @@ test("selected task session.status updates an existing rail record without creat
       },
     }),
   ).toBe(true)
-  expect(conversationAgentStore.records).toEqual([])
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_status_only"])
+  expect(conversationAgentStore.records[0]?.stage).toBe("frontend-research")
+  expect(conversationAgentStore.records[0]?.status).toBe("running")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBeUndefined()
+  expect(cardTreeStore.cards["frontend-research:session:ses_status_only"]).toBeUndefined()
 
   expect(
     routeSSEEvent({
@@ -343,18 +433,22 @@ test("selected task session.status updates an existing rail record without creat
       properties: {
         info: {
           id: "msg_status",
-          sessionID: "ses_status",
+          sessionID: "ses_status_only",
           role: "assistant",
-          resolvedRole: "frontend-design",
-          channel: "frontend-design",
-          agent: "frontend-design",
+          resolvedRole: "frontend-research",
+          channel: "frontend-research",
+          agent: "frontend-research",
           parentSessionID: "ses_root",
           time: { created: 1_776_000_601_000 },
         },
       },
     }),
   ).toBe(true)
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_status_only"])
   expect(conversationAgentStore.records[0]?.status).toBe("running")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(
+    "frontend-research:session:ses_status_only:message:msg_status",
+  )
 
   expect(
     routeSSEEvent({
@@ -364,13 +458,16 @@ test("selected task session.status updates an existing rail record without creat
       emittedAt: 1_776_000_602_000,
       properties: {
         taskID: "tsk_status",
-        sessionID: "ses_status",
+        sessionID: "ses_status_only",
+        channel: "frontend-research",
+        resolvedRole: "frontend-research",
+        parentSessionID: "ses_root",
         status: { type: "terminal", reason: "error", message: "failed" },
       },
     }),
   ).toBe(true)
 
-  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_status"])
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_status_only"])
   expect(conversationAgentStore.records[0]?.status).toBe("error")
   expect(conversationAgentStore.records[0]?.completedAt).toBe(1_776_000_602_000)
 })

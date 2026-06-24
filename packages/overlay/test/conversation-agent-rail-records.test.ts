@@ -4,6 +4,7 @@ import type { AgentWorkflowRecord } from "../src/utils/agent-workflow"
 import {
   conversationAgentStore,
   applyLiveConversationAgentMessageUpdated,
+  applyLiveConversationAgentSessionStatus,
   conversationAgentRecordsForSource,
   hydrateConversationAgentView,
   resetConversationAgentView,
@@ -57,10 +58,15 @@ test("ConversationAgentRail keeps hydrated sessions with deterministic rendered 
     ],
   )
 
-  expect(merged.map((item) => item.sessionID)).toEqual(["ses_build_hydrated", "ses_build_live"])
-  expect(merged[0]?.renderedCardID).toBe("build:session:ses_build_hydrated:message:msg_1")
-  expect(merged[1]?.renderedCardID).toBe("step:goal_a:build")
-  expect(merged[1]?.goalID).toBe("goal_a")
+  expect(merged.map((item) => item.sessionID)).toEqual([
+    "ses_build_orphan_1",
+    "ses_build_hydrated",
+    "ses_build_live",
+  ])
+  expect(merged[0]?.renderedCardID).toBeUndefined()
+  expect(merged[1]?.renderedCardID).toBe("build:session:ses_build_hydrated:message:msg_1")
+  expect(merged[2]?.renderedCardID).toBe("step:goal_a:build")
+  expect(merged[2]?.goalID).toBe("goal_a")
 })
 
 test("ConversationAgentRail merge keeps hydrated canonical identity over live card labels", () => {
@@ -167,7 +173,7 @@ test("hydrated agent records target the latest canonical display message", () =>
   expect(conversationAgentStore.records[1]?.targetMessageID).toBe("msg_goal_latest")
 })
 
-test("hydrated top-level agent records require a display message target", () => {
+test("hydrated top-level execution records do not require a display message target", () => {
   resetConversationAgentView()
   hydrateConversationAgentView("task:tsk", {
     sessions: [
@@ -177,15 +183,22 @@ test("hydrated top-level agent records require a display message target", () => 
         messageIDs: ["msg_old", "msg_latest"],
         firstMessageTime: 100,
         lastMessageTime: 200,
+        firstObservedAt: 90,
+        lastObservedAt: 210,
+        status: "running",
         placement: "top_level",
       },
     ],
   })
 
-  expect(conversationAgentStore.records).toEqual([])
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_build"])
+  expect(conversationAgentStore.records[0]?.status).toBe("running")
+  expect(conversationAgentStore.records[0]?.startedAt).toBe(90)
+  expect(conversationAgentStore.records[0]?.lastObservedAt).toBe(210)
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBeUndefined()
 })
 
-test("hydrated lifecycle-only agent records do not create blank session cards", () => {
+test("hydrated lifecycle-only agent records create rail entries without blank card targets", () => {
   resetConversationAgentView()
   hydrateConversationAgentView("task:tsk", {
     sessions: [
@@ -195,12 +208,19 @@ test("hydrated lifecycle-only agent records do not create blank session cards", 
         messageIDs: [],
         firstMessageTime: 100,
         lastMessageTime: 110,
+        firstObservedAt: 100,
+        lastObservedAt: 110,
+        status: "error",
         placement: "top_level",
       },
     ],
   })
 
-  expect(conversationAgentStore.records).toEqual([])
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_frontend_research_failed"])
+  expect(conversationAgentStore.records[0]?.stage).toBe("frontend-research")
+  expect(conversationAgentStore.records[0]?.status).toBe("error")
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBeUndefined()
+  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("")
 })
 
 test("hydrated goal-phase agent records may target the phase card without a display message", () => {
@@ -283,8 +303,34 @@ test("hydrated agent records are scoped to the selected task or session source",
   ).toEqual(["ses_coding_child"])
 })
 
-test("live message.updated creates a rail record without waiting for hydrate", () => {
+function liveSessionStatus(sessionID: string, status: Record<string, any> = { type: "streaming" }) {
+  return {
+    type: "session.status",
+    emittedAt: 1_779_099_999_000,
+    properties: {
+      sessionID,
+      channel: "build",
+      resolvedRole: "build",
+      parentSessionID: "ses_root",
+      status,
+    },
+  }
+}
+
+test("live session.status creates a rail record without waiting for hydrate", () => {
   resetConversationAgentView()
+  applyLiveConversationAgentSessionStatus("task:tsk_live", liveSessionStatus("ses_live_build"))
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
+  expect(records[0]?.status).toBe("running")
+  expect(records[0]?.renderedCardID).toBeUndefined()
+  expect(records[0]?.targetMessageID).toBe("")
+})
+
+test("live message.updated attaches target to an existing rail execution record", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentSessionStatus("task:tsk_live", liveSessionStatus("ses_live_build"))
   applyLiveConversationAgentMessageUpdated(
     "task:tsk_live",
     liveMessageUpdated({
@@ -302,8 +348,35 @@ test("live message.updated creates a rail record without waiting for hydrate", (
   expect(records[0]?.targetMessageID).toBe("msg_live")
 })
 
+test("live message.updated does not create rail existence without a session ledger record", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentMessageUpdated(
+    "task:tsk_live_no_status",
+    liveMessageUpdated({
+      id: "msg_live",
+      sessionID: "ses_live_build",
+      channel: "build",
+      time: { created: 1_779_100_000_100 },
+    }),
+  )
+
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_no_status" })).toEqual([])
+})
+
 test("live message.updated retargets goal-phase records to the rendered step card", () => {
   resetConversationAgentView()
+  applyLiveConversationAgentSessionStatus("task:tsk_live_phase", {
+    type: "session.status",
+    emittedAt: 1_779_100_000_100,
+    properties: {
+      sessionID: "ses_live_plan",
+      channel: "planner",
+      resolvedRole: "planner",
+      parentSessionID: "ses_goal_root",
+      goalID: "goal_live",
+      status: { type: "streaming" },
+    },
+  })
   applyLiveConversationAgentMessageUpdated(
     "task:tsk_live_phase",
     liveMessageUpdated({
@@ -317,7 +390,7 @@ test("live message.updated retargets goal-phase records to the rendered step car
   )
 
   const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_phase" })
-  expect(records[0]?.status).toBe("completed")
+  expect(records[0]?.status).toBe("running")
   expect(records[0]?.parentSessionID).toBe("ses_goal_root")
   expect(records[0]?.cardID).toBe("step:goal_live:build:phase:plan")
   expect(records[0]?.renderedCardID).toBe("step:goal_live:build")
@@ -354,6 +427,16 @@ test("live message.updated ignores non-agent channels", () => {
 
 test("live message.updated records are scoped by task and session source keys", () => {
   resetConversationAgentView()
+  applyLiveConversationAgentSessionStatus("session:ses_coding_live", {
+    type: "session.status",
+    emittedAt: 1_779_099_999_000,
+    properties: {
+      sessionID: "ses_child_live",
+      channel: "assistant",
+      resolvedRole: "assistant",
+      status: { type: "streaming" },
+    },
+  })
   applyLiveConversationAgentMessageUpdated(
     "session:ses_coding_live",
     liveMessageUpdated({
