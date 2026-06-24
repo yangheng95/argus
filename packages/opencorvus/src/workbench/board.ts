@@ -930,8 +930,8 @@ function buildWorkflowFields(
     // the "pre-attempt" bucket under a stable pseudo-id.
     const tipRun = findLatestTipGoalRun(goal.id)
     // goalRunID surfaces the run the overlay's per-row diff click fetches
-    // via /goal-run/<id>/acceptance. After a acceptance-rejection reset the tip
-    // is a fresh pending row with no acceptance, so click would resolve to an
+    // via /goal-run/<id>/acceptance. After a targeted retry the tip can be a
+    // fresh pending row with no acceptance, so click would resolve to an
     // empty diff. The Files panel displays whatever is currently merged on
     // master — which corresponds to the latest delivered run, not the
     // pending tip — so anchor to that run when one exists. Falls back to
@@ -1167,9 +1167,9 @@ function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: strin
   if (step.scope !== "goal") return undefined
   if (!step.phases || step.phases.length === 0) return undefined
 
-  // Use the latest *delivered* goal_run, not the tip. After a acceptance
-  // rejection, resetTaskGoalsToPending supersedes every goal's tip with a
-  // fresh pending row that has no acceptance yet — but the prior acceptance row's
+  // Use the latest *delivered* goal_run, not the tip. After a targeted
+  // acceptance retry, the tip can be a fresh pending row with no acceptance yet,
+  // but the prior acceptance row's
   // files are still merged into master and remain the canonical "built"
   // surface. Falling through to currentGoalRun() here would silently zero
   // out the file count for every previously-passed goal until the next

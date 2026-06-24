@@ -144,7 +144,7 @@ export namespace PromptProfile {
         "frontend-research":
           "Produce a source-backed replica brief that separates confirmed facts from assumptions and defines target surfaces, key interactions, and evidence gaps.",
         build:
-          "Convert the approved replica target into working code without drifting source structure, layout density, or behavior. Finish at a verifiable rendered result.",
+          "Build the approved replica without source drift. On frontend dependency blockers, inspect manifest/lockfile, .bin, and scoped links in the worktree; repair with the project package manager, rerun original checks, publish only on green.",
         "visual-qa":
           "Audit rendered replica surfaces for structure, spacing, interaction, and state mismatches. Name concrete defects and tie review to visible evidence.",
         integrity:
@@ -243,7 +243,7 @@ export namespace PromptProfile {
         "frontend-research":
           "Produce frontend investigation packets for automation: selectors, states, user flows, data dependencies, visual risks, and evidence gaps for each source page.",
         build:
-          "Convert the approved frontend fix into code plus focused automation. Add or update checks that expose the visible behavior and report exact commands.",
+          "Fix visible frontend failures with focused automation. If browser/preview/lint/typecheck/build stops before checker start, inspect manifest, .bin, package links, ports, and runners; repair local deps, rerun original command, then publish.",
         "visual-qa":
           "Audit rendered surfaces as executable checks: interactions, layout states, accessibility signals, and screenshots must support every acceptance claim.",
         "deep-research":

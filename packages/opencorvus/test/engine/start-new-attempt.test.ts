@@ -27,7 +27,7 @@ import { resetDatabase } from "../fixture/db"
  * Contract tests for Goal.startNewAttempt — the single atomic entry-point
  * that records retry intent on a terminal tip without changing lifecycle
  * projection. These are load-bearing: every retry path (manual_retry,
- * acceptance_rework, modify_contract, restart_stage) funnels through this one
+ * acceptance_rework, modify_contract) funnels through this one
  * function, and its mechanism decoupling from LLM decisions is the core of the attempt
  * redesign. A regression here reopens the "status carousel deadlock" bug.
  */
@@ -223,16 +223,17 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     expect(desc.is_terminal_fail).toBe(false)
   })
 
-  test("aborted tip → pending (restart_stage reason)", () => {
+  test("aborted tip → pending without a lifecycle reset reason", () => {
     const gr = `grun_aborted_${Date.now()}`
     insertGoalRun({ id: gr, status: "aborted" })
     Database.use((db) =>
       db.update(EngineGoalTable).set({ status: "pending" }).where(eq(EngineGoalTable.id, goalID)).run(),
     )
 
-    startNewAttempt({ goalID, reason: "restart_stage" })
+    startNewAttempt({ goalID, reason: "manual_retry" })
 
-    expect(findGoalRun(gr)?.superseded_reason).toBe("restart_stage")
+    expect(findGoalRun(gr)?.superseded_reason).toBe("manual_retry")
+    expect(goalStatusByID(goalID)).toBe("pending")
   })
 })
 

@@ -1035,10 +1035,6 @@ export type Config = {
    */
   assistant?: {
     /**
-     * Enable OpenCorvus host-side automatic repair iteration after failed goal waves or rejected acceptance reviews. Default false: acceptance rejection is reported and waits for operator follow-up.
-     */
-    auto_iteration?: boolean
-    /**
      * Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts
      */
     requirements?: {

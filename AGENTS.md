@@ -96,7 +96,7 @@ build agent 处理任何前端页面、组件、可视化、overlay、preview、
 
 **23.** 如果工具本身异常，先修工具。例如 git、rg、测试命令、运行器不可用时，应主动修复工具链，再继续任务。
 
-**23.1（build 工具链责任 — 2026-06-24）**：build agent 遇到本地可修复的依赖安装、`node_modules`/bin 链接、脚本、端口、测试运行器、browser runner、worktree merge 等前置工具链问题时，禁止用 `report_build_result(status="failed")` 当作逃逸出口。即使 `assistant.auto_iteration=false`，也必须继续执行具体修复并重跑原始验收命令，直到验收进入真实 checker、问题被修复，或剩余阻塞被证明是外部权限/破坏性操作/当前任务无权修复且已列出耗尽证据。
+**23.1（build 工具链责任 — 2026-06-24）**：build agent 遇到本地可修复的依赖安装、`node_modules`/bin 链接、脚本、端口、测试运行器、browser runner、worktree merge 等前置工具链问题时，禁止用 `report_build_result(status="failed")` 当作逃逸出口，也禁止在原始验收命令尚未进入并通过真实 checker 时用 `merge_back` 发布半验证实现。必须继续执行具体修复并重跑原始验收命令，直到验收进入真实 checker、问题被修复，或剩余阻塞被证明是外部权限/破坏性操作/当前任务无权修复且已列出耗尽证据。
 
 ---
 

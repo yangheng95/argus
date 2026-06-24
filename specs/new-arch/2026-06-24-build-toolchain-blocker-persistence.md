@@ -2,25 +2,36 @@
 
 Date: 2026-06-24
 
+Superseded by `2026-06-24-retire-auto-iteration.md` for the configuration
+decision. The toolchain/publish-blocker responsibility below remains the
+incident lesson, but it no longer depends on an `assistant.auto_iteration`
+mode.
+
 ## Problem
 
-Build sessions currently render `assistant.auto_iteration=false` as a bounded
-single repair pass. That wording gives the Build agent a clean exit path after
-a package-manager, dependency-layout, test-runner, browser-runner, port, script,
-or worktree-merge preflight failure, even though the static Build core already
-says pre-checker failures are toolchain blockers that must be repaired before
-rerunning the exact required command.
+Build sessions previously rendered a bounded repair-pass mode. That wording
+gave the Build agent a clean exit path after a package-manager,
+dependency-layout, test-runner, browser-runner, port, script, or worktree-merge
+preflight failure, even though the static Build core already says pre-checker
+failures are toolchain blockers that must be repaired before rerunning the exact
+required command.
 
 The result is misleading: `report_build_result(status="failed")` becomes a
 normal endpoint for repo-local repairable toolchain failures, and a later retry
 can pass after the environment has been partially repaired or stabilized.
 
+A second failure mode appeared in the same evidence: a Build agent can commit
+and `merge_back` a partially verified implementation, then report
+`status="failed"` because project typecheck/build/browser preview never
+actually ran. That publishes code to the primary worktree while the goal-run
+correctly remains failed and has no acceptance artifact.
+
 ## Call-Site Recall
 
-`rg -n -F "auto_iteration" specs packages/opencorvus/src packages/opencorvus/test`
+`rg -n "toolchain|merge_back|report_build_result" packages/opencorvus/src packages/opencorvus/test specs`
 
-- `packages/opencorvus/src/build/agent.ts::renderBuildAutoIterationMode`
-  renders the dynamic Build-session auto-iteration paragraph.
+- `packages/opencorvus/src/build/agent.ts::renderBuildRepairDiscipline`
+  renders the static Build-session repair paragraph.
 - `packages/opencorvus/src/prompt/core/build-core.txt` owns the static Build
   terminal and toolchain-blocker contract.
 - `packages/opencorvus/test/build-agent/prompt-goal-discipline.test.ts` asserts
@@ -33,10 +44,12 @@ can pass after the environment has been partially repaired or stabilized.
 
 Tighten the prompt contract instead of adding host-side gates:
 
-1. `assistant.auto_iteration=false` remains a host-side retry-loop setting for
-   product/implementation repair waves.
-2. Repo-local pre-checker/toolchain blockers are outside that bound. Build must
+1. Repo-local pre-checker/toolchain blockers are Build-owned. Build must
    keep repairing them while concrete local repair actions remain.
+2. Repo-local pre-checker/toolchain blockers are publish blockers too. Build may
+   commit local work to preserve progress, but must not call `merge_back` until
+   the required checker has actually started, completed, and produced green
+   evidence.
 3. Build may report failed only when the remaining blocker is external,
    destructive, unowned by the current task, or repeated with no new repair
    action/evidence available.
@@ -47,8 +60,9 @@ local toolchain repair.
 
 ## Acceptance
 
-- Build prompt explicitly says `auto_iteration=false` does not permit stopping
-  on repo-local toolchain/pre-checker blockers.
-- Dynamic auto-iteration text distinguishes product/implementation repair bounds
-  from toolchain persistence.
+- Build prompt explicitly says repo-local toolchain/pre-checker blockers remain
+  Build-owned while concrete local repair actions exist.
+- Build repair discipline is static, not controlled by a retry-loop setting.
+- Build prompt forbids `merge_back` while required verification is blocked by
+  repo-local dependency/script/port/runner/preview/worktree pre-checker failure.
 - Tests assert the above wording.

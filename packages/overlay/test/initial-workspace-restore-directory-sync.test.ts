@@ -12,7 +12,7 @@ mock.module("../src/services/conversation", () => ({
   hydrateTaskConversation: async () => 0,
 }))
 
-const { restoreInitialWorkspace } = await import("../src/services/init")
+const { restoreInitialTaskSelection, restoreInitialWorkspace } = await import("../src/services/init")
 
 function fakeTransport(): HostTransport {
   return {
@@ -56,6 +56,7 @@ describe("initial workspace restore directory sync", () => {
             id: "tsk_saved",
             status: "active",
             directory: "D:/projects/new",
+            time: { created: 1, updated: 1 },
           },
           pending_interactions: 0,
         },
@@ -96,6 +97,53 @@ describe("initial workspace restore directory sync", () => {
 
     expect(boardStore.selectedSource).toEqual({ kind: "task", id: "tsk_saved", directory: "D:/projects/new" })
     expect(new URL(apiUrl("agent")).searchParams.get("directory")).toBe("D:/projects/new")
+  })
+
+  test("selects a URL task deep link before persisted workspace restore", async () => {
+    setSettingsStore({
+      workspaceDirectory: "D:/projects/new",
+      workspaceTaskID: "tsk_saved",
+    })
+    setBoardStore("tasks", [
+      {
+        task: {
+          id: "tsk_saved",
+          status: "active",
+          directory: "D:/projects/new",
+          time: { created: 1, updated: 1 },
+        },
+        pending_interactions: 0,
+      },
+      {
+        task: {
+          id: "tsk_linked",
+          status: "completed",
+          directory: "D:/projects/old",
+          time: { created: 2, updated: 2 },
+        },
+        pending_interactions: 0,
+      },
+    ])
+
+    await expect(restoreInitialTaskSelection({ search: "?taskID=tsk_linked" })).resolves.toBe(true)
+
+    expect(boardStore.selectedSource).toEqual({ kind: "task", id: "tsk_linked", directory: "D:/projects/old" })
+    expect(new URL(apiUrl("agent")).searchParams.get("directory")).toBe("D:/projects/old")
+  })
+
+  test("rejects URL directory task deep links without selecting a saved task", async () => {
+    await expect(
+      restoreInitialTaskSelection({ search: "?taskID=tsk_saved&directory=D%3A%2Fprojects%2Fnew" }),
+    ).rejects.toThrow('Unsupported task deep link parameter "directory"')
+
+    expect(boardStore.selectedSource).toBeNull()
+    expect(boardStore.board).toBeNull()
+  })
+
+  test("uses persisted workspace restore when the URL has no task deep link", async () => {
+    await expect(restoreInitialTaskSelection({ search: "?theme=dark" })).resolves.toBe(true)
+
+    expect(boardStore.selectedSource).toEqual({ kind: "task", id: "tsk_saved", directory: "D:/projects/new" })
   })
 
   test("clears stale conversation cards when the saved task was deleted", async () => {

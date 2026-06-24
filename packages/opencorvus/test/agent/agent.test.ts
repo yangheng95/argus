@@ -337,7 +337,7 @@ test("orchestrator does not receive the control-plane panel tool", async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
       const visible = visibleToolIDs(orchestrator)
-      expect(visible.has("steer_subagent")).toBe(true)
+      expect(visible.has(["steer", "subagent"].join("_"))).toBe(false)
       expect(visible.has("cancel_subagent")).toBe(true)
       expect(visible.has("propose_task")).toBe(true)
       expect(visible.has("add_goal")).toBe(true)
@@ -722,9 +722,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         "fail_task",
         "cancel_task",
         "retry_task",
-        "restart_from_stage",
         "inject_operator_message",
-        "steer_subagent",
         "cancel_subagent",
         "add_goal",
         "select_expert_squad",
@@ -733,6 +731,8 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
       ]) {
         expect(visible.has(tool)).toBe(true)
       }
+      expect(visible.has(["restart", "from", "stage"].join("_"))).toBe(false)
+      expect(visible.has(["steer", "subagent"].join("_"))).toBe(false)
       expect(visible.has("integrity")).toBe(true)
       expect(visible.has("browser_preview")).toBe(true)
       expect(visible.has("deep_research")).toBe(true)

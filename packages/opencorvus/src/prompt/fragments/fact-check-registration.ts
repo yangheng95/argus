@@ -47,8 +47,8 @@ Over-claiming verified-ness will be flagged as a violation in fact-check.`
  *
  * Usage:
  *   core: withFactCheckRegistration(BUILD_CORE)
- *   core: withFactCheckRegistration(composeBuildCore(autoIteration))
- *   core: withFactCheckRegistration([FRONTEND_DESIGN_CORE, renderAutoIterationMode(autoIteration)].join("\\n\\n"))
+ *   core: withFactCheckRegistration(composeBuildCore())
+ *   core: withFactCheckRegistration([FRONTEND_DESIGN_CORE, renderFrontendReviewDiscipline()].join("\\n\\n"))
  */
 export function withFactCheckRegistration(core: string): string {
   return [core, FACT_CHECK_REGISTRATION_FRAGMENT].join("\n\n")

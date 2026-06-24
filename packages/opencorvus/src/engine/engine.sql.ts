@@ -41,7 +41,7 @@ export type EngineRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "disp
 // reads the rendered semantic hint on its next decision turn and decides
 // what to do — there is no loop-side watermark / auto-rewake on this column.
 // Conventional labels callers write (documentation only, not enforced):
-//   manual_retry, acceptance_rework, modify_contract, restart_stage
+//   manual_retry, acceptance_rework, modify_contract
 export type EngineInteractionType = "permission" | "question"
 export type EngineInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 

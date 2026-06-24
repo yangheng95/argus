@@ -197,8 +197,22 @@ function sourceMatches(left: BoardSource | null, right: BoardSource | null): boo
 function conversationHydratePath(source: BoardSource, tailLimit: number, directory: string): string {
   const prefix = source.kind === "task" ? "task" : "session"
   const params = new URLSearchParams({ tail_limit: String(tailLimit) })
-  params.set("directory", requireDirectory(directory, "conversation hydrate"))
+  const trimmed = String(directory || "").trim()
+  if (trimmed) params.set("directory", trimmed)
   return `${prefix}/${encodeURIComponent(source.id)}/conversation?${params.toString()}`
+}
+
+function conversationRequestDirectory(source: BoardSource, directory: string | undefined): string {
+  const trimmed = String(directory || "").trim()
+  if (source.kind === "session") return requireDirectory(trimmed, "hydrateConversation")
+  return trimmed
+}
+
+function hydratedTaskDirectory(board: Record<string, unknown>, taskID: string): string {
+  const task = board.task
+  if (!task || typeof task !== "object") throw new Error(`task ${taskID} conversation board missing task`)
+  const directory = (task as Record<string, unknown>).directory
+  return requireDirectory(typeof directory === "string" ? directory : "", `task ${taskID} conversation board`)
 }
 
 function assertActiveReplay(source: BoardSource, epoch: number, signal: AbortSignal): void {
@@ -342,13 +356,15 @@ export async function hydrateConversation(
       1,
       Math.floor(Number(options.tailLimit ?? INITIAL_CONVERSATION_TAIL_LIMIT) || INITIAL_CONVERSATION_TAIL_LIMIT),
     )
-    const directory = registerConversationSourceDirectory(
-      source,
-      requireDirectory(options.directory, "hydrateConversation"),
-    )
-    const data = await apiJson(conversationHydratePath(source, tailLimit, directory), { signal })
+    const requestDirectory = conversationRequestDirectory(source, options.directory)
+    if (requestDirectory) registerConversationSourceDirectory(source, requestDirectory)
+    const data = await apiJson(conversationHydratePath(source, tailLimit, requestDirectory), { signal })
     assertActiveReplay(source, epoch, signal)
     const board = requireObject(data?.board, "board")
+    const directory =
+      source.kind === "task"
+        ? registerConversationSourceDirectory(source, hydratedTaskDirectory(board, source.id))
+        : registerConversationSourceDirectory(source, requestDirectory)
     const transcript = requireArray(data?.transcript, "transcript")
     const timeline = requireArray(data?.timeline, "timeline")
     const events = requireArray(data?.events, "events")

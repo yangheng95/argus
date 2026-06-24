@@ -311,21 +311,21 @@ export async function selectTask(taskID: string, options: SelectTaskOptions = {}
     }
 
     const conversationDirectory = (taskDirectory || settingsStore.directory || "").trim()
-    if (!conversationDirectory) throw new Error("selectTask: task conversation requires a project directory")
     const lastSequence = await hydrateTaskConversation(nextTaskID, {
       scrollIntent: "bottom",
       resetCause: "task-switch-hydrate",
       tailLimit: TASK_SELECTION_INITIAL_TAIL_LIMIT,
-      directory: conversationDirectory,
+      directory: conversationDirectory || undefined,
     })
     if (stale()) return
 
-    startSSE({ kind: "task", id: nextTaskID }, lastSequence, { directory: conversationDirectory })
+    const selectedDirectory = taskOwningDirectory(nextTaskID)
+    startSSE({ kind: "task", id: nextTaskID }, lastSequence, { directory: selectedDirectory })
 
     // Persist the active task so initApp -> restoreInitialWorkspace() can
     // resume it on the next launch. Without this write the localStorage key
     // stays empty and the overlay always boots into an empty workspace.
-    const restoreDir = workspaceRestoreDirectory(taskDirectory || settingsStore.directory || "")
+    const restoreDir = workspaceRestoreDirectory(selectedDirectory)
     setSettingsStore("workspaceTaskID", nextTaskID)
     setSettingsStore("workspaceDirectory", restoreDir)
     await saveSettings()
