@@ -15,6 +15,7 @@ export * from "./workflow"
 export * from "./catalog"
 export * from "./orphan"
 export * from "./task-status"
+export * from "./agent-coordination"
 export {
   EngineTaskTable,
   EngineGoalTable,

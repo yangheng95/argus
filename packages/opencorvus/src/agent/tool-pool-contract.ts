@@ -25,7 +25,15 @@ export namespace AgentToolPool {
     "web_clone_source_audit",
   ] as const
 
-  const STAGE_CONTEXT_GLOBAL_TOOL_IDS = ["read", "glob", "search_code", "list", "memory", "skill"] as const
+  const STAGE_CONTEXT_GLOBAL_TOOL_IDS = [
+    "read",
+    "glob",
+    "search_code",
+    "list",
+    "memory",
+    "skill",
+    "request_orchestrator_decision",
+  ] as const
 
   const ORCHESTRATOR_PRIVATE_TOOL_IDS = [
     "build",
@@ -99,6 +107,7 @@ export namespace AgentToolPool {
     "planner",
     "mission_state",
     "wait",
+    "request_orchestrator_decision",
     "goal_report",
     "lsp",
     "batch",
@@ -138,6 +147,7 @@ export namespace AgentToolPool {
         "schedule",
         "mission_state",
         "wait",
+        "request_orchestrator_decision",
         "goal_report",
         "lsp",
         "batch",
@@ -216,7 +226,7 @@ export namespace AgentToolPool {
     "deep-research": pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "webfetch", "external_code_search", "todoread", "todowrite"],
     }),
-    "frontend-research": pool({ global: ["skill"] }),
+    "frontend-research": pool({ global: ["skill", "request_orchestrator_decision"] }),
     "goal-workload-analyst": pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "todoread", "todowrite"],
     }),

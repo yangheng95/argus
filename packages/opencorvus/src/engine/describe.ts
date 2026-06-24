@@ -32,6 +32,7 @@ import { deriveTaskStatus } from "./task-status"
 import { ToolFailureCause, renderToolFailureCause } from "@/session/tool-failure-cause"
 import { SessionStatus } from "@/session/status"
 import { Database, sql } from "@/storage/db"
+import { listPendingAgentCoordinationRequests } from "./agent-coordination"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
  *  The column it used to shadow (engine_goal.status) is gone; this is
@@ -69,6 +70,7 @@ const TOOL_EXECUTE_FAILURE_PROMPT_CAP = 5
 const OPEN_TOOL_CALL_PROMPT_CAP = 5
 const TERMINAL_GOAL_REFILL_PROMPT_CAP = 5
 const RESEARCH_BRIEF_DESC_CAP = 4
+const AGENT_COORDINATION_PROMPT_CAP = 8
 
 const TerminalGoalRefillNotificationPayloadSchema = z.object({
   task_id: z.string(),
@@ -178,6 +180,22 @@ export interface AgentFailureDesc {
   goal_id?: string
 }
 
+export interface AgentCoordinationRequestDesc {
+  request_id: string
+  time_created: number
+  session_id: string
+  agent: string
+  message_id: string
+  goal_id?: string
+  goal_run_id?: string
+  blocking: boolean
+  severity: "info" | "blocked" | "failure"
+  summary: string
+  details: string
+  requested_decision: string
+  evidence_refs: string[]
+}
+
 export interface OpenToolCallDesc {
   time_created: number
   session_id: string
@@ -280,6 +298,12 @@ export interface TaskDesc {
    *  session cards: provider quota, network, schema, and terminal session
    *  errors that would otherwise live only in User Interface (UI) / log status. */
   recent_agent_failures?: AgentFailureDesc[]
+  /** Pending worker-to-orchestrator coordination requests. These are durable
+   *  A2A facts: a worker asked the host for an explicit scheduling decision.
+   *  The orchestrator must answer through `respond_agent_coordination` or take
+   *  another visible lifecycle action; do not inject private steering without
+   *  a request id. */
+  pending_agent_coordination?: AgentCoordinationRequestDesc[]
   iterations_count: number
 }
 
@@ -751,6 +775,23 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       reason: entry.value,
       goal_id: entry.goalID ?? undefined,
     }))
+  const pendingAgentCoordination: AgentCoordinationRequestDesc[] = listPendingAgentCoordinationRequests(task.id)
+    .slice(0, AGENT_COORDINATION_PROMPT_CAP)
+    .map((row) => ({
+      request_id: row.payload.request_id,
+      time_created: row.timeCreated,
+      session_id: row.payload.session_id,
+      agent: row.payload.agent,
+      message_id: row.payload.message_id,
+      goal_id: row.payload.goal_id,
+      goal_run_id: row.payload.goal_run_id,
+      blocking: row.payload.blocking,
+      severity: row.payload.severity,
+      summary: row.payload.summary,
+      details: row.payload.details,
+      requested_decision: row.payload.requested_decision,
+      evidence_refs: row.payload.evidence_refs ?? [],
+    }))
   const openToolCallsWithoutCurrentOwner = listOpenToolCallsWithoutCurrentOwner(task)
   const recentTerminalGoalRefills = describeTerminalGoalRefillNotifications(task.id)
 
@@ -793,6 +834,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       openToolCallsWithoutCurrentOwner.length > 0 ? openToolCallsWithoutCurrentOwner : undefined,
     recent_terminal_goal_refills: recentTerminalGoalRefills.length > 0 ? recentTerminalGoalRefills : undefined,
     recent_agent_failures: recentAgentFailures.length > 0 ? recentAgentFailures : undefined,
+    pending_agent_coordination: pendingAgentCoordination.length > 0 ? pendingAgentCoordination : undefined,
     iterations_count: history.length,
   }
 }
@@ -1055,6 +1097,28 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
         `was made. Use those entries to decide: \`retry_task\` (transient network/idle blip), ` +
         `\`restart_from_stage\` (config-level — wrong provider/key), or \`fail_task\` ` +
         `(permanent — quota exhausted, key revoked, model gone).`,
+    )
+  }
+
+  if (desc.pending_agent_coordination && desc.pending_agent_coordination.length > 0) {
+    lines.push("")
+    lines.push(`## Pending agent coordination requests (${desc.pending_agent_coordination.length})`)
+    for (const request of desc.pending_agent_coordination) {
+      const ts = new Date(request.time_created).toISOString()
+      const goal = request.goal_id ? ` goal=${request.goal_id}` : ""
+      const goalRun = request.goal_run_id ? ` goal_run=${request.goal_run_id}` : ""
+      const refs = request.evidence_refs.length > 0 ? ` refs=${request.evidence_refs.join(",")}` : ""
+      lines.push(
+        `- ${ts} request=${request.request_id} agent=${request.agent} session=${request.session_id}${goal}${goalRun} ` +
+          `blocking=${request.blocking} severity=${request.severity}: ${truncate(request.summary, 220)}`,
+      )
+      lines.push(`  requested_decision: ${truncate(request.requested_decision, 240)}`)
+      lines.push(`  details: ${truncate(request.details, 420)}${refs}`)
+    }
+    lines.push(
+      `These requests are durable worker-to-orchestrator A2A messages. Answer a request with ` +
+        `respond_agent_coordination(request_id=...) or choose another visible lifecycle action. ` +
+        `Do not use private steering without a request id.`,
     )
   }
 

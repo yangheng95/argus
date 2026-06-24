@@ -122,6 +122,8 @@ export type EngineArtifactKind =
   | "orchestrator-stream-error"
   | "tool-execute-error"
   | "stage_continuation_request"
+  | "agent_coordination_request"
+  | "agent_coordination_response"
 export type EngineAcceptanceStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"

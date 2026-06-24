@@ -84,6 +84,9 @@ const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set([
   "task.blocked",
   "task.rewound",
   "task.message",
+  "agent.coordination.requested",
+  "agent.coordination.responded",
+  "agent.coordination.cancelled",
   "acceptance.ready",
   "acceptance.evidence.updated",
 ])
@@ -136,6 +139,7 @@ const BOARD_INVALIDATING_PREFIXES = [
   "evaluation.",
   "interaction.",
   "workflow.",
+  "agent.coordination.",
 ] as const
 
 const BOARD_INVALIDATING_EXACT_ACCEPTANCE_TYPES = new Set(["acceptance.ready", "acceptance.evidence.updated"])
