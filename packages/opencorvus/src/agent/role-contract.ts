@@ -1,5 +1,6 @@
 export type AgentRoleID =
   | "coding"
+  | "coding-assistant"
   | "build"
   | "visual-qa"
   | "general"
@@ -20,168 +21,335 @@ export type AgentRoleID =
   | "frontend-research"
   | "goal-workload-analyst"
 
+export type AgentArchetype = "host" | "worker"
+export type PromptProfileTargetMode = "none" | "user" | "builtin"
+
 export interface AgentRoleContract {
   id: AgentRoleID
+  archetype: AgentArchetype
   description: string
   promptEditable: boolean
   defaultPromptRequired: boolean
   promptConfigMode: "override" | "append" | "none"
+  promptProfileTarget: PromptProfileTargetMode
+  skillMountable: boolean
+  agentOwnedSessionKind: boolean
+  runtimeContractRequired: boolean
+  exactRuntimeContract: boolean
+  liveRuntimeContinuation: boolean
 }
 
 export namespace AgentRoleContract {
   export const all: Record<AgentRoleID, AgentRoleContract> = {
     coding: {
       id: "coding",
+      archetype: "worker",
       description: "Direct coding assistant for ad hoc workspace edits outside the task workflow.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "override",
+      promptProfileTarget: "user",
+      skillMountable: false,
+      agentOwnedSessionKind: false,
+      runtimeContractRequired: false,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
+    },
+    "coding-assistant": {
+      id: "coding-assistant",
+      archetype: "worker",
+      description:
+        "Right-sidebar coding assistant session. Uses the project conversation panel and executes tools based on configured permissions.",
+      promptEditable: true,
+      defaultPromptRequired: true,
+      promptConfigMode: "override",
+      promptProfileTarget: "user",
+      skillMountable: false,
+      agentOwnedSessionKind: false,
+      runtimeContractRequired: false,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
     },
     build: {
       id: "build",
+      archetype: "worker",
       description:
         "General workflow executor. Produces one scoped task or goal deliverable through the build-core terminal-report contract.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: true,
     },
     "visual-qa": {
       id: "visual-qa",
+      archetype: "worker",
       description:
         "Focused visual QA (Quality Assurance) agent. Uses browser/runtime evidence to test frontend GUI fidelity and observable functions, may repair in-scope defects, and reports reproducible visual and functional findings instead of relying on fixed screenshot baselines.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
     general: {
       id: "general",
+      archetype: "worker",
       description: "General-purpose subagent for multi-step research and parallel work.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "override",
+      promptProfileTarget: "user",
+      skillMountable: false,
+      agentOwnedSessionKind: false,
+      runtimeContractRequired: false,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
     },
     explore: {
       id: "explore",
+      archetype: "worker",
       description: "Read-oriented codebase exploration subagent for fast file, symbol, and code search.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "override",
+      promptProfileTarget: "user",
+      skillMountable: false,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: true,
     },
     compaction: {
       id: "compaction",
+      archetype: "worker",
       description: "Internal summary agent for transcript checkpoint compaction.",
       promptEditable: false,
       defaultPromptRequired: false,
       promptConfigMode: "none",
+      promptProfileTarget: "none",
+      skillMountable: false,
+      agentOwnedSessionKind: false,
+      runtimeContractRequired: false,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
     },
     title: {
       id: "title",
+      archetype: "worker",
       description: "Internal title agent for generating concise session titles.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "override",
+      promptProfileTarget: "none",
+      skillMountable: false,
+      agentOwnedSessionKind: false,
+      runtimeContractRequired: false,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
     },
     summary: {
       id: "summary",
+      archetype: "worker",
       description: "Internal follow-up summary model-routing slot; its prompt is built by the caller.",
       promptEditable: false,
       defaultPromptRequired: false,
       promptConfigMode: "none",
+      promptProfileTarget: "none",
+      skillMountable: false,
+      agentOwnedSessionKind: false,
+      runtimeContractRequired: false,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
     },
     control: {
       id: "control",
+      archetype: "worker",
       description: "Control-plane agent. Routes panel and gateway natural-language requests through the panel tool.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "override",
+      promptProfileTarget: "none",
+      skillMountable: false,
+      agentOwnedSessionKind: false,
+      runtimeContractRequired: false,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
     },
     orchestrator: {
       id: "orchestrator",
+      archetype: "host",
       description: "Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools.",
       promptEditable: false,
       defaultPromptRequired: false,
       promptConfigMode: "none",
+      promptProfileTarget: "builtin",
+      skillMountable: false,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
     },
     mission: {
       id: "mission",
+      archetype: "host",
       description:
         "Mission primary agent. Owns long-running user goals: intake and clarification, the mission contract and state, the roadmap, and reconciliation of delivered work. A full coordinator (reads/analyses the project, plans, delegates, summarises, asks the user) that delegates execution to orchestrator-led squad/team tasks rather than writing code itself.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: false,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: false,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: false,
     },
     requirements: {
       id: "requirements",
+      archetype: "worker",
       description:
         "Requirements agent. Extracts user requirements and foundational technical decisions; it does not produce goals.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
     architect: {
       id: "architect",
+      archetype: "worker",
       description: "Architect agent. Owns the goal graph, traceability, assembly ownership, and cross-goal contracts.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
     "frontend-design": {
       id: "frontend-design",
+      archetype: "worker",
       description:
         "Frontend design and webpage-replica agent. Single-shot task-scope evidence/handoff producer: dispatch it once to convert visual/reference evidence into the authoritative frontend implementation template, fillable modules, component inventory, material inventory, source handoff, and visual/data contracts; do not use it as a repeatable repair, retry, or implementation iteration agent after its handoff exists. For ainvest webpage rewrite work, generated code and PRD/SPEC/report material are reference inputs only; the rewritten webpage must be based on ainvest-frontend-design. It is not the owner for PRD/SPEC/report webpage research unless the requested deliverable is UI implementation or replication.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
     "intent-analysis": {
       id: "intent-analysis",
+      archetype: "worker",
       description:
         "Intent-analysis agent. Disambiguates the raw request into intent, complexity, slots, missing info, and clarifications.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
     integrity: {
       id: "integrity",
+      archetype: "worker",
       description:
         "Integrity reviewer. Audits requirement and goal integrity and owns final session-bound acceptance review, including runtime, frontend, visual, and rejection-detail evidence.",
       promptEditable: false,
       defaultPromptRequired: false,
       promptConfigMode: "none",
+      promptProfileTarget: "builtin",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: false,
+      liveRuntimeContinuation: true,
     },
     "fact-check": {
       id: "fact-check",
+      archetype: "worker",
       description:
         "Fact-check agent. Verifies factual claims (APIs, library versions, numbers, paths, historical decisions) emitted by worker agents in their terminal report `fact_check_items[]`. Dispatched by the orchestrator after integrity pass; outputs structured verified/corrected/unresolved findings with evidence pointers.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
     "deep-research": {
       id: "deep-research",
+      archetype: "worker",
       description:
         "Deep research agent. Read-only durable evidence gatherer for multi-source external facts, source maps, current documentation, API/industry research, PRD/SPEC/report source material, constraints, document outlines, and open questions. Dedicated webpage functional/visual investigation division belongs to frontend-research. Deep research never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
     "frontend-research": {
       id: "frontend-research",
+      archetype: "worker",
       description:
         "Frontend research agent. Source-page-scoped investigation publisher: dispatch one session per source page URL so the host can prepare rendered webpage evidence for that page, publish source-backed webpage investigation work packets, then emit a frontend_research_brief with an investigation-partition webpage_contract covering visible surfaces, component questions, layout/style checks, interaction/data checks, page interface verification, API adaptation documentation handoff cues, fidelity risks, document outlines, constraints, and open questions; do not reuse the same page scope as a repeatable crawler, repair, retry, or implementation iteration agent after its brief exists. Same source URL with a different focus, viewport, interaction state, component, region, fidelity risk, or missing-detail question is still the same page scope. For ainvest webpage rewrite work, any generated code snippets, PRD outline, or document material are reference inputs only; downstream webpage rewriting must be based on ainvest-frontend-design. It does not create the frontend implementation template, does not call build, and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
     "goal-workload-analyst": {
       id: "goal-workload-analyst",
+      archetype: "worker",
       description:
         "Goal workload analyst. Read-only reviewer that deeply reads the full template and the architect goal graph, flags goals too large or under-specified for one autonomous build (decomposition_concern), and emits a per-goal execution inventory plus an anti-underestimation brief. References existing contract/coverage ids rather than restating them, and never creates or modifies goals.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
+      promptProfileTarget: "user",
+      skillMountable: true,
+      agentOwnedSessionKind: true,
+      runtimeContractRequired: true,
+      exactRuntimeContract: true,
+      liveRuntimeContinuation: true,
     },
   }
+
+  export const ids = Object.keys(all) as AgentRoleID[]
 
   export function get(id: AgentRoleID): AgentRoleContract {
     return all[id]
@@ -191,7 +359,23 @@ export namespace AgentRoleContract {
     return all[id].promptConfigMode
   }
 
+  export function promptProfileTargetMode(id: AgentRoleID): PromptProfileTargetMode {
+    return get(id).promptProfileTarget
+  }
+
   export function description(id: AgentRoleID): string {
     return get(id).description
+  }
+
+  export function archetype(id: AgentRoleID): AgentArchetype {
+    return get(id).archetype
+  }
+
+  export function promptProfileTargets(mode?: PromptProfileTargetMode): AgentRoleID[] {
+    return ids.filter((id) => (mode ? get(id).promptProfileTarget === mode : get(id).promptProfileTarget !== "none"))
+  }
+
+  export function skillMountable(id: AgentRoleID): boolean {
+    return get(id).skillMountable
   }
 }

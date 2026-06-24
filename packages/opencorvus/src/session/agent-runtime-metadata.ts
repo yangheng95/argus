@@ -1,67 +1,36 @@
-import type { SessionKind } from "./session.sql"
+import { AgentRoleContract, type AgentRoleID } from "@/agent/role-contract"
+import { SESSION_KINDS, type SessionKind } from "./session.sql"
+
+function contractForSessionKind(kind: SessionKind) {
+  return Object.hasOwn(AgentRoleContract.all, kind)
+    ? AgentRoleContract.get(kind as Extract<AgentRoleID, SessionKind>)
+    : undefined
+}
+
+function filterSessionKinds(
+  predicate: (kind: SessionKind, contract: ReturnType<typeof contractForSessionKind>) => boolean,
+): readonly SessionKind[] {
+  return SESSION_KINDS.filter((kind) => predicate(kind, contractForSessionKind(kind)))
+}
 
 export namespace AgentRuntimeMetadata {
-  export const AGENT_OWNED_SESSION_KINDS = [
-    "orchestrator",
-    "mission",
-    "intent-analysis",
-    "requirements",
-    "frontend-design",
-    "goal-workload-analyst",
-    "architect",
-    "integrity",
-    "fact-check",
-    "acceptance",
-    "build",
-    "explore",
-    "deep-research",
-    "frontend-research",
-    "visual-qa",
-  ] as const satisfies readonly SessionKind[]
+  export const AGENT_OWNED_SESSION_KINDS = filterSessionKinds((kind, contract) => {
+    if (kind === "acceptance") return true
+    return contract?.agentOwnedSessionKind === true
+  })
 
-  export const RUNTIME_CONTRACT_REQUIRED_AGENT_KINDS = [
-    "architect",
-    "build",
-    "acceptance",
-    "explore",
-    "fact-check",
-    "frontend-design",
-    "frontend-research",
-    "goal-workload-analyst",
-    "integrity",
-    "intent-analysis",
-    "orchestrator",
-    "deep-research",
-    "requirements",
-    "visual-qa",
-  ] as const satisfies readonly SessionKind[]
+  export const RUNTIME_CONTRACT_REQUIRED_AGENT_KINDS = filterSessionKinds((kind, contract) => {
+    if (kind === "acceptance") return true
+    return contract?.runtimeContractRequired === true
+  })
 
-  export const EXACT_RUNTIME_CONTRACT_AGENT_KINDS = [
-    "architect",
-    "fact-check",
-    "frontend-design",
-    "frontend-research",
-    "goal-workload-analyst",
-    "intent-analysis",
-    "requirements",
-    "deep-research",
-    "visual-qa",
-  ] as const satisfies readonly SessionKind[]
+  export const EXACT_RUNTIME_CONTRACT_AGENT_KINDS = filterSessionKinds(
+    (_kind, contract) => contract?.exactRuntimeContract === true,
+  )
 
-  export const LIVE_RUNTIME_CONTINUATION_SESSION_KINDS = [
-    "architect",
-    "build",
-    "explore",
-    "fact-check",
-    "frontend-design",
-    "frontend-research",
-    "goal-workload-analyst",
-    "integrity",
-    "intent-analysis",
-    "deep-research",
-    "requirements",
-    "visual-qa",
-  ] as const satisfies readonly SessionKind[]
+  export const LIVE_RUNTIME_CONTINUATION_SESSION_KINDS = filterSessionKinds(
+    (_kind, contract) => contract?.liveRuntimeContinuation === true,
+  )
 
   export const DISABLED_AUTOMATIC_COMPACTION_SESSION_KINDS = [
     "acceptance",

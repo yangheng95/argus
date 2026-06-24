@@ -29,6 +29,7 @@ export interface AgentSkillMountMatrix {
     mode: "subagent" | "primary" | "all"
     native?: boolean
     hidden?: boolean
+    skill_mountable: boolean
     skill_tool_available: boolean
   }>
   matrix: Array<{

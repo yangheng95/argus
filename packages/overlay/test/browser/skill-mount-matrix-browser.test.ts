@@ -88,6 +88,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "primary",
       hidden: false,
       native: true,
+      skill_mountable: true,
       skill_tool_available: true,
     },
     {
@@ -96,6 +97,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "primary",
       hidden: false,
       native: true,
+      skill_mountable: true,
       skill_tool_available: true,
     },
     {
@@ -104,6 +106,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "subagent",
       hidden: false,
       native: true,
+      skill_mountable: true,
       skill_tool_available: true,
     },
     {
@@ -112,6 +115,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "subagent",
       hidden: false,
       native: true,
+      skill_mountable: true,
       skill_tool_available: true,
     },
     {
@@ -120,6 +124,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "subagent",
       hidden: false,
       native: true,
+      skill_mountable: true,
       skill_tool_available: true,
     },
     {
@@ -128,6 +133,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "subagent",
       hidden: false,
       native: true,
+      skill_mountable: true,
       skill_tool_available: true,
     },
     {
@@ -136,6 +142,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "subagent",
       hidden: false,
       native: true,
+      skill_mountable: true,
       skill_tool_available: true,
     },
     {
@@ -144,6 +151,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "subagent",
       hidden: false,
       native: true,
+      skill_mountable: true,
       skill_tool_available: true,
     },
   ] as const
@@ -154,6 +162,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "primary",
       hidden: true,
       native: true,
+      skill_mountable: false,
       skill_tool_available: false,
     },
     {
@@ -162,6 +171,7 @@ test("agent skill mount matrix renders pool warnings and agent rows without comp
       mode: "primary",
       hidden: true,
       native: true,
+      skill_mountable: false,
       skill_tool_available: false,
     },
   ] as const

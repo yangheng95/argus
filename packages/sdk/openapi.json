@@ -9497,6 +9497,9 @@
                           "hidden": {
                             "type": "boolean"
                           },
+                          "skill_mountable": {
+                            "type": "boolean"
+                          },
                           "skill_tool_available": {
                             "type": "boolean"
                           }
@@ -9504,6 +9507,7 @@
                         "required": [
                           "name",
                           "mode",
+                          "skill_mountable",
                           "skill_tool_available"
                         ]
                       }
@@ -9877,6 +9881,9 @@
                           "hidden": {
                             "type": "boolean"
                           },
+                          "skill_mountable": {
+                            "type": "boolean"
+                          },
                           "skill_tool_available": {
                             "type": "boolean"
                           }
@@ -9884,6 +9891,7 @@
                         "required": [
                           "name",
                           "mode",
+                          "skill_mountable",
                           "skill_tool_available"
                         ]
                       }
@@ -10278,6 +10286,9 @@
                           "hidden": {
                             "type": "boolean"
                           },
+                          "skill_mountable": {
+                            "type": "boolean"
+                          },
                           "skill_tool_available": {
                             "type": "boolean"
                           }
@@ -10285,6 +10296,7 @@
                         "required": [
                           "name",
                           "mode",
+                          "skill_mountable",
                           "skill_tool_available"
                         ]
                       }
@@ -10679,6 +10691,9 @@
                           "hidden": {
                             "type": "boolean"
                           },
+                          "skill_mountable": {
+                            "type": "boolean"
+                          },
                           "skill_tool_available": {
                             "type": "boolean"
                           }
@@ -10686,6 +10701,7 @@
                         "required": [
                           "name",
                           "mode",
+                          "skill_mountable",
                           "skill_tool_available"
                         ]
                       }
@@ -40851,6 +40867,10 @@
             "description": "Additional instructions appended after a code-owned stage-agent core prompt.",
             "type": "string"
           },
+          "skill_mountable": {
+            "description": "Whether this agent may receive operator-managed skill mounts. Custom agents default false; built-in agents must match their canonical role contract.",
+            "type": "boolean"
+          },
           "disable": {
             "type": "boolean"
           },
@@ -46131,6 +46151,16 @@
           },
           "color": {
             "type": "string"
+          },
+          "archetype": {
+            "type": "string",
+            "enum": [
+              "host",
+              "worker"
+            ]
+          },
+          "skill_mountable": {
+            "type": "boolean"
           },
           "permission": {
             "$ref": "#/components/schemas/PermissionRuleset"
