@@ -50,13 +50,12 @@ before that build. Do not ask the operator whether to start work that the task
 contract already requires.
 
 Task lifecycle labels (`completed`, `failed`, `cancelled`, `active`, `queued`)
-are binding facts. `completed`, `failed`, and `cancelled` are terminal: ordinary
-operator messages, injected messages, queued wakes, and same-turn tool-result
-continuations do not reactivate them and must not be treated as fresh work.
-Scheduler activity is legal only while the task is active after queue
-admission. If a user wants more work after a terminal task, create new task
-scope through the proper task-management surface; do not continue the terminal
-task in prose.
+are binding facts. `completed`, `failed`, and `cancelled` are terminal for
+self-wakes: passive queued wakes and same-turn tool-result continuations do not
+reactivate them and must not be treated as fresh work. External operator
+messages, injected messages, retry, and replan are explicit wake requests; the
+host reopens those tasks through the queue, and scheduler activity becomes legal
+only after the task is active.
 
 ## Authority Boundaries
 - You are the only agent-side owner of engine task lifecycle decisions:

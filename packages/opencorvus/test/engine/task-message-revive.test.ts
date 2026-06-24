@@ -263,7 +263,7 @@ describe("EngineService.recordOperatorNote — active blocked run wake", () => {
     })
   })
 
-  test("operator notes on failed tasks record the note without waking terminal work", async () => {
+  test("operator notes on failed tasks reopen the task and dispatch through the queue", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -321,22 +321,22 @@ describe("EngineService.recordOperatorNote — active blocked run wake", () => {
         const result = await EngineService.recordOperatorNote(taskID, "please continue this failed task")
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(result).toMatchObject({ resumed: false, status: "failed" })
+        expect(result).toMatchObject({ resumed: true, status: "queued" })
         const task = findTask(taskID)!
-        expect(deriveTaskStatus(task)).toBe("failed")
-        expect(task.error).toBe("previous failure")
-        expect(task.time_completed).toBe(now + 1)
+        expect(deriveTaskStatus(task)).toBe("active")
+        expect(task.error).toBeNull()
+        expect(task.time_completed).toBeNull()
         expect((task.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
-        const blocked = findRun(runID)
-        expect(blocked?.status).toBe("blocked")
-        expect(blocked?.blocking_reason).toBe("orchestrator_stream_error")
-        expect(blocked?.error).toBe("session prompt loop finished")
-        expect(runTaskLoop).not.toHaveBeenCalled()
+        const reopened = findRun(runID)
+        expect(reopened?.status).toBe("running")
+        expect(reopened?.blocking_reason).toBeNull()
+        expect(reopened?.error).toBeNull()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
   })
 
-  test("operator notes on completed tasks record the note without waking terminal work", async () => {
+  test("operator notes on completed tasks reopen the task and dispatch through the queue", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -367,17 +367,17 @@ describe("EngineService.recordOperatorNote — active blocked run wake", () => {
         const result = await EngineService.recordOperatorNote(taskID, "continue this completed task")
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(result).toMatchObject({ resumed: false, status: "completed" })
+        expect(result).toMatchObject({ resumed: true, status: "queued" })
         const task = findTask(taskID)!
-        expect(deriveTaskStatus(task)).toBe("completed")
+        expect(deriveTaskStatus(task)).toBe("active")
         expect(task.error).toBeNull()
-        expect(task.time_completed).toBe(now)
-        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(task.time_completed).toBeNull()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
   })
 
-  test("operator notes on cancelled tasks preserve cancellation without waking terminal work", async () => {
+  test("operator notes on cancelled tasks reopen the task and dispatch through the queue", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -409,14 +409,14 @@ describe("EngineService.recordOperatorNote — active blocked run wake", () => {
         const result = await EngineService.recordOperatorNote(taskID, "continue this cancelled task")
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(result).toMatchObject({ resumed: false, status: "cancelled" })
+        expect(result).toMatchObject({ resumed: true, status: "queued" })
         const task = findTask(taskID)!
-        expect(deriveTaskStatus(task)).toBe("cancelled")
-        expect(task.error).toBe("task cancelled")
-        expect(task.time_completed).toBe(now)
-        expect((task.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBe(true)
+        expect(deriveTaskStatus(task)).toBe("active")
+        expect(task.error).toBeNull()
+        expect(task.time_completed).toBeNull()
+        expect((task.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBeUndefined()
         expect((task.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
-        expect(runTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
       },
     })
   })

@@ -573,7 +573,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message appends to a failed task without waking the orchestrator", async () => {
+  test("POST /task/:taskID/message reopens a failed task and wakes the orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -581,7 +581,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const completedAt = now + 1
@@ -625,14 +625,15 @@ describe("task message routes", () => {
         const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(false)
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(body.should_resume).toBe(true)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(row).toBeDefined()
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("failed")
-        expect(row?.time_completed).toBe(completedAt)
-        expect(row?.error).toBe("previous failure")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_started).toBeNull()
+        expect(row?.time_completed).toBeNull()
+        expect(row?.error).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -691,21 +692,22 @@ describe("task message routes", () => {
         const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(false)
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(body.should_resume).toBe(true)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         expect(await Session.messages({ sessionID: root.id })).toHaveLength(2)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
-        expect(row?.time_completed).toBe(now + 1)
-        expect(row?.error).toBe("task cancelled")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_started).toBeNull()
+        expect(row?.time_completed).toBeNull()
+        expect(row?.error).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
-        expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBe(true)
+        expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBeUndefined()
       },
     })
   })
 
-  test("POST /task/:taskID/message appends to a cancelled task without waking the orchestrator", async () => {
+  test("POST /task/:taskID/message reopens a cancelled task and wakes the orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -713,7 +715,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "cancelled task" })
@@ -756,15 +758,16 @@ describe("task message routes", () => {
         const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(false)
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(body.should_resume).toBe(true)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         expect(await Session.messages({ sessionID: root.id })).toHaveLength(2)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
-        expect(row?.time_completed).toBe(now + 1)
-        expect(row?.error).toBe("task cancelled")
-        expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBe(true)
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_started).toBeNull()
+        expect(row?.time_completed).toBeNull()
+        expect(row?.error).toBeNull()
+        expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBeUndefined()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -985,7 +988,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message appends to a completed task without waking the orchestrator", async () => {
+  test("POST /task/:taskID/message reopens a completed task and wakes the orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -993,7 +996,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "completed task" })
@@ -1035,19 +1038,19 @@ describe("task message routes", () => {
         const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(false)
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(body.should_resume).toBe(true)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("completed")
-        expect(row?.time_started).toBe(now)
-        expect(row?.time_completed).toBe(now + 1)
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_started).toBeNull()
+        expect(row?.time_completed).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
   })
 
-  test("POST /task/:taskID/message leaves a completed same-cwd task terminal", async () => {
+  test("POST /task/:taskID/message queues a completed same-cwd task behind active work", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -1071,22 +1074,23 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; should_resume: boolean }
+        const body = (await response.json()) as { kind: string; should_resume: boolean; wake_status: string }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.should_resume).toBe(false)
+        expect(body.wake_status).toBe("queued")
         expect(runTaskLoop).not.toHaveBeenCalled()
 
         const completed = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, completedTaskID)).get(),
         )
-        expect(completed ? deriveTaskStatus(completed) : undefined).toBe("completed")
-        expect(Queue.directoryQueueSnapshot(tmp.path).queuedTaskIDs).not.toContain(completedTaskID)
+        expect(completed ? deriveTaskStatus(completed) : undefined).toBe("queued")
+        expect(Queue.directoryQueueSnapshot(tmp.path).queuedTaskIDs).toContain(completedTaskID)
       },
     })
   })
 
-  test("POST /task/:taskID/inject leaves a completed same-cwd task terminal", async () => {
+  test("POST /task/:taskID/inject queues a completed same-cwd task behind active work", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -1120,15 +1124,15 @@ describe("task message routes", () => {
           appended: true,
           orchestratorWoken: false,
           executorResumed: false,
-          status: "completed",
+          status: "queued",
         })
         expect(runTaskLoop).not.toHaveBeenCalled()
 
         const completed = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, completedTaskID)).get(),
         )
-        expect(completed ? deriveTaskStatus(completed) : undefined).toBe("completed")
-        expect(Queue.directoryQueueSnapshot(tmp.path).queuedTaskIDs).not.toContain(completedTaskID)
+        expect(completed ? deriveTaskStatus(completed) : undefined).toBe("queued")
+        expect(Queue.directoryQueueSnapshot(tmp.path).queuedTaskIDs).toContain(completedTaskID)
       },
     })
   })
@@ -1548,7 +1552,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/inject appends to failed terminal task without waking orchestrator", async () => {
+  test("POST /task/:taskID/inject reopens failed terminal task and wakes orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -1556,7 +1560,7 @@ describe("task message routes", () => {
       fn: async () => {
         const app = Server.App()
         await bootstrapProjectApp(app, tmp.path)
-        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue("started")
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         const root = await Session.create({ kind: "root", title: "inject terminal" })
@@ -1604,16 +1608,17 @@ describe("task message routes", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body).toEqual({
           appended: true,
-          orchestratorWoken: false,
+          orchestratorWoken: true,
           executorResumed: false,
-          status: "failed",
+          status: "queued",
         })
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
         const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("failed")
-        expect(row?.time_completed).toBe(now + 1)
-        expect(row?.error).toBe("previous failure")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_started).toBeNull()
+        expect(row?.time_completed).toBeNull()
+        expect(row?.error).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
