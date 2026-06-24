@@ -39,6 +39,44 @@ function seedTask(taskID: string, now: number) {
 }
 
 describe("agent coordination artifacts", () => {
+  test("request rejects sessions owned by a different task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const firstTaskID = Identifier.ascending("task")
+        const secondTaskID = Identifier.ascending("task")
+        seedTask(firstTaskID, now)
+        seedTask(secondTaskID, now)
+        const firstRoot = await Session.create({ kind: "root", title: "first task root" })
+        const secondRoot = await Session.create({ kind: "root", title: "second task root" })
+        const worker = await Session.create({
+          kind: "frontend-research",
+          parentID: firstRoot.id,
+          title: "first task worker",
+        })
+        Database.use((db) => {
+          db.update(EngineTaskTable).set({ session_id: firstRoot.id }).where(eq(EngineTaskTable.id, firstTaskID)).run()
+          db.update(EngineTaskTable).set({ session_id: secondRoot.id }).where(eq(EngineTaskTable.id, secondTaskID)).run()
+        })
+
+        expect(() =>
+          createAgentCoordinationRequest({
+            taskID: secondTaskID,
+            sessionID: worker.id,
+            agent: "frontend-research",
+            messageID: "msg_wrong_task",
+            summary: "Wrong task",
+            details: "This session belongs to a different task.",
+            blocking: true,
+            requestedDecision: "continue",
+          }),
+        ).toThrow(/belongs to task/)
+      },
+    })
+  })
+
   test("request persists, emits a visible event, and appears in task description", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -144,14 +182,29 @@ describe("agent coordination artifacts", () => {
         })
 
         expect(response.payload.decision).toBe("redispatch")
+        expect(() =>
+          createAgentCoordinationResponse({
+            taskID,
+            requestID: request.payload.request_id,
+            orchestratorSessionID: "ses_orchestrator_response_2",
+            orchestratorMessageID: "msg_orchestrator_response_2",
+            decision: "fail_task",
+            reason: "A second response must not consume the same request.",
+            now: now + 2,
+          }),
+        ).toThrow(/responded|claimed/)
         expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
           "responded",
         )
         expect(listPendingAgentCoordinationRequests(taskID)).toHaveLength(0)
-        const rows = Database.use((db) =>
-          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.id, response.artifactID)).all(),
+        const responseRows = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(eq(EngineArtifactTable.kind, "agent_coordination_response"))
+            .all(),
         )
-        expect(rows[0]?.kind).toBe("agent_coordination_response")
+        expect(responseRows.map((row) => row.id)).toEqual([response.artifactID])
 
         await new Promise((resolve) => setTimeout(resolve, 0))
         const event = ProtocolStore.listTaskEvents(taskID).find((row) => row.type === "agent.coordination.responded")

@@ -1679,6 +1679,28 @@ async function validateAgentCoordinationContinueTarget(input: {
   return { session, kind, model, runtimeContract }
 }
 
+async function startAgentCoordinationContinuation(input: {
+  session: Awaited<ReturnType<typeof Session.get>>
+}): Promise<{ loopPromise: ReturnType<typeof SessionPrompt.loop> }> {
+  const loopPromise: ReturnType<typeof SessionPrompt.loop> = Promise.resolve(
+    SessionContext.provide(input.session, () =>
+      Instance.provide({
+        directory: input.session.directory,
+        fn: () => SessionPrompt.loop({ sessionID: input.session.id, resume_existing: true }),
+      }),
+    ),
+  ).then((result) => result)
+  const immediate = await Promise.race([
+    loopPromise.then(
+      () => ({ type: "settled" as const }),
+      (error) => ({ type: "failed" as const, error }),
+    ),
+    new Promise<{ type: "scheduled" }>((resolve) => setTimeout(() => resolve({ type: "scheduled" }), 0)),
+  ])
+  if (immediate.type === "failed") throw immediate.error
+  return { loopPromise }
+}
+
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -6617,6 +6639,24 @@ export function createOrchestratorTools(input: {
               },
             ],
           })
+          let continuation: { loopPromise: ReturnType<typeof SessionPrompt.loop> }
+          try {
+            continuation = await startAgentCoordinationContinuation({ session: target.session })
+          } catch (error) {
+            await Session.removeMessage({
+              sessionID: request.payload.session_id,
+              messageID: workerMessage.info.id,
+            }).catch((removeError) => {
+              log.error("agent coordination failed-continuation rollback failed", {
+                taskID,
+                requestID: request.payload.request_id,
+                sessionID: request.payload.session_id,
+                messageID: workerMessage.info.id,
+                error: removeError,
+              })
+            })
+            throw error
+          }
           let response
           try {
             response = createAgentCoordinationResponse({
@@ -6645,12 +6685,7 @@ export function createOrchestratorTools(input: {
             throw error
           }
 
-          void SessionContext.provide(target.session, () =>
-            Instance.provide({
-              directory: target.session.directory,
-              fn: () => SessionPrompt.loop({ sessionID: target.session.id }),
-            }),
-          ).catch((error) => {
+          void continuation.loopPromise.catch((error) => {
             log.error("agent coordination continue loop failed", {
               taskID,
               requestID: request.payload.request_id,

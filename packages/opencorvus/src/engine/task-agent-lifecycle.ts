@@ -6,7 +6,7 @@ import {
   listLiveOrchestratorToolOwnership,
   type OrchestratorToolOwnershipRow,
 } from "./tool-ownership"
-import { cancelPendingAgentCoordinationRequestsForSession } from "./agent-coordination"
+import { cancelPendingAgentCoordinationRequestsForTask } from "./agent-coordination"
 import {
   cancelSessionPromptInScope,
   type TaskAgentPromptSession,
@@ -92,14 +92,10 @@ export async function requestTaskAgentLifecycleCancellation(input: {
     }
   }
 
-  let pendingCoordinationRequestsCancelled = 0
-  for (const sessionID of handles.sessionIDs) {
-    pendingCoordinationRequestsCancelled += cancelPendingAgentCoordinationRequestsForSession({
-      taskID: input.task.id,
-      sessionID,
-      reason: input.reason,
-    })
-  }
+  const pendingCoordinationRequestsCancelled = cancelPendingAgentCoordinationRequestsForTask({
+    taskID: input.task.id,
+    reason: input.reason,
+  })
 
   return {
     taskID: handles.taskID,
