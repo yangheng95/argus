@@ -59,6 +59,13 @@ and dominated the compact ledger row. The project action slot must be compact:
 18px square hit visuals with 10px icons, while preserving accessible button
 labels and keyboard focus through the existing button primitive.
 
+The second visual repair removes constant project-action chrome from the resting
+ledger state. Copy/rename/delete are auxiliary project tools, so they reveal on
+project-row hover or keyboard focus instead of competing with project names on
+every row. The project-specific CSS also overrides the global `.oc-button > svg`
+icon size; otherwise the primitive forces direct SVG children back to chip-size
+icons and makes the compact action slot look broken.
+
 ## Acceptance
 
 1. Task ledger project groups show copy, rename, and delete as distinct
@@ -73,7 +80,7 @@ labels and keyboard focus through the existing button primitive.
    visible through tooltip/parent context and remains the request-routing key.
 6. Source directories are not renamed or copied.
 7. Project action buttons stay visually subordinate to the project header:
-   18px square visual slots, compact spacing, and no text overlap on desktop
-   or mobile.
+   18px square visual slots, 10px icons, compact spacing, hidden in the resting
+   row state, revealed on hover/focus, and no text overlap on desktop or mobile.
 8. Static, unit, OpenAPI, route-policy, typecheck, and browser visual checks
    pass.

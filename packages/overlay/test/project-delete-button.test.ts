@@ -53,6 +53,8 @@ describe("project delete button", () => {
     )
     expect(PROJECT_LEDGER_GROUP).toContain("onDeleteProject?: (directory: string) => void | Promise<void>")
     expect(PROJECT_LEDGER_GROUP).toContain("const customName = String(props.projectName ||")
+    expect(PROJECT_LEDGER_GROUP).toContain("const hasProjectActions = () =>")
+    expect(PROJECT_LEDGER_GROUP).toContain('data-project-actions={hasProjectActions() ? "true" : undefined}')
     expect(PROJECT_LEDGER_GROUP).toContain('class="project-group-head"')
     expect(PROJECT_LEDGER_GROUP).toContain('class="project-group-actions"')
     expect(PROJECT_LEDGER_GROUP).toContain('data-ui="project-group-toggle"')
@@ -122,11 +124,15 @@ describe("project delete button", () => {
 
   test("sidebar CSS reserves a stable project-group action slot", () => {
     expect(SIDEBAR_CSS).toMatch(/\.project-group-head\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/)
+    expect(SIDEBAR_CSS).toMatch(/\.project-group-head\s*\{[^}]*position:\s*relative;/)
     expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*display:\s*flex;/)
+    expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*position:\s*absolute;/)
     expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*gap:\s*calc\(1px \* var\(--ui-scale\)\);/)
-    expect(SIDEBAR_CSS).toMatch(
-      /\.project-group-actions\s*\{[^}]*padding-inline-end:\s*calc\(2px \* var\(--ui-scale\)\);/,
-    )
+    expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*opacity:\s*0;/)
+    expect(SIDEBAR_CSS).toMatch(/\.project-group-actions\s*\{[^}]*visibility:\s*hidden;/)
+    expect(SIDEBAR_CSS).toContain('.project-group[data-project-actions="true"]:hover .project-group-actions')
+    expect(SIDEBAR_CSS).toContain('.project-group[data-project-actions="true"]:focus-within .project-group-actions')
+    expect(SIDEBAR_CSS).toContain('.project-group[data-project-actions="true"]:hover .project-group-count')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-copy"]')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-rename"]')
     expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-delete"]')
@@ -137,6 +143,8 @@ describe("project delete button", () => {
     expect(SIDEBAR_CSS).toContain("--oc-button-height: calc(18px * var(--ui-scale));")
     expect(SIDEBAR_CSS).toContain("width: calc(18px * var(--ui-scale));")
     expect(SIDEBAR_CSS).toContain("min-width: calc(18px * var(--ui-scale));")
+    expect(SIDEBAR_CSS).toContain('.project-group .oc-button[data-ui="project-group-copy"] > svg')
+    expect(SIDEBAR_CSS).toContain("width: calc(10px * var(--ui-scale));")
     expect(SIDEBAR_CSS).toContain('.project-group-delete-icon[data-icon="confirm"]')
     expect(SIDEBAR_CSS).toContain('.oc-button[data-ui="project-group-delete"][data-confirm="true"]')
   })

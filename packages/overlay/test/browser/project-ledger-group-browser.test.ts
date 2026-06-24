@@ -137,22 +137,35 @@ async function verifyProjectGroup(
     const deleteButton = group.querySelector<HTMLButtonElement>('[data-ui="project-group-delete"]')
     const actions = group.querySelector<HTMLElement>(".project-group-actions")
     const body = group.querySelector<HTMLElement>(".project-group-body")
+    const actionStyle = actions ? window.getComputedStyle(actions) : null
+    const count = group.querySelector<HTMLElement>(".project-group-count")
+    const chevron = group.querySelector<HTMLElement>(".project-group-chevron")
+    const countStyle = count ? window.getComputedStyle(count) : null
+    const chevronStyle = chevron ? window.getComputedStyle(chevron) : null
     const headingControls = heading?.getAttribute("aria-controls") ?? ""
     const headingRect = heading?.getBoundingClientRect()
     const copyRect = copyButton?.getBoundingClientRect()
     const renameRect = renameButton?.getBoundingClientRect()
     const deleteRect = deleteButton?.getBoundingClientRect()
+    const copyIconRect = copyButton?.querySelector("svg")?.getBoundingClientRect()
+    const renameIconRect = renameButton?.querySelector("svg")?.getBoundingClientRect()
+    const deleteIconRect = deleteButton?.querySelector("svg")?.getBoundingClientRect()
     return {
       tag: group.tagName,
       className: group.className,
       collapsed: group.dataset.collapsed ?? "",
+      projectActions: group.dataset.projectActions ?? "",
       headingTag: heading?.tagName ?? "",
       headingClass: heading?.className ?? "",
       headingVariant: heading?.dataset.variant ?? "",
       headingSize: heading?.dataset.size ?? "",
       headingTone: heading?.dataset.tone ?? "",
       actionsExists: !!actions,
+      actionsOpacity: actionStyle?.opacity ?? "",
+      actionsVisibility: actionStyle?.visibility ?? "",
+      actionsPointerEvents: actionStyle?.pointerEvents ?? "",
       copyExists: !!copyButton,
+      copyInsideActions: !!actions?.contains(copyButton),
       copyInsideToggle: !!heading?.querySelector('[data-ui="project-group-copy"]'),
       copyTag: copyButton?.tagName ?? "",
       copyVariant: copyButton?.dataset.variant ?? "",
@@ -162,8 +175,11 @@ async function verifyProjectGroup(
       copyLabel: copyButton?.getAttribute("aria-label") ?? "",
       copyWidth: copyRect?.width ?? 0,
       copyHeight: copyRect?.height ?? 0,
-      copyAfterToggle: !!headingRect && !!copyRect && copyRect.left >= headingRect.right - 0.5,
+      copyIconWidth: copyIconRect?.width ?? 0,
+      copyIconHeight: copyIconRect?.height ?? 0,
+      copyNearHeaderEnd: !!headingRect && !!copyRect && copyRect.left >= headingRect.right - 70,
       renameExists: !!renameButton,
+      renameInsideActions: !!actions?.contains(renameButton),
       renameInsideToggle: !!heading?.querySelector('[data-ui="project-group-rename"]'),
       renameTag: renameButton?.tagName ?? "",
       renameVariant: renameButton?.dataset.variant ?? "",
@@ -173,8 +189,11 @@ async function verifyProjectGroup(
       renameLabel: renameButton?.getAttribute("aria-label") ?? "",
       renameWidth: renameRect?.width ?? 0,
       renameHeight: renameRect?.height ?? 0,
+      renameIconWidth: renameIconRect?.width ?? 0,
+      renameIconHeight: renameIconRect?.height ?? 0,
       renameAfterCopy: !!copyRect && !!renameRect && renameRect.left >= copyRect.right - 0.5,
       deleteExists: !!deleteButton,
+      deleteInsideActions: !!actions?.contains(deleteButton),
       deleteInsideToggle: !!heading?.querySelector('[data-ui="project-group-delete"]'),
       deleteTag: deleteButton?.tagName ?? "",
       deleteClass: deleteButton?.className ?? "",
@@ -187,13 +206,17 @@ async function verifyProjectGroup(
       deleteVisible: !!deleteButton && deleteButton.getClientRects().length > 0,
       deleteWidth: deleteRect?.width ?? 0,
       deleteHeight: deleteRect?.height ?? 0,
+      deleteIconWidth: deleteIconRect?.width ?? 0,
+      deleteIconHeight: deleteIconRect?.height ?? 0,
       deleteAfterRename: !!renameRect && !!deleteRect && deleteRect.left >= renameRect.right - 0.5,
       headingExpanded: heading?.getAttribute("aria-expanded") ?? "",
       headingControls,
       headingLabel: heading?.getAttribute("aria-label") ?? "",
       headingTabIndex: heading?.tabIndex ?? null,
       name: group.querySelector<HTMLElement>(".project-group-name")?.textContent?.trim() ?? "",
-      count: group.querySelector<HTMLElement>(".project-group-count")?.textContent?.trim() ?? "",
+      count: count?.textContent?.trim() ?? "",
+      countOpacity: countStyle?.opacity ?? "",
+      chevronOpacity: chevronStyle?.opacity ?? "",
       bodyID: body?.id ?? "",
       bodyMatchesControls:
         !!headingControls && body?.id === headingControls && document.getElementById(headingControls) === body,
@@ -210,6 +233,7 @@ async function verifyProjectGroup(
   assert.equal(openState.headingSize, "mini")
   assert.equal(openState.headingTone, "neutral")
   assert.equal(openState.actionsExists, true)
+  assert.equal(openState.projectActions, input.expectedProjectActions ? "true" : "")
   assert.equal(openState.copyExists, input.expectedProjectActions)
   assert.equal(openState.copyInsideToggle, false)
   assert.equal(openState.renameExists, input.expectedProjectActions)
@@ -218,6 +242,10 @@ async function verifyProjectGroup(
   assert.equal(openState.deleteInsideToggle, false)
   if (input.expectedProjectActions) {
     assert.equal(openState.copyTag, "BUTTON")
+    assert.equal(openState.actionsOpacity, "0")
+    assert.equal(openState.actionsVisibility, "hidden")
+    assert.equal(openState.actionsPointerEvents, "none")
+    assert.equal(openState.copyInsideActions, true)
     assert.equal(openState.copyVariant, "ghost")
     assert.equal(openState.copySize, "icon")
     assert.equal(openState.copyTone, "neutral")
@@ -226,8 +254,11 @@ async function verifyProjectGroup(
     assert.ok(openState.copyWidth <= 20, `copy width should be compact, got ${openState.copyWidth}`)
     assert.ok(openState.copyHeight <= 20, `copy height should be compact, got ${openState.copyHeight}`)
     assert.ok(Math.abs(openState.copyWidth - openState.copyHeight) <= 0.5)
-    assert.equal(openState.copyAfterToggle, true)
+    assert.ok(openState.copyIconWidth <= 11, `copy icon should be compact, got ${openState.copyIconWidth}`)
+    assert.ok(openState.copyIconHeight <= 11, `copy icon should be compact, got ${openState.copyIconHeight}`)
+    assert.equal(openState.copyNearHeaderEnd, true)
     assert.equal(openState.renameTag, "BUTTON")
+    assert.equal(openState.renameInsideActions, true)
     assert.equal(openState.renameVariant, "ghost")
     assert.equal(openState.renameSize, "icon")
     assert.equal(openState.renameTone, "neutral")
@@ -236,8 +267,11 @@ async function verifyProjectGroup(
     assert.ok(openState.renameWidth <= 20, `rename width should be compact, got ${openState.renameWidth}`)
     assert.ok(openState.renameHeight <= 20, `rename height should be compact, got ${openState.renameHeight}`)
     assert.ok(Math.abs(openState.renameWidth - openState.renameHeight) <= 0.5)
+    assert.ok(openState.renameIconWidth <= 11, `rename icon should be compact, got ${openState.renameIconWidth}`)
+    assert.ok(openState.renameIconHeight <= 11, `rename icon should be compact, got ${openState.renameIconHeight}`)
     assert.equal(openState.renameAfterCopy, true)
     assert.equal(openState.deleteTag, "BUTTON")
+    assert.equal(openState.deleteInsideActions, true)
     assert.equal(openState.deleteClass, "oc-button")
     assert.equal(openState.deleteVariant, "ghost")
     assert.equal(openState.deleteSize, "icon")
@@ -249,6 +283,8 @@ async function verifyProjectGroup(
     assert.ok(openState.deleteWidth <= 20, `delete width should be compact, got ${openState.deleteWidth}`)
     assert.ok(openState.deleteHeight <= 20, `delete height should be compact, got ${openState.deleteHeight}`)
     assert.ok(Math.abs(openState.deleteWidth - openState.deleteHeight) <= 0.5)
+    assert.ok(openState.deleteIconWidth <= 11, `delete icon should be compact, got ${openState.deleteIconWidth}`)
+    assert.ok(openState.deleteIconHeight <= 11, `delete icon should be compact, got ${openState.deleteIconHeight}`)
     assert.equal(openState.deleteAfterRename, true)
   }
   assert.equal(openState.headingExpanded, "true")
@@ -257,11 +293,81 @@ async function verifyProjectGroup(
   assert.equal(openState.headingTabIndex, 0)
   if (input.expectedName) assert.equal(openState.name, input.expectedName)
   assert.equal(openState.count, input.expectedCount)
+  assert.equal(openState.countOpacity, "1")
+  assert.equal(openState.chevronOpacity, "1")
   assert.equal(openState.bodyID, openState.headingControls)
   assert.equal(openState.bodyMatchesControls, true)
   assert.equal(openState.bodyVisible, true)
 
+  if (input.expectedProjectActions) {
+    await page.hover(`${input.groupSelector} .project-group-head`)
+    await page.waitForFunction(
+      (selector) => {
+        const actions = document.querySelector<HTMLElement>(`${selector} .project-group-actions`)
+        if (!actions) return false
+        const style = window.getComputedStyle(actions)
+        return style.visibility === "visible" && Number(style.opacity) > 0.95
+      },
+      { timeout: 5_000 },
+      input.groupSelector,
+    )
+    const hoverState = await page.$eval(input.groupSelector, (node) => {
+      const group = node as HTMLElement
+      const actions = group.querySelector<HTMLElement>(".project-group-actions")
+      const count = group.querySelector<HTMLElement>(".project-group-count")
+      const chevron = group.querySelector<HTMLElement>(".project-group-chevron")
+      const actionStyle = actions ? window.getComputedStyle(actions) : null
+      const countStyle = count ? window.getComputedStyle(count) : null
+      const chevronStyle = chevron ? window.getComputedStyle(chevron) : null
+      return {
+        actionsOpacity: actionStyle?.opacity ?? "",
+        actionsVisibility: actionStyle?.visibility ?? "",
+        actionsPointerEvents: actionStyle?.pointerEvents ?? "",
+        countOpacity: countStyle?.opacity ?? "",
+        chevronOpacity: chevronStyle?.opacity ?? "",
+      }
+    })
+    assert.ok(Number(hoverState.actionsOpacity) > 0.95)
+    assert.equal(hoverState.actionsVisibility, "visible")
+    assert.equal(hoverState.actionsPointerEvents, "auto")
+    assert.ok(Number(hoverState.countOpacity) < 0.05)
+    assert.ok(Number(hoverState.chevronOpacity) < 0.05)
+    await page.mouse.move(0, 0)
+    await page.waitForFunction(
+      (selector) => {
+        const actions = document.querySelector<HTMLElement>(`${selector} .project-group-actions`)
+        if (!actions) return false
+        const style = window.getComputedStyle(actions)
+        return style.visibility === "hidden" && Number(style.opacity) < 0.05
+      },
+      { timeout: 5_000 },
+      input.groupSelector,
+    )
+  }
+
   await page.focus(`${input.groupSelector} [data-ui="project-group-toggle"]`)
+  if (input.expectedProjectActions) {
+    await page.waitForFunction(
+      (selector) => {
+        const actions = document.querySelector<HTMLElement>(`${selector} .project-group-actions`)
+        if (!actions) return false
+        const style = window.getComputedStyle(actions)
+        return style.visibility === "visible" && Number(style.opacity) > 0.95
+      },
+      { timeout: 5_000 },
+      input.groupSelector,
+    )
+    const focusState = await page.$eval(input.groupSelector, (node) => {
+      const actions = (node as HTMLElement).querySelector<HTMLElement>(".project-group-actions")
+      const style = actions ? window.getComputedStyle(actions) : null
+      return {
+        actionsOpacity: style?.opacity ?? "",
+        actionsVisibility: style?.visibility ?? "",
+      }
+    })
+    assert.ok(Number(focusState.actionsOpacity) > 0.95)
+    assert.equal(focusState.actionsVisibility, "visible")
+  }
   await page.keyboard.press("Enter")
   await page.waitForFunction(
     (selector) => document.querySelector<HTMLElement>(selector)?.dataset.collapsed === "true",
@@ -287,6 +393,23 @@ async function verifyProjectGroup(
     { timeout: 5_000 },
     input.groupSelector,
   )
+  await page.evaluate(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement) active.blur()
+  })
+  await page.mouse.move(0, 0)
+  if (input.expectedProjectActions) {
+    await page.waitForFunction(
+      (selector) => {
+        const actions = document.querySelector<HTMLElement>(`${selector} .project-group-actions`)
+        if (!actions) return false
+        const style = window.getComputedStyle(actions)
+        return style.visibility === "hidden" && Number(style.opacity) < 0.05
+      },
+      { timeout: 5_000 },
+      input.groupSelector,
+    )
+  }
   await saveElementScreenshot(page, input.groupSelector, input.screenshot)
 }
 
