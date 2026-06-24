@@ -23,7 +23,7 @@ import { Instance } from "@/project/instance"
  *
  * Includes:
  * - 4 codebase tools: read, glob, search_code, list
- * - 2 memory tools: memory_search, memory_get
+ * - 1 scoped memory tool: memory
  * Network retrieval tools such as websearch and webfetch are registry tools.
  * Do not add same-name runtime extras here, because extras are merged after
  * registry tools by SessionLoop and would shadow permission/plugin wrappers.
@@ -37,45 +37,45 @@ export function createAgentContextTools(taskWorkDir?: string) {
     ...codebase,
 
     // --- Project memory ---
-    memory_search: tool({
+    memory: tool({
       description:
-        "Search project memory for prior work, known patterns, gotchas, and architectural decisions. " +
+        "Read-only scoped memory for prior work, known patterns, gotchas, and architectural decisions. " +
         "ALWAYS search memory before planning to leverage past experience. " +
-        "Try 1-2 searches with different phrasings for better coverage.",
-      inputSchema: z.object({
-        query: z.string().describe("Search query — keywords, phrases, or question about past knowledge"),
-        scope: z.enum(["all", "global"]).default("all").describe("Memory scope to search"),
-        max_results: z.number().default(8).describe("Max results to return"),
-      }),
-      execute: async ({ query, scope, max_results }) => {
-        const results = Memory.search({
-          query,
-          projectId,
-          scope,
-          limit: max_results,
-          minScore: 0.1,
-        })
-        if (results.length === 0) return "No memories found for this query."
-        return results
-          .map(
-            (r, i) =>
-              `[${i + 1}] ${r.fileTitle} (${r.kind}/${r.scope}, score: ${r.score.toFixed(2)}, id: ${r.fileId})\n${r.content.slice(0, 600)}`,
-          )
-          .join("\n\n---\n\n")
-      },
-    }),
+        "Use action=search first, then action=get when complete details are needed.",
+      inputSchema: z.discriminatedUnion("action", [
+        z.object({
+          action: z.literal("search"),
+          query: z.string().describe("Search query — keywords, phrases, or question about past knowledge"),
+          scope: z.enum(["all", "global"]).default("all").describe("Memory scope to search"),
+          maxResults: z.number().int().min(1).max(50).default(8).describe("Max results to return"),
+          minScore: z.number().min(0).max(1).default(0.1).describe("Minimum relevance score"),
+        }),
+        z.object({
+          action: z.literal("get"),
+          fileId: z.string().describe("Memory file ID from memory search results"),
+        }),
+      ]),
+      execute: async (params) => {
+        if (params.action === "search") {
+          const results = Memory.search({
+            query: params.query,
+            projectId,
+            scope: params.scope,
+            limit: params.maxResults,
+            minScore: params.minScore,
+          })
+          if (results.length === 0) return "No memories found for this query."
+          return results
+            .map(
+              (r, i) =>
+                `[${i + 1}] ${r.fileTitle} (${r.kind}/${r.scope}, score: ${r.score.toFixed(2)}, id: ${r.fileId})\n${r.content.slice(0, 600)}`,
+            )
+            .join("\n\n---\n\n")
+        }
 
-    memory_get: tool({
-      description:
-        "Read the full content of a specific memory file by ID. " +
-        "Use after memory_search when you need complete details of a promising result.",
-      inputSchema: z.object({
-        file_id: z.string().describe("Memory file ID from memory_search results"),
-      }),
-      execute: async ({ file_id }) => {
-        const file = Memory.getFileInProject({ fileId: file_id, projectId })
-        if (!file) throw new Error(`Memory file ${file_id} not found`)
-        const chunks = Memory.getChunksInProject({ fileId: file_id, projectId })
+        const file = Memory.getFileInProject({ fileId: params.fileId, projectId })
+        if (!file) throw new Error(`Memory file ${params.fileId} not found`)
+        const chunks = Memory.getChunksInProject({ fileId: params.fileId, projectId })
         const text = chunks.map((c) => c.content).join("\n\n")
         return `# ${file.title}\nKind: ${file.kind} | Scope: ${file.scope} | Source: ${file.source}\n\n${text}`
       },

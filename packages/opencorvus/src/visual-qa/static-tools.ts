@@ -3,8 +3,7 @@ export const VISUAL_QA_CONTEXT_TOOL_IDS = [
   "glob",
   "search_code",
   "list",
-  "memory_search",
-  "memory_get",
+  "memory",
 ] as const
 
 export const VISUAL_QA_IMPLEMENTATION_TOOL_IDS = [
