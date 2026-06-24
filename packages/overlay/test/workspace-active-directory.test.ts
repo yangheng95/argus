@@ -111,9 +111,7 @@ describe("workspace active directory", () => {
 
     expect(activeDirectory()).toBe("D:/repo/from-selected-source")
     expect(syncActiveDirectoryApiContext()).toBe("D:/repo/from-selected-source")
-    expect(new URL(apiUrl("task/task_3/operator-model-context")).searchParams.get("directory")).toBe(
-      "D:/repo/from-selected-source",
-    )
+    expect(new URL(apiUrl("path")).searchParams.get("directory")).toBe("D:/repo/from-selected-source")
   })
 
   test("task-driven directory switch immediately retargets project-scoped API requests", async () => {

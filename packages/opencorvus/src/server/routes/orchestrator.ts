@@ -632,7 +632,7 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         const taskID = c.req.valid("param").taskID
-        taskPrimaryProjectRoot(taskID, { activeProjectID: Instance.project.id })
+        taskPrimaryProjectRoot(taskID)
         const after = Math.max(0, parseInt(c.req.query("after") ?? "0", 10) || 0)
         const afterLiveRaw = c.req.query("after_live")
         const shouldReplayLive = afterLiveRaw !== undefined

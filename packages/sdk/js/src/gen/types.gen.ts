@@ -11683,12 +11683,7 @@ export type TaskQueueStartNowResponse = TaskQueueStartNowResponses[keyof TaskQue
 export type TaskListEventsData = {
   body?: never
   path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/events"
 }
 
@@ -11752,12 +11747,7 @@ export type TaskGetData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}"
 }
 
@@ -11839,12 +11829,7 @@ export type TaskStatusData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/status"
 }
 
@@ -12001,12 +11986,7 @@ export type TaskBindingsData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/bindings"
 }
 
@@ -12035,12 +12015,7 @@ export type TaskProgressData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/progress"
 }
 
@@ -12286,12 +12261,7 @@ export type TaskEventsData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/events"
 }
 
@@ -13128,12 +13098,7 @@ export type TaskBriefData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/brief"
 }
 
@@ -13182,12 +13147,7 @@ export type TaskBoardData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/board"
 }
 
@@ -13614,12 +13574,7 @@ export type TaskTranscriptData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/transcript"
 }
 
@@ -13661,12 +13616,7 @@ export type TaskOperatorModelContextData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/operator-model-context"
 }
 
@@ -13734,12 +13684,7 @@ export type TaskRunsData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/runs"
 }
 
@@ -13802,12 +13747,7 @@ export type TaskInteractionsData = {
   path: {
     taskID: string
   }
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
+  query?: never
   url: "/task/{taskID}/interactions"
 }
 

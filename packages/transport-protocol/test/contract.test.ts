@@ -299,10 +299,21 @@ describe("route directory policy", () => {
       "/mission",
       "/attachment/project/shot.png",
       `/attachment/project/shot.png?variant=${SCREENSHOT_BROWSER_THUMBNAIL_VARIANT}`,
+      "/task/abc",
+      "/task/abc/status",
+      "/task/abc/bindings",
+      "/task/abc/progress",
+      "/task/abc/events",
       "/task/abc/conversation",
       "/task/abc/conversation/history",
       "/task/abc/conversation/events",
       "/task/abc/conversation/session/session_123",
+      "/task/abc/brief",
+      "/task/abc/board",
+      "/task/abc/transcript",
+      "/task/abc/operator-model-context",
+      "/task/abc/runs",
+      "/task/abc/interactions",
       "/favicon.ico",
     ]) {
       expect(routeRequiresProjectDirectory(path)).toBe(false)
@@ -330,7 +341,8 @@ describe("route directory policy", () => {
     }
     expect(routeRequiresProjectDirectory("/project/current", "DELETE")).toBe(true)
     expect(routeRequiresProjectDirectory("/project/current", "PATCH")).toBe(true)
-    expect(routeRequiresProjectDirectory("/task/abc", "GET")).toBe(true)
+    expect(routeRequiresProjectDirectory("/task/abc/project-archive", "GET")).toBe(true)
+    expect(routeRequiresProjectDirectory("/task/abc/browser-preview", "GET")).toBe(true)
     expect(routeRequiresProjectDirectory("/task/abc/conversation", "POST")).toBe(true)
   })
 })
