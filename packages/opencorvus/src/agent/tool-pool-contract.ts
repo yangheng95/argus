@@ -57,6 +57,7 @@ export namespace AgentToolPool {
     "cancel_task",
     "retry_task",
     "inject_operator_message",
+    "respond_agent_coordination",
     "cancel_subagent",
     "query_failed_goals",
     "read_context",
