@@ -9,6 +9,7 @@ export const FRONTEND_DESIGN_STATIC_TOOL_IDS = [
   "list",
   "memory",
   "skill",
+  "request_orchestrator_decision",
   "url_screenshot",
   "create_frontend_skeleton_project",
   "create_visual_region_coordinate_atlas",
@@ -32,6 +33,7 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "list",
   "memory",
   "skill",
+  "request_orchestrator_decision",
   "url_screenshot",
   "create_frontend_skeleton_project",
   "create_visual_region_coordinate_atlas",
@@ -81,7 +83,7 @@ export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = [
   "apply_patch",
 ] as const
 
-export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = ["skill"] as const
+export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = ["skill", "request_orchestrator_decision"] as const
 
 export type FrontendDesignStaticToolID = (typeof FRONTEND_DESIGN_STATIC_TOOL_IDS)[number]
 export type FrontendDesignSessionToolID = (typeof FRONTEND_DESIGN_SESSION_TOOL_IDS)[number]

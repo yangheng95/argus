@@ -23,7 +23,15 @@ export namespace AgentToolPool {
     "browser_preview_compare_regions",
   ] as const
 
-  const STAGE_CONTEXT_GLOBAL_TOOL_IDS = ["read", "glob", "search_code", "list", "memory", "skill"] as const
+  const STAGE_CONTEXT_GLOBAL_TOOL_IDS = [
+    "read",
+    "glob",
+    "search_code",
+    "list",
+    "memory",
+    "skill",
+    "request_orchestrator_decision",
+  ] as const
 
   const ORCHESTRATOR_PRIVATE_TOOL_IDS = [
     "build",
@@ -47,6 +55,7 @@ export namespace AgentToolPool {
     "cancel_task",
     "retry_task",
     "inject_operator_message",
+    "respond_agent_coordination",
     "cancel_subagent",
     "query_failed_goals",
     "read_context",
@@ -100,6 +109,10 @@ export namespace AgentToolPool {
     "batch",
   ] as const
 
+  const taskCodingGlobal = [...codingGlobal, "request_orchestrator_decision"] as const
+
+  const customDefaultGlobal = GLOBAL_TOOL_IDS.filter((id) => id !== "request_orchestrator_decision")
+
   export const roleAssignments: Record<AgentRoleID, ToolPoolAssignment> = {
     coding: pool({
       global: codingGlobal,
@@ -110,7 +123,7 @@ export namespace AgentToolPool {
       private: CODING_PRIVATE_TOOL_IDS,
     }),
     build: pool({
-      global: codingGlobal,
+      global: taskCodingGlobal,
       private: BUILD_PRIVATE_TOOL_IDS,
     }),
     "visual-qa": fromVisibleToolIDs(VISUAL_QA_STATIC_TOOL_IDS),
@@ -212,7 +225,7 @@ export namespace AgentToolPool {
     "deep-research": pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "webfetch", "external_code_search", "todoread", "todowrite"],
     }),
-    "frontend-research": pool({ global: ["skill"] }),
+    "frontend-research": pool({ global: ["skill", "request_orchestrator_decision"] }),
     "goal-workload-analyst": pool({
       global: [...STAGE_CONTEXT_GLOBAL_TOOL_IDS, "todoread", "todowrite"],
     }),
@@ -223,7 +236,7 @@ export namespace AgentToolPool {
   }
 
   export function customDefault(): ToolPoolAssignment {
-    return pool({ global: GLOBAL_TOOL_IDS })
+    return pool({ global: customDefaultGlobal })
   }
 
   export function normalize(input: Partial<ToolPoolAssignment> | undefined): ToolPoolAssignment {
