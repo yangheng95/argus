@@ -588,7 +588,7 @@ describe("build agent prompt context", () => {
           "- key=frontend_project value=status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\nacceptance_root: .\nadoption_rule: copy/adapt into root app before build pass\n" +
           "- key=visual_consistency_contract value=Match AMD page geometry and chart/table styling\n" +
           "- key=evidence_source_manifest value=references/url-amd.png\n" +
-          "- key=fillable_modules value=Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and source-skeleton evidence only for targeted gaps; web-clone-source-skeleton-consumption-audit.json passed",
+          "- key=fillable_modules value=Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and source-skeleton evidence only for targeted gaps; source-evidence findings recorded",
       },
     )
 
@@ -603,7 +603,8 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("web-clone-source/implementation-blueprint.md")
     expect(prompt).toContain("web-clone-source/source-ir/component-tree.json")
     expect(prompt).toContain("web-clone-source/source-skeleton/critical.css")
-    expect(prompt).toContain("web-clone-source-skeleton-consumption-audit.json passed")
+    expect(prompt).toContain("source-evidence findings recorded")
+    expect(prompt).not.toContain("web-clone-source-skeleton-consumption-audit.json")
     expect(prompt).toContain("Treat `.opencorvus/r/t/<task-key>/fd/` as read-only input")
     expect(prompt).toContain(
       "Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `webpage-evidence/`, `references/`, or top-level `reference.png`",

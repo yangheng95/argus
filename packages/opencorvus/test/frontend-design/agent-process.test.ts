@@ -98,7 +98,7 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
           styleModules: ["src/styles.css"],
           removedGeneratedBoundaries: ["src/components/source-dom/HeroRegion.tsx"],
           visualEvidence: ["acceptance/hero-preview-screenshot.json"],
-          auditEvidence: ["acceptance/web-clone-source-maintainable-audit.json"],
+          sourceEvidence: ["acceptance/source-evidence-review.json"],
           remainingSourceDebt: [],
           nextRegionComponentName: "FooterRegion",
         })
@@ -129,7 +129,7 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
           mature_library_candidates: [],
           props_states: "hero data fixture",
           replacement_boundary: "src/components/source-dom/HeroRegion.tsx",
-          parity_guard: "task-scoped preview screenshot inspection plus source audit",
+          parity_guard: "task-scoped preview screenshot inspection plus source evidence review",
           project_specific_reason: "Simple page-specific layout; no mature library domain.",
         })
         await input.toolKit.tools.update_frontend_baseline.execute({
@@ -142,7 +142,7 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
           mature_library_candidates: [],
           deletion_rule: "Remove source-dom HeroRegion after parity evidence.",
           source_refs: ["src/data/sourceDomReplacementPlan.ts"],
-          parity_guard: "task-scoped preview screenshot inspection plus source audit",
+          parity_guard: "task-scoped preview screenshot inspection plus source evidence review",
           project_specific_reason: "Simple page-specific layout.",
         })
         await input.toolKit.tools.update_frontend_text.execute({
@@ -180,6 +180,9 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
         }
         await input.toolKit.tools.update_frontend_iteration_note.execute({
           value: "Checked source-region process evidence.",
+        })
+        await input.toolKit.tools.update_frontend_iteration_note.execute({
+          value: "Checked downstream implementability from source evidence and rendered preview artifacts.",
         })
         await input.toolKit.tools.update_frontend_text.execute({
           section: "completeness_review",
@@ -273,7 +276,7 @@ test("FrontendDesignAgent.analyze persists process artifacts before failed final
           styleModules: ["src/styles.css"],
           removedGeneratedBoundaries: ["src/components/source-dom/FooterRegion.tsx"],
           visualEvidence: ["acceptance/footer-preview-screenshot.json"],
-          auditEvidence: ["acceptance/web-clone-source-maintainable-audit.json"],
+          sourceEvidence: ["acceptance/source-evidence-review.json"],
           remainingSourceDebt: [],
         })
         throw new Error("simulated frontend-design timeout after tools")

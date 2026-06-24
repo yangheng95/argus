@@ -1,7 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { decodePNG, type DecodedPNG } from "@/util/pixel-stats"
-import { auditWebCloneSourceSkeletonConsumption } from "@/web-clone/source-skeleton-consumption-audit"
 import { renderSourceProjectVisualIterationMatrix } from "@/web-clone/source-project-generator"
 
 const FRONTEND_SKELETON_DEEP_REFERENCE_FILES = [
@@ -40,7 +39,6 @@ export interface HostPreparedFrontendProject {
   compactEvidence: string
   visualIterationMatrix?: string
   sourceReplacementPlan: SourceReplacementPlanForSummary[]
-  sourceAuditEvidence?: string
 }
 
 function hostPreparedVisualIterationMatrix(project: HostPreparedFrontendProject): string {
@@ -57,7 +55,6 @@ async function readHostPreparedSourceReplacementPlan(projectRoot: string): Promi
 export async function readHostPreparedCompactEvidence(input: {
   sourcePackage: string
   projectRoot: string
-  sourceAuditEvidence?: string
 }): Promise<string> {
   const referencePixelSummary = await summarizeReferencePixels(path.join(input.sourcePackage, "reference.png"))
   const sourceProjectSummary = await summarizeHostPreparedSourceProject(input.projectRoot)
@@ -68,46 +65,8 @@ export async function readHostPreparedCompactEvidence(input: {
   if (sourceProjectSummary.trim()) {
     sections.push(`## frontend-design-skeleton/source-project-handoff-summary.md\n${sourceProjectSummary.trim()}`)
   }
-  if (input.sourceAuditEvidence?.trim()) {
-    sections.push(`## source-audit-supervision.md\n${input.sourceAuditEvidence.trim()}`)
-  }
   sections.push(renderHostPreparedEvidenceIndex())
   return sections.join("\n\n")
-}
-
-export async function summarizeHostPreparedSourceAudit(input: {
-  sourcePackage: string
-  projectRoot: string
-}): Promise<string> {
-  const lines = [
-    "Host-prepared source audit supervision.",
-    "This is current-state evidence for the captured source project, not a final acceptance decision.",
-  ]
-  for (const finalAcceptanceMode of ["visual_baseline_allowed", "maintainable_replacement_required"] as const) {
-    try {
-      const audit = await auditWebCloneSourceSkeletonConsumption({
-        projectDir: input.projectRoot,
-        sourcePackageDir: input.sourcePackage,
-        finalAcceptanceMode,
-      })
-      lines.push(
-        `- ${finalAcceptanceMode}: passed=${audit.passed}; generatedBaseline=${audit.risk.generatedBaselineDetected}; ` +
-          `finalBaselineOnly=${audit.risk.finalBaselineOnlyDetected}; sourceDomResidue=${audit.risk.finalSourceDomModuleResidueDetected}; ` +
-          `sourceDomModules=${audit.projectStats.sourceDomBaselineModuleCount}; sourceDomRegions=${audit.projectStats.sourceDomRegionFileCount}; ` +
-          `largestSourceDomRegionBytes=${audit.projectStats.largestSourceDomRegionBytes}; oversizedGeneratedRegions=${audit.projectStats.oversizedSourceDomRegionCount}`,
-      )
-      for (const finding of audit.findings.slice(0, 4)) {
-        lines.push(`  finding: ${finding}`)
-      }
-    } catch (err) {
-      lines.push(`- ${finalAcceptanceMode}: audit_error=${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-  lines.push(
-    "Supervision rule: a passing visual_baseline_allowed audit proves only traceable captured-source baseline adoption. " +
-      "A maintainable final remains unproven until maintainable_replacement_required passes with structured rendered screenshot review evidence.",
-  )
-  return lines.join("\n")
 }
 
 function renderHostPreparedEvidenceIndex(): string {

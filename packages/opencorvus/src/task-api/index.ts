@@ -648,8 +648,14 @@ async function appendAndWakeTaskOperatorMessage(input: {
     },
     { taskID: input.taskID, source: "service.message" },
   )
-  const wakeTask = await reactivateTaskForOperatorWake(task, "Operator message reactivated task")
-  await reopenActiveRunForOperatorWake(wakeTask, "Operator message reopened blocked run")
+  if (isTaskTerminal(task)) {
+    return {
+      task: requireTaskInCurrentProject(input.taskID),
+      userMessage,
+      resumed: false,
+    }
+  }
+  await reopenActiveRunForOperatorWake(task, "Operator message reopened blocked run")
 
   const dispatchResult = await dispatchTaskLoop({
     taskID: input.taskID,
@@ -685,16 +691,6 @@ function assertTaskOperatorMessageAccepted(task: TaskRow, text: string, attachme
       taskID: task.id,
     })
   }
-}
-
-async function reactivateTaskForOperatorWake(task: TaskRow, summary: string): Promise<TaskRow> {
-  if (!isTaskTerminal(task)) return task
-  const metadata =
-    task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-      ? { ...(task.metadata as Record<string, unknown>) }
-      : {}
-  delete metadata.cancelled
-  return updateTask(task, { status: isTaskCompleted(task) ? "queued" : "active", error: null, metadata }, summary)
 }
 
 function terminalTaskNotificationText(input: {
@@ -2125,9 +2121,11 @@ export namespace EngineService {
         })
         .run(),
     )
-    const wakeTask = await reactivateTaskForOperatorWake(task, "Operator note reactivated task")
-    await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")
-    void dispatchTaskLoop({ taskID: wakeTask.id, event: { note: OrchestratorEventNote.retry(task) } })
+    if (isTaskTerminal(task)) {
+      return { resumed: false, status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string }
+    }
+    await reopenActiveRunForOperatorWake(task, "Operator note reopened blocked run")
+    void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
     return { resumed: true, status: deriveTaskStatus(requireTaskInCurrentProject(taskID)) as string }
   }
 

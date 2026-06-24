@@ -7,7 +7,7 @@ import { generateWebCloneSourceProject } from "../web-clone/source-project-gener
 export const WebCloneGenerateSourceProjectTool = Tool.define("web_clone_generate_source_project", {
   description: `Generate an editable React source skeleton from a web-clone-source handoff.
 
-It writes framework components, sourceData arrays, CSS sidecars, copied assets, and reference.png from source-skeleton/source-IR. It does not render reference.png, replay screenshots, inline base64, inject raw HTML, or re-extract webpages. Downstream agents should preserve the generated CSS sidecars and refine the generated React modules in place as traceable source-region evidence. Use web_clone_source_audit and task-scoped preview screenshot inspection after generation.`,
+It writes framework components, sourceData arrays, CSS sidecars, copied assets, and reference.png from source-skeleton/source-IR. It does not render reference.png, replay screenshots, inline base64, inject raw HTML, or re-extract webpages. Downstream agents should preserve the generated CSS sidecars and refine the generated React modules in place as traceable source-region evidence. Use source evidence review and task-scoped preview screenshot inspection after generation.`,
   parameters: z.object({
     webpageEvidenceDir: z
       .string()
@@ -54,7 +54,7 @@ It writes framework components, sourceData arrays, CSS sidecars, copied assets, 
       `- Visual iteration matrix: ${result.visualIterationMatrix}`,
       "",
       "Next checks:",
-      `- Run web_clone_source_audit with projectDir=${result.outputDir} and sourcePackageDir=${result.webpageEvidenceDir}.`,
+      "- Review generated source against the source package evidence.",
       "- Build/run the project and inspect task-scoped preview screenshots against web-clone-source/reference.png.",
     ].join("\n")
 

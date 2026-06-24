@@ -124,7 +124,7 @@ import { goalStatusByID } from "@/engine/describe"
 import { isLiveGoalRunStatus, isLiveRunStatus } from "@/engine/catalog"
 import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
-import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
+import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
 import {
   completeOrchestratorToolOwnership,
   createOrchestratorToolOwnershipPayload,
@@ -361,17 +361,12 @@ async function hostPreparedFrontendProjectEvidenceSnapshot(taskID: string) {
     fs.stat(paths.skeletonProjectAbsolute).catch(() => undefined),
   ])
   if (!sourcePackageStat?.isDirectory() || !skeletonProjectStat?.isDirectory()) return null
-  const { readHostPreparedCompactEvidence, summarizeHostPreparedSourceAudit } = await import(
+  const { readHostPreparedCompactEvidence } = await import(
     "@/frontend-design/host-prepared-source-project"
   )
-  const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({
-    sourcePackage: paths.sourcePackageAbsolute,
-    projectRoot: paths.skeletonProjectAbsolute,
-  })
   const compactEvidence = await readHostPreparedCompactEvidence({
     sourcePackage: paths.sourcePackageAbsolute,
     projectRoot: paths.skeletonProjectAbsolute,
-    sourceAuditEvidence,
   })
   return {
     project_root: paths.skeletonProjectRelative,
@@ -3225,6 +3220,19 @@ export function createOrchestratorTools(input: {
     return "none"
   }
 
+  function terminalTaskToolRefusal(name: string, task: TaskRow) {
+    const status = deriveTaskStatus(task)
+    return {
+      output:
+        `Task ${task.id} is terminal (status=${status}); ${name} was not executed. ` +
+        "Task-level scheduler tools may act only while the task is active. Start a new task for follow-up work instead of continuing this terminal task.",
+      title: "Task is terminal",
+      metadata: {
+        [ORCHESTRATOR_DECISION_EFFECT_METADATA_KEY]: "observation" satisfies OrchestratorDecisionEffect,
+      },
+    }
+  }
+
   function withDecisionEffectMetadata(name: string, raw: unknown): unknown {
     const toolDef = raw as { execute?: (args: unknown, options: unknown) => Promise<unknown> }
     if (typeof toolDef.execute !== "function") return raw
@@ -3232,6 +3240,8 @@ export function createOrchestratorTools(input: {
     return {
       ...(raw as object),
       execute: async (args: unknown, options: unknown) => {
+        const currentTask = requireTask(taskID)
+        if (isTaskTerminal(currentTask)) return terminalTaskToolRefusal(name, currentTask)
         const before = taskDecisionSignature()
         const result = await execute(args, options)
         const after = taskDecisionSignature()
@@ -3291,8 +3301,14 @@ export function createOrchestratorTools(input: {
         "Scheduler-only search/load surface for mounted Orchestrator expert-squad skills. Use it to inspect request-matched squad guidance before calling select_expert_squad; never use it to load production, research, report, or implementation skills. The session loop replaces this placeholder with the canonical turn-scoped SkillTool before the model can call it.",
       inputSchema: z
         .object({
-          query: z.string().optional(),
-          name: z.string().optional(),
+          query: z
+            .string()
+            .optional()
+            .describe("Fuzzy search terms for mounted Orchestrator expert-squad skill titles and SKILL.md content."),
+          name: z
+            .string()
+            .optional()
+            .describe("Exact mounted Orchestrator expert-squad skill name to load after search identifies it."),
         })
         .strict(),
       execute: async (_input): Promise<string> => {

@@ -623,7 +623,7 @@ function renderFrontendDesignSummary(frontendDesign: string): string {
     "# Frontend Design Contract",
     sanitizePromptBlock(frontendDesign, 2_400),
     "",
-    "Reviewers must verify that reference-driven UI work follows this frontend replica contract, source manifest, web-clone-source handoff, source audit expectations, and visual reference requirements.",
+    "Reviewers must verify that reference-driven UI work follows this frontend replica contract, source manifest, web-clone-source handoff, source evidence expectations, and visual reference requirements.",
     'Use `inspect_integrity_evidence({ section: "frontend_design_contract" })` for the bounded full contract excerpt when this matters to your scope.',
   ].join("\n")
 }

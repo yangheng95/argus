@@ -604,12 +604,17 @@ describe("document health audit regressions", () => {
     expectFilesNotToContain(files, ["C:/Users/chuan", "C:\\Users\\chuan"])
   })
 
-  test("explicit sourcePackageDir and MCP transport contracts stay documented and implemented", () => {
-    const sourceAudit = read("packages/opencorvus/src/tool/web-clone-source-audit.ts")
-    expect(sourceAudit).toContain("sourcePackageDir")
-    expect(sourceAudit).not.toContain('path.join(Instance.directory, "web-clone-source")')
-    expect(sourceAudit).not.toContain("legacy <execution directory>")
-
+  test("retired source audit tool stays absent and MCP transport contracts stay documented and implemented", () => {
+    expect(fs.existsSync(path.join(repoRoot, "packages/opencorvus/src/tool/web-clone-source-audit.ts"))).toBe(false)
+    expect(
+      fs.existsSync(path.join(repoRoot, "packages/opencorvus/src/web-clone/source-skeleton-consumption-audit.ts")),
+    ).toBe(false)
+    expect(
+      fs.existsSync(path.join(repoRoot, "packages/opencorvus/test/tool/web-clone-source-audit.test.ts")),
+    ).toBe(false)
+    expect(
+      fs.existsSync(path.join(repoRoot, "packages/opencorvus/test/web-clone/source-skeleton-consumption-audit.test.ts")),
+    ).toBe(false)
     const mcpSource = read("packages/opencorvus/src/mcp/index.ts")
     expect(mcpSource).toContain("function createRemoteTransport")
     expect(mcpSource).toContain("createRemoteTransport(mcpConfig, authProvider)")

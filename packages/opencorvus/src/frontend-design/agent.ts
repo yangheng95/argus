@@ -44,7 +44,6 @@ import { EditTool } from "@/tool/edit"
 import { WriteTool } from "@/tool/write"
 import { ApplyPatchTool } from "@/tool/apply_patch"
 import { SkillTool } from "@/tool/skill"
-import { WebCloneSourceAuditTool } from "@/tool/web-clone-source-audit"
 import type { AgentReport } from "@/agent/report"
 import {
   WebpageAnalyzeTool,
@@ -73,7 +72,6 @@ import {
   readHostPreparedCompactEvidence,
   renderHostPreparedFrontendProjectSection,
   summarizeHostPreparedSourceProject,
-  summarizeHostPreparedSourceAudit,
   summarizeReferencePixels,
   type HostPreparedFrontendProject,
 } from "./host-prepared-source-project"
@@ -802,7 +800,7 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
     record_frontend_replacement_result: tool({
       description:
         "Record the result of one frontend_design rawproject source-region replacement attempt. " +
-        "Use after source edits, build/audit/visual checks, or a concrete blocker. This writes process evidence only; it does not mark acceptance by itself.",
+        "Use after source edits, source-evidence review, visual checks, or a concrete blocker. This writes process evidence only; it does not mark acceptance by itself.",
       inputSchema: z.object({
         regionComponentName: z
           .string()
@@ -832,7 +830,7 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
           .describe(
             "Task-scoped preview evidence, rendered screenshots, source/reference screenshots, or visual artifacts used for this replacement.",
           ),
-        auditEvidence: z
+        sourceEvidence: z
           .array(z.string())
           .default([])
           .describe("Source traceability or source-quality outputs used for this replacement."),
@@ -1085,7 +1083,6 @@ async function createFrontendImplementationTools(
     edit: await createFrontendTool(EditTool, input, trace),
     write: await createFrontendTool(WriteTool, input, trace),
     apply_patch: await createFrontendTool(ApplyPatchTool, input, trace),
-    web_clone_source_audit: await createFrontendTool(WebCloneSourceAuditTool, input, trace),
   }
   return selectFrontendStaticTools(tools, FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS, "frontend-design implementation")
 }
@@ -1110,14 +1107,9 @@ async function resolveHostPreparedFrontendProject(taskID?: string): Promise<Host
     pathExists(paths.skeletonProjectAbsolute),
   ])
   if (!sourcePackageExists || !skeletonProjectExists) return undefined
-  const sourceAuditEvidence = await summarizeHostPreparedSourceAudit({
-    sourcePackage: paths.sourcePackageAbsolute,
-    projectRoot: paths.skeletonProjectAbsolute,
-  })
   const compactEvidence = await readHostPreparedCompactEvidence({
     sourcePackage: paths.sourcePackageAbsolute,
     projectRoot: paths.skeletonProjectAbsolute,
-    sourceAuditEvidence,
   })
   return {
     status: "created",
@@ -1136,7 +1128,6 @@ async function resolveHostPreparedFrontendProject(taskID?: string): Promise<Host
     warnings: [],
     compactEvidence,
     sourceReplacementPlan: [],
-    sourceAuditEvidence,
   }
 }
 
@@ -1174,7 +1165,6 @@ export const FrontendDesignTestHooks = {
   recordFrontendProcessEvent,
   recordFrontendToolResultEvents,
   readHostPreparedCompactEvidence,
-  summarizeHostPreparedSourceAudit,
   summarizeHostPreparedSourceProject,
   summarizeReferencePixels,
   resolveHostPreparedFrontendProject,

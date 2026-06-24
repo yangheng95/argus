@@ -214,9 +214,7 @@ export async function listExistingWebCloneSourcePackageContamination(sourcePacka
     if (
       /(^|\/)(actual-app|eval|rendered|screenshots?|vision|verification|coverage|dist|build)(?:[./_-]|$)/i.test(
         relative,
-      ) ||
-      relative.endsWith("/web-clone-source-skeleton-consumption-audit.json") ||
-      relative === "web-clone-source-skeleton-consumption-audit.json"
+      )
     ) {
       findings.push(relative)
     }

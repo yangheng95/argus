@@ -441,7 +441,7 @@ export const FrontendTemplateFinalSchema = z
       .string()
       .min(1)
       .default(
-        "Host recorded the submitted frontend template as structurally complete enough for downstream requirements, architecture, build, source audit, and visual diff validation; screenshot-backed visual validation still controls whether a visual baseline can be consumed.",
+        "Host recorded the submitted frontend template as structurally complete enough for downstream requirements, architecture, build, source-evidence review, and visual diff validation; screenshot-backed visual validation still controls whether a visual baseline can be consumed.",
       )
       .describe(
         "Final completeness audit and primary human-readable problem/handoff section. Cover known implementation risks, visual/source gaps, extraction-vs-rewrite uncertainty, project source organization, component/library reuse constraints, reference artifacts, and remaining open questions. Do not finalize until this audit says the frontend template is complete enough to hand off.",

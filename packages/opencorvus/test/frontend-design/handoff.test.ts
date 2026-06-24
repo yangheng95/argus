@@ -147,7 +147,7 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       expect(handoff).toContain("rawproject evidence")
       expect(handoff).toContain("source data extraction")
       expect(handoff).toContain("rendered screenshot review evidence")
-      expect(handoff).toContain("zero-finding web_clone_source_audit evidence")
+      expect(handoff).toContain("source-evidence review facts")
       expect(handoff).toContain("Do not change other agent prompts or communication paths")
       expect(handoff).toContain(
         "do not delete `web-clone-source/` content until source-derived style evidence and styling obligations have been migrated",

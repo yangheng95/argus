@@ -578,9 +578,8 @@ describe("frontend-design prompt assembly", () => {
       directory: dir,
       fn: async () => {
         const tools = await FrontendDesignTestHooks.createFrontendImplementationTools({})
-        expect(Object.keys(tools)).toEqual(
-          expect.arrayContaining(["bash", "edit", "write", "apply_patch", "web_clone_source_audit"]),
-        )
+        expect(Object.keys(tools)).toEqual(expect.arrayContaining(["bash", "edit", "write", "apply_patch"]))
+        expect(Object.keys(tools)).not.toContain("web_clone_source_audit")
         expect(Object.keys(tools)).not.toContain("webpage_render")
         expect(Object.keys(tools)).not.toContain("webpage_evaluate")
         expect(Object.keys(tools)).not.toContain("webpage_text_diff")
@@ -842,7 +841,7 @@ describe("frontend-design prompt assembly", () => {
       styleModules: ["src/styles.css"],
       removedGeneratedBoundaries: ["src/components/source-dom/HeroRegion.tsx"],
       visualEvidence: ["acceptance/hero-preview-screenshot.json"],
-      auditEvidence: ["acceptance/web-clone-source-maintainable-audit.json"],
+      sourceEvidence: ["acceptance/source-evidence-review.json"],
       remainingSourceDebt: ["FooterRegion"],
       nextRegionComponentName: "FooterRegion",
     })
@@ -1115,7 +1114,7 @@ describe("frontend-design prompt assembly", () => {
         expect(resolved?.sourcePackageRef).toBe(paths.sourcePackageRelative)
         expect(resolved?.compactEvidence).toContain("source-project-handoff-summary.md")
         expect(resolved?.compactEvidence).toContain("nextReplacement: GenericRegion -> GenericCards")
-        expect(resolved?.compactEvidence).toContain("source-audit-supervision.md")
+        expect(resolved?.compactEvidence).not.toContain("source-audit-supervision.md")
       },
     })
   }, 30_000)
@@ -1345,35 +1344,14 @@ describe("frontend-design prompt assembly", () => {
       expect(compact).toContain("host-prepared-evidence-index.md")
       expect(compact).toContain("frontend-design-skeleton/src/data/sourceData.ts")
       expect(compact).toContain("Large source files are not inlined")
+      expect(compact).not.toContain("source-audit-supervision.md")
+      expect(compact).not.toContain("web_clone_source_audit")
       expect(compact).not.toContain("HUGE_INLINE_MARKER")
       expect(compact).not.toContain("[clipped:")
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
   })
-
-  test("host-prepared source audit supervision distinguishes visual baseline from maintainable final", async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-source-audit-"))
-    try {
-      const sourcePackage = await writeAuditFixtureSourcePackage(dir)
-      const projectRoot = path.join(dir, "frontend-design-skeleton")
-      await generateWebCloneSkeletonProject({
-        sourcePackageDir: sourcePackage,
-        outputDir: projectRoot,
-      })
-
-      const summary = await FrontendDesignTestHooks.summarizeHostPreparedSourceAudit({ sourcePackage, projectRoot })
-
-      expect(summary).toContain("Host-prepared source audit supervision")
-      expect(summary).toContain("visual_baseline_allowed: passed=true")
-      expect(summary).toContain("maintainable_replacement_required: passed=false")
-      expect(summary).toContain("generatedBaseline=true")
-      expect(summary).toContain("finalBaselineOnly=true")
-      expect(summary).toContain("A maintainable final remains unproven")
-    } finally {
-      await fs.rm(dir, { recursive: true, force: true })
-    }
-  }, 30_000)
 
   test("reference pixel summary exposes light first viewport separately from dark localized bands", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "frontend-reference-pixels-"))

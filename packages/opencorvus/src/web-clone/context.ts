@@ -222,7 +222,7 @@ function renderContextMarkdown(
     "- Repeated rows/cards/items must be data plus render loops, not duplicated JSX literals.",
     "- For full-stack/database work, derive schema, seed/reset data, and read APIs from `source-ir/content-model.json` and visible skeleton text.",
     "- Do not render `reference.png`, screenshots, base64/data URI payloads, or hidden semantic layers as the page. The frontend-design source skeleton and CSS sidecars are the visual baseline implementation; refine regions only when parity can be maintained.",
-    "- Use `web_clone_source_audit` and runtime visual evaluation against `reference.png` as evidence; report measured results and concrete findings instead of inventing a score.",
+    "- Use source evidence review and runtime visual evaluation against `reference.png` as evidence; report measured results and concrete findings instead of inventing a score.",
     "",
     "## Components",
     ...summary.components
@@ -277,7 +277,6 @@ function renderContract(
       primaryImplementationInput: "implementation-blueprint.md",
       rawSkeletonPolicy:
         "source-skeleton/index.html is raw evidence for DOM order and missing text; it is not an app-source template.",
-      sourceAuditTool: "web_clone_source_audit",
       visualTruth: "web-clone-source/reference.png",
       visualEvaluation: {
         role: "diagnostic_measurement",
@@ -476,7 +475,7 @@ function renderSourcePackageReadme(webpageEvidenceDir: string, stats: PrepareWeb
     "",
     "`source-ir/interaction-state-snapshots.json` is factual runtime evidence for frontend-research investigation packets and implementation verification; it must not be treated as generated PRD prose.",
     "",
-    "Verification evidence should include source-consumption diagnostics plus runtime visual comparison against `reference.png` when that check is available.",
+    "Verification evidence should include source-evidence review plus runtime visual comparison against `reference.png` when that check is available.",
     "",
     `Webpage evidence source: ${webpageEvidenceDir}`,
     "",
@@ -538,7 +537,7 @@ function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWe
     '- If the raw skeleton contains `<canvas src="images/canvas/...">`, implement it as an actual visible chart/image component; browsers do not render a `src` attribute on `<canvas>`.',
     "",
     "## Verification Checks",
-    "- Run `web_clone_source_audit` against this source package and use its findings as implementation evidence.",
+    "- Review generated source against this source package and record concrete source-evidence findings.",
     "- Run runtime overlay/visual diff against `reference.png` and inspect the rendered output before claiming fidelity.",
     "",
   ].join("\n")

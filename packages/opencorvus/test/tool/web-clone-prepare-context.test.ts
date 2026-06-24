@@ -75,7 +75,7 @@ describe("tool.web_clone_prepare_context", () => {
 
         const context = await Bun.file(result.metadata.contextPath).text()
         expect(context).not.toContain("web_clone_generate_source_project")
-        expect(context).toContain("web_clone_source_audit")
+        expect(context).not.toContain("web_clone_source_audit")
         expect(context).toContain("EconomicCalendarTable")
         expect(context).toContain("GDP Growth Rate")
         expect(context).toContain("Region Style Profiles")
