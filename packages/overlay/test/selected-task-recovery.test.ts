@@ -155,6 +155,8 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
       },
     }),
   ).toBe(true)
+  expect(conversationAgentStore.records.map((record: any) => record.sessionID)).toEqual(["ses_live"])
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("assistant:session:ses_live:message:msg_live")
 
   registerTaskDirectory("tsk_live")
   await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live")).resolves.toBe(12)

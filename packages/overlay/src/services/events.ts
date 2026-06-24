@@ -3,7 +3,8 @@
 // Executor events (run.progress/run.output) are converted to standard
 // message events and routed to cardTreeStore — no separate executorStore.
 
-import { boardStore, scheduleBoard, loadTasks, setTaskSequence, activeTaskID } from "../store/board"
+import { boardStore, scheduleBoard, loadTasks, setTaskSequence, activeTaskID, activeSessionID } from "../store/board"
+import { applyLiveConversationAgentMessageUpdated } from "../store/conversation-agents"
 import { configRefreshIncludesSettingsData, loadConfigInfo, loadSettingsInfo } from "./init"
 import { markSessionConfigStale } from "./config"
 import { applyEvent as applyTreeWriterEvent, hasProjectedPart } from "./tree-writer"
@@ -84,6 +85,17 @@ function markHandledSelectedLiveEvent(event: any): void {
   const taskID = eventTaskID(event)
   if (taskID && taskID !== activeTaskID()) return
   markSelectedLiveEventConsumed(event)
+}
+
+function selectedConversationAgentSourceKey(event: any): string {
+  const selectedTaskID = activeTaskID()
+  if (selectedTaskID) {
+    const taskID = eventTaskID(event)
+    if (taskID && taskID !== selectedTaskID) return ""
+    return `task:${selectedTaskID}`
+  }
+  const selectedSessionID = activeSessionID()
+  return selectedSessionID ? `session:${selectedSessionID}` : ""
 }
 
 function isMessageWriterPrerequisiteError(error: unknown): boolean {
@@ -556,6 +568,10 @@ export function routeSSEEvent(event: any): boolean {
       if (!isMessageWriterPrerequisiteError(error)) throw error
       scheduleSelectedTaskRecovery(`message writer prerequisites missing: ${type}`)
       return true
+    }
+    if (type === "message.updated") {
+      const sourceKey = selectedConversationAgentSourceKey(event)
+      if (sourceKey) applyLiveConversationAgentMessageUpdated(sourceKey, event)
     }
     advanceHandledSelectedTaskSequence(event)
     markHandledSelectedLiveEvent(event)

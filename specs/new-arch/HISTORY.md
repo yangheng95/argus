@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                         | Title                                     |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| [2026-06-24-agent-rail-live-message-stream.md](2026-06-24-agent-rail-live-message-stream.md) | Agent Rail Live Message Stream            |
 | [2026-06-24-read-context-drilldown-only.md](2026-06-24-read-context-drilldown-only.md)       | Read Context Drilldown Only               |
 | [2026-06-24-scheduler-compact-read-context.md](2026-06-24-scheduler-compact-read-context.md) | Scheduler Compact And Read Context Repair |
 

@@ -3,6 +3,7 @@ import { mergeAgentRecords, sortAgentWorkflowRecordsChronologically } from "../s
 import type { AgentWorkflowRecord } from "../src/utils/agent-workflow"
 import {
   conversationAgentStore,
+  applyLiveConversationAgentMessageUpdated,
   conversationAgentRecordsForSource,
   hydrateConversationAgentView,
   resetConversationAgentView,
@@ -22,6 +23,21 @@ function record(sessionID: string, startedAt: number, renderedCardID?: string): 
     attempts: 1,
     depth: 1,
     ...(renderedCardID ? { renderedCardID } : {}),
+  }
+}
+
+function liveMessageUpdated(info: Record<string, any>) {
+  return {
+    type: "message.updated",
+    properties: {
+      info: {
+        role: "assistant",
+        resolvedRole: info.channel,
+        agent: info.channel,
+        time: { created: 1_779_100_000_000 },
+        ...info,
+      },
+    },
   }
 }
 
@@ -265,4 +281,90 @@ test("hydrated agent records are scoped to the selected task or session source",
   expect(
     conversationAgentRecordsForSource({ kind: "session", id: "ses_coding" }).map((record) => record.sessionID),
   ).toEqual(["ses_coding_child"])
+})
+
+test("live message.updated creates a rail record without waiting for hydrate", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentMessageUpdated(
+    "task:tsk_live",
+    liveMessageUpdated({
+      id: "msg_live",
+      sessionID: "ses_live_build",
+      channel: "build",
+      time: { created: 1_779_100_000_100 },
+    }),
+  )
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live" })
+  expect(records.map((item) => item.sessionID)).toEqual(["ses_live_build"])
+  expect(records[0]?.status).toBe("running")
+  expect(records[0]?.renderedCardID).toBe("build:session:ses_live_build:message:msg_live")
+  expect(records[0]?.targetMessageID).toBe("msg_live")
+})
+
+test("live message.updated retargets goal-phase records to the rendered step card", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentMessageUpdated(
+    "task:tsk_live_phase",
+    liveMessageUpdated({
+      id: "msg_plan",
+      sessionID: "ses_live_plan",
+      parentSessionID: "ses_goal_root",
+      channel: "planner",
+      goalID: "goal_live",
+      time: { created: 1_779_100_000_200, completed: 1_779_100_000_250 },
+    }),
+  )
+
+  const records = conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_phase" })
+  expect(records[0]?.status).toBe("completed")
+  expect(records[0]?.parentSessionID).toBe("ses_goal_root")
+  expect(records[0]?.cardID).toBe("step:goal_live:build:phase:plan")
+  expect(records[0]?.renderedCardID).toBe("step:goal_live:build")
+  expect(records[0]?.stepID).toBe("build")
+  expect(records[0]?.phaseID).toBe("plan")
+})
+
+test("live message.updated ignores non-agent channels", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentMessageUpdated(
+    "task:tsk_live_ignored",
+    liveMessageUpdated({
+      id: "msg_user",
+      sessionID: "ses_user",
+      channel: "main",
+      role: "user",
+      resolvedRole: "user",
+      agent: "user",
+    }),
+  )
+  applyLiveConversationAgentMessageUpdated(
+    "task:tsk_live_ignored",
+    liveMessageUpdated({
+      id: "msg_filtered",
+      sessionID: "ses_filtered",
+      channel: "filtered",
+      resolvedRole: "filtered",
+      agent: "filtered",
+    }),
+  )
+
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "tsk_live_ignored" })).toEqual([])
+})
+
+test("live message.updated records are scoped by task and session source keys", () => {
+  resetConversationAgentView()
+  applyLiveConversationAgentMessageUpdated(
+    "session:ses_coding_live",
+    liveMessageUpdated({
+      id: "msg_coding_live",
+      sessionID: "ses_child_live",
+      channel: "assistant",
+    }),
+  )
+
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "ses_coding_live" })).toEqual([])
+  expect(
+    conversationAgentRecordsForSource({ kind: "session", id: "ses_coding_live" }).map((item) => item.sessionID),
+  ).toEqual(["ses_child_live"])
 })
