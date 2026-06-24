@@ -157,6 +157,17 @@
   overflow-wrap: anywhere;
 }
 
+.msg-tool-attachments {
+  margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+  max-width: 100%;
+}
+
+.msg-tool-attachments .msg-img-wrap {
+  margin: 0;
+}
+
 .msg-tool-input {
   margin: calc(6px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));

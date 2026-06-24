@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import test from "node:test"
+import { deflateSync } from "node:zlib"
 
 import { launchBrowser } from "../launch.ts"
 import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
@@ -13,6 +14,54 @@ const tinyPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
   "base64",
 )
+
+function u32(value: number): Buffer {
+  const buffer = Buffer.alloc(4)
+  buffer.writeUInt32BE(value >>> 0, 0)
+  return buffer
+}
+
+function crc32(buffer: Buffer): number {
+  let crc = 0xffffffff
+  for (const byte of buffer) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1))
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function pngChunk(type: string, data = Buffer.alloc(0)): Buffer {
+  const typeBuffer = Buffer.from(type, "ascii")
+  return Buffer.concat([u32(data.length), typeBuffer, data, u32(crc32(Buffer.concat([typeBuffer, data])))])
+}
+
+function comparisonPngBytes(width = 240, height = 96): Buffer {
+  const bytesPerPixel = 3
+  const rowStride = 1 + width * bytesPerPixel
+  const raw = Buffer.alloc(rowStride * height)
+  for (let y = 0; y < height; y += 1) {
+    const row = y * rowStride
+    raw[row] = 0
+    for (let x = 0; x < width; x += 1) {
+      const offset = row + 1 + x * bytesPerPixel
+      const rightSide = x >= width / 2
+      raw[offset] = rightSide ? 58 : 30
+      raw[offset + 1] = rightSide ? 111 : 144
+      raw[offset + 2] = rightSide ? 168 : 255
+    }
+  }
+  const ihdr = Buffer.concat([u32(width), u32(height), Buffer.from([8, 2, 0, 0, 0])])
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw, { level: 1 })),
+    pngChunk("IEND"),
+  ])
+}
+
+const comparisonPng = comparisonPngBytes()
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -106,6 +155,14 @@ test(
               status: "completed",
               input: { url: "https://example.test" },
               output: "Browser observation captured.",
+              attachments: [
+                {
+                  type: "file",
+                  url: "/attachment/project/compare-side-by-side.png",
+                  mime: "image/png",
+                  filename: "desktop-failed-main-side-by-side.png",
+                },
+              ],
               metadata: {
                 browser: {
                   url: "https://example.test",
@@ -141,6 +198,9 @@ test(
       if (path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
       if (path === "/attachment/project/tiny.png") {
         return new Response(tinyPng, { headers: { "content-type": "image/png" } })
+      }
+      if (path === "/attachment/project/compare-side-by-side.png") {
+        return new Response(comparisonPng, { headers: { "content-type": "image/png" } })
       }
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
@@ -221,6 +281,16 @@ test(
         ])
       }
       if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/skill/mounts")
+        return send({
+          scope: "project",
+          skills: [],
+          agents: [],
+          matrix: [],
+          project_mounts: { agents: {} },
+          unmounted_count: 0,
+        })
+      if (path === "/skill/market") return send([])
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
@@ -401,13 +471,76 @@ test(
         main.getAttribute("aria-expanded"),
       )
       assert.equal(expandedToolHeader, "true")
+      await page.waitForSelector(".msg-tool-attachments .msg-image-trigger")
+      const genericAttachmentState = await page.$eval(".msg-tool-attachments .md-img", (image) => {
+        const img = image as HTMLImageElement
+        const trigger = img.closest<HTMLElement>(".msg-image-trigger")
+        return {
+          alt: img.alt,
+          triggerLabel: trigger?.getAttribute("aria-label") || "",
+          dataTrigger: trigger?.getAttribute("data-image-preview-trigger") || "",
+          dataSrc: trigger?.getAttribute("data-image-preview-src") || "",
+          disabled: trigger instanceof HTMLButtonElement ? trigger.disabled : false,
+          complete: img.complete,
+          naturalWidth: img.naturalWidth,
+        }
+      })
+      assert.deepEqual(genericAttachmentState, {
+        alt: "desktop-failed-main-side-by-side.png",
+        triggerLabel: "打开图片预览：desktop-failed-main-side-by-side.png",
+        dataTrigger: "true",
+        dataSrc: genericAttachmentState.dataSrc,
+        disabled: false,
+        complete: true,
+        naturalWidth: 240,
+      })
+      assert.ok(genericAttachmentState.dataSrc.startsWith("blob:"))
       const toolCard = await page.$('.card[data-kind="tool"]')
       assert.ok(toolCard)
       const toolHeaderScreenshotPath = resolve(".scratch", "card-header-sibling-controls.png")
       mkdirSync(resolve(".scratch"), { recursive: true })
       writeFileSync(toolHeaderScreenshotPath, await toolCard.screenshot({}))
+      const attachmentScreenshotPath = resolve(".scratch", "tool-result-image-attachments.png")
+      writeFileSync(attachmentScreenshotPath, await toolCard.screenshot({}))
+      await page.click(".msg-tool-attachments .msg-image-trigger")
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 250)))
+      const genericDialogState = await page.evaluate(() => {
+        const dialog = document.querySelector<HTMLElement>("#imagePreviewDialog")
+        const image = document.querySelector<HTMLImageElement>(".image-preview-dialog__image")
+        const rect = dialog?.getBoundingClientRect()
+        const style = dialog ? getComputedStyle(dialog) : null
+        return {
+          exists: !!dialog,
+          display: style?.display || "",
+          visibility: style?.visibility || "",
+          opacity: style?.opacity || "",
+          width: rect?.width ?? 0,
+          height: rect?.height ?? 0,
+          title: dialog?.querySelector(".dialog-title")?.textContent?.trim() || "",
+          src: image?.getAttribute("src") || "",
+          alt: image?.getAttribute("alt") || "",
+        }
+      })
+      assert.equal(genericDialogState.display, "block", JSON.stringify(genericDialogState))
+      assert.equal(genericDialogState.visibility, "visible", JSON.stringify(genericDialogState))
+      assert.ok(genericDialogState.width > 0 && genericDialogState.height > 0, JSON.stringify(genericDialogState))
+      await page.waitForFunction(() => {
+        const image = document.querySelector<HTMLImageElement>(".image-preview-dialog__image")
+        return Boolean(
+          image?.complete &&
+            image.naturalWidth > 0 &&
+            image.alt === "desktop-failed-main-side-by-side.png",
+        )
+      })
+      await page.click('#imagePreviewDialog button[aria-label="关闭"]')
+      await page.waitForFunction(() => {
+        const dialog = document.querySelector<HTMLElement>("#imagePreviewDialog")
+        if (!dialog) return true
+        const rect = dialog.getBoundingClientRect()
+        const style = getComputedStyle(dialog)
+        return style.visibility === "hidden" || style.display === "none" || rect.width === 0 || rect.height === 0
+      })
       await page.click(".msg-browser-evidence__trigger")
-      await page.waitForSelector("#imagePreviewDialog")
       await page.waitForFunction(() => {
         const image = document.querySelector<HTMLImageElement>(".image-preview-dialog__image")
         return Boolean(image?.complete && image.naturalWidth > 0)

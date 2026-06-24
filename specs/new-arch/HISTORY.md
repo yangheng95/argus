@@ -16,6 +16,7 @@ Update this file whenever a historical note is added, removed, renamed, merged, 
 
 | File                                                                                         | Title                                     |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| [2026-06-24-tool-result-image-attachments.md](2026-06-24-tool-result-image-attachments.md) | Tool Result Image Attachments |
 | [2026-06-24-agent-rail-live-message-stream.md](2026-06-24-agent-rail-live-message-stream.md) | Agent Rail Live Message Stream            |
 | [2026-06-24-remove-web-clone-source-audit.md](2026-06-24-remove-web-clone-source-audit.md) | Remove Web Clone Source Audit Tool |
 | [2026-06-24-prune-obsolete-invalid-tests.md](2026-06-24-prune-obsolete-invalid-tests.md) | Prune Obsolete Invalid Tests |
