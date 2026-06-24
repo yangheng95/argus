@@ -62,6 +62,8 @@ rg -n "deleteTask\(|DELETE /task|project/current|closeProject\(|removeRecentDire
 - Implement project deletion outside `Project` namespace to avoid making `Project` depend on `task-api`.
 - Read all current project task ids from `EngineTaskTable`.
 - For each task id, call `EngineService.deleteTask(taskID)`.
+- After task deletion, collect every remaining `SessionTable` row in the current project and cancel/wait its `TaskQueueService` and live `SessionPrompt` handles before removing project files or DB rows. This covers assistant/mission/coding sessions that are project-owned but not rooted at an `EngineTaskTable` row.
+- If queue or prompt cancellation cannot be proven, surface `TaskCancellationIncompleteError` before deleting project files or project/session rows.
 - Delete `DecisionLogTable` rows for the collected task ids.
 - Delete `ControlMessageTable` and `QuickNoteTable` rows by current project id.
 - Delete the `.opencorvus` directory after resolving and checking that the target stays inside the current project directory and the basename is exactly `.opencorvus`.
@@ -86,11 +88,14 @@ rg -n "deleteTask\(|DELETE /task|project/current|closeProject\(|removeRecentDire
 6. `DELETE /task/:taskID` remains record-level and its route directory policy is unchanged.
 7. Mission/Coding Assistant project groups keep using `ProjectLedgerGroup` without a project delete action.
 8. Visual verification shows the project delete button aligned in the project group header without text overlap at desktop and mobile widths.
+9. Project delete waits for project-owned non-task queue wakes/prompts before deleting `.opencorvus` or project/session rows.
 
 ## Verification
 
 ```powershell
 bun test packages/opencorvus/test/server/project-routes.test.ts --test-name-pattern "DELETE /project/current" --timeout 60000
+bun test packages/opencorvus/test/task-api/delete-running-task-settle.test.ts packages/opencorvus/test/scheduler/task-queue-service.test.ts --timeout 60000
+bun run --cwd packages/opencorvus typecheck
 bun test packages/overlay/test/project-delete-button.test.ts packages/overlay/test/workspace-active-directory.test.ts packages/overlay/test/task-list-buttons-primitive.test.ts --timeout 60000
 node test/browser-runner.mjs test/browser/project-ledger-group-browser.test.ts
 ```

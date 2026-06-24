@@ -3,9 +3,14 @@ import path from "node:path"
 import z from "zod"
 import { ControlMessageTable } from "@/control/control.sql"
 import { DecisionLogTable } from "@/decision-log/schema"
+import { assertSessionPromptSubtreeFinished, cancelSessionPromptInScope } from "@/engine/cancellation-scope"
+import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
 import { EngineTaskTable } from "@/engine/engine.sql"
 import { QuickNoteTable } from "@/quicknote/quicknote.sql"
-import { EngineService } from "@/task-api"
+import { TaskQueueService } from "@/scheduler/task-queue-service"
+import { SessionTable } from "@/session/session.sql"
+import { CANCEL_CLEANUP_TIMEOUT_MS, EngineService } from "@/task-api"
+import { withTimeout } from "@/util/await-with-timeout"
 import { Database, eq, inArray } from "@/storage/db"
 import { Instance } from "./instance"
 import { ProjectTable } from "./project.sql"
@@ -53,6 +58,71 @@ function projectTaskIDs(projectID: string): string[] {
   )
 }
 
+type ProjectPromptSession = {
+  id: string
+  directory: string
+}
+
+function projectPromptSessions(projectID: string): ProjectPromptSession[] {
+  return Database.use((db) =>
+    db
+      .select({
+        id: SessionTable.id,
+        directory: SessionTable.directory,
+      })
+      .from(SessionTable)
+      .where(eq(SessionTable.project_id, projectID))
+      .orderBy(SessionTable.time_created, SessionTable.id)
+      .all(),
+  )
+}
+
+async function cancelRemainingProjectSessionPrompts(projectID: string): Promise<void> {
+  const sessions = projectPromptSessions(projectID)
+  const sessionIDs = sessions.map((session) => session.id)
+  const cancelledSessions: ProjectPromptSession[] = []
+  const failures: unknown[] = []
+
+  TaskQueueService.cancelSessionPrompts({
+    sessionIDs,
+    reason: "project deleted",
+  })
+
+  for (const session of sessions.slice().reverse()) {
+    try {
+      if (
+        cancelSessionPromptInScope({
+          session,
+          handle: "ProjectDelete.SessionPrompt.cancel",
+        })
+      ) {
+        cancelledSessions.push(session)
+      }
+    } catch (error) {
+      failures.push(error)
+    }
+  }
+
+  try {
+    await withTimeout(
+      TaskQueueService.awaitSessionPromptsIdle({ sessionIDs }),
+      CANCEL_CLEANUP_TIMEOUT_MS,
+      "ProjectDelete.TaskQueueService.awaitSessionPromptsIdle",
+    )
+  } catch (cause) {
+    throw createTaskCancellationIncomplete({
+      handle: "ProjectDelete.TaskQueueService.awaitSessionPromptsIdle",
+      cause,
+    })
+  }
+
+  await assertSessionPromptSubtreeFinished({
+    sessions: cancelledSessions,
+    failures,
+    handle: "ProjectDelete.SessionPrompt.cancel",
+  })
+}
+
 function deleteProjectRows(projectID: string, taskIDs: string[]): void {
   Database.transaction((db) => {
     if (taskIDs.length > 0) {
@@ -74,6 +144,7 @@ export async function deleteCurrentProject(): Promise<ProjectDeleteResult> {
     await EngineService.deleteTask(taskID)
   }
 
+  await cancelRemainingProjectSessionPrompts(projectID)
   await removeProjectConfigRoot(directory)
   deleteProjectRows(projectID, taskIDs)
   await Instance.dispose()
