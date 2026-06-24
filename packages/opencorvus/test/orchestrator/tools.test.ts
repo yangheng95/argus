@@ -75,7 +75,7 @@ import {
   persistentRootSummary,
   renderIntegrityRootHistoryBlock,
 } from "../../src/integrity/root-history"
-import { Config } from "../../src/config/config"
+import { EffectiveConfig } from "../../src/config/effective"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { Provider } from "../../src/provider/provider"
 import { createRun } from "../../src/engine/writer"
@@ -3477,7 +3477,6 @@ describe("orchestrator tools", () => {
           time_created: now,
           time_updated: now,
           time_started: now,
-          time_completed: now + 1,
         })
         .run()
     })
@@ -3493,7 +3492,9 @@ describe("orchestrator tools", () => {
             .where(eq(EngineTaskTable.id, taskID))
             .run(),
         )
-        spyOn(Config, "get").mockResolvedValue({ experimental: { auto_confirm_proposed_tasks: false } } as any)
+        spyOn(EffectiveConfig, "effective").mockResolvedValue({
+          experimental: { auto_confirm_proposed_tasks: false },
+        } as never)
         const pipeline = WorkflowRegistry.resolveSync("pipeline")!
         const { tools } = createOrchestratorTools({
           taskID,

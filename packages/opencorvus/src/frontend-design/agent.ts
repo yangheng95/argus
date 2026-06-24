@@ -44,6 +44,7 @@ import { EditTool } from "@/tool/edit"
 import { WriteTool } from "@/tool/write"
 import { ApplyPatchTool } from "@/tool/apply_patch"
 import { SkillTool } from "@/tool/skill"
+import { RequestOrchestratorDecisionTool } from "@/tool/request-orchestrator-decision"
 import type { AgentReport } from "@/agent/report"
 import {
   WebpageAnalyzeTool,
@@ -1095,6 +1096,7 @@ async function createFrontendUtilityTools(
   if (!agent) throw new Error("frontend-design agent definition is missing")
   const tools = {
     skill: await createFrontendTool(SkillTool, input, trace, { agent }),
+    request_orchestrator_decision: await createFrontendTool(RequestOrchestratorDecisionTool, input, trace),
   }
   return selectFrontendStaticTools(tools, FRONTEND_DESIGN_UTILITY_TOOL_IDS, "frontend-design utility")
 }
