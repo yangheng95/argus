@@ -2944,6 +2944,41 @@ export type EventMessageInjected = {
   }
 }
 
+export type EventAgentCoordinationRequested = {
+  type: "agent.coordination.requested"
+  properties: {
+    taskID: string
+    requestID: string
+    sessionID: string
+    agent: string
+    blocking: boolean
+    severity: "info" | "blocked" | "failure"
+    summary: string
+  }
+}
+
+export type EventAgentCoordinationResponded = {
+  type: "agent.coordination.responded"
+  properties: {
+    taskID: string
+    requestID: string
+    responseID: string
+    sessionID: string
+    decision: "continue" | "cancel_worker" | "redispatch" | "fail_task" | "ask_user"
+    summary: string
+  }
+}
+
+export type EventAgentCoordinationCancelled = {
+  type: "agent.coordination.cancelled"
+  properties: {
+    taskID: string
+    requestID: string
+    sessionID: string
+    summary: string
+  }
+}
+
 export type EventWorkflowSelected = {
   type: "workflow.selected"
   properties: {
@@ -3509,6 +3544,9 @@ export type Event =
   | EventRunProgress
   | EventRunOutput
   | EventMessageInjected
+  | EventAgentCoordinationRequested
+  | EventAgentCoordinationResponded
+  | EventAgentCoordinationCancelled
   | EventWorkflowSelected
   | EventWorkflowStepUpdated
   | EventGoalWorkflowProgress

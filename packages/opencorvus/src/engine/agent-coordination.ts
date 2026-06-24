@@ -2,9 +2,12 @@ import { Event } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { Identifier } from "@/id/id"
 import { processOwner } from "@/engine/lease"
-import { and, desc, eq } from "@/storage/db"
+import { taskIDForSession } from "@/orchestrator/task-event"
+import { and, desc, eq, sql } from "@/storage/db"
 import { Database } from "@/storage/db"
 import { EngineArtifactTable, EngineTaskTable, type EngineArtifactKind, type EngineMetadata } from "./engine.sql"
+import { findGoal, findGoalRun } from "./store"
+import { listLiveOrchestratorToolOwnership } from "./tool-ownership"
 
 export type AgentCoordinationSeverity = "info" | "blocked" | "failure"
 export type AgentCoordinationRequestStatus = "pending" | "responded" | "cancelled"
@@ -62,6 +65,8 @@ export interface AgentCoordinationResponseRow {
   timeUpdated: number
 }
 
+type AgentCoordinationArtifactRow = typeof EngineArtifactTable.$inferSelect
+
 function requireTask(taskID: string): void {
   const row = Database.use((db) =>
     db.select({ id: EngineTaskTable.id }).from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
@@ -76,6 +81,67 @@ function pendingRequestForSession(input: {
   return listAgentCoordinationRequests(input.taskID).find(
     (row) => row.payload.session_id === input.sessionID && row.payload.status === "pending",
   )
+}
+
+function requestRowFromArtifact(row: AgentCoordinationArtifactRow): AgentCoordinationRequestRow | undefined {
+  const payload = normalizeAgentCoordinationRequestPayload(row.payload)
+  if (!payload) return undefined
+  return {
+    artifactID: row.id,
+    taskID: row.task_id,
+    payload,
+    timeCreated: row.time_created,
+    timeUpdated: row.time_updated,
+  }
+}
+
+function validateAgentCoordinationRequestBinding(input: {
+  taskID: string
+  sessionID: string
+  goalID?: string
+  goalRunID?: string
+}): void {
+  const owningTask = taskIDForSession(input.sessionID)
+  if (owningTask && owningTask !== input.taskID) {
+    throw new Error(`Agent coordination session ${input.sessionID} belongs to task ${owningTask}, not ${input.taskID}`)
+  }
+
+  const liveOwnership = listLiveOrchestratorToolOwnership(input.taskID).find(
+    (ownership) => ownership.payload.child_session_id === input.sessionID,
+  )
+
+  if (input.goalID) {
+    const goal = findGoal(input.goalID)
+    if (!goal) throw new Error(`Agent coordination goal not found: ${input.goalID}`)
+    if (goal.task_id !== input.taskID) {
+      throw new Error(`Agent coordination goal ${input.goalID} belongs to task ${goal.task_id}, not ${input.taskID}`)
+    }
+  }
+
+  let goalRunSessionMatches = false
+  if (input.goalRunID) {
+    const goalRun = findGoalRun(input.goalRunID)
+    if (!goalRun) throw new Error(`Agent coordination goal_run not found: ${input.goalRunID}`)
+    if (goalRun.task_id !== input.taskID) {
+      throw new Error(
+        `Agent coordination goal_run ${input.goalRunID} belongs to task ${goalRun.task_id}, not ${input.taskID}`,
+      )
+    }
+    if (input.goalID && goalRun.goal_id !== input.goalID) {
+      throw new Error(
+        `Agent coordination goal_run ${input.goalRunID} belongs to goal ${goalRun.goal_id}, not ${input.goalID}`,
+      )
+    }
+    if (goalRun.session_id !== input.sessionID) {
+      throw new Error(
+        `Agent coordination goal_run ${input.goalRunID} is bound to session ${goalRun.session_id ?? "null"}, not ${input.sessionID}`,
+      )
+    }
+    goalRunSessionMatches = true
+  }
+
+  if (owningTask === input.taskID || liveOwnership || goalRunSessionMatches) return
+  throw new Error(`Agent coordination session ${input.sessionID} is not owned by task ${input.taskID}`)
 }
 
 export function createAgentCoordinationRequest(input: {
@@ -94,6 +160,7 @@ export function createAgentCoordinationRequest(input: {
   now?: number
 }): AgentCoordinationRequestRow {
   requireTask(input.taskID)
+  validateAgentCoordinationRequestBinding(input)
   const existing = pendingRequestForSession({ taskID: input.taskID, sessionID: input.sessionID })
   if (existing) {
     throw new Error(
@@ -174,17 +241,8 @@ export function listAgentCoordinationRequests(taskID: string): AgentCoordination
       .all(),
   )
   return rows.flatMap((row) => {
-    const payload = normalizeAgentCoordinationRequestPayload(row.payload)
-    if (!payload) return []
-    return [
-      {
-        artifactID: row.id,
-        taskID: row.task_id,
-        payload,
-        timeCreated: row.time_created,
-        timeUpdated: row.time_updated,
-      },
-    ]
+    const request = requestRowFromArtifact(row)
+    return request ? [request] : []
   })
 }
 
@@ -210,15 +268,7 @@ export function findAgentCoordinationRequest(input: {
       .get(),
   )
   if (!row) return undefined
-  const payload = normalizeAgentCoordinationRequestPayload(row.payload)
-  if (!payload) return undefined
-  return {
-    artifactID: row.id,
-    taskID: row.task_id,
-    payload,
-    timeCreated: row.time_created,
-    timeUpdated: row.time_updated,
-  }
+  return requestRowFromArtifact(row)
 }
 
 export function createAgentCoordinationResponse(input: {
@@ -232,42 +282,44 @@ export function createAgentCoordinationResponse(input: {
   workerMessageID?: string
   now?: number
 }): AgentCoordinationResponseRow {
-  const request = findAgentCoordinationRequest({ taskID: input.taskID, requestID: input.requestID })
-  if (!request) throw new Error(`Agent coordination request not found: ${input.requestID}`)
-  if (request.payload.status !== "pending") {
-    throw new Error(`Agent coordination request ${input.requestID} is ${request.payload.status}`)
-  }
   const now = input.now ?? Date.now()
   const responseID = Identifier.ascending("artifact")
-  const payload: AgentCoordinationResponsePayload = {
-    response_id: responseID,
-    request_id: input.requestID,
-    task_id: input.taskID,
-    orchestrator_session_id: input.orchestratorSessionID,
-    orchestrator_message_id: input.orchestratorMessageID,
-    decision: input.decision,
-    reason: input.reason,
-    ...(input.message ? { message: input.message } : {}),
-    ...(input.workerMessageID ? { worker_message_id: input.workerMessageID } : {}),
-    created_at: now,
-  }
+  let request: AgentCoordinationRequestRow | undefined
+  let payload: AgentCoordinationResponsePayload | undefined
 
-  Database.use((db) => {
-    db.insert(EngineArtifactTable)
-      .values({
-        id: responseID,
-        task_id: input.taskID,
-        run_id: null,
-        goal_run_id: request.payload.goal_run_id ?? null,
-        acceptance_id: null,
-        kind: "agent_coordination_response" as EngineArtifactKind,
-        label: input.decision,
-        payload,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    db.update(EngineArtifactTable)
+  Database.transaction((db) => {
+    const requestRow = db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.id, input.requestID),
+          eq(EngineArtifactTable.kind, "agent_coordination_request"),
+        ),
+      )
+      .get()
+    request = requestRow ? requestRowFromArtifact(requestRow) : undefined
+    if (!request) throw new Error(`Agent coordination request not found: ${input.requestID}`)
+    if (request.payload.status !== "pending") {
+      throw new Error(`Agent coordination request ${input.requestID} is ${request.payload.status}`)
+    }
+
+    payload = {
+      response_id: responseID,
+      request_id: input.requestID,
+      task_id: input.taskID,
+      orchestrator_session_id: input.orchestratorSessionID,
+      orchestrator_message_id: input.orchestratorMessageID,
+      decision: input.decision,
+      reason: input.reason,
+      ...(input.message ? { message: input.message } : {}),
+      ...(input.workerMessageID ? { worker_message_id: input.workerMessageID } : {}),
+      created_at: now,
+    }
+
+    const updated = db
+      .update(EngineArtifactTable)
       .set({
         label: "responded",
         payload: {
@@ -283,10 +335,31 @@ export function createAgentCoordinationResponse(input: {
           eq(EngineArtifactTable.task_id, input.taskID),
           eq(EngineArtifactTable.id, input.requestID),
           eq(EngineArtifactTable.kind, "agent_coordination_request"),
+          eq(EngineArtifactTable.label, "pending"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
         ),
       )
+      .returning({ id: EngineArtifactTable.id })
+      .get()
+    if (!updated) throw new Error(`Agent coordination request ${input.requestID} was already claimed`)
+
+    db.insert(EngineArtifactTable)
+      .values({
+        id: responseID,
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: request.payload.goal_run_id ?? null,
+        acceptance_id: null,
+        kind: "agent_coordination_response" as EngineArtifactKind,
+        label: input.decision,
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
       .run()
   })
+
+  if (!request || !payload) throw new Error(`Agent coordination response transaction failed: ${input.requestID}`)
 
   void EngineProtocol.emit(
     Event.AgentCoordinationResponded,
@@ -312,16 +385,15 @@ export function createAgentCoordinationResponse(input: {
   return { artifactID: responseID, taskID: input.taskID, payload, timeCreated: now, timeUpdated: now }
 }
 
-export function cancelPendingAgentCoordinationRequestsForSession(input: {
+function cancelPendingAgentCoordinationRequests(input: {
   taskID: string
-  sessionID: string
   reason: string
+  filter?: (row: AgentCoordinationRequestRow) => boolean
   now?: number
 }): number {
-  const pending = listPendingAgentCoordinationRequests(input.taskID).filter(
-    (row) => row.payload.session_id === input.sessionID,
-  )
+  const pending = listPendingAgentCoordinationRequests(input.taskID).filter((row) => input.filter?.(row) ?? true)
   const now = input.now ?? Date.now()
+  let cancelled = 0
   for (const request of pending) {
     const payload: AgentCoordinationRequestPayload = {
       ...request.payload,
@@ -329,36 +401,64 @@ export function cancelPendingAgentCoordinationRequestsForSession(input: {
       cancelled_at: now,
       cancel_reason: input.reason,
     }
-    Database.use((db) => {
-      db.update(EngineArtifactTable)
+    const updated = Database.use((db) =>
+      db
+        .update(EngineArtifactTable)
         .set({ label: "cancelled", payload, time_updated: now })
         .where(
           and(
             eq(EngineArtifactTable.task_id, input.taskID),
             eq(EngineArtifactTable.id, request.artifactID),
             eq(EngineArtifactTable.kind, "agent_coordination_request"),
+            eq(EngineArtifactTable.label, "pending"),
+            sql`json_extract(${EngineArtifactTable.payload}, '$.status') = 'pending'`,
           ),
         )
-        .run()
-    })
+        .returning({ id: EngineArtifactTable.id })
+        .get(),
+    )
+    if (!updated) continue
+    cancelled += 1
     void EngineProtocol.emit(
       Event.AgentCoordinationCancelled,
       {
         taskID: input.taskID,
         requestID: request.payload.request_id,
-        sessionID: input.sessionID,
+        sessionID: request.payload.session_id,
         summary: input.reason,
       },
       {
         taskID: input.taskID,
-        sessionID: input.sessionID,
+        sessionID: request.payload.session_id,
         source: "orchestrator",
         target: request.payload.agent,
         correlationID: request.payload.request_id,
       },
     )
   }
-  return pending.length
+  return cancelled
+}
+
+export function cancelPendingAgentCoordinationRequestsForSession(input: {
+  taskID: string
+  sessionID: string
+  reason: string
+  now?: number
+}): number {
+  return cancelPendingAgentCoordinationRequests({
+    taskID: input.taskID,
+    reason: input.reason,
+    now: input.now,
+    filter: (row) => row.payload.session_id === input.sessionID,
+  })
+}
+
+export function cancelPendingAgentCoordinationRequestsForTask(input: {
+  taskID: string
+  reason: string
+  now?: number
+}): number {
+  return cancelPendingAgentCoordinationRequests(input)
 }
 
 function normalizeAgentCoordinationRequestPayload(payload: unknown): AgentCoordinationRequestPayload | undefined {

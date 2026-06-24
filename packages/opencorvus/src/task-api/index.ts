@@ -99,6 +99,8 @@ import {
 } from "@/engine/cancellation-scope"
 import { createTaskCancellationIncomplete } from "@/engine/cancellation-error"
 import { requestTaskAgentLifecycleCancellation } from "@/engine/task-agent-lifecycle"
+import { cancelPendingAgentCoordinationRequestsForTask } from "@/engine/agent-coordination"
+import { abortGoalRunExecution } from "@/engine/execution-abort"
 import { withTimeout, AwaitTimeoutError } from "@/util/await-with-timeout"
 import { createDecisionLog } from "@/decision-log"
 import { Orchestrator } from "@/orchestrator/agent"
@@ -1913,7 +1915,7 @@ export namespace EngineService {
       reason: "task cancelled",
       handle: "task-api.cancel-task",
     })
-    TaskQueueService.cancelSessionPrompts({
+    const queuedPromptCancellations = TaskQueueService.cancelSessionPrompts({
       sessionIDs: lifecycle.sessionIDs,
       reason: "task cancelled",
     })
@@ -1939,31 +1941,14 @@ export namespace EngineService {
     )
     await Promise.all(
       liveGoalRuns.map(async (row) => {
-        const refs =
-          row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-            ? (row.metadata as Record<string, unknown>)
-            : undefined
-        // goal_run executor follows its coordinator run — the separate column
-        // was dead (written only, never read). Resolve via the parent run.
-        const coordinatorRun = findRun(row.coordinator_run_id)
-        if (!coordinatorRun) return
-        const succeeded = await withTimeout(
-          ExecutorRegistry.require(coordinatorRun.executor).abort({
-            sessionID:
-              typeof refs?.provider_session_id === "string" ? refs.provider_session_id : (row.session_id ?? undefined),
-            queueTaskID: typeof refs?.queue_task_id === "string" ? refs.queue_task_id : undefined,
-          }),
+        await abortGoalRunExecution({
+          taskID,
+          goalRunID: row.id,
+          reason: "task cancelled",
           abortTimeoutMs,
-          "executor.abort liveGoalRun",
-        ).catch((err) =>
-          onAbortFailure("executor.abort liveGoalRun", err, { goalRunID: row.id, runID: coordinatorRun.id }),
+        }).catch((err) =>
+          onAbortFailure("abortGoalRunExecution", err, { goalRunID: row.id, runID: row.coordinator_run_id }),
         )
-        if (!succeeded) {
-          onAbortFailure("executor.abort liveGoalRun", new Error("executor.abort returned false"), {
-            goalRunID: row.id,
-            runID: coordinatorRun.id,
-          })
-        }
       }),
     )
     const { abortLiveExecutionForTask } = await import("@/engine/writer")
@@ -2008,6 +1993,29 @@ export namespace EngineService {
       failures: lifecycle.cancellationFailures,
       taskID,
       inactivityTimeoutMs: options?.promptSettleInactivityMs,
+    })
+    const secondPassCoordinationRequestsCancelled = cancelPendingAgentCoordinationRequestsForTask({
+      taskID,
+      reason: "task cancelled",
+    })
+    decisions.append({
+      phase: "cancel",
+      key: "agent_lifecycle_report",
+      value: JSON.stringify({
+        taskID,
+        sessionIDs: lifecycle.sessionIDs,
+        promptCancellations: lifecycle.cancelledSessions.map((session) => session.id),
+        queuedPromptCancellations,
+        ownerships: lifecycle.ownerships.map((ownership) => ownership.ownershipID),
+        goalRunIDs: lifecycle.goalRunIDs,
+        runIDs: lifecycle.runIDs,
+        pendingCoordinationRequestsCancelled:
+          lifecycle.pendingCoordinationRequestsCancelled + secondPassCoordinationRequestsCancelled,
+        cancellationFailures: lifecycle.cancellationFailures.map((error) =>
+          error instanceof Error ? error.message : String(error),
+        ),
+      }),
+      reason: "Task cancellation collected and cancelled every task-owned agent lifecycle handle before terminal status.",
     })
     await updateTask(
       task,

@@ -106,11 +106,14 @@ export namespace AgentToolPool {
     "planner",
     "mission_state",
     "wait",
-    "request_orchestrator_decision",
     "goal_report",
     "lsp",
     "batch",
   ] as const
+
+  const taskCodingGlobal = [...codingGlobal, "request_orchestrator_decision"] as const
+
+  const customDefaultGlobal = GLOBAL_TOOL_IDS.filter((id) => id !== "request_orchestrator_decision")
 
   export const roleAssignments: Record<AgentRoleID, ToolPoolAssignment> = {
     coding: pool({
@@ -122,7 +125,7 @@ export namespace AgentToolPool {
       private: CODING_PRIVATE_TOOL_IDS,
     }),
     build: pool({
-      global: codingGlobal,
+      global: taskCodingGlobal,
       private: BUILD_PRIVATE_TOOL_IDS,
     }),
     "visual-qa": fromVisibleToolIDs(VISUAL_QA_STATIC_TOOL_IDS),
@@ -146,7 +149,6 @@ export namespace AgentToolPool {
         "schedule",
         "mission_state",
         "wait",
-        "request_orchestrator_decision",
         "goal_report",
         "lsp",
         "batch",
@@ -236,7 +238,7 @@ export namespace AgentToolPool {
   }
 
   export function customDefault(): ToolPoolAssignment {
-    return pool({ global: GLOBAL_TOOL_IDS })
+    return pool({ global: customDefaultGlobal })
   }
 
   export function normalize(input: Partial<ToolPoolAssignment> | undefined): ToolPoolAssignment {

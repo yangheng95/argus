@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { createDecisionLog } from "../../src/decision-log"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import {
   createOrchestratorToolOwnershipPayload,
@@ -203,5 +204,15 @@ describe("cancelTask live orchestrator ownership cleanup", () => {
     const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
     expect(task?.time_completed).toBeNumber()
     expect(task?.error).toBe("task cancelled")
+    const lifecycleReport = createDecisionLog(taskID).readByKey("agent_lifecycle_report")
+    expect(lifecycleReport).toBeDefined()
+    const lifecycleValue = JSON.parse(lifecycleReport!.value) as {
+      sessionIDs: string[]
+      queuedPromptCancellations: number
+      pendingCoordinationRequestsCancelled: number
+    }
+    expect(lifecycleValue.sessionIDs).toContain(childID)
+    expect(lifecycleValue.queuedPromptCancellations).toBe(1)
+    expect(lifecycleValue.pendingCoordinationRequestsCancelled).toBe(1)
   })
 })

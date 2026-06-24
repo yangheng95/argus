@@ -94,6 +94,7 @@ import {
 import { createAgentCoordinationRequest, findAgentCoordinationRequest } from "../../src/engine/agent-coordination"
 import { researchRequestHash, researchSourceDigest } from "../../src/research/schema"
 import { recordFactCheckAttempt } from "../../src/fact-check/persist"
+import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 
 let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
@@ -572,6 +573,45 @@ async function createAbortableCoordinatorRun(input: { taskID: string; sessionID:
     "bind test abort handle",
   )
   return run.id
+}
+
+function installFrontendResearchRuntimeContract(input: { sessionID: string; taskID: string }) {
+  const descriptor = WorkerTurnDescriptor.create({
+    sessionID: input.sessionID,
+    payload: {
+      agent: "frontend-research",
+      roleContractID: "frontend-research",
+      model: { providerID: "openai", modelID: "gpt-5.5" },
+      prompt: { rawSystemPrompt: false },
+      tools: {
+        enabled: ["skill", "request_orchestrator_decision"],
+        terminal: "submit_research_brief",
+      },
+      output: { format: "text", resultMode: "reply" },
+      workflow: {
+        taskID: input.taskID,
+        sessionKind: "frontend-research",
+      },
+    },
+  })
+  SessionPrompt.setSessionRuntimeContract(input.sessionID, {
+    identity: {
+      sessionID: input.sessionID,
+      agentKind: "frontend-research",
+      contractKind: "stage-attempt",
+      workerTurnDescriptorID: descriptor.id,
+      workerTurnDescriptorHash: descriptor.hash,
+      installedAt: Date.now(),
+    },
+    tools: {
+      skill: {} as any,
+      request_orchestrator_decision: {} as any,
+    },
+    system: ["Frontend research runtime contract for request-bound continuation."],
+    exactTools: true,
+    includeMcpTools: false,
+  })
+  return descriptor
 }
 
 function deferred<T = void>() {
@@ -3593,7 +3633,181 @@ describe("orchestrator tools", () => {
           true,
         )
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(loopSpy).toHaveBeenCalledWith({ sessionID: worker.id })
+        expect(loopSpy).toHaveBeenCalledWith({ sessionID: worker.id, resume_existing: true })
+      },
+    })
+  })
+
+  test("respond_agent_coordination continue supports frontend-research worker sessions", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_agent_coordination_frontend_research_${stamp}`
+    const taskID = `tsk_agent_coordination_frontend_research_${stamp}`
+    const goalID = `gol_agent_coordination_frontend_research_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "agent coordination frontend research",
+      taskTitle: "agent coordination frontend research",
+      request: "Frontend research asks the orchestrator to continue the same session",
+      goalTitle: "Coordinate frontend research",
+      goalSlug: "coordinate-frontend-research",
+      objective: "Continue frontend research from the existing session",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const loopSpy = spyOn(SessionPrompt, "loop").mockResolvedValue({
+          info: {
+            id: Identifier.ascending("message"),
+            role: "assistant",
+            sessionID: "unused",
+          },
+          parts: [],
+        } as any)
+        const parent = await Session.create({
+          kind: "root",
+          title: "agent coordination frontend research root",
+          metadata: { configOverlay: { model: "openai/gpt-5.5" } },
+        })
+        const worker = await Session.create({
+          kind: "frontend-research",
+          parentID: parent.id,
+          title: "agent coordination frontend research worker",
+        })
+        installFrontendResearchRuntimeContract({ sessionID: worker.id, taskID })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const request = createAgentCoordinationRequest({
+          taskID,
+          sessionID: worker.id,
+          agent: "frontend-research",
+          messageID: Identifier.ascending("message"),
+          summary: "Need frontend research routing",
+          details: "The worker has a source-evidence conflict and needs scheduler guidance.",
+          blocking: true,
+          requestedDecision: "continue this frontend-research session",
+          severity: "blocked",
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = toolText(
+          await tools.respond_agent_coordination.execute(
+            {
+              request_id: request.payload.request_id,
+              decision: "continue",
+              message: "Continue the source investigation under the existing frontend-research contract.",
+              reason: "The worker requested scheduler confirmation and its runtime contract is still installed.",
+            },
+            buildToolOptions("respond_agent_coordination_frontend_research"),
+          ),
+        )
+
+        expect(result).toContain(`Responded to coordination request ${request.payload.request_id} with continue`)
+        expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
+          "responded",
+        )
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(loopSpy).toHaveBeenCalledWith({ sessionID: worker.id, resume_existing: true })
+      },
+    })
+  })
+
+  test("respond_agent_coordination continue keeps request pending when same-session resume cannot start", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_agent_coordination_loop_failed_${stamp}`
+    const taskID = `tsk_agent_coordination_loop_failed_${stamp}`
+    const goalID = `gol_agent_coordination_loop_failed_${stamp}`
+
+    insertWorkflowTaskWithGoal({
+      projectID,
+      taskID,
+      goalID,
+      sessionID: null,
+      worktree: tmp.path,
+      projectName: "agent coordination loop failure",
+      taskTitle: "agent coordination loop failure",
+      request: "Worker asks the orchestrator to continue but loop cannot start",
+      goalTitle: "Coordinate loop failure",
+      goalSlug: "coordinate-loop-failure",
+      objective: "Keep the request pending when continuation fails",
+      now,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(SessionPrompt, "loop").mockRejectedValue(new Error("loop failed immediately"))
+        const parent = await Session.create({
+          kind: "root",
+          title: "agent coordination loop failure root",
+          metadata: { configOverlay: { model: "openai/gpt-5.5" } },
+        })
+        const worker = await Session.create({
+          kind: "assistant",
+          parentID: parent.id,
+          title: "agent coordination loop failure worker",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable).set({ session_id: parent.id }).where(eq(EngineTaskTable.id, taskID)).run(),
+        )
+        const request = createAgentCoordinationRequest({
+          taskID,
+          sessionID: worker.id,
+          agent: "coding",
+          messageID: Identifier.ascending("message"),
+          summary: "Need a routing decision",
+          details: "The worker needs the orchestrator to continue it.",
+          blocking: true,
+          requestedDecision: "continue this worker session",
+          severity: "blocked",
+        })
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        await expect(
+          tools.respond_agent_coordination.execute(
+            {
+              request_id: request.payload.request_id,
+              decision: "continue",
+              message: "Continue with the current evidence.",
+              reason: "Exercise loop startup failure.",
+            },
+            buildToolOptions("respond_agent_coordination_loop_failed"),
+          ),
+        ).rejects.toThrow(/loop failed immediately/)
+
+        expect(findAgentCoordinationRequest({ taskID, requestID: request.payload.request_id })?.payload.status).toBe(
+          "pending",
+        )
+        const messages: Message.WithParts[] = []
+        for await (const item of Message.stream(worker.id)) messages.push(item)
+        expect(
+          messages.some(
+            (item) =>
+              item.info.role === "user" &&
+              item.parts.some(
+                (part) => part.type === "text" && part.text.includes("Orchestrator Coordination Response"),
+              ),
+          ),
+        ).toBe(false)
       },
     })
   })

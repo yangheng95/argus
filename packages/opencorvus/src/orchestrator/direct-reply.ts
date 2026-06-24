@@ -15,7 +15,20 @@ const DIRECT_REPLY_AGENT_KIND_VALUES = [
 
 export const DIRECT_REPLY_AGENT_KINDS = new Set(DIRECT_REPLY_AGENT_KIND_VALUES)
 
-export const DIRECT_AGENT_SESSION_CONTROL_KINDS = new Set([...DIRECT_REPLY_AGENT_KIND_VALUES, "build"])
+// A2A means Agent-to-Agent coordination between a task worker and orchestrator.
+const A2A_WORKER_CONTROL_AGENT_KIND_VALUES = [
+  "build",
+  "fact-check",
+  "deep-research",
+  "frontend-research",
+  "visual-qa",
+  "goal-workload-analyst",
+]
+
+export const DIRECT_AGENT_SESSION_CONTROL_KINDS = new Set([
+  ...DIRECT_REPLY_AGENT_KIND_VALUES,
+  ...A2A_WORKER_CONTROL_AGENT_KIND_VALUES,
+])
 
 export function canReceiveDirectAgentReply(kind: string | undefined): boolean {
   return !!kind && DIRECT_REPLY_AGENT_KINDS.has(kind)
