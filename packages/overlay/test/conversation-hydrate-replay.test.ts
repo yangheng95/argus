@@ -6,6 +6,7 @@ import { conversationAgentStore, hydrateConversationAgentView } from "../src/sto
 import {
   cancelConversationReplay,
   conversationCardContainsMessage,
+  conversationSourceDirectory,
   hydrateTaskConversation,
   loadConversation,
   loadConversationHistoryUntilCard,
@@ -111,6 +112,55 @@ test("session conversation hydrate carries the explicit Mission row directory", 
   expect(captured?.query?.tail_limit).toBe("80")
 })
 
+test("task conversation hydrate registers task directory from the hydrated board", async () => {
+  resetWriter()
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_deep_link" })
+
+  let captured: TransportRequest | undefined
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      captured = req
+      if (req.path !== "task/tsk_deep_link/conversation") {
+        throw new Error(`unexpected request path: ${req.path}`)
+      }
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: {
+          board: {
+            snapshotVersion: "board:deep-link",
+            task: {
+              id: "tsk_deep_link",
+              status: "active",
+              request: "open linked task",
+              sessionID: "ses_root",
+              directory: TEST_DIRECTORY,
+              time: { created: 1_776_000_000_000 },
+              attachments: [],
+            },
+            goalWorkflows: [],
+            interactions: [],
+          },
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { sessions: [] },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 10 },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+          lastSequence: 0,
+        },
+      }
+    }),
+  )
+
+  await hydrateTaskConversation("tsk_deep_link", { tailLimit: 1 })
+
+  expect(captured?.query?.directory).toBeUndefined()
+  expect(captured?.query?.tail_limit).toBe("1")
+  expect(conversationSourceDirectory({ kind: "task", id: "tsk_deep_link" })).toBe(TEST_DIRECTORY)
+})
+
 test("hydration replay projects persisted executor output into the card tree", () => {
   resetWriter()
   setBoardStore("board", {
@@ -120,6 +170,7 @@ test("hydration replay projects persisted executor output into the card tree", (
       status: "active",
       request: "restore conversation",
       sessionID: "ses_root",
+      directory: TEST_DIRECTORY,
       time: { created: 1_776_000_000_000 },
       attachments: [],
     },
@@ -181,6 +232,7 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
                 status: "active",
                 request: "restore conversation",
                 sessionID: "ses_root",
+                directory: TEST_DIRECTORY,
                 time: { created: 1_776_000_000_000 },
                 attachments: [],
               },
@@ -298,6 +350,7 @@ test("hydrateTaskConversation preserves agent rail records until the replacement
         status: "active",
         request: "preserve rail agents",
         sessionID: "ses_root",
+        directory: TEST_DIRECTORY,
         time: { created: 1_776_000_000_000 },
         attachments: [],
       },
@@ -352,6 +405,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
       status: "active",
       request: "restore conversation lazily",
       sessionID: "ses_root",
+      directory: TEST_DIRECTORY,
       time: { created: 1_776_000_000_000 },
       attachments: [],
     },
@@ -540,6 +594,7 @@ test("history paging replays lifecycle-only frontend agent events without blank 
       status: "active",
       request: "restore lifecycle-only frontend agent",
       sessionID: "ses_root",
+      directory: TEST_DIRECTORY,
       time: { created: 1_776_000_030_000 },
       attachments: [],
     },
@@ -724,6 +779,7 @@ test("history paging continues when a goal phase card exists but its target mess
       status: "active",
       request: "restore phase conversation lazily",
       sessionID: "ses_root",
+      directory: TEST_DIRECTORY,
       time: { created: 1_776_000_010_000 },
       attachments: [],
     },
@@ -971,6 +1027,7 @@ test("goal phase history can hydrate a build session directly by session id", as
       status: "active",
       request: "restore build session directly",
       sessionID: "ses_root",
+      directory: TEST_DIRECTORY,
       time: { created: 1_776_000_020_000 },
       attachments: [],
     },
@@ -1208,6 +1265,7 @@ test("session-scoped history replays lifecycle-only frontend agent events withou
       status: "active",
       request: "restore lifecycle-only session card",
       sessionID: "ses_root",
+      directory: TEST_DIRECTORY,
       time: { created: 1_776_000_040_000 },
       attachments: [],
     },
